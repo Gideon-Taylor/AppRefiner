@@ -16,7 +16,7 @@ namespace AppRefiner.Linters
         public SQLLongString()
         {
             Description = "Reports SQL strings > 120 characters. ";
-            Type = ReportType.Error;
+            Type = ReportType.Warning;
             Active = false;
         }
 

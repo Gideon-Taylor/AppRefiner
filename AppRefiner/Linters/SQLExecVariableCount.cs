@@ -36,6 +36,10 @@ namespace AppRefiner.Linters
             return placeHolders.Count;
         }
 
+        private int GetOutputCount(Statement.Select statement)
+        {
+            return statement.Query.Body.AsSelectExpression().Select.Projection.Count;
+        }
 
         public override void EnterSimpleFunctionCall(PeopleCodeParser.SimpleFunctionCallContext context)
         {
@@ -64,6 +68,10 @@ namespace AppRefiner.Linters
                         }
 
                         var outputCount = 0;
+                        if (statement is Statement.Select select)
+                        {
+                            outputCount = GetOutputCount(select);
+                        }
 
                         /* Count the binds */
                         var bindCount = GetBindCount(statement);
