@@ -693,10 +693,18 @@ namespace AppRefiner
 
         internal static void ApplyBetterSQL(ScintillaEditor editor)
         {
+            if (editor.ContentString == null)
+            {
+                editor.ContentString = GetScintillaText(editor);
+            }
 
             var formatted = SqlFormatter.Of(Dialect.StandardSql)
                 .Extend(cfg => cfg.PlusSpecialWordChars("%"))
                 .Format(editor.ContentString, formatConfig);
+            if (string.IsNullOrEmpty(formatted))
+            {
+                return;
+            }
             editor.ContentString = formatted;
             SetScintillaText(editor, formatted);
             editor.SendMessage(SCI_SETSAVEPOINT, (IntPtr)0, (IntPtr)0);
