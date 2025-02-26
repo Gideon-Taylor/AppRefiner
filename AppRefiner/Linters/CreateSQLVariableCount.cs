@@ -132,7 +132,9 @@ namespace AppRefiner.Linters
 
         public override void EnterSimpleFunctionCall(SimpleFunctionCallContext context)
         {
-            if (!context.genericID().GetText().Equals("CreateSQL", StringComparison.OrdinalIgnoreCase))
+            var functionName = context.genericID().GetText();
+            if (!functionName.Equals("CreateSQL", StringComparison.OrdinalIgnoreCase) 
+                && !functionName.Equals("GetSQL", StringComparison.OrdinalIgnoreCase))
                 return;
 
             var args = context.functionCallArguments();
