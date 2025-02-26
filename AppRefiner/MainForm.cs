@@ -56,6 +56,12 @@ namespace AppRefiner
         private List<BaseLintRule> linterRules = new();
         private List<BaseStyler> stylers = new(); // Changed from List<BaseStyler> analyzers
 
+        private class RuleState
+        {
+            public string TypeName { get; set; } = "";
+            public bool Active { get; set; }
+        }
+
         public MainForm()
         {
             InitializeComponent();
@@ -66,6 +72,122 @@ namespace AppRefiner
 
             InitLinterOptions();
             InitStylerOptions(); // Changed from InitAnalyzerOptions
+        }
+
+        protected override void OnLoad(EventArgs e)
+        {
+            LoadSettings();
+        }
+
+        protected override void OnFormClosing(FormClosingEventArgs e)
+        {
+            SaveSettings();
+        }
+
+        private void LoadSettings()
+        {
+            chkInitCollapsed.Checked = Properties.Settings.Default.initCollapsed;
+            chkOnlyPPC.Checked = Properties.Settings.Default.onlyPPC;
+            chkBetterSQL.Checked = Properties.Settings.Default.betterSQL;
+            chkAutoDark.Checked = Properties.Settings.Default.autoDark;
+            chkLintAnnotate.Checked = Properties.Settings.Default.lintAnnotate;
+            
+            LoadStylerStates();
+            LoadLinterStates();
+        }
+
+        private void SaveSettings()
+        {
+            Properties.Settings.Default.initCollapsed = chkInitCollapsed.Checked;
+            Properties.Settings.Default.onlyPPC = chkOnlyPPC.Checked;
+            Properties.Settings.Default.betterSQL = chkBetterSQL.Checked;
+            Properties.Settings.Default.autoDark = chkAutoDark.Checked;
+            Properties.Settings.Default.lintAnnotate = chkLintAnnotate.Checked;
+            
+            SaveStylerStates();
+            SaveLinterStates();
+            
+            Properties.Settings.Default.Save();
+        }
+
+        private void LoadStylerStates()
+        {
+            try
+            {
+                var states = System.Text.Json.JsonSerializer.Deserialize<List<RuleState>>(
+                    Properties.Settings.Default.StylerStates);
+                    
+                if (states == null) return;
+                
+                foreach (var state in states)
+                {
+                    var styler = stylers.FirstOrDefault(s => s.GetType().FullName == state.TypeName);
+                    if (styler != null)
+                    {
+                        styler.Active = state.Active;
+                        // Update corresponding grid row
+                        var row = dataGridView3.Rows.Cast<DataGridViewRow>()
+                            .FirstOrDefault(r => r.Tag is BaseStyler s && s == styler);
+                        if (row != null)
+                        {
+                            row.Cells[0].Value = state.Active;
+                        }
+                    }
+                }
+            }
+            catch { /* Use defaults if settings are corrupt */ }
+        }
+
+        private void SaveStylerStates()
+        {
+            var states = stylers.Select(s => new RuleState 
+            { 
+                TypeName = s.GetType().FullName ?? "",
+                Active = s.Active 
+            }).ToList();
+            
+            Properties.Settings.Default.StylerStates = 
+                System.Text.Json.JsonSerializer.Serialize(states);
+        }
+
+        private void LoadLinterStates()
+        {
+            try
+            {
+                var states = System.Text.Json.JsonSerializer.Deserialize<List<RuleState>>(
+                    Properties.Settings.Default.LinterStates);
+                    
+                if (states == null) return;
+                
+                foreach (var state in states)
+                {
+                    var linter = linterRules.FirstOrDefault(l => l.GetType().FullName == state.TypeName);
+                    if (linter != null)
+                    {
+                        linter.Active = state.Active;
+                        // Update corresponding grid row
+                        var row = dataGridView1.Rows.Cast<DataGridViewRow>()
+                            .FirstOrDefault(r => r.Tag is BaseLintRule l && l == linter);
+                        if (row != null)
+                        {
+                            row.Cells[0].Value = state.Active;
+                        }
+                    }
+                }
+            }
+            catch { /* Use defaults if settings are corrupt */ }
+        }
+
+        private void SaveLinterStates()
+        {
+            var states = linterRules.Select(l => new RuleState 
+            { 
+                TypeName = l.GetType().FullName ?? "",
+                Active = l.Active 
+            }).ToList();
+            
+            Properties.Settings.Default.LinterStates = 
+                System.Text.Json.JsonSerializer.Serialize(states);
         }
 
         private void btnStart_Click(object sender, EventArgs e)

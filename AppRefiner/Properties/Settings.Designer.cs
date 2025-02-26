@@ -70,5 +70,41 @@ namespace AppRefiner.Properties {
                 this["autoDark"] = value;
             }
         }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("True")]
+        public bool lintAnnotate {
+            get {
+                return ((bool)(this["lintAnnotate"]));
+            }
+            set {
+                this["lintAnnotate"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("[]")]
+        public string StylerStates {
+            get {
+                return ((string)(this["StylerStates"]));
+            }
+            set {
+                this["StylerStates"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("[]")]
+        public string LinterStates {
+            get {
+                return ((string)(this["LinterStates"]));
+            }
+            set {
+                this["LinterStates"] = value;
+            }
+        }
     }
 }
