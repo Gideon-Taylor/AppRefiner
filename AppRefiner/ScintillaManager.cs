@@ -665,7 +665,7 @@ namespace AppRefiner
         {
             // If the line is blank or consists only of whitespace,
             // mark it with the SC_FOLDLEVELWHITEFLAG.
-            if (string.IsNullOrWhiteSpace(line))
+            if (string.IsNullOrEmpty(line))
             {
                 return SC_FOLDLEVELWHITEFLAG | SC_FOLDLEVELBASE;
             }
