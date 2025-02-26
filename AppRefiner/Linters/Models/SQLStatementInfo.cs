@@ -5,6 +5,7 @@ namespace AppRefiner.Linters.Models
     /// </summary>
     public class SQLStatementInfo
     {
+        public bool UsesSQLDefn { get; set; }
         public string SqlText { get; set; }
         public int BindCount { get; set; }
         public int OutputColumnCount { get; set; }

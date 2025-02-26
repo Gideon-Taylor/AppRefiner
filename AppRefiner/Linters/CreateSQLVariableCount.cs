@@ -153,18 +153,9 @@ namespace AppRefiner.Linters
             }
 
             var firstArg = args.expression()[0];
-            if (firstArg is not LiteralExprContext literalExpr)
-                return;
-
-            var sqlText = literalExpr.GetText();
-            // Remove quotes from SQL text
-            sqlText = sqlText.Substring(1, sqlText.Length - 2);
-
-            // Validate arguments and update SQLStatementInfo
-            var sqlInfo = new SQLStatementInfo(sqlText, 0, 0, context.Start.Line, (context.Start.StartIndex, context.Stop.StopIndex), "");
-
 
             string? varName = null;
+
             if (context.Parent.Parent is LocalVariableDeclAssignmentContext localAssign)
             {
                 varName = localAssign.GetChild(2).GetText();
@@ -174,6 +165,27 @@ namespace AppRefiner.Linters
             {
                 varName = equalityAssign.GetChild(0).GetText();
             }
+
+            if (firstArg is DotAccessExprContext dotAccess)
+            {
+                if (TryFindInScopes(varName, out var sqlInfoObj))
+                    sqlInfoObj.UsesSQLDefn = true;
+                return;
+            }
+
+            if (firstArg is not LiteralExprContext literalExpr)
+                return;
+
+            var sqlText = literalExpr.GetText();
+            // Remove quotes from SQL text
+            sqlText = sqlText.Substring(1, sqlText.Length - 2);
+
+            // Validate arguments and update SQLStatementInfo
+            var sqlInfo = new SQLStatementInfo(sqlText, 0, 0, context.Start.Line, (context.Start.StartIndex, context.Stop.StopIndex), "");
+            
+
+            
+
             
             //context.Parent.Parent.GetChild(2).GetText();
             if (varName != null)
@@ -202,6 +214,12 @@ namespace AppRefiner.Linters
             // Check if this is a SQL variable we're tracking
             if (!TryFindInScopes(varName, out var sqlInfo))
                 return;
+
+            if (sqlInfo.UsesSQLDefn)
+            {
+                /* We cannot validate these since we don't have SQL text available... */
+                return;
+            }
 
             // Validate the function call arguments
             var args = context.functionCallArguments();
@@ -236,6 +254,13 @@ namespace AppRefiner.Linters
         private void ValidateOpenCall(DotAccessContext context, FunctionCallArgumentsContext args, SQLStatementInfo sqlInfo)
         {
             var firstArg = args.expression()[0];
+
+            if (firstArg is DotAccessExprContext dotAccess)
+            {
+                sqlInfo.UsesSQLDefn = true;
+                return;
+            }
+
             if (firstArg is not LiteralExprContext literalExpr)
                 return;
 
