@@ -16,7 +16,7 @@ namespace AppRefiner.Linters
         public SQLWildCard()
         {
             Description = "Reports any SQL using * wildcards";
-            Type = ReportType.Error;
+            Type = ReportType.Warning;
             Active = false;
         }
 
@@ -62,7 +62,7 @@ namespace AppRefiner.Linters
                                 /* Report ERROR that there is a Wildcard in a select statement */
                                 Reports?.Add(new Report()
                                 {
-                                    Type = ReportType.Error,
+                                    Type = this.Type,
                                     Line = firstArg.Start.Line - 1,
                                     Span = (firstArg.Start.StartIndex, firstArg.Stop.StopIndex),
                                     Message = $"SQL has a wildcard in select statement."

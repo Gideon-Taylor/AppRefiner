@@ -14,6 +14,7 @@ using System.Threading.Tasks;
 using System.Windows.Forms;
 using static AppRefiner.PeopleCode.PeopleCodeParser;
 using static SqlParser.Ast.CopyTarget;
+using Antlr4.Build.Tasks;
 
 namespace AppRefiner
 {
@@ -435,14 +436,36 @@ namespace AppRefiner
             /* TODO: Work out the styles for each character so we can report multiple issues on a single line */
             foreach (var g in reports.GroupBy(r => r.Line))
             {
-                StringBuilder sb = new();
-                foreach (var r in g)
+                List<string> messages = new();
+                List<AnnotationStyle> styles = new();
+
+                foreach (var report in g)
                 {
-                    sb.AppendLine($"^^ {r.Message}");
+                    int rowIndex = dataGridView2.Rows.Add(report.Type, report.Message, report.Line);
+                    dataGridView2.Rows[rowIndex].Tag = report;
+                    if (chkLintAnnotate.Checked)
+                    {
+                        messages.Add(report.Message);
+                        styles.Add(report.Type switch
+                        {
+                            ReportType.Error => AnnotationStyle.Red,
+                            ReportType.Warning => AnnotationStyle.Yellow,
+                            ReportType.Info => AnnotationStyle.Gray,
+                            _ => AnnotationStyle.Gray
+                        });
+                    }
                 }
-                var report = g.First();
-                int rowIndex = dataGridView2.Rows.Add(report.Type, report.Message, report.Line);
-                dataGridView2.Rows[rowIndex].Tag = report;
+
+                if (chkLintAnnotate.Checked)
+                {
+                    ScintillaManager.SetAnnotations(activeEditor, messages, g.First().Line, styles);
+                }
+                /* SetAnnotations*/
+
+
+                /* StringBuilder sb = new();
+                
+                
 
                 if (chkLintAnnotate.Checked)
                 {
@@ -454,7 +477,7 @@ namespace AppRefiner
                         _ => AnnotationStyle.Gray
                     };
                     ScintillaManager.SetAnnotation(activeEditor, report.Line, sb.ToString().Trim(), style);
-                }
+                } */
             }
 
 

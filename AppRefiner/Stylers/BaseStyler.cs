@@ -15,15 +15,15 @@ namespace AppRefiner.Stylers
 
     public struct CodeHighlight
     {
-        public uint Start { get; set; }
-        public uint Length { get; set; }
+        public int Start { get; set; }
+        public int Length { get; set; }
         public HighlightColor Color { get; set; }
     }
 
     public struct CodeColor
     {
-        public uint Start { get; set; }
-        public uint Length { get; set; }
+        public int Start { get; set; }
+        public int Length { get; set; }
         public FontColor Color { get; set; }
     }
 

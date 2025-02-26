@@ -29,7 +29,7 @@ namespace AppRefiner.Linters
                     {
                         Reports?.Add(new Report()
                         {
-                            Type = ReportType.Warning,
+                            Type = Type,
                             Line = firstArg.Start.Line - 1,
                             Span = (firstArg.Start.StartIndex, firstArg.Stop.StopIndex),
                             Message = $"Found SQL using string concatenation."

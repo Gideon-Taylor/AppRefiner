@@ -63,9 +63,9 @@
             tabPage3 = new TabPage();
             grpRefactorVariables = new GroupBox();
             grpRefactorImports = new GroupBox();
+            btnOptimizeImports = new Button();
             progressBar1 = new ProgressBar();
             lblStatus = new Label();
-            btnOptimizeImports = new Button();
             ((System.ComponentModel.ISupportInitialize)splitContainer1).BeginInit();
             splitContainer1.Panel1.SuspendLayout();
             splitContainer1.Panel2.SuspendLayout();
@@ -397,6 +397,8 @@
             // chkLintAnnotate
             // 
             chkLintAnnotate.AutoSize = true;
+            chkLintAnnotate.Checked = true;
+            chkLintAnnotate.CheckState = CheckState.Checked;
             chkLintAnnotate.Location = new Point(5, 11);
             chkLintAnnotate.Name = "chkLintAnnotate";
             chkLintAnnotate.Size = new Size(75, 19);
@@ -481,6 +483,15 @@
             grpRefactorImports.TabStop = false;
             grpRefactorImports.Text = "Imports";
             // 
+            // btnOptimizeImports
+            // 
+            btnOptimizeImports.Location = new Point(6, 23);
+            btnOptimizeImports.Name = "btnOptimizeImports";
+            btnOptimizeImports.Size = new Size(75, 23);
+            btnOptimizeImports.TabIndex = 1;
+            btnOptimizeImports.Text = "button1";
+            btnOptimizeImports.UseVisualStyleBackColor = true;
+            // 
             // progressBar1
             // 
             progressBar1.Dock = DockStyle.Bottom;
@@ -498,15 +509,6 @@
             lblStatus.TabIndex = 21;
             lblStatus.Text = "Stopped";
             lblStatus.TextAlign = ContentAlignment.MiddleCenter;
-            // 
-            // btnOptimizeImports
-            // 
-            btnOptimizeImports.Location = new Point(6, 23);
-            btnOptimizeImports.Name = "btnOptimizeImports";
-            btnOptimizeImports.Size = new Size(75, 23);
-            btnOptimizeImports.TabIndex = 1;
-            btnOptimizeImports.Text = "button1";
-            btnOptimizeImports.UseVisualStyleBackColor = true;
             // 
             // MainForm
             // 

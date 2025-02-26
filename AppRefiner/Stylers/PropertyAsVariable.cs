@@ -80,8 +80,8 @@ namespace AppRefiner.Stylers
                 {
                     Highlights.Add(new CodeHighlight
                     {
-                        Start = (uint)userVariable.Symbol.StartIndex,
-                        Length = (uint)userVariable.Symbol.Text.Length,
+                        Start = userVariable.Symbol.StartIndex,
+                        Length = userVariable.Symbol.Text.Length,
                         Color = HighlightColor.Salmon
                     });
                 }

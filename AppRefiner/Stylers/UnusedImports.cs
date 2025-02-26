@@ -16,11 +16,11 @@ namespace AppRefiner.Stylers
             public string Name { get; }
             public bool Used { get; set; }
 
-            public uint Line { get; }
-            public uint StartIndex { get; }
-            public uint StopIndex { get; }
+            public int Line { get; }
+            public int StartIndex { get; }
+            public int StopIndex { get; }
 
-            public ImportInfo(string name, uint line, uint start, uint stop)
+            public ImportInfo(string name, int line, int start, int stop)
             {
                 Name = name;
                 Used = false;
@@ -56,7 +56,7 @@ namespace AppRefiner.Stylers
                 packageName = context.appClassPath().GetText();
             }
 
-            var importInfo = new ImportInfo(packageName, (uint)context.Start.Line, (uint)context.Start.StartIndex, (uint)context.Stop.StopIndex);
+            var importInfo = new ImportInfo(packageName, context.Start.Line, context.Start.StartIndex, context.Stop.StopIndex);
 
             importsUsed[packageName] = importInfo;
         }

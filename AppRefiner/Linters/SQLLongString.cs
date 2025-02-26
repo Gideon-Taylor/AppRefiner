@@ -52,7 +52,7 @@ namespace AppRefiner.Linters
                             /* Report that the SQL statement is too long */
                             Reports?.Add(new Report()
                             {
-                                Type = ReportType.Warning,
+                                Type = Type,
                                 Line = firstArg.Start.Line - 1,
                                 Span = (firstArg.Start.StartIndex, firstArg.Stop.StopIndex),
                                 Message = $"Long literal SQL statements should be SQL objects."

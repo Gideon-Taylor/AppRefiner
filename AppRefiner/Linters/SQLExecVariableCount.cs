@@ -12,11 +12,11 @@ using static AppRefiner.PeopleCode.PeopleCodeParser;
 
 namespace AppRefiner.Linters
 {
-    public class SQLVariableCount : BaseLintRule
+    public class SQLExecVariableCount : BaseLintRule
     {
-        public SQLVariableCount()
+        public SQLExecVariableCount()
         {
-            Description = "Validate bind counts in SQLExec and CreateSQL functions.";
+            Description = "Validate bind counts in SQLExec functions.";
             Type = ReportType.Error;
             Active = false;
         }
@@ -40,8 +40,7 @@ namespace AppRefiner.Linters
         public override void EnterSimpleFunctionCall(PeopleCodeParser.SimpleFunctionCallContext context)
         {
             // Check if the function being called is "SQLExec"
-            if (context.genericID().GetText().Equals("SQLExec", StringComparison.OrdinalIgnoreCase) ||
-                context.genericID().GetText().Equals("CreateSQL", StringComparison.OrdinalIgnoreCase))
+            if (context.genericID().GetText().Equals("SQLExec", StringComparison.OrdinalIgnoreCase))
             {
                 var args = context.functionCallArguments();
                 if (args != null && args.expression() != null && args.expression().Length > 0)

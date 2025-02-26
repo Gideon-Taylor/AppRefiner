@@ -175,7 +175,7 @@ namespace AppRefiner
         private static Dictionary<uint, IntPtr> processHandles = new();
         private static Dictionary<uint, bool> hasLexilla = new();
 
-        private const int ANNOTATION_STYLE_OFFSET = 60; // Lower, more standard offset value
+        private const int ANNOTATION_STYLE_OFFSET = 0x100; // Lower, more standard offset value
         private const int BASE_ANNOT_STYLE = ANNOTATION_STYLE_OFFSET;
         private const int ANNOT_STYLE_GRAY = BASE_ANNOT_STYLE;
         private const int ANNOT_STYLE_YELLOW = BASE_ANNOT_STYLE + 1;
@@ -433,7 +433,7 @@ namespace AppRefiner
             editor.FoldEnabled = true;
         }
 
-        public static void HighlightText(ScintillaEditor editor, HighlightColor color, uint start, uint length)
+        public static void HighlightText(ScintillaEditor editor, HighlightColor color, int start, int length)
         {
             int indicatorNumber = 0;
             switch(color)
@@ -454,34 +454,40 @@ namespace AppRefiner
         {
             try
             {
-                // First, allocate extended styles
-                const int EXTRA_STYLES = 64; // Reduced from 256 to a more reasonable number
-                editor.SendMessage(SCI_ALLOCATEEXTENDEDSTYLES, (IntPtr)EXTRA_STYLES, IntPtr.Zero);
+                if (editor.AnnotationStyleOffset == IntPtr.Zero)
+                {
+                    const int EXTRA_STYLES = 64; // Reduced from 256 to a more reasonable number
+                    var newStyleOffset = editor.SendMessage(SCI_ALLOCATEEXTENDEDSTYLES, (IntPtr)EXTRA_STYLES, IntPtr.Zero);
+                    editor.AnnotationStyleOffset = newStyleOffset;
 
-                // Set the annotation style offset
-                editor.SendMessage(SCI_ANNOTATIONSETSTYLEOFFSET, (IntPtr)ANNOTATION_STYLE_OFFSET, IntPtr.Zero);
+                    // Set the annotation style offset
+                    editor.SendMessage(SCI_ANNOTATIONSETSTYLEOFFSET, (IntPtr)newStyleOffset, IntPtr.Zero);
+                }
+
 
                 // Enable annotations and set visibility mode first
                 editor.SendMessage(SCI_ANNOTATIONSETVISIBLE, (IntPtr)ANNOTATION_BOXED, IntPtr.Zero);
 
                 // Define colors in BGR format
-                const int GRAY_COLOR = 0x808080;    // Gray
-                const int YELLOW_COLOR = 0x00FFFF;  // Yellow
-                const int RED_COLOR = 0x0000FF;     // Red
-                const int LIGHT_GRAY_BG = 0xE0E0E0; // Light gray background
-                const int BLACK_COLOR = 0x000000;   // Black
+                const int GRAY_BACK = 0xEFEFEF;
+                const int GRAY_FORE = 0;
+                const int YELLOW_BACK = 0xF0FFFF;
+                const int YELLOW_FORE = 0x0089B3;
+                const int RED_BACK = 0xF0F0FF;
+                const int RED_FORE = 0x000080;
+
 
                 // Configure Gray style
-                editor.SendMessage(SCI_STYLESETFORE, (IntPtr)(BASE_ANNOT_STYLE + (int)AnnotationStyle.Gray), (IntPtr)BLACK_COLOR);
-                editor.SendMessage(SCI_STYLESETBACK, (IntPtr)(BASE_ANNOT_STYLE + (int)AnnotationStyle.Gray), (IntPtr)LIGHT_GRAY_BG);
+                editor.SendMessage(SCI_STYLESETFORE, (IntPtr)(editor.AnnotationStyleOffset + (int)AnnotationStyle.Gray), (IntPtr)GRAY_FORE);
+                editor.SendMessage(SCI_STYLESETBACK, (IntPtr)(editor.AnnotationStyleOffset + (int)AnnotationStyle.Gray), (IntPtr)GRAY_BACK);
 
                 // Configure Yellow style
-                editor.SendMessage(SCI_STYLESETFORE, (IntPtr)(BASE_ANNOT_STYLE + (int)AnnotationStyle.Yellow), (IntPtr)BLACK_COLOR);
-                editor.SendMessage(SCI_STYLESETBACK, (IntPtr)(BASE_ANNOT_STYLE + (int)AnnotationStyle.Yellow), (IntPtr)YELLOW_COLOR);
+                editor.SendMessage(SCI_STYLESETFORE, (IntPtr)(editor.AnnotationStyleOffset + (int)AnnotationStyle.Yellow), (IntPtr)YELLOW_FORE);
+                editor.SendMessage(SCI_STYLESETBACK, (IntPtr)(editor.AnnotationStyleOffset + (int)AnnotationStyle.Yellow), (IntPtr)YELLOW_BACK);
 
                 // Configure Red style
-                editor.SendMessage(SCI_STYLESETFORE, (IntPtr)(BASE_ANNOT_STYLE + (int)AnnotationStyle.Red), (IntPtr)BLACK_COLOR);
-                editor.SendMessage(SCI_STYLESETBACK, (IntPtr)(BASE_ANNOT_STYLE + (int)AnnotationStyle.Red), (IntPtr)RED_COLOR);
+                editor.SendMessage(SCI_STYLESETFORE, (IntPtr)(editor.AnnotationStyleOffset + (int)AnnotationStyle.Red), (IntPtr)RED_FORE);
+                editor.SendMessage(SCI_STYLESETBACK, (IntPtr)(editor.AnnotationStyleOffset + (int)AnnotationStyle.Red), (IntPtr)RED_BACK);
 
                 // Store initialization state
                 editor.AnnotationsInitialized = true;
@@ -769,7 +775,7 @@ namespace AppRefiner
         {
             editor.SendMessage(SCI_SETSEL, (IntPtr)startIndex, (IntPtr)endIndex);
         }
-        public static void ColorText(ScintillaEditor editor, FontColor color, uint start, uint length)
+        public static void ColorText(ScintillaEditor editor, FontColor color, int start, int length)
         {
             // Define color constants using BGR format (Scintilla uses BGR)
             int foreColor;
@@ -812,6 +818,96 @@ namespace AppRefiner
             // Clear the annotation pointers dictionary
             editor.AnnotationPointers.Clear();
         }
+
+        /// <summary>
+        /// Sets multiple annotations on a single line with different styles per annotation.
+        /// Each character in the combined annotation text can have its own style.
+        /// </summary>
+        /// <param name="editor">The Scintilla editor instance</param>
+        /// <param name="annotations">List of annotation strings to combine</param>
+        /// <param name="line">Line number to add annotations to</param>
+        /// <param name="styles">List of styles matching the annotations list length</param>
+        public static void SetAnnotations(ScintillaEditor editor, List<string> annotations, int line, List<AnnotationStyle> styles)
+        {
+            if (annotations.Count != styles.Count)
+            {
+                throw new ArgumentException("Number of annotations must match number of styles");
+            }
+
+            InitAnnotationStyles(editor);
+
+            try
+            {
+                // First construct complete strings with prefixes to match exact byte layout
+                var formattedAnnotations = annotations.Select(a => $"^^ {a}").ToList();
+                var combinedText = string.Join("\n", formattedAnnotations);
+                var textBytes = Encoding.Default.GetBytes(combinedText);
+                var neededSize = textBytes.Length + 1; // +1 for null terminator
+
+                // Create style bytes array matching exact text bytes length
+                var styleBytes = new byte[neededSize];
+                int currentPos = 0;
+                
+                // Fill style bytes array for each formatted annotation including prefix and newline
+                for (int i = 0; i < formattedAnnotations.Count; i++)
+                {
+                    var annotationWithPrefix = formattedAnnotations[i];
+                    var bytesForThisLine = Encoding.Default.GetByteCount(annotationWithPrefix);
+                    var styleValue = (byte)((int)styles[i]);
+                    
+                    // Style all bytes for this line including prefix
+                    for (int j = 0; j < bytesForThisLine; j++)
+                    {
+                        styleBytes[currentPos++] = styleValue;
+                    }
+
+                    // Add style for newline character if not the last annotation
+                    if (i < formattedAnnotations.Count - 1)
+                    {
+                        styleBytes[currentPos++] = styleValue;
+                    }
+                }
+                // Set last byte as null terminator style
+                styleBytes[neededSize - 1] = styleBytes[Math.Max(0, neededSize - 2)];
+
+                // Allocate and write the annotation text buffer
+                var remoteTextBuffer = VirtualAllocEx(editor.hProc, IntPtr.Zero, (uint)neededSize, MEM_COMMIT, PAGE_READWRITE);
+                if (remoteTextBuffer == IntPtr.Zero)
+                {
+                    throw new Exception($"Failed to allocate text buffer: {Marshal.GetLastWin32Error()}");
+                }
+
+                // Allocate and write the styles buffer
+                var remoteStyleBuffer = VirtualAllocEx(editor.hProc, IntPtr.Zero, (uint)neededSize, MEM_COMMIT, PAGE_READWRITE);
+                if (remoteStyleBuffer == IntPtr.Zero)
+                {
+                    VirtualFreeEx(editor.hProc, remoteTextBuffer, 0, MEM_RELEASE);
+                    throw new Exception($"Failed to allocate style buffer: {Marshal.GetLastWin32Error()}");
+                }
+
+                // Write the text and styles to remote buffers
+                if (!WriteProcessMemory(editor.hProc, remoteTextBuffer, textBytes, neededSize, out int bytesWritten) ||
+                    !WriteProcessMemory(editor.hProc, remoteStyleBuffer, styleBytes, neededSize, out int stylesBytesWritten))
+                {
+                    VirtualFreeEx(editor.hProc, remoteTextBuffer, 0, MEM_RELEASE);
+                    VirtualFreeEx(editor.hProc, remoteStyleBuffer, 0, MEM_RELEASE);
+                    throw new Exception("Failed to write to remote buffers");
+                }
+
+                // Set the annotation text and styles
+                editor.SendMessage(SCI_ANNOTATIONSETTEXT, (IntPtr)line, remoteTextBuffer);
+                editor.SendMessage(SCI_ANNOTATIONSETSTYLES, (IntPtr)line, remoteStyleBuffer);
+
+                // Store buffers for cleanup
+                editor.AnnotationPointers[combinedText] = remoteTextBuffer;
+                editor.AnnotationPointers[combinedText + "_styles"] = remoteStyleBuffer;
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"Error setting annotations: {ex.Message}");
+                throw;
+            }
+        }
     }
     public enum EditorType
     {
@@ -838,6 +934,7 @@ namespace AppRefiner
         public int LastContentHash { get; set; }
         public string? ContentString = null;
         public bool AnnotationsInitialized { get; set; } = false;
+        public IntPtr AnnotationStyleOffset = IntPtr.Zero;
         public ScintillaEditor(IntPtr hWnd, uint procID, string caption)
         {
             this.hWnd = hWnd;
