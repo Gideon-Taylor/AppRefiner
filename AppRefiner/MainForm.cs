@@ -558,5 +558,35 @@ namespace AppRefiner
             ScintillaManager.ClearAnnotations(activeEditor);
             dataGridView2.Rows.Clear();
         }
+
+        private void btnDarkMode_Click(object sender, EventArgs e)
+        {
+            ScintillaManager.SetDarkMode(activeEditor);
+        }
+
+        private void btnCollapseAll_Click(object sender, EventArgs e)
+        {
+            ScintillaManager.ContractTopLevel(activeEditor);
+        }
+
+        private void btnExpand_Click(object sender, EventArgs e)
+        {
+            ScintillaManager.ExpandTopLevel(activeEditor);
+        }
+
+        private void btnTakeSnapshot_Click(object sender, EventArgs e)
+        {
+            activeEditor.SnapshotText = ScintillaManager.GetScintillaText(activeEditor);
+            btnRestoreSnapshot.Enabled = true;
+        }
+
+        private void btnRestoreSnapshot_Click(object sender, EventArgs e)
+        {
+            ScintillaManager.ClearAnnotations(activeEditor);
+            ScintillaManager.SetScintillaText(activeEditor, activeEditor.SnapshotText);
+            activeEditor.SnapshotText = null;
+            btnRestoreSnapshot.Enabled = false;
+
+        }
     }
 }

@@ -32,6 +32,8 @@
             tabControl1 = new TabControl();
             tabPage1 = new TabPage();
             grpEditorActions = new GroupBox();
+            btnRestoreSnapshot = new Button();
+            btnTakeSnapshot = new Button();
             btnCollapseAll = new Button();
             btnExpand = new Button();
             btnDarkMode = new Button();
@@ -63,9 +65,9 @@
             tabPage3 = new TabPage();
             grpRefactorVariables = new GroupBox();
             grpRefactorImports = new GroupBox();
-            btnOptimizeImports = new Button();
             progressBar1 = new ProgressBar();
             lblStatus = new Label();
+            btnOptimizeImports = new Button();
             ((System.ComponentModel.ISupportInitialize)splitContainer1).BeginInit();
             splitContainer1.Panel1.SuspendLayout();
             splitContainer1.Panel2.SuspendLayout();
@@ -138,34 +140,59 @@
             // 
             // grpEditorActions
             // 
+            grpEditorActions.Controls.Add(btnRestoreSnapshot);
+            grpEditorActions.Controls.Add(btnTakeSnapshot);
             grpEditorActions.Controls.Add(btnCollapseAll);
             grpEditorActions.Controls.Add(btnExpand);
             grpEditorActions.Controls.Add(btnDarkMode);
             grpEditorActions.Enabled = false;
             grpEditorActions.Location = new Point(8, 149);
             grpEditorActions.Name = "grpEditorActions";
-            grpEditorActions.Size = new Size(528, 61);
+            grpEditorActions.Size = new Size(528, 106);
             grpEditorActions.TabIndex = 0;
             grpEditorActions.TabStop = false;
             grpEditorActions.Text = "Actions";
             // 
+            // btnRestoreSnapshot
+            // 
+            btnRestoreSnapshot.Enabled = false;
+            btnRestoreSnapshot.Location = new Point(101, 51);
+            btnRestoreSnapshot.Name = "btnRestoreSnapshot";
+            btnRestoreSnapshot.Size = new Size(110, 23);
+            btnRestoreSnapshot.TabIndex = 25;
+            btnRestoreSnapshot.Text = "Restore Snapshot";
+            btnRestoreSnapshot.UseVisualStyleBackColor = true;
+            btnRestoreSnapshot.Click += btnRestoreSnapshot_Click;
+            // 
+            // btnTakeSnapshot
+            // 
+            btnTakeSnapshot.Location = new Point(101, 22);
+            btnTakeSnapshot.Name = "btnTakeSnapshot";
+            btnTakeSnapshot.Size = new Size(110, 23);
+            btnTakeSnapshot.TabIndex = 24;
+            btnTakeSnapshot.Text = "Take Snapshot";
+            btnTakeSnapshot.UseVisualStyleBackColor = true;
+            btnTakeSnapshot.Click += btnTakeSnapshot_Click;
+            // 
             // btnCollapseAll
             // 
-            btnCollapseAll.Location = new Point(6, 22);
+            btnCollapseAll.Location = new Point(10, 22);
             btnCollapseAll.Name = "btnCollapseAll";
             btnCollapseAll.Size = new Size(85, 23);
             btnCollapseAll.TabIndex = 21;
             btnCollapseAll.Text = "Collapse All";
             btnCollapseAll.UseVisualStyleBackColor = true;
+            btnCollapseAll.Click += btnCollapseAll_Click;
             // 
             // btnExpand
             // 
-            btnExpand.Location = new Point(97, 22);
+            btnExpand.Location = new Point(10, 51);
             btnExpand.Name = "btnExpand";
             btnExpand.Size = new Size(85, 23);
             btnExpand.TabIndex = 22;
             btnExpand.Text = "Expand All";
             btnExpand.UseVisualStyleBackColor = true;
+            btnExpand.Click += btnExpand_Click;
             // 
             // btnDarkMode
             // 
@@ -175,6 +202,7 @@
             btnDarkMode.TabIndex = 23;
             btnDarkMode.Text = "Dark Mode";
             btnDarkMode.UseVisualStyleBackColor = true;
+            btnDarkMode.Click += btnDarkMode_Click;
             // 
             // btnStart
             // 
@@ -483,15 +511,6 @@
             grpRefactorImports.TabStop = false;
             grpRefactorImports.Text = "Imports";
             // 
-            // btnOptimizeImports
-            // 
-            btnOptimizeImports.Location = new Point(6, 23);
-            btnOptimizeImports.Name = "btnOptimizeImports";
-            btnOptimizeImports.Size = new Size(75, 23);
-            btnOptimizeImports.TabIndex = 1;
-            btnOptimizeImports.Text = "button1";
-            btnOptimizeImports.UseVisualStyleBackColor = true;
-            // 
             // progressBar1
             // 
             progressBar1.Dock = DockStyle.Bottom;
@@ -509,6 +528,15 @@
             lblStatus.TabIndex = 21;
             lblStatus.Text = "Stopped";
             lblStatus.TextAlign = ContentAlignment.MiddleCenter;
+            // 
+            // btnOptimizeImports
+            // 
+            btnOptimizeImports.Location = new Point(6, 23);
+            btnOptimizeImports.Name = "btnOptimizeImports";
+            btnOptimizeImports.Size = new Size(75, 23);
+            btnOptimizeImports.TabIndex = 1;
+            btnOptimizeImports.Text = "button1";
+            btnOptimizeImports.UseVisualStyleBackColor = true;
             // 
             // MainForm
             // 
@@ -585,6 +613,8 @@
         private DataGridViewTextBoxColumn colDescr;
         private DataGridViewComboBoxColumn colLevel;
         private Button btnClearLint;
+        private Button btnRestoreSnapshot;
+        private Button btnTakeSnapshot;
         private Button btnOptimizeImports;
     }
 }

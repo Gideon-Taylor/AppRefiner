@@ -933,6 +933,7 @@ namespace AppRefiner
 
         public int LastContentHash { get; set; }
         public string? ContentString = null;
+        public string? SnapshotText = null;
         public bool AnnotationsInitialized { get; set; } = false;
         public IntPtr AnnotationStyleOffset = IntPtr.Zero;
         public ScintillaEditor(IntPtr hWnd, uint procID, string caption)
