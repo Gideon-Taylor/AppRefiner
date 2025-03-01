@@ -1,6 +1,7 @@
 using AppRefiner.PeopleCode;
 using Antlr4.Runtime;
 using System.Collections.Generic;
+using System.Linq;
 using static AppRefiner.PeopleCode.PeopleCodeParser;
 
 namespace AppRefiner.Linters
@@ -15,6 +16,7 @@ namespace AppRefiner.Linters
         private const int MaxNestingLevel = 3;
         private int currentNestingLevel = 0;
         private Stack<IfStatementContext> ifContextStack = new Stack<IfStatementContext>();
+        private HashSet<IfStatementContext> reportedIfStatements = new HashSet<IfStatementContext>();
         
         public NestedIfElseCheck()
         {
@@ -70,13 +72,20 @@ namespace AppRefiner.Linters
                         // and would benefit from using EVALUATE instead
                         var outermost = ifContextStack.Last();
                         
-                        Reports?.Add(new Report
+                        // Only report each top-level if statement once
+                        if (!reportedIfStatements.Contains(outermost))
                         {
-                            Type = ReportType.Info,
-                            Line = outermost.Start.Line - 1,
-                            Span = (outermost.Start.StartIndex, outermost.Stop.StopIndex),
-                            Message = "Multiple IF-ELSE-IF chains detected. Consider using Evaluate statement for better readability."
-                        });
+                            Reports?.Add(new Report
+                            {
+                                Type = ReportType.Info,
+                                Line = outermost.Start.Line - 1,
+                                Span = (outermost.Start.StartIndex, outermost.Stop.StopIndex),
+                                Message = "Multiple IF-ELSE-IF chains detected. Consider using Evaluate statement for better readability."
+                            });
+                            
+                            // Mark this if statement as reported
+                            reportedIfStatements.Add(outermost);
+                        }
                     }
                 }
             }
@@ -86,6 +95,7 @@ namespace AppRefiner.Linters
         {
             currentNestingLevel = 0;
             ifContextStack.Clear();
+            reportedIfStatements.Clear();
         }
     }
 }
