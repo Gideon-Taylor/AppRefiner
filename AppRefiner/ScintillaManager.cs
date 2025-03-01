@@ -129,6 +129,7 @@ namespace AppRefiner
         // indicators 
         private const int SALMON_HIGLIGHTER = 0;
         private const int GRAY_HIGLIGHTER = 1;
+        private const int BLUE_HIGLIGHTER = 2;
 
         // font colors
         private const int GRAY_TEXT = 250;
@@ -430,6 +431,12 @@ namespace AppRefiner
             editor.SendMessage(SCI_INDICSETALPHA, (IntPtr)GRAY_HIGLIGHTER, (IntPtr)0x60);
             editor.SendMessage(SCI_INDICSETUNDER, (IntPtr)GRAY_HIGLIGHTER, (IntPtr)1);
 
+            /* Create Blue Highlighter */
+            editor.SendMessage(SCI_INDICSETSTYLE, (IntPtr)BLUE_HIGLIGHTER, (IntPtr)INDIC_FULLBOX);
+            editor.SendMessage(SCI_INDICSETFORE, (IntPtr)BLUE_HIGLIGHTER, (IntPtr)0xD9D6A5); /* Blue-orange in BGR format */
+            editor.SendMessage(SCI_INDICSETALPHA, (IntPtr)BLUE_HIGLIGHTER, (IntPtr)0x60);
+            editor.SendMessage(SCI_INDICSETUNDER, (IntPtr)BLUE_HIGLIGHTER, (IntPtr)1);
+
             editor.FoldEnabled = true;
         }
 
@@ -443,6 +450,9 @@ namespace AppRefiner
                     break;
                 case HighlightColor.Gray:
                     indicatorNumber = GRAY_HIGLIGHTER;
+                    break;
+                case HighlightColor.Blue:
+                    indicatorNumber = BLUE_HIGLIGHTER;
                     break;
             }
 
@@ -989,7 +999,8 @@ namespace AppRefiner
     public enum HighlightColor
     {
         Salmon = 0,
-        Gray = 1
+        Gray = 1,
+        Blue = 2
     }
 
     public enum FontColor
