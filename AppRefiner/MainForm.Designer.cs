@@ -63,8 +63,8 @@
             colResultLine = new DataGridViewTextBoxColumn();
             label1 = new Label();
             tabPage3 = new TabPage();
-            grpRefactorVariables = new GroupBox();
-            grpRefactorImports = new GroupBox();
+            groupBox1 = new GroupBox();
+            btnAddFlowerBox = new Button();
             progressBar1 = new ProgressBar();
             lblStatus = new Label();
             btnOptimizeImports = new Button();
@@ -90,7 +90,7 @@
             splitContainer2.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)dataGridView2).BeginInit();
             tabPage3.SuspendLayout();
-            grpRefactorImports.SuspendLayout();
+            groupBox1.SuspendLayout();
             SuspendLayout();
             // 
             // splitContainer1
@@ -482,8 +482,7 @@
             // 
             // tabPage3
             // 
-            tabPage3.Controls.Add(grpRefactorVariables);
-            tabPage3.Controls.Add(grpRefactorImports);
+            tabPage3.Controls.Add(groupBox1);
             tabPage3.Location = new Point(4, 24);
             tabPage3.Name = "tabPage3";
             tabPage3.Padding = new Padding(3);
@@ -492,24 +491,26 @@
             tabPage3.Text = "Refactor";
             tabPage3.UseVisualStyleBackColor = true;
             // 
-            // grpRefactorVariables
+            // groupBox1
             // 
-            grpRefactorVariables.Location = new Point(8, 127);
-            grpRefactorVariables.Name = "grpRefactorVariables";
-            grpRefactorVariables.Size = new Size(528, 113);
-            grpRefactorVariables.TabIndex = 1;
-            grpRefactorVariables.TabStop = false;
-            grpRefactorVariables.Text = "Variables";
+            groupBox1.Controls.Add(btnOptimizeImports);
+            groupBox1.Controls.Add(btnAddFlowerBox);
+            groupBox1.Location = new Point(8, 8);
+            groupBox1.Name = "groupBox1";
+            groupBox1.Size = new Size(528, 113);
+            groupBox1.TabIndex = 2;
+            groupBox1.TabStop = false;
+            groupBox1.Text = "Quick Edits";
             // 
-            // grpRefactorImports
+            // btnAddFlowerBox
             // 
-            grpRefactorImports.Controls.Add(btnOptimizeImports);
-            grpRefactorImports.Location = new Point(8, 8);
-            grpRefactorImports.Name = "grpRefactorImports";
-            grpRefactorImports.Size = new Size(528, 113);
-            grpRefactorImports.TabIndex = 0;
-            grpRefactorImports.TabStop = false;
-            grpRefactorImports.Text = "Imports";
+            btnAddFlowerBox.Location = new Point(6, 22);
+            btnAddFlowerBox.Name = "btnAddFlowerBox";
+            btnAddFlowerBox.Size = new Size(109, 23);
+            btnAddFlowerBox.TabIndex = 2;
+            btnAddFlowerBox.Text = "Add Flowerbox";
+            btnAddFlowerBox.UseVisualStyleBackColor = true;
+            btnAddFlowerBox.Click += btnAddFlowerBox_Click;
             // 
             // progressBar1
             // 
@@ -531,12 +532,13 @@
             // 
             // btnOptimizeImports
             // 
-            btnOptimizeImports.Location = new Point(6, 23);
+            btnOptimizeImports.Location = new Point(121, 22);
             btnOptimizeImports.Name = "btnOptimizeImports";
-            btnOptimizeImports.Size = new Size(75, 23);
-            btnOptimizeImports.TabIndex = 1;
-            btnOptimizeImports.Text = "button1";
+            btnOptimizeImports.Size = new Size(109, 23);
+            btnOptimizeImports.TabIndex = 3;
+            btnOptimizeImports.Text = "Optimize Imports";
             btnOptimizeImports.UseVisualStyleBackColor = true;
+            btnOptimizeImports.Click += btnOptimizeImports_Click;
             // 
             // MainForm
             // 
@@ -570,7 +572,7 @@
             splitContainer2.ResumeLayout(false);
             ((System.ComponentModel.ISupportInitialize)dataGridView2).EndInit();
             tabPage3.ResumeLayout(false);
-            grpRefactorImports.ResumeLayout(false);
+            groupBox1.ResumeLayout(false);
             ResumeLayout(false);
         }
 
@@ -601,8 +603,6 @@
         private DataGridViewTextBoxColumn colResultLine;
         private Label label1;
         private TabPage tabPage3;
-        private GroupBox grpRefactorVariables;
-        private GroupBox grpRefactorImports;
         private ProgressBar progressBar1;
         private Label lblStatus;
         private SplitContainer splitContainer2;
@@ -615,6 +615,8 @@
         private Button btnClearLint;
         private Button btnRestoreSnapshot;
         private Button btnTakeSnapshot;
+        private GroupBox groupBox1;
+        private Button btnAddFlowerBox;
         private Button btnOptimizeImports;
     }
 }

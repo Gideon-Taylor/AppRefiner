@@ -15,6 +15,9 @@ using System.Windows.Forms;
 using static AppRefiner.PeopleCode.PeopleCodeParser;
 using static SqlParser.Ast.CopyTarget;
 using Antlr4.Build.Tasks;
+using AppRefiner.Refactors;
+using SharpCompress.Readers;
+using Antlr4.Runtime.Tree;
 
 namespace AppRefiner
 {
@@ -91,7 +94,7 @@ namespace AppRefiner
             chkBetterSQL.Checked = Properties.Settings.Default.betterSQL;
             chkAutoDark.Checked = Properties.Settings.Default.autoDark;
             chkLintAnnotate.Checked = Properties.Settings.Default.lintAnnotate;
-            
+
             LoadStylerStates();
             LoadLinterStates();
         }
@@ -103,10 +106,10 @@ namespace AppRefiner
             Properties.Settings.Default.betterSQL = chkBetterSQL.Checked;
             Properties.Settings.Default.autoDark = chkAutoDark.Checked;
             Properties.Settings.Default.lintAnnotate = chkLintAnnotate.Checked;
-            
+
             SaveStylerStates();
             SaveLinterStates();
-            
+
             Properties.Settings.Default.Save();
         }
 
@@ -116,9 +119,9 @@ namespace AppRefiner
             {
                 var states = System.Text.Json.JsonSerializer.Deserialize<List<RuleState>>(
                     Properties.Settings.Default.StylerStates);
-                    
+
                 if (states == null) return;
-                
+
                 foreach (var state in states)
                 {
                     var styler = stylers.FirstOrDefault(s => s.GetType().FullName == state.TypeName);
@@ -140,13 +143,13 @@ namespace AppRefiner
 
         private void SaveStylerStates()
         {
-            var states = stylers.Select(s => new RuleState 
-            { 
+            var states = stylers.Select(s => new RuleState
+            {
                 TypeName = s.GetType().FullName ?? "",
-                Active = s.Active 
+                Active = s.Active
             }).ToList();
-            
-            Properties.Settings.Default.StylerStates = 
+
+            Properties.Settings.Default.StylerStates =
                 System.Text.Json.JsonSerializer.Serialize(states);
         }
 
@@ -156,9 +159,9 @@ namespace AppRefiner
             {
                 var states = System.Text.Json.JsonSerializer.Deserialize<List<RuleState>>(
                     Properties.Settings.Default.LinterStates);
-                    
+
                 if (states == null) return;
-                
+
                 foreach (var state in states)
                 {
                     var linter = linterRules.FirstOrDefault(l => l.GetType().FullName == state.TypeName);
@@ -180,13 +183,13 @@ namespace AppRefiner
 
         private void SaveLinterStates()
         {
-            var states = linterRules.Select(l => new RuleState 
-            { 
+            var states = linterRules.Select(l => new RuleState
+            {
                 TypeName = l.GetType().FullName ?? "",
-                Active = l.Active 
+                Active = l.Active
             }).ToList();
-            
-            Properties.Settings.Default.LinterStates = 
+
+            Properties.Settings.Default.LinterStates =
                 System.Text.Json.JsonSerializer.Serialize(states);
         }
 
@@ -200,8 +203,6 @@ namespace AppRefiner
             if (tmrScan.Enabled == false)
             {
                 grpEditorActions.Enabled = tmrScan.Enabled;
-                grpRefactorImports.Enabled = tmrScan.Enabled;
-                grpRefactorVariables.Enabled = tmrScan.Enabled;
                 btnLintCode.Enabled = tmrScan.Enabled;
             }
         }
@@ -212,8 +213,6 @@ namespace AppRefiner
             {
                 grpEditorActions.Enabled = true;
                 btnLintCode.Enabled = true;
-                grpRefactorImports.Enabled = true;
-                grpRefactorVariables.Enabled = true;
 
             }));
 
@@ -537,25 +536,35 @@ namespace AppRefiner
 
             PeopleCodeLexer lexer = new PeopleCodeLexer(new Antlr4.Runtime.AntlrInputStream(activeEditor.ContentString));
             var stream = new Antlr4.Runtime.CommonTokenStream(lexer);
-            PeopleCodeParser parser = new PeopleCodeParser(new Antlr4.Runtime.CommonTokenStream(lexer));
-            var program = parser.program();
 
+            // Get all tokens including those on hidden channels
+            stream.Fill();
+
+            // Collect all comments from both comment channels
+            var comments = stream.GetTokens()
+                .Where(token => token.Channel == PeopleCodeLexer.COMMENTS || token.Channel == PeopleCodeLexer.API_COMMENTS)
+                .ToList();
+
+            PeopleCodeParser parser = new PeopleCodeParser(stream);
+            var program = parser.program();
             var activeLinters = linterRules.Where(a => a.Active);
             MultiParseTreeWalker walker = new();
             List<Report> reports = new();
+
             foreach (var linter in activeLinters)
             {
                 linter.Reports = reports;
+                linter.Comments = comments;  // Make comments available to each linter
                 walker.AddListener(linter);
             }
+
             walker.Walk(program);
+
             foreach (var linter in activeLinters)
             {
                 linter.Reset();
             }
 
-            /* For each report, add a row to datagridview2 which has columns Level, Message, Line Number */
-            /* TODO: Work out the styles for each character so we can report multiple issues on a single line */
             foreach (var g in reports.GroupBy(r => r.Line))
             {
                 List<string> messages = new();
@@ -582,28 +591,7 @@ namespace AppRefiner
                 {
                     ScintillaManager.SetAnnotations(activeEditor, messages, g.First().Line, styles);
                 }
-                /* SetAnnotations*/
-
-
-                /* StringBuilder sb = new();
-                
-                
-
-                if (chkLintAnnotate.Checked)
-                {
-                    AnnotationStyle style = report.Type switch
-                    {
-                        ReportType.Error => AnnotationStyle.Red,
-                        ReportType.Warning => AnnotationStyle.Yellow,
-                        ReportType.Info => AnnotationStyle.Gray,
-                        _ => AnnotationStyle.Gray
-                    };
-                    ScintillaManager.SetAnnotation(activeEditor, report.Line, sb.ToString().Trim(), style);
-                } */
             }
-
-
-
         }
 
         private void dataGridView3_CellContentClick(object sender, DataGridViewCellEventArgs e)
@@ -709,6 +697,38 @@ namespace AppRefiner
             activeEditor.SnapshotText = null;
             btnRestoreSnapshot.Enabled = false;
 
+        }
+
+        private void btnAddFlowerBox_Click(object sender, EventArgs e)
+        {
+            ProcessRefactor(new AddFlowerBox());
+        }
+
+        private void ProcessRefactor(BaseRefactor refactorClass)
+        {
+            ScintillaManager.ClearAnnotations(activeEditor);
+
+            var freshText = ScintillaManager.GetScintillaText(activeEditor);
+            activeEditor.SnapshotText = freshText;
+            btnRestoreSnapshot.Enabled = true;
+
+            PeopleCodeLexer lexer = new PeopleCodeLexer(new Antlr4.Runtime.AntlrInputStream(freshText));
+            var stream = new Antlr4.Runtime.CommonTokenStream(lexer);
+            PeopleCodeParser parser = new PeopleCodeParser(stream);
+            var program = parser.program();
+
+            refactorClass.Initialize(freshText, stream);
+
+            ParseTreeWalker walker = new();
+            walker.Walk(refactorClass, program);
+            var newText = refactorClass.GetRefactoredCode();
+            ScintillaManager.SetScintillaText(activeEditor, newText);
+        }
+
+        private void btnOptimizeImports_Click(object sender, EventArgs e)
+        {
+
+            ProcessRefactor(new OptimizeImports());
         }
     }
 }

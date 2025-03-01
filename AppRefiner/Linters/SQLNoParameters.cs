@@ -108,10 +108,6 @@ namespace AppRefiner.Linters
         public override void Reset()
         {
             // No state to reset in this linter
-            if (Reports != null)
-            {
-                Reports.Clear();
-            }
         }
     }
 }

@@ -1,22 +1,12 @@
 ﻿using Antlr4.Runtime;
 using Antlr4.Runtime.Misc;
 using AppRefiner.PeopleCode;
+using AppRefiner.Refactors.CodeChanges;
 using System.Collections.Generic;
 using System.Text;
 
 namespace AppRefiner.Refactors
 {
-    /// <summary>
-    /// Represents a code change to be applied during refactoring
-    /// </summary>
-    public struct CodeChange
-    {
-        public int StartIndex { get; set; }
-        public int EndIndex { get; set; }
-        public string NewText { get; set; }
-        public string Description { get; set; }
-    }
-
     /// <summary>
     /// Base class for implementing PeopleCode refactoring operations
     /// </summary>
@@ -49,8 +39,7 @@ namespace AppRefiner.Refactors
             var result = new StringBuilder(SourceText);
             foreach (var change in Changes)
             {
-                result.Remove(change.StartIndex, change.EndIndex - change.StartIndex);
-                result.Insert(change.StartIndex, change.NewText);
+                change.Apply(result);
             }
 
             return result.ToString();
@@ -62,15 +51,41 @@ namespace AppRefiner.Refactors
         public IReadOnlyList<CodeChange> GetChanges() => Changes.AsReadOnly();
 
         /// <summary>
-        /// Adds a new code change to the refactoring
+        /// Adds a new replacement change to the refactoring
         /// </summary>
         protected void AddChange(ParserRuleContext context, string newText, string description)
         {
-            Changes.Add(new CodeChange
+            Changes.Add(new ReplaceChange
             {
                 StartIndex = context.Start.StartIndex,
                 EndIndex = context.Stop.StopIndex + 1,
                 NewText = newText,
+                Description = description
+            });
+        }
+
+        /// <summary>
+        /// Adds a new insertion change to the refactoring
+        /// </summary>
+        protected void AddInsert(int position, string textToInsert, string description)
+        {
+            Changes.Add(new InsertChange
+            {
+                StartIndex = position,
+                TextToInsert = textToInsert,
+                Description = description
+            });
+        }
+
+        /// <summary>
+        /// Adds a new delete change to the refactoring
+        /// </summary>
+        protected void AddDelete(int startIndex, int endIndex, string description)
+        {
+            Changes.Add(new DeleteChange
+            {
+                StartIndex = startIndex,
+                EndIndex = endIndex,
                 Description = description
             });
         }
