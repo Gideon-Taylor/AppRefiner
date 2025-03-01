@@ -17,21 +17,7 @@ namespace AppRefiner.Linters
             Type = ReportType.Error;
             Active = true;
         }
-        private int GetOutputCount(Statement.Select statement)
-        {
-            return statement.Query.Body.AsSelectExpression().Select.Projection.Count;
-        }
-        private int GetBindCount(Statement statement)
-        {
-            var placeHolderRegex = new Regex("Placeholder { Value = (:[0-9]+) }");
-            var matches = placeHolderRegex.Matches(statement.ToString());
-            HashSet<string> placeHolders = new HashSet<string>();
-            foreach (Match match in matches)
-            {
-                placeHolders.Add(match.Groups[1].Value);
-            }
-            return placeHolders.Count;
-        }
+        // Using the helper class for SQL-related functionality
 
         private bool IsTypeSQL(TypeTContext typeContext)
         {
@@ -87,29 +73,27 @@ namespace AppRefiner.Linters
             AddToCurrentScope(varName, defaultInfo);
         }
 
-        private void ValidateArguments(string sqlText, FunctionCallArgumentsContext args, SQLStatementInfo sqlInfo, ParserRuleContext context, bool AllowZeroBinds = false)
+        private void ValidateArguments(string sqlText, FunctionCallArgumentsContext args, SQLStatementInfo sqlInfo, ParserRuleContext context, bool allowZeroBinds = false)
         {
             try
             {
-                var ast = new SqlQueryParser().Parse(sqlText, new PeopleSoftSQLDialect());
-                var statement = ast.FirstOrDefault();
+                var statement = SQLHelper.ParseSQL(sqlText);
                 if (statement == null)
                     return;
 
-
                 if (statement is Statement.Select select)
                 {
-                    sqlInfo.OutputColumnCount = GetOutputCount(select);
+                    sqlInfo.OutputColumnCount = SQLHelper.GetOutputCount(select);
                 }
 
-                var bindCount = GetBindCount(statement);
+                var bindCount = SQLHelper.GetBindCount(statement);
                 var totalInOutArgs = args.expression().Length - 1;
 
                 // Update SQLStatementInfo
                 sqlInfo.SqlText = sqlText;
                 sqlInfo.BindCount = bindCount;
 
-                if (totalInOutArgs == 0 && AllowZeroBinds) return;
+                if (totalInOutArgs == 0 && allowZeroBinds) return;
 
                 if (totalInOutArgs != bindCount)
                 {
