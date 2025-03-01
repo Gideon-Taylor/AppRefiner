@@ -12,13 +12,13 @@ namespace AppRefiner.Linters
     public class SQLNoParameters : BaseLintRule
     {
         // Pattern to look for dynamic values being used directly in SQL
-        private static readonly Regex DynamicValuePattern = new Regex(@"['"]\s*\|\s*");
+        private static readonly Regex DynamicValuePattern = new Regex(@"['""]\s*\|\s*");
         
         public SQLNoParameters()
         {
             Description = "Detects SQL statements that might be vulnerable to SQL injection";
             Type = ReportType.Error;
-            Active = true;
+            Active = false;  // Set to false by default to be consistent with other linters
         }
 
         public override void EnterSimpleFunctionCall(SimpleFunctionCallContext context)
@@ -106,6 +106,11 @@ namespace AppRefiner.Linters
         
         public override void Reset()
         {
+            // No state to reset in this linter
+            if (Reports != null)
+            {
+                Reports.Clear();
+            }
         }
     }
 }
