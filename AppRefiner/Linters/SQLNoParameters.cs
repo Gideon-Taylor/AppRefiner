@@ -12,6 +12,7 @@ namespace AppRefiner.Linters
     public class SQLNoParameters : BaseLintRule
     {
         // Pattern to look for dynamic values being used directly in SQL
+        // This matches both single and double quotes followed by pipe operator
         private static readonly Regex DynamicValuePattern = new Regex(@"['""]\s*\|\s*");
         
         public SQLNoParameters()
