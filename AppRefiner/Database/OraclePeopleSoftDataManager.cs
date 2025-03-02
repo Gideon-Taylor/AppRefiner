@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Data;
 using System.IO;
 using System.Text.RegularExpressions;
+using System.Text;
 
 namespace AppRefiner.Database
 {
@@ -137,6 +138,92 @@ namespace AppRefiner.Database
             {
                 string objectName = row["SQLID"].ToString();
                 string definition = GetSqlDefinition(objectName);
+                definitions[objectName] = definition;
+            }
+            
+            return definitions;
+        }
+        
+        /// <summary>
+        /// Retrieves the HTML definition for a given object name
+        /// </summary>
+        /// <param name="objectName">Name of the HTML object</param>
+        /// <returns>The HTML definition</returns>
+        public HtmlDefinition GetHtmlDefinition(string objectName)
+        {
+            if (!IsConnected)
+            {
+                throw new InvalidOperationException("Database connection is not open");
+            }
+            
+            // PeopleSoft stores HTML definitions in PSCONTENT table
+            string sql = @"
+                SELECT CONTDATA
+                FROM PSCONTENT
+                WHERE CONTNAME = :objectName
+                ORDER BY SEQNUM";
+                
+            Dictionary<string, object> parameters = new Dictionary<string, object>
+            {
+                { ":objectName", objectName }
+            };
+            
+            DataTable result = _connection.ExecuteQuery(sql, parameters);
+            
+            if (result.Rows.Count == 0)
+            {
+                return new HtmlDefinition(string.Empty, 0);
+            }
+            
+            // Concatenate all parts of the HTML definition
+            StringBuilder htmlContent = new StringBuilder();
+            foreach (DataRow row in result.Rows)
+            {
+                htmlContent.Append(row["CONTDATA"]);
+            }
+            
+            string content = htmlContent.ToString();
+            
+            // Find the highest bind number in the form %Bind(:n)
+            int maxBindNumber = 0;
+            Regex bindRegex = new Regex(@"%Bind\(:(\d+)\)", RegexOptions.IgnoreCase);
+            MatchCollection matches = bindRegex.Matches(content);
+            
+            foreach (Match match in matches)
+            {
+                if (match.Groups.Count > 1 && int.TryParse(match.Groups[1].Value, out int bindNumber))
+                {
+                    maxBindNumber = Math.Max(maxBindNumber, bindNumber);
+                }
+            }
+            
+            return new HtmlDefinition(content, maxBindNumber);
+        }
+
+        /// <summary>
+        /// Retrieves all available HTML definitions
+        /// </summary>
+        /// <returns>Dictionary mapping object names to their HTML definitions</returns>
+        public Dictionary<string, HtmlDefinition> GetAllHtmlDefinitions()
+        {
+            if (!IsConnected)
+            {
+                throw new InvalidOperationException("Database connection is not open");
+            }
+            
+            Dictionary<string, HtmlDefinition> definitions = new Dictionary<string, HtmlDefinition>();
+            
+            // Query to get all HTML object names
+            string sqlNames = @"
+                SELECT DISTINCT CONTNAME
+                FROM PSCONTENT";
+                
+            DataTable namesResult = _connection.ExecuteQuery(sqlNames);
+            
+            foreach (DataRow row in namesResult.Rows)
+            {
+                string objectName = row["CONTNAME"].ToString();
+                HtmlDefinition definition = GetHtmlDefinition(objectName);
                 definitions[objectName] = definition;
             }
             

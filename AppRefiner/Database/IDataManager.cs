@@ -42,5 +42,18 @@ namespace AppRefiner.Database
         /// </summary>
         /// <returns>Dictionary mapping object names to their SQL definitions</returns>
         Dictionary<string, string> GetAllSqlDefinitions();
+        
+        /// <summary>
+        /// Retrieves the HTML definition for a given object name
+        /// </summary>
+        /// <param name="objectName">Name of the HTML object</param>
+        /// <returns>The HTML definition</returns>
+        HtmlDefinition GetHtmlDefinition(string objectName);
+
+        /// <summary>
+        /// Retrieves all available HTML definitions
+        /// </summary>
+        /// <returns>Dictionary mapping object names to their HTML definitions</returns>
+        Dictionary<string, HtmlDefinition> GetAllHtmlDefinitions();
     }
 }
