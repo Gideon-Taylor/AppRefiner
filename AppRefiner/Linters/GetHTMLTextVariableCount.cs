@@ -97,14 +97,6 @@ namespace AppRefiner.Linters
                     }
                 }
             }
-            // Handle string literal
-            else if (expr is LiteralExprContext literalExpr)
-            {
-                var htmlName = literalExpr.GetText();
-                // Remove quotes from HTML name
-                return htmlName.Substring(1, htmlName.Length - 2);
-            }
-
             return null;
         }
     }

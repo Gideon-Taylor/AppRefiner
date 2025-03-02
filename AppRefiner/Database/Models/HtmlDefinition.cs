@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Text;
 
-namespace AppRefiner.Database
+namespace AppRefiner.Database.Models
 {
     /// <summary>
     /// Represents an HTML definition with its content and bind information

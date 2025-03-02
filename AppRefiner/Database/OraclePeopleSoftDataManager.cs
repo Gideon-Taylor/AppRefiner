@@ -4,6 +4,7 @@ using System.Data;
 using System.IO;
 using System.Text.RegularExpressions;
 using System.Text;
+using AppRefiner.Database.Models;
 
 namespace AppRefiner.Database
 {
@@ -126,8 +127,7 @@ namespace AppRefiner.Database
             string sqlNames = @"
                 SELECT DISTINCT A.SQLID
                 FROM PSSQLDEFN A
-                WHERE A.SQLTYPE = 'SQL'
-                AND EXISTS (
+                WHERE EXISTS (
                     SELECT 1 FROM PSSQLTEXTDEFN B
                     WHERE A.SQLID = B.SQLID
                 )";
