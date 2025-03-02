@@ -1,4 +1,5 @@
 using Antlr4.Runtime;
+using AppRefiner.Database;
 using AppRefiner.Linters.Models;
 using AppRefiner.PeopleCode;
 using SqlParser;
@@ -17,7 +18,8 @@ namespace AppRefiner.Linters
             Type = ReportType.Error;
             Active = true;
         }
-        // Using the helper class for SQL-related functionality
+
+        public override DataManagerRequirement DatabaseRequirement => DataManagerRequirement.Optional;
 
         private bool IsTypeSQL(TypeTContext typeContext)
         {
@@ -73,8 +75,56 @@ namespace AppRefiner.Linters
             AddToCurrentScope(varName, defaultInfo);
         }
 
-        private void ValidateArguments(string sqlText, FunctionCallArgumentsContext args, SQLStatementInfo sqlInfo, ParserRuleContext context, bool allowZeroBinds = false)
+        private (string? sqlText, int start, int stop) GetSqlText(ExpressionContext expr)
         {
+            // Handle SQL.NAME format
+            if (expr is DotAccessExprContext dotAccess)
+            {
+                var leftExpr = dotAccess.expression();
+                if (leftExpr is IdentifierExprContext idExpr && 
+                    idExpr.ident().GetText().Equals("SQL", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (dotAccess.children[1] is DotAccessContext dotAccessCtx)
+                    {
+                        var defName = dotAccessCtx.genericID().GetText();
+                        if (DataManager != null)
+                        {
+                            var sqlText = DataManager.GetSqlDefinition(defName);
+                            if (string.IsNullOrWhiteSpace(sqlText))
+                            {
+                                Reports?.Add(new Report
+                                {
+                                    Type = ReportType.Error,
+                                    Line = expr.Start.Line - 1,
+                                    Span = (expr.Start.StartIndex, expr.Stop.StopIndex),
+                                    Message = $"Invalid SQL definition: {defName}"
+                                });
+                                return (null, expr.Start.StartIndex, expr.Stop.StopIndex);
+                            }
+                            return (sqlText, expr.Start.StartIndex, expr.Stop.StopIndex);
+                        }
+                        return (null, expr.Start.StartIndex, expr.Stop.StopIndex);
+                    }
+                    
+                }
+            }
+            // Handle string literal
+            else if (expr is LiteralExprContext literalExpr)
+            {
+                var sqlText = literalExpr.GetText();
+                // Remove quotes from SQL text
+                sqlText = sqlText.Substring(1, sqlText.Length - 2);
+                return (sqlText, expr.Start.StartIndex, expr.Stop.StopIndex);
+            }
+
+            return (null, expr.Start.StartIndex, expr.Stop.StopIndex);
+        }
+
+        private void ValidateArguments(string? sqlText, FunctionCallArgumentsContext args, SQLStatementInfo sqlInfo, ParserRuleContext context, bool allowZeroBinds = false)
+        {
+            if (string.IsNullOrWhiteSpace(sqlText))
+                return;
+
             try
             {
                 var statement = SQLHelper.ParseSQL(sqlText);
@@ -95,18 +145,16 @@ namespace AppRefiner.Linters
 
                 if (totalInOutArgs == 0 && allowZeroBinds) return;
 
-                if (totalInOutArgs != bindCount)
+                if (totalInOutArgs != bindCount + sqlInfo.OutputColumnCount)
                 {
                     Reports?.Add(new Report
                     {
                         Type = ReportType.Error,
                         Line = context.Start.Line - 1,
                         Span = (args.expression()[0].Start.StartIndex, context.Stop.StopIndex),
-                        Message = $"SQL statement has incorrect number of bind parameters. Expected {bindCount}, got {totalInOutArgs}."
+                        Message = $"SQL statement has incorrect number of In/Out parameters. Expected {bindCount + sqlInfo.OutputColumnCount}, got {totalInOutArgs}."
                     });
                 }
-
-
             }
             catch (Exception)
             {
@@ -125,21 +173,7 @@ namespace AppRefiner.Linters
             if (args?.expression() == null || args.expression().Length == 0)
                 return;
 
-            if (args.expression().Length == 1)
-            {
-                /* Warn that no binds are provided, make sure you call Execute before fetching */
-                Reports?.Add(new Report
-                {
-                    Type = ReportType.Warning,
-                    Line = context.Start.Line - 1,
-                    Span = (context.Start.StartIndex, context.Stop.StopIndex),
-                    Message = "CreateSQL with no binds provided. Make sure to call Execute before Fetch."
-                });
-
-            }
-
             var firstArg = args.expression()[0];
-
             string? varName = null;
 
             if (context.Parent.Parent is LocalVariableDeclAssignmentContext localAssign)
@@ -152,32 +186,37 @@ namespace AppRefiner.Linters
                 varName = equalityAssign.GetChild(0).GetText();
             }
 
-            if (firstArg is DotAccessExprContext dotAccess)
-            {
-                if (TryFindInScopes(varName, out var sqlInfoObj))
-                    sqlInfoObj.UsesSQLDefn = true;
-                return;
-            }
-
-            if (firstArg is not LiteralExprContext literalExpr)
-                return;
-
-            var sqlText = literalExpr.GetText();
-            // Remove quotes from SQL text
-            sqlText = sqlText.Substring(1, sqlText.Length - 2);
-
-            // Validate arguments and update SQLStatementInfo
-            var sqlInfo = new SQLStatementInfo(sqlText, 0, 0, context.Start.Line, (context.Start.StartIndex, context.Stop.StopIndex), "");
+            var (sqlText, start, stop) = GetSqlText(firstArg);
             
+            // Create SQLStatementInfo even if sqlText is null to track the variable
+            var sqlInfo = new SQLStatementInfo(
+                sqlText ?? "", 
+                0, 
+                0, 
+                context.Start.Line, 
+                (start, stop), 
+                varName ?? ""
+            );
 
-            
-
-            
-            //context.Parent.Parent.GetChild(2).GetText();
             if (varName != null)
             {
                 ReplaceInFoundScope(varName, sqlInfo);
-                ValidateArguments(sqlText, args, sqlInfo, context, true);
+                if (sqlText != null)
+                {
+                    ValidateArguments(sqlText, args, sqlInfo, context, true);
+                }
+            }
+
+            if (args.expression().Length == 1 && sqlInfo.BindCount > 0)
+            {
+                /* Warn that no binds are provided, make sure you call Execute before fetching */
+                Reports?.Add(new Report
+                {
+                    Type = ReportType.Warning,
+                    Line = context.Start.Line - 1,
+                    Span = (context.Start.StartIndex, context.Stop.StopIndex),
+                    Message = "CreateSQL with no binds provided. Make sure to call Execute before Fetch."
+                });
             }
 
         }
@@ -200,12 +239,6 @@ namespace AppRefiner.Linters
             // Check if this is a SQL variable we're tracking
             if (!TryFindInScopes(varName, out var sqlInfo))
                 return;
-
-            if (sqlInfo.UsesSQLDefn)
-            {
-                /* We cannot validate these since we don't have SQL text available... */
-                return;
-            }
 
             // Validate the function call arguments
             var args = context.functionCallArguments();
@@ -240,19 +273,7 @@ namespace AppRefiner.Linters
         private void ValidateOpenCall(DotAccessContext context, FunctionCallArgumentsContext args, SQLStatementInfo sqlInfo)
         {
             var firstArg = args.expression()[0];
-
-            if (firstArg is DotAccessExprContext dotAccess)
-            {
-                sqlInfo.UsesSQLDefn = true;
-                return;
-            }
-
-            if (firstArg is not LiteralExprContext literalExpr)
-                return;
-
-            var sqlText = literalExpr.GetText();
-            // Remove quotes from SQL text
-            sqlText = sqlText.Substring(1, sqlText.Length - 2);
+            var (sqlText, start, stop) = GetSqlText(firstArg);
 
             // Validate arguments and update SQLStatementInfo
             ValidateArguments(sqlText, args, sqlInfo, context);

@@ -7,6 +7,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using Antlr4.Runtime;
+using AppRefiner.Database;
 
 namespace AppRefiner.Linters
 {
@@ -16,6 +17,9 @@ namespace AppRefiner.Linters
         public string Description = "Description not set";
         public ReportType Type;
         public List<Report>? Reports;
+        public virtual DataManagerRequirement DatabaseRequirement => DataManagerRequirement.NotRequired;
+        public IDataManager? DataManager;
+
         // Add collection to store comments from lexer
         public IList<IToken>? Comments;
         public abstract void Reset();

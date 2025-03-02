@@ -18,6 +18,7 @@ using Antlr4.Build.Tasks;
 using AppRefiner.Refactors;
 using SharpCompress.Readers;
 using Antlr4.Runtime.Tree;
+using AppRefiner.Database;
 
 namespace AppRefiner
 {
@@ -58,7 +59,7 @@ namespace AppRefiner
         private ScintillaEditor? activeEditor = null;
         private List<BaseLintRule> linterRules = new();
         private List<BaseStyler> stylers = new(); // Changed from List<BaseStyler> analyzers
-        
+
         // Map of process IDs to their corresponding data managers
         private Dictionary<uint, IDataManager> processDataManagers = new Dictionary<uint, IDataManager>();
 
@@ -266,13 +267,19 @@ namespace AppRefiner
                     {
 
                         editor = ScintillaManager.GetEditor(hWnd);
-                        
-                        // Associate the data manager with this editor if one exists for this process
-                        if (processDataManagers.ContainsKey(procId))
+                        processDataManagers.TryGetValue(procId, out IDataManager? value);
+                        if (value == null)
                         {
-                            editor.DataManager = processDataManagers[procId];
+                            btnConnectDB.Text = "Connect DB...";
                         }
-                        
+                        else
+                        {
+                            btnConnectDB.Text = "Disconnect DB";
+                        }
+
+                        // Associate the data manager with this editor if one exists for this process
+                        editor.DataManager ??= value;
+
                         return false;
                     }
                 }
@@ -558,11 +565,26 @@ namespace AppRefiner
             PeopleCodeParser parser = new PeopleCodeParser(stream);
             var program = parser.program();
             var activeLinters = linterRules.Where(a => a.Active);
+
+            /* Only run NotRequired or Optional linters if there is no database connection */
+            if (activeEditor.DataManager == null)
+            {
+                activeLinters = activeLinters.Where(a => a.DatabaseRequirement != DataManagerRequirement.Required);
+            }
+
             MultiParseTreeWalker walker = new();
             List<Report> reports = new();
 
+            /* check to see if there's recently a new datamanager for this editor */
+            if (processDataManagers.TryGetValue(activeEditor.ProcessId, out IDataManager? value))
+            {
+                activeEditor.DataManager = value;
+            }
+
+            IDataManager? dataManger = activeEditor.DataManager;
             foreach (var linter in activeLinters)
             {
+                linter.DataManager = dataManger;
                 linter.Reports = reports;
                 linter.Comments = comments;  // Make comments available to each linter
                 walker.AddListener(linter);
@@ -739,6 +761,29 @@ namespace AppRefiner
         {
 
             ProcessRefactor(new OptimizeImports());
+        }
+
+        private void btnConnectDB_Click(object sender, EventArgs e)
+        {
+            if (activeEditor.DataManager != null)
+            {
+                activeEditor.DataManager.Disconnect();
+                processDataManagers.Remove(activeEditor.ProcessId);
+                activeEditor.DataManager = null;
+                btnConnectDB.Text = "Connect DB...";
+                return;
+            }
+
+            DBConnectDialog dialog = new DBConnectDialog();
+            if (dialog.ShowDialog() == DialogResult.OK)
+            {
+                IDataManager? manager = dialog.DataManager;
+                if (manager != null)
+                {
+                    processDataManagers[activeEditor.ProcessId] = manager;
+                    btnConnectDB.Text = "Disconnect DB";
+                }
+            }
         }
     }
 }

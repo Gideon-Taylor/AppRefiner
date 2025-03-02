@@ -83,7 +83,6 @@ namespace AppRefiner.Database
                 SELECT B.SQLTEXT
                 FROM PSSQLDEFN A, PSSQLTEXTDEFN B
                 WHERE A.SQLID = B.SQLID
-                AND A.SQLTYPE = 'SQL'
                 AND A.SQLID = :objectName
                 ORDER BY B.SEQNUM";
                 
@@ -152,73 +151,5 @@ namespace AppRefiner.Database
             _connection?.Dispose();
         }
         
-        /// <summary>
-        /// Gets all TNS names from the tnsnames.ora file
-        /// </summary>
-        /// <returns>A list of TNS names</returns>
-        public static List<string> GetAllTnsNames()
-        {
-            List<string> tnsNames = new List<string>();
-            string tnsNamesPath = GetTnsNamesPath();
-            
-            if (string.IsNullOrEmpty(tnsNamesPath) || !File.Exists(tnsNamesPath))
-            {
-                return tnsNames;
-            }
-            
-            try
-            {
-                string content = File.ReadAllText(tnsNamesPath);
-                
-                // Regular expression to find TNS entries
-                Regex regex = new Regex(@"^\s*([a-zA-Z0-9_\-]+)\s*=", RegexOptions.Multiline);
-                MatchCollection matches = regex.Matches(content);
-                
-                foreach (Match match in matches)
-                {
-                    if (match.Groups.Count > 1)
-                    {
-                        tnsNames.Add(match.Groups[1].Value.Trim());
-                    }
-                }
-            }
-            catch (Exception)
-            {
-                // Ignore any errors reading the file
-            }
-            
-            return tnsNames;
-        }
-        
-        /// <summary>
-        /// Gets the path to the tnsnames.ora file
-        /// </summary>
-        /// <returns>The full path to tnsnames.ora, or null if not found</returns>
-        private static string GetTnsNamesPath()
-        {
-            // Check TNS_ADMIN environment variable first
-            string tnsAdmin = Environment.GetEnvironmentVariable("TNS_ADMIN");
-            if (!string.IsNullOrEmpty(tnsAdmin))
-            {
-                string path = Path.Combine(tnsAdmin, "tnsnames.ora");
-                if (File.Exists(path))
-                {
-                    return path;
-                }
-            }
-            
-            // Check ORACLE_HOME environment variable
-            string oracleHome = Environment.GetEnvironmentVariable("ORACLE_HOME");
-            if (!string.IsNullOrEmpty(oracleHome))
-            {
-                string path = Path.Combine(oracleHome, "network", "admin", "tnsnames.ora");
-                if (File.Exists(path))
-                {
-                    return path;
-                }
-            }
-            
-            return null;
-        }
     }
 }

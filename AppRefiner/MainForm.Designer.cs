@@ -54,6 +54,7 @@
             colDescr = new DataGridViewTextBoxColumn();
             colLevel = new DataGridViewComboBoxColumn();
             splitContainer2 = new SplitContainer();
+            btnConnectDB = new Button();
             btnLintCode = new Button();
             btnClearLint = new Button();
             chkLintAnnotate = new CheckBox();
@@ -64,10 +65,10 @@
             label1 = new Label();
             tabPage3 = new TabPage();
             groupBox1 = new GroupBox();
+            btnOptimizeImports = new Button();
             btnAddFlowerBox = new Button();
             progressBar1 = new ProgressBar();
             lblStatus = new Label();
-            btnOptimizeImports = new Button();
             ((System.ComponentModel.ISupportInitialize)splitContainer1).BeginInit();
             splitContainer1.Panel1.SuspendLayout();
             splitContainer1.Panel2.SuspendLayout();
@@ -389,6 +390,7 @@
             // 
             // splitContainer2.Panel1
             // 
+            splitContainer2.Panel1.Controls.Add(btnConnectDB);
             splitContainer2.Panel1.Controls.Add(btnLintCode);
             // 
             // splitContainer2.Panel2
@@ -399,14 +401,25 @@
             splitContainer2.SplitterDistance = 352;
             splitContainer2.TabIndex = 0;
             // 
+            // btnConnectDB
+            // 
+            btnConnectDB.Dock = DockStyle.Right;
+            btnConnectDB.Location = new Point(245, 0);
+            btnConnectDB.Name = "btnConnectDB";
+            btnConnectDB.Size = new Size(107, 40);
+            btnConnectDB.TabIndex = 10;
+            btnConnectDB.Text = "Connect DB...";
+            btnConnectDB.UseVisualStyleBackColor = true;
+            btnConnectDB.Click += btnConnectDB_Click;
+            // 
             // btnLintCode
             // 
-            btnLintCode.Dock = DockStyle.Top;
+            btnLintCode.Dock = DockStyle.Left;
             btnLintCode.Enabled = false;
             btnLintCode.Location = new Point(0, 0);
             btnLintCode.Name = "btnLintCode";
-            btnLintCode.Size = new Size(352, 40);
-            btnLintCode.TabIndex = 4;
+            btnLintCode.Size = new Size(239, 40);
+            btnLintCode.TabIndex = 9;
             btnLintCode.Text = "Lint Code";
             btnLintCode.UseVisualStyleBackColor = true;
             btnLintCode.Click += btnLintCode_Click;
@@ -502,6 +515,16 @@
             groupBox1.TabStop = false;
             groupBox1.Text = "Quick Edits";
             // 
+            // btnOptimizeImports
+            // 
+            btnOptimizeImports.Location = new Point(121, 22);
+            btnOptimizeImports.Name = "btnOptimizeImports";
+            btnOptimizeImports.Size = new Size(109, 23);
+            btnOptimizeImports.TabIndex = 3;
+            btnOptimizeImports.Text = "Optimize Imports";
+            btnOptimizeImports.UseVisualStyleBackColor = true;
+            btnOptimizeImports.Click += btnOptimizeImports_Click;
+            // 
             // btnAddFlowerBox
             // 
             btnAddFlowerBox.Location = new Point(6, 22);
@@ -529,16 +552,6 @@
             lblStatus.TabIndex = 21;
             lblStatus.Text = "Stopped";
             lblStatus.TextAlign = ContentAlignment.MiddleCenter;
-            // 
-            // btnOptimizeImports
-            // 
-            btnOptimizeImports.Location = new Point(121, 22);
-            btnOptimizeImports.Name = "btnOptimizeImports";
-            btnOptimizeImports.Size = new Size(109, 23);
-            btnOptimizeImports.TabIndex = 3;
-            btnOptimizeImports.Text = "Optimize Imports";
-            btnOptimizeImports.UseVisualStyleBackColor = true;
-            btnOptimizeImports.Click += btnOptimizeImports_Click;
             // 
             // MainForm
             // 
@@ -606,7 +619,6 @@
         private ProgressBar progressBar1;
         private Label lblStatus;
         private SplitContainer splitContainer2;
-        private Button btnLintCode;
         private CheckBox chkLintAnnotate;
         private DataGridView dataGridView1;
         private DataGridViewCheckBoxColumn colActive;
@@ -618,5 +630,7 @@
         private GroupBox groupBox1;
         private Button btnAddFlowerBox;
         private Button btnOptimizeImports;
+        private Button btnConnectDB;
+        private Button btnLintCode;
     }
 }

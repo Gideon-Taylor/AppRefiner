@@ -8,6 +8,7 @@ using System.IO.Hashing;
 using SQL.Formatter.Core;
 using SQL.Formatter.Language;
 using SQL.Formatter;
+using AppRefiner.Database;
 
 namespace AppRefiner
 {
@@ -954,6 +955,8 @@ namespace AppRefiner
         public string? SnapshotText = null;
         public bool AnnotationsInitialized { get; set; } = false;
         public IntPtr AnnotationStyleOffset = IntPtr.Zero;
+        public IDataManager? DataManager = null;
+
         public ScintillaEditor(IntPtr hWnd, uint procID, string caption)
         {
             this.hWnd = hWnd;

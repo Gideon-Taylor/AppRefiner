@@ -1,6 +1,9 @@
-﻿using AppRefiner.PeopleCode;
+﻿using Antlr4.Runtime;
+using AppRefiner.Database;
+using AppRefiner.Linters.Models;
+using AppRefiner.PeopleCode;
+using SqlParser;
 using SqlParser.Ast;
-using System;
 using static AppRefiner.PeopleCode.PeopleCodeParser;
 
 namespace AppRefiner.Linters
@@ -14,51 +17,100 @@ namespace AppRefiner.Linters
             Active = false;
         }
 
+        public override DataManagerRequirement DatabaseRequirement => DataManagerRequirement.Optional;
+
+        private (string? sqlText, int start, int stop) GetSqlText(ExpressionContext expr)
+        {
+            // Handle SQL.NAME format
+            if (expr is DotAccessExprContext dotAccess)
+            {
+                var leftExpr = dotAccess.expression();
+                if (leftExpr is IdentifierExprContext idExpr && 
+                    idExpr.ident().GetText().Equals("SQL", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (dotAccess.children[1] is DotAccessContext dotAccessCtx)
+                    {
+                        var defName = dotAccessCtx.genericID().GetText();
+                        if (DataManager != null)
+                        {
+                            var sqlText = DataManager.GetSqlDefinition(defName);
+                            if (string.IsNullOrWhiteSpace(sqlText))
+                            {
+                                Reports?.Add(new Report
+                                {
+                                    Type = ReportType.Error,
+                                    Line = expr.Start.Line - 1,
+                                    Span = (expr.Start.StartIndex, expr.Stop.StopIndex),
+                                    Message = $"Invalid SQL definition: {defName}"
+                                });
+                                return (null, expr.Start.StartIndex, expr.Stop.StopIndex);
+                            }
+                            return (sqlText, expr.Start.StartIndex, expr.Stop.StopIndex);
+                        }
+                        return (null, expr.Start.StartIndex, expr.Stop.StopIndex);
+                    }
+                }
+            }
+            // Handle string literal
+            else if (expr is LiteralExprContext literalExpr)
+            {
+                var sqlText = literalExpr.GetText();
+                // Remove quotes from SQL text
+                sqlText = sqlText.Substring(1, sqlText.Length - 2);
+                return (sqlText, expr.Start.StartIndex, expr.Stop.StopIndex);
+            }
+
+            return (null, expr.Start.StartIndex, expr.Stop.StopIndex);
+        }
+
         public override void EnterSimpleFunctionCall(SimpleFunctionCallContext context)
         {
             // Check if the function being called is "SQLExec"
-            if (context.genericID().GetText().Equals("SQLExec", StringComparison.OrdinalIgnoreCase))
+            if (!context.genericID().GetText().Equals("SQLExec", StringComparison.OrdinalIgnoreCase))
+                return;
+
+            var args = context.functionCallArguments();
+            if (args?.expression() == null || args.expression().Length == 0)
+                return;
+
+            // Get the first argument
+            var firstArg = args.expression()[0];
+            var (sqlText, start, stop) = GetSqlText(firstArg);
+
+            if (string.IsNullOrWhiteSpace(sqlText))
+                return;
+
+            try
             {
-                var args = context.functionCallArguments();
-                if (args != null && args.expression() != null && args.expression().Length > 0)
+                var statement = SQLHelper.ParseSQL(sqlText);
+                if (statement == null)
+                    return;
+
+                var outputCount = 0;
+                if (statement is Statement.Select select)
                 {
-                    // Get the first argument
-                    var firstArg = args.expression()[0];
-
-                    /* We can only really process this rule for SQLExec and CreateSQL that have a literal string as the first argument */
-                    if (firstArg is LiteralExprContext)
-                    {
-                        var sqlText = SQLHelper.ExtractSQLFromLiteral(firstArg.GetText());
-                        var statement = SQLHelper.ParseSQL(sqlText);
-                        
-                        if (statement == null)
-                        {
-                            return;
-                        }
-
-                        var outputCount = 0;
-                        if (statement is Statement.Select select)
-                        {
-                            outputCount = SQLHelper.GetOutputCount(select);
-                        }
-
-                        /* Count the binds */
-                        var bindCount = SQLHelper.GetBindCount(statement);
-                        var totalInOutArgs = args.expression().Length - 1;
-                        
-                        if (totalInOutArgs != (outputCount + bindCount))
-                        {
-                            /* Report that there are an incorrect number of In/Out parameters and how many there should be */
-                            Reports?.Add(new Report()
-                            {
-                                Type = ReportType.Error,
-                                Line = context.Start.Line - 1,
-                                Span = (firstArg.Start.StartIndex, context.Stop.StopIndex),
-                                Message = $"SQL has incorrect number of In/Out parameters. Expected {bindCount + outputCount}, got {totalInOutArgs}."
-                            });
-                        }
-                    }
+                    outputCount = SQLHelper.GetOutputCount(select);
                 }
+
+                /* Count the binds */
+                var bindCount = SQLHelper.GetBindCount(statement);
+                var totalInOutArgs = args.expression().Length - 1;
+                
+                if (totalInOutArgs != (outputCount + bindCount))
+                {
+                    /* Report that there are an incorrect number of In/Out parameters and how many there should be */
+                    Reports?.Add(new Report()
+                    {
+                        Type = ReportType.Error,
+                        Line = context.Start.Line - 1,
+                        Span = (start, context.Stop.StopIndex),
+                        Message = $"SQL has incorrect number of In/Out parameters. Expected {bindCount + outputCount}, got {totalInOutArgs}."
+                    });
+                }
+            }
+            catch (Exception)
+            {
+                // SQL parsing failed - ignore
             }
         }
 
