@@ -58,6 +58,9 @@ namespace AppRefiner
         private ScintillaEditor? activeEditor = null;
         private List<BaseLintRule> linterRules = new();
         private List<BaseStyler> stylers = new(); // Changed from List<BaseStyler> analyzers
+        
+        // Map of process IDs to their corresponding data managers
+        private Dictionary<uint, IDataManager> processDataManagers = new Dictionary<uint, IDataManager>();
 
         private class RuleState
         {
@@ -263,6 +266,13 @@ namespace AppRefiner
                     {
 
                         editor = ScintillaManager.GetEditor(hWnd);
+                        
+                        // Associate the data manager with this editor if one exists for this process
+                        if (processDataManagers.ContainsKey(procId))
+                        {
+                            editor.DataManager = processDataManagers[procId];
+                        }
+                        
                         return false;
                     }
                 }
