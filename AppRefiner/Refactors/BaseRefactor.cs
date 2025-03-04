@@ -13,8 +13,8 @@ namespace AppRefiner.Refactors
     public abstract class BaseRefactor : PeopleCodeParserBaseListener
     {
         protected List<CodeChange> Changes { get; } = new();
-        protected ITokenStream TokenStream { get; private set; }
-        protected string SourceText { get; private set; }
+        protected ITokenStream? TokenStream { get; private set; }
+        protected string? SourceText { get; private set; }
 
         /// <summary>
         /// Initializes the refactor with source code and token stream
@@ -29,7 +29,7 @@ namespace AppRefiner.Refactors
         /// <summary>
         /// Gets the refactored source code with all changes applied
         /// </summary>
-        public string GetRefactoredCode()
+        public string? GetRefactoredCode()
         {
             if (Changes.Count == 0) return SourceText;
 
@@ -55,11 +55,9 @@ namespace AppRefiner.Refactors
         /// </summary>
         protected void AddChange(ParserRuleContext context, string newText, string description)
         {
-            Changes.Add(new ReplaceChange
+            Changes.Add(new ReplaceChange(context.Stop.StopIndex + 1, newText)
             {
                 StartIndex = context.Start.StartIndex,
-                EndIndex = context.Stop.StopIndex + 1,
-                NewText = newText,
                 Description = description
             });
         }
@@ -69,10 +67,8 @@ namespace AppRefiner.Refactors
         /// </summary>
         protected void AddInsert(int position, string textToInsert, string description)
         {
-            Changes.Add(new InsertChange
-            {
+            Changes.Add(new InsertChange(textToInsert) { 
                 StartIndex = position,
-                TextToInsert = textToInsert,
                 Description = description
             });
         }
@@ -93,9 +89,9 @@ namespace AppRefiner.Refactors
         /// <summary>
         /// Gets the original text for a parser rule context
         /// </summary>
-        protected string GetOriginalText(ParserRuleContext context)
+        protected string? GetOriginalText(ParserRuleContext context)
         {
-            return SourceText.Substring(context.Start.StartIndex,
+            return SourceText?.Substring(context.Start.StartIndex,
                 context.Stop.StopIndex - context.Start.StartIndex + 1);
         }
     }

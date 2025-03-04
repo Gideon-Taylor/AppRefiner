@@ -86,7 +86,7 @@ namespace AppRefiner.Database
         /// <summary>
         /// Executes a query and returns the results as a DataTable
         /// </summary>
-        public DataTable ExecuteQuery(string sql, Dictionary<string, object> parameters = null)
+        public DataTable ExecuteQuery(string sql, Dictionary<string, object>? parameters = null)
         {
             using (var command = _connection.CreateCommand())
             {
@@ -116,7 +116,7 @@ namespace AppRefiner.Database
         /// <summary>
         /// Executes a non-query command and returns the number of rows affected
         /// </summary>
-        public int ExecuteNonQuery(string sql, Dictionary<string, object> parameters = null)
+        public int ExecuteNonQuery(string sql, Dictionary<string, object>? parameters = null)
         {
             using (var command = _connection.CreateCommand())
             {
@@ -152,7 +152,7 @@ namespace AppRefiner.Database
         public static List<string> GetAllTnsNames()
         {
             List<string> tnsNames = new List<string>();
-            string tnsNamesPath = GetTnsNamesPath();
+            string? tnsNamesPath = GetTnsNamesPath();
 
             if (string.IsNullOrEmpty(tnsNamesPath) || !File.Exists(tnsNamesPath))
             {
@@ -187,10 +187,10 @@ namespace AppRefiner.Database
         /// Gets the path to the tnsnames.ora file
         /// </summary>
         /// <returns>The full path to tnsnames.ora, or null if not found</returns>
-        private static string GetTnsNamesPath()
+        private static string? GetTnsNamesPath()
         {
             // Check TNS_ADMIN environment variable first
-            string tnsAdmin = Environment.GetEnvironmentVariable("TNS_ADMIN");
+            string? tnsAdmin = Environment.GetEnvironmentVariable("TNS_ADMIN");
             if (!string.IsNullOrEmpty(tnsAdmin))
             {
                 string path = Path.Combine(tnsAdmin, "tnsnames.ora");
@@ -201,7 +201,7 @@ namespace AppRefiner.Database
             }
 
             // Check ORACLE_HOME environment variable
-            string oracleHome = Environment.GetEnvironmentVariable("ORACLE_HOME");
+            string? oracleHome = Environment.GetEnvironmentVariable("ORACLE_HOME");
             if (!string.IsNullOrEmpty(oracleHome))
             {
                 string path = Path.Combine(oracleHome, "network", "admin", "tnsnames.ora");

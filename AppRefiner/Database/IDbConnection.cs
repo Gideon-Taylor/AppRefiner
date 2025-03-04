@@ -42,11 +42,11 @@ namespace AppRefiner.Database
         /// <summary>
         /// Executes a query and returns the results as a DataTable
         /// </summary>
-        DataTable ExecuteQuery(string sql, Dictionary<string, object> parameters = null);
+        DataTable ExecuteQuery(string sql, Dictionary<string, object>? parameters = null);
         
         /// <summary>
         /// Executes a non-query command and returns the number of rows affected
         /// </summary>
-        int ExecuteNonQuery(string sql, Dictionary<string, object> parameters = null);
+        int ExecuteNonQuery(string sql, Dictionary<string, object>? parameters = null);
     }
 }

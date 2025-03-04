@@ -82,7 +82,7 @@ namespace AppRefiner.Linters
             }
         }
 
-        private string GetHtmlReference(ExpressionContext expr)
+        private string? GetHtmlReference(ExpressionContext expr)
         {
             // Handle HTML.NAME format
             if (expr is DotAccessExprContext dotAccess)

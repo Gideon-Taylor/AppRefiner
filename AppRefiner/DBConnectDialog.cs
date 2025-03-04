@@ -47,6 +47,8 @@ namespace AppRefiner
                         DataManager = new OraclePeopleSoftDataManager(connectionString);
                         break;
                 }
+                if (DataManager == null) return;
+
                 if (DataManager.Connect())
                 {
                     MessageBox.Show("Connected to database", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);

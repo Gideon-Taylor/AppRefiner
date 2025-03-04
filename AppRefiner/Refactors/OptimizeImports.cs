@@ -33,7 +33,7 @@ namespace AppRefiner.Refactors
 
         private readonly Dictionary<string, List<ImportEntry>> importsByPackage = new();
         private bool trackUsage = false;
-        private ImportsBlockContext importsBlockContext;
+        private ImportsBlockContext? importsBlockContext;
         public override void EnterImportDeclaration(ImportDeclarationContext context)
         {
             string packageName;
@@ -142,11 +142,13 @@ namespace AppRefiner.Refactors
                     }
                 }
             }
-
-            // Replace the entire imports block
-            AddChange(importsBlockContext, 
-                     newImports.ToString().TrimEnd(), 
-                     "Optimize imports");
+            if (importsBlockContext != null)
+            {
+                // Replace the entire imports block
+                AddChange(importsBlockContext,
+                         newImports.ToString().TrimEnd(),
+                         "Optimize imports");
+            }
         }
     }
 }

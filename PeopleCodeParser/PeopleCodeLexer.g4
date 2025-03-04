@@ -21,7 +21,6 @@ using System.Text.RegularExpressions;
 @members {
 	private static Regex REGEX_REM = new Regex("^rem(ark)?\\b.*",RegexOptions.IgnoreCase | RegexOptions.Singleline);
 	private static Regex REGEX_3_STAR = new Regex("^/\\*{3}/.*", RegexOptions.Singleline);
-	private static int STAR_CHAR = (int) '*';
 }
 
 

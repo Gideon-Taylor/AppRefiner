@@ -645,8 +645,10 @@ namespace AppRefiner
             {
                 return;
             }
-            BaseStyler styler = (BaseStyler)dataGridView3.Rows[e.RowIndex].Tag;
-            styler.Active = (bool)dataGridView3.Rows[e.RowIndex].Cells[0].Value;
+            if (dataGridView3.Rows[e.RowIndex].Tag is BaseStyler styler)
+            {
+                styler.Active = (bool)dataGridView3.Rows[e.RowIndex].Cells[0].Value;
+            }
         }
 
         private void btnLintCode_Click(object sender, EventArgs e)
@@ -668,8 +670,10 @@ namespace AppRefiner
             {
                 return;
             }
-            BaseLintRule linter = (BaseLintRule)dataGridView1.Rows[e.RowIndex].Tag;
-            linter.Active = (bool)dataGridView1.Rows[e.RowIndex].Cells[0].Value;
+            if (dataGridView1.Rows[e.RowIndex].Tag is BaseLintRule linter)
+            {
+                linter.Active = (bool)dataGridView1.Rows[e.RowIndex].Cells[0].Value;
+            }
         }
 
         private void dataGridView1_CellContentClick(object sender, DataGridViewCellEventArgs e)
@@ -680,50 +684,57 @@ namespace AppRefiner
 
         private void dataGridView2_CellClick(object sender, DataGridViewCellEventArgs e)
         {
+            if (activeEditor == null) return;
             /* Get the tag (Report ) from the selected row */
             /* instruct Scintilla to select the line and send focus to main window */
             if (dataGridView2.SelectedRows.Count == 0)
             {
                 return;
             }
-            Report report = (Report)dataGridView2.SelectedRows[0].Tag;
-            if (report == null)
+            if (dataGridView2.SelectedRows[0].Tag is Report report)
             {
-                return;
+                ScintillaManager.SetSelection(activeEditor, report.Span.Start, report.Span.Stop);
+                WindowHelper.FocusWindow(activeEditor.hWnd);
             }
-            ScintillaManager.SetSelection(activeEditor, report.Span.Start, report.Span.Stop);
-            WindowHelper.FocusWindow(activeEditor.hWnd);
         }
 
         private void btnClearLint_Click(object sender, EventArgs e)
         {
+            if (activeEditor == null) return;
             ScintillaManager.ClearAnnotations(activeEditor);
             dataGridView2.Rows.Clear();
         }
 
         private void btnDarkMode_Click(object sender, EventArgs e)
         {
+            if (activeEditor == null) return;
             ScintillaManager.SetDarkMode(activeEditor);
         }
 
         private void btnCollapseAll_Click(object sender, EventArgs e)
         {
+            if (activeEditor == null) return;
             ScintillaManager.ContractTopLevel(activeEditor);
         }
 
         private void btnExpand_Click(object sender, EventArgs e)
         {
+            if (activeEditor == null) return;
             ScintillaManager.ExpandTopLevel(activeEditor);
         }
 
         private void btnTakeSnapshot_Click(object sender, EventArgs e)
         {
+            if (activeEditor == null) return;
             activeEditor.SnapshotText = ScintillaManager.GetScintillaText(activeEditor);
             btnRestoreSnapshot.Enabled = true;
         }
 
         private void btnRestoreSnapshot_Click(object sender, EventArgs e)
         {
+            if (activeEditor == null) return;
+            if (activeEditor.SnapshotText == null) return;
+
             ScintillaManager.ClearAnnotations(activeEditor);
             ScintillaManager.SetScintillaText(activeEditor, activeEditor.SnapshotText);
             activeEditor.SnapshotText = null;
@@ -738,9 +749,12 @@ namespace AppRefiner
 
         private void ProcessRefactor(BaseRefactor refactorClass)
         {
+            if (activeEditor == null) return;
             ScintillaManager.ClearAnnotations(activeEditor);
 
             var freshText = ScintillaManager.GetScintillaText(activeEditor);
+            if (freshText == null) return;
+
             activeEditor.SnapshotText = freshText;
             btnRestoreSnapshot.Enabled = true;
 
@@ -754,6 +768,8 @@ namespace AppRefiner
             ParseTreeWalker walker = new();
             walker.Walk(refactorClass, program);
             var newText = refactorClass.GetRefactoredCode();
+            if (newText == null) return;
+
             ScintillaManager.SetScintillaText(activeEditor, newText);
         }
 
@@ -765,6 +781,7 @@ namespace AppRefiner
 
         private void btnConnectDB_Click(object sender, EventArgs e)
         {
+            if (activeEditor == null) return; 
             if (activeEditor.DataManager != null)
             {
                 activeEditor.DataManager.Disconnect();

@@ -272,7 +272,7 @@ namespace AppRefiner
         /// </summary>
         /// <param name="scintillaHwnd">The window handle of the Scintilla control.</param>
         /// <returns>The document text, or null if retrieval failed.</returns>
-        public static string GetScintillaText(ScintillaEditor editor)
+        public static string? GetScintillaText(ScintillaEditor editor)
         {
 
             // Retrieve the text length.
@@ -308,8 +308,7 @@ namespace AppRefiner
         /// <param name="text">The text to set in the editor.</param>
         /// <returns>True if the text was successfully set; false otherwise.</returns>
         public static bool SetScintillaText(ScintillaEditor editor, string text)
-        {
-
+        {                
             // Convert the new text into a byte array using the default encoding.
             // We need to include an extra byte for the terminating null.
             byte[] textBytes = Encoding.Default.GetBytes(text ?? string.Empty);
@@ -394,7 +393,7 @@ namespace AppRefiner
             editor.SendMessage(SCI_SETMARGINTYPEN, (IntPtr)2, (IntPtr)SC_MARGIN_SYMBOL);
             editor.SendMessage(SCI_SETMARGINWIDTHN, (IntPtr)2, (IntPtr)20);      // width in pixels
             editor.SendMessage(SCI_SETMARGINSENSITIVEN, (IntPtr)2, (IntPtr)1);
-            editor.SendMessage(SCI_SETMARGINMASKN, (IntPtr)2, (IntPtr)SC_MASK_FOLDERS);
+            editor.SendMessage(SCI_SETMARGINMASKN, (IntPtr)2, unchecked((IntPtr)SC_MASK_FOLDERS));
             // Collapse Label Style
             editor.SendMessage(SCI_MARKERDEFINE, (IntPtr)SC_MARKNUM_FOLDER, (IntPtr)SC_MARK_BOXPLUS);
             editor.SendMessage(SCI_MARKERDEFINE, (IntPtr)SC_MARKNUM_FOLDEROPEN, (IntPtr)SC_MARK_BOXMINUS);
@@ -555,8 +554,6 @@ namespace AppRefiner
         {
             editor.SendMessage(SCI_FOLDALL, (IntPtr)1, (IntPtr)0);
         }
-
-        static int styleIndex = 250;
         internal static void SetDarkMode(ScintillaEditor editor)
         {
             /* Style 0 - whitespace */
@@ -598,7 +595,13 @@ namespace AppRefiner
             /* make crc32 hash of content string */
             var content = GetScintillaText(editor);
             editor.ContentString = content;
-            return GetContentHashFromString(content);
+            if (content != null)
+            {
+                return GetContentHashFromString(content);
+            } else
+            {
+                return 0;
+            }
         }
 
         internal static int GetContentHashFromString(string content)
@@ -613,6 +616,7 @@ namespace AppRefiner
             if (editor.ContentString == null)
             {
                 editor.ContentString = GetScintillaText(editor);
+                if (editor.ContentString == null) { return; }
             }
 
             // Split the document text into lines.
@@ -795,19 +799,7 @@ namespace AppRefiner
             editor.SendMessage(SCI_SETSEL, (IntPtr)startIndex, (IntPtr)endIndex);
         }
         public static void ColorText(ScintillaEditor editor, FontColor color, int start, int length)
-        {
-            // Define color constants using BGR format (Scintilla uses BGR)
-            int foreColor;
-            switch (color)
-            {
-                case FontColor.Gray:
-                    foreColor = 0x808080; // Gray in BGR format
-                    break;
-                default:
-                    foreColor = 0x000000; // Black in BGR format
-                    break;
-            }
-
+        { 
             // Create a temporary style for colored text
             const int TEMP_STYLE = 35; // Using a high style number to avoid conflicts
 
@@ -941,7 +933,7 @@ namespace AppRefiner
         public IntPtr hWnd;
         public IntPtr hProc;
         public uint ProcessId;
-        public string Caption = "";
+        public string? Caption = null;
         public bool FoldEnabled = false;
         public bool HasLexilla = false;
 
@@ -992,11 +984,6 @@ namespace AppRefiner
         public IntPtr SendMessage(int Msg, IntPtr wParam, IntPtr lParam)
         {
             return SendMessage(hWnd, Msg, wParam, lParam);
-        }
-
-        public override string ToString()
-        {
-            return Caption;
         }
     }
     public enum HighlightColor

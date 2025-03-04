@@ -22,7 +22,7 @@ namespace AppRefiner.Linters
         private void AddMissingHeaderReport()
         {
             
-            Reports.Add(new Report
+            Reports?.Add(new Report
             {
                 Type = ReportType.Warning,
                 Line = 0,

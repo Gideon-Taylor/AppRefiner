@@ -136,9 +136,12 @@ namespace AppRefiner.Database
             
             foreach (DataRow row in namesResult.Rows)
             {
-                string objectName = row["SQLID"].ToString();
-                string definition = GetSqlDefinition(objectName);
-                definitions[objectName] = definition;
+                string? objectName = row["SQLID"].ToString();
+                if (objectName != null)
+                {
+                    string definition = GetSqlDefinition(objectName);
+                    definitions[objectName] = definition;
+                }
             }
             
             return definitions;
@@ -222,9 +225,12 @@ namespace AppRefiner.Database
             
             foreach (DataRow row in namesResult.Rows)
             {
-                string objectName = row["CONTNAME"].ToString();
-                HtmlDefinition definition = GetHtmlDefinition(objectName);
-                definitions[objectName] = definition;
+                string? objectName = row["CONTNAME"].ToString();
+                if (objectName != null)
+                {
+                    HtmlDefinition definition = GetHtmlDefinition(objectName);
+                    definitions[objectName] = definition;
+                }
             }
             
             return definitions;

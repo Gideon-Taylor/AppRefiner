@@ -44,7 +44,6 @@ namespace AppRefiner.Stylers
         public override void EnterImportDeclaration(ImportDeclarationContext context)
         {
             string packageName = "";
-            IRuleNode ruleNode;
 
             var appPackageAll = context.appPackageAll();
             if (appPackageAll != null)

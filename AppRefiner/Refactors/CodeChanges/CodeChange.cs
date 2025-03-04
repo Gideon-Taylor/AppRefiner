@@ -13,7 +13,7 @@ namespace AppRefiner.Refactors.CodeChanges
         /// <summary>
         /// Description of the change being made
         /// </summary>
-        public string Description { get; set; }
+        public string? Description { get; set; }
 
         /// <summary>
         /// Applies the change to a StringBuilder containing the source text
@@ -34,6 +34,10 @@ namespace AppRefiner.Refactors.CodeChanges
     public class InsertChange : CodeChange
     {
         public string TextToInsert { get; set; }
+        public InsertChange(string textToInsert)
+        {
+            TextToInsert = textToInsert;
+        }
 
         public override void Apply(System.Text.StringBuilder source)
         {
@@ -45,6 +49,12 @@ namespace AppRefiner.Refactors.CodeChanges
     {
         public int EndIndex { get; set; }
         public string NewText { get; set; }
+
+        public ReplaceChange(int endIndex, string newText)
+        {
+            EndIndex = endIndex;
+            NewText = newText;
+        }
 
         public override void Apply(System.Text.StringBuilder source)
         {
