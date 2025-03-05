@@ -182,7 +182,7 @@ namespace AppRefiner.Database
             StringBuilder htmlContent = new StringBuilder();
             foreach (DataRow row in result.Rows)
             {
-                htmlContent.Append(row["CONTDATA"]);
+                htmlContent.Append(Encoding.Unicode.GetString((byte[])row["CONTDATA"]));
             }
             
             string content = htmlContent.ToString();
