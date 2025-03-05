@@ -1,4 +1,5 @@
 using Antlr4.Runtime;
+using Antlr4.Runtime.Misc;
 using AppRefiner.Linters.Models;
 using AppRefiner.Refactors.CodeChanges;
 using System.Collections.Generic;
@@ -12,19 +13,11 @@ namespace AppRefiner.Refactors
         private readonly int cursorPosition;
         private readonly string newVariableName;
         private string? variableToRename;
-        
+        private Dictionary<string, List<(int, int)>>? targetScope;
         public RenameLocalVariable(int cursorPosition, string newVariableName)
         {
             this.cursorPosition = cursorPosition;
             this.newVariableName = newVariableName;
-        }
-        
-        // Initialize the refactoring operation with source code and token stream
-        public new void Initialize(string sourceText, ITokenStream tokenStream)
-        {
-            base.Initialize(sourceText, tokenStream);
-            Reset();
-            variableToRename = null;
         }
         
         // Called when a variable is declared
@@ -34,9 +27,10 @@ namespace AppRefiner.Refactors
             AddOccurrence(varInfo.Name, varInfo.Span);
             
             // Check if cursor is within this variable declaration
-            if (varInfo.Span.Item1 <= cursorPosition && cursorPosition <= varInfo.Span.Item2)
+            if (varInfo.Span.Item1 <= cursorPosition && cursorPosition <= varInfo.Span.Item2 + 1)
             {
                 variableToRename = varInfo.Name;
+                targetScope = GetCurrentScope();
             }
         }
         
@@ -48,31 +42,19 @@ namespace AppRefiner.Refactors
             string varName = context.GetText();
             var span = (context.Start.StartIndex, context.Stop.StopIndex);
             
-            // Check if variable exists in any scope before adding
-            if (TryFindInScopes(varName, out _))
-            {
-                AddOccurrence(varName, span);
-            }
+            AddOccurrence(varName, span);
             
             // Check if cursor is within this variable reference
-            if (span.Item1 <= cursorPosition && cursorPosition <= span.Item2)
+            if (span.Item1 <= cursorPosition && cursorPosition <= span.Item2 + 1)
             {
                 variableToRename = varName;
+                targetScope = GetCurrentScope();
             }
         }
         
         // Helper method to add an occurrence to the appropriate scope
         private void AddOccurrence(string varName, (int, int) span)
         {
-            // Try to find the variable in an existing scope
-            foreach (var scope in scopeStack)
-            {
-                if (scope.ContainsKey(varName))
-                {
-                    scope[varName].Add(span);
-                    return;
-                }
-            }
             
             // If not found, add to current scope
             var currentScope = GetCurrentScope();
@@ -82,32 +64,28 @@ namespace AppRefiner.Refactors
             }
             currentScope[varName].Add(span);
         }
-        
+
+        public override void ExitProgram([NotNull] ProgramContext context)
+        {
+            GenerateChanges();
+        }
         // Generate the refactoring changes
         public void GenerateChanges()
         {
-            if (variableToRename == null)
+            if (variableToRename == null || targetScope == null)
             {
                 // No variable found at cursor position
                 return;
             }
 
-            // Collect all occurrences of the variable
-            var allOccurrences = new List<(int, int)>();
-            
-            foreach (var scope in scopeStack)
+            targetScope.TryGetValue(variableToRename, out var allOccurrences);
+
+            if (allOccurrences == null)
             {
-                if (scope.TryGetValue(variableToRename, out var occurrences))
-                {
-                    allOccurrences.AddRange(occurrences);
-                }
-            }
-            
-            if (allOccurrences.Count == 0)
-            {
+                // No occurrences found
                 return;
             }
-            
+
             // Sort occurrences in reverse order to avoid position shifting
             allOccurrences.Sort((a, b) => b.Item1.CompareTo(a.Item1));
             

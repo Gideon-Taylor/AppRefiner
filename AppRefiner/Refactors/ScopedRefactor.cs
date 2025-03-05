@@ -201,13 +201,6 @@ namespace AppRefiner.Refactors
             }
         }
 
-        // Override the Initialize method to reset scopes
-        public void Initialize(string sourceText, ITokenStream tokenStream)
-        {
-            base.Initialize(sourceText, tokenStream);
-            Reset();
-        }
-
         // Reset method to clear scope stacks
         public void Reset()
         {

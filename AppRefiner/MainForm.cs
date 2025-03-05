@@ -567,7 +567,7 @@ namespace AppRefiner
                         int rowIndex = dataGridView2.Rows.Add(report.Type, report.Message, report.Line);
                         dataGridView2.Rows[rowIndex].Tag = report;
                     }));
-                    
+
                     if (chkLintAnnotate.Checked)
                     {
                         messages.Add(report.Message);
@@ -638,7 +638,7 @@ namespace AppRefiner
                 progressBar1.Style = ProgressBarStyle.Blocks;
             }));
             Application.DoEvents();
-            
+
         }
 
         private void dataGridView1_CellValueChanged(object sender, DataGridViewCellEventArgs e)
@@ -786,6 +786,63 @@ namespace AppRefiner
                     btnConnectDB.Text = "Disconnect DB";
                 }
             }
+        }
+
+        private void btnRenameLocalVar_Click(object sender, EventArgs e)
+        {
+            /* Ask the user for a new variable name */
+            string newName = "";
+            var dlgResult  = ShowInputDialog("New variable name", "Enter new variable name", ref newName);
+
+            if (dlgResult != DialogResult.OK) return;
+
+            /* Get the current cursor position */
+            int cursorPosition = ScintillaManager.GetCursorPosition(activeEditor);
+
+            /* Create a new instance of the refactoring class */
+            RenameLocalVariable refactor = new RenameLocalVariable(cursorPosition, newName);
+            ProcessRefactor(refactor);
+        }
+
+
+        private static DialogResult ShowInputDialog(string title, string text, ref string result)
+        {
+            Size size = new Size(300, 70);
+            Form inputBox = new Form();
+
+            inputBox.FormBorderStyle = FormBorderStyle.FixedDialog;
+            inputBox.ClientSize = size;
+            inputBox.Text = title;
+            inputBox.StartPosition = FormStartPosition.CenterParent;
+
+            TextBox textBox = new TextBox();
+            textBox.Size = new Size(size.Width - 10, 23);
+            textBox.Location = new Point(5, 5);
+            textBox.Text = text;
+            inputBox.Controls.Add(textBox);
+
+            Button okButton = new Button();
+            okButton.DialogResult = DialogResult.OK;
+            okButton.Name = "okButton";
+            okButton.Size = new Size(75, 23);
+            okButton.Text = "&OK";
+            okButton.Location = new Point(size.Width - 80 - 80, 39);
+            inputBox.Controls.Add(okButton);
+
+            Button cancelButton = new Button();
+            cancelButton.DialogResult = DialogResult.Cancel;
+            cancelButton.Name = "cancelButton";
+            cancelButton.Size = new Size(75, 23);
+            cancelButton.Text = "&Cancel";
+            cancelButton.Location = new Point(size.Width - 80, 39);
+            inputBox.Controls.Add(cancelButton);
+
+            inputBox.AcceptButton = okButton;
+            inputBox.CancelButton = cancelButton;
+
+            DialogResult dlgResult = inputBox.ShowDialog();
+            result = textBox.Text;
+            return dlgResult;
         }
     }
 }

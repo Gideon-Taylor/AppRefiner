@@ -69,6 +69,7 @@
             btnAddFlowerBox = new Button();
             progressBar1 = new ProgressBar();
             lblStatus = new Label();
+            btnRenameLocalVar = new Button();
             ((System.ComponentModel.ISupportInitialize)splitContainer1).BeginInit();
             splitContainer1.Panel1.SuspendLayout();
             splitContainer1.Panel2.SuspendLayout();
@@ -506,6 +507,7 @@
             // 
             // groupBox1
             // 
+            groupBox1.Controls.Add(btnRenameLocalVar);
             groupBox1.Controls.Add(btnOptimizeImports);
             groupBox1.Controls.Add(btnAddFlowerBox);
             groupBox1.Location = new Point(8, 8);
@@ -552,6 +554,16 @@
             lblStatus.TabIndex = 21;
             lblStatus.Text = "Stopped";
             lblStatus.TextAlign = ContentAlignment.MiddleCenter;
+            // 
+            // btnRenameLocalVar
+            // 
+            btnRenameLocalVar.Location = new Point(236, 22);
+            btnRenameLocalVar.Name = "btnRenameLocalVar";
+            btnRenameLocalVar.Size = new Size(109, 23);
+            btnRenameLocalVar.TabIndex = 4;
+            btnRenameLocalVar.Text = "Rename Local Var";
+            btnRenameLocalVar.UseVisualStyleBackColor = true;
+            btnRenameLocalVar.Click += btnRenameLocalVar_Click;
             // 
             // MainForm
             // 
@@ -632,5 +644,6 @@
         private Button btnOptimizeImports;
         private Button btnConnectDB;
         private Button btnLintCode;
+        private Button btnRenameLocalVar;
     }
 }

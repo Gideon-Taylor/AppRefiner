@@ -925,6 +925,12 @@ namespace AppRefiner
             var docLength = activeEditor.SendMessage(SCI_GETLENGTH, 0, 0);
             activeEditor.SendMessage(SCI_COLOURISE, 0, docLength);
         }
+
+        internal static int GetCursorPosition(ScintillaEditor? activeEditor)
+        {
+            if (activeEditor == null) return -1;
+            return (int)activeEditor.SendMessage(SCI_GETCURRENTPOS, 0, 0);
+        }
     }
     public enum EditorType
     {
