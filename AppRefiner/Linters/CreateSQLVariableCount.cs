@@ -12,6 +12,11 @@ namespace AppRefiner.Linters
 {
     public class CreateSQLVariableCount : ScopedLintRule<SQLStatementInfo>
     {
+        private enum ValidationMode
+        {
+            CreateOrGet, Open, Execute, Fetch
+        }
+
         public CreateSQLVariableCount()
         {
             Description = "Validate bind counts in CreateSQL objects.";
@@ -103,6 +108,13 @@ namespace AppRefiner.Linters
                             }
                             return (sqlText, expr.Start.StartIndex, expr.Stop.StopIndex);
                         }
+                        Reports?.Add(new Report
+                        {
+                            Type = ReportType.Info,
+                            Line = expr.Start.Line - 1,
+                            Span = (expr.Start.StartIndex, expr.Stop.StopIndex),
+                            Message = "Connect to DB to validate this SQL usage."
+                        });
                         return (null, expr.Start.StartIndex, expr.Stop.StopIndex);
                     }
                     
@@ -120,7 +132,7 @@ namespace AppRefiner.Linters
             return (null, expr.Start.StartIndex, expr.Stop.StopIndex);
         }
 
-        private void ValidateArguments(string? sqlText, FunctionCallArgumentsContext args, SQLStatementInfo sqlInfo, ParserRuleContext context, bool allowZeroBinds = false)
+        private void ValidateArguments(string? sqlText, FunctionCallArgumentsContext args, SQLStatementInfo sqlInfo, ParserRuleContext context, ValidationMode validationMode)
         {
             if (string.IsNullOrWhiteSpace(sqlText))
                 return;
@@ -143,7 +155,30 @@ namespace AppRefiner.Linters
                 sqlInfo.SqlText = sqlText;
                 sqlInfo.BindCount = bindCount;
 
-                if (totalInOutArgs == 0 && allowZeroBinds) return;
+                if (validationMode == ValidationMode.CreateOrGet && totalInOutArgs == 0 )
+                {
+                    sqlInfo.NeedsOpenOrExec = true;
+                    sqlInfo.InVarsBound = false;
+                    return;
+                }
+
+                if (validationMode == ValidationMode.CreateOrGet && totalInOutArgs == bindCount)
+                {
+                    sqlInfo.InVarsBound = true;
+                    return;
+                }
+
+                if (validationMode == ValidationMode.Open && totalInOutArgs != sqlInfo.BindCount)
+                {
+                    Reports?.Add(new Report
+                    {
+                        Type = ReportType.Error,
+                        Line = context.Start.Line - 1,
+                        Span = (args.expression()[0].Start.StartIndex, context.Stop.StopIndex),
+                        Message = $"SQL statement has incorrect number of input parameters. Expected {bindCount}, got {totalInOutArgs}."
+                    });
+                    return;
+                }
 
                 if (totalInOutArgs != bindCount + sqlInfo.OutputColumnCount)
                 {
@@ -190,7 +225,7 @@ namespace AppRefiner.Linters
             
             // Create SQLStatementInfo even if sqlText is null to track the variable
             var sqlInfo = new SQLStatementInfo(
-                sqlText ?? "", 
+                sqlText, 
                 0, 
                 0, 
                 context.Start.Line, 
@@ -203,22 +238,9 @@ namespace AppRefiner.Linters
                 ReplaceInFoundScope(varName, sqlInfo);
                 if (sqlText != null)
                 {
-                    ValidateArguments(sqlText, args, sqlInfo, context, true);
+                    ValidateArguments(sqlText, args, sqlInfo, context, ValidationMode.CreateOrGet);
                 }
             }
-
-            if (args.expression().Length == 1 && sqlInfo.BindCount > 0)
-            {
-                /* Warn that no binds are provided, make sure you call Execute before fetching */
-                Reports?.Add(new Report
-                {
-                    Type = ReportType.Warning,
-                    Line = context.Start.Line - 1,
-                    Span = (context.Start.StartIndex, context.Stop.StopIndex),
-                    Message = "CreateSQL with no binds provided. Make sure to call Execute before Fetch."
-                });
-            }
-
         }
 
         public override void EnterDotAccess(DotAccessContext context)
@@ -257,6 +279,12 @@ namespace AppRefiner.Linters
             {
                 // Existing Execute validation
                 var argCount = args.expression()?.Length ?? 0;
+                if (argCount == sqlInfo.BindCount)
+                {
+                    sqlInfo.InVarsBound = true;
+                    return;
+                }
+
                 if (argCount != sqlInfo.BindCount)
                 {
                     Reports?.Add(new Report
@@ -276,11 +304,26 @@ namespace AppRefiner.Linters
             var (sqlText, start, stop) = GetSqlText(firstArg);
 
             // Validate arguments and update SQLStatementInfo
-            ValidateArguments(sqlText, args, sqlInfo, context);
+            ValidateArguments(sqlText, args, sqlInfo, context, ValidationMode.Open);
         }
 
         private void ValidateFetchCall(DotAccessContext context, FunctionCallArgumentsContext args, SQLStatementInfo sqlInfo)
         {
+            /* Cannot validate calls where we don't have the SQL text... */
+            if (sqlInfo.SqlText == null) return;
+
+            if (sqlInfo.InVarsBound == false && sqlInfo.BindCount > 0)
+            {
+                Reports?.Add(new Report
+                {
+                    Type = ReportType.Error,
+                    Line = context.Start.Line - 1,
+                    Span = (context.Start.StartIndex, context.Stop.StopIndex),
+                    Message = "SQL.Fetch called before bind values were provided. Make sure to call Open/Execute before Fetch."
+                });
+            }
+
+
             var expressions = args.expression();
             if (expressions == null || expressions.Length == 0)
             {
