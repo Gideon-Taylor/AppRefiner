@@ -756,7 +756,7 @@ namespace AppRefiner
             var result = refactorClass.GetResult();
             if (!result.Success)
             {
-                MessageBox.Show(result.Message, "Refactoring Failed", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show(this, result.Message, "Refactoring Failed", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 btnRestoreSnapshot.Enabled = false;
                 return;
             }
