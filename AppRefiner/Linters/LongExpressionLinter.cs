@@ -8,12 +8,12 @@ namespace AppRefiner.Linters
     /// </summary>
     public class LongExpressionLinter : BaseLintRule
     {
-        private const int MaxExpressionLength = 100; // Maximum character length for an expression
+        private const int MaxExpressionLength = 200; // Maximum character length for an expression
         private const int MaxOperatorCount = 5; // Maximum number of operators in a single expression
         
         public LongExpressionLinter()
         {
-            Description = "Detects overly long or complex expressions";
+            Description = "Detects overly complex expressions";
             Type = ReportType.Warning;
             Active = false;
         }
