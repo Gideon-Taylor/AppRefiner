@@ -20,6 +20,12 @@ namespace AppRefiner.Stylers
             "arr", "array", "lst", "list", "val", "value", "res", "result", "ret", "return"
         };
 
+        public MeaninglessVariableNameStyler()
+        {
+            Description = "Highlights meaningless variable names.";
+            Active = true;
+        }
+
         public override void Reset()
         {
             // Reset any state when starting a new analysis
