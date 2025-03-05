@@ -53,7 +53,7 @@ namespace AppRefiner.Linters
                     Type = Type,
                     Line = context.Start.Line - 1,
                     Span = (context.Start.StartIndex, context.Stop.StopIndex),
-                    Message = $"Function '{context.allowableFunctionName().GetText()}' has {paramCount} parameters, which exceeds recommended maximum of {MaxFunctionParameters}. Consider using a compound parameter object."
+                    Message = $"Function has {paramCount} parameters, which exceeds recommended maximum of {MaxFunctionParameters}. Consider using a compound parameter object."
                 });
             }
         }

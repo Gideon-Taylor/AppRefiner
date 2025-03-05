@@ -30,7 +30,7 @@ namespace AppRefiner.Linters
                 {
                     Type = Type,
                     Line = context.Start.Line - 1,
-                    Span = (context.Start.StartIndex, context.Stop.StopIndex),
+                    Span = (context.Start.StartIndex, context.Stop.StopIndex + 1),
                     Message = "Empty catch block silently swallows exceptions. Consider logging or rethrowing."
                 });
             }

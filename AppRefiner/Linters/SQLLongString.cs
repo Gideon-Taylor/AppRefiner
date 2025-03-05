@@ -30,13 +30,6 @@ namespace AppRefiner.Linters
                     if (firstArg is LiteralExprContext)
                     {
                         var sqlText = SQLHelper.ExtractSQLFromLiteral(firstArg.GetText());
-                        
-                        // First verify we can parse it as SQL
-                        var statement = SQLHelper.ParseSQL(sqlText);
-                        if (statement == null)
-                        {
-                            return;
-                        }
 
                         if (sqlText.Length > MaxSqlLength)
                         {

@@ -66,8 +66,21 @@ namespace AppRefiner.Linters
         /// <returns>True if wildcards are used, false otherwise</returns>
         public static bool HasWildcard(Statement.Select statement)
         {
-            var columns = statement.Query.Body.AsSelectExpression().Select.Projection;
-            return columns.Any(x => x is SelectItem.Wildcard || x is SelectItem.QualifiedWildcard);
+            try
+            {
+                if (statement.Query.Body is SetExpression.SetOperation set)
+                {
+                    return set.Left.AsSelectExpression().Select.Projection.Any(x => x is SelectItem.Wildcard || x is SelectItem.QualifiedWildcard) ||
+                        set.Right.AsSelectExpression().Select.Projection.Any(x => x is SelectItem.Wildcard || x is SelectItem.QualifiedWildcard);
+                }
+
+                var columns = statement.Query.Body.AsSelectExpression().Select.Projection;
+                return columns.Any(x => x is SelectItem.Wildcard || x is SelectItem.QualifiedWildcard);
+
+            }catch(Exception ex)
+            {
+                return false;
+            }
         }
 
         /// <summary>

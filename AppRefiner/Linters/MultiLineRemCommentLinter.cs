@@ -41,7 +41,7 @@ namespace AppRefiner.Linters
                         Type = Type,
                         Line = comment.Line,
                         Span = (comment.StartIndex, comment.StopIndex),
-                        Message = "REM comment spans multiple lines, possiblee missing semicolon termination."
+                        Message = "REM comment spans multiple lines, possible missing semicolon termination."
                     });
                 }
             }

@@ -162,21 +162,35 @@ namespace AppRefiner.Linters
                     return;
                 }
 
-                if (validationMode == ValidationMode.CreateOrGet && totalInOutArgs == bindCount)
+                if (validationMode == ValidationMode.CreateOrGet)
                 {
                     sqlInfo.InVarsBound = true;
+
+                    if (totalInOutArgs != bindCount)
+                    {
+                        Reports?.Add(new Report
+                        {
+                            Type = ReportType.Error,
+                            Line = context.Start.Line - 1,
+                            Span = (args.expression()[0].Start.StartIndex, context.Stop.StopIndex),
+                            Message = $"SQL statement has incorrect number of input parameters. Expected {bindCount}, got {totalInOutArgs}."
+                        });
+                    }
                     return;
                 }
 
-                if (validationMode == ValidationMode.Open && totalInOutArgs != sqlInfo.BindCount)
+                if (validationMode == ValidationMode.Open)
                 {
-                    Reports?.Add(new Report
+                    if (totalInOutArgs != sqlInfo.BindCount)
                     {
-                        Type = ReportType.Error,
-                        Line = context.Start.Line - 1,
-                        Span = (args.expression()[0].Start.StartIndex, context.Stop.StopIndex),
-                        Message = $"SQL statement has incorrect number of input parameters. Expected {bindCount}, got {totalInOutArgs}."
-                    });
+                        Reports?.Add(new Report
+                        {
+                            Type = ReportType.Error,
+                            Line = context.Start.Line - 1,
+                            Span = (args.expression()[0].Start.StartIndex, context.Stop.StopIndex),
+                            Message = $"SQL statement has incorrect number of input parameters. Expected {bindCount}, got {totalInOutArgs}."
+                        });
+                    }
                     return;
                 }
 
@@ -319,11 +333,12 @@ namespace AppRefiner.Linters
             }
             else
             {
+                sqlInfo.InVarsBound = true;
                 // Existing Execute validation
                 var argCount = args.expression()?.Length ?? 0;
                 if (argCount == sqlInfo.BindCount)
                 {
-                    sqlInfo.InVarsBound = true;
+                    
                     return;
                 }
 

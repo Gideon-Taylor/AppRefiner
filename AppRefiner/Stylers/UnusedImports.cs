@@ -120,6 +120,7 @@ namespace AppRefiner.Stylers
         public override void Reset()
         {
             importsUsed.Clear();
+            trackUsage = false;
         }
     }
 }

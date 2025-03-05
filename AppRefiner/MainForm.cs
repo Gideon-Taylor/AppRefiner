@@ -499,7 +499,6 @@ namespace AppRefiner
                 MessageBox.Show("Linting is only available for PeopleCode editors", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return;
             }
-            dataGridView2.Rows.Clear();
             if (activeEditor.ContentString == null)
             {
                 activeEditor.ContentString = ScintillaManager.GetScintillaText(activeEditor);
@@ -556,7 +555,7 @@ namespace AppRefiner
                 linter.Reset();
             }
             program = null;
-            foreach (var g in reports.GroupBy(r => r.Line))
+            foreach (var g in reports.GroupBy(r => r.Line).OrderBy(b => b.First().Line))
             {
                 List<string> messages = new();
                 List<AnnotationStyle> styles = new();
@@ -622,6 +621,7 @@ namespace AppRefiner
                 lblStatus.Text = "Linting...";
                 progressBar1.Style = ProgressBarStyle.Marquee;
                 progressBar1.MarqueeAnimationSpeed = 30;
+                dataGridView2.Rows.Clear();
             }));
             Application.DoEvents();
             // Run the folding operation in a background thread
