@@ -126,7 +126,8 @@ namespace AppRefiner
         private const int SCI_SETSEL = 2160;
         private const int SCI_STARTSTYLING = 2032;
         private const int SCI_SETSTYLING = 2033;
-
+        private const int SCI_CLEARDOCUMENTSTYLE = 2005;
+        private const int SCI_COLOURISE = 4003;
         // indicators 
         private const int SALMON_HIGLIGHTER = 0;
         private const int GRAY_HIGLIGHTER = 1;
@@ -918,6 +919,13 @@ namespace AppRefiner
                 Debug.WriteLine($"Error setting annotations: {ex.Message}");
                 throw;
             }
+        }
+
+        internal static void ResetStyles(ScintillaEditor activeEditor)
+        {
+            activeEditor.SendMessage(SCI_CLEARDOCUMENTSTYLE, (IntPtr)0, (IntPtr)0);
+            var docLength = activeEditor.SendMessage(SCI_GETLENGTH, 0, 0);
+            activeEditor.SendMessage(SCI_COLOURISE, 0, docLength);
         }
     }
     public enum EditorType

@@ -520,6 +520,8 @@ namespace AppRefiner
                 styler.Reset();
             }
 
+            ScintillaManager.ResetStyles(activeEditor);
+
             foreach (var annotation in annotations)
             {
                 ScintillaManager.SetAnnotation(activeEditor, annotation.LineNumber, annotation.Message);
