@@ -63,6 +63,34 @@ namespace AppRefiner.Linters
             return (null, expr.Start.StartIndex, expr.Stop.StopIndex);
         }
 
+        private bool ContainsConcatenation(ExpressionContext expr)
+        {
+            // If the expression is directly a concatenation, return true.
+            if (expr is ConcatenationExprContext)
+            {
+                return true;
+            }
+
+            // If the expression is parenthesized, examine the inner expression.
+            if (expr is ParenthesizedExprContext parenthesized)
+            {
+                return ContainsConcatenation(parenthesized.expression());
+            }
+
+            // Otherwise, iterate over all children and check any nested expressions.
+            if (expr.children != null)
+            {
+                foreach (var child in expr.children)
+                {
+                    if (child is ExpressionContext childExpr && ContainsConcatenation(childExpr))
+                    {
+                        return true;
+                    }
+                }
+            }
+            return false;
+        }
+
         public override void EnterSimpleFunctionCall(SimpleFunctionCallContext context)
         {
             // Check if the function being called is "SQLExec"
@@ -75,6 +103,20 @@ namespace AppRefiner.Linters
 
             // Get the first argument
             var firstArg = args.expression()[0];
+
+            // Check recursively if the first argument contains a concatenation operator
+            if (ContainsConcatenation(firstArg))
+            {
+                Reports?.Add(new Report()
+                {
+                    Type = Type,
+                    Line = firstArg.Start.Line - 1,
+                    Span = (firstArg.Start.StartIndex, firstArg.Stop.StopIndex),
+                    Message = $"Found SQL using string concatenation."
+                });
+            }
+
+
             var (sqlText, start, stop) = GetSqlText(firstArg);
 
             if (string.IsNullOrWhiteSpace(sqlText))
