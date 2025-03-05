@@ -52,10 +52,9 @@ namespace AppRefiner
             public int Bottom;
         }
 
-        private System.Timers.Timer tmrScan = new System.Timers.Timer();
-
+        System.Threading.Timer scanTimer;
+        private bool timerRunning = false;
         private object scanningLock = new();
-        private bool scanningFlag = false;
         private ScintillaEditor? activeEditor = null;
         private List<BaseLintRule> linterRules = new();
         private List<BaseStyler> stylers = new(); // Changed from List<BaseStyler> analyzers
@@ -72,11 +71,6 @@ namespace AppRefiner
         public MainForm()
         {
             InitializeComponent();
-
-            tmrScan.Interval = 1000;
-            tmrScan.Elapsed += (sender, e) => PerformScan();
-            tmrScan.Enabled = false;
-
             InitLinterOptions();
             InitStylerOptions(); // Changed from InitAnalyzerOptions
         }
@@ -199,16 +193,12 @@ namespace AppRefiner
 
         private void btnStart_Click(object sender, EventArgs e)
         {
-            tmrScan.Enabled = !tmrScan.Enabled;
-            btnStart.Text = tmrScan.Enabled ? "Stop" : "Start";
-            lblStatus.Text = tmrScan.Enabled ? "Monitoring..." : "Ready";
-
-            activeEditor = null;
-            if (tmrScan.Enabled == false)
+            timerRunning = !timerRunning;
+            if (timerRunning)
             {
-                grpEditorActions.Enabled = tmrScan.Enabled;
-                btnLintCode.Enabled = tmrScan.Enabled;
+                scanTimer = new System.Threading.Timer(ScanTick, null, 1000, Timeout.Infinite);
             }
+            btnStart.Text = timerRunning ? "Stop" : "Start";
         }
 
         private void EnableUIActions()
@@ -291,46 +281,23 @@ namespace AppRefiner
 
             return editor;
         }
-
         private void PerformScan()
         {
-            lock (scanningLock)
-            {
-                if (scanningFlag)
-                {
-                    return;
-                }
-                scanningFlag = true;
-            }
-
             var currentEditor = GetActiveEditor();
             if (currentEditor == null)
             {
-                lock (scanningLock)
-                {
-                    scanningFlag = false;
-                }
                 return;
             }
 
-            if (activeEditor == null)
+            if (activeEditor == null && currentEditor != null)
             {
                 EnableUIActions();
             }
-            else if (activeEditor.hWnd != currentEditor.hWnd)
-            {
-                dataGridView2.Rows.Clear();
-            }
-
             activeEditor = currentEditor;
 
             /* If "only PPC" is checked and the editor is not PPC, skip */
             if (chkOnlyPPC.Checked && activeEditor.Type != EditorType.PeopleCode)
             {
-                lock (scanningLock)
-                {
-                    scanningFlag = false;
-                }
                 return;
             }
 
@@ -365,11 +332,6 @@ namespace AppRefiner
                     ScintillaManager.ContractTopLevel(activeEditor);
                 }
 
-
-                lock (scanningLock)
-                {
-                    scanningFlag = false;
-                }
                 return;
             }
 
@@ -382,10 +344,6 @@ namespace AppRefiner
                 {
                     /* We want to update our content hash to match so we don't process it next tick. */
                     activeEditor.LastContentHash = ScintillaManager.GetContentHash(activeEditor);
-                    lock (scanningLock)
-                    {
-                        scanningFlag = false;
-                    }
                     return;
                 }
 
@@ -394,10 +352,6 @@ namespace AppRefiner
                 var contentHash = ScintillaManager.GetContentHash(activeEditor);
                 if (contentHash == activeEditor.LastContentHash)
                 {
-                    lock (scanningLock)
-                    {
-                        scanningFlag = false;
-                    }
                     return;
                 }
 
@@ -420,20 +374,22 @@ namespace AppRefiner
                 if (activeEditor.Type == EditorType.PeopleCode)
                 {
                     PeopleCodeLexer lexer = new PeopleCodeLexer(new Antlr4.Runtime.AntlrInputStream(activeEditor.ContentString));
-                    var stream = new Antlr4.Runtime.CommonTokenStream(lexer);
                     PeopleCodeParser parser = new PeopleCodeParser(new Antlr4.Runtime.CommonTokenStream(lexer));
                     var program = parser.program();
-
-
                     ProcessStylers(program);
+                    program = null;
+                    parser = null;
                 }
 
                 activeEditor.LastContentHash = contentHash;
             }
-
-            lock (scanningLock)
+        }
+        private void ScanTick(object? state)
+        {
+            PerformScan();
+            if (timerRunning)
             {
-                scanningFlag = false;
+                scanTimer.Change(1000, Timeout.Infinite);
             }
         }
 
@@ -444,34 +400,32 @@ namespace AppRefiner
                 return;
             }
 
-            if (!activeEditor.HasLexilla)
+            // Set the status label and progress bar before starting the background task
+            this.Invoke((Action)(() =>
             {
-                // Set the status label and progress bar before starting the background task
-                this.Invoke((Action)(() =>
+                lblStatus.Text = "Folding...";
+                progressBar1.Style = ProgressBarStyle.Marquee;
+                progressBar1.MarqueeAnimationSpeed = 30;
+            }));
+            Application.DoEvents();
+            // Run the folding operation in a background thread
+            await Task.Run(() =>
+            {
+                // Ensure the activeEditor is not null before proceeding
+                if (activeEditor != null)
                 {
-                    lblStatus.Text = "Folding...";
-                    progressBar1.Style = ProgressBarStyle.Marquee;
-                    progressBar1.MarqueeAnimationSpeed = 30;
-                }));
-                Application.DoEvents();
-                // Run the folding operation in a background thread
-                await Task.Run(() =>
-                {
-                    // Ensure the activeEditor is not null before proceeding
-                    if (activeEditor != null)
-                    {
-                        ScintillaManager.SetFoldRegions(activeEditor);
-                    }
-                });
+                    ScintillaManager.SetFoldRegions(activeEditor);
+                }
+            });
 
-                // Update the UI after the background task completes
-                this.Invoke((Action)(() =>
-                {
-                    lblStatus.Text = "Monitoring...";
-                    progressBar1.Style = ProgressBarStyle.Blocks;
-                }));
-                Application.DoEvents();
-            }
+            // Update the UI after the background task completes
+            this.Invoke((Action)(() =>
+            {
+                lblStatus.Text = "Monitoring...";
+                progressBar1.Style = ProgressBarStyle.Blocks;
+            }));
+            Application.DoEvents();
+
         }
         private void InitStylerOptions() // Changed from InitAnalyzerOptions
         {
@@ -536,8 +490,6 @@ namespace AppRefiner
             {
                 ScintillaManager.ColorText(activeEditor, color.Color, color.Start, color.Length);
             }
-
-            walker.Walk(program);
         }
 
         private void ProcessLinters()
@@ -553,7 +505,7 @@ namespace AppRefiner
                 activeEditor.ContentString = ScintillaManager.GetScintillaText(activeEditor);
             }
 
-            PeopleCodeLexer lexer = new PeopleCodeLexer(new Antlr4.Runtime.AntlrInputStream(activeEditor.ContentString));
+            PeopleCodeLexer? lexer = new PeopleCodeLexer(new Antlr4.Runtime.AntlrInputStream(activeEditor.ContentString));
             var stream = new Antlr4.Runtime.CommonTokenStream(lexer);
 
             // Get all tokens including those on hidden channels
@@ -564,9 +516,14 @@ namespace AppRefiner
                 .Where(token => token.Channel == PeopleCodeLexer.COMMENTS || token.Channel == PeopleCodeLexer.API_COMMENTS)
                 .ToList();
 
-            PeopleCodeParser parser = new PeopleCodeParser(stream);
+            PeopleCodeParser? parser = new PeopleCodeParser(stream);
             var program = parser.program();
             var activeLinters = linterRules.Where(a => a.Active);
+
+            /* Free up ANTLR resources */
+            lexer = null;
+            parser = null;
+            stream = null;
 
             /* Only run NotRequired or Optional linters if there is no database connection */
             if (activeEditor.DataManager == null)
@@ -598,7 +555,7 @@ namespace AppRefiner
             {
                 linter.Reset();
             }
-
+            program = null;
             foreach (var g in reports.GroupBy(r => r.Line))
             {
                 List<string> messages = new();
@@ -606,8 +563,12 @@ namespace AppRefiner
 
                 foreach (var report in g)
                 {
-                    int rowIndex = dataGridView2.Rows.Add(report.Type, report.Message, report.Line);
-                    dataGridView2.Rows[rowIndex].Tag = report;
+                    this.Invoke((Action)(() =>
+                    {
+                        int rowIndex = dataGridView2.Rows.Add(report.Type, report.Message, report.Line);
+                        dataGridView2.Rows[rowIndex].Tag = report;
+                    }));
+                    
                     if (chkLintAnnotate.Checked)
                     {
                         messages.Add(report.Message);
@@ -653,9 +614,31 @@ namespace AppRefiner
             }
         }
 
-        private void btnLintCode_Click(object sender, EventArgs e)
+        private async void btnLintCode_Click(object sender, EventArgs e)
         {
-            ProcessLinters();
+            // Set the status label and progress bar before starting the background task
+            this.Invoke((Action)(() =>
+            {
+                lblStatus.Text = "Linting...";
+                progressBar1.Style = ProgressBarStyle.Marquee;
+                progressBar1.MarqueeAnimationSpeed = 30;
+            }));
+            Application.DoEvents();
+            // Run the folding operation in a background thread
+            await Task.Run(() =>
+            {
+                // Ensure the activeEditor is not null before proceeding
+                ProcessLinters();
+            });
+
+            // Update the UI after the background task completes
+            this.Invoke((Action)(() =>
+            {
+                lblStatus.Text = "Monitoring...";
+                progressBar1.Style = ProgressBarStyle.Blocks;
+            }));
+            Application.DoEvents();
+            
         }
 
         private void dataGridView1_CellValueChanged(object sender, DataGridViewCellEventArgs e)
@@ -783,7 +766,7 @@ namespace AppRefiner
 
         private void btnConnectDB_Click(object sender, EventArgs e)
         {
-            if (activeEditor == null) return; 
+            if (activeEditor == null) return;
             if (activeEditor.DataManager != null)
             {
                 activeEditor.DataManager.Disconnect();
