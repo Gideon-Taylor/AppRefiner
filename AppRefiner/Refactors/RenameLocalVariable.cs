@@ -75,14 +75,16 @@ namespace AppRefiner.Refactors
             if (variableToRename == null || targetScope == null)
             {
                 // No variable found at cursor position
+                SetFailure("No variable found at cursor position. Please place cursor on a variable name.");
                 return;
             }
 
             targetScope.TryGetValue(variableToRename, out var allOccurrences);
 
-            if (allOccurrences == null)
+            if (allOccurrences == null || allOccurrences.Count == 0)
             {
                 // No occurrences found
+                SetFailure($"Unable to find any occurrences of variable '{variableToRename}'");
                 return;
             }
 
