@@ -19,6 +19,7 @@ using AppRefiner.Refactors;
 using SharpCompress.Readers;
 using Antlr4.Runtime.Tree;
 using AppRefiner.Database;
+using AppRefiner.Templates;
 
 namespace AppRefiner
 {
@@ -95,6 +96,14 @@ namespace AppRefiner
 
             LoadStylerStates();
             LoadLinterStates();
+            LoadTemplates();
+        }
+
+        private void LoadTemplates()
+        {
+            Template.GetAvailableTemplates().ForEach(t => {
+                cmbTemplates.Items.Add(t);
+            });
         }
 
         private void SaveSettings()
