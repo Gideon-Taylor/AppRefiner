@@ -474,16 +474,6 @@ namespace AppRefiner
                     ScintillaManager.ApplyBetterSQL(activeEditor);
                 }
 
-                if (!activeEditor.HasLexilla || (activeEditor.Type == EditorType.SQL || activeEditor.Type == EditorType.Other))
-                {
-                    /* Perform folding ourselves 
-                        1. if they are missing Lexilla
-                        2. if it is a SQL object 
-                        3. if its an editor type we don't know
-                    */
-                    DoExplicitFolding();
-                }
-
                 /* Create parse tree */
                 if (activeEditor.Type == EditorType.PeopleCode)
                 {
@@ -493,6 +483,16 @@ namespace AppRefiner
                     ProcessStylers(program);
                     program = null;
                     parser = null;
+                }
+
+                if (!activeEditor.HasLexilla || (activeEditor.Type == EditorType.SQL || activeEditor.Type == EditorType.Other))
+                {
+                    /* Perform folding ourselves 
+                        1. if they are missing Lexilla
+                        2. if it is a SQL object 
+                        3. if its an editor type we don't know
+                    */
+                    DoExplicitFolding();
                 }
 
                 activeEditor.LastContentHash = contentHash;
