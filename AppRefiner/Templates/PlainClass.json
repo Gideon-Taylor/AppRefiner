@@ -9,7 +9,15 @@
       "required": true,
       "defaultValue": "MyClass",
       "description": "The name of the class to generate"
+    },
+    {
+      "id": "include_comments",
+      "label": "Include Comments",
+      "type": "boolean",
+      "required": true,
+      "defaultValue": "true",
+      "description": "Whether to include additional comments in the generated code"
     }
   ],
-  "template": "class {{class_name}}\r\n   method {{class_name}}();\r\nend-class;\r\n\r\nmethod {{class_name}}\r\nend-method;"
+  "template": "class {{class_name}}\r\n{{#if include_comments}}   /* This is a basic class template */\r\n{{/if}}   method {{class_name}}();\r\n{{#if include_comments}}      /* Constructor implementation */\r\n{{/if}}end-class;\r\n\r\nmethod {{class_name}}\r\n{{#if include_comments}}   /* Constructor method body */\r\n{{/if}}end-method;"
 }

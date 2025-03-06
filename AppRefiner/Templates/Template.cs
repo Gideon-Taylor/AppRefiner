@@ -137,13 +137,14 @@ namespace AppRefiner.Templates
         }
 
         /// <summary>
-        /// Gets all markers in the template
+        /// Gets all simple markers in the template (excluding conditional markers)
         /// </summary>
         /// <returns>A list of unique marker names without braces</returns>
         public List<string> GetMarkers()
         {
             var markers = new HashSet<string>();
-            var regex = new Regex(@"{{([^{}]+)}}");
+            // Match {{name}} but not {{#if name}} or {{/if}}
+            var regex = new Regex(@"{{(?!\#if\s)(?!\/if)([^{}]+)}}");
             var matches = regex.Matches(TemplateText);
 
             foreach (Match match in matches)
@@ -178,8 +179,6 @@ namespace AppRefiner.Templates
         /// <returns>The processed template text with markers replaced by values</returns>
         public string Apply(Dictionary<string, string> values)
         {
-            string result = TemplateText;
-
             // Fill in default values for any missing inputs
             var allValues = new Dictionary<string, string>(values);
             foreach (var input in Inputs)
@@ -190,11 +189,46 @@ namespace AppRefiner.Templates
                 }
             }
 
-            // Replace all markers with their values
+            // Process conditional blocks first
+            string processedTemplate = ProcessConditionalBlocks(TemplateText, allValues);
+
+            // Replace all simple markers with their values
             foreach (var marker in GetMarkers())
             {
                 string replacementValue = allValues.ContainsKey(marker) ? allValues[marker] : string.Empty;
-                result = result.Replace("{{" + marker + "}}", replacementValue);
+                processedTemplate = processedTemplate.Replace("{{" + marker + "}}", replacementValue);
+            }
+
+            return processedTemplate;
+        }
+
+        /// <summary>
+        /// Processes conditional blocks in the template ({{#if condition}}...{{/if}})
+        /// </summary>
+        /// <param name="template">The template text to process</param>
+        /// <param name="values">Dictionary of values for conditional evaluation</param>
+        /// <returns>The processed template with conditional blocks evaluated</returns>
+        private string ProcessConditionalBlocks(string template, Dictionary<string, string> values)
+        {
+            var ifBlockRegex = new Regex(@"{{#if\s+([^}]+)}}(.*?){{/if}}", RegexOptions.Singleline);
+            var result = template;
+
+            while (ifBlockRegex.IsMatch(result))
+            {
+                result = ifBlockRegex.Replace(result, match =>
+                {
+                    string condition = match.Groups[1].Value.Trim();
+                    string content = match.Groups[2].Value;
+
+                    bool conditionValue = false;
+                    if (values.TryGetValue(condition, out string value))
+                    {
+                        // Evaluate the condition as a boolean
+                        conditionValue = value.ToLower() == "true" || value == "1" || value.ToLower() == "yes";
+                    }
+
+                    return conditionValue ? content : string.Empty;
+                });
             }
 
             return result;

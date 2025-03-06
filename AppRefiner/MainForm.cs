@@ -125,6 +125,16 @@ namespace AppRefiner
                 return;
             }
 
+            // Add Apply Template button at the bottom
+            Button applyButton = new Button
+            {
+                Text = "Apply Template",
+                Size = new Size(120, 30),
+                Anchor = AnchorStyles.Bottom | AnchorStyles.Right
+            };
+            applyButton.Click += btnApplyTemplate_Click;
+            pnlTemplateParams.Controls.Add(applyButton);
+
             const int labelWidth = 120;
             const int controlWidth = 200;
             const int verticalSpacing = 30;
@@ -151,9 +161,11 @@ namespace AppRefiner
                         inputControl = new CheckBox
                         {
                             Checked = !string.IsNullOrEmpty(input.DefaultValue) && 
-                                      (input.DefaultValue.ToLower() == "true" || input.DefaultValue == "1"),
+                                      (input.DefaultValue.ToLower() == "true" || input.DefaultValue == "1" || 
+                                       input.DefaultValue.ToLower() == "yes"),
                             Location = new Point(labelWidth + horizontalPadding * 2, currentY),
-                            Size = new Size(20, 20)
+                            Size = new Size(controlWidth, 23),
+                            Text = "" // No text needed since we have the label
                         };
                         break;
                     
@@ -181,6 +193,14 @@ namespace AppRefiner
                 templateInputControls[input.Id] = inputControl;
 
                 currentY += verticalSpacing;
+            }
+            
+            // Position the apply button at the bottom
+            if (pnlTemplateParams.Controls.OfType<Button>().FirstOrDefault() is Button applyButton)
+            {
+                applyButton.Location = new Point(
+                    pnlTemplateParams.Width - applyButton.Width - 20, 
+                    currentY + 20);
             }
         }
 
@@ -931,6 +951,76 @@ namespace AppRefiner
             {
                 GenerateTemplateParameterControls(selectedTemplate);
             }
+        }
+
+        private void btnApplyTemplate_Click(object sender, EventArgs e)
+        {
+            if (cmbTemplates.SelectedItem is Template selectedTemplate)
+            {
+                var parameterValues = GetTemplateParameterValues();
+                
+                if (!selectedTemplate.ValidateInputs(parameterValues))
+                {
+                    MessageBox.Show("Please fill in all required fields.", "Required Fields Missing", 
+                        MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    return;
+                }
+                
+                string generatedContent = selectedTemplate.Apply(parameterValues);
+                
+                if (activeEditor != null)
+                {
+                    // Take a snapshot of the current content
+                    activeEditor.SnapshotText = ScintillaManager.GetScintillaText(activeEditor);
+                    btnRestoreSnapshot.Enabled = true;
+                    
+                    // Set the generated content in the editor
+                    ScintillaManager.SetScintillaText(activeEditor, generatedContent);
+                }
+                else
+                {
+                    // If no editor is active, show the content in a dialog
+                    ShowGeneratedTemplateDialog(generatedContent, selectedTemplate.TemplateName);
+                }
+            }
+        }
+        
+        private void ShowGeneratedTemplateDialog(string content, string templateName)
+        {
+            Form dialog = new Form
+            {
+                Text = $"Generated {templateName}",
+                Size = new Size(600, 400),
+                StartPosition = FormStartPosition.CenterParent
+            };
+            
+            TextBox textBox = new TextBox
+            {
+                Multiline = true,
+                ScrollBars = ScrollBars.Both,
+                Dock = DockStyle.Fill,
+                Font = new Font("Consolas", 10),
+                Text = content,
+                WordWrap = false
+            };
+            
+            Button copyButton = new Button
+            {
+                Text = "Copy to Clipboard",
+                Dock = DockStyle.Bottom
+            };
+            
+            copyButton.Click += (s, e) => 
+            {
+                Clipboard.SetText(content);
+                MessageBox.Show("Content copied to clipboard!", "Success", 
+                    MessageBoxButtons.OK, MessageBoxIcon.Information);
+            };
+            
+            dialog.Controls.Add(textBox);
+            dialog.Controls.Add(copyButton);
+            
+            dialog.ShowDialog();
         }
 
         private static DialogResult ShowInputDialog(string title, string text, ref string result)
