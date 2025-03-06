@@ -1,0 +1,23 @@
+import IS_DX_INPUT:InputDefinition;
+
+class {{class_name}} extends IS_DX_INPUT:InputDefinition
+   method IsValid(&sCurrentValue As string) Returns boolean;
+protected
+   method PopulateChoices();
+end-class;
+
+method IsValid
+   /+ &sCurrentValue as String +/
+   /+ Returns Boolean +/
+   /+ Extends/implements IS_DX_INPUT:InputDefinition.IsValid +/
+   Return True;
+end-method;
+
+method PopulateChoices
+   
+   %Super.PopulateChoices();  
+   
+   /* Add your custom code here */
+   [[cursor]]
+end-method;
+

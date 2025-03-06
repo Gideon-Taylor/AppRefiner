@@ -1,0 +1,14 @@
+{
+  "templateName": "Decision Input",
+  "description": "Basic Decision Input",
+  "inputs": [
+    {
+      "id": "class_name",
+      "label": "Class Name",
+      "type": "string",
+      "required": true,
+      "defaultValue": "MyInput",
+      "description": "The name of the class to generate"
+    }
+  ]
+}
