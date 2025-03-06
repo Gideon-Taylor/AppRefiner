@@ -249,7 +249,7 @@ namespace AppRefiner.Templates
                         conditionValue = value.ToLower() == "true" || value == "1" || value.ToLower() == "yes";
                     }
 
-                    return conditionValue ? content : string.Empty;
+                    return conditionValue ? content.Trim(['\r','\n']) : string.Empty;
                 });
             }
 

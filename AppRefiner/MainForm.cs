@@ -125,16 +125,6 @@ namespace AppRefiner
                 return;
             }
 
-            // Add Apply Template button at the bottom
-            Button applyButton = new Button
-            {
-                Text = "Apply Template",
-                Size = new Size(120, 30),
-                Anchor = AnchorStyles.Bottom | AnchorStyles.Right
-            };
-            applyButton.Click += btnApplyTemplate_Click;
-            pnlTemplateParams.Controls.Add(applyButton);
-
             const int labelWidth = 120;
             const int controlWidth = 200;
             const int verticalSpacing = 30;
@@ -194,14 +184,7 @@ namespace AppRefiner
 
                 currentY += verticalSpacing;
             }
-            
-            // Position the apply button at the bottom
-            if (pnlTemplateParams.Controls.OfType<Button>().FirstOrDefault() is Button applyButton)
-            {
-                applyButton.Location = new Point(
-                    pnlTemplateParams.Width - applyButton.Width - 20, 
-                    currentY + 20);
-            }
+           
         }
 
         private Dictionary<string, string> GetTemplateParameterValues()
