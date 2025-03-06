@@ -1,0 +1,15 @@
+{
+  "templateName": "Plain Class",
+  "description": "Basic PeopleCode class with constructor",
+  "inputs": [
+    {
+      "id": "class_name",
+      "label": "Class Name",
+      "type": "string",
+      "required": true,
+      "defaultValue": "MyClass",
+      "description": "The name of the class to generate"
+    }
+  ],
+  "template": "class {{class_name}}\n\n   method {{class_name}}();\n      /* Constructor implementation */\n   end-method;\n\nend-class;"
+}
