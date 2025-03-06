@@ -128,6 +128,8 @@ namespace AppRefiner
         private const int SCI_SETSTYLING = 2033;
         private const int SCI_CLEARDOCUMENTSTYLE = 2005;
         private const int SCI_COLOURISE = 4003;
+        private const int SCI_GOTOPOS = 2025;
+        private const int SCI_SCROLLCARET = 2169;
         // indicators 
         private const int SALMON_HIGLIGHTER = 0;
         private const int GRAY_HIGLIGHTER = 1;
@@ -930,6 +932,22 @@ namespace AppRefiner
         {
             if (activeEditor == null) return -1;
             return (int)activeEditor.SendMessage(SCI_GETCURRENTPOS, 0, 0);
+        }
+
+        /// <summary>
+        /// Sets the cursor position in the Scintilla editor
+        /// </summary>
+        /// <param name="editor">The editor to set the cursor position in</param>
+        /// <param name="position">The position to place the cursor</param>
+        public static void SetCursorPosition(ScintillaEditor editor, int position)
+        {
+            if (editor == null) return;
+            
+            // Set the cursor position
+            editor.SendMessage(SCI_GOTOPOS, (IntPtr)position, IntPtr.Zero);
+            
+            // Ensure the position is visible by scrolling to it
+            editor.SendMessage(SCI_SCROLLCARET, IntPtr.Zero, IntPtr.Zero);
         }
     }
     public enum EditorType

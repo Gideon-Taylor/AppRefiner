@@ -13,5 +13,6 @@ end-class;
 /* Constructor implementation */
 {{/if}}
 method {{class_name}}
+   [[cursor]]
 end-method;
 

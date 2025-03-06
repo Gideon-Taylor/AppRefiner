@@ -68,6 +68,11 @@ namespace AppRefiner.Templates
         /// The template text with {{marker}} placeholders
         /// </summary>
         public string TemplateText { get; set; }
+        
+        /// <summary>
+        /// Position to place the cursor after applying the template (-1 if not specified)
+        /// </summary>
+        public int CursorPosition { get; private set; } = -1;
 
         public override string ToString()
         {
@@ -201,6 +206,9 @@ namespace AppRefiner.Templates
         /// <returns>The processed template text with markers replaced by values</returns>
         public string Apply(Dictionary<string, string> values)
         {
+            // Reset cursor position
+            CursorPosition = -1;
+            
             // Fill in default values for any missing inputs
             var allValues = new Dictionary<string, string>(values);
             foreach (var input in Inputs)
@@ -219,6 +227,14 @@ namespace AppRefiner.Templates
             {
                 string replacementValue = allValues.ContainsKey(marker) ? allValues[marker] : string.Empty;
                 processedTemplate = processedTemplate.Replace("{{" + marker + "}}", replacementValue);
+            }
+            
+            // Process cursor position marker
+            int cursorMarkerIndex = processedTemplate.IndexOf("[[cursor]]");
+            if (cursorMarkerIndex >= 0)
+            {
+                CursorPosition = cursorMarkerIndex;
+                processedTemplate = processedTemplate.Replace("[[cursor]]", string.Empty);
             }
 
             return processedTemplate;

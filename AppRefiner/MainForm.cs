@@ -959,6 +959,12 @@ namespace AppRefiner
                     
                     // Set the generated content in the editor
                     ScintillaManager.SetScintillaText(activeEditor, generatedContent);
+                    
+                    // Set cursor position if specified in the template
+                    if (selectedTemplate.CursorPosition >= 0)
+                    {
+                        ScintillaManager.SetCursorPosition(activeEditor, selectedTemplate.CursorPosition);
+                    }
                 }
                 else
                 {
