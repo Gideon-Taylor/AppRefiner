@@ -15,4 +15,3 @@ end-class;
 method {{class_name}}
    [[cursor]]
 end-method;
-

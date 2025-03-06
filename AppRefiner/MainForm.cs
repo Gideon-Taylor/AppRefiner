@@ -964,6 +964,7 @@ namespace AppRefiner
                     if (selectedTemplate.CursorPosition >= 0)
                     {
                         ScintillaManager.SetCursorPosition(activeEditor, selectedTemplate.CursorPosition);
+                        WindowHelper.FocusWindow(activeEditor.hWnd);
                     }
                 }
                 else

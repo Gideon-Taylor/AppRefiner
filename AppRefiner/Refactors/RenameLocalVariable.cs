@@ -17,6 +17,11 @@ namespace AppRefiner.Refactors
         public RenameLocalVariable(int cursorPosition, string newVariableName)
         {
             this.cursorPosition = cursorPosition;
+            if (!newVariableName.StartsWith('&'))
+            {
+                newVariableName = $"&{newVariableName}";
+            }
+
             this.newVariableName = newVariableName;
         }
         
@@ -80,6 +85,13 @@ namespace AppRefiner.Refactors
             }
 
             targetScope.TryGetValue(variableToRename, out var allOccurrences);
+
+            /* If newVariableName is already in the scope, report failure to the user, cannot rename to existing variable name */
+            if (targetScope.ContainsKey(newVariableName))
+            {
+                SetFailure($"Variable '{newVariableName}' already exists in the current scope. Please choose a different name.");
+                return;
+            }
 
             if (allOccurrences == null || allOccurrences.Count == 0)
             {

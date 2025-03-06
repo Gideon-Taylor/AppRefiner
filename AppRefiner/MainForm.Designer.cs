@@ -65,11 +65,16 @@
             label1 = new Label();
             tabPage3 = new TabPage();
             groupBox1 = new GroupBox();
+            btnRenameLocalVar = new Button();
             btnOptimizeImports = new Button();
             btnAddFlowerBox = new Button();
+            tabPage5 = new TabPage();
+            splitContainer3 = new SplitContainer();
+            pnlTemplateParams = new Panel();
+            btnApplyTemplate = new Button();
+            cmbTemplates = new ComboBox();
             progressBar1 = new ProgressBar();
             lblStatus = new Label();
-            btnRenameLocalVar = new Button();
             ((System.ComponentModel.ISupportInitialize)splitContainer1).BeginInit();
             splitContainer1.Panel1.SuspendLayout();
             splitContainer1.Panel2.SuspendLayout();
@@ -93,6 +98,11 @@
             ((System.ComponentModel.ISupportInitialize)dataGridView2).BeginInit();
             tabPage3.SuspendLayout();
             groupBox1.SuspendLayout();
+            tabPage5.SuspendLayout();
+            ((System.ComponentModel.ISupportInitialize)splitContainer3).BeginInit();
+            splitContainer3.Panel1.SuspendLayout();
+            splitContainer3.Panel2.SuspendLayout();
+            splitContainer3.SuspendLayout();
             SuspendLayout();
             // 
             // splitContainer1
@@ -120,6 +130,7 @@
             tabControl1.Controls.Add(tabPage4);
             tabControl1.Controls.Add(tabPage2);
             tabControl1.Controls.Add(tabPage3);
+            tabControl1.Controls.Add(tabPage5);
             tabControl1.Dock = DockStyle.Fill;
             tabControl1.Location = new Point(0, 0);
             tabControl1.Name = "tabControl1";
@@ -517,6 +528,16 @@
             groupBox1.TabStop = false;
             groupBox1.Text = "Quick Edits";
             // 
+            // btnRenameLocalVar
+            // 
+            btnRenameLocalVar.Location = new Point(236, 22);
+            btnRenameLocalVar.Name = "btnRenameLocalVar";
+            btnRenameLocalVar.Size = new Size(109, 23);
+            btnRenameLocalVar.TabIndex = 4;
+            btnRenameLocalVar.Text = "Rename Local Var";
+            btnRenameLocalVar.UseVisualStyleBackColor = true;
+            btnRenameLocalVar.Click += btnRenameLocalVar_Click;
+            // 
             // btnOptimizeImports
             // 
             btnOptimizeImports.Location = new Point(121, 22);
@@ -537,6 +558,64 @@
             btnAddFlowerBox.UseVisualStyleBackColor = true;
             btnAddFlowerBox.Click += btnAddFlowerBox_Click;
             // 
+            // tabPage5
+            // 
+            tabPage5.Controls.Add(splitContainer3);
+            tabPage5.Controls.Add(cmbTemplates);
+            tabPage5.Location = new Point(4, 24);
+            tabPage5.Name = "tabPage5";
+            tabPage5.Padding = new Padding(3);
+            tabPage5.Size = new Size(523, 465);
+            tabPage5.TabIndex = 5;
+            tabPage5.Text = "Templates";
+            tabPage5.UseVisualStyleBackColor = true;
+            // 
+            // splitContainer3
+            // 
+            splitContainer3.Dock = DockStyle.Fill;
+            splitContainer3.Location = new Point(3, 26);
+            splitContainer3.Name = "splitContainer3";
+            splitContainer3.Orientation = Orientation.Horizontal;
+            // 
+            // splitContainer3.Panel1
+            // 
+            splitContainer3.Panel1.Controls.Add(pnlTemplateParams);
+            // 
+            // splitContainer3.Panel2
+            // 
+            splitContainer3.Panel2.Controls.Add(btnApplyTemplate);
+            splitContainer3.Size = new Size(517, 436);
+            splitContainer3.SplitterDistance = 403;
+            splitContainer3.TabIndex = 1;
+            // 
+            // pnlTemplateParams
+            // 
+            pnlTemplateParams.Dock = DockStyle.Fill;
+            pnlTemplateParams.Location = new Point(0, 0);
+            pnlTemplateParams.Name = "pnlTemplateParams";
+            pnlTemplateParams.Size = new Size(517, 403);
+            pnlTemplateParams.TabIndex = 3;
+            // 
+            // btnApplyTemplate
+            // 
+            btnApplyTemplate.Dock = DockStyle.Fill;
+            btnApplyTemplate.Location = new Point(0, 0);
+            btnApplyTemplate.Name = "btnApplyTemplate";
+            btnApplyTemplate.Size = new Size(517, 29);
+            btnApplyTemplate.TabIndex = 1;
+            btnApplyTemplate.Text = "Apply Template";
+            btnApplyTemplate.UseVisualStyleBackColor = true;
+            btnApplyTemplate.Click += btnApplyTemplate_Click;
+            // 
+            // cmbTemplates
+            // 
+            cmbTemplates.Dock = DockStyle.Top;
+            cmbTemplates.FormattingEnabled = true;
+            cmbTemplates.Location = new Point(3, 3);
+            cmbTemplates.Name = "cmbTemplates";
+            cmbTemplates.Size = new Size(517, 23);
+            cmbTemplates.TabIndex = 0;
+            // 
             // progressBar1
             // 
             progressBar1.Dock = DockStyle.Bottom;
@@ -554,16 +633,6 @@
             lblStatus.TabIndex = 21;
             lblStatus.Text = "Stopped";
             lblStatus.TextAlign = ContentAlignment.MiddleCenter;
-            // 
-            // btnRenameLocalVar
-            // 
-            btnRenameLocalVar.Location = new Point(236, 22);
-            btnRenameLocalVar.Name = "btnRenameLocalVar";
-            btnRenameLocalVar.Size = new Size(109, 23);
-            btnRenameLocalVar.TabIndex = 4;
-            btnRenameLocalVar.Text = "Rename Local Var";
-            btnRenameLocalVar.UseVisualStyleBackColor = true;
-            btnRenameLocalVar.Click += btnRenameLocalVar_Click;
             // 
             // MainForm
             // 
@@ -598,6 +667,11 @@
             ((System.ComponentModel.ISupportInitialize)dataGridView2).EndInit();
             tabPage3.ResumeLayout(false);
             groupBox1.ResumeLayout(false);
+            tabPage5.ResumeLayout(false);
+            splitContainer3.Panel1.ResumeLayout(false);
+            splitContainer3.Panel2.ResumeLayout(false);
+            ((System.ComponentModel.ISupportInitialize)splitContainer3).EndInit();
+            splitContainer3.ResumeLayout(false);
             ResumeLayout(false);
         }
 
@@ -645,5 +719,12 @@
         private Button btnConnectDB;
         private Button btnLintCode;
         private Button btnRenameLocalVar;
+        private TabPage tabPage5;
+        private Button button1;
+        private Panel panel1;
+        private ComboBox cmbTemplates;
+        private SplitContainer splitContainer3;
+        private Panel pnlTemplateParams;
+        private Button btnApplyTemplate;
     }
 }
