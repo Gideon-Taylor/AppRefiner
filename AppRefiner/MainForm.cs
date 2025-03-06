@@ -63,6 +63,8 @@ namespace AppRefiner
         // Map of process IDs to their corresponding data managers
         private Dictionary<uint, IDataManager> processDataManagers = new Dictionary<uint, IDataManager>();
         private Dictionary<string, Control> templateInputControls = new Dictionary<string, Control>();
+        private Dictionary<string, Control> templateInputLabels = new Dictionary<string, Control>();
+        private Dictionary<string, DisplayCondition> templateInputsDisplayConditions = new Dictionary<string, DisplayCondition>();
 
         private class RuleState
         {
@@ -116,9 +118,11 @@ namespace AppRefiner
 
         private void GenerateTemplateParameterControls(Template template)
         {
-            // Clear existing controls and dictionary
+            // Clear existing controls and dictionaries
             pnlTemplateParams.Controls.Clear();
             templateInputControls.Clear();
+            templateInputLabels.Clear();
+            templateInputsDisplayConditions.Clear();
 
             if (template == null || template.Inputs == null || template.Inputs.Count == 0)
             {
@@ -139,9 +143,11 @@ namespace AppRefiner
                     Text = input.Label + ":",
                     Location = new Point(horizontalPadding, currentY + 3),
                     Size = new Size(labelWidth, 20),
-                    AutoSize = false
+                    AutoSize = false,
+                    Tag = input.Id // Store input ID in Tag for easier reference
                 };
                 pnlTemplateParams.Controls.Add(label);
+                templateInputLabels[input.Id] = label;
 
                 // Create input control based on parameter type
                 Control inputControl;
@@ -155,7 +161,8 @@ namespace AppRefiner
                                        input.DefaultValue.ToLower() == "yes"),
                             Location = new Point(labelWidth + horizontalPadding * 2, currentY),
                             Size = new Size(controlWidth, 23),
-                            Text = "" // No text needed since we have the label
+                            Text = "", // No text needed since we have the label
+                            Tag = input.Id // Store input ID in Tag for easier reference
                         };
                         break;
                     
@@ -166,7 +173,8 @@ namespace AppRefiner
                         {
                             Text = input.DefaultValue ?? string.Empty,
                             Location = new Point(labelWidth + horizontalPadding * 2, currentY),
-                            Size = new Size(controlWidth, 23)
+                            Size = new Size(controlWidth, 23),
+                            Tag = input.Id // Store input ID in Tag for easier reference
                         };
                         break;
                 }
@@ -179,12 +187,95 @@ namespace AppRefiner
                     tooltip.SetToolTip(label, input.Description);
                 }
 
+                // Store display condition if present
+                if (input.DisplayCondition != null)
+                {
+                    templateInputsDisplayConditions[input.Id] = input.DisplayCondition;
+                }
+
                 pnlTemplateParams.Controls.Add(inputControl);
                 templateInputControls[input.Id] = inputControl;
 
                 currentY += verticalSpacing;
             }
-           
+            
+            // Add event handlers for controls that affect display conditions
+            foreach (var kvp in templateInputControls)
+            {
+                if (kvp.Value is CheckBox checkBox)
+                {
+                    checkBox.CheckedChanged += (s, e) => UpdateDisplayConditions();
+                }
+                else if (kvp.Value is TextBox textBox)
+                {
+                    textBox.TextChanged += (s, e) => UpdateDisplayConditions();
+                }
+                // Add handlers for other control types as needed
+            }
+            
+            // Initial update of display conditions
+            UpdateDisplayConditions();
+        }
+        
+        private void UpdateDisplayConditions()
+        {
+            // Get current values from all controls
+            var currentValues = GetTemplateParameterValues();
+            
+            // Track if we need to reflow controls
+            bool visibilityChanged = false;
+            
+            // Update visibility for each control with a display condition
+            foreach (var kvp in templateInputsDisplayConditions)
+            {
+                string inputId = kvp.Key;
+                DisplayCondition condition = kvp.Value;
+                
+                if (templateInputControls.TryGetValue(inputId, out Control control))
+                {
+                    bool shouldDisplay = Template.IsDisplayConditionMet(condition, currentValues);
+                    visibilityChanged |= (control.Visible != shouldDisplay);
+                    control.Visible = shouldDisplay;
+                    
+                    // Also update the label visibility
+                    if (templateInputLabels.TryGetValue(inputId, out Control label))
+                    {
+                        label.Visible = shouldDisplay;
+                    }
+                }
+            }
+            
+            // Reflow visible controls to avoid gaps if needed
+            if (visibilityChanged)
+            {
+                ReflowControls();
+            }
+        }
+        
+        private void ReflowControls()
+        {
+            // Reposition visible controls to avoid gaps
+            const int verticalSpacing = 30;
+            int currentY = 10;
+            
+            // Get all input IDs ordered as they were originally added
+            var orderedInputs = templateInputControls.Keys.ToList();
+            
+            foreach (var inputId in orderedInputs)
+            {
+                if (templateInputControls.TryGetValue(inputId, out Control control) && 
+                    templateInputLabels.TryGetValue(inputId, out Control label))
+                {
+                    if (control.Visible)
+                    {
+                        // Reposition the control and its label
+                        label.Location = new Point(label.Location.X, currentY + 3);
+                        control.Location = new Point(control.Location.X, currentY);
+                        
+                        currentY += verticalSpacing;
+                    }
+                }
+            }
         }
 
         private Dictionary<string, string> GetTemplateParameterValues()
