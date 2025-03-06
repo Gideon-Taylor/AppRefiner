@@ -69,6 +69,11 @@ namespace AppRefiner.Templates
         /// </summary>
         public string TemplateText { get; set; }
 
+        public override string ToString()
+        {
+            return TemplateName;
+        }
+
         /// <summary>
         /// Loads a template from a JSON file
         /// </summary>

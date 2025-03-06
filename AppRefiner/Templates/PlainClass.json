@@ -11,5 +11,5 @@
       "description": "The name of the class to generate"
     }
   ],
-  "template": "class {{class_name}}\n\n   method {{class_name}}();\n      /* Constructor implementation */\n   end-method;\n\nend-class;"
+  "template": "class {{class_name}}\r\n   method {{class_name}}();\r\nend-class;\r\n\r\nmethod {{class_name}}\r\nend-method;"
 }
