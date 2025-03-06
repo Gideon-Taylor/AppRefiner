@@ -1,0 +1,9 @@
+class {{class_name}}
+{{#if include_comments}}   /* This is a basic class template */
+{{/if}}   method {{class_name}}();
+{{#if include_comments}}      /* Constructor implementation */
+{{/if}}end-class;
+
+method {{class_name}}
+{{#if include_comments}}   /* Constructor method body */
+{{/if}}end-method;

@@ -85,15 +85,16 @@ namespace AppRefiner.Templates
                 throw new FileNotFoundException($"Template file not found: {filePath}");
 
             string json = File.ReadAllText(filePath);
-            return LoadFromJson(json);
+            return LoadFromJson(json, filePath);
         }
 
         /// <summary>
         /// Loads a template from a JSON string
         /// </summary>
         /// <param name="json">JSON string containing template definition</param>
+        /// <param name="filePath">Optional path to the JSON file (needed to find associated template text file)</param>
         /// <returns>A populated Template object</returns>
-        public static Template LoadFromJson(string json)
+        public static Template LoadFromJson(string json, string filePath = null)
         {
             try
             {
@@ -104,13 +105,34 @@ namespace AppRefiner.Templates
 
                 var jsonDoc = JsonSerializer.Deserialize<JsonElement>(json, options);
                 
+                // Create template with properties from JSON
                 var template = new Template
                 {
                     TemplateName = jsonDoc.GetProperty("templateName").GetString(),
                     Description = jsonDoc.GetProperty("description").GetString(),
-                    TemplateText = jsonDoc.GetProperty("template").GetString(),
                     Inputs = new List<TemplateInput>()
                 };
+                
+                // Load template text from associated .txt file
+                string jsonFilePath = filePath ?? throw new ArgumentNullException(nameof(filePath));
+                string templateFilePath = Path.ChangeExtension(jsonFilePath, ".txt");
+                
+                if (File.Exists(templateFilePath))
+                {
+                    template.TemplateText = File.ReadAllText(templateFilePath);
+                }
+                else
+                {
+                    // Fallback to template property in JSON if it exists
+                    if (jsonDoc.TryGetProperty("template", out var templateProp))
+                    {
+                        template.TemplateText = templateProp.GetString();
+                    }
+                    else
+                    {
+                        throw new FileNotFoundException($"Template text file not found: {templateFilePath}");
+                    }
+                }
 
                 var inputs = jsonDoc.GetProperty("inputs");
                 foreach (var input in inputs.EnumerateArray())

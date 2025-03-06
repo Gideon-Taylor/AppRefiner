@@ -18,6 +18,5 @@
       "defaultValue": "true",
       "description": "Whether to include additional comments in the generated code"
     }
-  ],
-  "template": "/* This is a basic class template */\r\nclass AppRefiner\r\n   /* Constructor */\r\n   method AppRefiner();\r\n   \r\nend-class;\r\n\r\n/* Constructor Implementation */\r\nmethod AppRefiner\r\n   \r\nend-method;"
+  ]
 }
