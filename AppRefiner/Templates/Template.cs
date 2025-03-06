@@ -194,5 +194,33 @@ namespace AppRefiner.Templates
 
             return result;
         }
+
+        /// <summary>
+        /// Gets all available templates from the Templates directory
+        /// </summary>
+        /// <returns>A list of all available templates</returns>
+        public static List<Template> GetAvailableTemplates()
+        {
+            var templates = new List<Template>();
+            string templatesDirectory = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Templates");
+            
+            if (Directory.Exists(templatesDirectory))
+            {
+                foreach (var file in Directory.GetFiles(templatesDirectory, "*.json"))
+                {
+                    try
+                    {
+                        templates.Add(LoadFromFile(file));
+                    }
+                    catch (Exception ex)
+                    {
+                        // Log or handle the error, but continue processing other templates
+                        Console.WriteLine($"Error loading template {file}: {ex.Message}");
+                    }
+                }
+            }
+            
+            return templates;
+        }
     }
 }
