@@ -19,5 +19,5 @@
       "description": "Whether to include additional comments in the generated code"
     }
   ],
-  "template": "class {{class_name}}\r\n{{#if include_comments}}   /* This is a basic class template */\r\n{{/if}}   method {{class_name}}();\r\n{{#if include_comments}}      /* Constructor implementation */\r\n{{/if}}end-class;\r\n\r\nmethod {{class_name}}\r\n{{#if include_comments}}   /* Constructor method body */\r\n{{/if}}end-method;"
+  "template": "/* This is a basic class template */\r\nclass AppRefiner\r\n   /* Constructor */\r\n   method AppRefiner();\r\n   \r\nend-class;\r\n\r\n/* Constructor Implementation */\r\nmethod AppRefiner\r\n   \r\nend-method;"
 }
