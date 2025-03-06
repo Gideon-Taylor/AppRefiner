@@ -105,6 +105,8 @@ namespace AppRefiner
             Template.GetAvailableTemplates().ForEach(t => {
                 cmbTemplates.Items.Add(t);
             });
+        
+            cmbTemplates.SelectedIndexChanged += CmbTemplates_SelectedIndexChanged;
             
             if (cmbTemplates.Items.Count > 0)
             {
