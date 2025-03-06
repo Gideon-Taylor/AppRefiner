@@ -62,6 +62,7 @@ namespace AppRefiner
 
         // Map of process IDs to their corresponding data managers
         private Dictionary<uint, IDataManager> processDataManagers = new Dictionary<uint, IDataManager>();
+        private Dictionary<string, Control> templateInputControls = new Dictionary<string, Control>();
 
         private class RuleState
         {
@@ -104,6 +105,105 @@ namespace AppRefiner
             Template.GetAvailableTemplates().ForEach(t => {
                 cmbTemplates.Items.Add(t);
             });
+            
+            if (cmbTemplates.Items.Count > 0)
+            {
+                cmbTemplates.SelectedIndex = 0;
+            }
+        }
+
+        private void GenerateTemplateParameterControls(Template template)
+        {
+            // Clear existing controls and dictionary
+            pnlTemplateParams.Controls.Clear();
+            templateInputControls.Clear();
+
+            if (template == null || template.Inputs == null || template.Inputs.Count == 0)
+            {
+                return;
+            }
+
+            const int labelWidth = 120;
+            const int controlWidth = 200;
+            const int verticalSpacing = 30;
+            const int horizontalPadding = 10;
+            int currentY = 10;
+
+            foreach (var input in template.Inputs)
+            {
+                // Create label for parameter
+                Label label = new Label
+                {
+                    Text = input.Label + ":",
+                    Location = new Point(horizontalPadding, currentY + 3),
+                    Size = new Size(labelWidth, 20),
+                    AutoSize = false
+                };
+                pnlTemplateParams.Controls.Add(label);
+
+                // Create input control based on parameter type
+                Control inputControl;
+                switch (input.Type.ToLower())
+                {
+                    case "boolean":
+                        inputControl = new CheckBox
+                        {
+                            Checked = !string.IsNullOrEmpty(input.DefaultValue) && 
+                                      (input.DefaultValue.ToLower() == "true" || input.DefaultValue == "1"),
+                            Location = new Point(labelWidth + horizontalPadding * 2, currentY),
+                            Size = new Size(20, 20)
+                        };
+                        break;
+                    
+                    // Could add more types here (dropdown, etc.) in the future
+                    
+                    default: // Default to TextBox for string, number, etc.
+                        inputControl = new TextBox
+                        {
+                            Text = input.DefaultValue ?? string.Empty,
+                            Location = new Point(labelWidth + horizontalPadding * 2, currentY),
+                            Size = new Size(controlWidth, 23)
+                        };
+                        break;
+                }
+
+                // Add tooltip if description is available
+                if (!string.IsNullOrEmpty(input.Description))
+                {
+                    ToolTip tooltip = new ToolTip();
+                    tooltip.SetToolTip(inputControl, input.Description);
+                    tooltip.SetToolTip(label, input.Description);
+                }
+
+                pnlTemplateParams.Controls.Add(inputControl);
+                templateInputControls[input.Id] = inputControl;
+
+                currentY += verticalSpacing;
+            }
+        }
+
+        private Dictionary<string, string> GetTemplateParameterValues()
+        {
+            var values = new Dictionary<string, string>();
+            
+            foreach (var kvp in templateInputControls)
+            {
+                string value = string.Empty;
+                
+                if (kvp.Value is TextBox textBox)
+                {
+                    value = textBox.Text;
+                }
+                else if (kvp.Value is CheckBox checkBox)
+                {
+                    value = checkBox.Checked ? "true" : "false";
+                }
+                // Add other control types as needed
+                
+                values[kvp.Key] = value;
+            }
+            
+            return values;
         }
 
         private void SaveSettings()
@@ -822,6 +922,14 @@ namespace AppRefiner
             ProcessRefactor(refactor);
         }
 
+
+        private void CmbTemplates_SelectedIndexChanged(object sender, EventArgs e)
+        {
+            if (cmbTemplates.SelectedItem is Template selectedTemplate)
+            {
+                GenerateTemplateParameterControls(selectedTemplate);
+            }
+        }
 
         private static DialogResult ShowInputDialog(string title, string text, ref string result)
         {
