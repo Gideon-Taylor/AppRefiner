@@ -13,5 +13,5 @@ end-class;
 /* Constructor implementation */
 {{/if}}
 method {{class_name}}
-   [[cursor]]
+   [[select]]/* your code goes here */[[/select]]
 end-method;

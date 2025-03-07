@@ -47,7 +47,7 @@ namespace AppRefiner.Refactors
             string varName = context.GetText();
             var span = (context.Start.StartIndex, context.Stop.StopIndex);
             
-            AddOccurrence(varName, span);
+            AddOccurrence(varName, span, true);
             
             // Check if cursor is within this variable reference
             if (span.Item1 <= cursorPosition && cursorPosition <= span.Item2 + 1)
@@ -58,11 +58,17 @@ namespace AppRefiner.Refactors
         }
         
         // Helper method to add an occurrence to the appropriate scope
-        private void AddOccurrence(string varName, (int, int) span)
+        private void AddOccurrence(string varName, (int, int) span, bool mustExist = false)
         {
             
             // If not found, add to current scope
             var currentScope = GetCurrentScope();
+
+            if (mustExist && !currentScope.ContainsKey(varName))
+            {
+                return;
+            }
+
             if (!currentScope.ContainsKey(varName))
             {
                 currentScope[varName] = new List<(int, int)>();
@@ -96,7 +102,7 @@ namespace AppRefiner.Refactors
             if (allOccurrences == null || allOccurrences.Count == 0)
             {
                 // No occurrences found
-                SetFailure($"Unable to find any occurrences of variable '{variableToRename}'");
+                SetFailure($"Target '{variableToRename}' is not a local variable. Only local variables can be renamed.");
                 return;
             }
 

@@ -66,6 +66,11 @@ namespace AppRefiner
         private Dictionary<string, Control> templateInputLabels = new Dictionary<string, Control>();
         private Dictionary<string, DisplayCondition> templateInputsDisplayConditions = new Dictionary<string, DisplayCondition>();
 
+        KeyboardHook renameVarHook = new KeyboardHook();
+        KeyboardHook collapseLevel = new KeyboardHook();
+        KeyboardHook expandLevel = new KeyboardHook();
+        KeyboardHook collapseAll = new KeyboardHook();
+        KeyboardHook expandAll = new KeyboardHook();
         private class RuleState
         {
             public string TypeName { get; set; } = "";
@@ -82,6 +87,65 @@ namespace AppRefiner
         protected override void OnLoad(EventArgs e)
         {
             LoadSettings();
+            renameVarHook.KeyPressed += renameVariable;
+            renameVarHook.RegisterHotKey(AppRefiner.ModifierKeys.Control| AppRefiner.ModifierKeys.Shift, Keys.R);
+
+            collapseLevel.KeyPressed += collapseLevelHandler;
+            collapseLevel.RegisterHotKey(AppRefiner.ModifierKeys.Alt, Keys.Left);
+
+            expandLevel.KeyPressed += expandLevelHandler;
+            expandLevel.RegisterHotKey(AppRefiner.ModifierKeys.Alt, Keys.Right);
+
+            collapseAll.KeyPressed += collapseAllHandler;
+            collapseAll.RegisterHotKey(AppRefiner.ModifierKeys.Control | AppRefiner.ModifierKeys.Alt, Keys.Left);
+
+            expandAll.KeyPressed += expandAllHandler;
+            expandAll.RegisterHotKey(AppRefiner.ModifierKeys.Control | AppRefiner.ModifierKeys.Alt, Keys.Right);
+
+        }
+
+        private void expandAllHandler(object? sender, KeyPressedEventArgs e)
+        {
+            if (activeEditor == null) return;
+            ScintillaManager.ExpandTopLevel(activeEditor);
+        }
+
+        private void collapseAllHandler(object? sender, KeyPressedEventArgs e)
+        {
+            if (activeEditor == null) return;
+            ScintillaManager.CollapseTopLevel(activeEditor);
+        }
+
+        private void expandLevelHandler(object? sender, KeyPressedEventArgs e)
+        {
+            if (activeEditor == null) return;
+            ScintillaManager.SetLineFoldStatus(activeEditor,false);
+        }
+
+        private void collapseLevelHandler(object? sender, KeyPressedEventArgs e)
+        {
+            if (activeEditor == null) return;
+            ScintillaManager.SetLineFoldStatus(activeEditor, true);
+        }
+
+        private void renameVariable(object? sender, KeyPressedEventArgs e)
+        {
+            if (activeEditor == null) return;
+            /* Ask the user for a new variable name */
+            string newName = "";
+
+            var mainHandle = Process.GetProcessById((int)activeEditor.ProcessId).MainWindowHandle;
+
+            var dlgResult = ShowInputDialog("New variable name", "Enter new variable name", ref newName, mainHandle);
+
+            if (dlgResult != DialogResult.OK) return;
+
+            /* Get the current cursor position */
+            int cursorPosition = ScintillaManager.GetCursorPosition(activeEditor);
+
+            /* Create a new instance of the refactoring class */
+            RenameLocalVariable refactor = new RenameLocalVariable(cursorPosition, newName);
+            ProcessRefactor(refactor, mainHandle);
         }
 
         protected override void OnFormClosing(FormClosingEventArgs e)
@@ -129,7 +193,7 @@ namespace AppRefiner
                 return;
             }
 
-            const int labelWidth = 120;
+            const int labelWidth = 150;
             const int controlWidth = 200;
             const int verticalSpacing = 30;
             const int horizontalPadding = 10;
@@ -534,7 +598,7 @@ namespace AppRefiner
 
                 if (chkInitCollapsed.Checked)
                 {
-                    ScintillaManager.ContractTopLevel(activeEditor);
+                    ScintillaManager.CollapseTopLevel(activeEditor);
                 }
 
                 return;
@@ -904,7 +968,7 @@ namespace AppRefiner
         private void btnCollapseAll_Click(object sender, EventArgs e)
         {
             if (activeEditor == null) return;
-            ScintillaManager.ContractTopLevel(activeEditor);
+            ScintillaManager.CollapseTopLevel(activeEditor);
         }
 
         private void btnExpand_Click(object sender, EventArgs e)
@@ -937,7 +1001,7 @@ namespace AppRefiner
             ProcessRefactor(new AddFlowerBox());
         }
 
-        private void ProcessRefactor(BaseRefactor refactorClass)
+        private void ProcessRefactor(BaseRefactor refactorClass, IntPtr owner = 0)
         {
             if (activeEditor == null) return;
             ScintillaManager.ClearAnnotations(activeEditor);
@@ -961,7 +1025,7 @@ namespace AppRefiner
             var result = refactorClass.GetResult();
             if (!result.Success)
             {
-                MessageBox.Show(this, result.Message, "Refactoring Failed", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show(owner != IntPtr.Zero ? new WindowWrapper(owner): this, result.Message, "Refactoring Failed", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 btnRestoreSnapshot.Enabled = false;
                 return;
             }
@@ -1072,6 +1136,10 @@ namespace AppRefiner
             }
         }
         
+        private void RenameByShortcut()
+        {
+            
+        }
         private void ShowGeneratedTemplateDialog(string content, string templateName)
         {
             Form dialog = new Form
@@ -1110,7 +1178,7 @@ namespace AppRefiner
             dialog.ShowDialog();
         }
 
-        private static DialogResult ShowInputDialog(string title, string text, ref string result)
+        private static DialogResult ShowInputDialog(string title, string text, ref string result, IntPtr owner = 0)
         {
             Size size = new Size(300, 70);
             Form inputBox = new Form();
@@ -1145,9 +1213,24 @@ namespace AppRefiner
             inputBox.AcceptButton = okButton;
             inputBox.CancelButton = cancelButton;
 
-            DialogResult dlgResult = inputBox.ShowDialog();
+            DialogResult dlgResult = inputBox.ShowDialog(owner != IntPtr.Zero ? new WindowWrapper(owner): null);
             result = textBox.Text;
             return dlgResult;
         }
+    }
+
+    public class WindowWrapper : System.Windows.Forms.IWin32Window
+    {
+        public WindowWrapper(IntPtr handle)
+        {
+            _hwnd = handle;
+        }
+
+        public IntPtr Handle
+        {
+            get { return _hwnd; }
+        }
+
+        private IntPtr _hwnd;
     }
 }

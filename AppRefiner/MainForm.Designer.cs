@@ -610,6 +610,7 @@
             // cmbTemplates
             // 
             cmbTemplates.Dock = DockStyle.Top;
+            cmbTemplates.DropDownStyle = ComboBoxStyle.DropDownList;
             cmbTemplates.FormattingEnabled = true;
             cmbTemplates.Location = new Point(3, 3);
             cmbTemplates.Name = "cmbTemplates";

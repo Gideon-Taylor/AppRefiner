@@ -9,7 +9,6 @@
 	<ItemGroup>
 		<PackageReference Include="Antlr4.Runtime.Standard" Version="4.13.1" />
 		<PackageReference Include="Antlr4BuildTasks" Version="12.9.0" />
-		<PackageReference Include="SqlParserCS" Version="0.6.3" />
 	</ItemGroup>
 	<ItemGroup>
 		<Antlr4 Include="PeopleCodeLexer.g4" />

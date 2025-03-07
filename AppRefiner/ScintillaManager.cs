@@ -46,6 +46,7 @@ namespace AppRefiner
         private const int SC_MARKNUM_FOLDERSUB = 29;
         private const int SC_MARKNUM_FOLDER = 30;
         private const int SC_MARKNUM_FOLDEROPEN = 31;
+        private const int SCI_GETLINEENDPOSITION = 2136;
         private const int SC_MARK_BOXPLUS = 12;
         private const int SC_MARK_BOXMINUS = 14;
         private const int SC_MARK_VLINE = 9;
@@ -54,6 +55,11 @@ namespace AppRefiner
         private const int SC_MARK_BOXMINUSCONNECTED = 15;
         private const int SC_MARK_TCORNER = 11;
         private const int SCI_FOLDALL = 2662;
+        private const int SCI_TOGGLEFOLD = 2231;
+        private const int SCI_FOLDLINE = 2237;
+        private const int SCI_GETCURRENTPOS = 2008;
+        private const int SCI_LINEFROMPOSITION = 2166;
+        private const int SCI_GETFOLDLEVEL = 2223;
         private const int SCI_STYLECLEARALL = 2050;
         private const int SCI_STYLESETFORE = 2051;
         private const int SCI_STYLESETBACK = 2052;
@@ -122,7 +128,6 @@ namespace AppRefiner
         private const int SCI_SETSELECTIONEND = 2144;
         private const int SCI_GETSELECTIONEND = 2145;
         private const int SCI_SETEMPTYSELECTION = 2556;
-        private const int SCI_GETCURRENTPOS = 2008;
         private const int SCI_SETSEL = 2160;
         private const int SCI_STARTSTYLING = 2032;
         private const int SCI_SETSTYLING = 2033;
@@ -552,11 +557,49 @@ namespace AppRefiner
         {
             editor.SendMessage(SCI_FOLDALL, (IntPtr)0, (IntPtr)0);
         }
-
         public static void ExpandTopLevel(ScintillaEditor editor)
         {
             editor.SendMessage(SCI_FOLDALL, (IntPtr)1, (IntPtr)0);
         }
+
+        internal static void SetLineFoldStatus(ScintillaEditor activeEditor, bool folded)
+        {
+            // Get current cursor position
+            int cursorPos = (int)activeEditor.SendMessage(SCI_GETCURRENTPOS, IntPtr.Zero, IntPtr.Zero);
+
+            // Get line number from position
+            int lineNum = (int)activeEditor.SendMessage(SCI_LINEFROMPOSITION, (IntPtr)cursorPos, IntPtr.Zero);
+
+            // Check if the line is a fold point and toggle it
+            int foldLevel = (int)activeEditor.SendMessage(SCI_GETFOLDLEVEL, (IntPtr)lineNum, IntPtr.Zero);
+            int currentLineLevel = foldLevel & SC_FOLDLEVELNUMBERMASK;
+            // Check if the line is a fold header (can be folded)
+            if ((foldLevel & SC_FOLDLEVELHEADERFLAG) != 0)
+            {
+                // Toggle the fold (will collapse if expanded)
+                activeEditor.SendMessage(SCI_FOLDLINE, (IntPtr)lineNum, folded ? 0 : 1);
+            }
+            else
+            {
+                /* If the line is not a fold header, try to find the fold header */
+                int parentLine = lineNum - 1;
+                while (parentLine >= 0)
+                {
+                    foldLevel = (int)activeEditor.SendMessage(SCI_GETFOLDLEVEL, (IntPtr)parentLine, IntPtr.Zero);
+                    if ((foldLevel & SC_FOLDLEVELHEADERFLAG) != 0 && (foldLevel & SC_FOLDLEVELNUMBERMASK) < currentLineLevel)
+                    {
+                        activeEditor.SendMessage(SCI_FOLDLINE, (IntPtr)parentLine, (IntPtr)(folded ? 0 : 1));
+                        /* Set cursor to the end of the parent line */
+                        activeEditor.SendMessage(SCI_GOTOPOS, (IntPtr)activeEditor.SendMessage(SCI_GETLINEENDPOSITION, (IntPtr)parentLine, IntPtr.Zero), IntPtr.Zero);
+                        break;
+                    }
+                    parentLine--;
+                }
+
+                
+            }
+        }
+
         internal static void SetDarkMode(ScintillaEditor editor)
         {
             /* Style 0 - whitespace */
