@@ -553,7 +553,7 @@ namespace AppRefiner
             editors.Clear();
         }
 
-        public static void ContractTopLevel(ScintillaEditor editor)
+        public static void CollapseTopLevel(ScintillaEditor editor)
         {
             editor.SendMessage(SCI_FOLDALL, (IntPtr)0, (IntPtr)0);
         }
@@ -757,7 +757,7 @@ namespace AppRefiner
             editor.ContentString ??= GetScintillaText(editor);
 
             var formatted = SqlFormatter.Of(Dialect.StandardSql)
-                .Extend(cfg => cfg.PlusSpecialWordChars("%").PlusNamedPlaceholderTypes(new string[] { ":" }))
+                .Extend(cfg => cfg.PlusSpecialWordChars("%").PlusNamedPlaceholderTypes(new string[] { ":" }).PlusOperators(new string[] {"%Concat"}))
                 .Format(editor.ContentString, formatConfig).Replace("\n", "\r\n");
             if (string.IsNullOrEmpty(formatted))
             {
@@ -998,6 +998,25 @@ namespace AppRefiner
             
             // Ensure the position is visible by scrolling to it
             editor.SendMessage(SCI_SCROLLCARET, IntPtr.Zero, IntPtr.Zero);
+        }
+
+        internal static void ExpandCurrent(ScintillaEditor activeEditor)
+        {
+            // Get current cursor position
+            int cursorPos = (int)activeEditor.SendMessage(SCI_GETCURRENTPOS, IntPtr.Zero, IntPtr.Zero);
+            
+            // Get line number from position
+            int lineNum = (int)activeEditor.SendMessage(SCI_LINEFROMPOSITION, (IntPtr)cursorPos, IntPtr.Zero);
+            
+            // Check if the line is a fold point and toggle it
+            int foldLevel = (int)activeEditor.SendMessage(SCI_GETFOLDLEVEL, (IntPtr)lineNum, IntPtr.Zero);
+            
+            // Check if the line is a fold header (can be folded)
+            if ((foldLevel & SC_FOLDLEVELHEADERFLAG) != 0)
+            {
+                // Toggle the fold (will expand if collapsed)
+                activeEditor.SendMessage(SCI_TOGGLEFOLD, (IntPtr)lineNum, IntPtr.Zero);
+            }
         }
     }
     public enum EditorType
