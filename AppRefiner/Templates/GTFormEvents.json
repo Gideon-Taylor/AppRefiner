@@ -1,0 +1,38 @@
+{
+  "templateName": "GT FormEvents",
+  "description": "Standard PeopleSoft Form Events template with configurable methods",
+  "inputs": [
+    {
+      "id": "class_name",
+      "label": "Class Name",
+      "type": "string",
+      "required": true,
+      "defaultValue": "FormEvents",
+      "description": "The name of the class to generate"
+    },
+    {
+      "id": "include_form_init",
+      "label": "Include FormInit Method",
+      "type": "boolean",
+      "required": true,
+      "defaultValue": "true",
+      "description": "Whether to include the FormInit method in the class"
+    },
+    {
+      "id": "include_search_key_save_hook",
+      "label": "Include SearchKeySaveHook Method",
+      "type": "boolean",
+      "required": true,
+      "defaultValue": "true",
+      "description": "Whether to include the SearchKeySaveHook method in the class"
+    },
+    {
+      "id": "include_save_post_change_hook",
+      "label": "Include SavePostChangeHook Method",
+      "type": "boolean",
+      "required": true,
+      "defaultValue": "true",
+      "description": "Whether to include the SavePostChangeHook method in the class"
+    }
+  ]
+}
