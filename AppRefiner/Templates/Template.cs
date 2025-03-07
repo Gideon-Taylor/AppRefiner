@@ -99,6 +99,16 @@ namespace AppRefiner.Templates
         /// Position to place the cursor after applying the template (-1 if not specified)
         /// </summary>
         public int CursorPosition { get; private set; } = -1;
+        
+        /// <summary>
+        /// Starting position of the selection range (-1 if not specified)
+        /// </summary>
+        public int SelectionStart { get; private set; } = -1;
+        
+        /// <summary>
+        /// Ending position of the selection range (-1 if not specified)
+        /// </summary>
+        public int SelectionEnd { get; private set; } = -1;
 
         public override string ToString()
         {
@@ -308,6 +318,27 @@ namespace AppRefiner.Templates
             {
                 CursorPosition = cursorMarkerIndex;
                 processedTemplate = processedTemplate.Replace("[[cursor]]", string.Empty);
+            }
+            
+            // Process selection range markers
+            int selectStartIndex = processedTemplate.IndexOf("[[select]]");
+            int selectEndIndex = processedTemplate.IndexOf("[[/select]]");
+            
+            if (selectStartIndex >= 0 && selectEndIndex >= 0 && selectEndIndex > selectStartIndex)
+            {
+                // Store the positions, adjusting for the marker lengths
+                SelectionStart = selectStartIndex;
+                SelectionEnd = selectEndIndex - "[[select]]".Length;
+                
+                // Remove the markers
+                processedTemplate = processedTemplate.Replace("[[select]]", string.Empty);
+                processedTemplate = processedTemplate.Replace("[[/select]]", string.Empty);
+            }
+            else
+            {
+                // Reset selection markers if not properly defined
+                SelectionStart = -1;
+                SelectionEnd = -1;
             }
 
             return processedTemplate;

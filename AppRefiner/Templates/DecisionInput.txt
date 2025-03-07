@@ -34,7 +34,6 @@ end-method;
 method PopulateChoices
    %Super.PopulateChoices();  
    
-   /* Add your custom code here */
-   [[cursor]]
+   [[select]]/* Add your custom code here */[[/select]]
 end-method;
 

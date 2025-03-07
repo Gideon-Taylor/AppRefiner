@@ -795,10 +795,17 @@ namespace AppRefiner
             return (int)selectionEnd - (int)selectionStart;
         }
 
+        /// <summary>
+        /// Sets the selection range in the Scintilla editor
+        /// </summary>
+        /// <param name="editor">The editor to set the selection in</param>
+        /// <param name="startIndex">The starting position of the selection</param>
+        /// <param name="endIndex">The ending position of the selection</param>
         public static void SetSelection(ScintillaEditor editor, int startIndex, int endIndex)
         {
             editor.SendMessage(SCI_SETSEL, (IntPtr)startIndex, (IntPtr)endIndex);
         }
+        
         public static void ColorText(ScintillaEditor editor, FontColor color, int start, int length)
         { 
             // Create a temporary style for colored text

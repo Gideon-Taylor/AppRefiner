@@ -1,0 +1,38 @@
+{
+  "templateName": "GT Column Field Events",
+  "description": "GT eForm Column Field Events template with configurable methods",
+  "inputs": [
+    {
+      "id": "record_tag",
+      "label": "Record Tag",
+      "type": "string",
+      "required": true,
+      "defaultValue": "RECORDTAG",
+      "description": "The Record Tag this events class is for."
+    },
+    {
+      "id": "field_tag",
+      "label": "First Field Tag",
+      "type": "string",
+      "required": true,
+      "defaultValue": "FIELDTAG",
+      "description": "The name of the field to generate methods for"
+    },
+    {
+      "id": "include_edit",
+      "label": "Edit",
+      "type": "boolean",
+      "required": true,
+      "defaultValue": "true",
+      "description": "Whether to include the field edit method in the class"
+    },
+    {
+      "id": "include_change",
+      "label": "Change",
+      "type": "boolean",
+      "required": true,
+      "defaultValue": "true",
+      "description": "Whether to include the field change method in the class"
+    }
+  ]
+}
