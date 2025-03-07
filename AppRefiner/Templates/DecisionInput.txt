@@ -1,11 +1,29 @@
 import IS_DX_INPUT:InputDefinition;
+{{#if uses_product_options}}
+import IS_CO_BASE:Utility:Product;
 
+{{/if}}
 class {{class_name}} extends IS_DX_INPUT:InputDefinition
+{{#if uses_product_options}}
+   method {{class_name}}();
+{{/if}}
    method IsValid(&sCurrentValue As string) Returns boolean;
 protected
    method PopulateChoices();
+{{#if uses_product_options}}
+private
+   instance IS_CO_BASE:Utility:Product &{{product_id}}Product;
+{{/if}}
 end-class;
 
+{{#if uses_product_options}}
+method {{class_name}}
+   /+ Extends/implements IS_DX_INPUT:InputDefinition +/
+   %Super = create IS_DX_INPUT:InputDefinition();
+   &{{product_id}}Product = create IS_CO_BASE:Utility:Product("{{product_id}}");
+end-method;
+
+{{/if}}
 method IsValid
    /+ &sCurrentValue as String +/
    /+ Returns Boolean +/
@@ -14,7 +32,6 @@ method IsValid
 end-method;
 
 method PopulateChoices
-   
    %Super.PopulateChoices();  
    
    /* Add your custom code here */

@@ -15,7 +15,7 @@
       "label": "Uses Product Options",
       "type": "boolean",
       "required": true,
-      "defaultValue": false,
+      "defaultValue": "false",
       "description": "Whether this class uses product options"
     },
     {

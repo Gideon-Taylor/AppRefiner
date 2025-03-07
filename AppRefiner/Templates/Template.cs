@@ -321,7 +321,7 @@ namespace AppRefiner.Templates
         /// <returns>The processed template with conditional blocks evaluated</returns>
         private string ProcessConditionalBlocks(string template, Dictionary<string, string> values)
         {
-            var ifBlockRegex = new Regex(@"{{#if\s+([^}]+)}}(.*?){{/if}}", RegexOptions.Singleline);
+            var ifBlockRegex = new Regex(@"{{#if\s+([^}]+)}}\r?\n(.*?){{/if}}\r?\n", RegexOptions.Singleline);
             var result = template;
 
             while (ifBlockRegex.IsMatch(result))
@@ -338,7 +338,7 @@ namespace AppRefiner.Templates
                         conditionValue = value.ToLower() == "true" || value == "1" || value.ToLower() == "yes";
                     }
 
-                    return conditionValue ? content.Trim(['\r','\n']) : string.Empty;
+                    return conditionValue ? content : "";
                 });
             }
 
