@@ -1,8 +1,6 @@
 name: Publish .NET 8 Build for Windows
 
-on:
-  push:
-    branches: [ "main" ]
+on: workflow_dispatch
 
 jobs:
   build-and-release:
