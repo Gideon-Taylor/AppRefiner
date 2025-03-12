@@ -1,0 +1,64 @@
+name: Publish AppRefiner
+
+permissions:
+  contents: write
+
+on: workflow_dispatch
+
+jobs:
+  build-and-release:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Set up Java
+        uses: actions/setup-java@v3
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v3
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Restore dependencies
+        run: dotnet restore
+
+      - name: Publish framework-dependent build
+        run: dotnet publish --self-contained false -r win-x64 -c Release -o publish/framework
+        shell: pwsh
+
+      - name: Get current date
+        id: date
+        run: |
+          $currentDate = Get-Date -Format "yyyy-MM-dd"
+          echo "current_date=$currentDate" >> $env:GITHUB_OUTPUT
+        shell: pwsh
+
+      - name: Zip framework-dependent build
+        run: Compress-Archive -Path publish/framework/* -DestinationPath "AppRefiner-${{ steps.date.outputs.current_date }}.zip"
+        shell: pwsh
+
+      - name: Create GitHub Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ steps.date.outputs.current_date }}
+          release_name: Release ${{ steps.date.outputs.current_date }}
+          draft: false
+          prerelease: false
+
+      - name: Upload Release Asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: "AppRefiner-${{ steps.date.outputs.current_date }}.zip"
+          asset_name: "AppRefiner-${{ steps.date.outputs.current_date }}.zip"
+          asset_content_type: application/zip
