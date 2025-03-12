@@ -2,9 +2,7 @@ name: Publish .NET 8 Build for Windows
 
 on:
   push:
-    # Trigger only on tag pushes
-    tags:
-      - '*'
+    branches: [ "main" ]
 
 jobs:
   build-and-release:
