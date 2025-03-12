@@ -64,7 +64,7 @@
             colResultLine = new DataGridViewTextBoxColumn();
             label1 = new Label();
             tabPage3 = new TabPage();
-            groupBox1 = new GroupBox();
+            grpRefactors = new GroupBox();
             btnRenameLocalVar = new Button();
             btnOptimizeImports = new Button();
             btnAddFlowerBox = new Button();
@@ -97,7 +97,7 @@
             splitContainer2.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)dataGridView2).BeginInit();
             tabPage3.SuspendLayout();
-            groupBox1.SuspendLayout();
+            grpRefactors.SuspendLayout();
             tabPage5.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)splitContainer3).BeginInit();
             splitContainer3.Panel1.SuspendLayout();
@@ -439,6 +439,7 @@
             // btnClearLint
             // 
             btnClearLint.Dock = DockStyle.Right;
+            btnClearLint.Enabled = false;
             btnClearLint.Location = new Point(86, 0);
             btnClearLint.Name = "btnClearLint";
             btnClearLint.Size = new Size(75, 40);
@@ -507,7 +508,7 @@
             // 
             // tabPage3
             // 
-            tabPage3.Controls.Add(groupBox1);
+            tabPage3.Controls.Add(grpRefactors);
             tabPage3.Location = new Point(4, 24);
             tabPage3.Name = "tabPage3";
             tabPage3.Padding = new Padding(3);
@@ -516,17 +517,18 @@
             tabPage3.Text = "Refactor";
             tabPage3.UseVisualStyleBackColor = true;
             // 
-            // groupBox1
+            // grpRefactors
             // 
-            groupBox1.Controls.Add(btnRenameLocalVar);
-            groupBox1.Controls.Add(btnOptimizeImports);
-            groupBox1.Controls.Add(btnAddFlowerBox);
-            groupBox1.Location = new Point(8, 8);
-            groupBox1.Name = "groupBox1";
-            groupBox1.Size = new Size(528, 113);
-            groupBox1.TabIndex = 2;
-            groupBox1.TabStop = false;
-            groupBox1.Text = "Quick Edits";
+            grpRefactors.Controls.Add(btnRenameLocalVar);
+            grpRefactors.Controls.Add(btnOptimizeImports);
+            grpRefactors.Controls.Add(btnAddFlowerBox);
+            grpRefactors.Enabled = false;
+            grpRefactors.Location = new Point(8, 8);
+            grpRefactors.Name = "grpRefactors";
+            grpRefactors.Size = new Size(528, 113);
+            grpRefactors.TabIndex = 2;
+            grpRefactors.TabStop = false;
+            grpRefactors.Text = "Quick Edits";
             // 
             // btnRenameLocalVar
             // 
@@ -603,7 +605,7 @@
             btnApplyTemplate.Name = "btnApplyTemplate";
             btnApplyTemplate.Size = new Size(517, 29);
             btnApplyTemplate.TabIndex = 1;
-            btnApplyTemplate.Text = "Apply Template";
+            btnApplyTemplate.Text = "Generate Template";
             btnApplyTemplate.UseVisualStyleBackColor = true;
             btnApplyTemplate.Click += btnApplyTemplate_Click;
             // 
@@ -667,7 +669,7 @@
             splitContainer2.ResumeLayout(false);
             ((System.ComponentModel.ISupportInitialize)dataGridView2).EndInit();
             tabPage3.ResumeLayout(false);
-            groupBox1.ResumeLayout(false);
+            grpRefactors.ResumeLayout(false);
             tabPage5.ResumeLayout(false);
             splitContainer3.Panel1.ResumeLayout(false);
             splitContainer3.Panel2.ResumeLayout(false);
@@ -714,7 +716,7 @@
         private Button btnClearLint;
         private Button btnRestoreSnapshot;
         private Button btnTakeSnapshot;
-        private GroupBox groupBox1;
+        private GroupBox grpRefactors;
         private Button btnAddFlowerBox;
         private Button btnOptimizeImports;
         private Button btnConnectDB;

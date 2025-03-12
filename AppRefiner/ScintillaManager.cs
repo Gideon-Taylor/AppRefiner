@@ -9,6 +9,7 @@ using SQL.Formatter.Core;
 using SQL.Formatter.Language;
 using SQL.Formatter;
 using AppRefiner.Database;
+using System.CodeDom;
 
 namespace AppRefiner
 {
@@ -515,6 +516,29 @@ namespace AppRefiner
                 Debug.WriteLine($"Failed to initialize annotations: {ex.Message}");
                 editor.AnnotationsInitialized = false;
             }
+        }
+
+        public static void CleanupEditor(ScintillaEditor editor)
+        {
+            /* Free all annotation strings */
+            foreach (var v in editor.AnnotationPointers.Values)
+            {
+                if (v != IntPtr.Zero)
+                {
+                    VirtualFreeEx(editor.hProc, v, 0, MEM_RELEASE);
+                }
+            }
+            foreach (var v in editor.PropertyBuffers)
+            {
+                if (v != IntPtr.Zero)
+                {
+                    VirtualFreeEx(editor.hProc, v, 0, MEM_RELEASE);
+                }
+            }
+            editor.AnnotationPointers.Clear();
+            editor.PropertyBuffers.Clear();
+            editor.Caption = null;
+            editor.ContentString = null;
         }
 
         /// <summary>
@@ -1029,6 +1053,10 @@ namespace AppRefiner
         [DllImport("user32.dll", CharSet = CharSet.Auto)]
         private static extern IntPtr SendMessage(IntPtr hWnd, int Msg, IntPtr wParam, IntPtr lParam);
 
+        [DllImport("user32.dll")]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        static extern bool IsWindow(IntPtr hWnd);
+
         public IntPtr hWnd;
         public IntPtr hProc;
         public uint ProcessId;
@@ -1083,6 +1111,11 @@ namespace AppRefiner
         public IntPtr SendMessage(int Msg, IntPtr wParam, IntPtr lParam)
         {
             return SendMessage(hWnd, Msg, wParam, lParam);
+        }
+
+        public bool IsValid()
+        {
+            return IsWindow(hWnd);
         }
     }
     public enum HighlightColor

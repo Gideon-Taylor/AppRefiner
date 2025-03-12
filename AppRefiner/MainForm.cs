@@ -67,6 +67,7 @@ namespace AppRefiner
         private Dictionary<string, DisplayCondition> templateInputsDisplayConditions = new Dictionary<string, DisplayCondition>();
 
         KeyboardHook renameVarHook = new KeyboardHook();
+        KeyboardHook lintCodeHook = new KeyboardHook();
         KeyboardHook collapseLevel = new KeyboardHook();
         KeyboardHook expandLevel = new KeyboardHook();
         KeyboardHook collapseAll = new KeyboardHook();
@@ -88,7 +89,7 @@ namespace AppRefiner
         {
             LoadSettings();
             renameVarHook.KeyPressed += renameVariable;
-            renameVarHook.RegisterHotKey(AppRefiner.ModifierKeys.Control| AppRefiner.ModifierKeys.Shift, Keys.R);
+            renameVarHook.RegisterHotKey(AppRefiner.ModifierKeys.Control | AppRefiner.ModifierKeys.Shift, Keys.R);
 
             collapseLevel.KeyPressed += collapseLevelHandler;
             collapseLevel.RegisterHotKey(AppRefiner.ModifierKeys.Alt, Keys.Left);
@@ -102,6 +103,15 @@ namespace AppRefiner
             expandAll.KeyPressed += expandAllHandler;
             expandAll.RegisterHotKey(AppRefiner.ModifierKeys.Control | AppRefiner.ModifierKeys.Alt, Keys.Right);
 
+            lintCodeHook.KeyPressed += lintCodeHandler;
+            lintCodeHook.RegisterHotKey(AppRefiner.ModifierKeys.Control | AppRefiner.ModifierKeys.Alt, Keys.L);
+
+        }
+
+        private void lintCodeHandler(object? sender, KeyPressedEventArgs e)
+        {
+            if (activeEditor == null) return;
+            ProcessLinters();
         }
 
         private void expandAllHandler(object? sender, KeyPressedEventArgs e)
@@ -119,7 +129,7 @@ namespace AppRefiner
         private void expandLevelHandler(object? sender, KeyPressedEventArgs e)
         {
             if (activeEditor == null) return;
-            ScintillaManager.SetLineFoldStatus(activeEditor,false);
+            ScintillaManager.SetLineFoldStatus(activeEditor, false);
         }
 
         private void collapseLevelHandler(object? sender, KeyPressedEventArgs e)
@@ -168,12 +178,13 @@ namespace AppRefiner
 
         private void LoadTemplates()
         {
-            Template.GetAvailableTemplates().ForEach(t => {
+            Template.GetAvailableTemplates().ForEach(t =>
+            {
                 cmbTemplates.Items.Add(t);
             });
-        
+
             cmbTemplates.SelectedIndexChanged += CmbTemplates_SelectedIndexChanged;
-            
+
             if (cmbTemplates.Items.Count > 0)
             {
                 cmbTemplates.SelectedIndex = 0;
@@ -220,8 +231,8 @@ namespace AppRefiner
                     case "boolean":
                         inputControl = new CheckBox
                         {
-                            Checked = !string.IsNullOrEmpty(input.DefaultValue) && 
-                                      (input.DefaultValue.ToLower() == "true" || input.DefaultValue == "1" || 
+                            Checked = !string.IsNullOrEmpty(input.DefaultValue) &&
+                                      (input.DefaultValue.ToLower() == "true" || input.DefaultValue == "1" ||
                                        input.DefaultValue.ToLower() == "yes"),
                             Location = new Point(labelWidth + horizontalPadding * 2, currentY),
                             Size = new Size(controlWidth, 23),
@@ -229,9 +240,9 @@ namespace AppRefiner
                             Tag = input.Id // Store input ID in Tag for easier reference
                         };
                         break;
-                    
+
                     // Could add more types here (dropdown, etc.) in the future
-                    
+
                     default: // Default to TextBox for string, number, etc.
                         inputControl = new TextBox
                         {
@@ -262,7 +273,7 @@ namespace AppRefiner
 
                 currentY += verticalSpacing;
             }
-            
+
             // Add event handlers for controls that affect display conditions
             foreach (var kvp in templateInputControls)
             {
@@ -276,31 +287,31 @@ namespace AppRefiner
                 }
                 // Add handlers for other control types as needed
             }
-            
+
             // Initial update of display conditions
             UpdateDisplayConditions();
         }
-        
+
         private void UpdateDisplayConditions()
         {
             // Get current values from all controls
             var currentValues = GetTemplateParameterValues();
-            
+
             // Track if we need to reflow controls
             bool visibilityChanged = false;
-            
+
             // Update visibility for each control with a display condition
             foreach (var kvp in templateInputsDisplayConditions)
             {
                 string inputId = kvp.Key;
                 DisplayCondition condition = kvp.Value;
-                
+
                 if (templateInputControls.TryGetValue(inputId, out Control control))
                 {
                     bool shouldDisplay = Template.IsDisplayConditionMet(condition, currentValues);
                     visibilityChanged |= (control.Visible != shouldDisplay);
                     control.Visible = shouldDisplay;
-                    
+
                     // Also update the label visibility
                     if (templateInputLabels.TryGetValue(inputId, out Control label))
                     {
@@ -308,26 +319,26 @@ namespace AppRefiner
                     }
                 }
             }
-            
+
             // Reflow visible controls to avoid gaps if needed
             if (visibilityChanged)
             {
                 ReflowControls();
             }
         }
-        
+
         private void ReflowControls()
         {
             // Reposition visible controls to avoid gaps
             const int verticalSpacing = 30;
             int currentY = 10;
-            
+
             // Get all input IDs ordered as they were originally added
             var orderedInputs = templateInputControls.Keys.ToList();
-            
+
             foreach (var inputId in orderedInputs)
             {
-                if (templateInputControls.TryGetValue(inputId, out Control control) && 
+                if (templateInputControls.TryGetValue(inputId, out Control control) &&
                     templateInputLabels.TryGetValue(inputId, out Control label))
                 {
                     if (control.Visible)
@@ -335,7 +346,7 @@ namespace AppRefiner
                         // Reposition the control and its label
                         label.Location = new Point(label.Location.X, currentY + 3);
                         control.Location = new Point(control.Location.X, currentY);
-                        
+
                         currentY += verticalSpacing;
                     }
                 }
@@ -345,11 +356,11 @@ namespace AppRefiner
         private Dictionary<string, string> GetTemplateParameterValues()
         {
             var values = new Dictionary<string, string>();
-            
+
             foreach (var kvp in templateInputControls)
             {
                 string value = string.Empty;
-                
+
                 if (kvp.Value is TextBox textBox)
                 {
                     value = textBox.Text;
@@ -359,10 +370,10 @@ namespace AppRefiner
                     value = checkBox.Checked ? "true" : "false";
                 }
                 // Add other control types as needed
-                
+
                 values[kvp.Key] = value;
             }
-            
+
             return values;
         }
 
@@ -476,9 +487,33 @@ namespace AppRefiner
             {
                 grpEditorActions.Enabled = true;
                 btnLintCode.Enabled = true;
+                btnClearLint.Enabled = true;
+                grpRefactors.Enabled = true;
+                btnApplyTemplate.Text = "Apply Template";
+
+                if (activeEditor?.DataManager == null)
+                {
+                    btnConnectDB.Text = "Connect DB...";
+                }
+                else
+                {
+                    btnConnectDB.Text = "Disconnect DB";
+                }
 
             }));
 
+        }
+
+        private void DisableUIActions()
+        {
+            this.Invoke((Action)(() =>
+            {
+                grpEditorActions.Enabled = false;
+                btnLintCode.Enabled = false;
+                btnClearLint.Enabled = false;
+                grpRefactors.Enabled = false;
+                btnApplyTemplate.Text = "Generate Template";
+            }));
         }
 
         private void InitLinterOptions()
@@ -506,49 +541,15 @@ namespace AppRefiner
 
         private ScintillaEditor? GetActiveEditor()
         {
-            var topWindow = WindowHelper.GetCurrentlyFocusedWindow();
-            GetWindowThreadProcessId(topWindow, out uint procId);
+            var activeWindow = ActiveWindowChecker.GetActiveScintillaWindow();
 
-            /* get the process name */
-            var procName = Process.GetProcessById((int)procId).ProcessName;
-            if (procName != "pside")
-            {
-                return null;
-            }
+            /* If currently focused window is *not* owned by PSIDE, return the last active editor */
+            if (activeWindow == new IntPtr(-1)) return activeEditor;
 
-            var className = new StringBuilder(256);
-            ScintillaEditor? editor = null;
-            EnumChildWindows(topWindow, (hWnd, lParam) =>
-            {
-                if (GetClassName(hWnd, className, className.Capacity) != 0)
-                {
-                    if (className.ToString() == "Scintilla")
-                    {
+            /* If the active window is not a Scintilla editor, return null */
+            if (activeWindow == IntPtr.Zero) return null;
 
-                        editor = ScintillaManager.GetEditor(hWnd);
-                        processDataManagers.TryGetValue(procId, out IDataManager? value);
-                        if (value == null)
-                        {
-                            btnConnectDB.Text = "Connect DB...";
-                        }
-                        else
-                        {
-                            btnConnectDB.Text = "Disconnect DB";
-                        }
-
-                        // Associate the data manager with this editor if one exists for this process
-                        editor.DataManager ??= value;
-
-                        return false;
-                    }
-                }
-                return true;
-            }, IntPtr.Zero);
-
-            className.Clear();
-            className = null;
-
-            return editor;
+            return ScintillaManager.GetEditor(activeWindow);
         }
         private void PerformScan()
         {
@@ -558,11 +559,22 @@ namespace AppRefiner
                 return;
             }
 
-            if (activeEditor == null && currentEditor != null)
+            /* Make sure the hwnd is still valid */
+            if (!currentEditor.IsValid())
             {
-                EnableUIActions();
+                /* Releases any annotation buffers */
+                ScintillaManager.CleanupEditor(currentEditor);
+
+                currentEditor = null;
+                activeEditor = null;
+                DisableUIActions();
+                return;
             }
+
+            EnableUIActions();
+
             activeEditor = currentEditor;
+
 
             /* If "only PPC" is checked and the editor is not PPC, skip */
             if (chkOnlyPPC.Checked && activeEditor.Type != EditorType.PeopleCode)
@@ -763,6 +775,10 @@ namespace AppRefiner
 
         private void ProcessLinters()
         {
+            if (activeEditor == null) return;
+
+            ScintillaManager.ClearAnnotations(activeEditor);
+
             if (activeEditor == null || activeEditor.Type != EditorType.PeopleCode)
             {
                 MessageBox.Show("Linting is only available for PeopleCode editors", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
@@ -1021,15 +1037,15 @@ namespace AppRefiner
 
             ParseTreeWalker walker = new();
             walker.Walk(refactorClass, program);
-            
+
             var result = refactorClass.GetResult();
             if (!result.Success)
             {
-                MessageBox.Show(owner != IntPtr.Zero ? new WindowWrapper(owner): this, result.Message, "Refactoring Failed", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show(owner != IntPtr.Zero ? new WindowWrapper(owner) : this, result.Message, "Refactoring Failed", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 btnRestoreSnapshot.Enabled = false;
                 return;
             }
-            
+
             var newText = refactorClass.GetRefactoredCode();
             if (newText == null) return;
 
@@ -1061,6 +1077,7 @@ namespace AppRefiner
                 if (manager != null)
                 {
                     processDataManagers[activeEditor.ProcessId] = manager;
+                    activeEditor.DataManager = manager;
                     btnConnectDB.Text = "Disconnect DB";
                 }
             }
@@ -1070,7 +1087,7 @@ namespace AppRefiner
         {
             /* Ask the user for a new variable name */
             string newName = "";
-            var dlgResult  = ShowInputDialog("New variable name", "Enter new variable name", ref newName);
+            var dlgResult = ShowInputDialog("New variable name", "Enter new variable name", ref newName);
 
             if (dlgResult != DialogResult.OK) return;
 
@@ -1096,25 +1113,25 @@ namespace AppRefiner
             if (cmbTemplates.SelectedItem is Template selectedTemplate)
             {
                 var parameterValues = GetTemplateParameterValues();
-                
+
                 if (!selectedTemplate.ValidateInputs(parameterValues))
                 {
-                    MessageBox.Show("Please fill in all required fields.", "Required Fields Missing", 
+                    MessageBox.Show("Please fill in all required fields.", "Required Fields Missing",
                         MessageBoxButtons.OK, MessageBoxIcon.Warning);
                     return;
                 }
-                
+
                 string generatedContent = selectedTemplate.Apply(parameterValues);
-                
+
                 if (activeEditor != null)
                 {
                     // Take a snapshot of the current content
                     activeEditor.SnapshotText = ScintillaManager.GetScintillaText(activeEditor);
                     btnRestoreSnapshot.Enabled = true;
-                    
+
                     // Set the generated content in the editor
                     ScintillaManager.SetScintillaText(activeEditor, generatedContent);
-                    
+
                     // Handle cursor position or selection range if specified in the template
                     if (selectedTemplate.SelectionStart >= 0 && selectedTemplate.SelectionEnd >= 0)
                     {
@@ -1135,10 +1152,10 @@ namespace AppRefiner
                 }
             }
         }
-        
+
         private void RenameByShortcut()
         {
-            
+
         }
         private void ShowGeneratedTemplateDialog(string content, string templateName)
         {
@@ -1148,7 +1165,7 @@ namespace AppRefiner
                 Size = new Size(600, 400),
                 StartPosition = FormStartPosition.CenterParent
             };
-            
+
             TextBox textBox = new TextBox
             {
                 Multiline = true,
@@ -1158,23 +1175,23 @@ namespace AppRefiner
                 Text = content,
                 WordWrap = false
             };
-            
+
             Button copyButton = new Button
             {
                 Text = "Copy to Clipboard",
                 Dock = DockStyle.Bottom
             };
-            
-            copyButton.Click += (s, e) => 
+
+            copyButton.Click += (s, e) =>
             {
                 Clipboard.SetText(content);
-                MessageBox.Show("Content copied to clipboard!", "Success", 
+                MessageBox.Show("Content copied to clipboard!", "Success",
                     MessageBoxButtons.OK, MessageBoxIcon.Information);
             };
-            
+
             dialog.Controls.Add(textBox);
             dialog.Controls.Add(copyButton);
-            
+
             dialog.ShowDialog();
         }
 
@@ -1213,7 +1230,7 @@ namespace AppRefiner
             inputBox.AcceptButton = okButton;
             inputBox.CancelButton = cancelButton;
 
-            DialogResult dlgResult = inputBox.ShowDialog(owner != IntPtr.Zero ? new WindowWrapper(owner): null);
+            DialogResult dlgResult = inputBox.ShowDialog(owner != IntPtr.Zero ? new WindowWrapper(owner) : null);
             result = textBox.Text;
             return dlgResult;
         }
