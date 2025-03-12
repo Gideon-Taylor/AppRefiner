@@ -1,4 +1,7 @@
-name: Publish .NET 8 Build for Windows
+name: Publish App Refiner
+
+permissions:
+  contents: write
 
 on: workflow_dispatch
 
@@ -24,7 +27,7 @@ jobs:
         run: dotnet restore
 
       - name: Publish framework-dependent build
-        run: dotnet publish --self-contained false -r win-x64 -c Release -o publish/framework
+        run: dotnet publish --self-contained false -r win-x64 -c Release
         shell: pwsh
 
       - name: Set short commit hash
@@ -35,7 +38,7 @@ jobs:
         shell: pwsh
 
       - name: Zip framework-dependent build
-        run: Compress-Archive -Path publish/framework/* -DestinationPath "AppRefiner - ${{ steps.vars.outputs.short_sha }}.zip"
+        run: Compress-Archive -Path AppRefiner/bin/Release/net8.0-windows/win-x64/publish/* -DestinationPath "AppRefiner-${{ steps.vars.outputs.short_sha }}.zip"
         shell: pwsh
 
       - name: Create GitHub Release
@@ -55,6 +58,6 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: "AppRefiner - ${{ steps.vars.outputs.short_sha }}.zip"
-          asset_name: "AppRefiner - ${{ steps.vars.outputs.short_sha }}.zip"
+          asset_path: "AppRefiner-${{ steps.vars.outputs.short_sha }}.zip"
+          asset_name: "AppRefiner-${{ steps.vars.outputs.short_sha }}.zip"
           asset_content_type: application/zip
