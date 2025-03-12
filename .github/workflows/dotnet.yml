@@ -1,0 +1,59 @@
+name: Publish .NET 8 Build for Windows
+
+on:
+  push:
+    # Trigger only on tag pushes
+    tags:
+      - '*'
+
+jobs:
+  build-and-release:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v3
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Restore dependencies
+        run: dotnet restore
+
+      - name: Publish framework-dependent build
+        run: dotnet publish --self-contained false -r win-x64 -c Release -o publish/framework
+        shell: pwsh
+
+      - name: Set short commit hash
+        id: vars
+        run: |
+          $shortSha = $env:GITHUB_SHA.Substring(0,7)
+          echo "short_sha=$shortSha" >> $env:GITHUB_OUTPUT
+        shell: pwsh
+
+      - name: Zip framework-dependent build
+        run: Compress-Archive -Path publish/framework/* -DestinationPath "AppRefiner - ${{ steps.vars.outputs.short_sha }}.zip"
+        shell: pwsh
+
+      - name: Create GitHub Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref }}
+          release_name: Release ${{ github.ref }}
+          draft: false
+          prerelease: false
+
+      - name: Upload Release Asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: "AppRefiner - ${{ steps.vars.outputs.short_sha }}.zip"
+          asset_name: "AppRefiner - ${{ steps.vars.outputs.short_sha }}.zip"
+          asset_content_type: application/zip
