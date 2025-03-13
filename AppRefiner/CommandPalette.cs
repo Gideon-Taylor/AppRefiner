@@ -75,7 +75,7 @@ namespace AppRefiner
             this.Controls.Add(this.commandListView);
             this.Controls.Add(this.searchBox);
             this.FormBorderStyle = FormBorderStyle.None;
-            this.StartPosition = FormStartPosition.CenterScreen;
+            this.StartPosition = FormStartPosition.CenterParent;
             this.Name = "CommandPalette";
             this.Text = "Command Palette";
             this.Deactivate += new EventHandler(this.CommandPalette_Deactivate);
