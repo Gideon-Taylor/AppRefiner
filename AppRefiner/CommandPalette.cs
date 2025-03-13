@@ -96,6 +96,7 @@ namespace AppRefiner
         private ListView commandListView;
         private List<Command> allCommands;
         private List<Command> filteredCommands;
+        private Action? selectedAction;
 
         public CommandPalette(List<Command> commands)
         {
@@ -104,6 +105,11 @@ namespace AppRefiner
             InitializeComponent();
             ConfigureForm();
             PopulateCommandList();
+        }
+        
+        public Action? GetSelectedAction()
+        {
+            return selectedAction;
         }
 
         private void InitializeComponent()
@@ -285,7 +291,7 @@ namespace AppRefiner
             }
             else if (e.KeyCode == Keys.Enter)
             {
-                ExecuteSelectedCommand();
+                SelectCommand();
                 e.Handled = true;
             }
             else if (e.KeyCode == Keys.Escape)
@@ -297,18 +303,19 @@ namespace AppRefiner
 
         private void CommandListView_MouseDoubleClick(object sender, MouseEventArgs e)
         {
-            ExecuteSelectedCommand();
+            SelectCommand();
         }
         
         private void CommandListView_KeyDown(object sender, KeyEventArgs e)
         {
             if (e.KeyCode == Keys.Enter)
             {
-                ExecuteSelectedCommand();
+                SelectCommand();
                 e.Handled = true;
             }
             else if (e.KeyCode == Keys.Escape)
             {
+                this.DialogResult = DialogResult.Cancel;
                 this.Close();
                 e.Handled = true;
             }
@@ -320,28 +327,28 @@ namespace AppRefiner
             }
         }
 
-        private void ExecuteSelectedCommand()
+        private void SelectCommand()
         {
             if (commandListView.SelectedItems.Count > 0)
             {
                 var command = (Command)commandListView.SelectedItems[0].Tag;
                 
-                // Only execute if the command is enabled
+                // Only select if the command is enabled
                 if (command.Enabled)
                 {
                     // Store the command to execute
-                    var commandToExecute = command;
-                    // Close the form first
+                    selectedAction = command.Execute;
+                    // Close the form with DialogResult.OK
+                    this.DialogResult = DialogResult.OK;
                     this.Hide();
                     this.Close();
-                    // Then execute the command after the form is hidden
-                    commandToExecute.Execute();
                 }
             }
         }
 
         private void CommandPalette_Deactivate(object sender, EventArgs e)
         {
+            this.DialogResult = DialogResult.Cancel;
             this.Close();
         }
 
@@ -349,6 +356,7 @@ namespace AppRefiner
         {
             if (keyData == Keys.Escape)
             {
+                this.DialogResult = DialogResult.Cancel;
                 this.Close();
                 return true;
             }

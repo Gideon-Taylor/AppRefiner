@@ -122,7 +122,7 @@ namespace AppRefiner
             ProcessLinters();
         }
 
-        private void ShowCommandPalette(object? sender, KeyPressedEventArgs e)
+        private async void ShowCommandPalette(object? sender, KeyPressedEventArgs e)
         {
             if (activeEditor == null) return;
             
@@ -133,7 +133,51 @@ namespace AppRefiner
             var mainHandle = Process.GetProcessById((int)activeEditor.ProcessId).MainWindowHandle;
             
             // Show the dialog
-            palette.ShowDialog(new WindowWrapper(mainHandle));
+            DialogResult result = palette.ShowDialog(new WindowWrapper(mainHandle));
+            
+            // If a command was selected, execute it with progress dialog
+            if (result == DialogResult.OK)
+            {
+                Action? selectedAction = palette.GetSelectedAction();
+                if (selectedAction != null)
+                {
+                    await ExecuteCommandWithProgressAsync(selectedAction, mainHandle);
+                }
+            }
+        }
+        
+        private async Task ExecuteCommandWithProgressAsync(Action commandAction, IntPtr parentHandle)
+        {
+            // Create progress dialog
+            var progressDialog = new CommandProgressDialog();
+            
+            try
+            {
+                // Show progress dialog
+                progressDialog.Show(new WindowWrapper(parentHandle));
+                
+                // Execute the command asynchronously
+                await Task.Run(() => {
+                    try
+                    {
+                        commandAction();
+                    }
+                    catch (Exception ex)
+                    {
+                        // Handle any exceptions during command execution
+                        MessageBox.Show(new WindowWrapper(parentHandle), 
+                            $"Error executing command: {ex.Message}", 
+                            "Command Error", 
+                            MessageBoxButtons.OK, 
+                            MessageBoxIcon.Error);
+                    }
+                });
+            }
+            finally
+            {
+                // Close the progress dialog
+                progressDialog.Close();
+            }
         }
 
         private void expandAllHandler(object? sender, KeyPressedEventArgs e)
