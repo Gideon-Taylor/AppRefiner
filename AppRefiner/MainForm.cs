@@ -1116,6 +1116,112 @@ namespace AppRefiner
             }
         }
 
+        private void ProcessSingleLinter(BaseLintRule linter)
+        {
+            if (activeEditor == null) return;
+
+            ScintillaManager.ClearAnnotations(activeEditor);
+            
+            // Clear previous lint results
+            this.Invoke((Action)(() => {
+                dataGridView2.Rows.Clear();
+            }));
+
+            if (activeEditor.Type != EditorType.PeopleCode)
+            {
+                MessageBox.Show("Linting is only available for PeopleCode editors", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
+            
+            if (activeEditor.ContentString == null)
+            {
+                activeEditor.ContentString = ScintillaManager.GetScintillaText(activeEditor);
+            }
+
+            PeopleCodeLexer? lexer = new PeopleCodeLexer(new Antlr4.Runtime.AntlrInputStream(activeEditor.ContentString));
+            var stream = new Antlr4.Runtime.CommonTokenStream(lexer);
+
+            // Get all tokens including those on hidden channels
+            stream.Fill();
+
+            // Collect all comments from both comment channels
+            var comments = stream.GetTokens()
+                .Where(token => token.Channel == PeopleCodeLexer.COMMENTS || token.Channel == PeopleCodeLexer.API_COMMENTS)
+                .ToList();
+
+            PeopleCodeParser? parser = new PeopleCodeParser(stream);
+            var program = parser.program();
+
+            /* Free up ANTLR resources */
+            lexer = null;
+            parser = null;
+            stream = null;
+
+            // Check if the linter requires database connection
+            if (linter.DatabaseRequirement == DataManagerRequirement.Required && activeEditor.DataManager == null)
+            {
+                MessageBox.Show("This linting rule requires a database connection", "Database Required", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            MultiParseTreeWalker walker = new();
+            List<Report> reports = new();
+
+            /* check to see if there's recently a new datamanager for this editor */
+            if (processDataManagers.TryGetValue(activeEditor.ProcessId, out IDataManager? value))
+            {
+                activeEditor.DataManager = value;
+            }
+
+            IDataManager? dataManger = activeEditor.DataManager;
+            
+            // Configure and run the specific linter
+            linter.DataManager = dataManger;
+            linter.Reports = reports;
+            linter.Comments = comments;
+            
+            walker.AddListener(linter);
+            walker.Walk(program);
+            
+            // Reset the linter state
+            linter.Reset();
+            
+            program = null;
+            
+            // Process and display reports
+            foreach (var g in reports.GroupBy(r => r.Line).OrderBy(b => b.First().Line))
+            {
+                List<string> messages = new();
+                List<AnnotationStyle> styles = new();
+
+                foreach (var report in g)
+                {
+                    this.Invoke((Action)(() =>
+                    {
+                        int rowIndex = dataGridView2.Rows.Add(report.Type, report.Message, report.Line);
+                        dataGridView2.Rows[rowIndex].Tag = report;
+                    }));
+
+                    if (chkLintAnnotate.Checked)
+                    {
+                        messages.Add(report.Message);
+                        styles.Add(report.Type switch
+                        {
+                            ReportType.Error => AnnotationStyle.Red,
+                            ReportType.Warning => AnnotationStyle.Yellow,
+                            ReportType.Info => AnnotationStyle.Gray,
+                            _ => AnnotationStyle.Gray
+                        });
+                    }
+                }
+
+                if (chkLintAnnotate.Checked)
+                {
+                    ScintillaManager.SetAnnotations(activeEditor, messages, g.First().Line, styles);
+                }
+            }
+        }
+
         private void btnRenameLocalVar_Click(object sender, EventArgs e)
         {
             /* Ask the user for a new variable name */
@@ -1427,6 +1533,19 @@ namespace AppRefiner
                     }
                 }
             ));
+            
+            // Add individual linter commands with "Lint: " prefix
+            foreach (var linter in linterRules)
+            {
+                AvailableCommands.Add(new Command(
+                    $"Lint: {linter.Description}",
+                    $"Run {linter.Description} linting rule",
+                    () => {
+                        if (activeEditor != null)
+                            ProcessSingleLinter(linter);
+                    }
+                ));
+            }
            
         }
     }
