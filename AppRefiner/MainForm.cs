@@ -1409,6 +1409,24 @@ namespace AppRefiner
                         ProcessRefactor(new OptimizeImports());
                 }
             ));
+            
+            AvailableCommands.Add(new Command(
+                "Refactor: Rename Variable", 
+                "Rename the variable at the current cursor position",
+                () => { 
+                    if (activeEditor != null) {
+                        string newName = "";
+                        var mainHandle = Process.GetProcessById((int)activeEditor.ProcessId).MainWindowHandle;
+                        var dlgResult = ShowInputDialog("New variable name", "Enter new variable name", ref newName, mainHandle);
+                        
+                        if (dlgResult == DialogResult.OK) {
+                            int cursorPosition = ScintillaManager.GetCursorPosition(activeEditor);
+                            RenameLocalVariable refactor = new RenameLocalVariable(cursorPosition, newName);
+                            ProcessRefactor(refactor, mainHandle);
+                        }
+                    }
+                }
+            ));
            
         }
     }
