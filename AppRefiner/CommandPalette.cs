@@ -260,11 +260,9 @@ namespace AppRefiner
                         if (index >= commandListView.Items.Count)
                             index = 0;
                     }
+                    commandListView.SelectedIndices.Clear();
                     commandListView.Items[index].Selected = true;
                     commandListView.EnsureVisible(index);
-                    
-                    // Transfer focus to the list view
-                    commandListView.Focus();
                 }
                 e.Handled = true;
             }
@@ -279,11 +277,9 @@ namespace AppRefiner
                         if (index < 0)
                             index = commandListView.Items.Count - 1;
                     }
+                    commandListView.SelectedIndices.Clear();
                     commandListView.Items[index].Selected = true;
                     commandListView.EnsureVisible(index);
-                    
-                    // Transfer focus to the list view
-                    commandListView.Focus();
                 }
                 e.Handled = true;
             }
