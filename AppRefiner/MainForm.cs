@@ -1340,10 +1340,6 @@ namespace AppRefiner
                 () => chkInitCollapsed.Checked ? "Auto Collapse is ON - Click to disable" : "Auto Collapse is OFF - Click to enable",
                 () => { 
                     chkInitCollapsed.Checked = !chkInitCollapsed.Checked;
-                    if (activeEditor != null) {
-                        // Clear the content hash so it gets processed on next tick
-                        activeEditor.LastContentHash = 0;
-                    }
                 }
             ));
             
@@ -1352,10 +1348,6 @@ namespace AppRefiner
                 () => chkOnlyPPC.Checked ? "Only PeopleCode is ON - Click to disable" : "Only PeopleCode is OFF - Click to enable",
                 () => { 
                     chkOnlyPPC.Checked = !chkOnlyPPC.Checked;
-                    if (activeEditor != null) {
-                        // Clear the content hash so it gets processed on next tick
-                        activeEditor.LastContentHash = 0;
-                    }
                 }
             ));
             
@@ -1364,10 +1356,6 @@ namespace AppRefiner
                 () => chkAutoDark.Checked ? "Auto Dark Mode is ON - Click to disable" : "Auto Dark Mode is OFF - Click to enable",
                 () => { 
                     chkAutoDark.Checked = !chkAutoDark.Checked;
-                    if (activeEditor != null) {
-                        // Clear the content hash so it gets processed on next tick
-                        activeEditor.LastContentHash = 0;
-                    }
                 }
             ));
             
@@ -1376,10 +1364,6 @@ namespace AppRefiner
                 () => chkBetterSQL.Checked ? "Auto Format SQL is ON - Click to disable" : "Auto Format SQL is OFF - Click to enable",
                 () => { 
                     chkBetterSQL.Checked = !chkBetterSQL.Checked;
-                    if (activeEditor != null) {
-                        // Clear the content hash so it gets processed on next tick
-                        activeEditor.LastContentHash = 0;
-                    }
                 }
             ));
             
@@ -1425,16 +1409,7 @@ namespace AppRefiner
                         ProcessRefactor(new OptimizeImports());
                 }
             ));
-            
-            // Add other commands
-            AvailableCommands.Add(new Command(
-                "Hello World", 
-                "A simple test command",
-                () => { 
-                    MessageBox.Show("Hello World from Command Palette!", "Test Command", 
-                        MessageBoxButtons.OK, MessageBoxIcon.Information);
-                }
-            ));
+           
         }
     }
 
