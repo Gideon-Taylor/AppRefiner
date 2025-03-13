@@ -1547,6 +1547,26 @@ namespace AppRefiner
                 ));
             }
             
+            // Add linter toggle commands
+            foreach (var linter in linterRules)
+            {
+                AvailableCommands.Add(new Command(
+                    $"Lint: Toggle {linter.Description}",
+                    () => linter.Active ? $"Currently enabled - Click to disable" : $"Currently disabled - Click to enable",
+                    () => {
+                        linter.Active = !linter.Active;
+                        
+                        // Update corresponding grid row if exists
+                        var row = dataGridView1.Rows.Cast<DataGridViewRow>()
+                            .FirstOrDefault(r => r.Tag is BaseLintRule l && l == linter);
+                        if (row != null)
+                        {
+                            row.Cells[0].Value = linter.Active;
+                        }
+                    }
+                ));
+            }
+            
             // Add database commands with dynamic enabled states
             AvailableCommands.Add(new Command(
                 "Database: Connect to DB",
