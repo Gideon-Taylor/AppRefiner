@@ -66,12 +66,16 @@ namespace AppRefiner
         private Dictionary<string, Control> templateInputLabels = new Dictionary<string, Control>();
         private Dictionary<string, DisplayCondition> templateInputsDisplayConditions = new Dictionary<string, DisplayCondition>();
 
+        // Static list of available commands
+        public static List<Command> AvailableCommands = new List<Command>();
+        
         KeyboardHook renameVarHook = new KeyboardHook();
         KeyboardHook lintCodeHook = new KeyboardHook();
         KeyboardHook collapseLevel = new KeyboardHook();
         KeyboardHook expandLevel = new KeyboardHook();
         KeyboardHook collapseAll = new KeyboardHook();
         KeyboardHook expandAll = new KeyboardHook();
+        KeyboardHook commandPaletteHook = new KeyboardHook();
         private class RuleState
         {
             public string TypeName { get; set; } = "";
@@ -83,6 +87,7 @@ namespace AppRefiner
             InitializeComponent();
             InitLinterOptions();
             InitStylerOptions(); // Changed from InitAnalyzerOptions
+            RegisterCommands(); // Register the default commands
         }
 
         protected override void OnLoad(EventArgs e)
@@ -106,12 +111,29 @@ namespace AppRefiner
             lintCodeHook.KeyPressed += lintCodeHandler;
             lintCodeHook.RegisterHotKey(AppRefiner.ModifierKeys.Control | AppRefiner.ModifierKeys.Alt, Keys.L);
 
+            commandPaletteHook.KeyPressed += ShowCommandPalette;
+            commandPaletteHook.RegisterHotKey(AppRefiner.ModifierKeys.Control | AppRefiner.ModifierKeys.Shift, Keys.P);
+
         }
 
         private void lintCodeHandler(object? sender, KeyPressedEventArgs e)
         {
             if (activeEditor == null) return;
             ProcessLinters();
+        }
+
+        private void ShowCommandPalette(object? sender, KeyPressedEventArgs e)
+        {
+            if (activeEditor == null) return;
+            
+            // Create the command palette dialog
+            var palette = new CommandPalette(AvailableCommands);
+            
+            // Set the owner to the editor's parent window
+            var mainHandle = Process.GetProcessById((int)activeEditor.ProcessId).MainWindowHandle;
+            
+            // Show the dialog
+            palette.ShowDialog(new WindowWrapper(mainHandle));
         }
 
         private void expandAllHandler(object? sender, KeyPressedEventArgs e)
