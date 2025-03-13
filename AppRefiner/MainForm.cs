@@ -1546,6 +1546,54 @@ namespace AppRefiner
                     }
                 ));
             }
+            
+            // Add database commands with dynamic enabled states
+            AvailableCommands.Add(new Command(
+                "Database: Connect to DB",
+                "Connect to database for advanced functionality",
+                () => {
+                    if (activeEditor != null) {
+                        DBConnectDialog dialog = new DBConnectDialog();
+                        if (dialog.ShowDialog() == DialogResult.OK)
+                        {
+                            IDataManager? manager = dialog.DataManager;
+                            if (manager != null)
+                            {
+                                processDataManagers[activeEditor.ProcessId] = manager;
+                                activeEditor.DataManager = manager;
+                                btnConnectDB.Text = "Disconnect DB";
+                            }
+                        }
+                    }
+                },
+                () => activeEditor != null && activeEditor.DataManager == null
+            ));
+
+            AvailableCommands.Add(new Command(
+                "Database: Disconnect DB",
+                "Disconnect from current database",
+                () => {
+                    if (activeEditor != null && activeEditor.DataManager != null) {
+                        activeEditor.DataManager.Disconnect();
+                        processDataManagers.Remove(activeEditor.ProcessId);
+                        activeEditor.DataManager = null;
+                        btnConnectDB.Text = "Connect DB...";
+                    }
+                },
+                () => activeEditor != null && activeEditor.DataManager != null
+            ));
+            
+            // Add clear annotations command
+            AvailableCommands.Add(new Command(
+                "Editor: Clear Annotations",
+                "Clear all annotations from the current editor",
+                () => {
+                    if (activeEditor != null) {
+                        ScintillaManager.ClearAnnotations(activeEditor);
+                        dataGridView2.Rows.Clear();
+                    }
+                }
+            ));
            
         }
     }

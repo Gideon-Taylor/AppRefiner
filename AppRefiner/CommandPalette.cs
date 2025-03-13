@@ -13,6 +13,10 @@ namespace AppRefiner
         private string _description;
         private Func<string> _dynamicDescription;
         public Action Execute { get; set; }
+    
+        // New properties for enabled state
+        private bool _isEnabled = true;
+        private Func<bool>? _dynamicEnabled;
 
         public string Description 
         { 
@@ -28,6 +32,21 @@ namespace AppRefiner
                 _dynamicDescription = null;
             }
         }
+    
+        public bool Enabled
+        {
+            get
+            {
+                if (_dynamicEnabled != null)
+                    return _dynamicEnabled();
+                return _isEnabled;
+            }
+            set
+            {
+                _isEnabled = value;
+                _dynamicEnabled = null;
+            }
+        }
 
         public Command(string title, string description, Action execute)
         {
@@ -41,6 +60,31 @@ namespace AppRefiner
             Title = title;
             _dynamicDescription = dynamicDescription;
             Execute = execute;
+        }
+    
+        // New constructors with enabled state
+        public Command(string title, string description, Action execute, bool enabled)
+        {
+            Title = title;
+            _description = description;
+            Execute = execute;
+            _isEnabled = enabled;
+        }
+    
+        public Command(string title, string description, Action execute, Func<bool> dynamicEnabled)
+        {
+            Title = title;
+            _description = description;
+            Execute = execute;
+            _dynamicEnabled = dynamicEnabled;
+        }
+    
+        public Command(string title, Func<string> dynamicDescription, Action execute, Func<bool> dynamicEnabled)
+        {
+            Title = title;
+            _dynamicDescription = dynamicDescription;
+            Execute = execute;
+            _dynamicEnabled = dynamicEnabled;
         }
     }
 
@@ -154,6 +198,12 @@ namespace AppRefiner
                 
                 // Add tooltip with description
                 item.ToolTipText = command.Description;
+                
+                // Apply visual style for disabled commands
+                if (!command.Enabled)
+                {
+                    item.ForeColor = SystemColors.GrayText;
+                }
                 
                 commandListView.Items.Add(item);
             }
@@ -279,13 +329,18 @@ namespace AppRefiner
             if (commandListView.SelectedItems.Count > 0)
             {
                 var command = (Command)commandListView.SelectedItems[0].Tag;
-                // Store the command to execute
-                var commandToExecute = command;
-                // Close the form first
-                this.Hide();
-                this.Close();
-                // Then execute the command after the form is hidden
-                commandToExecute.Execute();
+                
+                // Only execute if the command is enabled
+                if (command.Enabled)
+                {
+                    // Store the command to execute
+                    var commandToExecute = command;
+                    // Close the form first
+                    this.Hide();
+                    this.Close();
+                    // Then execute the command after the form is hidden
+                    commandToExecute.Execute();
+                }
             }
         }
 
