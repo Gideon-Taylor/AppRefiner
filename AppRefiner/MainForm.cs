@@ -1334,6 +1334,55 @@ namespace AppRefiner
                 }
             ));
             
+            // Add toggle commands for MainForm checkboxes
+            AvailableCommands.Add(new Command(
+                "Editor: Toggle Auto Collapse", 
+                () => chkInitCollapsed.Checked ? "Auto Collapse is ON - Click to disable" : "Auto Collapse is OFF - Click to enable",
+                () => { 
+                    chkInitCollapsed.Checked = !chkInitCollapsed.Checked;
+                    if (activeEditor != null) {
+                        // Clear the content hash so it gets processed on next tick
+                        activeEditor.LastContentHash = 0;
+                    }
+                }
+            ));
+            
+            AvailableCommands.Add(new Command(
+                "Editor: Toggle Only PeopleCode Editors", 
+                () => chkOnlyPPC.Checked ? "Only PeopleCode is ON - Click to disable" : "Only PeopleCode is OFF - Click to enable",
+                () => { 
+                    chkOnlyPPC.Checked = !chkOnlyPPC.Checked;
+                    if (activeEditor != null) {
+                        // Clear the content hash so it gets processed on next tick
+                        activeEditor.LastContentHash = 0;
+                    }
+                }
+            ));
+            
+            AvailableCommands.Add(new Command(
+                "Editor: Toggle Auto Dark Mode", 
+                () => chkAutoDark.Checked ? "Auto Dark Mode is ON - Click to disable" : "Auto Dark Mode is OFF - Click to enable",
+                () => { 
+                    chkAutoDark.Checked = !chkAutoDark.Checked;
+                    if (activeEditor != null) {
+                        // Clear the content hash so it gets processed on next tick
+                        activeEditor.LastContentHash = 0;
+                    }
+                }
+            ));
+            
+            AvailableCommands.Add(new Command(
+                "Editor: Toggle Auto Format SQL", 
+                () => chkBetterSQL.Checked ? "Auto Format SQL is ON - Click to disable" : "Auto Format SQL is OFF - Click to enable",
+                () => { 
+                    chkBetterSQL.Checked = !chkBetterSQL.Checked;
+                    if (activeEditor != null) {
+                        // Clear the content hash so it gets processed on next tick
+                        activeEditor.LastContentHash = 0;
+                    }
+                }
+            ));
+            
             // Add styler toggle commands with "Styler:" prefix
             foreach (var styler in stylers)
             {
