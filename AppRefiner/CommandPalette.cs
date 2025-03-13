@@ -111,7 +111,7 @@ namespace AppRefiner
             if (commandListView.Items.Count > 0)
             {
                 commandListView.Items[0].Selected = true;
-                commandListView.Select();
+                // Removed commandListView.Select() to prevent focus stealing
             }
         }
 
@@ -135,7 +135,11 @@ namespace AppRefiner
             if (commandListView.Items.Count > 0)
             {
                 commandListView.Items[0].Selected = true;
+                commandListView.EnsureVisible(0);
             }
+            
+            // Ensure focus stays in the search box
+            searchBox.Focus();
         }
 
         private void SearchBox_TextChanged(object sender, EventArgs e)
@@ -199,8 +203,13 @@ namespace AppRefiner
             if (commandListView.SelectedItems.Count > 0)
             {
                 var command = (Command)commandListView.SelectedItems[0].Tag;
+                // Store the command to execute
+                var commandToExecute = command;
+                // Close the form first
+                this.Hide();
                 this.Close();
-                command.Execute();
+                // Then execute the command after the form is hidden
+                commandToExecute.Execute();
             }
         }
 
