@@ -1256,6 +1256,82 @@ namespace AppRefiner
             result = textBox.Text;
             return dlgResult;
         }
+        
+        private void RegisterCommands()
+        {
+            // Clear any existing commands
+            AvailableCommands.Clear();
+            
+            // Add some test commands
+            AvailableCommands.Add(new Command(
+                "Lint Current Code", 
+                "Run linting rules against the current editor",
+                () => { 
+                    if (activeEditor != null) 
+                        ProcessLinters(); 
+                }
+            ));
+            
+            AvailableCommands.Add(new Command(
+                "Dark Mode", 
+                "Apply dark mode to the current editor",
+                () => { 
+                    if (activeEditor != null) 
+                        ScintillaManager.SetDarkMode(activeEditor); 
+                }
+            ));
+            
+            AvailableCommands.Add(new Command(
+                "Collapse All", 
+                "Collapse all foldable sections",
+                () => { 
+                    if (activeEditor != null) 
+                        ScintillaManager.CollapseTopLevel(activeEditor); 
+                }
+            ));
+            
+            AvailableCommands.Add(new Command(
+                "Expand All", 
+                "Expand all foldable sections",
+                () => { 
+                    if (activeEditor != null) 
+                        ScintillaManager.ExpandTopLevel(activeEditor); 
+                }
+            ));
+            
+            AvailableCommands.Add(new Command(
+                "Take Snapshot", 
+                "Take a snapshot of the current editor content",
+                () => { 
+                    if (activeEditor != null) {
+                        activeEditor.SnapshotText = ScintillaManager.GetScintillaText(activeEditor);
+                        btnRestoreSnapshot.Enabled = true;
+                    }
+                }
+            ));
+            
+            AvailableCommands.Add(new Command(
+                "Restore Snapshot", 
+                "Restore editor content from the last snapshot",
+                () => { 
+                    if (activeEditor != null && activeEditor.SnapshotText != null) {
+                        ScintillaManager.ClearAnnotations(activeEditor);
+                        ScintillaManager.SetScintillaText(activeEditor, activeEditor.SnapshotText);
+                        activeEditor.SnapshotText = null;
+                        btnRestoreSnapshot.Enabled = false;
+                    }
+                }
+            ));
+            
+            AvailableCommands.Add(new Command(
+                "Hello World", 
+                "A simple test command",
+                () => { 
+                    MessageBox.Show("Hello World from Command Palette!", "Test Command", 
+                        MessageBoxButtons.OK, MessageBoxIcon.Information);
+                }
+            ));
+        }
     }
 
     public class WindowWrapper : System.Windows.Forms.IWin32Window
