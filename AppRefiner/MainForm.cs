@@ -1553,8 +1553,15 @@ namespace AppRefiner
                 "Connect to database for advanced functionality",
                 () => {
                     if (activeEditor != null) {
+                        // Get the main window handle of the process that owns the active editor
+                        var mainHandle = Process.GetProcessById((int)activeEditor.ProcessId).MainWindowHandle;
+                        
+                        // Create the dialog with proper parenting
                         DBConnectDialog dialog = new DBConnectDialog();
-                        if (dialog.ShowDialog() == DialogResult.OK)
+                        dialog.StartPosition = FormStartPosition.CenterParent;
+                        
+                        // Show dialog with parent window
+                        if (dialog.ShowDialog(new WindowWrapper(mainHandle)) == DialogResult.OK)
                         {
                             IDataManager? manager = dialog.DataManager;
                             if (manager != null)
