@@ -85,8 +85,9 @@ namespace AppRefiner
             this.commandListView.Size = new Size(550, 318);
             this.commandListView.TabIndex = 1;
             this.commandListView.UseCompatibleStateImageBehavior = false;
-            this.commandListView.View = View.Details;
+            this.commandListView.View = View.Tile;
             this.commandListView.MouseDoubleClick += new MouseEventHandler(this.CommandListView_MouseDoubleClick);
+            this.commandListView.KeyDown += new KeyEventHandler(this.CommandListView_KeyDown);
             
             // CommandPalette
             this.ClientSize = new Size(550, 380); // Made slightly taller to accommodate header
@@ -106,14 +107,16 @@ namespace AppRefiner
 
         private void ConfigureForm()
         {
-            // Add a column to the ListView that fills the width
-            commandListView.Columns.Add("Command", -1, HorizontalAlignment.Left);
-            commandListView.Columns[0].Width = commandListView.Width - 4;
-
-            // Set up list view with groups for title and description
-            commandListView.ShowGroups = false;
-            commandListView.View = View.Details;
-            commandListView.FullRowSelect = true;
+            // Change the view to TileView to show both title and description
+            commandListView.View = View.Tile;
+            commandListView.TileSize = new Size(commandListView.Width - 10, 50);
+            
+            // Configure the list view for title and description
+            commandListView.Columns.Add("Title", 250);
+            commandListView.Columns.Add("Description", 250);
+            
+            // Show item tooltips
+            commandListView.ShowItemToolTips = true;
         }
 
         private void PopulateCommandList()
@@ -125,6 +128,10 @@ namespace AppRefiner
                 var item = new ListViewItem(command.Title);
                 item.SubItems.Add(command.Description);
                 item.Tag = command;
+                
+                // Add tooltip with description
+                item.ToolTipText = command.Description;
+                
                 commandListView.Items.Add(item);
             }
 
@@ -182,6 +189,9 @@ namespace AppRefiner
                     }
                     commandListView.Items[index].Selected = true;
                     commandListView.EnsureVisible(index);
+                    
+                    // Transfer focus to the list view
+                    commandListView.Focus();
                 }
                 e.Handled = true;
             }
@@ -198,6 +208,9 @@ namespace AppRefiner
                     }
                     commandListView.Items[index].Selected = true;
                     commandListView.EnsureVisible(index);
+                    
+                    // Transfer focus to the list view
+                    commandListView.Focus();
                 }
                 e.Handled = true;
             }
@@ -216,6 +229,26 @@ namespace AppRefiner
         private void CommandListView_MouseDoubleClick(object sender, MouseEventArgs e)
         {
             ExecuteSelectedCommand();
+        }
+        
+        private void CommandListView_KeyDown(object sender, KeyEventArgs e)
+        {
+            if (e.KeyCode == Keys.Enter)
+            {
+                ExecuteSelectedCommand();
+                e.Handled = true;
+            }
+            else if (e.KeyCode == Keys.Escape)
+            {
+                this.Close();
+                e.Handled = true;
+            }
+            else if (e.KeyData == Keys.Tab || e.KeyData == (Keys.Tab | Keys.Shift))
+            {
+                // Send focus back to search box
+                searchBox.Focus();
+                e.Handled = true;
+            }
         }
 
         private void ExecuteSelectedCommand()
