@@ -23,6 +23,8 @@ namespace AppRefiner
 
     public partial class CommandPalette : Form
     {
+        private Panel headerPanel;
+        private Label headerLabel;
         private TextBox searchBox;
         private ListView commandListView;
         private List<Command> allCommands;
@@ -39,9 +41,25 @@ namespace AppRefiner
 
         private void InitializeComponent()
         {
+            this.headerPanel = new Panel();
+            this.headerLabel = new Label();
             this.searchBox = new TextBox();
             this.commandListView = new ListView();
+            this.headerPanel.SuspendLayout();
             this.SuspendLayout();
+            
+            // headerPanel
+            this.headerPanel.BackColor = Color.FromArgb(50, 50, 60);
+            this.headerPanel.Dock = DockStyle.Top;
+            this.headerPanel.Height = 30;
+            this.headerPanel.Controls.Add(this.headerLabel);
+            
+            // headerLabel
+            this.headerLabel.Text = "AppRefiner - Command Palette";
+            this.headerLabel.ForeColor = Color.White;
+            this.headerLabel.Font = new Font("Segoe UI", 9F, FontStyle.Regular, GraphicsUnit.Point);
+            this.headerLabel.Dock = DockStyle.Fill;
+            this.headerLabel.TextAlign = ContentAlignment.MiddleCenter;
 
             // searchBox
             this.searchBox.BorderStyle = BorderStyle.FixedSingle;
@@ -71,15 +89,17 @@ namespace AppRefiner
             this.commandListView.MouseDoubleClick += new MouseEventHandler(this.CommandListView_MouseDoubleClick);
             
             // CommandPalette
-            this.ClientSize = new Size(550, 350);
+            this.ClientSize = new Size(550, 380); // Made slightly taller to accommodate header
             this.Controls.Add(this.commandListView);
             this.Controls.Add(this.searchBox);
+            this.Controls.Add(this.headerPanel);
             this.FormBorderStyle = FormBorderStyle.None;
             this.StartPosition = FormStartPosition.CenterParent;
             this.Name = "CommandPalette";
             this.Text = "Command Palette";
             this.Deactivate += new EventHandler(this.CommandPalette_Deactivate);
             this.ShowInTaskbar = false;
+            this.headerPanel.ResumeLayout(false);
             this.ResumeLayout(false);
             this.PerformLayout();
         }
@@ -232,6 +252,23 @@ namespace AppRefiner
         {
             base.OnShown(e);
             searchBox.Focus();
+            
+            // Add drop shadow effect to the form
+            const int CS_DROPSHADOW = 0x00020000;
+            CreateParams cp = this.CreateParams;
+            cp.ClassStyle |= CS_DROPSHADOW;
+        }
+        
+        protected override CreateParams CreateParams
+        {
+            get
+            {
+                // Add drop shadow effect to the form
+                const int CS_DROPSHADOW = 0x00020000;
+                CreateParams cp = base.CreateParams;
+                cp.ClassStyle |= CS_DROPSHADOW;
+                return cp;
+            }
         }
     }
 }
