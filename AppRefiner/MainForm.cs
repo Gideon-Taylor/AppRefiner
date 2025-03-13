@@ -663,15 +663,10 @@ namespace AppRefiner
                     ScintillaManager.ApplyBetterSQL(activeEditor);
                 }
 
-                /* Create parse tree */
+                /* Process stylers for PeopleCode */
                 if (activeEditor.Type == EditorType.PeopleCode)
                 {
-                    PeopleCodeLexer lexer = new PeopleCodeLexer(new Antlr4.Runtime.AntlrInputStream(activeEditor.ContentString));
-                    PeopleCodeParser parser = new PeopleCodeParser(new Antlr4.Runtime.CommonTokenStream(lexer));
-                    var program = parser.program();
-                    ProcessStylers(program);
-                    program = null;
-                    parser = null;
+                    ProcessStylers(activeEditor);
                 }
 
                 if (!activeEditor.HasLexilla || (activeEditor.Type == EditorType.SQL || activeEditor.Type == EditorType.Other))
@@ -747,21 +742,32 @@ namespace AppRefiner
                 }
             }
         }
-        private void ProcessStylers(ProgramContext program) // Changed from ProcessAnalyzers
+        private void ProcessStylers(ScintillaEditor editor)
         {
-            if (activeEditor == null || activeEditor.Type != EditorType.PeopleCode)
+            if (editor == null || editor.Type != EditorType.PeopleCode)
             {
                 return;
             }
 
-            var activeStylers = stylers.Where(a => a.Active); // Changed from activeAnalyzers
+            // Get the text from the editor if needed
+            if (editor.ContentString == null)
+            {
+                editor.ContentString = ScintillaManager.GetScintillaText(editor);
+            }
+
+            // Create parse tree
+            PeopleCodeLexer lexer = new PeopleCodeLexer(new Antlr4.Runtime.AntlrInputStream(editor.ContentString));
+            PeopleCodeParser parser = new PeopleCodeParser(new Antlr4.Runtime.CommonTokenStream(lexer));
+            var program = parser.program();
+
+            var activeStylers = stylers.Where(a => a.Active);
             MultiParseTreeWalker walker = new();
 
             List<CodeAnnotation> annotations = new();
             List<CodeHighlight> highlights = new();
             List<CodeColor> colors = new();
 
-            foreach (var styler in activeStylers) // Changed from analyzer
+            foreach (var styler in activeStylers)
             {
                 styler.Annotations = annotations;
                 styler.Highlights = highlights;
@@ -777,22 +783,27 @@ namespace AppRefiner
                 styler.Reset();
             }
 
-            ScintillaManager.ResetStyles(activeEditor);
+            ScintillaManager.ResetStyles(editor);
 
             foreach (var annotation in annotations)
             {
-                ScintillaManager.SetAnnotation(activeEditor, annotation.LineNumber, annotation.Message);
+                ScintillaManager.SetAnnotation(editor, annotation.LineNumber, annotation.Message);
             }
 
             foreach (var highlight in highlights)
             {
-                ScintillaManager.HighlightText(activeEditor, highlight.Color, highlight.Start, highlight.Length);
+                ScintillaManager.HighlightText(editor, highlight.Color, highlight.Start, highlight.Length);
             }
 
             foreach (var color in colors)
             {
-                ScintillaManager.ColorText(activeEditor, color.Color, color.Start, color.Length);
+                ScintillaManager.ColorText(editor, color.Color, color.Start, color.Length);
             }
+
+            // Clean up
+            program = null;
+            lexer = null;
+            parser = null;
         }
 
         private void ProcessLinters()
@@ -1262,9 +1273,9 @@ namespace AppRefiner
             // Clear any existing commands
             AvailableCommands.Clear();
             
-            // Add some test commands
+            // Add editor commands with "Editor:" prefix
             AvailableCommands.Add(new Command(
-                "Lint Current Code", 
+                "Editor: Lint Current Code", 
                 "Run linting rules against the current editor",
                 () => { 
                     if (activeEditor != null) 
@@ -1273,7 +1284,7 @@ namespace AppRefiner
             ));
             
             AvailableCommands.Add(new Command(
-                "Dark Mode", 
+                "Editor: Dark Mode", 
                 "Apply dark mode to the current editor",
                 () => { 
                     if (activeEditor != null) 
@@ -1282,7 +1293,7 @@ namespace AppRefiner
             ));
             
             AvailableCommands.Add(new Command(
-                "Collapse All", 
+                "Editor: Collapse All", 
                 "Collapse all foldable sections",
                 () => { 
                     if (activeEditor != null) 
@@ -1291,7 +1302,7 @@ namespace AppRefiner
             ));
             
             AvailableCommands.Add(new Command(
-                "Expand All", 
+                "Editor: Expand All", 
                 "Expand all foldable sections",
                 () => { 
                     if (activeEditor != null) 
@@ -1300,7 +1311,7 @@ namespace AppRefiner
             ));
             
             AvailableCommands.Add(new Command(
-                "Take Snapshot", 
+                "Editor: Take Snapshot", 
                 "Take a snapshot of the current editor content",
                 () => { 
                     if (activeEditor != null) {
@@ -1311,7 +1322,7 @@ namespace AppRefiner
             ));
             
             AvailableCommands.Add(new Command(
-                "Restore Snapshot", 
+                "Editor: Restore Snapshot", 
                 "Restore editor content from the last snapshot",
                 () => { 
                     if (activeEditor != null && activeEditor.SnapshotText != null) {
@@ -1323,6 +1334,50 @@ namespace AppRefiner
                 }
             ));
             
+            // Add styler toggle commands with "Styler:" prefix
+            foreach (var styler in stylers)
+            {
+                AvailableCommands.Add(new Command(
+                    $"Styler: Toggle {styler.Description}",
+                    () => styler.Active ? $"Currently enabled - Click to disable" : $"Currently disabled - Click to enable",
+                    () => {
+                        styler.Active = !styler.Active;
+                        if (activeEditor != null)
+                        {
+                            ProcessStylers(activeEditor);
+                        }
+                        
+                        // Update corresponding grid row if exists
+                        var row = dataGridView3.Rows.Cast<DataGridViewRow>()
+                            .FirstOrDefault(r => r.Tag is BaseStyler s && s == styler);
+                        if (row != null)
+                        {
+                            row.Cells[0].Value = styler.Active;
+                        }
+                    }
+                ));
+            }
+            
+            // Add refactoring commands
+            AvailableCommands.Add(new Command(
+                "Refactor: Add Flower Box", 
+                "Add a flower box header to the current file",
+                () => { 
+                    if (activeEditor != null)
+                        ProcessRefactor(new AddFlowerBox());
+                }
+            ));
+            
+            AvailableCommands.Add(new Command(
+                "Refactor: Optimize Imports", 
+                "Clean up and organize import statements",
+                () => { 
+                    if (activeEditor != null)
+                        ProcessRefactor(new OptimizeImports());
+                }
+            ));
+            
+            // Add other commands
             AvailableCommands.Add(new Command(
                 "Hello World", 
                 "A simple test command",

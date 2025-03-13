@@ -10,13 +10,36 @@ namespace AppRefiner
     public class Command
     {
         public string Title { get; set; }
-        public string Description { get; set; }
+        private string _description;
+        private Func<string> _dynamicDescription;
         public Action Execute { get; set; }
+
+        public string Description 
+        { 
+            get 
+            {
+                if (_dynamicDescription != null)
+                    return _dynamicDescription();
+                return _description;
+            }
+            set 
+            {
+                _description = value;
+                _dynamicDescription = null;
+            }
+        }
 
         public Command(string title, string description, Action execute)
         {
             Title = title;
-            Description = description;
+            _description = description;
+            Execute = execute;
+        }
+
+        public Command(string title, Func<string> dynamicDescription, Action execute)
+        {
+            Title = title;
+            _dynamicDescription = dynamicDescription;
             Execute = execute;
         }
     }
