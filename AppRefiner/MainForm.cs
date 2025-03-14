@@ -1124,7 +1124,9 @@ namespace AppRefiner
             // Take a snapshot before refactoring
             activeEditor.SnapshotText = freshText;
             activeEditor.SnapshotCursorPosition = currentCursorPosition;
-            btnRestoreSnapshot.Enabled = true;
+            this.Invoke(() => {
+                btnRestoreSnapshot.Enabled = true;
+            });
 
             // Parse the code
             PeopleCodeLexer lexer = new PeopleCodeLexer(new Antlr4.Runtime.AntlrInputStream(freshText));
@@ -1150,7 +1152,9 @@ namespace AppRefiner
                     MessageBoxButtons.OK, 
                     MessageBoxIcon.Warning
                 );
-                btnRestoreSnapshot.Enabled = false;
+                this.Invoke(() => {
+                    btnRestoreSnapshot.Enabled = false;
+                });
                 return;
             }
 
