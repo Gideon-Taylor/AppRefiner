@@ -148,36 +148,48 @@ namespace AppRefiner
         
         private async Task ExecuteCommandWithProgressAsync(Action commandAction, IntPtr parentHandle)
         {
-            // Create progress dialog
-            var progressDialog = new CommandProgressDialog();
+            // Create progress dialog with parent handle
+            var progressDialog = new CommandProgressDialog(parentHandle);
+            
+            // Create a task completion source to wait for command execution
+            var tcs = new TaskCompletionSource<bool>();
             
             try
             {
-                // Show progress dialog
+                // Show the dialog without blocking so we can execute the command
                 progressDialog.Show(new WindowWrapper(parentHandle));
+                progressDialog.BringToFront();
                 Application.DoEvents();
+                
                 // Execute the command asynchronously
                 await Task.Run(() => {
                     try
                     {
                         commandAction();
+                        tcs.SetResult(true);
                     }
                     catch (Exception ex)
                     {
                         // Handle any exceptions during command execution
-                        MessageBox.Show(new WindowWrapper(parentHandle), 
-                            $"Error executing command: {ex.Message}", 
-                            "Command Error", 
-                            MessageBoxButtons.OK, 
-                            MessageBoxIcon.Error);
+                        this.Invoke(() => {
+                            MessageBox.Show(new WindowWrapper(parentHandle), 
+                                $"Error executing command: {ex.Message}", 
+                                "Command Error", 
+                                MessageBoxButtons.OK, 
+                                MessageBoxIcon.Error);
+                        });
+                        tcs.SetResult(false);
                     }
-                    int i = 3;
                 });
+                
+                // Wait for a short delay to ensure progress is visible
+                await Task.Delay(200);
             }
             finally
             {
                 // Close the progress dialog
                 progressDialog.Close();
+                progressDialog.Dispose();
             }
         }
 

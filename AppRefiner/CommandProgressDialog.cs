@@ -1,5 +1,6 @@
 using System;
 using System.Drawing;
+using System.Runtime.InteropServices;
 using System.Windows.Forms;
 
 namespace AppRefiner
@@ -9,10 +10,47 @@ namespace AppRefiner
         private Panel headerPanel;
         private Label headerLabel;
         private ProgressBar progressBar;
+        private IntPtr parentHandle;
 
-        public CommandProgressDialog()
+        [DllImport("user32.dll")]
+        private static extern bool GetWindowRect(IntPtr hWnd, out RECT lpRect);
+
+        [StructLayout(LayoutKind.Sequential)]
+        public struct RECT
         {
+            public int Left;
+            public int Top;
+            public int Right;
+            public int Bottom;
+        }
+
+        public CommandProgressDialog(IntPtr parentHwnd)
+        {
+            this.parentHandle = parentHwnd;
             InitializeComponent();
+            PositionInParent();
+        }
+
+        private void PositionInParent()
+        {
+            if (parentHandle != IntPtr.Zero)
+            {
+                RECT parentRect;
+                if (GetWindowRect(parentHandle, out parentRect))
+                {
+                    int parentWidth = parentRect.Right - parentRect.Left;
+                    int parentHeight = parentRect.Bottom - parentRect.Top;
+                    int parentCenterX = parentRect.Left + (parentWidth / 2);
+                    int parentCenterY = parentRect.Top + (parentHeight / 2);
+
+                    // Position the dialog centered in the parent window
+                    this.StartPosition = FormStartPosition.Manual;
+                    this.Location = new Point(
+                        parentCenterX - (this.Width / 2),
+                        parentCenterY - (this.Height / 2)
+                    );
+                }
+            }
         }
 
         private void InitializeComponent()
