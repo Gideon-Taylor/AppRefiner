@@ -155,7 +155,7 @@ namespace AppRefiner
             {
                 // Show progress dialog
                 progressDialog.Show(new WindowWrapper(parentHandle));
-                
+                Application.DoEvents();
                 // Execute the command asynchronously
                 await Task.Run(() => {
                     try
@@ -171,6 +171,7 @@ namespace AppRefiner
                             MessageBoxButtons.OK, 
                             MessageBoxIcon.Error);
                     }
+                    int i = 3;
                 });
             }
             finally
