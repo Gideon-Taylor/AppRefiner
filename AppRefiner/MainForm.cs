@@ -76,6 +76,7 @@ namespace AppRefiner
         KeyboardHook collapseAll = new KeyboardHook();
         KeyboardHook expandAll = new KeyboardHook();
         KeyboardHook commandPaletteHook = new KeyboardHook();
+        KeyboardHook resolveImportsHook = new KeyboardHook();
         private class RuleState
         {
             public string TypeName { get; set; } = "";
@@ -114,6 +115,9 @@ namespace AppRefiner
             commandPaletteHook.KeyPressed += ShowCommandPalette;
             commandPaletteHook.RegisterHotKey(AppRefiner.ModifierKeys.Control | AppRefiner.ModifierKeys.Shift, Keys.P);
 
+            resolveImportsHook.KeyPressed += resolveImportsHandler;
+            resolveImportsHook.RegisterHotKey(AppRefiner.ModifierKeys.Control | AppRefiner.ModifierKeys.Shift, Keys.I);
+
             // Automatically start the scanning timer
             timerRunning = true;
             scanTimer = new System.Threading.Timer(ScanTick, null, 1000, Timeout.Infinite);
@@ -124,6 +128,12 @@ namespace AppRefiner
         {
             if (activeEditor == null) return;
             ProcessLinters();
+        }
+        
+        private void resolveImportsHandler(object? sender, KeyPressedEventArgs e)
+        {
+            if (activeEditor == null) return;
+            ProcessRefactor(new ResolveImports());
         }
 
         private async void ShowCommandPalette(object? sender, KeyPressedEventArgs e)
@@ -1624,7 +1634,7 @@ namespace AppRefiner
             
             AvailableCommands.Add(new Command(
                 "Refactor: Resolve Imports", 
-                "Create explicit imports for all class references",
+                "Create explicit imports for all class references (Ctrl+Shift+I)",
                 () => { 
                     if (activeEditor != null)
                         ProcessRefactor(new ResolveImports());
