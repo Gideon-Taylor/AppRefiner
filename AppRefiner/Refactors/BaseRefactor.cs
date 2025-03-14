@@ -73,6 +73,13 @@ namespace AppRefiner.Refactors
         /// Applies this change to the given source code builder
         /// </summary>
         public abstract void Apply(StringBuilder source);
+        
+        /// <summary>
+        /// Calculates how this change affects a cursor position
+        /// </summary>
+        /// <param name="cursorPosition">The current cursor position</param>
+        /// <returns>The new cursor position after applying this change</returns>
+        public abstract int UpdateCursorPosition(int cursorPosition);
     }
     
     /// <summary>
@@ -84,6 +91,11 @@ namespace AppRefiner.Refactors
         /// The ending index (inclusive) in the source where the deletion ends
         /// </summary>
         public int EndIndex { get; }
+        
+        /// <summary>
+        /// Length of the deleted text
+        /// </summary>
+        public int DeleteLength => EndIndex - StartIndex + 1;
         
         /// <summary>
         /// Creates a new deletion change
@@ -102,7 +114,31 @@ namespace AppRefiner.Refactors
         /// </summary>
         public override void Apply(StringBuilder source)
         {
-            source.Remove(StartIndex, EndIndex - StartIndex + 1);
+            source.Remove(StartIndex, DeleteLength);
+        }
+        
+        /// <summary>
+        /// Updates cursor position based on this deletion
+        /// </summary>
+        /// <param name="cursorPosition">The current cursor position</param>
+        /// <returns>The adjusted cursor position</returns>
+        public override int UpdateCursorPosition(int cursorPosition)
+        {
+            if (cursorPosition <= StartIndex)
+            {
+                // Cursor is before deletion, no change needed
+                return cursorPosition;
+            }
+            else if (cursorPosition <= EndIndex)
+            {
+                // Cursor is within deleted text, move to start of deletion
+                return StartIndex;
+            }
+            else
+            {
+                // Cursor is after deleted text, shift backward by deleted length
+                return cursorPosition - DeleteLength;
+            }
         }
     }
     
@@ -135,6 +171,25 @@ namespace AppRefiner.Refactors
         {
             source.Insert(StartIndex, TextToInsert);
         }
+        
+        /// <summary>
+        /// Updates cursor position based on this insertion
+        /// </summary>
+        /// <param name="cursorPosition">The current cursor position</param>
+        /// <returns>The adjusted cursor position</returns>
+        public override int UpdateCursorPosition(int cursorPosition)
+        {
+            if (cursorPosition < StartIndex)
+            {
+                // Cursor is before insertion point, no change needed
+                return cursorPosition;
+            }
+            else 
+            {
+                // Cursor is at or after insertion point, shift forward by inserted text length
+                return cursorPosition + TextToInsert.Length;
+            }
+        }
     }
     
     /// <summary>
@@ -151,6 +206,16 @@ namespace AppRefiner.Refactors
         /// The new text to replace the old text with
         /// </summary>
         public string NewText { get; }
+        
+        /// <summary>
+        /// The length of the original text being replaced
+        /// </summary>
+        public int OldLength => EndIndex - StartIndex + 1;
+        
+        /// <summary>
+        /// The net change in length (positive if new text is longer, negative if shorter)
+        /// </summary>
+        public int LengthDelta => NewText.Length - OldLength;
         
         /// <summary>
         /// Creates a new replacement change
@@ -171,8 +236,33 @@ namespace AppRefiner.Refactors
         /// </summary>
         public override void Apply(StringBuilder source)
         {
-            source.Remove(StartIndex, EndIndex - StartIndex + 1);
+            source.Remove(StartIndex, OldLength);
             source.Insert(StartIndex, NewText);
+        }
+        
+        /// <summary>
+        /// Updates cursor position based on this replacement
+        /// </summary>
+        /// <param name="cursorPosition">The current cursor position</param>
+        /// <returns>The adjusted cursor position</returns>
+        public override int UpdateCursorPosition(int cursorPosition)
+        {
+            if (cursorPosition < StartIndex)
+            {
+                // Cursor is before replacement, no change needed
+                return cursorPosition;
+            }
+            else if (cursorPosition <= EndIndex)
+            {
+                // Cursor is within replacement
+                // Move to end of new text if cursor was inside replaced section
+                return StartIndex + NewText.Length;
+            }
+            else
+            {
+                // Cursor is after replacement, adjust by the change in length
+                return cursorPosition + LengthDelta;
+            }
         }
     }
     
@@ -182,6 +272,8 @@ namespace AppRefiner.Refactors
     public abstract class BaseRefactor : PeopleCodeParserBaseListener
     {
         private readonly List<CodeChange> _changes = new();
+        private int _initialCursorPosition = -1;
+        private int _updatedCursorPosition = -1;
         
         /// <summary>
         /// The token stream of the source code being refactored
@@ -197,16 +289,18 @@ namespace AppRefiner.Refactors
         /// The current result of the refactoring operation
         /// </summary>
         protected RefactorResult Result { get; set; } = RefactorResult.Successful;
-
+        
         /// <summary>
         /// Initializes the refactor with source code and token stream
         /// </summary>
-        public void Initialize(string sourceText, ITokenStream tokenStream)
+        public void Initialize(string sourceText, ITokenStream tokenStream, int cursorPosition = -1)
         {
             SourceText = sourceText;
             TokenStream = tokenStream;
             _changes.Clear();
             Result = RefactorResult.Successful;
+            _initialCursorPosition = cursorPosition;
+            _updatedCursorPosition = cursorPosition;
         }
 
         /// <summary>
@@ -235,12 +329,27 @@ namespace AppRefiner.Refactors
             _changes.Sort((a, b) => b.StartIndex.CompareTo(a.StartIndex));
 
             var result = new StringBuilder(SourceText);
+            
+            // Process each change and update cursor position
             foreach (var change in _changes)
             {
+                if (_initialCursorPosition >= 0)
+                {
+                    _updatedCursorPosition = change.UpdateCursorPosition(_updatedCursorPosition);
+                }
                 change.Apply(result);
             }
 
             return result.ToString();
+        }
+        
+        /// <summary>
+        /// Gets the updated cursor position after refactoring
+        /// </summary>
+        /// <returns>The new cursor position, or -1 if no cursor position was provided</returns>
+        public int GetUpdatedCursorPosition()
+        {
+            return _updatedCursorPosition;
         }
 
         /// <summary>

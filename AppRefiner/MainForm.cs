@@ -1118,9 +1118,12 @@ namespace AppRefiner
             var freshText = ScintillaManager.GetScintillaText(activeEditor);
             if (freshText == null) return;
 
+            // Capture current cursor position
+            int currentCursorPosition = ScintillaManager.GetCursorPosition(activeEditor);
+
             // Take a snapshot before refactoring
             activeEditor.SnapshotText = freshText;
-            activeEditor.SnapshotCursorPosition = ScintillaManager.GetCursorPosition(activeEditor);
+            activeEditor.SnapshotCursorPosition = currentCursorPosition;
             btnRestoreSnapshot.Enabled = true;
 
             // Parse the code
@@ -1129,8 +1132,10 @@ namespace AppRefiner
             PeopleCodeParser parser = new PeopleCodeParser(stream);
             var program = parser.program();
 
-            // Initialize and run the refactor
-            refactorClass.Initialize(freshText, stream);
+            // Initialize the refactor with cursor position
+            refactorClass.Initialize(freshText, stream, currentCursorPosition);
+            
+            // Run the refactor
             ParseTreeWalker walker = new();
             walker.Walk(refactorClass, program);
 
@@ -1154,6 +1159,13 @@ namespace AppRefiner
             if (newText == null) return;
 
             ScintillaManager.SetScintillaText(activeEditor, newText);
+            
+            // Get and set the updated cursor position
+            int updatedCursorPosition = refactorClass.GetUpdatedCursorPosition();
+            if (updatedCursorPosition >= 0)
+            {
+                ScintillaManager.SetCursorPosition(activeEditor, updatedCursorPosition);
+            }
         }
 
         private void btnOptimizeImports_Click(object sender, EventArgs e)
