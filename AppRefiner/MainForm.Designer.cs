@@ -141,7 +141,6 @@
             // tabPage1
             // 
             tabPage1.Controls.Add(grpEditorActions);
-            tabPage1.Controls.Add(btnStart);
             tabPage1.Controls.Add(grpEditorSettings);
             tabPage1.Location = new Point(4, 24);
             tabPage1.Name = "tabPage1";
@@ -217,17 +216,6 @@
             btnDarkMode.UseVisualStyleBackColor = true;
             btnDarkMode.Click += btnDarkMode_Click;
             // 
-            // btnStart
-            // 
-            btnStart.Dock = DockStyle.Top;
-            btnStart.Font = new Font("Segoe UI", 14.25F, FontStyle.Regular, GraphicsUnit.Point, 0);
-            btnStart.Location = new Point(3, 3);
-            btnStart.Name = "btnStart";
-            btnStart.Size = new Size(517, 45);
-            btnStart.TabIndex = 24;
-            btnStart.Text = "Start";
-            btnStart.UseVisualStyleBackColor = true;
-            btnStart.Click += btnStart_Click;
             // 
             // grpEditorSettings
             // 
@@ -687,7 +675,6 @@
         private Button btnCollapseAll;
         private Button btnExpand;
         private Button btnDarkMode;
-        private Button btnStart;
         private GroupBox grpEditorSettings;
         private CheckBox chkBetterSQL;
         private CheckBox chkOnlyPPC;

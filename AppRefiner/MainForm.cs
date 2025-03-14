@@ -114,6 +114,10 @@ namespace AppRefiner
             commandPaletteHook.KeyPressed += ShowCommandPalette;
             commandPaletteHook.RegisterHotKey(AppRefiner.ModifierKeys.Control | AppRefiner.ModifierKeys.Shift, Keys.P);
 
+            // Automatically start the scanning timer
+            timerRunning = true;
+            scanTimer = new System.Threading.Timer(ScanTick, null, 1000, Timeout.Infinite);
+            lblStatus.Text = "Monitoring...";
         }
 
         private void lintCodeHandler(object? sender, KeyPressedEventArgs e)
@@ -550,15 +554,6 @@ namespace AppRefiner
                 System.Text.Json.JsonSerializer.Serialize(states);
         }
 
-        private void btnStart_Click(object sender, EventArgs e)
-        {
-            timerRunning = !timerRunning;
-            if (timerRunning)
-            {
-                scanTimer = new System.Threading.Timer(ScanTick, null, 1000, Timeout.Infinite);
-            }
-            btnStart.Text = timerRunning ? "Stop" : "Start";
-        }
 
         private void EnableUIActions()
         {
