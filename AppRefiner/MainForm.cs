@@ -1174,8 +1174,12 @@ namespace AppRefiner
 
         private void btnOptimizeImports_Click(object sender, EventArgs e)
         {
-
             ProcessRefactor(new OptimizeImports());
+        }
+        
+        private void btnResolveImports_Click(object sender, EventArgs e)
+        {
+            ProcessRefactor(new ResolveImports());
         }
 
         private void btnConnectDB_Click(object sender, EventArgs e)
@@ -1615,6 +1619,15 @@ namespace AppRefiner
                 () => { 
                     if (activeEditor != null)
                         ProcessRefactor(new OptimizeImports());
+                }
+            ));
+            
+            AvailableCommands.Add(new Command(
+                "Refactor: Resolve Imports", 
+                "Create explicit imports for all class references",
+                () => { 
+                    if (activeEditor != null)
+                        ProcessRefactor(new ResolveImports());
                 }
             ));
             
