@@ -1479,7 +1479,10 @@ namespace AppRefiner
                 () => { 
                     if (activeEditor != null) {
                         activeEditor.SnapshotText = ScintillaManager.GetScintillaText(activeEditor);
-                        btnRestoreSnapshot.Enabled = true;
+                        this.Invoke(() => {
+                            btnRestoreSnapshot.Enabled = true;
+                        });
+                        
                     }
                 }
             ));
@@ -1492,7 +1495,9 @@ namespace AppRefiner
                         ScintillaManager.ClearAnnotations(activeEditor);
                         ScintillaManager.SetScintillaText(activeEditor, activeEditor.SnapshotText);
                         activeEditor.SnapshotText = null;
-                        btnRestoreSnapshot.Enabled = false;
+                        this.Invoke(() => {
+                            btnRestoreSnapshot.Enabled = false;
+                        });
                     }
                 }
             ));
