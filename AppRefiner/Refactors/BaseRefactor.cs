@@ -256,12 +256,22 @@ namespace AppRefiner.Refactors
         /// <param name="description">A description of what is being replaced</param>
         protected void ReplaceNode(ParserRuleContext context, string newText, string description)
         {
-            _changes.Add(new ReplaceChange(
-                context.Start.StartIndex, 
-                context.Stop.StopIndex, 
-                newText, 
-                description
-            ));
+            // Handle case where node has a Start but no Stop (empty node)
+            if (context.Stop == null)
+            {
+                // Treat as an insert operation at the start position
+                InsertText(context.Start.StartIndex, newText, description);
+            }
+            else
+            {
+                // Normal case - replace the entire node
+                _changes.Add(new ReplaceChange(
+                    context.Start.StartIndex, 
+                    context.Stop.StopIndex, 
+                    newText, 
+                    description
+                ));
+            }
         }
 
         /// <summary>
