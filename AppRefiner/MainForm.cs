@@ -1087,6 +1087,7 @@ namespace AppRefiner
         {
             if (activeEditor == null) return;
             activeEditor.SnapshotText = ScintillaManager.GetScintillaText(activeEditor);
+            activeEditor.SnapshotCursorPosition = ScintillaManager.GetCursorPosition(activeEditor);
             btnRestoreSnapshot.Enabled = true;
         }
 
@@ -1097,9 +1098,16 @@ namespace AppRefiner
 
             ScintillaManager.ClearAnnotations(activeEditor);
             ScintillaManager.SetScintillaText(activeEditor, activeEditor.SnapshotText);
+            
+            // Restore cursor position if it was saved
+            if (activeEditor.SnapshotCursorPosition.HasValue)
+            {
+                ScintillaManager.SetCursorPosition(activeEditor, activeEditor.SnapshotCursorPosition.Value);
+            }
+            
             activeEditor.SnapshotText = null;
+            activeEditor.SnapshotCursorPosition = null;
             btnRestoreSnapshot.Enabled = false;
-
         }
 
         private void btnAddFlowerBox_Click(object sender, EventArgs e)
@@ -1321,8 +1329,9 @@ namespace AppRefiner
 
                 if (activeEditor != null)
                 {
-                    // Take a snapshot of the current content
+                    // Take a snapshot of the current content and cursor position
                     activeEditor.SnapshotText = ScintillaManager.GetScintillaText(activeEditor);
+                    activeEditor.SnapshotCursorPosition = ScintillaManager.GetCursorPosition(activeEditor);
                     btnRestoreSnapshot.Enabled = true;
 
                     // Set the generated content in the editor
@@ -1479,6 +1488,7 @@ namespace AppRefiner
                 () => { 
                     if (activeEditor != null) {
                         activeEditor.SnapshotText = ScintillaManager.GetScintillaText(activeEditor);
+                        activeEditor.SnapshotCursorPosition = ScintillaManager.GetCursorPosition(activeEditor);
                         this.Invoke(() => {
                             btnRestoreSnapshot.Enabled = true;
                         });
@@ -1494,7 +1504,15 @@ namespace AppRefiner
                     if (activeEditor != null && activeEditor.SnapshotText != null) {
                         ScintillaManager.ClearAnnotations(activeEditor);
                         ScintillaManager.SetScintillaText(activeEditor, activeEditor.SnapshotText);
+                        
+                        // Restore cursor position if it was saved
+                        if (activeEditor.SnapshotCursorPosition.HasValue)
+                        {
+                            ScintillaManager.SetCursorPosition(activeEditor, activeEditor.SnapshotCursorPosition.Value);
+                        }
+                        
                         activeEditor.SnapshotText = null;
+                        activeEditor.SnapshotCursorPosition = null;
                         this.Invoke(() => {
                             btnRestoreSnapshot.Enabled = false;
                         });
