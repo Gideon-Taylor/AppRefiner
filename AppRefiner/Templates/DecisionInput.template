@@ -1,3 +1,39 @@
+{
+  "templateName": "Decision Input",
+  "description": "Basic Decision Input",
+  "inputs": [
+    {
+      "id": "class_name",
+      "label": "Class Name",
+      "type": "string",
+      "required": true,
+      "defaultValue": "MyInput",
+      "description": "The name of the class to generate"
+    },
+    {
+      "id": "uses_product_options",
+      "label": "Uses Product Options",
+      "type": "boolean",
+      "required": true,
+      "defaultValue": "false",
+      "description": "Whether this class uses product options"
+    },
+    {
+      "id": "product_id",
+      "label": "Product ID",
+      "type": "string",
+      "required": false,
+      "defaultValue": "",
+      "description": "The product ID to use",
+      "displayCondition": {
+        "field": "uses_product_options",
+        "operator": "equals",
+        "value": true
+      }
+    }
+  ]
+}
+---
 import IS_DX_INPUT:InputDefinition;
 {{#if uses_product_options}}
 import IS_CO_BASE:Utility:Product;
@@ -37,4 +73,3 @@ method PopulateChoices
    /* Add your custom code here */
    [[cursor]]
 end-method;
-

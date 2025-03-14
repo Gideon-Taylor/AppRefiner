@@ -37,7 +37,6 @@
             btnCollapseAll = new Button();
             btnExpand = new Button();
             btnDarkMode = new Button();
-            btnStart = new Button();
             grpEditorSettings = new GroupBox();
             chkBetterSQL = new CheckBox();
             chkOnlyPPC = new CheckBox();
@@ -158,7 +157,7 @@
             grpEditorActions.Controls.Add(btnExpand);
             grpEditorActions.Controls.Add(btnDarkMode);
             grpEditorActions.Enabled = false;
-            grpEditorActions.Location = new Point(8, 149);
+            grpEditorActions.Location = new Point(6, 101);
             grpEditorActions.Name = "grpEditorActions";
             grpEditorActions.Size = new Size(528, 106);
             grpEditorActions.TabIndex = 0;
@@ -216,14 +215,13 @@
             btnDarkMode.UseVisualStyleBackColor = true;
             btnDarkMode.Click += btnDarkMode_Click;
             // 
-            // 
             // grpEditorSettings
             // 
             grpEditorSettings.Controls.Add(chkBetterSQL);
             grpEditorSettings.Controls.Add(chkOnlyPPC);
             grpEditorSettings.Controls.Add(chkInitCollapsed);
             grpEditorSettings.Controls.Add(chkAutoDark);
-            grpEditorSettings.Location = new Point(8, 54);
+            grpEditorSettings.Location = new Point(6, 6);
             grpEditorSettings.Name = "grpEditorSettings";
             grpEditorSettings.Size = new Size(528, 89);
             grpEditorSettings.TabIndex = 20;

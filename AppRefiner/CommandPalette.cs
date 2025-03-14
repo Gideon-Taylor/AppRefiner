@@ -171,7 +171,6 @@ namespace AppRefiner
             this.StartPosition = FormStartPosition.CenterParent;
             this.Name = "CommandPalette";
             this.Text = "Command Palette";
-            this.Deactivate += new EventHandler(this.CommandPalette_Deactivate);
             this.ShowInTaskbar = false;
             this.headerPanel.ResumeLayout(false);
             this.ResumeLayout(false);
@@ -344,12 +343,6 @@ namespace AppRefiner
                     this.Close();
                 }
             }
-        }
-
-        private void CommandPalette_Deactivate(object sender, EventArgs e)
-        {
-            this.DialogResult = DialogResult.Cancel;
-            this.Close();
         }
 
         protected override bool ProcessCmdKey(ref Message msg, Keys keyData)

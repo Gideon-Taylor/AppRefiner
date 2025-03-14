@@ -116,29 +116,55 @@ namespace AppRefiner.Templates
         }
 
         /// <summary>
-        /// Loads a template from a JSON file
+        /// Loads a template from a file
         /// </summary>
-        /// <param name="filePath">Path to the template JSON file</param>
+        /// <param name="filePath">Path to the template file (.template or .json)</param>
         /// <returns>A populated Template object</returns>
         public static Template LoadFromFile(string filePath)
         {
             if (!File.Exists(filePath))
                 throw new FileNotFoundException($"Template file not found: {filePath}");
 
-            string json = File.ReadAllText(filePath);
-            return LoadFromJson(json, filePath);
+            string extension = Path.GetExtension(filePath).ToLowerInvariant();
+            
+            if (extension == ".template")
+            {
+                // Parse combined template file format
+                string fileContent = File.ReadAllText(filePath);
+                return LoadFromCombinedFormat(fileContent);
+            }
+            else if (extension == ".json")
+            {
+                // Handle legacy JSON format
+                string json = File.ReadAllText(filePath);
+                return LoadFromJson(json, filePath);
+            }
+            else
+            {
+                throw new FormatException($"Unsupported template file format: {extension}");
+            }
         }
 
         /// <summary>
-        /// Loads a template from a JSON string
+        /// Loads a template from a combined format (JSON + template text)
         /// </summary>
-        /// <param name="json">JSON string containing template definition</param>
-        /// <param name="filePath">Optional path to the JSON file (needed to find associated template text file)</param>
+        /// <param name="content">The full content of a .template file</param>
         /// <returns>A populated Template object</returns>
-        public static Template LoadFromJson(string json, string filePath = null)
+        public static Template LoadFromCombinedFormat(string content)
         {
             try
             {
+                // Split the content at the delimiter
+                const string delimiter = "---";
+                int delimiterIndex = content.IndexOf(delimiter);
+                
+                if (delimiterIndex < 0)
+                    throw new FormatException("Template file is missing the '---' delimiter between JSON and template text");
+                
+                string json = content.Substring(0, delimiterIndex).Trim();
+                string templateText = content.Substring(delimiterIndex + delimiter.Length).Trim();
+                
+                // Load the JSON part
                 var options = new JsonSerializerOptions
                 {
                     PropertyNameCaseInsensitive = true
@@ -151,30 +177,10 @@ namespace AppRefiner.Templates
                 {
                     TemplateName = jsonDoc.GetProperty("templateName").GetString(),
                     Description = jsonDoc.GetProperty("description").GetString(),
-                    Inputs = new List<TemplateInput>()
+                    Inputs = new List<TemplateInput>(),
+                    TemplateText = templateText
                 };
                 
-                // Load template text from associated .txt file
-                string jsonFilePath = filePath ?? throw new ArgumentNullException(nameof(filePath));
-                string templateFilePath = Path.ChangeExtension(jsonFilePath, ".txt");
-                
-                if (File.Exists(templateFilePath))
-                {
-                    template.TemplateText = File.ReadAllText(templateFilePath);
-                }
-                else
-                {
-                    // Fallback to template property in JSON if it exists
-                    if (jsonDoc.TryGetProperty("template", out var templateProp))
-                    {
-                        template.TemplateText = templateProp.GetString();
-                    }
-                    else
-                    {
-                        throw new FileNotFoundException($"Template text file not found: {templateFilePath}");
-                    }
-                }
-
                 var inputs = jsonDoc.GetProperty("inputs");
                 foreach (var input in inputs.EnumerateArray())
                 {
@@ -203,12 +209,12 @@ namespace AppRefiner.Templates
                     
                     template.Inputs.Add(templateInput);
                 }
-
+                
                 return template;
             }
             catch (Exception ex)
             {
-                throw new FormatException($"Error parsing template JSON: {ex.Message}", ex);
+                throw new FormatException($"Error parsing template file: {ex.Message}", ex);
             }
         }
 
@@ -398,6 +404,89 @@ namespace AppRefiner.Templates
         }
         
         /// <summary>
+        /// Loads a template from a JSON string (legacy format)
+        /// </summary>
+        /// <param name="json">JSON string containing template definition</param>
+        /// <param name="filePath">Optional path to the JSON file (needed to find associated template text file)</param>
+        /// <returns>A populated Template object</returns>
+        public static Template LoadFromJson(string json, string filePath = null)
+        {
+            try
+            {
+                var options = new JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = true
+                };
+
+                var jsonDoc = JsonSerializer.Deserialize<JsonElement>(json, options);
+                
+                // Create template with properties from JSON
+                var template = new Template
+                {
+                    TemplateName = jsonDoc.GetProperty("templateName").GetString(),
+                    Description = jsonDoc.GetProperty("description").GetString(),
+                    Inputs = new List<TemplateInput>()
+                };
+                
+                // Load template text from associated .txt file
+                string jsonFilePath = filePath ?? throw new ArgumentNullException(nameof(filePath));
+                string templateFilePath = Path.ChangeExtension(jsonFilePath, ".txt");
+                
+                if (File.Exists(templateFilePath))
+                {
+                    template.TemplateText = File.ReadAllText(templateFilePath);
+                }
+                else
+                {
+                    // Fallback to template property in JSON if it exists
+                    if (jsonDoc.TryGetProperty("template", out var templateProp))
+                    {
+                        template.TemplateText = templateProp.GetString();
+                    }
+                    else
+                    {
+                        throw new FileNotFoundException($"Template text file not found: {templateFilePath}");
+                    }
+                }
+
+                var inputs = jsonDoc.GetProperty("inputs");
+                foreach (var input in inputs.EnumerateArray())
+                {
+                    var templateInput = new TemplateInput
+                    {
+                        Id = input.GetProperty("id").GetString(),
+                        Label = input.GetProperty("label").GetString(),
+                        Type = input.GetProperty("type").GetString(),
+                        Required = input.GetProperty("required").GetBoolean(),
+                        DefaultValue = input.TryGetProperty("defaultValue", out var defaultValue) ? 
+                            defaultValue.GetString() : null,
+                        Description = input.TryGetProperty("description", out var description) ? 
+                            description.GetString() : null
+                    };
+                    
+                    // Parse display condition if present
+                    if (input.TryGetProperty("displayCondition", out var displayConditionProp))
+                    {
+                        templateInput.DisplayCondition = new DisplayCondition
+                        {
+                            Field = displayConditionProp.GetProperty("field").GetString(),
+                            Operator = displayConditionProp.GetProperty("operator").GetString(),
+                            Value = GetValueFromJsonElement(displayConditionProp.GetProperty("value"))
+                        };
+                    }
+                    
+                    template.Inputs.Add(templateInput);
+                }
+
+                return template;
+            }
+            catch (Exception ex)
+            {
+                throw new FormatException($"Error parsing template JSON: {ex.Message}", ex);
+            }
+        }
+
+        /// <summary>
         /// Gets all available templates from the Templates directory
         /// </summary>
         /// <returns>A list of all available templates</returns>
@@ -408,10 +497,31 @@ namespace AppRefiner.Templates
             
             if (Directory.Exists(templatesDirectory))
             {
+                // Look for .template files first (new format)
+                foreach (var file in Directory.GetFiles(templatesDirectory, "*.template"))
+                {
+                    try
+                    {
+                        templates.Add(LoadFromFile(file));
+                    }
+                    catch (Exception ex)
+                    {
+                        // Log or handle the error, but continue processing other templates
+                        Console.WriteLine($"Error loading template {file}: {ex.Message}");
+                    }
+                }
+                
+                // Then look for .json files (legacy format) that don't have a corresponding .template file
                 foreach (var file in Directory.GetFiles(templatesDirectory, "*.json"))
                 {
                     try
                     {
+                        string templateFile = Path.ChangeExtension(file, ".template");
+                        
+                        // Skip if we already loaded a .template version
+                        if (File.Exists(templateFile))
+                            continue;
+                            
                         templates.Add(LoadFromFile(file));
                     }
                     catch (Exception ex)

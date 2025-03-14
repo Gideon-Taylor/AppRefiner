@@ -20,3 +20,21 @@
     }
   ]
 }
+---
+{{#if include_comments}}
+/* This is a basic class template */
+{{/if}}
+class {{class_name}}
+{{#if include_comments}}
+   /* Constructor */
+{{/if}}
+   method {{class_name}}();
+   
+end-class;
+
+{{#if include_comments}}
+/* Constructor implementation */
+{{/if}}
+method {{class_name}}
+   [[select]]/* your code goes here */[[/select]]
+end-method;
