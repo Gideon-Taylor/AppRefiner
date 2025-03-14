@@ -74,6 +74,7 @@
             cmbTemplates = new ComboBox();
             progressBar1 = new ProgressBar();
             lblStatus = new Label();
+            btnResolveImports = new Button();
             ((System.ComponentModel.ISupportInitialize)splitContainer1).BeginInit();
             splitContainer1.Panel1.SuspendLayout();
             splitContainer1.Panel2.SuspendLayout();
@@ -505,6 +506,7 @@
             // 
             // grpRefactors
             // 
+            grpRefactors.Controls.Add(btnResolveImports);
             grpRefactors.Controls.Add(btnRenameLocalVar);
             grpRefactors.Controls.Add(btnOptimizeImports);
             grpRefactors.Controls.Add(btnAddFlowerBox);
@@ -623,6 +625,16 @@
             lblStatus.Text = "Stopped";
             lblStatus.TextAlign = ContentAlignment.MiddleCenter;
             // 
+            // btnResolveImports
+            // 
+            btnResolveImports.Location = new Point(121, 51);
+            btnResolveImports.Name = "btnResolveImports";
+            btnResolveImports.Size = new Size(109, 23);
+            btnResolveImports.TabIndex = 5;
+            btnResolveImports.Text = "Resolve Imports";
+            btnResolveImports.UseVisualStyleBackColor = true;
+            btnResolveImports.Click += btnResolveImports_Click;
+            // 
             // MainForm
             // 
             AutoScaleDimensions = new SizeF(7F, 15F);
@@ -714,5 +726,6 @@
         private SplitContainer splitContainer3;
         private Panel pnlTemplateParams;
         private Button btnApplyTemplate;
+        private Button btnResolveImports;
     }
 }

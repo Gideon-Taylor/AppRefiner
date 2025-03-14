@@ -414,7 +414,7 @@ namespace AppRefiner.Refactors
         /// <param name="description">A description of what is being inserted</param>
         protected void InsertAfter(ParserRuleContext context, string textToInsert, string description)
         {
-            _changes.Add(new InsertText(context.Stop.StopIndex + 1, textToInsert, description));
+            _changes.Add(new InsertChange(context.Stop.StopIndex + 1, textToInsert, description));
         }
         
         /// <summary>
@@ -425,7 +425,7 @@ namespace AppRefiner.Refactors
         /// <param name="description">A description of what is being inserted</param>
         protected void InsertBefore(ParserRuleContext context, string textToInsert, string description)
         {
-            _changes.Add(new InsertText(context.Start.StartIndex, textToInsert, description));
+            _changes.Add(new InsertChange(context.Start.StartIndex, textToInsert, description));
         }
 
         /// <summary>

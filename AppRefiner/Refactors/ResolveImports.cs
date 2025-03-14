@@ -1,3 +1,4 @@
+using Antlr4.Runtime;
 using Antlr4.Runtime.Tree;
 using AppRefiner.PeopleCode;
 using System;
@@ -79,8 +80,7 @@ namespace AppRefiner.Refactors
                 newImports.AppendLine($"import {classPath};");
             }
             
-            // Remove trailing newline if any
-            string imports = newImports.ToString().TrimEnd();
+            string imports = newImports.ToString();
             
             if (importsBlockContext != null)
             {
