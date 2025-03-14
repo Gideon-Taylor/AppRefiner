@@ -1118,27 +1118,38 @@ namespace AppRefiner
             var freshText = ScintillaManager.GetScintillaText(activeEditor);
             if (freshText == null) return;
 
+            // Take a snapshot before refactoring
             activeEditor.SnapshotText = freshText;
+            activeEditor.SnapshotCursorPosition = ScintillaManager.GetCursorPosition(activeEditor);
             btnRestoreSnapshot.Enabled = true;
 
+            // Parse the code
             PeopleCodeLexer lexer = new PeopleCodeLexer(new Antlr4.Runtime.AntlrInputStream(freshText));
             var stream = new Antlr4.Runtime.CommonTokenStream(lexer);
             PeopleCodeParser parser = new PeopleCodeParser(stream);
             var program = parser.program();
 
+            // Initialize and run the refactor
             refactorClass.Initialize(freshText, stream);
-
             ParseTreeWalker walker = new();
             walker.Walk(refactorClass, program);
 
+            // Check if refactoring was successful
             var result = refactorClass.GetResult();
             if (!result.Success)
             {
-                MessageBox.Show(owner != IntPtr.Zero ? new WindowWrapper(owner) : this, result.Message, "Refactoring Failed", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show(
+                    owner != IntPtr.Zero ? new WindowWrapper(owner) : this, 
+                    result.Message, 
+                    "Refactoring Failed", 
+                    MessageBoxButtons.OK, 
+                    MessageBoxIcon.Warning
+                );
                 btnRestoreSnapshot.Enabled = false;
                 return;
             }
 
+            // Apply the refactored code
             var newText = refactorClass.GetRefactoredCode();
             if (newText == null) return;
 
