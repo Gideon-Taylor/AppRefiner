@@ -21,7 +21,7 @@ namespace AppRefiner.Refactors
         public override void EnterProgram(ProgramContext context)
         {
             base.EnterProgram(context);
-            AddInsert(0, FLOWER_BOX_HEADER, "Add flower box");
+            InsertText(0, FLOWER_BOX_HEADER, "Add flower box");
         }
     }
 }

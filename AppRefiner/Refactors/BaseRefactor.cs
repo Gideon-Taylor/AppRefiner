@@ -284,7 +284,7 @@ namespace AppRefiner.Refactors
         /// <param name="description">A description of what is being inserted</param>
         protected void InsertText(int position, string textToInsert, string description)
         {
-            _changes.Add(new InsertText(position, textToInsert, description));
+            _changes.Add(new InsertChange(position, textToInsert, description));
         }
                 
         /// <summary>

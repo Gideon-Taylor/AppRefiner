@@ -1,7 +1,6 @@
 using Antlr4.Runtime;
 using Antlr4.Runtime.Misc;
 using AppRefiner.Linters.Models;
-using AppRefiner.Refactors.CodeChanges;
 using System.Collections.Generic;
 using System.Linq;
 using static AppRefiner.PeopleCode.PeopleCodeParser;
@@ -112,11 +111,12 @@ namespace AppRefiner.Refactors
             // Generate replacement changes for each occurrence
             foreach (var (start, end) in allOccurrences)
             {
-                Changes.Add(new ReplaceChange(end + 1, newVariableName)
-                {
-                    StartIndex = start,
-                    Description = $"Rename variable '{variableToRename}' to '{newVariableName}'"
-                });
+                ReplaceText(
+                    start, 
+                    end, 
+                    newVariableName,
+                    $"Rename variable '{variableToRename}' to '{newVariableName}'"
+                );
             }
         }
     }

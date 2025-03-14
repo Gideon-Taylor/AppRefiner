@@ -145,7 +145,7 @@ namespace AppRefiner.Refactors
             if (importsBlockContext != null)
             {
                 // Replace the entire imports block
-                AddChange(importsBlockContext,
+                ReplaceNode(importsBlockContext,
                          newImports.ToString().TrimEnd(),
                          "Optimize imports");
             }
