@@ -239,7 +239,7 @@ namespace AppRefiner
             }
 
             // Initialize annotations right after editor creation
-            InitAnnotationStyles(editor, editor.IsDarkMode);
+            InitAnnotationStyles(editor);
         }
 
         public static ScintillaEditor GetEditor(IntPtr hWnd)
@@ -469,7 +469,7 @@ namespace AppRefiner
             editor.SendMessage(SCI_INDICATORFILLRANGE, (IntPtr)start, (IntPtr)length);
         }
 
-        public static void InitAnnotationStyles(ScintillaEditor editor, bool isDarkMode = false)
+        public static void InitAnnotationStyles(ScintillaEditor editor)
         {
             try
             {
@@ -490,7 +490,7 @@ namespace AppRefiner
                 // Define colors in BGR format based on the mode
                 int GRAY_BACK, GRAY_FORE, YELLOW_BACK, YELLOW_FORE, RED_BACK, RED_FORE;
                 
-                if (isDarkMode)
+                if (editor.IsDarkMode)
                 {
                     // Dark mode colors
                     GRAY_BACK = 0x303030;   // Dark gray background
@@ -524,9 +524,8 @@ namespace AppRefiner
                 editor.SendMessage(SCI_STYLESETFORE, (IntPtr)(editor.AnnotationStyleOffset + (int)AnnotationStyle.Red), (IntPtr)RED_FORE);
                 editor.SendMessage(SCI_STYLESETBACK, (IntPtr)(editor.AnnotationStyleOffset + (int)AnnotationStyle.Red), (IntPtr)RED_BACK);
 
-                // Store initialization state and dark mode state
+                // Store initialization state
                 editor.AnnotationsInitialized = true;
-                editor.IsDarkMode = isDarkMode;
             }
             catch (Exception ex)
             {
@@ -679,8 +678,11 @@ namespace AppRefiner
             // Numbers (purplish blue)
             editor.SendMessage(SCI_STYLESETFORE, (IntPtr)2, (IntPtr)0xB682AA);
         
+            // Set dark mode flag
+            editor.IsDarkMode = true;
+            
             // Also update annotation styles for dark mode
-            InitAnnotationStyles(editor, true);
+            InitAnnotationStyles(editor);
 
         }
 
@@ -842,7 +844,7 @@ namespace AppRefiner
         {
             if (!editor.AnnotationsInitialized)
             {
-                InitAnnotationStyles(editor, editor.IsDarkMode);
+                InitAnnotationStyles(editor);
             }
 
             try
