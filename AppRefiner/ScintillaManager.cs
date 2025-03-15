@@ -141,6 +141,11 @@ namespace AppRefiner
         private const int SCI_SETSELFORE = 2067;
         private const int SCI_SETSELBACK = 2068;
         private const int SCI_SETSELALPHA = 2478;
+        private const int SCI_SETELEMENTCOLOUR = 2753;
+        
+        // Element identifiers
+        private const int SC_ELEMENT_SELECTION_BACK = 31;
+        private const int SC_ELEMENT_SELECTION_TEXT = 32;
 
 
         // indicators 
@@ -692,9 +697,8 @@ namespace AppRefiner
             editor.SendMessage(SCI_SETCARETWIDTH, (IntPtr)2, IntPtr.Zero);
     
             // Set selection colors: navy blue background with white text
-            // editor.SendMessage(SCI_SETSELBACK, (IntPtr)0xFFFFFF, IntPtr.Zero); // Navy blue in BGR (800000 = RGB 0,0,128)
-            // editor.SendMessage(SCI_SETSELFORE, (IntPtr)0xFFFFFF, IntPtr.Zero); // White text (hex FFFFFF)
-            // editor.SendMessage(SCI_SETSELALPHA, (IntPtr)255, IntPtr.Zero);     // Make selection semi-transparent
+            editor.SendMessage(SCI_SETELEMENTCOLOUR, (IntPtr)SC_ELEMENT_SELECTION_BACK, (IntPtr)0x800000); // Navy blue in BGR (800000 = RGB 0,0,128)
+            editor.SendMessage(SCI_SETELEMENTCOLOUR, (IntPtr)SC_ELEMENT_SELECTION_TEXT, (IntPtr)0xFFFFFF); // White text (hex FFFFFF)
             // Set dark mode flag
             editor.IsDarkMode = true;
             
