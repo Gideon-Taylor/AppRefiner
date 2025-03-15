@@ -678,15 +678,15 @@ namespace AppRefiner
             // Numbers (purplish blue)
             editor.SendMessage(SCI_STYLESETFORE, (IntPtr)2, (IntPtr)0xB682AA);
             
-            // Set white cursor color
+            // Set white cursor color (hex FFFFFF)
             editor.SendMessage(SCI_SETCARETFORE, (IntPtr)0xFFFFFF, IntPtr.Zero);
-            
+    
             // Make cursor slightly wider for better visibility
             editor.SendMessage(SCI_SETCARETWIDTH, (IntPtr)2, IntPtr.Zero);
-            
+    
             // Set selection colors: navy blue background with white text
-            editor.SendMessage(SCI_SETSELBACK, (IntPtr)0x800000, IntPtr.Zero); // Navy blue in BGR (001080)
-            editor.SendMessage(SCI_SETSELFORE, (IntPtr)0xFFFFFF, IntPtr.Zero); // White text
+            editor.SendMessage(SCI_SETSELBACK, (IntPtr)0x800000, IntPtr.Zero); // Navy blue in BGR (800000 = RGB 0,0,128)
+            editor.SendMessage(SCI_SETSELFORE, (IntPtr)0xFFFFFF, IntPtr.Zero); // White text (hex FFFFFF)
             editor.SendMessage(SCI_SETSELALPHA, (IntPtr)200, IntPtr.Zero);     // Make selection semi-transparent
         
             // Set dark mode flag
