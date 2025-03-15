@@ -725,6 +725,12 @@ namespace AppRefiner
                     ScintillaManager.ApplyBetterSQL(activeEditor);
                 }
 
+                // Apply dark mode whenever content changes if auto dark mode is enabled
+                if (chkAutoDark.Checked)
+                {
+                    ScintillaManager.SetDarkMode(activeEditor);
+                }
+
                 /* Process stylers for PeopleCode */
                 if (activeEditor.Type == EditorType.PeopleCode)
                 {
