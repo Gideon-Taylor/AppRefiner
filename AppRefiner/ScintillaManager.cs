@@ -640,18 +640,27 @@ namespace AppRefiner
             /* Style 33 is margins! */
             //foreach (var s in styles)
 
-            editor.SendMessage(SCI_STYLESETBACK, (IntPtr)32, (IntPtr)0x1E1E1E);
-            editor.SendMessage(SCI_STYLESETBACK, (IntPtr)33, (IntPtr)0x1E1E1E);
-            editor.SendMessage(SCI_STYLESETFORE, (IntPtr)32, (IntPtr)0xD4D4D4);
+            // Darker background for better contrast
+            editor.SendMessage(SCI_STYLESETBACK, (IntPtr)32, (IntPtr)0x1A1A1A);
+            editor.SendMessage(SCI_STYLESETBACK, (IntPtr)33, (IntPtr)0x1A1A1A);
+            // Brighter text for better readability
+            editor.SendMessage(SCI_STYLESETFORE, (IntPtr)32, (IntPtr)0xE8E8E8);
             editor.SendMessage(SCI_STYLECLEARALL, (IntPtr)0, (IntPtr)0);
 
-            editor.SendMessage(SCI_STYLESETFORE, (IntPtr)3, (IntPtr)0xD69C56);
-            editor.SendMessage(SCI_STYLESETFORE, (IntPtr)4, (IntPtr)0x7891CE);
-            editor.SendMessage(SCI_STYLESETFORE, (IntPtr)10, (IntPtr)0x9CDCFE);
-            editor.SendMessage(SCI_STYLESETFORE, (IntPtr)11, (IntPtr)0xDCDCAA);
-            editor.SendMessage(SCI_STYLESETFORE, (IntPtr)1, (IntPtr)0x55996A);
-            editor.SendMessage(SCI_STYLESETFORE, (IntPtr)24, (IntPtr)0x55996A);
-            editor.SendMessage(SCI_STYLESETFORE, (IntPtr)2, (IntPtr)0xA8CEB5);
+            // Keywords (orange in Visual Studio Code style)
+            editor.SendMessage(SCI_STYLESETFORE, (IntPtr)3, (IntPtr)0x2C8BE2);
+            // Strings (green)
+            editor.SendMessage(SCI_STYLESETFORE, (IntPtr)4, (IntPtr)0x64D356);
+            // Secondary keywords (cyan/light blue)
+            editor.SendMessage(SCI_STYLESETFORE, (IntPtr)10, (IntPtr)0xD5AA6F);
+            // Tertiary keywords (softer blue/teal)
+            editor.SendMessage(SCI_STYLESETFORE, (IntPtr)11, (IntPtr)0xC7953B);
+            // Comments (green-gray)
+            editor.SendMessage(SCI_STYLESETFORE, (IntPtr)1, (IntPtr)0x6A9955);
+            // Block comments (same as line comments)
+            editor.SendMessage(SCI_STYLESETFORE, (IntPtr)24, (IntPtr)0x6A9955);
+            // Numbers (purplish blue)
+            editor.SendMessage(SCI_STYLESETFORE, (IntPtr)2, (IntPtr)0xB682AA);
 
         }
 
