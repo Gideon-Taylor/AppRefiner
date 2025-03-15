@@ -239,7 +239,7 @@ namespace AppRefiner
             }
 
             // Initialize annotations right after editor creation
-            InitAnnotationStyles(editor);
+            InitAnnotationStyles(editor, editor.IsDarkMode);
         }
 
         public static ScintillaEditor GetEditor(IntPtr hWnd)
@@ -469,7 +469,7 @@ namespace AppRefiner
             editor.SendMessage(SCI_INDICATORFILLRANGE, (IntPtr)start, (IntPtr)length);
         }
 
-        public static void InitAnnotationStyles(ScintillaEditor editor)
+        public static void InitAnnotationStyles(ScintillaEditor editor, bool isDarkMode = false)
         {
             try
             {
@@ -487,13 +487,29 @@ namespace AppRefiner
                 // Enable annotations and set visibility mode first
                 editor.SendMessage(SCI_ANNOTATIONSETVISIBLE, (IntPtr)ANNOTATION_BOXED, IntPtr.Zero);
 
-                // Define colors in BGR format
-                const int GRAY_BACK = 0xEFEFEF;
-                const int GRAY_FORE = 0;
-                const int YELLOW_BACK = 0xF0FFFF;
-                const int YELLOW_FORE = 0x0089B3;
-                const int RED_BACK = 0xF0F0FF;
-                const int RED_FORE = 0x000080;
+                // Define colors in BGR format based on the mode
+                int GRAY_BACK, GRAY_FORE, YELLOW_BACK, YELLOW_FORE, RED_BACK, RED_FORE;
+                
+                if (isDarkMode)
+                {
+                    // Dark mode colors
+                    GRAY_BACK = 0x303030;   // Dark gray background
+                    GRAY_FORE = 0xCCCCCC;   // Light gray text
+                    YELLOW_BACK = 0x2D2D54; // Dark blue/yellow background
+                    YELLOW_FORE = 0x4DC4FF; // Light orange/amber text
+                    RED_BACK = 0x252550;    // Dark blue/red background  
+                    RED_FORE = 0x7070FF;    // Light red text
+                }
+                else
+                {
+                    // Light mode colors (original)
+                    GRAY_BACK = 0xEFEFEF;   // Light gray background
+                    GRAY_FORE = 0;          // Black text
+                    YELLOW_BACK = 0xF0FFFF; // Light yellow background 
+                    YELLOW_FORE = 0x0089B3; // Brown text
+                    RED_BACK = 0xF0F0FF;    // Light red background
+                    RED_FORE = 0x000080;    // Dark red text
+                }
 
 
                 // Configure Gray style
@@ -508,8 +524,9 @@ namespace AppRefiner
                 editor.SendMessage(SCI_STYLESETFORE, (IntPtr)(editor.AnnotationStyleOffset + (int)AnnotationStyle.Red), (IntPtr)RED_FORE);
                 editor.SendMessage(SCI_STYLESETBACK, (IntPtr)(editor.AnnotationStyleOffset + (int)AnnotationStyle.Red), (IntPtr)RED_BACK);
 
-                // Store initialization state
+                // Store initialization state and dark mode state
                 editor.AnnotationsInitialized = true;
+                editor.IsDarkMode = isDarkMode;
             }
             catch (Exception ex)
             {
@@ -661,6 +678,9 @@ namespace AppRefiner
             editor.SendMessage(SCI_STYLESETFORE, (IntPtr)24, (IntPtr)0x6A9955);
             // Numbers (purplish blue)
             editor.SendMessage(SCI_STYLESETFORE, (IntPtr)2, (IntPtr)0xB682AA);
+        
+            // Also update annotation styles for dark mode
+            InitAnnotationStyles(editor, true);
 
         }
 
@@ -822,7 +842,7 @@ namespace AppRefiner
         {
             if (!editor.AnnotationsInitialized)
             {
-                InitAnnotationStyles(editor);
+                InitAnnotationStyles(editor, editor.IsDarkMode);
             }
 
             try
@@ -1084,6 +1104,7 @@ namespace AppRefiner
         public string? ContentString = null;
         public string? SnapshotText = null;
         public bool AnnotationsInitialized { get; set; } = false;
+        public bool IsDarkMode { get; set; } = false;
         public IntPtr AnnotationStyleOffset = IntPtr.Zero;
         public IDataManager? DataManager = null;
 
