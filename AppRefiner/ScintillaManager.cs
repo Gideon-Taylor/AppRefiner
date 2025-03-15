@@ -219,6 +219,11 @@ namespace AppRefiner
         public static void InitEditor(IntPtr hWnd)
         {
             var caption = WindowHelper.GetGrandparentWindowCaption(hWnd);
+            if (caption == "Suppress")
+            {
+                Thread.Sleep(1000);
+                caption = WindowHelper.GetGrandparentWindowCaption(hWnd);
+            }
             // Get the process ID associated with the Scintilla window.
             GetWindowThreadProcessId(hWnd, out uint processId);
 
@@ -673,7 +678,7 @@ namespace AppRefiner
             editor.SendMessage(SCI_STYLESETBACK, (IntPtr)33, (IntPtr)0x1A1A1A);
             // Brighter text for better readability
             editor.SendMessage(SCI_STYLESETFORE, (IntPtr)32, (IntPtr)0xE8E8E8);
-            //editor.SendMessage(SCI_STYLECLEARALL, (IntPtr)0, (IntPtr)0);
+            editor.SendMessage(SCI_STYLECLEARALL, (IntPtr)0, (IntPtr)0);
 
             // Keywords (orange in Visual Studio Code style)
             editor.SendMessage(SCI_STYLESETFORE, (IntPtr)3, (IntPtr)0x2C8BE2);
@@ -697,8 +702,8 @@ namespace AppRefiner
             editor.SendMessage(SCI_SETCARETWIDTH, (IntPtr)2, IntPtr.Zero);
     
             // Set selection colors: navy blue background with white text
-            editor.SendMessage(SCI_SETELEMENTCOLOUR, (IntPtr)SC_ELEMENT_SELECTION_BACK, (IntPtr)0x800000); // Navy blue in BGR (800000 = RGB 0,0,128)
-            editor.SendMessage(SCI_SETELEMENTCOLOUR, (IntPtr)SC_ELEMENT_SELECTION_TEXT, (IntPtr)0xFFFFFF); // White text (hex FFFFFF)
+            editor.SendMessage(SCI_SETELEMENTCOLOUR, (IntPtr)SC_ELEMENT_SELECTION_BACK, (IntPtr)0xC19429FF); // Navy blue in BGR (800000 = RGB 0,0,128)
+            editor.SendMessage(SCI_SETELEMENTCOLOUR, (IntPtr)SC_ELEMENT_SELECTION_TEXT, (IntPtr)0xFF00FFFF); // White text (hex FFFFFF)
             // Set dark mode flag
             editor.IsDarkMode = true;
             
