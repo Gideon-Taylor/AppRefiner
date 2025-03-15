@@ -9,19 +9,22 @@ namespace AppRefiner.Refactors
 {
     class AddFlowerBox : BaseRefactor
     {
-        private const string FLOWER_BOX_HEADER = 
-@"/* =======================================================================================
+        private string GenerateFlowerBoxHeader()
+        {
+            string today = DateTime.Now.ToString("MM/dd/yyyy");
+            return @$"/* =======================================================================================
  Change Log.
 
  Date        Modified By  Description
  ----------  -----------  --------------------------------------------------------------        
- 01/01/1900  Your Name    Initial creation of the file.
+ {today}  Your Name    Initial creation of the file.
  ======================================================================================= */
 ";
+        }
         public override void EnterProgram(ProgramContext context)
         {
             base.EnterProgram(context);
-            InsertText(0, FLOWER_BOX_HEADER, "Add flower box");
+            InsertText(0, GenerateFlowerBoxHeader(), "Add flower box");
         }
     }
 }
