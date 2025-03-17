@@ -21,6 +21,7 @@ using SharpCompress.Readers;
 using Antlr4.Runtime.Tree;
 using AppRefiner.Database;
 using AppRefiner.Templates;
+using System.Web;
 
 namespace AppRefiner
 {
@@ -332,18 +333,123 @@ namespace AppRefiner
             // and generate a consolidated report
 
             var ppcProgs = editor.DataManager.GetPeopleCodeItemsForProject(projectName);
-
+            var activeLinters = linterRules.Where(a => a.Active).ToList();
+            
+            // Message to show progress
+            this.Invoke(() => {
+                lblStatus.Text = "Linting project...";
+                progressBar1.Style = ProgressBarStyle.Marquee;
+                progressBar1.MarqueeAnimationSpeed = 30;
+            });
+            
+            // Master collection of all linting reports
+            List<(PeopleCodeItem Program, Report LintReport)> allReports = new List<(PeopleCodeItem, Report)>();
+            
+            // Process each program in the project
             foreach (var ppcProg in ppcProgs)
             {
                 var programText = ppcProg.GetProgramTextAsString();
-                // TODO...
+                if (string.IsNullOrEmpty(programText))
+                    continue;
+                
+                // Create lexer and parser for this program
+                PeopleCodeLexer lexer = new PeopleCodeLexer(new Antlr4.Runtime.AntlrInputStream(programText));
+                var stream = new Antlr4.Runtime.CommonTokenStream(lexer);
+                
+                // Get all tokens including those on hidden channels
+                stream.Fill();
+                
+                // Collect all comments from both comment channels
+                var comments = stream.GetTokens()
+                    .Where(token => token.Channel == PeopleCodeLexer.COMMENTS || token.Channel == PeopleCodeLexer.API_COMMENTS)
+                    .ToList();
+                
+                PeopleCodeParser parser = new PeopleCodeParser(stream);
+                var program = parser.program();
+                
+                // Collection for reports from this program
+                List<Report> programReports = new List<Report>();
+                
+                MultiParseTreeWalker walker = new();
+                
+                // Configure and run each active linter
+                foreach (var linter in activeLinters)
+                {
+                    // Reset linter state
+                    linter.Reset();
+                    
+                    // Configure linter for this program
+                    linter.DataManager = editor.DataManager;
+                    linter.Reports = programReports;
+                    linter.Comments = comments;
+                    
+                    walker.AddListener(linter);
+                }
+                
+                // Process the program with all linters at once
+                walker.Walk(program);
+                
+                // Store reports with the program they came from
+                foreach (var report in programReports)
+                {
+                    allReports.Add((ppcProg, report));
+                }
+                
+                // Clean up walker listeners for next program
+                foreach (var linter in activeLinters)
+                {
+                    walker.RemoveListener(linter);
+                }
+                
+                // Free up resources
+                lexer = null;
+                parser = null;
+                stream = null;
+                program = null;
             }
-
-
-            MessageBox.Show($"Project linting will generate a report at: {reportPath}\n\nThis functionality will be fully implemented in a future update.", 
-            "Project Linting", 
-            MessageBoxButtons.OK, 
-            MessageBoxIcon.Information);
+            
+            // Generate the HTML report
+            if (allReports.Count > 0)
+            {
+                GenerateHtmlReport(reportPath, projectName, allReports);
+                
+                // Reset UI and show confirmation with link to report
+                this.Invoke(() => {
+                    lblStatus.Text = "Monitoring...";
+                    progressBar1.Style = ProgressBarStyle.Blocks;
+                    
+                    // Show dialog with option to open the report
+                    var result = MessageBox.Show(
+                        $"Project linting complete. {allReports.Count} issues found.\n\nWould you like to open the report?", 
+                        "Project Linting Complete", 
+                        MessageBoxButtons.YesNo, 
+                        MessageBoxIcon.Information);
+                        
+                    if (result == DialogResult.Yes)
+                    {
+                        // Open the report in default browser
+                        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                        {
+                            FileName = reportPath,
+                            UseShellExecute = true
+                        });
+                    }
+                });
+            }
+            else
+            {
+                // Reset UI and show no issues found
+                this.Invoke(() => {
+                    lblStatus.Text = "Monitoring...";
+                    progressBar1.Style = ProgressBarStyle.Blocks;
+                    
+                    MessageBox.Show(
+                        "No linting issues found in the project.", 
+                        "Project Linting Complete", 
+                        MessageBoxButtons.OK, 
+                        MessageBoxIcon.Information);
+                });
+            }
         }
 
         private void LoadSettings()
@@ -1491,6 +1597,174 @@ namespace AppRefiner
             }
         }
 
+        /// <summary>
+        /// Generates an HTML report of linting results for a project
+        /// </summary>
+        /// <param name="reportPath">The path where the report should be saved</param>
+        /// <param name="projectName">The name of the project</param>
+        /// <param name="reportData">The collection of programs and their lint reports</param>
+        private void GenerateHtmlReport(string reportPath, string projectName, 
+            List<(PeopleCodeItem Program, Report LintReport)> reportData)
+        {
+            // Group reports by program
+            var groupedReports = reportData
+                .GroupBy(r => r.Program.BuildPath())
+                .OrderBy(g => g.Key)
+                .ToList();
+                
+            StringBuilder html = new StringBuilder();
+            
+            // HTML header
+            html.AppendLine("<!DOCTYPE html>");
+            html.AppendLine("<html lang=\"en\">");
+            html.AppendLine("<head>");
+            html.AppendLine("  <meta charset=\"UTF-8\">");
+            html.AppendLine("  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">");
+            html.AppendLine($"  <title>Lint Report - {projectName}</title>");
+            html.AppendLine("  <style>");
+            html.AppendLine("    body { font-family: Arial, sans-serif; margin: 0; padding: 20px; color: #333; }");
+            html.AppendLine("    h1 { color: #2c3e50; border-bottom: 2px solid #ecf0f1; padding-bottom: 10px; }");
+            html.AppendLine("    h2 { color: #3498db; margin-top: 30px; padding-bottom: 5px; border-bottom: 1px solid #ecf0f1; }");
+            html.AppendLine("    .summary { background-color: #f8f9fa; border-radius: 5px; padding: 15px; margin: 20px 0; }");
+            html.AppendLine("    .program-item { margin-bottom: 30px; border: 1px solid #ddd; border-radius: 5px; overflow: hidden; }");
+            html.AppendLine("    .program-header { background-color: #f0f8ff; padding: 10px 15px; border-bottom: 1px solid #ddd; display: flex; justify-content: space-between; }");
+            html.AppendLine("    .program-content { padding: 0 15px; }");
+            html.AppendLine("    table { width: 100%; border-collapse: collapse; margin: 15px 0; }");
+            html.AppendLine("    th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid #ddd; }");
+            html.AppendLine("    th { background-color: #f5f5f5; }");
+            html.AppendLine("    tr:hover { background-color: #f9f9f9; }");
+            html.AppendLine("    .error { color: #e74c3c; }");
+            html.AppendLine("    .warning { color: #f39c12; }");
+            html.AppendLine("    .info { color: #3498db; }");
+            html.AppendLine("    .timestamp { color: #7f8c8d; font-size: 0.9em; margin-top: 5px; }");
+            html.AppendLine("    .expanded { display: block; }");
+            html.AppendLine("    .collapsed { display: none; }");
+            html.AppendLine("    .expand-button { background: none; border: none; color: #3498db; cursor: pointer; }");
+            html.AppendLine("    .stats { display: flex; gap: 20px; margin: 20px 0; }");
+            html.AppendLine("    .stat-box { background-color: #f8f9fa; border-radius: 5px; padding: 10px 15px; flex: 1; text-align: center; }");
+            html.AppendLine("    .stat-box.errors { border-left: 4px solid #e74c3c; }");
+            html.AppendLine("    .stat-box.warnings { border-left: 4px solid #f39c12; }");
+            html.AppendLine("    .stat-box.info { border-left: 4px solid #3498db; }");
+            html.AppendLine("    .stat-count { font-size: 1.5em; font-weight: bold; }");
+            html.AppendLine("  </style>");
+            html.AppendLine("  <script>");
+            html.AppendLine("    function toggleContent(id) {");
+            html.AppendLine("      const content = document.getElementById(id);");
+            html.AppendLine("      const button = document.querySelector(`[onclick=\"toggleContent('${id}')\"]`);");
+            html.AppendLine("      if (content.classList.contains('collapsed')) {");
+            html.AppendLine("        content.classList.remove('collapsed');");
+            html.AppendLine("        content.classList.add('expanded');");
+            html.AppendLine("        button.textContent = 'Collapse';");
+            html.AppendLine("      } else {");
+            html.AppendLine("        content.classList.remove('expanded');");
+            html.AppendLine("        content.classList.add('collapsed');");
+            html.AppendLine("        button.textContent = 'Expand';");
+            html.AppendLine("      }");
+            html.AppendLine("    }");
+            html.AppendLine("  </script>");
+            html.AppendLine("</head>");
+            html.AppendLine("<body>");
+            
+            // Report header
+            html.AppendLine($"  <h1>Lint Report for Project: {projectName}</h1>");
+            html.AppendLine($"  <p class=\"timestamp\">Generated on: {DateTime.Now}</p>");
+            
+            // Calculate statistics
+            int totalErrors = reportData.Count(r => r.LintReport.Type == ReportType.Error);
+            int totalWarnings = reportData.Count(r => r.LintReport.Type == ReportType.Warning);
+            int totalInfo = reportData.Count(r => r.LintReport.Type == ReportType.Info);
+            
+            // Add statistics summary
+            html.AppendLine("  <div class=\"stats\">");
+            html.AppendLine($"    <div class=\"stat-box errors\"><div class=\"stat-count\">{totalErrors}</div><div>Errors</div></div>");
+            html.AppendLine($"    <div class=\"stat-box warnings\"><div class=\"stat-count\">{totalWarnings}</div><div>Warnings</div></div>");
+            html.AppendLine($"    <div class=\"stat-box info\"><div class=\"stat-count\">{totalInfo}</div><div>Info</div></div>");
+            html.AppendLine("  </div>");
+            
+            // Summary section
+            html.AppendLine("  <div class=\"summary\">");
+            html.AppendLine($"    <p><strong>Total Programs:</strong> {groupedReports.Count}</p>");
+            html.AppendLine($"    <p><strong>Total Issues:</strong> {reportData.Count} ({totalErrors} errors, {totalWarnings} warnings, {totalInfo} info)</p>");
+            html.AppendLine("  </div>");
+            
+            // Program reports
+            html.AppendLine("  <h2>Program Reports</h2>");
+            
+            int programCounter = 0;
+            
+            foreach (var programGroup in groupedReports)
+            {
+                programCounter++;
+                string programId = $"program-{programCounter}";
+                string programPath = programGroup.Key;
+                var programReports = programGroup.ToList();
+                
+                int programErrors = programReports.Count(r => r.LintReport.Type == ReportType.Error);
+                int programWarnings = programReports.Count(r => r.LintReport.Type == ReportType.Warning);
+                int programInfo = programReports.Count(r => r.LintReport.Type == ReportType.Info);
+                
+                // Program header with issue counts and expand/collapse button
+                html.AppendLine("  <div class=\"program-item\">");
+                html.AppendLine("    <div class=\"program-header\">");
+                html.AppendLine($"      <div><strong>{programPath}</strong> ({programReports.Count} issues)</div>");
+                html.AppendLine($"      <div>");
+                if (programErrors > 0) html.AppendLine($"        <span class=\"error\">{programErrors} errors</span> ");
+                if (programWarnings > 0) html.AppendLine($"        <span class=\"warning\">{programWarnings} warnings</span> ");
+                if (programInfo > 0) html.AppendLine($"        <span class=\"info\">{programInfo} info</span> ");
+                html.AppendLine($"        <button class=\"expand-button\" onclick=\"toggleContent('{programId}')\">Expand</button>");
+                html.AppendLine($"      </div>");
+                html.AppendLine("    </div>");
+                
+                // Program content (initially collapsed for cleaner view)
+                html.AppendLine($"    <div id=\"{programId}\" class=\"program-content collapsed\">");
+                
+                // Table of issues
+                html.AppendLine("      <table>");
+                html.AppendLine("        <thead>");
+                html.AppendLine("          <tr>");
+                html.AppendLine("            <th>Type</th>");
+                html.AppendLine("            <th>Line</th>");
+                html.AppendLine("            <th>Message</th>");
+                html.AppendLine("          </tr>");
+                html.AppendLine("        </thead>");
+                html.AppendLine("        <tbody>");
+                
+                foreach (var item in programReports.OrderBy(r => r.LintReport.Line))
+                {
+                    var report = item.LintReport;
+                    string typeClass = report.Type == ReportType.Error ? "error" : 
+                                      (report.Type == ReportType.Warning ? "warning" : "info");
+                    
+                    html.AppendLine("          <tr>");
+                    html.AppendLine($"            <td class=\"{typeClass}\">{report.Type}</td>");
+                    html.AppendLine($"            <td>{report.Line}</td>");
+                    html.AppendLine($"            <td>{System.Web.HttpUtility.HtmlEncode(report.Message)}</td>");
+                    html.AppendLine("          </tr>");
+                }
+                
+                html.AppendLine("        </tbody>");
+                html.AppendLine("      </table>");
+                html.AppendLine("    </div>");
+                html.AppendLine("  </div>");
+            }
+            
+            // Footer
+            html.AppendLine("  <p class=\"timestamp\">Report generated by AppRefiner - © 2023</p>");
+            html.AppendLine("</body>");
+            html.AppendLine("</html>");
+            
+            // Write the HTML to the report file
+            try
+            {
+                File.WriteAllText(reportPath, html.ToString());
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error creating report: {ex.Message}", "Report Error", 
+                    MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+        
         private void RenameByShortcut()
         {
 
