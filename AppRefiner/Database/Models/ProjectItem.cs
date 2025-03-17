@@ -91,16 +91,16 @@ namespace AppRefiner.Database.Models
         {
             List<string> pathParts = new List<string>();
             
-            if (!string.IsNullOrEmpty(ObjectValue1))
+            if (!string.IsNullOrEmpty(ObjectValue1?.Trim()))
                 pathParts.Add(ObjectValue1);
                 
-            if (!string.IsNullOrEmpty(ObjectValue2))
+            if (!string.IsNullOrEmpty(ObjectValue2?.Trim()))
                 pathParts.Add(ObjectValue2);
                 
-            if (!string.IsNullOrEmpty(ObjectValue3))
+            if (!string.IsNullOrEmpty(ObjectValue3?.Trim()))
                 pathParts.Add(ObjectValue3);
                 
-            if (!string.IsNullOrEmpty(ObjectValue4))
+            if (!string.IsNullOrEmpty(ObjectValue4?.Trim()))
                 pathParts.Add(ObjectValue4);
                 
             return string.Join(":", pathParts);
