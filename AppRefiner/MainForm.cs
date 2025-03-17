@@ -327,14 +327,23 @@ namespace AppRefiner
             string timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
             string reportFileName = $"{projectName}_LintReport_{timestamp}.html";
             string reportPath = Path.Combine(lintReportPath, reportFileName);
-            
+
             // TODO: This will be implemented later to scan all files in the project
             // and generate a consolidated report
-            
+
+            var ppcProgs = editor.DataManager.GetPeopleCodeItemsForProject(projectName);
+
+            foreach (var ppcProg in ppcProgs)
+            {
+                var programText = ppcProg.GetProgramTextAsString();
+                // TODO...
+            }
+
+
             MessageBox.Show($"Project linting will generate a report at: {reportPath}\n\nThis functionality will be fully implemented in a future update.", 
-                "Project Linting", 
-                MessageBoxButtons.OK, 
-                MessageBoxIcon.Information);
+            "Project Linting", 
+            MessageBoxButtons.OK, 
+            MessageBoxIcon.Information);
         }
 
         private void LoadSettings()
