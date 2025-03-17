@@ -236,52 +236,6 @@ namespace AppRefiner.Database
             return definitions;
         }
         
-        /// <summary>
-        /// Helper method to convert project item object IDs to program object IDs
-        /// </summary>
-        /// <param name="objectType">The object type code</param>
-        /// <param name="objectId1">First object ID</param>
-        /// <param name="objectValue1">First object value</param>
-        /// <param name="objectId2">Second object ID</param>
-        /// <param name="objectValue2">Second object value</param>
-        /// <param name="objectId3">Third object ID</param>
-        /// <param name="objectValue3">Third object value</param>
-        /// <param name="objectId4">Fourth object ID</param>
-        /// <param name="objectValue4">Fourth object value</param>
-        /// <returns>Dictionary mapping column names to values for PSPCMPROG query</returns>
-        private Dictionary<string, object> ConvertProjectItemToProgram(
-            int objectType,
-            object objectId1, object objectValue1,
-            object objectId2, object objectValue2,
-            object objectId3, object objectValue3,
-            object objectId4, object objectValue4)
-        {
-            // Placeholder for conversion logic - to be manually implemented
-            // This converts from 4 pairs in PSPROJECTITEM to 7 pairs in PSPCMPROG
-            
-            Dictionary<string, object> parameters = new Dictionary<string, object>();
-            
-            // Copy the existing values
-            parameters["OBJECTID1"] = objectId1;
-            parameters["OBJECTVALUE1"] = objectValue1;
-            parameters["OBJECTID2"] = objectId2;
-            parameters["OBJECTVALUE2"] = objectValue2;
-            parameters["OBJECTID3"] = objectId3;
-            parameters["OBJECTVALUE3"] = objectValue3;
-            parameters["OBJECTID4"] = objectId4;
-            parameters["OBJECTVALUE4"] = objectValue4;
-            
-            // Default values for remaining parameters
-            // These will be overridden in the actual implementation
-            parameters["OBJECTID5"] = DBNull.Value;
-            parameters["OBJECTVALUE5"] = DBNull.Value;
-            parameters["OBJECTID6"] = DBNull.Value;
-            parameters["OBJECTVALUE6"] = DBNull.Value;
-            parameters["OBJECTID7"] = DBNull.Value;
-            parameters["OBJECTVALUE7"] = DBNull.Value;
-            
-            return parameters;
-        }
 
         /// <summary>
         /// Gets all PeopleCode definitions for a specified project
@@ -318,30 +272,25 @@ namespace AppRefiner.Database
             
             foreach (DataRow row in projectItems.Rows)
             {
-                // Build the path using non-empty OBJECTVALUE fields
-                List<string> pathParts = new List<string>();
                 int objectType = Convert.ToInt32(row["OBJECTTYPE"]);
-                for (int i = 1; i <= 4; i++)
-                {
-                    string value = row[$"OBJECTVALUE{i}"]?.ToString();
-                    if (string.IsNullOrEmpty(value))
-                        break;
-                    
-                    pathParts.Add(value);
-                }
                 
-                if (pathParts.Count > 0)
+                // Create ProjectItem instance
+                ProjectItem projectItem = new ProjectItem(
+                    objectType,
+                    Convert.ToInt32(row["OBJECTID1"]), row["OBJECTVALUE1"]?.ToString() ?? string.Empty,
+                    Convert.ToInt32(row["OBJECTID2"]), row["OBJECTVALUE2"]?.ToString() ?? string.Empty,
+                    Convert.ToInt32(row["OBJECTID3"]), row["OBJECTVALUE3"]?.ToString() ?? string.Empty,
+                    Convert.ToInt32(row["OBJECTID4"]), row["OBJECTVALUE4"]?.ToString() ?? string.Empty
+                );
+                
+                string path = projectItem.BuildPath();
+                
+                if (!string.IsNullOrEmpty(path))
                 {
-                    string path = string.Join(":", pathParts);
                     string content = string.Empty;
                     
                     // Convert project item object IDs to program object IDs
-                    Dictionary<string, object> programObjectIds = ConvertProjectItemToProgram(
-                        objectType,
-                        row["OBJECTID1"], row["OBJECTVALUE1"],
-                        row["OBJECTID2"], row["OBJECTVALUE2"],
-                        row["OBJECTID3"], row["OBJECTVALUE3"],
-                        row["OBJECTID4"], row["OBJECTVALUE4"]);
+                    Dictionary<string, object> programObjectIds = projectItem.ToProgramFields();
                     
                     // Build query to retrieve the actual PeopleCode from PSPCMPROG
                     StringBuilder queryBuilder = new StringBuilder();
