@@ -65,7 +65,6 @@ namespace AppRefiner
         private Dictionary<string, Control> templateInputControls = new Dictionary<string, Control>();
         private Dictionary<string, Control> templateInputLabels = new Dictionary<string, Control>();
         private Dictionary<string, DisplayCondition> templateInputsDisplayConditions = new Dictionary<string, DisplayCondition>();
-
         // Static list of available commands
         public static List<Command> AvailableCommands = new List<Command>();
         

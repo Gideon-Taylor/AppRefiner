@@ -47,6 +47,7 @@ namespace AppRefiner
         private const int SC_MARKNUM_FOLDERSUB = 29;
         private const int SC_MARKNUM_FOLDER = 30;
         private const int SC_MARKNUM_FOLDEROPEN = 31;
+        private const int SC_MARK_FULLRECT = 26;
         private const int SCI_GETLINEENDPOSITION = 2136;
         private const int SC_MARK_BOXPLUS = 12;
         private const int SC_MARK_BOXMINUS = 14;
@@ -72,7 +73,8 @@ namespace AppRefiner
         private const int SCI_MARKERSETBACKSELECTEDTRANSLUCENT = 2296;
         private const int SCI_GETMODIFY = 2159;
         private const int SCI_SETSAVEPOINT = 2014;
-
+        private const int SCI_SETFOLDMARGINCOLOUR = 2290;
+        private const int SCI_SETFOLDMARGINHICOLOUR = 2291;
 
         private const int SCI_INDICSETSTYLE = 2080;
         private const int SCI_INDICGETSTYLE = 2081;
@@ -197,6 +199,7 @@ namespace AppRefiner
         private static Dictionary<uint, (IntPtr address, uint size)> processBuffers = new();
         private static Dictionary<uint, IntPtr> processHandles = new();
         private static Dictionary<uint, bool> hasLexilla = new();
+        private static HashSet<uint> ProcessesWithDarkMode = new();
 
         private const int ANNOTATION_STYLE_OFFSET = 0x100; // Lower, more standard offset value
         private const int BASE_ANNOT_STYLE = ANNOTATION_STYLE_OFFSET;
@@ -430,9 +433,23 @@ namespace AppRefiner
             editor.SendMessage(SCI_MARKERDEFINE, (IntPtr)SC_MARKNUM_FOLDERTAIL, (IntPtr)SC_MARK_LCORNER);
 
             // Collapse Label Color
-            editor.SendMessage(SCI_MARKERSETBACK, SC_MARKNUM_FOLDERSUB, 0xa0a0a0);
-            editor.SendMessage(SCI_MARKERSETBACK, SC_MARKNUM_FOLDERMIDTAIL, 0xa0a0a0);
-            editor.SendMessage(SCI_MARKERSETBACK, SC_MARKNUM_FOLDERTAIL, 0xa0a0a0);
+            editor.SendMessage(SCI_MARKERSETBACK, (IntPtr)SC_MARKNUM_FOLDER, (IntPtr)0x0);
+            editor.SendMessage(SCI_MARKERSETBACK, (IntPtr)SC_MARKNUM_FOLDEROPEN, (IntPtr)0x0);
+            editor.SendMessage(SCI_MARKERSETBACK, (IntPtr)SC_MARKNUM_FOLDEREND, (IntPtr)0x0);
+            editor.SendMessage(SCI_MARKERSETBACK, (IntPtr)SC_MARKNUM_FOLDEROPENMID, (IntPtr)0x0);
+            editor.SendMessage(SCI_MARKERSETBACK, (IntPtr)SC_MARKNUM_FOLDERMIDTAIL, (IntPtr)0x0);
+            editor.SendMessage(SCI_MARKERSETBACK, (IntPtr)SC_MARKNUM_FOLDERSUB, (IntPtr)0x0);
+            editor.SendMessage(SCI_MARKERSETBACK, (IntPtr)SC_MARKNUM_FOLDERTAIL, (IntPtr)0x0);
+
+            editor.SendMessage(SCI_MARKERSETFORE, (IntPtr)SC_MARKNUM_FOLDER, (IntPtr)0xFFFFFF);
+            editor.SendMessage(SCI_MARKERSETFORE, (IntPtr)SC_MARKNUM_FOLDEROPEN, (IntPtr)0xFFFFFF);
+            editor.SendMessage(SCI_MARKERSETFORE, (IntPtr)SC_MARKNUM_FOLDEREND, (IntPtr)0xFFFFFF);
+            editor.SendMessage(SCI_MARKERSETFORE, (IntPtr)SC_MARKNUM_FOLDEROPENMID, (IntPtr)0xFFFFFF);
+            editor.SendMessage(SCI_MARKERSETFORE, (IntPtr)SC_MARKNUM_FOLDERMIDTAIL, (IntPtr)0xFFFFFF);
+            editor.SendMessage(SCI_MARKERSETFORE, (IntPtr)SC_MARKNUM_FOLDERSUB, (IntPtr)0xFFFFFF);
+            editor.SendMessage(SCI_MARKERSETFORE, (IntPtr)SC_MARKNUM_FOLDERTAIL, (IntPtr)0xFFFFFF);
+
+
 
             editor.SendMessage(SCI_SETFOLDFLAGS, (IntPtr)(16 | 4), (IntPtr)0); //Display a horizontal line above and below the line after folding 
 
@@ -704,11 +721,45 @@ namespace AppRefiner
             // Set selection colors: navy blue background with white text
             editor.SendMessage(SCI_SETELEMENTCOLOUR, (IntPtr)SC_ELEMENT_SELECTION_BACK, (IntPtr)0xC19429FF); // Navy blue in BGR (800000 = RGB 0,0,128)
             editor.SendMessage(SCI_SETELEMENTCOLOUR, (IntPtr)SC_ELEMENT_SELECTION_TEXT, (IntPtr)0xFF00FFFF); // White text (hex FFFFFF)
+
+            /* fold margin colors */
+            // Collapse Label Style
+            editor.SendMessage(SCI_MARKERSETBACK, (IntPtr)SC_MARKNUM_FOLDER, (IntPtr)0x1A1A1A);
+            editor.SendMessage(SCI_MARKERSETBACK, (IntPtr)SC_MARKNUM_FOLDEROPEN, (IntPtr)0x1A1A1A);
+            editor.SendMessage(SCI_MARKERSETBACK, (IntPtr)SC_MARKNUM_FOLDEREND, (IntPtr)0x1A1A1A);
+            editor.SendMessage(SCI_MARKERSETBACK, (IntPtr)SC_MARKNUM_FOLDEROPENMID, (IntPtr)0x1A1A1A);
+            editor.SendMessage(SCI_MARKERSETBACK, (IntPtr)SC_MARKNUM_FOLDERMIDTAIL, (IntPtr)0x1A1A1A);
+            editor.SendMessage(SCI_MARKERSETBACK, (IntPtr)SC_MARKNUM_FOLDERSUB, (IntPtr)0x1A1A1A);
+            editor.SendMessage(SCI_MARKERSETBACK, (IntPtr)SC_MARKNUM_FOLDERTAIL, (IntPtr)0x1A1A1A);
+
+            // Collapse Label Color
+            editor.SendMessage(SCI_MARKERSETBACK, SC_MARKNUM_FOLDERSUB, 0x0);
+            editor.SendMessage(SCI_MARKERSETBACK, SC_MARKNUM_FOLDERMIDTAIL, 0x0);
+            editor.SendMessage(SCI_MARKERSETBACK, SC_MARKNUM_FOLDERTAIL, 0x0);
+
+            editor.SendMessage(SCI_MARKERSETBACK, SC_MARK_FULLRECT, 0x1A1A1A);
+            editor.SendMessage(SCI_MARKERSETBACK, SC_MARK_BACKGROUND , 0x1A1A1A);
+
+            editor.SendMessage(SCI_MARKERSETFORE, (IntPtr)SC_MARKNUM_FOLDER, (IntPtr)0xFFFFFF);
+            editor.SendMessage(SCI_MARKERSETFORE, (IntPtr)SC_MARKNUM_FOLDEROPEN, (IntPtr)0xFFFFFF);
+            editor.SendMessage(SCI_MARKERSETFORE, (IntPtr)SC_MARKNUM_FOLDEREND, (IntPtr)0xFFFFFF);
+            editor.SendMessage(SCI_MARKERSETFORE, (IntPtr)SC_MARKNUM_FOLDEROPENMID, (IntPtr)0xFFFFFF);
+            editor.SendMessage(SCI_MARKERSETFORE, (IntPtr)SC_MARKNUM_FOLDERMIDTAIL, (IntPtr)0xFFFFFF);
+            editor.SendMessage(SCI_MARKERSETFORE, (IntPtr)SC_MARKNUM_FOLDERSUB, (IntPtr)0xFFFFFF);
+            editor.SendMessage(SCI_MARKERSETFORE, (IntPtr)SC_MARKNUM_FOLDERTAIL, (IntPtr)0xFFFFFF);
+
             // Set dark mode flag
             editor.IsDarkMode = true;
             
             // Also update annotation styles for dark mode
             InitAnnotationStyles(editor);
+
+
+            if (!ProcessesWithDarkMode.Contains(editor.ProcessId))
+            {
+                DarkModeHelper.ApplyDarkModeToControls((int)editor.ProcessId);
+                ProcessesWithDarkMode.Add(editor.ProcessId);
+            }
 
         }
 
