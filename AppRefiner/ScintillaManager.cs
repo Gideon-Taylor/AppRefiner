@@ -1123,8 +1123,8 @@ namespace AppRefiner
         /// <returns>The project name or a default name if it cannot be determined</returns>
         public static string GetProjectName(ScintillaEditor editor)
         {
-            // Get the caption from the editor window's grandparent
-            string caption = WindowHelper.GetGrandparentWindowCaption(editor.hWnd);
+            // Get the caption from the main window of the editor's process
+            string caption = WindowHelper.GetMainWindowCaption(editor.ProcessId);
             
             if (!string.IsNullOrEmpty(caption))
             {

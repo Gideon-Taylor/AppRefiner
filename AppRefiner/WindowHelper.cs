@@ -40,6 +40,58 @@ namespace AppRefiner
         }
 
         /// <summary>
+        /// Given a process ID, retrieves the caption of its main window.
+        /// </summary>
+        /// <param name="processId">The process ID to get the main window caption for.</param>
+        /// <returns>The caption text of the main window, or an empty string if not found.</returns>
+        public static string GetMainWindowCaption(uint processId)
+        {
+            // Delegate for EnumWindows callback function
+            delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
+            
+            // Import the EnumWindows function from user32.dll
+            [DllImport("user32.dll")]
+            static extern bool EnumWindows(EnumWindowsProc enumProc, IntPtr lParam);
+            
+            // Import the GetWindowThreadProcessId function from user32.dll
+            [DllImport("user32.dll", SetLastError = true)]
+            static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);
+            
+            IntPtr foundWindow = IntPtr.Zero;
+            
+            // Enumerate all top-level windows
+            EnumWindows((hWnd, lParam) => {
+                // Check if this window belongs to our process
+                GetWindowThreadProcessId(hWnd, out uint winProcessId);
+                if (winProcessId == processId)
+                {
+                    // Check if window is visible and has a title
+                    StringBuilder caption = new StringBuilder(256);
+                    int length = GetWindowText(hWnd, caption, caption.Capacity);
+                    if (length > 0)
+                    {
+                        foundWindow = hWnd;
+                        return false; // Stop enumeration
+                    }
+                }
+                return true; // Continue enumeration
+            }, IntPtr.Zero);
+            
+            // If we found a window, get its caption
+            if (foundWindow != IntPtr.Zero)
+            {
+                StringBuilder caption = new StringBuilder(256);
+                int length = GetWindowText(foundWindow, caption, caption.Capacity);
+                if (length > 0)
+                {
+                    return caption.ToString();
+                }
+            }
+            
+            return string.Empty;
+        }
+
+        /// <summary>
         /// Given a window handle (hWnd), retrieves the caption of its grandparent window.
         /// If the parent or grandparent does not exist, an empty string is returned.
         /// </summary>
