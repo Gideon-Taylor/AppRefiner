@@ -1668,6 +1668,14 @@ namespace AppRefiner
             html.AppendLine("    .stat-box.warnings { border-left: 4px solid #f39c12; }");
             html.AppendLine("    .stat-box.info { border-left: 4px solid #3498db; }");
             html.AppendLine("    .stat-count { font-size: 1.5em; font-weight: bold; }");
+            html.AppendLine("    .filter-controls { margin: 20px 0; background-color: #f8f9fa; padding: 10px 15px; border-radius: 5px; }");
+            html.AppendLine("    .filter-btn { background-color: #fff; border: 1px solid #ddd; padding: 5px 10px; margin-right: 5px; border-radius: 3px; cursor: pointer; }");
+            html.AppendLine("    .filter-btn:hover { background-color: #f0f0f0; }");
+            html.AppendLine("    .filter-btn.active { background-color: #3498db; color: white; border-color: #2980b9; }");
+            html.AppendLine("    .issue-row { transition: display 0.2s ease; }");
+            html.AppendLine("    .hide-error .issue-error { display: none; }");
+            html.AppendLine("    .hide-warning .issue-warning { display: none; }");
+            html.AppendLine("    .hide-info .issue-info { display: none; }");
             html.AppendLine("  </style>");
             html.AppendLine("  <script>");
             html.AppendLine("    function toggleContent(id) {");
@@ -1683,6 +1691,59 @@ namespace AppRefiner
             html.AppendLine("        button.textContent = 'Expand';");
             html.AppendLine("      }");
             html.AppendLine("    }");
+            html.AppendLine("");
+            html.AppendLine("    // Filter issues by type");
+            html.AppendLine("    document.addEventListener('DOMContentLoaded', function() {");
+            html.AppendLine("      const filterButtons = document.querySelectorAll('.filter-btn');");
+            html.AppendLine("      const reportBody = document.body;");
+            html.AppendLine("");
+            html.AppendLine("      // Handle filter button clicks");
+            html.AppendLine("      filterButtons.forEach(button => {");
+            html.AppendLine("        button.addEventListener('click', function() {");
+            html.AppendLine("          // Update active button");
+            html.AppendLine("          filterButtons.forEach(btn => btn.classList.remove('active'));");
+            html.AppendLine("          this.classList.add('active');");
+            html.AppendLine("");
+            html.AppendLine("          // Get filter type");
+            html.AppendLine("          const filterType = this.getAttribute('data-type');");
+            html.AppendLine("");
+            html.AppendLine("          // Reset all filters first");
+            html.AppendLine("          reportBody.classList.remove('hide-error', 'hide-warning', 'hide-info');");
+            html.AppendLine("");
+            html.AppendLine("          // Apply appropriate filters");
+            html.AppendLine("          switch (filterType) {");
+            html.AppendLine("            case 'error':"); 
+            html.AppendLine("              reportBody.classList.add('hide-warning', 'hide-info');");
+            html.AppendLine("              break;");
+            html.AppendLine("            case 'warning':");
+            html.AppendLine("              reportBody.classList.add('hide-error', 'hide-info');");
+            html.AppendLine("              break;");
+            html.AppendLine("            case 'info':");
+            html.AppendLine("              reportBody.classList.add('hide-error', 'hide-warning');");
+            html.AppendLine("              break;");
+            html.AppendLine("            case 'error-warning':");
+            html.AppendLine("              reportBody.classList.add('hide-info');");
+            html.AppendLine("              break;");
+            html.AppendLine("            // 'all' or default - show everything");
+            html.AppendLine("          }");
+            html.AppendLine("          ");
+            html.AppendLine("          // Update the issue count for each program");
+            html.AppendLine("          updateProgramCounts();");
+            html.AppendLine("        });");
+            html.AppendLine("      });");
+            html.AppendLine("");
+            html.AppendLine("      function updateProgramCounts() {");
+            html.AppendLine("        // For each program, count visible issues and update the header");
+            html.AppendLine("        document.querySelectorAll('.program-item').forEach(program => {");
+            html.AppendLine("          const programId = program.querySelector('.program-content').id;");
+            html.AppendLine("          const visibleIssues = program.querySelectorAll('tr.issue-row:not([style*=\"display: none\"])').length;");
+            html.AppendLine("          const countDisplay = program.querySelector('.issue-count');");
+            html.AppendLine("          if (countDisplay) {");
+            html.AppendLine("            countDisplay.textContent = `(${visibleIssues} issues)`;");
+            html.AppendLine("          }");
+            html.AppendLine("        });");
+            html.AppendLine("      }");
+            html.AppendLine("    });");
             html.AppendLine("  </script>");
             html.AppendLine("</head>");
             html.AppendLine("<body>");
@@ -1701,6 +1762,16 @@ namespace AppRefiner
             html.AppendLine($"    <div class=\"stat-box errors\"><div class=\"stat-count\">{totalErrors}</div><div>Errors</div></div>");
             html.AppendLine($"    <div class=\"stat-box warnings\"><div class=\"stat-count\">{totalWarnings}</div><div>Warnings</div></div>");
             html.AppendLine($"    <div class=\"stat-box info\"><div class=\"stat-count\">{totalInfo}</div><div>Info</div></div>");
+            html.AppendLine("  </div>");
+            
+            // Add filter controls
+            html.AppendLine("  <div class=\"filter-controls\">");
+            html.AppendLine("    <span>Filter issues: </span>");
+            html.AppendLine("    <button class=\"filter-btn active\" data-type=\"all\">All</button>");
+            html.AppendLine("    <button class=\"filter-btn\" data-type=\"error\">Errors Only</button>");
+            html.AppendLine("    <button class=\"filter-btn\" data-type=\"warning\">Warnings Only</button>");
+            html.AppendLine("    <button class=\"filter-btn\" data-type=\"info\">Info Only</button>");
+            html.AppendLine("    <button class=\"filter-btn\" data-type=\"error-warning\">Errors & Warnings</button>");
             html.AppendLine("  </div>");
             
             // Summary section
@@ -1728,7 +1799,7 @@ namespace AppRefiner
                 // Program header with issue counts and expand/collapse button
                 html.AppendLine("  <div class=\"program-item\">");
                 html.AppendLine("    <div class=\"program-header\">");
-                html.AppendLine($"      <div><strong>{programPath}</strong> ({programReports.Count} issues)</div>");
+                html.AppendLine($"      <div><strong>{programPath}</strong> <span class=\"issue-count\">({programReports.Count} issues)</span></div>");
                 html.AppendLine($"      <div>");
                 if (programErrors > 0) html.AppendLine($"        <span class=\"error\">{programErrors} errors</span> ");
                 if (programWarnings > 0) html.AppendLine($"        <span class=\"warning\">{programWarnings} warnings</span> ");
@@ -1757,7 +1828,10 @@ namespace AppRefiner
                     string typeClass = report.Type == ReportType.Error ? "error" : 
                                       (report.Type == ReportType.Warning ? "warning" : "info");
                     
-                    html.AppendLine("          <tr>");
+                    string issueClass = report.Type == ReportType.Error ? "issue-error" : 
+                                       (report.Type == ReportType.Warning ? "issue-warning" : "issue-info");
+                    
+                    html.AppendLine($"          <tr class=\"issue-row {issueClass}\">");
                     html.AppendLine($"            <td class=\"{typeClass}\">{report.Type}</td>");
                     html.AppendLine($"            <td>{report.Line}</td>");
                     html.AppendLine($"            <td>{System.Web.HttpUtility.HtmlEncode(report.Message)}</td>");
