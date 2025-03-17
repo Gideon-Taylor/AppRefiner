@@ -84,11 +84,17 @@ namespace AppRefiner.Database.Models
 
             if (objectType == 104)
             {
-                // For objectType 104, we have 4 keys
+                // For objectType 104, only add values with non-zero ObjectIDs
                 for (var i = 1; i < 4; i++)
                 {
-                    result.Add(new Tuple<int, string>(ObjectIDs[i], ObjectValues[i]));
+                    if (ObjectIDs[i] != 0)
+                    {
+                        result.Add(new Tuple<int, string>(ObjectIDs[i], ObjectValues[i]));
+                    }
                 }
+
+                // Add the special "OnExecute" value with ID 12
+                result.Add(new Tuple<int, string>(12, "OnExecute"));
 
                 // Fill the rest with empty entries to have 7 total
                 while (result.Count < 7)
