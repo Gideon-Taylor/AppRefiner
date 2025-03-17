@@ -277,10 +277,10 @@ namespace AppRefiner.Database
                 // Create ProjectItem instance
                 ProjectItem projectItem = new ProjectItem(
                     objectType,
-                    Convert.ToInt32(row["OBJECTID1"]), row["OBJECTVALUE1"]?.ToString() ?? string.Empty,
-                    Convert.ToInt32(row["OBJECTID2"]), row["OBJECTVALUE2"]?.ToString() ?? string.Empty,
-                    Convert.ToInt32(row["OBJECTID3"]), row["OBJECTVALUE3"]?.ToString() ?? string.Empty,
-                    Convert.ToInt32(row["OBJECTID4"]), row["OBJECTVALUE4"]?.ToString() ?? string.Empty
+                    Convert.ToInt32(row["OBJECTID1"]), row["OBJECTVALUE1"]?.ToString() ?? " ",
+                    Convert.ToInt32(row["OBJECTID2"]), row["OBJECTVALUE2"]?.ToString() ?? " ",
+                    Convert.ToInt32(row["OBJECTID3"]), row["OBJECTVALUE3"]?.ToString() ?? " ",
+                    Convert.ToInt32(row["OBJECTID4"]), row["OBJECTVALUE4"]?.ToString() ?? " "
                 );
                 
                 string path = projectItem.BuildPath();
@@ -290,7 +290,7 @@ namespace AppRefiner.Database
                     string content = string.Empty;
                     
                     // Convert project item object IDs to program object IDs
-                    Dictionary<string, object> programObjectIds = projectItem.ToProgramFields();
+                    List<Tuple<int,string>> programFields = projectItem.ToProgramFields();
                     
                     // Build query to retrieve the actual PeopleCode from PSPCMPROG
                     StringBuilder queryBuilder = new StringBuilder();
