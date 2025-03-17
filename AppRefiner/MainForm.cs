@@ -324,8 +324,26 @@ namespace AppRefiner
             
             // Get project name
             string projectName = ScintillaManager.GetProjectName(editor);
-            
-
+    
+            // Check if project name is "Untitled", which means no project is open
+            if (projectName == "Untitled")
+            {
+                MessageBox.Show("Please open a project before running the lint tool.", 
+                    "No Project Open", 
+                    MessageBoxButtons.OK, 
+                    MessageBoxIcon.Warning);
+                return;
+            }
+    
+            // Check if string.Empty is returned, which indicates a failure to get the project name
+            if (string.IsNullOrEmpty(projectName))
+            {
+                MessageBox.Show("Unable to determine the project name. Linting cannot be completed.", 
+                    "Project Name Error", 
+                    MessageBoxButtons.OK, 
+                    MessageBoxIcon.Error);
+                return;
+            }
 
             // Create a timestamp for the report filename
             string timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
