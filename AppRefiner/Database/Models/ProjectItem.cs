@@ -14,44 +14,14 @@ namespace AppRefiner.Database.Models
         public int ObjectType { get; }
         
         /// <summary>
-        /// Gets the first object ID
+        /// Gets the object type code
         /// </summary>
-        public int ObjectId1 { get; }
+        public int[] ObjectIds { get; }
         
         /// <summary>
-        /// Gets the first object value
+        /// Gets the object values
         /// </summary>
-        public string ObjectValue1 { get; }
-        
-        /// <summary>
-        /// Gets the second object ID
-        /// </summary>
-        public int ObjectId2 { get; }
-        
-        /// <summary>
-        /// Gets the second object value
-        /// </summary>
-        public string ObjectValue2 { get; }
-        
-        /// <summary>
-        /// Gets the third object ID
-        /// </summary>
-        public int ObjectId3 { get; }
-        
-        /// <summary>
-        /// Gets the third object value
-        /// </summary>
-        public string ObjectValue3 { get; }
-        
-        /// <summary>
-        /// Gets the fourth object ID
-        /// </summary>
-        public int ObjectId4 { get; }
-        
-        /// <summary>
-        /// Gets the fourth object value
-        /// </summary>
-        public string ObjectValue4 { get; }
+        public string[] ObjectValues { get; }
         
         /// <summary>
         /// Creates a new project item with the specified object type and ID/value pairs
@@ -73,14 +43,14 @@ namespace AppRefiner.Database.Models
             int objectId4, string objectValue4)
         {
             ObjectType = objectType;
-            ObjectId1 = objectId1;
-            ObjectValue1 = objectValue1 ?? string.Empty;
-            ObjectId2 = objectId2;
-            ObjectValue2 = objectValue2 ?? string.Empty;
-            ObjectId3 = objectId3;
-            ObjectValue3 = objectValue3 ?? string.Empty;
-            ObjectId4 = objectId4;
-            ObjectValue4 = objectValue4 ?? string.Empty;
+            ObjectIds = new int[4] { objectId1, objectId2, objectId3, objectId4 };
+            ObjectValues = new string[4] 
+            { 
+                objectValue1 ?? string.Empty,
+                objectValue2 ?? string.Empty,
+                objectValue3 ?? string.Empty,
+                objectValue4 ?? string.Empty
+            };
         }
         
         /// <summary>
@@ -91,18 +61,12 @@ namespace AppRefiner.Database.Models
         {
             List<string> pathParts = new List<string>();
             
-            if (!string.IsNullOrEmpty(ObjectValue1?.Trim()))
-                pathParts.Add(ObjectValue1);
-                
-            if (!string.IsNullOrEmpty(ObjectValue2?.Trim()))
-                pathParts.Add(ObjectValue2);
-                
-            if (!string.IsNullOrEmpty(ObjectValue3?.Trim()))
-                pathParts.Add(ObjectValue3);
-                
-            if (!string.IsNullOrEmpty(ObjectValue4?.Trim()))
-                pathParts.Add(ObjectValue4);
-                
+            for (int i = 0; i < ObjectValues.Length; i++)
+            {
+                if (!string.IsNullOrEmpty(ObjectValues[i]?.Trim()))
+                    pathParts.Add(ObjectValues[i]);
+            }
+            
             return string.Join(":", pathParts);
         }
         
@@ -115,14 +79,11 @@ namespace AppRefiner.Database.Models
             Dictionary<string, object> parameters = new Dictionary<string, object>();
             
             // Copy the existing values
-            parameters["OBJECTID1"] = ObjectId1;
-            parameters["OBJECTVALUE1"] = ObjectValue1;
-            parameters["OBJECTID2"] = ObjectId2;
-            parameters["OBJECTVALUE2"] = ObjectValue2;
-            parameters["OBJECTID3"] = ObjectId3;
-            parameters["OBJECTVALUE3"] = ObjectValue3;
-            parameters["OBJECTID4"] = ObjectId4;
-            parameters["OBJECTVALUE4"] = ObjectValue4;
+            for (int i = 0; i < ObjectIds.Length; i++)
+            {
+                parameters[$"OBJECTID{i+1}"] = ObjectIds[i];
+                parameters[$"OBJECTVALUE{i+1}"] = ObjectValues[i];
+            }
             
             // Default values for remaining parameters
             // These will need to be overridden based on the object type in a real implementation
