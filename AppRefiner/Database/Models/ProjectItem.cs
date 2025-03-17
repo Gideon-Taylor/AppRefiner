@@ -16,7 +16,7 @@ namespace AppRefiner.Database.Models
         /// <summary>
         /// Gets the object type code
         /// </summary>
-        public int[] ObjectIds { get; }
+        public int[] ObjectIDs { get; }
         
         /// <summary>
         /// Gets the object values
@@ -43,7 +43,7 @@ namespace AppRefiner.Database.Models
             int objectId4, string objectValue4)
         {
             ObjectType = objectType;
-            ObjectIds = new int[4] { objectId1, objectId2, objectId3, objectId4 };
+            ObjectIDs = new int[4] { objectId1, objectId2, objectId3, objectId4 };
             ObjectValues = new string[4] 
             { 
                 objectValue1 ?? string.Empty,
@@ -74,30 +74,88 @@ namespace AppRefiner.Database.Models
         /// Converts project item object IDs/values to program object IDs/values (7 pairs)
         /// </summary>
         /// <returns>Dictionary mapping column names to values for PSPCMPROG query</returns>
-        public Dictionary<string, object> ToProgramFields()
+        public List<Tuple<int,string>> ToProgramFields()
         {
-            Dictionary<string, object> parameters = new Dictionary<string, object>();
-            
-            // Copy the existing values
-            for (int i = 0; i < ObjectIds.Length; i++)
+            var result = new List<Tuple<int, string>>(7); // Initialize with capacity for 7 items
+            var objectType = ObjectType;
+
+            // First key is always the ObjectType
+            result.Add(new Tuple<int, string>(ObjectIDs[0], ObjectValues[0]));
+
+            if (objectType == 104)
             {
-                parameters[$"OBJECTID{i+1}"] = ObjectIds[i];
-                parameters[$"OBJECTVALUE{i+1}"] = ObjectValues[i];
+                // For objectType 104, we have 4 keys
+                for (var i = 1; i < 4; i++)
+                {
+                    result.Add(new Tuple<int, string>(ObjectIDs[i], ObjectValues[i]));
+                }
+
+                // Fill the rest with empty entries to have 7 total
+                while (result.Count < 7)
+                {
+                    result.Add(new Tuple<int, string>(0, string.Empty));
+                }
             }
-            
-            // Default values for remaining parameters
-            // These will need to be overridden based on the object type in a real implementation
-            parameters["OBJECTID5"] = DBNull.Value;
-            parameters["OBJECTVALUE5"] = DBNull.Value;
-            parameters["OBJECTID6"] = DBNull.Value;
-            parameters["OBJECTVALUE6"] = DBNull.Value;
-            parameters["OBJECTID7"] = DBNull.Value;
-            parameters["OBJECTVALUE7"] = DBNull.Value;
-            
-            // TODO: Implement type-specific mapping logic here
-            // Different object types may have different mapping rules
-            
-            return parameters;
+            else if (objectType == 66)
+            {
+                // For objectType 66, we need to split the composite in projectItem.ObjectValues[1]
+                var composite = ObjectValues[1];
+
+                // Extract the components from the composite string
+                string component1 = composite.Substring(0, Math.Min(8, composite.Length)).Trim();
+                string component2 = composite.Length > 8 ? composite.Substring(8, Math.Min(3, composite.Length - 8)).Trim() : string.Empty;
+                string component3 = composite.Length > 11 ? composite.Substring(11, Math.Min(9, composite.Length - 11)).Trim() : string.Empty;
+                string component4 = composite.Length > 20 ? composite.Substring(20).Trim() : string.Empty;
+
+                // Add the components
+                result.Add(new Tuple<int, string>(0, component1));
+                result.Add(new Tuple<int, string>(0, component2));
+                result.Add(new Tuple<int, string>(0, component3));
+                result.Add(new Tuple<int, string>(0, component4));
+
+                // Add the last two keys
+                result.Add(new Tuple<int, string>(ObjectIDs[2], ObjectValues[2]));
+                result.Add(new Tuple<int, string>(ObjectIDs[3], ObjectValues[3]));
+            }
+            else if (objectType == 10 && ObjectValues[3].Length > 18)
+            {
+                // For objectType 10 with long ObjectValues[3]
+                // Add the next 2 keys as they are
+                for (var i = 1; i < 3; i++)
+                {
+                    result.Add(new Tuple<int, string>(ObjectIDs[i], ObjectValues[i]));
+                }
+
+                // Split the fourth value
+                var key4 = ObjectValues[3].Substring(0, 18).Trim();
+                var key5 = ObjectValues[3].Substring(18).Trim();
+
+                result.Add(new Tuple<int, string>(ObjectIDs[3], key4));
+                result.Add(new Tuple<int, string>(0, key5));
+
+                // Fill the rest with empty entries
+                while (result.Count < 7)
+                {
+                    result.Add(new Tuple<int, string>(0, string.Empty));
+                }
+            }
+            else
+            {
+                // Default case
+                // Add the remaining 3 keys
+                for (var i = 1; i < 4; i++)
+                {
+                    result.Add(new Tuple<int, string>(ObjectIDs[i], ObjectValues[i]));
+                }
+
+                // Fill the rest with empty entries
+                while (result.Count < 7)
+                {
+                    result.Add(new Tuple<int, string>(0, " "));
+                }
+            }
+
+            return result;
         }
     }
 }
