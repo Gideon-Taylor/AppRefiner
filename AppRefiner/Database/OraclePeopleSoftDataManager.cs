@@ -307,7 +307,7 @@ namespace AppRefiner.Database
                        OBJECTID4, OBJECTVALUE4
                 FROM PSPROJECTITEM
                 WHERE PROJECTNAME = :projectName
-                AND OBJECTTYPE IN (8,9,39,40,42,43,44,46,47,48,58)"; // PeopleCode object types
+                AND OBJECTTYPE IN ( 8, 9, 39, 40, 42, 43, 44, 45, 46, 47, 48, 58, 66 )"; // PeopleCode object types
                 
             Dictionary<string, object> parameters = new Dictionary<string, object>
             {
