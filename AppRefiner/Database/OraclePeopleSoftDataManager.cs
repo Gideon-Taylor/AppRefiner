@@ -237,10 +237,57 @@ namespace AppRefiner.Database
         }
         
         /// <summary>
+        /// Helper method to convert project item object IDs to program object IDs
+        /// </summary>
+        /// <param name="objectType">The object type code</param>
+        /// <param name="objectId1">First object ID</param>
+        /// <param name="objectValue1">First object value</param>
+        /// <param name="objectId2">Second object ID</param>
+        /// <param name="objectValue2">Second object value</param>
+        /// <param name="objectId3">Third object ID</param>
+        /// <param name="objectValue3">Third object value</param>
+        /// <param name="objectId4">Fourth object ID</param>
+        /// <param name="objectValue4">Fourth object value</param>
+        /// <returns>Dictionary mapping column names to values for PSPCMPROG query</returns>
+        private Dictionary<string, object> ConvertProjectItemToProgram(
+            int objectType,
+            object objectId1, object objectValue1,
+            object objectId2, object objectValue2,
+            object objectId3, object objectValue3,
+            object objectId4, object objectValue4)
+        {
+            // Placeholder for conversion logic - to be manually implemented
+            // This converts from 4 pairs in PSPROJECTITEM to 7 pairs in PSPCMPROG
+            
+            Dictionary<string, object> parameters = new Dictionary<string, object>();
+            
+            // Copy the existing values
+            parameters["OBJECTID1"] = objectId1;
+            parameters["OBJECTVALUE1"] = objectValue1;
+            parameters["OBJECTID2"] = objectId2;
+            parameters["OBJECTVALUE2"] = objectValue2;
+            parameters["OBJECTID3"] = objectId3;
+            parameters["OBJECTVALUE3"] = objectValue3;
+            parameters["OBJECTID4"] = objectId4;
+            parameters["OBJECTVALUE4"] = objectValue4;
+            
+            // Default values for remaining parameters
+            // These will be overridden in the actual implementation
+            parameters["OBJECTID5"] = DBNull.Value;
+            parameters["OBJECTVALUE5"] = DBNull.Value;
+            parameters["OBJECTID6"] = DBNull.Value;
+            parameters["OBJECTVALUE6"] = DBNull.Value;
+            parameters["OBJECTID7"] = DBNull.Value;
+            parameters["OBJECTVALUE7"] = DBNull.Value;
+            
+            return parameters;
+        }
+
+        /// <summary>
         /// Gets all PeopleCode definitions for a specified project
         /// </summary>
         /// <param name="projectName">Name of the project</param>
-        /// <returns>List of tuples containing path and content (initially empty)</returns>
+        /// <returns>List of tuples containing object type, path and content</returns>
         public List<Tuple<int, string, string>> GetPeopleCodeForProject(string projectName)
         {
             if (!IsConnected)
@@ -253,23 +300,27 @@ namespace AppRefiner.Database
             // PeopleSoft stores project items in PSPROJECTITEM table
             // We're looking for PeopleCode object types
             string sql = @"
-                SELECT OBJECTTYPE, OBJECTVALUE1, OBJECTVALUE2, OBJECTVALUE3, OBJECTVALUE4
-                 FROM PSPROJECTITEM
-                 WHERE PROJECTNAME = :projectName
-                 AND OBJECTTYPE IN (8,9,39,40,42,43,44,46,47,48,58)"; // PeopleCode object types
+                SELECT OBJECTTYPE, 
+                       OBJECTID1, OBJECTVALUE1, 
+                       OBJECTID2, OBJECTVALUE2, 
+                       OBJECTID3, OBJECTVALUE3, 
+                       OBJECTID4, OBJECTVALUE4
+                FROM PSPROJECTITEM
+                WHERE PROJECTNAME = :projectName
+                AND OBJECTTYPE IN (8,9,39,40,42,43,44,46,47,48,58)"; // PeopleCode object types
                 
             Dictionary<string, object> parameters = new Dictionary<string, object>
             {
                 { ":projectName", projectName }
             };
             
-            DataTable result = _connection.ExecuteQuery(sql, parameters);
+            DataTable projectItems = _connection.ExecuteQuery(sql, parameters);
             
-            foreach (DataRow row in result.Rows)
+            foreach (DataRow row in projectItems.Rows)
             {
                 // Build the path using non-empty OBJECTVALUE fields
                 List<string> pathParts = new List<string>();
-                int objectType = (int)row["OBJECTTYPE"];
+                int objectType = Convert.ToInt32(row["OBJECTTYPE"]);
                 for (int i = 1; i <= 4; i++)
                 {
                     string value = row[$"OBJECTVALUE{i}"]?.ToString();
@@ -282,8 +333,58 @@ namespace AppRefiner.Database
                 if (pathParts.Count > 0)
                 {
                     string path = string.Join(":", pathParts);
-                    // Content will be implemented later - for now it's an empty string
                     string content = string.Empty;
+                    
+                    // Convert project item object IDs to program object IDs
+                    Dictionary<string, object> programObjectIds = ConvertProjectItemToProgram(
+                        objectType,
+                        row["OBJECTID1"], row["OBJECTVALUE1"],
+                        row["OBJECTID2"], row["OBJECTVALUE2"],
+                        row["OBJECTID3"], row["OBJECTVALUE3"],
+                        row["OBJECTID4"], row["OBJECTVALUE4"]);
+                    
+                    // Build query to retrieve the actual PeopleCode from PSPCMPROG
+                    StringBuilder queryBuilder = new StringBuilder();
+                    queryBuilder.Append("SELECT PROGTXT FROM PSPCMPROG WHERE ");
+                    
+                    Dictionary<string, object> progParameters = new Dictionary<string, object>();
+                    List<string> conditions = new List<string>();
+                    
+                    // Add conditions for each object ID/value pair
+                    for (int i = 1; i <= 7; i++)
+                    {
+                        if (programObjectIds.TryGetValue($"OBJECTID{i}", out object objId) && 
+                            objId != DBNull.Value && objId != null)
+                        {
+                            conditions.Add($"OBJECTID{i} = :objId{i}");
+                            progParameters[$":objId{i}"] = objId;
+                        }
+                        
+                        if (programObjectIds.TryGetValue($"OBJECTVALUE{i}", out object objVal) && 
+                            objVal != DBNull.Value && objVal != null)
+                        {
+                            conditions.Add($"OBJECTVALUE{i} = :objVal{i}");
+                            progParameters[$":objVal{i}"] = objVal;
+                        }
+                    }
+                    
+                    queryBuilder.Append(string.Join(" AND ", conditions));
+                    queryBuilder.Append(" ORDER BY PROGSEQ");
+                    
+                    DataTable programData = _connection.ExecuteQuery(queryBuilder.ToString(), progParameters);
+                    
+                    // Combine the program text from all rows
+                    StringBuilder programText = new StringBuilder();
+                    foreach (DataRow progRow in programData.Rows)
+                    {
+                        byte[] blobData = (byte[])progRow["PROGTXT"];
+                        // Convert blob to string - the actual conversion depends on how PeopleSoft stores the data
+                        // This is a placeholder and may need custom implementation
+                        string textPart = Encoding.UTF8.GetString(blobData);
+                        programText.Append(textPart);
+                    }
+                    
+                    content = programText.ToString();
                     
                     results.Add(new Tuple<int, string, string>(objectType, path, content));
                 }
