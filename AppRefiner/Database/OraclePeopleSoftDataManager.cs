@@ -292,35 +292,35 @@ namespace AppRefiner.Database
                     // Convert project item object IDs to program object IDs
                     List<Tuple<int,string>> programFields = projectItem.ToProgramFields();
                     
-                    // Build query to retrieve the actual PeopleCode from PSPCMPROG
-                    StringBuilder queryBuilder = new StringBuilder();
-                    queryBuilder.Append("SELECT PROGTXT FROM PSPCMPROG WHERE ");
+                    // Fixed query to retrieve the actual PeopleCode from PSPCMPROG with all 7 fields
+                    string query = @"
+                        SELECT PROGTXT FROM PSPCMPROG 
+                        WHERE OBJECTID1 = :objId1 AND OBJECTVALUE1 = :objVal1
+                        AND OBJECTID2 = :objId2 AND OBJECTVALUE2 = :objVal2
+                        AND OBJECTID3 = :objId3 AND OBJECTVALUE3 = :objVal3
+                        AND OBJECTID4 = :objId4 AND OBJECTVALUE4 = :objVal4
+                        AND OBJECTID5 = :objId5 AND OBJECTVALUE5 = :objVal5
+                        AND OBJECTID6 = :objId6 AND OBJECTVALUE6 = :objVal6
+                        AND OBJECTID7 = :objId7 AND OBJECTVALUE7 = :objVal7
+                        ORDER BY PROGSEQ";
                     
                     Dictionary<string, object> progParameters = new Dictionary<string, object>();
-                    List<string> conditions = new List<string>();
                     
-                    // Add conditions for each object ID/value pair
-                    for (int i = 1; i <= 7; i++)
+                    // Set parameters for all 7 object ID/value pairs
+                    for (int i = 0; i < 7; i++)
                     {
-                        if (programObjectIds.TryGetValue($"OBJECTID{i}", out object objId) && 
-                            objId != DBNull.Value && objId != null)
-                        {
-                            conditions.Add($"OBJECTID{i} = :objId{i}");
-                            progParameters[$":objId{i}"] = objId;
-                        }
+                        // Parameter index is 1-based in the query
+                        int paramIndex = i + 1;
                         
-                        if (programObjectIds.TryGetValue($"OBJECTVALUE{i}", out object objVal) && 
-                            objVal != DBNull.Value && objVal != null)
-                        {
-                            conditions.Add($"OBJECTVALUE{i} = :objVal{i}");
-                            progParameters[$":objVal{i}"] = objVal;
-                        }
+                        // Use values from programFields list or defaults for empty fields
+                        int objId = (i < programFields.Count) ? programFields[i].Item1 : 0;
+                        string objVal = (i < programFields.Count) ? programFields[i].Item2 : "";
+                        
+                        progParameters[$":objId{paramIndex}"] = objId;
+                        progParameters[$":objVal{paramIndex}"] = objVal;
                     }
                     
-                    queryBuilder.Append(string.Join(" AND ", conditions));
-                    queryBuilder.Append(" ORDER BY PROGSEQ");
-                    
-                    DataTable programData = _connection.ExecuteQuery(queryBuilder.ToString(), progParameters);
+                    DataTable programData = _connection.ExecuteQuery(query, progParameters);
                     
                     // Combine the program text from all rows
                     StringBuilder programText = new StringBuilder();
