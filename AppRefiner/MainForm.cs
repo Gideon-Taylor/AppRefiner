@@ -325,6 +325,8 @@ namespace AppRefiner
             // Get project name
             string projectName = ScintillaManager.GetProjectName(editor);
             
+
+
             // Create a timestamp for the report filename
             string timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
             string reportFileName = $"{projectName}_LintReport_{timestamp}.html";
