@@ -237,6 +237,62 @@ namespace AppRefiner.Database
         }
         
         /// <summary>
+        /// Gets all PeopleCode definitions for a specified project
+        /// </summary>
+        /// <param name="projectName">Name of the project</param>
+        /// <returns>List of tuples containing path and content (initially empty)</returns>
+        public List<Tuple<string, string>> GetPeopleCodeForProject(string projectName)
+        {
+            if (!IsConnected)
+            {
+                throw new InvalidOperationException("Database connection is not open");
+            }
+            
+            List<Tuple<string, string>> results = new List<Tuple<string, string>>();
+            
+            // PeopleSoft stores project items in PSPROJECTITEM table
+            // We're looking for PeopleCode object types
+            string sql = @"
+                SELECT OBJECTVALUE1, OBJECTVALUE2, OBJECTVALUE3, OBJECTVALUE4, OBJECTVALUE5, OBJECTVALUE6, OBJECTVALUE7
+                FROM PSPROJECTITEM
+                WHERE PROJECTNAME = :projectName
+                AND OBJECTTYPE IN ('P', 'W', 'F', 'R', 'A')"; // PeopleCode object types
+                
+            Dictionary<string, object> parameters = new Dictionary<string, object>
+            {
+                { ":projectName", projectName }
+            };
+            
+            DataTable result = _connection.ExecuteQuery(sql, parameters);
+            
+            foreach (DataRow row in result.Rows)
+            {
+                // Build the path using non-empty OBJECTVALUE fields
+                List<string> pathParts = new List<string>();
+                
+                for (int i = 1; i <= 7; i++)
+                {
+                    string value = row[$"OBJECTVALUE{i}"]?.ToString();
+                    if (string.IsNullOrEmpty(value))
+                        break;
+                    
+                    pathParts.Add(value);
+                }
+                
+                if (pathParts.Count > 0)
+                {
+                    string path = string.Join(":", pathParts);
+                    // Content will be implemented later - for now it's an empty string
+                    string content = string.Empty;
+                    
+                    results.Add(new Tuple<string, string>(path, content));
+                }
+            }
+            
+            return results;
+        }
+        
+        /// <summary>
         /// Disposes of the connection
         /// </summary>
         public void Dispose()

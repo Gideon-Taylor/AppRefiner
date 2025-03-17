@@ -56,5 +56,12 @@ namespace AppRefiner.Database
         /// </summary>
         /// <returns>Dictionary mapping object names to their HTML definitions</returns>
         Dictionary<string, HtmlDefinition> GetAllHtmlDefinitions();
+        
+        /// <summary>
+        /// Gets all PeopleCode definitions for a specified project
+        /// </summary>
+        /// <param name="projectName">Name of the project</param>
+        /// <returns>List of tuples containing path and content (initially empty)</returns>
+        List<Tuple<string, string>> GetPeopleCodeForProject(string projectName);
     }
 }
