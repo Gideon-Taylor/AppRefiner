@@ -322,18 +322,35 @@ namespace AppRefiner.Database
                     
                     DataTable programData = _connection.ExecuteQuery(query, progParameters);
                     
-                    // Combine the program text from all rows
-                    StringBuilder programText = new StringBuilder();
+                    // Create a new PeopleCodeItem with the program text data
+                    List<byte[]> progTextParts = new List<byte[]>();
                     foreach (DataRow progRow in programData.Rows)
                     {
                         byte[] blobData = (byte[])progRow["PROGTXT"];
-                        // Convert blob to string - the actual conversion depends on how PeopleSoft stores the data
-                        // This is a placeholder and may need custom implementation
-                        string textPart = Encoding.UTF8.GetString(blobData);
-                        programText.Append(textPart);
+                        progTextParts.Add(blobData);
                     }
                     
-                    content = programText.ToString();
+                    // Combine all byte arrays
+                    byte[] combinedProgramText = CombineBinaryData(progTextParts);
+                    
+                    // Create a PeopleCodeItem
+                    PeopleCodeItem peopleCodeItem = new PeopleCodeItem(
+                        new int[] {
+                            programFields[0].Item1, programFields[1].Item1, programFields[2].Item1,
+                            programFields[3].Item1, programFields[4].Item1, programFields[5].Item1,
+                            programFields[6].Item1
+                        },
+                        new string[] {
+                            programFields[0].Item2, programFields[1].Item2, programFields[2].Item2,
+                            programFields[3].Item2, programFields[4].Item2, programFields[5].Item2,
+                            programFields[6].Item2
+                        },
+                        combinedProgramText,
+                        GetNameReferencesForProgram(programFields)
+                    );
+                    
+                    // Get the program text as a string
+                    content = peopleCodeItem.GetProgramTextAsString(Encoding.UTF8);
                     
                     results.Add(new Tuple<int, string, string>(objectType, path, content));
                 }
@@ -348,6 +365,88 @@ namespace AppRefiner.Database
         public void Dispose()
         {
             _connection?.Dispose();
+        }
+        
+        /// <summary>
+        /// Combines multiple byte arrays into a single byte array
+        /// </summary>
+        /// <param name="byteArrays">List of byte arrays to combine</param>
+        /// <returns>Combined byte array</returns>
+        private byte[] CombineBinaryData(List<byte[]> byteArrays)
+        {
+            if (byteArrays == null || byteArrays.Count == 0)
+                return Array.Empty<byte>();
+                
+            // Calculate total length
+            int totalLength = 0;
+            foreach (byte[] array in byteArrays)
+            {
+                totalLength += array.Length;
+            }
+            
+            // Create new array and copy data
+            byte[] result = new byte[totalLength];
+            int offset = 0;
+            
+            foreach (byte[] array in byteArrays)
+            {
+                Buffer.BlockCopy(array, 0, result, offset, array.Length);
+                offset += array.Length;
+            }
+            
+            return result;
+        }
+        
+        /// <summary>
+        /// Retrieves name references for a PeopleCode program
+        /// </summary>
+        /// <param name="programFields">Program object ID/value pairs</param>
+        /// <returns>List of name references</returns>
+        private List<NameReference> GetNameReferencesForProgram(List<Tuple<int, string>> programFields)
+        {
+            List<NameReference> nameReferences = new List<NameReference>();
+            
+            // Query to get name references from PSPCMNAME table
+            string query = @"
+                SELECT NAMENUM, RECNAME, REFNAME
+                FROM PSPCMNAME
+                WHERE OBJECTID1 = :objId1 AND OBJECTVALUE1 = :objVal1
+                AND OBJECTID2 = :objId2 AND OBJECTVALUE2 = :objVal2
+                AND OBJECTID3 = :objId3 AND OBJECTVALUE3 = :objVal3
+                AND OBJECTID4 = :objId4 AND OBJECTVALUE4 = :objVal4
+                AND OBJECTID5 = :objId5 AND OBJECTVALUE5 = :objVal5
+                AND OBJECTID6 = :objId6 AND OBJECTVALUE6 = :objVal6
+                AND OBJECTID7 = :objId7 AND OBJECTVALUE7 = :objVal7
+                ORDER BY NAMENUM";
+                
+            Dictionary<string, object> parameters = new Dictionary<string, object>();
+            
+            // Set parameters for all 7 object ID/value pairs
+            for (int i = 0; i < 7; i++)
+            {
+                // Parameter index is 1-based in the query
+                int paramIndex = i + 1;
+                
+                // Use values from programFields list or defaults for empty fields
+                int objId = (i < programFields.Count) ? programFields[i].Item1 : 0;
+                string objVal = (i < programFields.Count) ? programFields[i].Item2 : "";
+                
+                parameters[$":objId{paramIndex}"] = objId;
+                parameters[$":objVal{paramIndex}"] = objVal;
+            }
+            
+            DataTable nameData = _connection.ExecuteQuery(query, parameters);
+            
+            foreach (DataRow row in nameData.Rows)
+            {
+                int nameNum = Convert.ToInt32(row["NAMENUM"]);
+                string recName = row["RECNAME"]?.ToString() ?? string.Empty;
+                string refName = row["REFNAME"]?.ToString() ?? string.Empty;
+                
+                nameReferences.Add(new NameReference(nameNum, recName, refName));
+            }
+            
+            return nameReferences;
         }
         
     }
