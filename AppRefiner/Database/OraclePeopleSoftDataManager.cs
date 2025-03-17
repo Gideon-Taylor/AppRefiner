@@ -241,22 +241,22 @@ namespace AppRefiner.Database
         /// </summary>
         /// <param name="projectName">Name of the project</param>
         /// <returns>List of tuples containing path and content (initially empty)</returns>
-        public List<Tuple<string, string>> GetPeopleCodeForProject(string projectName)
+        public List<Tuple<int, string, string>> GetPeopleCodeForProject(string projectName)
         {
             if (!IsConnected)
             {
                 throw new InvalidOperationException("Database connection is not open");
             }
             
-            List<Tuple<string, string>> results = new List<Tuple<string, string>>();
+            List<Tuple<int, string, string>> results = new List<Tuple<int, string, string>>();
             
             // PeopleSoft stores project items in PSPROJECTITEM table
             // We're looking for PeopleCode object types
             string sql = @"
-                SELECT OBJECTVALUE1, OBJECTVALUE2, OBJECTVALUE3, OBJECTVALUE4, OBJECTVALUE5, OBJECTVALUE6, OBJECTVALUE7
-                FROM PSPROJECTITEM
-                WHERE PROJECTNAME = :projectName
-                AND OBJECTTYPE IN ('P', 'W', 'F', 'R', 'A')"; // PeopleCode object types
+                SELECT OBJECTTYPE, OBJECTVALUE1, OBJECTVALUE2, OBJECTVALUE3, OBJECTVALUE4
+                 FROM PSPROJECTITEM
+                 WHERE PROJECTNAME = :projectName
+                 AND OBJECTTYPE IN (8,9,39,40,42,43,44,46,47,48,58)"; // PeopleCode object types
                 
             Dictionary<string, object> parameters = new Dictionary<string, object>
             {
@@ -269,8 +269,8 @@ namespace AppRefiner.Database
             {
                 // Build the path using non-empty OBJECTVALUE fields
                 List<string> pathParts = new List<string>();
-                
-                for (int i = 1; i <= 7; i++)
+                int objectType = (int)row["OBJECTTYPE"];
+                for (int i = 1; i <= 4; i++)
                 {
                     string value = row[$"OBJECTVALUE{i}"]?.ToString();
                     if (string.IsNullOrEmpty(value))
@@ -285,7 +285,7 @@ namespace AppRefiner.Database
                     // Content will be implemented later - for now it's an empty string
                     string content = string.Empty;
                     
-                    results.Add(new Tuple<string, string>(path, content));
+                    results.Add(new Tuple<int, string, string>(objectType, path, content));
                 }
             }
             
