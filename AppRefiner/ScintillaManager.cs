@@ -1123,16 +1123,26 @@ namespace AppRefiner
         /// <returns>The project name or a default name if it cannot be determined</returns>
         public static string GetProjectName(ScintillaEditor editor)
         {
-            //TODO: replace with real logic
-            return "TS_IS_CV_24_03";
-            // This is a placeholder method that will be implemented later
-            // For now, return a generic project name based on the editor caption
+            // Get the caption from the editor window's grandparent
+            string caption = WindowHelper.GetGrandparentWindowCaption(editor.hWnd);
+            
+            if (!string.IsNullOrEmpty(caption))
+            {
+                // Split the caption on "-" character
+                string[] parts = caption.Split('-');
+                
+                // Check if we have at least 3 parts (to access the third item)
+                if (parts.Length >= 3)
+                {
+                    // Return the third part, trimmed
+                    return parts[2].Trim();
+                }
+            }
+            
+            // Fallback to the editor's caption or a default value if we couldn't extract the project name
             if (editor.Caption != null)
             {
-                // Try to extract a project name from the caption
-                string caption = editor.Caption;
-                int colonIndex = caption.IndexOf(':');
-                return colonIndex > 0 ? caption.Substring(0, colonIndex).Trim() : "Project";
+                return editor.Caption;
             }
             
             return "Project";
