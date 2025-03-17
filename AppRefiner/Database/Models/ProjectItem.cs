@@ -82,9 +82,9 @@ namespace AppRefiner.Database.Models
             // First key is always the ObjectType
             result.Add(new Tuple<int, string>(ObjectIDs[0], ObjectValues[0]));
 
-            if (objectType == 104)
+            if (objectType == 58)
             {
-                // For objectType 104, only add values with non-zero ObjectIDs
+                // For objectType 58, only add values with non-zero ObjectIDs
                 for (var i = 1; i < 4; i++)
                 {
                     if (ObjectIDs[i] != 0)
@@ -99,7 +99,7 @@ namespace AppRefiner.Database.Models
                 // Fill the rest with empty entries to have 7 total
                 while (result.Count < 7)
                 {
-                    result.Add(new Tuple<int, string>(0, string.Empty));
+                    result.Add(new Tuple<int, string>(0, " "));
                 }
             }
             else if (objectType == 66)

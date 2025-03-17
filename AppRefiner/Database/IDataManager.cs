@@ -62,6 +62,6 @@ namespace AppRefiner.Database
         /// </summary>
         /// <param name="projectName">Name of the project</param>
         /// <returns>List of tuples containing path and content (initially empty)</returns>
-        List<Tuple<string, string>> GetPeopleCodeForProject(string projectName);
+        List<PeopleCodeItem> GetPeopleCodeItemsForProject(string projectName);
     }
 }

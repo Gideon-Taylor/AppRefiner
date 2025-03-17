@@ -148,13 +148,13 @@ namespace AppRefiner.Database.Models
         /// </summary>
         /// <param name="encoding">The encoding to use (defaults to UTF-8)</param>
         /// <returns>The program text as a string</returns>
-        public string GetProgramTextAsString(Encoding encoding = null)
+        public string GetProgramTextAsString()
         {
             if (ProgramText == null || ProgramText.Length == 0)
                 return string.Empty;
-                
-            encoding = encoding ?? Encoding.UTF8;
-            return encoding.GetString(ProgramText);
+
+            PeopleCodeDecoder decoder = new PeopleCodeDecoder();
+            return decoder.ParsePPC(ProgramText, NameReferences);
         }
         
         /// <summary>

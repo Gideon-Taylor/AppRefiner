@@ -106,5 +106,17 @@ namespace AppRefiner.Properties {
                 this["LinterStates"] = value;
             }
         }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("LintingReports")]
+        public string LintReportPath {
+            get {
+                return ((string)(this["LintReportPath"]));
+            }
+            set {
+                this["LintReportPath"] = value;
+            }
+        }
     }
 }

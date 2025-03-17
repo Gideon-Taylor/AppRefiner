@@ -1123,6 +1123,8 @@ namespace AppRefiner
         /// <returns>The project name or a default name if it cannot be determined</returns>
         public static string GetProjectName(ScintillaEditor editor)
         {
+            //TODO: replace with real logic
+            return "TS_IS_CV_24_03";
             // This is a placeholder method that will be implemented later
             // For now, return a generic project name based on the editor caption
             if (editor.Caption != null)

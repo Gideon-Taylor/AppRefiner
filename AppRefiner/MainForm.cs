@@ -22,6 +22,7 @@ using Antlr4.Runtime.Tree;
 using AppRefiner.Database;
 using AppRefiner.Templates;
 using System.Web;
+using AppRefiner.Database.Models;
 
 namespace AppRefiner
 {
@@ -398,7 +399,8 @@ namespace AppRefiner
                 // Clean up walker listeners for next program
                 foreach (var linter in activeLinters)
                 {
-                    walker.RemoveListener(linter);
+                    programReports.Clear();
+                    comments.Clear();
                 }
                 
                 // Free up resources
@@ -1756,7 +1758,7 @@ namespace AppRefiner
             // Write the HTML to the report file
             try
             {
-                File.WriteAllText(reportPath, html.ToString());
+                System.IO.File.WriteAllText(reportPath, html.ToString());
             }
             catch (Exception ex)
             {

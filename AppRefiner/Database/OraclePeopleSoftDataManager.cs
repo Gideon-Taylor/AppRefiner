@@ -242,14 +242,14 @@ namespace AppRefiner.Database
         /// </summary>
         /// <param name="projectName">Name of the project</param>
         /// <returns>List of tuples containing object type, path and content</returns>
-        public List<Tuple<int, string, string>> GetPeopleCodeForProject(string projectName)
+        public List<PeopleCodeItem> GetPeopleCodeItemsForProject(string projectName)
         {
             if (!IsConnected)
             {
                 throw new InvalidOperationException("Database connection is not open");
             }
             
-            List<Tuple<int, string, string>> results = new List<Tuple<int, string, string>>();
+            List<PeopleCodeItem> results = new List<PeopleCodeItem>();
             
             // PeopleSoft stores project items in PSPROJECTITEM table
             // We're looking for PeopleCode object types
@@ -349,13 +349,9 @@ namespace AppRefiner.Database
                         GetNameReferencesForProgram(programFields)
                     );
                     
-                    // Get the program text as a string
-                    content = peopleCodeItem.GetProgramTextAsString(Encoding.UTF8);
-                    
-                    results.Add(new Tuple<int, string, string>(objectType, path, content));
+                    results.Add(peopleCodeItem);
                 }
             }
-            
             return results;
         }
         
