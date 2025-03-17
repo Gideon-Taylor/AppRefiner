@@ -1115,6 +1115,26 @@ namespace AppRefiner
             if (activeEditor == null) return -1;
             return (int)activeEditor.SendMessage(SCI_GETCURRENTPOS, 0, 0);
         }
+        
+        /// <summary>
+        /// Gets the project name for the current editor
+        /// </summary>
+        /// <param name="editor">The editor to get the project name for</param>
+        /// <returns>The project name or a default name if it cannot be determined</returns>
+        public static string GetProjectName(ScintillaEditor editor)
+        {
+            // This is a placeholder method that will be implemented later
+            // For now, return a generic project name based on the editor caption
+            if (editor.Caption != null)
+            {
+                // Try to extract a project name from the caption
+                string caption = editor.Caption;
+                int colonIndex = caption.IndexOf(':');
+                return colonIndex > 0 ? caption.Substring(0, colonIndex).Trim() : "Project";
+            }
+            
+            return "Project";
+        }
 
         /// <summary>
         /// Sets the cursor position in the Scintilla editor

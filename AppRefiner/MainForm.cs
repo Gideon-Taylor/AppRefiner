@@ -7,6 +7,7 @@ using System.ComponentModel;
 using System.Data;
 using System.Diagnostics;
 using System.Drawing;
+using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -81,6 +82,9 @@ namespace AppRefiner
             public string TypeName { get; set; } = "";
             public bool Active { get; set; }
         }
+        
+        // Path for linting report output
+        private string lintReportPath;
 
         public MainForm()
         {
@@ -92,6 +96,25 @@ namespace AppRefiner
 
         protected override void OnLoad(EventArgs e)
         {
+            // Initialize the linting report path
+            lintReportPath = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
+                Properties.Settings.Default.LintReportPath);
+            
+            // Ensure the directory exists
+            if (!Directory.Exists(lintReportPath))
+            {
+                try
+                {
+                    Directory.CreateDirectory(lintReportPath);
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show("Failed to create lint report directory: " + ex.Message,
+                        "Warning", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                }
+            }
+            
             LoadSettings();
             renameVarHook.KeyPressed += renameVariable;
             renameVarHook.RegisterHotKey(AppRefiner.ModifierKeys.Control | AppRefiner.ModifierKeys.Shift, Keys.R);
@@ -253,6 +276,65 @@ namespace AppRefiner
         protected override void OnFormClosing(FormClosingEventArgs e)
         {
             SaveSettings();
+        }
+
+        /// <summary>
+        /// Set the directory where linting reports will be saved
+        /// </summary>
+        private void SetLintReportDirectory()
+        {
+            // Create folder browser dialog
+            FolderBrowserDialog folderDialog = new FolderBrowserDialog
+            {
+                Description = "Select directory for linting reports",
+                UseDescriptionForTitle = true,
+                SelectedPath = lintReportPath
+            };
+
+            // Show dialog and update path if OK
+            if (folderDialog.ShowDialog() == DialogResult.OK)
+            {
+                lintReportPath = folderDialog.SelectedPath;
+                Properties.Settings.Default.LintReportPath = lintReportPath;
+                Properties.Settings.Default.Save();
+                
+                MessageBox.Show($"Lint reports will be saved to: {lintReportPath}", 
+                    "Lint Report Directory Updated", 
+                    MessageBoxButtons.OK, 
+                    MessageBoxIcon.Information);
+            }
+        }
+        
+        /// <summary>
+        /// Generate lint reports for all files in the current project
+        /// </summary>
+        /// <param name="editor">The active editor, used to identify the project</param>
+        private void LintProject(ScintillaEditor editor)
+        {
+            if (editor == null || editor.DataManager == null)
+            {
+                MessageBox.Show("Database connection required for project linting.", 
+                    "Database Required", 
+                    MessageBoxButtons.OK, 
+                    MessageBoxIcon.Warning);
+                return;
+            }
+            
+            // Get project name
+            string projectName = ScintillaManager.GetProjectName(editor);
+            
+            // Create a timestamp for the report filename
+            string timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
+            string reportFileName = $"{projectName}_LintReport_{timestamp}.html";
+            string reportPath = Path.Combine(lintReportPath, reportFileName);
+            
+            // TODO: This will be implemented later to scan all files in the project
+            // and generate a consolidated report
+            
+            MessageBox.Show($"Project linting will generate a report at: {reportPath}\n\nThis functionality will be fully implemented in a future update.", 
+                "Project Linting", 
+                MessageBoxButtons.OK, 
+                MessageBoxIcon.Information);
         }
 
         private void LoadSettings()
@@ -476,6 +558,7 @@ namespace AppRefiner
             Properties.Settings.Default.betterSQL = chkBetterSQL.Checked;
             Properties.Settings.Default.autoDark = chkAutoDark.Checked;
             Properties.Settings.Default.lintAnnotate = chkLintAnnotate.Checked;
+            Properties.Settings.Default.LintReportPath = lintReportPath;
 
             SaveStylerStates();
             SaveLinterStates();
@@ -1750,6 +1833,26 @@ namespace AppRefiner
                         dataGridView2.Rows.Clear();
                     }
                 }
+            ));
+            
+            // Add project linting commands
+            AvailableCommands.Add(new Command(
+                "Project: Set Lint Report Directory",
+                $"Current directory: {lintReportPath}",
+                () => {
+                    SetLintReportDirectory();
+                }
+            ));
+            
+            AvailableCommands.Add(new Command(
+                "Project: Lint Project",
+                "Run all linters on the entire project and generate a report",
+                () => {
+                    if (activeEditor != null) {
+                        LintProject(activeEditor);
+                    }
+                },
+                () => activeEditor != null && activeEditor.DataManager != null
             ));
            
         }
