@@ -12,6 +12,9 @@ namespace AppRefiner
 
     public static class WindowHelper
     {
+        // Delegate for EnumWindows callback function
+        private delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
+        
         // Retrieves the handle to the foreground window (i.e. the currently focused window).
         [DllImport("user32.dll")]
         private static extern IntPtr GetForegroundWindow();
@@ -46,9 +49,6 @@ namespace AppRefiner
         /// <returns>The caption text of the main window, or an empty string if not found.</returns>
         public static string GetMainWindowCaption(uint processId)
         {
-            // Delegate for EnumWindows callback function
-            delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
-            
             // Import the EnumWindows function from user32.dll
             [DllImport("user32.dll")]
             static extern bool EnumWindows(EnumWindowsProc enumProc, IntPtr lParam);
