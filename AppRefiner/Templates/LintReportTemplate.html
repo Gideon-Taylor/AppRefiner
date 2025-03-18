@@ -44,6 +44,16 @@
     .hide-warning .issue-warning { display: none; }
     .hide-info .issue-info { display: none; }
     .program-item.empty { display: none; }
+    
+    /* Linters section styles */
+    .linters-section { margin: 20px 0; background-color: #f8f9fa; border-radius: 5px; overflow: hidden; }
+    .linters-header { background-color: #e9ecef; padding: 10px 15px; cursor: pointer; }
+    .linters-header h3 { margin: 0; display: flex; justify-content: space-between; }
+    .linters-content { padding: 0; max-height: 0; overflow: hidden; transition: max-height 0.3s ease; }
+    .linters-content.expanded { max-height: 500px; padding: 15px; border-top: 1px solid #ddd; }
+    #linters-toggle { font-size: 0.8em; color: #3498db; }
+    #linters-table { width: 100%; }
+    #linters-table th { background-color: #f0f0f0; }
   </style>
 </head>
 <body>
@@ -54,6 +64,25 @@
     <div class="stat-box errors"><div class="stat-count" id="totalErrors">0</div><div>Errors</div></div>
     <div class="stat-box warnings"><div class="stat-count" id="totalWarnings">0</div><div>Warnings</div></div>
     <div class="stat-box info"><div class="stat-count" id="totalInfo">0</div><div>Info</div></div>
+  </div>
+
+  <div class="linters-section">
+    <div class="linters-header" onclick="toggleLinters()">
+      <h3>Applied Linters <span id="linters-toggle">[Show]</span></h3>
+    </div>
+    <div id="linters-content" class="linters-content collapsed">
+      <table id="linters-table">
+        <thead>
+          <tr>
+            <th>Linter</th>
+            <th>Description</th>
+          </tr>
+        </thead>
+        <tbody>
+          <!-- Linters will be loaded here -->
+        </tbody>
+      </table>
+    </div>
   </div>
   
   <div class="tabs-container">
@@ -176,11 +205,52 @@
       }
     }
 
+    // Toggle linters section
+    function toggleLinters() {
+      const content = document.getElementById('linters-content');
+      const toggle = document.getElementById('linters-toggle');
+      
+      if (content.classList.contains('collapsed')) {
+        content.classList.remove('collapsed');
+        content.classList.add('expanded');
+        toggle.textContent = '[Hide]';
+      } else {
+        content.classList.remove('expanded');
+        content.classList.add('collapsed');
+        toggle.textContent = '[Show]';
+      }
+    }
+    
+    // Render the linters section
+    function renderLinters(data) {
+      if (!data.activeLinters || data.activeLinters.length === 0) {
+        // If no linters data, show a message
+        document.getElementById('linters-table').outerHTML = '<p>No linter information available</p>';
+        return;
+      }
+      
+      const tbody = document.querySelector('#linters-table tbody');
+      tbody.innerHTML = '';
+      
+      // Add a row for each linter
+      data.activeLinters.forEach(linter => {
+        const row = document.createElement('tr');
+        row.innerHTML = `
+          <td>${escapeHtml(linter.name)}</td>
+          <td>${escapeHtml(linter.description)}</td>
+        `;
+        tbody.appendChild(row);
+      });
+    }
+    
     // Render the entire report
     function renderReport(data) {
       // Set project name and timestamp
       document.getElementById('projectName').textContent = data.projectName;
       document.getElementById('timestamp').textContent = data.timestamp;
+      
+      // Render linters information
+      renderLinters(data);
       
       // Set initial summary statistics
       document.getElementById('totalErrors').textContent = data.totalErrors;

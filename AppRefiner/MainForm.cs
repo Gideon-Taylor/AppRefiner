@@ -1644,6 +1644,12 @@ namespace AppRefiner
                 int totalWarnings = reportData.Count(r => r.LintReport.Type == ReportType.Warning);
                 int totalInfo = reportData.Count(r => r.LintReport.Type == ReportType.Info);
                 
+                // Get active linters
+                var activeLinterInfo = linterRules
+                    .Where(l => l.Active)
+                    .Select(l => new { name = l.GetType().Name, description = l.Description })
+                    .ToList();
+
                 // Create a structured report object for JSON serialization
                 var report = new
                 {
@@ -1653,6 +1659,7 @@ namespace AppRefiner
                     totalWarnings,
                     totalInfo,
                     totalIssues = reportData.Count,
+                    activeLinters = activeLinterInfo,
                     programReports = groupedReports.Select(pg => new
                     {
                         programPath = pg.Key,
