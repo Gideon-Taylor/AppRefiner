@@ -5,6 +5,11 @@ using static AppRefiner.PeopleCode.PeopleCodeParser;
 
 namespace AppRefiner.Linters
 {
+    /// <summary>
+    /// Base class for lint rules that need to track variables and other elements within code scopes.
+    /// Works with LinterSuppressionListener to respect scope-based suppression directives.
+    /// </summary>
+    /// <typeparam name="T">The type of data to track in scopes</typeparam>
     public abstract class ScopedLintRule<T> : BaseLintRule
     {
         protected readonly Stack<Dictionary<string, T>> scopeStack = new();
@@ -253,5 +258,14 @@ namespace AppRefiner.Linters
         // Protected virtual methods for derived classes to handle scope changes
         protected virtual void OnEnterScope() { }
         protected virtual void OnExitScope(Dictionary<string, T> scope) { }
+        
+        /// <summary>
+        /// Override of the OnExitScope method with additional variable scope information.
+        /// Provided for backwards compatibility.
+        /// </summary>
+        protected virtual void OnExitScope(Dictionary<string, T> scope, Dictionary<string, VariableInfo> variableScope) 
+        { 
+            OnExitScope(scope);
+        }
     }
 }

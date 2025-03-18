@@ -10,12 +10,36 @@ namespace AppRefiner.Linters
 {
     /// <summary>
     /// Parses and tracks linter suppression directives in PeopleCode comments.
-    /// Handles three types of suppressions:
-    /// 1. Global suppressions (above imports block) - apply to entire program
-    /// 2. Scope suppressions (above method/function) - apply to entire scope
-    /// 3. Line suppressions (above a statement) - apply only to the next line
     /// 
-    /// Format: /* #AppRefiner suppress (LINTER_ID.number, LINTER_ID.number) */
+    /// Suppression Comment Formats:
+    /// 1. Global Suppression (above imports/class declaration):
+    ///    /* #AppRefiner suppress (LinterId.ReportNumber, AnotherLinter.Number) */
+    ///    // Applies to entire program file
+    /// 
+    /// 2. Scope Suppression (above method/function/block):
+    ///    /* #AppRefiner suppress (LinterId.ReportNumber) */
+    ///    Method MyMethod()
+    ///    {
+    ///        // All lines in this method will suppress the specified linter report
+    ///    }
+    /// 
+    /// 3. Line-specific Suppression (immediately above a line):
+    ///    /* #AppRefiner suppress (LinterId.ReportNumber) */
+    ///    var x = SomeMethod(); // This specific line is suppressed
+    /// 
+    /// Usage Examples:
+    /// 
+    /// /* #AppRefiner suppress (CodeStyle.1, Naming.2) */
+    /// import PTCS_PORTAL:*;
+    /// 
+    /// class MyClass 
+    /// {
+    ///     /* #AppRefiner suppress (Complexity.3) */
+    ///     method ComplexMethod()
+    ///         /* AppRefiner suppress (Performance.4) */
+    ///         Local number &result = ExpensiveOperation();
+    ///     end-method;
+    /// }
     /// </summary>
     public class LinterSuppressionListener : PeopleCodeParserBaseListener
     {
