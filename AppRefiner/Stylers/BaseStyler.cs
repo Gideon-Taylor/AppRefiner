@@ -32,6 +32,7 @@ namespace AppRefiner.Stylers
         public List<CodeAnnotation>? Annotations;
         public List<CodeHighlight>? Highlights;
         public List<CodeColor>? Colors;
+        public List<Antlr4.Runtime.IToken>? Comments;
         public abstract void Reset();
 
         public bool Active = false;
