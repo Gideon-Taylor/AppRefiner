@@ -23,6 +23,7 @@ using AppRefiner.Database;
 using AppRefiner.Templates;
 using System.Web;
 using AppRefiner.Database.Models;
+using Antlr4.Runtime.Atn;
 
 namespace AppRefiner
 {
@@ -387,7 +388,10 @@ namespace AppRefiner
                 
                 PeopleCodeParser parser = new PeopleCodeParser(stream);
                 var program = parser.program();
-                
+
+                parser.Interpreter.ClearDFA();
+                GC.Collect();
+
                 // Collection for reports from this program
                 List<Report> programReports = new List<Report>();
                 
@@ -1046,7 +1050,8 @@ namespace AppRefiner
             PeopleCodeLexer lexer = new PeopleCodeLexer(new Antlr4.Runtime.AntlrInputStream(editor.ContentString));
             PeopleCodeParser parser = new PeopleCodeParser(new Antlr4.Runtime.CommonTokenStream(lexer));
             var program = parser.program();
-
+            parser.Interpreter.ClearDFA();
+            GC.Collect();
             var activeStylers = stylers.Where(a => a.Active);
             MultiParseTreeWalker walker = new();
 
@@ -1122,6 +1127,9 @@ namespace AppRefiner
 
             PeopleCodeParser? parser = new PeopleCodeParser(stream);
             var program = parser.program();
+            parser.Interpreter.ClearDFA();
+            GC.Collect();
+
             var activeLinters = linterRules.Where(a => a.Active);
 
             /* Free up ANTLR resources */
@@ -1368,7 +1376,8 @@ namespace AppRefiner
             var stream = new Antlr4.Runtime.CommonTokenStream(lexer);
             PeopleCodeParser parser = new PeopleCodeParser(stream);
             var program = parser.program();
-
+            parser.Interpreter.ClearDFA();
+            GC.Collect();
             // Initialize the refactor with cursor position
             refactorClass.Initialize(freshText, stream, currentCursorPosition);
             
@@ -1477,7 +1486,8 @@ namespace AppRefiner
 
             PeopleCodeParser? parser = new PeopleCodeParser(stream);
             var program = parser.program();
-
+            parser.Interpreter.ClearDFA();
+            GC.Collect();
             /* Free up ANTLR resources */
             lexer = null;
             parser = null;
