@@ -74,7 +74,7 @@ namespace AppRefiner.Linters
         private readonly Stack<HashSet<SuppressionInfo>> _scopeSuppressionStack = new();
     
         private static readonly Regex _suppressionRegex = new(
-            @"#AppRefiner\s+suppress\s+\(([\w\.\s,]+)\)",
+            @"#AppRefiner\s+suppress\s+\(([\w\:\_\s,]+)\)",
             RegexOptions.Compiled);
 
         public LinterSuppressionListener(ITokenStream tokenStream, List<IToken> comments)
