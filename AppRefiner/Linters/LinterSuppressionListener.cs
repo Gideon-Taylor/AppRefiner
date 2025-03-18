@@ -67,27 +67,12 @@ namespace AppRefiner.Linters
             }
         }
 
-        private class ScopeInfo
-        {
-            public int StartLine { get; }
-            public int EndLine { get; set; }
-            public HashSet<SuppressionInfo> Suppressions { get; }
-
-            public ScopeInfo(int startLine, HashSet<SuppressionInfo> suppressions)
-            {
-                StartLine = startLine;
-                EndLine = -1; // Will be set when scope ends
-                Suppressions = suppressions;
-            }
-        }
-
         private readonly ITokenStream _tokenStream;
         private readonly IList<IToken> _comments;
-        private readonly List<ScopeInfo> _scopes = new();
         private readonly HashSet<SuppressionInfo> _globalSuppressions = new();
         private readonly Dictionary<int, HashSet<SuppressionInfo>> _lineSpecificSuppressions = new();
-        
-        private int _currentScopeStartLine = -1;
+        private readonly Stack<HashSet<SuppressionInfo>> _scopeSuppressionStack = new();
+    
         private static readonly Regex _suppressionRegex = new(
             @"#AppRefiner\s+suppress\s+\(([\w\.\s,]+)\)",
             RegexOptions.Compiled);
@@ -95,15 +80,30 @@ namespace AppRefiner.Linters
         public LinterSuppressionListener(ITokenStream tokenStream, List<IToken> comments)
         {
             _tokenStream = tokenStream ?? throw new ArgumentNullException(nameof(tokenStream));
-            
+        
             // Extract all comments from the token stream
             _comments = comments ?? throw new ArgumentNullException(nameof(comments));
-            
+        
+            // Clear any existing suppressions
+            Reset();
+        
             // Process global suppressions (above imports block)
             ProcessGlobalSuppressions();
-            
+        
             // Process line-specific suppressions for all comments
             ProcessAllLineSpecificSuppressions();
+        }
+    
+        /// <summary>
+        /// Resets the listener state, clearing all suppression information
+        /// </summary>
+        public void Reset()
+        {
+            _globalSuppressions.Clear();
+            _lineSpecificSuppressions.Clear();
+        
+            // Clear the scope stack
+            _scopeSuppressionStack.Clear();
         }
         
         /// <summary>
@@ -219,40 +219,37 @@ namespace AppRefiner.Linters
 
         public override void ExitMethod([NotNull] PeopleCodeParser.MethodContext context)
         {
-            RecordScopeExit(context.Stop.Line);
+            PopScopeSuppressions();
         }
 
         public override void EnterFunctionDefinition([NotNull] PeopleCodeParser.FunctionDefinitionContext context)
         {
-            _currentScopeStartLine = context.Start.Line;
-            ProcessScopeEntrySuppressions(_currentScopeStartLine);
+            ProcessScopeEntrySuppressions(context.Start.Line);
         }
 
         public override void ExitFunctionDefinition([NotNull] PeopleCodeParser.FunctionDefinitionContext context)
         {
-            RecordScopeExit(context.Stop.Line);
+            PopScopeSuppressions();
         }
 
         public override void EnterGetter([NotNull] PeopleCodeParser.GetterContext context)
         {
-            _currentScopeStartLine = context.Start.Line;
-            ProcessScopeEntrySuppressions(_currentScopeStartLine);
+            ProcessScopeEntrySuppressions(context.Start.Line);
         }
 
         public override void ExitGetter([NotNull] PeopleCodeParser.GetterContext context)
         {
-            RecordScopeExit(context.Stop.Line);
+            PopScopeSuppressions();
         }
 
         public override void EnterSetter([NotNull] PeopleCodeParser.SetterContext context)
         {
-            _currentScopeStartLine = context.Start.Line;
-            ProcessScopeEntrySuppressions(_currentScopeStartLine);
+            ProcessScopeEntrySuppressions(context.Start.Line);
         }
 
         public override void ExitSetter([NotNull] PeopleCodeParser.SetterContext context)
         {
-            RecordScopeExit(context.Stop.Line);
+            PopScopeSuppressions();
         }
         
         #endregion
@@ -261,68 +258,62 @@ namespace AppRefiner.Linters
         
         public override void EnterIfStatement([NotNull] PeopleCodeParser.IfStatementContext context)
         {
-            _currentScopeStartLine = context.Start.Line;
-            ProcessScopeEntrySuppressions(_currentScopeStartLine);
+            ProcessScopeEntrySuppressions(context.Start.Line);
         }
 
         public override void ExitIfStatement([NotNull] PeopleCodeParser.IfStatementContext context)
         {
-            RecordScopeExit(context.Stop.Line);
+            PopScopeSuppressions();
         }
 
         public override void EnterForStatement([NotNull] PeopleCodeParser.ForStatementContext context)
         {
-            _currentScopeStartLine = context.Start.Line;
-            ProcessScopeEntrySuppressions(_currentScopeStartLine);
+            ProcessScopeEntrySuppressions(context.Start.Line);
         }
 
         public override void ExitForStatement([NotNull] PeopleCodeParser.ForStatementContext context)
         {
-            RecordScopeExit(context.Stop.Line);
+            PopScopeSuppressions();
         }
 
         public override void EnterWhileStatement([NotNull] PeopleCodeParser.WhileStatementContext context)
         {
-            _currentScopeStartLine = context.Start.Line;
-            ProcessScopeEntrySuppressions(_currentScopeStartLine);
+            ProcessScopeEntrySuppressions(context.Start.Line);
         }
 
         public override void ExitWhileStatement([NotNull] PeopleCodeParser.WhileStatementContext context)
         {
-            RecordScopeExit(context.Stop.Line);
+            PopScopeSuppressions();
         }
 
         public override void EnterRepeatStatement([NotNull] PeopleCodeParser.RepeatStatementContext context)
         {
-            _currentScopeStartLine = context.Start.Line;
-            ProcessScopeEntrySuppressions(_currentScopeStartLine);
+            ProcessScopeEntrySuppressions(context.Start.Line);
         }
 
         public override void ExitRepeatStatement([NotNull] PeopleCodeParser.RepeatStatementContext context)
         {
-            RecordScopeExit(context.Stop.Line);
+            PopScopeSuppressions();
         }
 
         public override void EnterEvaluateStatement([NotNull] PeopleCodeParser.EvaluateStatementContext context)
         {
-            _currentScopeStartLine = context.Start.Line;
-            ProcessScopeEntrySuppressions(_currentScopeStartLine);
+            ProcessScopeEntrySuppressions(context.Start.Line);
         }
 
         public override void ExitEvaluateStatement([NotNull] PeopleCodeParser.EvaluateStatementContext context)
         {
-            RecordScopeExit(context.Stop.Line);
+            PopScopeSuppressions();
         }
 
         public override void EnterTryCatchBlock([NotNull] PeopleCodeParser.TryCatchBlockContext context)
         {
-            _currentScopeStartLine = context.Start.Line;
-            ProcessScopeEntrySuppressions(_currentScopeStartLine);
+            ProcessScopeEntrySuppressions(context.Start.Line);
         }
 
         public override void ExitTryCatchBlock([NotNull] PeopleCodeParser.TryCatchBlockContext context)
         {
-            RecordScopeExit(context.Stop.Line);
+            PopScopeSuppressions();
         }
         
         #endregion
@@ -330,7 +321,7 @@ namespace AppRefiner.Linters
         private void ProcessScopeEntrySuppressions(int scopeStartLine)
         {
             var scopeSuppressions = new HashSet<SuppressionInfo>();
-            
+        
             // Find comments immediately above this scope
             var scopeComments = _comments
                 .Where(c => c.Line < scopeStartLine)
@@ -364,27 +355,16 @@ namespace AppRefiner.Linters
                 }
             }
 
-            if (scopeSuppressions.Count > 0)
-            {
-                // We'll finalize the scope in the exit method
-                _scopes.Add(new ScopeInfo(scopeStartLine, scopeSuppressions));
-            }
+            // Push the suppression set onto the stack
+            _scopeSuppressionStack.Push(scopeSuppressions);
         }
 
-        private void RecordScopeExit(int endLine)
+        private void PopScopeSuppressions()
         {
-            // Update the end line of the most recently added scope
-            for (int i = _scopes.Count - 1; i >= 0; i--)
+            if (_scopeSuppressionStack.Count > 0)
             {
-                var scope = _scopes[i];
-                if (scope.StartLine == _currentScopeStartLine && scope.EndLine == -1)
-                {
-                    scope.EndLine = endLine;
-                    break;
-                }
+                _scopeSuppressionStack.Pop();
             }
-            
-            _currentScopeStartLine = -1;
         }
 
         /// <summary>
@@ -397,30 +377,29 @@ namespace AppRefiner.Linters
         public bool IsSuppressed(string linterId, int reportNumber, int line)
         {
             var suppressionInfo = new SuppressionInfo(linterId, reportNumber);
-            
+        
             // 1. Check global suppressions first
             if (_globalSuppressions.Contains(suppressionInfo))
             {
                 return true;
             }
-            
-            // 2. Check scoped suppressions
-            foreach (var scope in _scopes)
+        
+            // 2. Check active scope suppressions from the stack
+            foreach (var scopeSuppressions in _scopeSuppressionStack)
             {
-                if (line >= scope.StartLine && line <= scope.EndLine && 
-                    scope.Suppressions.Contains(suppressionInfo))
+                if (scopeSuppressions.Contains(suppressionInfo))
                 {
                     return true;
                 }
             }
-            
+        
             // 3. Check line-specific suppressions
             if (_lineSpecificSuppressions.TryGetValue(line, out var lineSuppressions) && 
                 lineSuppressions.Contains(suppressionInfo))
             {
                 return true;
             }
-            
+        
             return false;
         }
 
@@ -432,25 +411,22 @@ namespace AppRefiner.Linters
         public List<(string LinterId, int ReportNumber)> GetSuppressionsForLine(int line)
         {
             var result = new List<(string, int)>();
-            
+        
             // Add global suppressions
             foreach (var suppression in _globalSuppressions)
             {
                 result.Add((suppression.LinterId, suppression.ReportNumber));
             }
-            
-            // Add scoped suppressions
-            foreach (var scope in _scopes)
+        
+            // Add active scope suppressions from the stack
+            foreach (var scopeSuppressions in _scopeSuppressionStack)
             {
-                if (line >= scope.StartLine && line <= scope.EndLine)
+                foreach (var suppression in scopeSuppressions)
                 {
-                    foreach (var suppression in scope.Suppressions)
-                    {
-                        result.Add((suppression.LinterId, suppression.ReportNumber));
-                    }
+                    result.Add((suppression.LinterId, suppression.ReportNumber));
                 }
             }
-            
+        
             // Add line-specific suppressions
             if (_lineSpecificSuppressions.TryGetValue(line, out var lineSuppressions))
             {
@@ -459,7 +435,7 @@ namespace AppRefiner.Linters
                     result.Add((suppression.LinterId, suppression.ReportNumber));
                 }
             }
-            
+        
             return result;
         }
     }
