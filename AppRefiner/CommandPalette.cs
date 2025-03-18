@@ -7,12 +7,16 @@ using System.Runtime.InteropServices;
 
 namespace AppRefiner
 {
+    // Define delegate for command actions that can receive progress dialog
+    public delegate void CommandAction(CommandProgressDialog? progressDialog = null);
+
     public class Command
     {
         public string Title { get; set; }
         private string _description;
         private Func<string> _dynamicDescription;
-        public Action Execute { get; set; }
+        public Action? LegacyExecute { get; set; }
+        public CommandAction? ExecuteWithProgress { get; set; }
     
         // New properties for enabled state
         private bool _isEnabled = true;
@@ -48,26 +52,26 @@ namespace AppRefiner
             }
         }
 
+        // Legacy constructors using Action
         public Command(string title, string description, Action execute)
         {
             Title = title;
             _description = description;
-            Execute = execute;
+            LegacyExecute = execute;
         }
 
         public Command(string title, Func<string> dynamicDescription, Action execute)
         {
             Title = title;
             _dynamicDescription = dynamicDescription;
-            Execute = execute;
+            LegacyExecute = execute;
         }
     
-        // New constructors with enabled state
         public Command(string title, string description, Action execute, bool enabled)
         {
             Title = title;
             _description = description;
-            Execute = execute;
+            LegacyExecute = execute;
             _isEnabled = enabled;
         }
     
@@ -75,7 +79,7 @@ namespace AppRefiner
         {
             Title = title;
             _description = description;
-            Execute = execute;
+            LegacyExecute = execute;
             _dynamicEnabled = dynamicEnabled;
         }
     
@@ -83,7 +87,46 @@ namespace AppRefiner
         {
             Title = title;
             _dynamicDescription = dynamicDescription;
-            Execute = execute;
+            LegacyExecute = execute;
+            _dynamicEnabled = dynamicEnabled;
+        }
+        
+        // New constructors using CommandAction for progress reporting
+        public Command(string title, string description, CommandAction execute)
+        {
+            Title = title;
+            _description = description;
+            ExecuteWithProgress = execute;
+        }
+
+        public Command(string title, Func<string> dynamicDescription, CommandAction execute)
+        {
+            Title = title;
+            _dynamicDescription = dynamicDescription;
+            ExecuteWithProgress = execute;
+        }
+    
+        public Command(string title, string description, CommandAction execute, bool enabled)
+        {
+            Title = title;
+            _description = description;
+            ExecuteWithProgress = execute;
+            _isEnabled = enabled;
+        }
+    
+        public Command(string title, string description, CommandAction execute, Func<bool> dynamicEnabled)
+        {
+            Title = title;
+            _description = description;
+            ExecuteWithProgress = execute;
+            _dynamicEnabled = dynamicEnabled;
+        }
+    
+        public Command(string title, Func<string> dynamicDescription, CommandAction execute, Func<bool> dynamicEnabled)
+        {
+            Title = title;
+            _dynamicDescription = dynamicDescription;
+            ExecuteWithProgress = execute;
             _dynamicEnabled = dynamicEnabled;
         }
     }
@@ -96,7 +139,7 @@ namespace AppRefiner
         private ListView commandListView;
         private List<Command> allCommands;
         private List<Command> filteredCommands;
-        private Action? selectedAction;
+        private CommandAction? selectedAction;
 
         public CommandPalette(List<Command> commands)
         {
@@ -107,7 +150,7 @@ namespace AppRefiner
             PopulateCommandList();
         }
         
-        public Action? GetSelectedAction()
+        public CommandAction? GetSelectedAction()
         {
             return selectedAction;
         }
@@ -335,8 +378,17 @@ namespace AppRefiner
                 // Only select if the command is enabled
                 if (command.Enabled)
                 {
-                    // Store the command to execute
-                    selectedAction = command.Execute;
+                    // Store the command to execute, prioritizing the progress-aware action
+                    if (command.ExecuteWithProgress != null)
+                    {
+                        selectedAction = command.ExecuteWithProgress;
+                    }
+                    else if (command.LegacyExecute != null)
+                    {
+                        // Wrap the legacy action in a CommandAction delegate
+                        selectedAction = (progressDialog) => command.LegacyExecute?.Invoke();
+                    }
+                    
                     // Close the form with DialogResult.OK
                     this.DialogResult = DialogResult.OK;
                     this.Hide();

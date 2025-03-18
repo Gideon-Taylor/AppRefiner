@@ -1837,18 +1837,22 @@ namespace AppRefiner
             AvailableCommands.Add(new Command(
                 "Editor: Lint Current Code", 
                 "Run linting rules against the current editor",
-                () => { 
-                    if (activeEditor != null) 
+                (progressDialog) => { 
+                    if (activeEditor != null) {
+                        progressDialog?.UpdateHeader("Running linters...");
                         ProcessLinters(); 
+                    }
                 }
             ));
             
             AvailableCommands.Add(new Command(
                 "Editor: Dark Mode", 
                 "Apply dark mode to the current editor",
-                () => { 
-                    if (activeEditor != null) 
+                (progressDialog) => { 
+                    if (activeEditor != null) {
+                        progressDialog?.UpdateHeader("Applying dark mode...");
                         ScintillaManager.SetDarkMode(activeEditor); 
+                    }
                 }
             ));
             
@@ -2103,7 +2107,7 @@ namespace AppRefiner
             AvailableCommands.Add(new Command(
                 "Project: Set Lint Report Directory",
                 $"Current directory: {lintReportPath}",
-                () => {
+                (progressDialog) => {
                     SetLintReportDirectory();
                 }
             ));
@@ -2111,9 +2115,10 @@ namespace AppRefiner
             AvailableCommands.Add(new Command(
                 "Project: Lint Project",
                 "Run all linters on the entire project and generate a report",
-                () => {
+                (progressDialog) => {
                     if (activeEditor != null) {
-                        LintProject(activeEditor);
+                        progressDialog?.UpdateHeader("Initializing project linting...");
+                        LintProject(activeEditor, progressDialog);
                     }
                 },
                 () => activeEditor != null && activeEditor.DataManager != null
