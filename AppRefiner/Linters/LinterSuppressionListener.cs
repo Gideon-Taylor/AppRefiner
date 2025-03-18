@@ -13,30 +13,30 @@ namespace AppRefiner.Linters
     /// 
     /// Suppression Comment Formats:
     /// 1. Global Suppression (above imports/class declaration):
-    ///    /* #AppRefiner suppress (LinterId.ReportNumber, AnotherLinter.Number) */
+    ///    /* #AppRefiner suppress (LINTER_ID:ReportNumber, ANOTHER_ID:Number) */
     ///    // Applies to entire program file
     /// 
     /// 2. Scope Suppression (above method/function/block):
-    ///    /* #AppRefiner suppress (LinterId.ReportNumber) */
+    ///    /* #AppRefiner suppress (LINTER_ID:ReportNumber) */
     ///    Method MyMethod()
     ///    {
     ///        // All lines in this method will suppress the specified linter report
     ///    }
     /// 
     /// 3. Line-specific Suppression (immediately above a line):
-    ///    /* #AppRefiner suppress (LinterId.ReportNumber) */
+    ///    /* #AppRefiner suppress (LINTER_ID:ReportNumber) */
     ///    var x = SomeMethod(); // This specific line is suppressed
     /// 
     /// Usage Examples:
     /// 
-    /// /* #AppRefiner suppress (CodeStyle.1, Naming.2) */
+    /// /* #AppRefiner suppress (CODE_STYLE:1, NAMING:2) */
     /// import PTCS_PORTAL:*;
     /// 
     /// class MyClass 
     /// {
-    ///     /* #AppRefiner suppress (Complexity.3) */
+    ///     /* #AppRefiner suppress (COMPLEXITY:3) */
     ///     method ComplexMethod()
-    ///         /* AppRefiner suppress (Performance.4) */
+    ///         /* AppRefiner suppress (PERFORMANCE:4) */
     ///         Local number &result = ExpensiveOperation();
     ///     end-method;
     /// }
@@ -200,7 +200,7 @@ namespace AppRefiner.Linters
                 string suppressionList = match.Groups[1].Value;
                 foreach (var item in suppressionList.Split(','))
                 {
-                    var parts = item.Trim().Split('.');
+                    var parts = item.Trim().Split(':');
                     if (parts.Length == 2 && int.TryParse(parts[1], out int reportNumber))
                     {
                         targetCollection.Add(new SuppressionInfo(parts[0], reportNumber));
