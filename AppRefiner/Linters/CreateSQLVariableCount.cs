@@ -148,13 +148,13 @@ namespace AppRefiner.Linters
             {
                 if (sqlText.Trim().Contains(metaSQL, StringComparison.OrdinalIgnoreCase))
                 {
-                    Reports?.Add(AddReport(
+                    AddReport(
                         3,
                         "Cannot validate SQL using certain MetaSQL constructs like %Inser, %Update, %SelectAll etc.",
                         ReportType.Info,
                         context.Start.Line - 1,
                         (args.expression()[0].Start.StartIndex, context.Stop.StopIndex)
-                    ));
+                    );
                     return;
                 }
                     
@@ -196,13 +196,13 @@ namespace AppRefiner.Linters
 
                     if (totalInOutArgs != bindCount)
                     {
-                        Reports?.Add(AddReport(
+                        AddReport(
                             4,
                             $"SQL statement has incorrect number of input parameters. Expected {bindCount}, got {totalInOutArgs}.",
                             ReportType.Error,
                             context.Start.Line - 1,
                             (args.expression()[0].Start.StartIndex, context.Stop.StopIndex)
-                        ));
+                        );
                     }
                     return;
                 }
@@ -211,26 +211,26 @@ namespace AppRefiner.Linters
                 {
                     if (totalInOutArgs != sqlInfo.BindCount)
                     {
-                        Reports?.Add(AddReport(
+                        AddReport(
                             5,
                             $"SQL statement has incorrect number of input parameters. Expected {bindCount}, got {totalInOutArgs}.",
                             ReportType.Error,
                             context.Start.Line - 1,
                             (args.expression()[0].Start.StartIndex, context.Stop.StopIndex)
-                        ));
+                        );
                     }
                     return;
                 }
 
                 if (totalInOutArgs != bindCount + sqlInfo.OutputColumnCount)
                 {
-                    Reports?.Add(AddReport(
+                    AddReport(
                         6,
                         $"SQL statement has incorrect number of In/Out parameters. Expected {bindCount + sqlInfo.OutputColumnCount}, got {totalInOutArgs}.",
                         ReportType.Error,
                         context.Start.Line - 1,
                         (args.expression()[0].Start.StartIndex, context.Stop.StopIndex)
-                    ));
+                    );
                 }
             }
             catch (Exception)
@@ -284,13 +284,13 @@ namespace AppRefiner.Linters
             // Check recursively if the first argument contains a concatenation operator
             if (ContainsConcatenation(firstArg))
             {
-                Reports?.Add(AddReport(
+                AddReport(
                     7,
                     "Found SQL using string concatenation.",
                     Type,
                     firstArg.Start.Line - 1,
                     (firstArg.Start.StartIndex, firstArg.Stop.StopIndex)
-                ));
+                );
             }
 
 
@@ -366,13 +366,13 @@ namespace AppRefiner.Linters
                 
                 if (!sqlInfo.HasValidSqlText)
                 {
-                    Reports?.Add(AddReport(
+                    AddReport(
                         8,
                         $"Cannot validate SQL.{functionName} - SQL text is empty or could not be resolved.",
                         ReportType.Info,
                         context.Start.Line - 1,
                         (context.Start.StartIndex, context.Stop.StopIndex)
-                    ));
+                    );
                     return;
                 }
                 
@@ -385,13 +385,13 @@ namespace AppRefiner.Linters
 
                 if (argCount != sqlInfo.BindCount)
                 {
-                    Reports?.Add(AddReport(
+                    AddReport(
                         9,
                         $"SQL.{functionName} has incorrect number of bind parameters. Expected {sqlInfo.BindCount}, got {argCount}.",
                         ReportType.Error,
                         context.Start.Line - 1,
                         (context.Start.StartIndex, context.Stop.StopIndex)
-                    ));
+                    );
                 }
             }
         }
@@ -405,13 +405,13 @@ namespace AppRefiner.Linters
                 // Check recursively if the first argument contains a concatenation operator
                 if (ContainsConcatenation(firstArg))
                 {
-                    Reports?.Add(AddReport(
+                    AddReport(
                         10,
                         "Found SQL using string concatenation.",
                         Type,
                         firstArg.Start.Line - 1,
                         (firstArg.Start.StartIndex, firstArg.Stop.StopIndex)
-                    ));
+                    );
                 }
 
                 var (sqlText, start, stop) = GetSqlText(firstArg);
@@ -430,13 +430,13 @@ namespace AppRefiner.Linters
             // If we still don't have valid SQL text, check if this requires parameters
             if (!sqlInfo.HasValidSqlText && args?.expression()?.Length > 0)
             {
-                Reports?.Add(AddReport(
+                AddReport(
                     11,
                     "Cannot validate SQL.Open - SQL text is empty or could not be resolved.",
                     ReportType.Info,
                     context.Start.Line - 1,
                     (context.Start.StartIndex, context.Stop.StopIndex)
-                ));
+                );
             }
             else if (sqlInfo.HasValidSqlText)
             {
@@ -450,38 +450,38 @@ namespace AppRefiner.Linters
             /* Cannot validate calls where we don't have the SQL text... */
             if (!sqlInfo.HasValidSqlText) 
             {
-                Reports?.Add(AddReport(
+                AddReport(
                     12,
                     "Cannot validate SQL.Fetch - SQL text is empty or could not be resolved.",
                     ReportType.Info,
                     context.Start.Line - 1,
                     (context.Start.StartIndex, context.Stop.StopIndex)
-                ));
+                );
                 return;
             }
 
             if (sqlInfo.InVarsBound == false && sqlInfo.BindCount > 0)
             {
-                Reports?.Add(AddReport(
+                AddReport(
                     13,
                     "SQL.Fetch called before bind values were provided. Make sure to call Open/Execute before Fetch.",
                     ReportType.Error,
                     context.Start.Line - 1,
                     (context.Start.StartIndex, context.Stop.StopIndex)
-                ));
+                );
             }
 
 
             var expressions = args.expression();
             if (expressions == null || expressions.Length == 0)
             {
-                Reports?.Add(AddReport(
+                AddReport(
                     14,
                     "SQL.Fetch requires at least one output parameter.",
                     ReportType.Error,
                     context.Start.Line - 1,
                     (context.Start.StartIndex, context.Stop.StopIndex)
-                ));
+                );
                 return;
             }
 
@@ -502,13 +502,13 @@ namespace AppRefiner.Linters
                     }
                     else
                     {
-                        Reports?.Add(AddReport(
+                        AddReport(
                             15,
                             $"SQL.Fetch parameter is not an array or record which is needed to handle {sqlInfo.OutputColumnCount} output columns.",
                             ReportType.Error,
                             context.Start.Line - 1,
                             (context.Start.StartIndex, context.Stop.StopIndex)
-                        ));
+                        );
                     }
                 }
 
@@ -518,13 +518,13 @@ namespace AppRefiner.Linters
                 // Multiple parameters must match the exact number of output columns
                 if (expressions.Length != sqlInfo.OutputColumnCount)
                 {
-                    Reports?.Add(AddReport(
+                    AddReport(
                         16,
                         $"SQL.Fetch has incorrect number of output parameters. Expected {sqlInfo.OutputColumnCount}, got {expressions.Length}.",
                         ReportType.Error,
                         context.Start.Line - 1,
                         (context.Start.StartIndex, context.Stop.StopIndex)
-                    ));
+                    );
                 }
             }
         }

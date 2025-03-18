@@ -28,13 +28,13 @@ namespace AppRefiner.Linters
                 statementBlock.statements().statement() == null || 
                 statementBlock.statements().statement().Length == 0)
             {
-                Reports?.Add(AddReport(
+                AddReport(
                     1,
                     "Empty catch block silently swallows exceptions. Consider logging or rethrowing.",
                     Type,
                     context.Start.Line - 1,
                     (context.Start.StartIndex, context.Stop.StopIndex + 1)
-                ));
+                );
             }
         }
 

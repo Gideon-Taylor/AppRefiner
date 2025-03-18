@@ -41,13 +41,13 @@ namespace AppRefiner.Linters
                         if (statement is Statement.Select select && SQLHelper.HasWildcard(select))
                         {
                             /* Report WARNING that there is a wildcard in a select statement */
-                            Reports?.Add(AddReport(
+                            AddReport(
                                 1,
                                 "SQL has a wildcard in select statement.",
                                 this.Type,
                                 firstArg.Start.Line - 1,
                                 (firstArg.Start.StartIndex, firstArg.Stop.StopIndex)
-                            ));
+                            );
                         }
                     }
                 }

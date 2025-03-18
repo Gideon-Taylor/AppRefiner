@@ -35,13 +35,13 @@ namespace AppRefiner.Linters
                         if (sqlText.Length > MaxSqlLength)
                         {
                             /* Report that the SQL statement is too long */
-                            Reports?.Add(AddReport(
+                            AddReport(
                                 1,
                                 "Long literal SQL statements should be SQL objects.",
                                 Type,
                                 firstArg.Start.Line - 1,
                                 (firstArg.Start.StartIndex, firstArg.Stop.StopIndex)
-                            ));
+                            );
                         }
                     }
                 }

@@ -29,13 +29,13 @@ namespace AppRefiner.Linters
             
             if (paramCount > MaxMethodParameters)
             {
-                Reports?.Add(AddReport(
+                AddReport(
                     1,
                     $"Method has {paramCount} parameters, which exceeds recommended maximum of {MaxMethodParameters}. Consider refactoring.",
                     Type,
                     context.Start.Line - 1,
                     (context.Start.StartIndex, context.Stop.StopIndex)
-                ));
+                );
             }
         }
         
@@ -49,13 +49,13 @@ namespace AppRefiner.Linters
             
             if (paramCount > MaxFunctionParameters)
             {
-                Reports?.Add(AddReport(
+                AddReport(
                     2,
                     $"Function has {paramCount} parameters, which exceeds recommended maximum of {MaxFunctionParameters}. Consider using a compound parameter object.",
                     Type,
                     context.Start.Line - 1,
                     (context.Start.StartIndex, context.Stop.StopIndex)
-                ));
+                );
             }
         }
 

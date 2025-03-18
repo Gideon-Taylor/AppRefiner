@@ -68,13 +68,13 @@ namespace AppRefiner.Linters
             // Check if the assignment is a create expression
             if (context.expression() is ObjectCreateExprContext)
             {
-                Reports?.Add(AddReport(
+                AddReport(
                     1,
                     "Variable is declared as 'object' but assigned a specific type.",
                     ReportType.Warning,
                     context.Start.Line - 1,
                     (context.Start.StartIndex, context.Stop.StopIndex)
-                ));
+                );
             }
         }
 
@@ -93,13 +93,13 @@ namespace AppRefiner.Linters
                     // Check if right side is a create expression
                     if (context.expression(1) is ObjectCreateExprContext)
                     {
-                        Reports?.Add(AddReport(
+                        AddReport(
                             2,
                             "Variable is declared as 'object' but assigned a specific type.",
                             ReportType.Warning,
                             context.Start.Line - 1,
                             (context.Start.StartIndex, context.Stop.StopIndex)
-                        ));
+                        );
                     }
                 }
             }

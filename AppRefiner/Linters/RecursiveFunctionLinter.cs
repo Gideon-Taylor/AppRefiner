@@ -48,13 +48,13 @@ namespace AppRefiner.Linters
                 var functionContext = functions[currentFunction];
                 if (!HasSafeTerminationCondition(functionContext))
                 {
-                    Reports?.Add(AddReport(
+                    AddReport(
                         1,
                         "Potentially unsafe recursive function call. Ensure there is a proper termination condition.",
                         Type,
                         context.Start.Line - 1,
                         (context.Start.StartIndex, context.Stop.StopIndex)
-                    ));
+                    );
                 }
             }
         }

@@ -48,13 +48,13 @@ namespace AppRefiner.Linters
             var htmlDef = DataManager.GetHtmlDefinition(htmlRef);
             if (htmlDef == null || string.IsNullOrEmpty(htmlDef.Content))
             {
-                Reports?.Add(AddReport(
+                AddReport(
                     1,
                     $"Invalid HTML definition: {htmlRef}",
                     ReportType.Error,
                     firstArg.Start.Line - 1,
                     (firstArg.Start.StartIndex, firstArg.Stop.StopIndex)
-                ));
+                );
                 return;
             }
 
@@ -64,23 +64,23 @@ namespace AppRefiner.Linters
 
             if (providedBinds < bindCount)
             {
-                Reports?.Add(AddReport(
+                AddReport(
                     2,
                     $"GetHTMLText has too few bind parameters. Expected {bindCount}, got {providedBinds}.",
                     ReportType.Error,
                     context.Start.Line - 1,
                     (context.Start.StartIndex, context.Stop.StopIndex)
-                ));
+                );
             }
             else if (providedBinds > bindCount && bindCount > 0)
             {
-                Reports?.Add(AddReport(
+                AddReport(
                     3,
                     $"GetHTMLText has more bind parameters than needed. Expected {bindCount}, got {providedBinds}.",
                     ReportType.Warning,
                     context.Start.Line - 1,
                     (context.Start.StartIndex, context.Stop.StopIndex)
-                ));
+                );
             }
         }
 

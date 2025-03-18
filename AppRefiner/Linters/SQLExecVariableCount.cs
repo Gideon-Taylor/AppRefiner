@@ -38,13 +38,13 @@ namespace AppRefiner.Linters
                             var sqlText = DataManager.GetSqlDefinition(defName);
                             if (string.IsNullOrWhiteSpace(sqlText))
                             {
-                                Reports?.Add(AddReport(
+                                AddReport(
                                     1,
                                     $"Invalid SQL definition: {defName}",
                                     ReportType.Error,
                                     expr.Start.Line - 1,
                                     (expr.Start.StartIndex, expr.Stop.StopIndex)
-                                ));
+                                );
                                 return (null, expr.Start.StartIndex, expr.Stop.StopIndex);
                             }
                             return (sqlText, expr.Start.StartIndex, expr.Stop.StopIndex);
@@ -109,13 +109,13 @@ namespace AppRefiner.Linters
             // Check recursively if the first argument contains a concatenation operator
             if (ContainsConcatenation(firstArg))
             {
-                Reports?.Add(AddReport(
+                AddReport(
                     2,
                     "Found SQL using string concatenation.",
                     Type,
                     firstArg.Start.Line - 1,
                     (firstArg.Start.StartIndex, firstArg.Stop.StopIndex)
-                ));
+                );
             }
 
 
@@ -143,13 +143,13 @@ namespace AppRefiner.Linters
                 if (totalInOutArgs != (outputCount + bindCount))
                 {
                     /* Report that there are an incorrect number of In/Out parameters and how many there should be */
-                    Reports?.Add(AddReport(
+                    AddReport(
                         3,
                         $"SQL has incorrect number of In/Out parameters. Expected {bindCount + outputCount}, got {totalInOutArgs}.",
                         ReportType.Error,
                         context.Start.Line - 1,
                         (start, context.Stop.StopIndex)
-                    ));
+                    );
                 }
             }
             catch (Exception)

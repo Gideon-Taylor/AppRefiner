@@ -22,13 +22,13 @@ namespace AppRefiner.Linters
 
         private void AddMissingHeaderReport()
         {
-            Reports?.Add(AddReport(
+            AddReport(
                 1,
                 MISSING_HEADER_MESSAGE,
                 ReportType.Warning,
                 0,
                 (0, 1)
-            ));
+            );
         }
 
         public override void EnterProgram(ProgramContext context)
