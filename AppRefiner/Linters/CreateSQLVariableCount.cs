@@ -10,6 +10,9 @@ using static AppRefiner.PeopleCode.PeopleCodeParser;
 
 namespace AppRefiner.Linters
 {
+    /* Issues:
+     * If SQLText is "", then we cannot validate any usage of this SQL variable. (Open/Exec/Fetch/etc)
+     */
     public class CreateSQLVariableCount : ScopedLintRule<SQLStatementInfo>
     {
         private enum ValidationMode
@@ -136,10 +139,15 @@ namespace AppRefiner.Linters
         {
             if (string.IsNullOrWhiteSpace(sqlText))
                 return;
-                
-            // Skip SQL that starts with %Insert
-            if (sqlText.Trim().StartsWith("%Insert", StringComparison.OrdinalIgnoreCase))
-                return;
+            
+            string [] metaSQLToSkip = ["%UpdatePairs", "%KeyEqual", "%Insert", "%SelectAll"];
+
+            foreach (var metaSQL in metaSQLToSkip)
+            {
+                if (sqlText.Trim().Contains(metaSQL, StringComparison.OrdinalIgnoreCase))
+                    return;
+            }
+
 
             try
             {
