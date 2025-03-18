@@ -1664,6 +1664,8 @@ namespace AppRefiner
                     programReports = groupedReports.Select(pg => new
                     {
                         programPath = pg.Key,
+                        // Include the PeopleCodeType information
+                        peopleCodeType = pg.First().Program.Type.ToString(),
                         reports = pg.Select(item => new 
                         {
                             type = item.LintReport.Type.ToString(),

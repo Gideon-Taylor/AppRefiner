@@ -8,6 +8,12 @@
     body { font-family: Arial, sans-serif; margin: 0; padding: 20px; color: #333; }
     h1 { color: #2c3e50; border-bottom: 2px solid #ecf0f1; padding-bottom: 10px; }
     h2 { color: #3498db; margin-top: 30px; padding-bottom: 5px; border-bottom: 1px solid #ecf0f1; }
+    .tabs-container { margin: 20px 0 10px 0; }
+    .tabs { display: flex; flex-wrap: wrap; border-bottom: 1px solid #ddd; }
+    .tab-btn { background-color: #f8f9fa; border: 1px solid #ddd; border-bottom: none; padding: 8px 16px; 
+              cursor: pointer; margin-right: 2px; border-radius: 4px 4px 0 0; }
+    .tab-btn:hover { background-color: #e9ecef; }
+    .tab-btn.active { background-color: #3498db; color: white; border-color: #2980b9; }
     .summary { background-color: #f8f9fa; border-radius: 5px; padding: 15px; margin: 20px 0; }
     .program-item { margin-bottom: 30px; border: 1px solid #ddd; border-radius: 5px; overflow: hidden; }
     .program-header { background-color: #f0f8ff; padding: 10px 15px; border-bottom: 1px solid #ddd; display: flex; justify-content: space-between; }
@@ -50,6 +56,13 @@
     <div class="stat-box info"><div class="stat-count" id="totalInfo">0</div><div>Info</div></div>
   </div>
   
+  <div class="tabs-container">
+    <div class="tabs" id="typeTabs">
+      <!-- Type tabs will be inserted here by JavaScript -->
+      <button class="tab-btn active" data-type="all">All Types</button>
+    </div>
+  </div>
+  
   <div class="filter-controls">
     <span>Filter issues: </span>
     <button class="filter-btn active" data-type="all">All</button>
@@ -78,7 +91,80 @@
     // Load report data from JSON
     function loadReportData(jsonData) {
       reportData = typeof jsonData === 'string' ? JSON.parse(jsonData) : jsonData;
+      
+      // Set up type tabs first
+      setupTypeTabs(reportData);
+      
+      // Then render the report with all types
       renderReport(reportData);
+    }
+    
+    // Set up the type tabs based on available PeopleCodeTypes
+    function setupTypeTabs(data) {
+      const tabsContainer = document.getElementById('typeTabs');
+      
+      // Keep "All Types" tab and then add other types
+      const allTypesTab = tabsContainer.querySelector('[data-type="all"]');
+      tabsContainer.innerHTML = '';
+      tabsContainer.appendChild(allTypesTab);
+      
+      // Get unique PeopleCodeTypes
+      const uniqueTypes = new Set();
+      data.programReports.forEach(program => {
+        if (program.peopleCodeType) {
+          uniqueTypes.add(program.peopleCodeType);
+        }
+      });
+      
+      // Create a tab for each type
+      uniqueTypes.forEach(type => {
+        const tab = document.createElement('button');
+        tab.className = 'tab-btn';
+        tab.setAttribute('data-type', type);
+        tab.textContent = type;
+        tab.addEventListener('click', () => switchTab(type));
+        tabsContainer.appendChild(tab);
+      });
+    }
+    
+    // Switch between tabs
+    function switchTab(typeName) {
+      // Update active tab
+      document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.classList.remove('active');
+      });
+      document.querySelector(`.tab-btn[data-type="${typeName}"]`).classList.add('active');
+      
+      // Filter programs by type
+      if (typeName === 'all') {
+        // Show all programs
+        renderReport(reportData);
+      } else {
+        // Filter to show only programs of specified type
+        const filteredData = {
+          ...reportData,
+          programReports: reportData.programReports.filter(program => 
+            program.peopleCodeType === typeName
+          )
+        };
+        
+        // Recalculate totals for the filtered data
+        filteredData.totalErrors = 0;
+        filteredData.totalWarnings = 0;
+        filteredData.totalInfo = 0;
+        filteredData.totalIssues = 0;
+        
+        filteredData.programReports.forEach(program => {
+          program.reports.forEach(report => {
+            filteredData.totalIssues++;
+            if (report.type === 'Error') filteredData.totalErrors++;
+            else if (report.type === 'Warning') filteredData.totalWarnings++;
+            else if (report.type === 'Info') filteredData.totalInfo++;
+          });
+        });
+        
+        renderReport(filteredData);
+      }
     }
 
     // Render the entire report
