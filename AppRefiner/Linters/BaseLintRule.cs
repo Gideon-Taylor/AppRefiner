@@ -28,7 +28,7 @@ namespace AppRefiner.Linters
         public IList<IToken>? Comments;
         
         // The suppression listener shared across all linters
-        public static LinterSuppressionListener? SuppressionListener;
+        public LinterSuppressionListener? SuppressionListener;
         
         public abstract void Reset();
         
@@ -59,57 +59,5 @@ namespace AppRefiner.Linters
             }
         }
         
-        // Finds all suppression directives that apply to the given report
-        [Obsolete("Use LinterSuppressionListener instead")]
-        public static List<string> GetSuppressedWarnings(IList<IToken> comments, int line)
-        {
-            var suppressions = new List<string>();
-            
-            // Look for #pragma suppress directives in comments preceding the line
-            foreach (var comment in comments)
-            {
-                int commentLine = comment.Line;
-                
-                // Only check comments that are on the lines preceding the current line
-                if (commentLine < line)
-                {
-                    string commentText = comment.Text;
-                    
-                    // Extract suppression directives using regex
-                    // Format: REM #pragma suppress LINTER_ID:REPORT_NUMBER [, LINTER_ID:REPORT_NUMBER]
-                    Match match = Regex.Match(commentText, @"(?:REM|/\*)\s*#AppRefiner\s+suppress\s+(.+?)(?:\*/|\s*$)", RegexOptions.IgnoreCase);
-                    if (match.Success)
-                    {
-                        string suppressionList = match.Groups[1].Value.Trim();
-                        
-                        // Parse comma-separated list of suppressions
-                        foreach (var suppression in suppressionList.Split(','))
-                        {
-                            string trimmedSuppression = suppression.Trim();
-                            if (!string.IsNullOrEmpty(trimmedSuppression))
-                            {
-                                suppressions.Add(trimmedSuppression);
-                            }
-                        }
-                    }
-                }
-                // Skip comments that are after the current line
-                else if (commentLine > line)
-                {
-                    break;
-                }
-            }
-            
-            return suppressions;
-        }
-        
-        // Checks if a specific report should be suppressed based on the suppression listener
-        public static bool IsSuppressed(Report report, LinterSuppressionListener suppressionListener)
-        {
-            if (suppressionListener == null || report == null)
-                return false;
-                
-            return suppressionListener.IsSuppressed(report.LinterId, report.ReportNumber, report.Line);
-        }
     }
 }

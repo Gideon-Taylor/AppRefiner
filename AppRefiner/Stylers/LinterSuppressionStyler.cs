@@ -1,4 +1,6 @@
 using Antlr4.Runtime;
+using Antlr4.Runtime.Misc;
+using AppRefiner.PeopleCode;
 using System;
 using System.Collections.Generic;
 using System.Text.RegularExpressions;
@@ -18,6 +20,12 @@ namespace AppRefiner.Stylers
         public override void Reset()
         {
             // Nothing to reset
+        }
+
+        public override void ExitProgram([NotNull] PeopleCodeParser.ProgramContext context)
+        {
+            base.ExitProgram(context);
+            ProcessComments();
         }
 
         public void ProcessComments()

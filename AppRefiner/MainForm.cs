@@ -25,6 +25,7 @@ using AppRefiner.Templates;
 using System.Web;
 using AppRefiner.Database.Models;
 using Antlr4.Runtime.Atn;
+using SharpCompress.Compressors.Xz;
 
 namespace AppRefiner
 {
@@ -417,16 +418,14 @@ namespace AppRefiner
                 parseCount++;
                 parser.Interpreter.ClearDFA();
 
-                // Create the linter suppression listener
-                BaseLintRule.SuppressionListener = new LinterSuppressionListener(stream, comments);
-
                 // Collection for reports from this program
                 List<Report> programReports = new List<Report>();
                 
                 MultiParseTreeWalker walker = new();
-                
+
                 // Add the suppression listener first
-                walker.AddListener(BaseLintRule.SuppressionListener);
+                var suppresionListner = new LinterSuppressionListener(stream, comments);
+                walker.AddListener(suppresionListner);
                 
                 // Configure and run each active linter
                 foreach (var linter in activeLinters)
@@ -438,7 +437,7 @@ namespace AppRefiner
                     linter.DataManager = editor.DataManager;
                     linter.Reports = programReports;
                     linter.Comments = comments;
-                    
+                    linter.SuppressionListener = suppresionListner;
                     walker.AddListener(linter);
                 }
                 
@@ -1077,7 +1076,8 @@ namespace AppRefiner
 
             // Create parse tree
             PeopleCodeLexer lexer = new PeopleCodeLexer(new Antlr4.Runtime.AntlrInputStream(editor.ContentString));
-            PeopleCodeParser parser = new PeopleCodeParser(new Antlr4.Runtime.CommonTokenStream(lexer));
+            var stream = new Antlr4.Runtime.CommonTokenStream(lexer);
+            PeopleCodeParser parser = new PeopleCodeParser(stream);
             var program = parser.program();
             parser.Interpreter.ClearDFA();
             GC.Collect();
@@ -1088,11 +1088,17 @@ namespace AppRefiner
             List<CodeHighlight> highlights = new();
             List<CodeColor> colors = new();
 
+            // Collect all comments from both comment channels
+            var comments = stream.GetTokens()
+                .Where(token => token.Channel == PeopleCodeLexer.COMMENTS || token.Channel == PeopleCodeLexer.API_COMMENTS)
+                .ToList();
+
             foreach (var styler in activeStylers)
             {
                 styler.Annotations = annotations;
                 styler.Highlights = highlights;
                 styler.Colors = colors;
+                styler.Comments = comments;
                 walker.AddListener(styler);
             }
 
@@ -1158,19 +1164,8 @@ namespace AppRefiner
             var program = parser.program();
             parser.Interpreter.ClearDFA();
             GC.Collect();
-            
-            // Create the linter suppression listener
-            BaseLintRule.SuppressionListener = new LinterSuppressionListener(stream, comments);
-
-            // Create the linter suppression listener
-            BaseLintRule.SuppressionListener = new LinterSuppressionListener(stream, comments);
 
             var activeLinters = linterRules.Where(a => a.Active);
-
-            /* Free up ANTLR resources */
-            lexer = null;
-            parser = null;
-            stream = null;
 
             /* Only run NotRequired or Optional linters if there is no database connection */
             if (activeEditor.DataManager == null)
@@ -1188,7 +1183,8 @@ namespace AppRefiner
             }
 
             // Add the suppression listener first
-            walker.AddListener(BaseLintRule.SuppressionListener);
+            var suppressionListener = new LinterSuppressionListener(stream, comments);
+            walker.AddListener(suppressionListener);
             
             IDataManager? dataManger = activeEditor.DataManager;
             foreach (var linter in activeLinters)
@@ -1196,6 +1192,7 @@ namespace AppRefiner
                 linter.DataManager = dataManger;
                 linter.Reports = reports;
                 linter.Comments = comments;  // Make comments available to each linter
+                linter.SuppressionListener = suppressionListener;
                 walker.AddListener(linter);
             }
 
@@ -1205,7 +1202,12 @@ namespace AppRefiner
             {
                 linter.Reset();
             }
+
+            /* Free up ANTLR resources */
             program = null;
+            lexer = null;
+            parser = null;
+            stream = null;
             foreach (var g in reports.GroupBy(r => r.Line).OrderBy(b => b.First().Line))
             {
                 List<string> messages = new();
@@ -1221,7 +1223,7 @@ namespace AppRefiner
 
                     if (chkLintAnnotate.Checked)
                     {
-                        messages.Add(report.Message);
+                        messages.Add($"{report.Message} ({report.GetFullId()})");
                         styles.Add(report.Type switch
                         {
                             ReportType.Error => AnnotationStyle.Red,
@@ -1526,10 +1528,6 @@ namespace AppRefiner
             var program = parser.program();
             parser.Interpreter.ClearDFA();
             GC.Collect();
-            /* Free up ANTLR resources */
-            lexer = null;
-            parser = null;
-            stream = null;
 
             // Check if the linter requires database connection
             if (linter.DatabaseRequirement == DataManagerRequirement.Required && activeEditor.DataManager == null)
@@ -1548,8 +1546,9 @@ namespace AppRefiner
             }
 
             // Add the suppression listener first
-            walker.AddListener(BaseLintRule.SuppressionListener);
-            
+            var suppressionListener = new LinterSuppressionListener(stream, comments);
+            walker.AddListener(suppressionListener);
+
             IDataManager? dataManger = activeEditor.DataManager;
             
             // Configure and run the specific linter
@@ -1562,9 +1561,13 @@ namespace AppRefiner
             
             // Reset the linter state
             linter.Reset();
-            
+
+            /* Free up ANTLR resources */
             program = null;
-            
+            lexer = null;
+            parser = null;
+            stream = null;
+
             // Process and display reports
             foreach (var g in reports.GroupBy(r => r.Line).OrderBy(b => b.First().Line))
             {

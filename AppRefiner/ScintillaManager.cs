@@ -483,8 +483,8 @@ namespace AppRefiner
 
             /* Create Linter Suppression Highlighter */
             editor.SendMessage(SCI_INDICSETSTYLE, (IntPtr)LINTER_SUPPRESSION_HIGHLIGHTER, (IntPtr)INDIC_FULLBOX);
-            editor.SendMessage(SCI_INDICSETFORE, (IntPtr)LINTER_SUPPRESSION_HIGHLIGHTER, (IntPtr)0x50CB50); /* Green in BGR format */
-            editor.SendMessage(SCI_INDICSETALPHA, (IntPtr)LINTER_SUPPRESSION_HIGHLIGHTER, (IntPtr)0x70);
+            editor.SendMessage(SCI_INDICSETFORE, (IntPtr)LINTER_SUPPRESSION_HIGHLIGHTER, (IntPtr)0x50CB50); /* Purpleish in BGR format */
+            editor.SendMessage(SCI_INDICSETALPHA, (IntPtr)LINTER_SUPPRESSION_HIGHLIGHTER, (IntPtr)0x40);
             editor.SendMessage(SCI_INDICSETUNDER, (IntPtr)LINTER_SUPPRESSION_HIGHLIGHTER, (IntPtr)1);
 
             editor.FoldEnabled = true;
@@ -503,6 +503,9 @@ namespace AppRefiner
                     break;
                 case HighlightColor.Blue:
                     indicatorNumber = BLUE_HIGLIGHTER;
+                    break;
+                case HighlightColor.LinterSuppression:
+                    indicatorNumber = LINTER_SUPPRESSION_HIGHLIGHTER;
                     break;
             }
 
