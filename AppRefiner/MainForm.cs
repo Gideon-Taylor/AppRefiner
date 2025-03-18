@@ -13,6 +13,7 @@ using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using System.IO;
 using static AppRefiner.PeopleCode.PeopleCodeParser;
 using static SqlParser.Ast.CopyTarget;
 using Antlr4.Build.Tasks;
@@ -1638,231 +1639,85 @@ namespace AppRefiner
         private void GenerateHtmlReport(string reportPath, string projectName, 
             List<(PeopleCodeItem Program, Report LintReport)> reportData)
         {
-            // Group reports by program
-            var groupedReports = reportData
-                .GroupBy(r => r.Program.BuildPath())
-                .OrderBy(g => g.Key)
-                .ToList();
-                
-            StringBuilder html = new StringBuilder();
-            
-            // HTML header
-            html.AppendLine("<!DOCTYPE html>");
-            html.AppendLine("<html lang=\"en\">");
-            html.AppendLine("<head>");
-            html.AppendLine("  <meta charset=\"UTF-8\">");
-            html.AppendLine("  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">");
-            html.AppendLine($"  <title>Lint Report - {projectName}</title>");
-            html.AppendLine("  <style>");
-            html.AppendLine("    body { font-family: Arial, sans-serif; margin: 0; padding: 20px; color: #333; }");
-            html.AppendLine("    h1 { color: #2c3e50; border-bottom: 2px solid #ecf0f1; padding-bottom: 10px; }");
-            html.AppendLine("    h2 { color: #3498db; margin-top: 30px; padding-bottom: 5px; border-bottom: 1px solid #ecf0f1; }");
-            html.AppendLine("    .summary { background-color: #f8f9fa; border-radius: 5px; padding: 15px; margin: 20px 0; }");
-            html.AppendLine("    .program-item { margin-bottom: 30px; border: 1px solid #ddd; border-radius: 5px; overflow: hidden; }");
-            html.AppendLine("    .program-header { background-color: #f0f8ff; padding: 10px 15px; border-bottom: 1px solid #ddd; display: flex; justify-content: space-between; }");
-            html.AppendLine("    .program-content { padding: 0 15px; }");
-            html.AppendLine("    table { width: 100%; border-collapse: collapse; margin: 15px 0; }");
-            html.AppendLine("    th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid #ddd; }");
-            html.AppendLine("    th { background-color: #f5f5f5; }");
-            html.AppendLine("    tr:hover { background-color: #f9f9f9; }");
-            html.AppendLine("    .error { color: #e74c3c; }");
-            html.AppendLine("    .warning { color: #f39c12; }");
-            html.AppendLine("    .info { color: #3498db; }");
-            html.AppendLine("    .timestamp { color: #7f8c8d; font-size: 0.9em; margin-top: 5px; }");
-            html.AppendLine("    .expanded { display: block; }");
-            html.AppendLine("    .collapsed { display: none; }");
-            html.AppendLine("    .expand-button { background: none; border: none; color: #3498db; cursor: pointer; }");
-            html.AppendLine("    .stats { display: flex; gap: 20px; margin: 20px 0; }");
-            html.AppendLine("    .stat-box { background-color: #f8f9fa; border-radius: 5px; padding: 10px 15px; flex: 1; text-align: center; }");
-            html.AppendLine("    .stat-box.errors { border-left: 4px solid #e74c3c; }");
-            html.AppendLine("    .stat-box.warnings { border-left: 4px solid #f39c12; }");
-            html.AppendLine("    .stat-box.info { border-left: 4px solid #3498db; }");
-            html.AppendLine("    .stat-count { font-size: 1.5em; font-weight: bold; }");
-            html.AppendLine("    .filter-controls { margin: 20px 0; background-color: #f8f9fa; padding: 10px 15px; border-radius: 5px; }");
-            html.AppendLine("    .filter-btn { background-color: #fff; border: 1px solid #ddd; padding: 5px 10px; margin-right: 5px; border-radius: 3px; cursor: pointer; }");
-            html.AppendLine("    .filter-btn:hover { background-color: #f0f0f0; }");
-            html.AppendLine("    .filter-btn.active { background-color: #3498db; color: white; border-color: #2980b9; }");
-            html.AppendLine("    .issue-row { transition: display 0.2s ease; }");
-            html.AppendLine("    .hide-error .issue-error { display: none; }");
-            html.AppendLine("    .hide-warning .issue-warning { display: none; }");
-            html.AppendLine("    .hide-info .issue-info { display: none; }");
-            html.AppendLine("  </style>");
-            html.AppendLine("  <script>");
-            html.AppendLine("    function toggleContent(id) {");
-            html.AppendLine("      const content = document.getElementById(id);");
-            html.AppendLine("      const button = document.querySelector(`[onclick=\"toggleContent('${id}')\"]`);");
-            html.AppendLine("      if (content.classList.contains('collapsed')) {");
-            html.AppendLine("        content.classList.remove('collapsed');");
-            html.AppendLine("        content.classList.add('expanded');");
-            html.AppendLine("        button.textContent = 'Collapse';");
-            html.AppendLine("      } else {");
-            html.AppendLine("        content.classList.remove('expanded');");
-            html.AppendLine("        content.classList.add('collapsed');");
-            html.AppendLine("        button.textContent = 'Expand';");
-            html.AppendLine("      }");
-            html.AppendLine("    }");
-            html.AppendLine("");
-            html.AppendLine("    // Filter issues by type");
-            html.AppendLine("    document.addEventListener('DOMContentLoaded', function() {");
-            html.AppendLine("      const filterButtons = document.querySelectorAll('.filter-btn');");
-            html.AppendLine("      const reportBody = document.body;");
-            html.AppendLine("");
-            html.AppendLine("      // Handle filter button clicks");
-            html.AppendLine("      filterButtons.forEach(button => {");
-            html.AppendLine("        button.addEventListener('click', function() {");
-            html.AppendLine("          // Update active button");
-            html.AppendLine("          filterButtons.forEach(btn => btn.classList.remove('active'));");
-            html.AppendLine("          this.classList.add('active');");
-            html.AppendLine("");
-            html.AppendLine("          // Get filter type");
-            html.AppendLine("          const filterType = this.getAttribute('data-type');");
-            html.AppendLine("");
-            html.AppendLine("          // Reset all filters first");
-            html.AppendLine("          reportBody.classList.remove('hide-error', 'hide-warning', 'hide-info');");
-            html.AppendLine("");
-            html.AppendLine("          // Apply appropriate filters");
-            html.AppendLine("          switch (filterType) {");
-            html.AppendLine("            case 'error':"); 
-            html.AppendLine("              reportBody.classList.add('hide-warning', 'hide-info');");
-            html.AppendLine("              break;");
-            html.AppendLine("            case 'warning':");
-            html.AppendLine("              reportBody.classList.add('hide-error', 'hide-info');");
-            html.AppendLine("              break;");
-            html.AppendLine("            case 'info':");
-            html.AppendLine("              reportBody.classList.add('hide-error', 'hide-warning');");
-            html.AppendLine("              break;");
-            html.AppendLine("            case 'error-warning':");
-            html.AppendLine("              reportBody.classList.add('hide-info');");
-            html.AppendLine("              break;");
-            html.AppendLine("            // 'all' or default - show everything");
-            html.AppendLine("          }");
-            html.AppendLine("          ");
-            html.AppendLine("          // Update the issue count for each program");
-            html.AppendLine("          updateProgramCounts();");
-            html.AppendLine("        });");
-            html.AppendLine("      });");
-            html.AppendLine("");
-            html.AppendLine("      function updateProgramCounts() {");
-            html.AppendLine("        // For each program, count visible issues and update the header");
-            html.AppendLine("        document.querySelectorAll('.program-item').forEach(program => {");
-            html.AppendLine("          const programId = program.querySelector('.program-content').id;");
-            html.AppendLine("          const visibleIssues = program.querySelectorAll('tr.issue-row:not([style*=\"display: none\"])').length;");
-            html.AppendLine("          const countDisplay = program.querySelector('.issue-count');");
-            html.AppendLine("          if (countDisplay) {");
-            html.AppendLine("            countDisplay.textContent = `(${visibleIssues} issues)`;");
-            html.AppendLine("          }");
-            html.AppendLine("        });");
-            html.AppendLine("      }");
-            html.AppendLine("    });");
-            html.AppendLine("  </script>");
-            html.AppendLine("</head>");
-            html.AppendLine("<body>");
-            
-            // Report header
-            html.AppendLine($"  <h1>Lint Report for Project: {projectName}</h1>");
-            html.AppendLine($"  <p class=\"timestamp\">Generated on: {DateTime.Now}</p>");
-            
-            // Calculate statistics
-            int totalErrors = reportData.Count(r => r.LintReport.Type == ReportType.Error);
-            int totalWarnings = reportData.Count(r => r.LintReport.Type == ReportType.Warning);
-            int totalInfo = reportData.Count(r => r.LintReport.Type == ReportType.Info);
-            
-            // Add statistics summary
-            html.AppendLine("  <div class=\"stats\">");
-            html.AppendLine($"    <div class=\"stat-box errors\"><div class=\"stat-count\">{totalErrors}</div><div>Errors</div></div>");
-            html.AppendLine($"    <div class=\"stat-box warnings\"><div class=\"stat-count\">{totalWarnings}</div><div>Warnings</div></div>");
-            html.AppendLine($"    <div class=\"stat-box info\"><div class=\"stat-count\">{totalInfo}</div><div>Info</div></div>");
-            html.AppendLine("  </div>");
-            
-            // Add filter controls
-            html.AppendLine("  <div class=\"filter-controls\">");
-            html.AppendLine("    <span>Filter issues: </span>");
-            html.AppendLine("    <button class=\"filter-btn active\" data-type=\"all\">All</button>");
-            html.AppendLine("    <button class=\"filter-btn\" data-type=\"error\">Errors Only</button>");
-            html.AppendLine("    <button class=\"filter-btn\" data-type=\"warning\">Warnings Only</button>");
-            html.AppendLine("    <button class=\"filter-btn\" data-type=\"info\">Info Only</button>");
-            html.AppendLine("    <button class=\"filter-btn\" data-type=\"error-warning\">Errors & Warnings</button>");
-            html.AppendLine("  </div>");
-            
-            // Summary section
-            html.AppendLine("  <div class=\"summary\">");
-            html.AppendLine($"    <p><strong>Total Programs:</strong> {groupedReports.Count}</p>");
-            html.AppendLine($"    <p><strong>Total Issues:</strong> {reportData.Count} ({totalErrors} errors, {totalWarnings} warnings, {totalInfo} info)</p>");
-            html.AppendLine("  </div>");
-            
-            // Program reports
-            html.AppendLine("  <h2>Program Reports</h2>");
-            
-            int programCounter = 0;
-            
-            foreach (var programGroup in groupedReports)
-            {
-                programCounter++;
-                string programId = $"program-{programCounter}";
-                string programPath = programGroup.Key;
-                var programReports = programGroup.ToList();
-                
-                int programErrors = programReports.Count(r => r.LintReport.Type == ReportType.Error);
-                int programWarnings = programReports.Count(r => r.LintReport.Type == ReportType.Warning);
-                int programInfo = programReports.Count(r => r.LintReport.Type == ReportType.Info);
-                
-                // Program header with issue counts and expand/collapse button
-                html.AppendLine("  <div class=\"program-item\">");
-                html.AppendLine("    <div class=\"program-header\">");
-                html.AppendLine($"      <div><strong>{programPath}</strong> <span class=\"issue-count\">({programReports.Count} issues)</span></div>");
-                html.AppendLine($"      <div>");
-                if (programErrors > 0) html.AppendLine($"        <span class=\"error\">{programErrors} errors</span> ");
-                if (programWarnings > 0) html.AppendLine($"        <span class=\"warning\">{programWarnings} warnings</span> ");
-                if (programInfo > 0) html.AppendLine($"        <span class=\"info\">{programInfo} info</span> ");
-                html.AppendLine($"        <button class=\"expand-button\" onclick=\"toggleContent('{programId}')\">Expand</button>");
-                html.AppendLine($"      </div>");
-                html.AppendLine("    </div>");
-                
-                // Program content (initially collapsed for cleaner view)
-                html.AppendLine($"    <div id=\"{programId}\" class=\"program-content collapsed\">");
-                
-                // Table of issues
-                html.AppendLine("      <table>");
-                html.AppendLine("        <thead>");
-                html.AppendLine("          <tr>");
-                html.AppendLine("            <th>Type</th>");
-                html.AppendLine("            <th>Line</th>");
-                html.AppendLine("            <th>Message</th>");
-                html.AppendLine("          </tr>");
-                html.AppendLine("        </thead>");
-                html.AppendLine("        <tbody>");
-                
-                foreach (var item in programReports.OrderBy(r => r.LintReport.Line))
-                {
-                    var report = item.LintReport;
-                    string typeClass = report.Type == ReportType.Error ? "error" : 
-                                      (report.Type == ReportType.Warning ? "warning" : "info");
-                    
-                    string issueClass = report.Type == ReportType.Error ? "issue-error" : 
-                                       (report.Type == ReportType.Warning ? "issue-warning" : "issue-info");
-                    
-                    html.AppendLine($"          <tr class=\"issue-row {issueClass}\">");
-                    html.AppendLine($"            <td class=\"{typeClass}\">{report.Type}</td>");
-                    html.AppendLine($"            <td>{report.Line}</td>");
-                    html.AppendLine($"            <td>{System.Web.HttpUtility.HtmlEncode(report.Message)}</td>");
-                    html.AppendLine("          </tr>");
-                }
-                
-                html.AppendLine("        </tbody>");
-                html.AppendLine("      </table>");
-                html.AppendLine("    </div>");
-                html.AppendLine("  </div>");
-            }
-            
-            // Footer
-            html.AppendLine("  <p class=\"timestamp\">Report generated by AppRefiner - © 2023</p>");
-            html.AppendLine("</body>");
-            html.AppendLine("</html>");
-            
-            // Write the HTML to the report file
             try
             {
-                System.IO.File.WriteAllText(reportPath, html.ToString());
+                // Group reports by program
+                var groupedReports = reportData
+                    .GroupBy(r => r.Program.BuildPath())
+                    .OrderBy(g => g.Key)
+                    .ToList();
+                
+                // Calculate statistics
+                int totalErrors = reportData.Count(r => r.LintReport.Type == ReportType.Error);
+                int totalWarnings = reportData.Count(r => r.LintReport.Type == ReportType.Warning);
+                int totalInfo = reportData.Count(r => r.LintReport.Type == ReportType.Info);
+                
+                // Create a structured report object for JSON serialization
+                var report = new
+                {
+                    projectName,
+                    timestamp = DateTime.Now.ToString(),
+                    totalErrors,
+                    totalWarnings,
+                    totalInfo,
+                    totalIssues = reportData.Count,
+                    programReports = groupedReports.Select(pg => new
+                    {
+                        programPath = pg.Key,
+                        reports = pg.Select(item => new 
+                        {
+                            type = item.LintReport.Type.ToString(),
+                            line = item.LintReport.Line,
+                            message = item.LintReport.Message
+                        }).OrderBy(r => r.line).ToList()
+                    }).ToList()
+                };
+                
+                // Convert the report object to JSON
+                string reportJson = System.Text.Json.JsonSerializer.Serialize(report);
+                
+                // Get the template file path
+                string templatePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Templates", "LintReportTemplate.html");
+                string templateHtml;
+                
+                // Check if template file exists
+                if (File.Exists(templatePath))
+                {
+                    // Read the template file
+                    templateHtml = File.ReadAllText(templatePath);
+                }
+                else
+                {
+                    // If file doesn't exist, try to read from embedded resource
+                    using (Stream? stream = GetType().Assembly.GetManifestResourceStream("AppRefiner.Templates.LintReportTemplate.html"))
+                    {
+                        if (stream != null)
+                        {
+                            using (var reader = new StreamReader(stream))
+                            {
+                                templateHtml = reader.ReadToEnd();
+                            }
+                        }
+                        else
+                        {
+                            // Fallback message if template isn't found
+                            MessageBox.Show("Lint report template not found. Please check your installation.", 
+                                "Template Missing", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                            return;
+                        }
+                    }
+                }
+                
+                // Inject the JSON data into the HTML
+                string finalHtml = templateHtml.Replace("{{projectName}}", projectName)
+                                             .Replace("{{timestamp}}", DateTime.Now.ToString());
+                
+                // Add the report data as a JavaScript variable
+                finalHtml = finalHtml.Replace("</head>", 
+                    $"<script>const reportJSON = {reportJson};</script>\n</head>");
+                
+                // Write the final HTML to the report file
+                File.WriteAllText(reportPath, finalHtml);
             }
             catch (Exception ex)
             {
