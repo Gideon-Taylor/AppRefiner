@@ -148,7 +148,7 @@ namespace AppRefiner.Linters
                 var token = _tokenStream.Get(i);
                 
                 // Skip tokens on or before the comment line or on comment channel
-                if (token.Line <= commentLine || token.Channel == PeopleCodeLexer.COMMENTS_CHANNEL)
+                if (token.Line <= commentLine || token.Channel == PeopleCodeLexer.COMMENTS)
                     continue;
                 
                 // Skip insignificant tokens like semicolons
@@ -385,14 +385,6 @@ namespace AppRefiner.Linters
             }
             
             _currentScopeStartLine = -1;
-        }
-
-        // This method is now handled by ProcessAllLineSpecificSuppressions
-        // and is kept here only as reference - it's not called anymore
-        private void ProcessLineSpecificSuppressions(int line)
-        {
-            // This functionality has been moved to ProcessAllLineSpecificSuppressions
-            // which runs once at initialization
         }
 
         /// <summary>
