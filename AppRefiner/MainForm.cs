@@ -1667,7 +1667,7 @@ namespace AppRefiner
                         reports = pg.Select(item => new 
                         {
                             type = item.LintReport.Type.ToString(),
-                            line = item.LintReport.Line,
+                            line = item.LintReport.Line + 1,
                             message = item.LintReport.Message
                         }).OrderBy(r => r.line).ToList()
                     }).ToList()

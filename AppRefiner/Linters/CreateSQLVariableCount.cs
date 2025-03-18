@@ -356,7 +356,7 @@ namespace AppRefiner.Linters
                 {
                     Reports?.Add(new Report
                     {
-                        Type = ReportType.Warning,
+                        Type = ReportType.Info,
                         Line = context.Start.Line - 1,
                         Span = (context.Start.StartIndex, context.Stop.StopIndex),
                         Message = $"Cannot validate SQL.{functionName} - SQL text is empty or could not be resolved."
@@ -420,7 +420,7 @@ namespace AppRefiner.Linters
             {
                 Reports?.Add(new Report
                 {
-                    Type = ReportType.Warning,
+                    Type = ReportType.Info,
                     Line = context.Start.Line - 1,
                     Span = (context.Start.StartIndex, context.Stop.StopIndex),
                     Message = "Cannot validate SQL.Open - SQL text is empty or could not be resolved."
@@ -440,7 +440,7 @@ namespace AppRefiner.Linters
             {
                 Reports?.Add(new Report
                 {
-                    Type = ReportType.Warning,
+                    Type = ReportType.Info,
                     Line = context.Start.Line - 1,
                     Span = (context.Start.StartIndex, context.Stop.StopIndex),
                     Message = "Cannot validate SQL.Fetch - SQL text is empty or could not be resolved."
