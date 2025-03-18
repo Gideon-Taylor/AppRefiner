@@ -92,29 +92,15 @@ namespace AppRefiner.Linters
             @"#AppRefiner\s+suppress\s+\(([\w\.\s,]+)\)",
             RegexOptions.Compiled);
 
-        public LinterSuppressionListener(ITokenStream tokenStream)
+        public LinterSuppressionListener(ITokenStream tokenStream, List<IToken> comments)
         {
             _tokenStream = tokenStream ?? throw new ArgumentNullException(nameof(tokenStream));
             
             // Extract all comments from the token stream
-            _comments = ExtractComments();
+            _comments = comments;
             
             // Process global suppressions (above imports block)
             ProcessGlobalSuppressions();
-        }
-
-        private IList<IToken> ExtractComments()
-        {
-            var comments = new List<IToken>();
-            for (int i = 0; i < _tokenStream.Size; i++)
-            {
-                var token = _tokenStream.Get(i);
-                if (token.Channel == PeopleCodeLexer.COMMENTS_CHANNEL)
-                {
-                    comments.Add(token);
-                }
-            }
-            return comments;
         }
 
         private void ProcessGlobalSuppressions()
