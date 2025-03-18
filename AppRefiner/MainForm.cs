@@ -435,48 +435,34 @@ namespace AppRefiner
                 program = null;
             }
             
-            // Generate the HTML report
-            if (allReports.Count > 0)
-            {
-                GenerateHtmlReport(reportPath, projectName, allReports);
+            // Always generate the HTML report, even if no issues found
+            GenerateHtmlReport(reportPath, projectName, allReports);
+            
+            // Reset UI and show confirmation with link to report
+            this.Invoke(() => {
+                lblStatus.Text = "Monitoring...";
+                progressBar1.Style = ProgressBarStyle.Blocks;
                 
-                // Reset UI and show confirmation with link to report
-                this.Invoke(() => {
-                    lblStatus.Text = "Monitoring...";
-                    progressBar1.Style = ProgressBarStyle.Blocks;
+                string message = allReports.Count > 0 
+                    ? $"Project linting complete. {allReports.Count} issues found.\n\nWould you like to open the report?"
+                    : "Project linting complete. No issues found.\n\nWould you like to open the report?";
+                
+                var result = MessageBox.Show(
+                    message, 
+                    "Project Linting Complete", 
+                    MessageBoxButtons.YesNo, 
+                    MessageBoxIcon.Information);
                     
-                    // Show dialog with option to open the report
-                    var result = MessageBox.Show(
-                        $"Project linting complete. {allReports.Count} issues found.\n\nWould you like to open the report?", 
-                        "Project Linting Complete", 
-                        MessageBoxButtons.YesNo, 
-                        MessageBoxIcon.Information);
-                        
-                    if (result == DialogResult.Yes)
+                if (result == DialogResult.Yes)
+                {
+                    // Open the report in default browser
+                    System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
                     {
-                        // Open the report in default browser
-                        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
-                        {
-                            FileName = reportPath,
-                            UseShellExecute = true
-                        });
-                    }
-                });
-            }
-            else
-            {
-                // Reset UI and show no issues found
-                this.Invoke(() => {
-                    lblStatus.Text = "Monitoring...";
-                    progressBar1.Style = ProgressBarStyle.Blocks;
-                    
-                    MessageBox.Show(
-                        "No linting issues found in the project.", 
-                        "Project Linting Complete", 
-                        MessageBoxButtons.OK, 
-                        MessageBoxIcon.Information);
-                });
-            }
+                        FileName = reportPath,
+                        UseShellExecute = true
+                    });
+                }
+            });
         }
 
         private void LoadSettings()
