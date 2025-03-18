@@ -367,7 +367,7 @@ namespace AppRefiner
             
             // Master collection of all linting reports
             List<(PeopleCodeItem Program, Report LintReport)> allReports = new List<(PeopleCodeItem, Report)>();
-            
+            var parseCount = 0;
             // Process each program in the project
             foreach (var ppcProg in ppcProgs)
             {
@@ -389,7 +389,7 @@ namespace AppRefiner
                 
                 PeopleCodeParser parser = new PeopleCodeParser(stream);
                 var program = parser.program();
-
+                parseCount++;
                 parser.Interpreter.ClearDFA();
                 GC.Collect();
 
