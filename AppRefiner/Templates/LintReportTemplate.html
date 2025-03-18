@@ -87,6 +87,7 @@
   <script>
     // Load and render report data
     let reportData = null;
+    window.currentTabType = 'all'; // Initialize current tab type
 
     // Load report data from JSON
     function loadReportData(jsonData) {
@@ -111,20 +112,20 @@
       // Add click event handler to the "All Types" tab
       allTypesTab.addEventListener('click', () => switchTab('all'));
       
-      // Get unique PeopleCodeTypes
-      const uniqueTypes = new Set();
+      // Count programs by type
+      const typeCount = {};
       data.programReports.forEach(program => {
         if (program.peopleCodeType) {
-          uniqueTypes.add(program.peopleCodeType);
+          typeCount[program.peopleCodeType] = (typeCount[program.peopleCodeType] || 0) + 1;
         }
       });
       
-      // Create a tab for each type
-      uniqueTypes.forEach(type => {
+      // Create a tab for each type with counts
+      Object.keys(typeCount).sort().forEach(type => {
         const tab = document.createElement('button');
         tab.className = 'tab-btn';
         tab.setAttribute('data-type', type);
-        tab.textContent = type;
+        tab.textContent = `${type} (${typeCount[type]})`;
         tab.addEventListener('click', () => switchTab(type));
         tabsContainer.appendChild(tab);
       });
@@ -137,6 +138,9 @@
         btn.classList.remove('active');
       });
       document.querySelector(`.tab-btn[data-type="${typeName}"]`).classList.add('active');
+      
+      // Store current tab type in a global variable for use in renderReport
+      window.currentTabType = typeName;
       
       // Filter programs by type
       if (typeName === 'all') {
@@ -201,10 +205,18 @@
         const programWarnings = program.reports.filter(r => r.type === 'Warning').length;
         const programInfo = program.reports.filter(r => r.type === 'Info').length;
         
+        // Format program path based on current tab
+        let displayPath = program.programPath;
+        
+        // Only show type prefix in "All Types" mode
+        if (window.currentTabType === 'all' && program.peopleCodeType) {
+          displayPath = `${program.peopleCodeType}: ${program.programPath}`;
+        }
+        
         // Create program header
         programItem.innerHTML = `
           <div class="program-header">
-            <div><strong>${program.programPath}</strong> <span class="issue-count">(${program.reports.length} issues)</span></div>
+            <div><strong>${displayPath}</strong> <span class="issue-count">(${program.reports.length} issues)</span></div>
             <div>
               ${programErrors > 0 ? `<span class="error">${programErrors} errors</span> ` : ''}
               ${programWarnings > 0 ? `<span class="warning">${programWarnings} warnings</span> ` : ''}
