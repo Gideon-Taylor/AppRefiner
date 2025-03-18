@@ -6,6 +6,8 @@ namespace AppRefiner.Linters
 {
     class SQLWildCard : BaseLintRule
     {
+        public override string LINTER_ID => "SQL_WILDCARD";
+        
         public SQLWildCard()
         {
             Description = "Reports any SQL using * wildcards";
@@ -39,13 +41,13 @@ namespace AppRefiner.Linters
                         if (statement is Statement.Select select && SQLHelper.HasWildcard(select))
                         {
                             /* Report WARNING that there is a wildcard in a select statement */
-                            Reports?.Add(new Report()
-                            {
-                                Type = this.Type,
-                                Line = firstArg.Start.Line - 1,
-                                Span = (firstArg.Start.StartIndex, firstArg.Stop.StopIndex),
-                                Message = "SQL has a wildcard in select statement."
-                            });
+                            Reports?.Add(CreateReport(
+                                1,
+                                "SQL has a wildcard in select statement.",
+                                this.Type,
+                                firstArg.Start.Line - 1,
+                                (firstArg.Start.StartIndex, firstArg.Stop.StopIndex)
+                            ));
                         }
                     }
                 }

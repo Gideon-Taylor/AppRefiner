@@ -8,6 +8,8 @@ namespace AppRefiner.Linters
     /// </summary>
     public class EmptyCatchBlockLinter : BaseLintRule
     {
+        public override string LINTER_ID => "EMPTY_CATCH";
+        
         public EmptyCatchBlockLinter()
         {
             Description = "Detects empty catch blocks that silently swallow exceptions";
@@ -26,13 +28,13 @@ namespace AppRefiner.Linters
                 statementBlock.statements().statement() == null || 
                 statementBlock.statements().statement().Length == 0)
             {
-                Reports?.Add(new Report
-                {
-                    Type = Type,
-                    Line = context.Start.Line - 1,
-                    Span = (context.Start.StartIndex, context.Stop.StopIndex + 1),
-                    Message = "Empty catch block silently swallows exceptions. Consider logging or rethrowing."
-                });
+                Reports?.Add(CreateReport(
+                    1,
+                    "Empty catch block silently swallows exceptions. Consider logging or rethrowing.",
+                    Type,
+                    context.Start.Line - 1,
+                    (context.Start.StartIndex, context.Stop.StopIndex + 1)
+                ));
             }
         }
 

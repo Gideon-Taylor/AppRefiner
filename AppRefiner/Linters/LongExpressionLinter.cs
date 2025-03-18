@@ -8,6 +8,7 @@ namespace AppRefiner.Linters
     /// </summary>
     public class LongExpressionLinter : BaseLintRule
     {
+        public override string LINTER_ID => "LONG_EXPR";
         private const int MaxExpressionLength = 200; // Maximum character length for an expression
         private const int MaxOperatorCount = 5; // Maximum number of operators in a single expression
         
@@ -76,13 +77,13 @@ namespace AppRefiner.Linters
             var expressionText = context.GetText();
             if (expressionText.Length > MaxExpressionLength)
             {
-                Reports?.Add(new Report
-                {
-                    Type = Type,
-                    Line = context.Start.Line - 1,
-                    Span = (context.Start.StartIndex, context.Stop.StopIndex),
-                    Message = $"Expression is too long ({expressionText.Length} chars). Consider breaking it down into smaller parts."
-                });
+                Reports?.Add(CreateReport(
+                    1,
+                    $"Expression is too long ({expressionText.Length} chars). Consider breaking it down into smaller parts.",
+                    Type,
+                    context.Start.Line - 1,
+                    (context.Start.StartIndex, context.Stop.StopIndex)
+                ));
                 return;
             }
             
@@ -90,13 +91,13 @@ namespace AppRefiner.Linters
             int operatorCount = CountOperators(context);
             if (operatorCount > MaxOperatorCount)
             {
-                Reports?.Add(new Report
-                {
-                    Type = Type,
-                    Line = context.Start.Line - 1,
-                    Span = (context.Start.StartIndex, context.Stop.StopIndex),
-                    Message = $"Expression is too complex with {operatorCount} operators. Consider simplifying."
-                });
+                Reports?.Add(CreateReport(
+                    2,
+                    $"Expression is too complex with {operatorCount} operators. Consider simplifying.",
+                    Type,
+                    context.Start.Line - 1,
+                    (context.Start.StartIndex, context.Stop.StopIndex)
+                ));
             }
         }
         

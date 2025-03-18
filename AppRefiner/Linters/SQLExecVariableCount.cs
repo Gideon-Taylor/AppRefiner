@@ -10,6 +10,8 @@ namespace AppRefiner.Linters
 {
     public class SQLExecVariableCount : BaseLintRule
     {
+        public override string LINTER_ID => "SQL_EXEC_VAR";
+        
         public SQLExecVariableCount()
         {
             Description = "Validate bind counts in SQLExec functions.";
@@ -36,13 +38,13 @@ namespace AppRefiner.Linters
                             var sqlText = DataManager.GetSqlDefinition(defName);
                             if (string.IsNullOrWhiteSpace(sqlText))
                             {
-                                Reports?.Add(new Report
-                                {
-                                    Type = ReportType.Error,
-                                    Line = expr.Start.Line - 1,
-                                    Span = (expr.Start.StartIndex, expr.Stop.StopIndex),
-                                    Message = $"Invalid SQL definition: {defName}"
-                                });
+                                Reports?.Add(CreateReport(
+                                    1,
+                                    $"Invalid SQL definition: {defName}",
+                                    ReportType.Error,
+                                    expr.Start.Line - 1,
+                                    (expr.Start.StartIndex, expr.Stop.StopIndex)
+                                ));
                                 return (null, expr.Start.StartIndex, expr.Stop.StopIndex);
                             }
                             return (sqlText, expr.Start.StartIndex, expr.Stop.StopIndex);
@@ -107,13 +109,13 @@ namespace AppRefiner.Linters
             // Check recursively if the first argument contains a concatenation operator
             if (ContainsConcatenation(firstArg))
             {
-                Reports?.Add(new Report()
-                {
-                    Type = Type,
-                    Line = firstArg.Start.Line - 1,
-                    Span = (firstArg.Start.StartIndex, firstArg.Stop.StopIndex),
-                    Message = $"Found SQL using string concatenation."
-                });
+                Reports?.Add(CreateReport(
+                    2,
+                    "Found SQL using string concatenation.",
+                    Type,
+                    firstArg.Start.Line - 1,
+                    (firstArg.Start.StartIndex, firstArg.Stop.StopIndex)
+                ));
             }
 
 
@@ -141,13 +143,13 @@ namespace AppRefiner.Linters
                 if (totalInOutArgs != (outputCount + bindCount))
                 {
                     /* Report that there are an incorrect number of In/Out parameters and how many there should be */
-                    Reports?.Add(new Report()
-                    {
-                        Type = ReportType.Error,
-                        Line = context.Start.Line - 1,
-                        Span = (start, context.Stop.StopIndex),
-                        Message = $"SQL has incorrect number of In/Out parameters. Expected {bindCount + outputCount}, got {totalInOutArgs}."
-                    });
+                    Reports?.Add(CreateReport(
+                        3,
+                        $"SQL has incorrect number of In/Out parameters. Expected {bindCount + outputCount}, got {totalInOutArgs}.",
+                        ReportType.Error,
+                        context.Start.Line - 1,
+                        (start, context.Stop.StopIndex)
+                    ));
                 }
             }
             catch (Exception)

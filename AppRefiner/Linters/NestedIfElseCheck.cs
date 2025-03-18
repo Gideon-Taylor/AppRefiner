@@ -13,6 +13,7 @@ namespace AppRefiner.Linters
     /// </summary>
     public class NestedIfElseCheck : BaseLintRule
     {
+        public override string LINTER_ID => "NESTED_IF";
         private const int MaxNestingLevel = 3;
         private int currentNestingLevel = 0;
         private Stack<IfStatementContext> ifContextStack = new Stack<IfStatementContext>();
@@ -36,13 +37,13 @@ namespace AppRefiner.Linters
                 // Get the outermost If statement to report on
                 var outermost = ifContextStack.Last();
                 
-                Reports?.Add(new Report
-                {
-                    Type = Type,
-                    Line = outermost.Start.Line - 1,
-                    Span = (outermost.Start.StartIndex, outermost.Stop.StopIndex),
-                    Message = $"Deeply nested If/Else blocks (level {currentNestingLevel}). Consider refactoring using Evaluate or early returns."
-                });
+                Reports?.Add(CreateReport(
+                    1,
+                    $"Deeply nested If/Else blocks (level {currentNestingLevel}). Consider refactoring using Evaluate or early returns.",
+                    Type,
+                    outermost.Start.Line - 1,
+                    (outermost.Start.StartIndex, outermost.Stop.StopIndex)
+                ));
             }
         }
         
@@ -75,13 +76,13 @@ namespace AppRefiner.Linters
                         // Only report each top-level if statement once
                         if (!reportedIfStatements.Contains(outermost))
                         {
-                            Reports?.Add(new Report
-                            {
-                                Type = ReportType.Info,
-                                Line = outermost.Start.Line - 1,
-                                Span = (outermost.Start.StartIndex, outermost.Stop.StopIndex),
-                                Message = "Multiple IF-ELSE-IF chains detected. Consider using Evaluate statement for better readability."
-                            });
+                            Reports?.Add(CreateReport(
+                                2,
+                                "Multiple IF-ELSE-IF chains detected. Consider using Evaluate statement for better readability.",
+                                ReportType.Info,
+                                outermost.Start.Line - 1,
+                                (outermost.Start.StartIndex, outermost.Stop.StopIndex)
+                            ));
                             
                             // Mark this if statement as reported
                             reportedIfStatements.Add(outermost);

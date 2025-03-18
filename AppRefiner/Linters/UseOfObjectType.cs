@@ -6,6 +6,8 @@ namespace AppRefiner.Linters
 {
     public class UseOfObjectType : ScopedLintRule<VariableInfo>
     {
+        public override string LINTER_ID => "OBJECT_TYPE";
+        
         public UseOfObjectType()
         {
             Description = "Check for variables declared as 'object' that are assigned specific types.";
@@ -66,13 +68,13 @@ namespace AppRefiner.Linters
             // Check if the assignment is a create expression
             if (context.expression() is ObjectCreateExprContext)
             {
-                Reports?.Add(new Report
-                {
-                    Type = ReportType.Warning,
-                    Line = context.Start.Line - 1,
-                    Span = (context.Start.StartIndex, context.Stop.StopIndex),
-                    Message = $"Variable is declared as 'object' but assigned a specific type."
-                });
+                Reports?.Add(CreateReport(
+                    1,
+                    "Variable is declared as 'object' but assigned a specific type.",
+                    ReportType.Warning,
+                    context.Start.Line - 1,
+                    (context.Start.StartIndex, context.Stop.StopIndex)
+                ));
             }
         }
 
@@ -91,13 +93,13 @@ namespace AppRefiner.Linters
                     // Check if right side is a create expression
                     if (context.expression(1) is ObjectCreateExprContext)
                     {
-                        Reports?.Add(new Report
-                        {
-                            Type = ReportType.Warning,
-                            Line = context.Start.Line - 1,
-                            Span = (context.Start.StartIndex, context.Stop.StopIndex),
-                            Message = $"Variable is declared as 'object' but assigned a specific type."
-                        });
+                        Reports?.Add(CreateReport(
+                            2,
+                            "Variable is declared as 'object' but assigned a specific type.",
+                            ReportType.Warning,
+                            context.Start.Line - 1,
+                            (context.Start.StartIndex, context.Stop.StopIndex)
+                        ));
                     }
                 }
             }

@@ -5,6 +5,7 @@ namespace AppRefiner.Linters
 {
     class SQLLongString : BaseLintRule
     {
+        public override string LINTER_ID => "SQL_LONG";
         private const int MaxSqlLength = 120;
         
         public SQLLongString()
@@ -34,13 +35,13 @@ namespace AppRefiner.Linters
                         if (sqlText.Length > MaxSqlLength)
                         {
                             /* Report that the SQL statement is too long */
-                            Reports?.Add(new Report()
-                            {
-                                Type = Type,
-                                Line = firstArg.Start.Line - 1,
-                                Span = (firstArg.Start.StartIndex, firstArg.Stop.StopIndex),
-                                Message = "Long literal SQL statements should be SQL objects."
-                            });
+                            Reports?.Add(CreateReport(
+                                1,
+                                "Long literal SQL statements should be SQL objects.",
+                                Type,
+                                firstArg.Start.Line - 1,
+                                (firstArg.Start.StartIndex, firstArg.Stop.StopIndex)
+                            ));
                         }
                     }
                 }

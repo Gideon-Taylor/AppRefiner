@@ -8,6 +8,7 @@ namespace AppRefiner.Linters
     /// </summary>
     public class FunctionParameterCountLinter : BaseLintRule
     {
+        public override string LINTER_ID => "PARAM_COUNT";
         private const int MaxMethodParameters = 5;
         private const int MaxFunctionParameters = 5;
         
@@ -28,13 +29,13 @@ namespace AppRefiner.Linters
             
             if (paramCount > MaxMethodParameters)
             {
-                Reports?.Add(new Report
-                {
-                    Type = Type,
-                    Line = context.Start.Line - 1,
-                    Span = (context.Start.StartIndex, context.Stop.StopIndex),
-                    Message = $"Method has {paramCount} parameters, which exceeds recommended maximum of {MaxMethodParameters}. Consider refactoring."
-                });
+                Reports?.Add(CreateReport(
+                    1,
+                    $"Method has {paramCount} parameters, which exceeds recommended maximum of {MaxMethodParameters}. Consider refactoring.",
+                    Type,
+                    context.Start.Line - 1,
+                    (context.Start.StartIndex, context.Stop.StopIndex)
+                ));
             }
         }
         
@@ -48,13 +49,13 @@ namespace AppRefiner.Linters
             
             if (paramCount > MaxFunctionParameters)
             {
-                Reports?.Add(new Report
-                {
-                    Type = Type,
-                    Line = context.Start.Line - 1,
-                    Span = (context.Start.StartIndex, context.Stop.StopIndex),
-                    Message = $"Function has {paramCount} parameters, which exceeds recommended maximum of {MaxFunctionParameters}. Consider using a compound parameter object."
-                });
+                Reports?.Add(CreateReport(
+                    2,
+                    $"Function has {paramCount} parameters, which exceeds recommended maximum of {MaxFunctionParameters}. Consider using a compound parameter object.",
+                    Type,
+                    context.Start.Line - 1,
+                    (context.Start.StartIndex, context.Stop.StopIndex)
+                ));
             }
         }
 

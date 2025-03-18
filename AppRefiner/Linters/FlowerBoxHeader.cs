@@ -6,6 +6,7 @@ namespace AppRefiner.Linters
 {
     public class FlowerBoxHeader : BaseLintRule
     {
+        public override string LINTER_ID => "FLOWERBOX";
         private const string MISSING_HEADER_MESSAGE = "File is missing a flowerbox header comment /* ===== */";
 
         public FlowerBoxHeader()
@@ -21,14 +22,13 @@ namespace AppRefiner.Linters
 
         private void AddMissingHeaderReport()
         {
-            
-            Reports?.Add(new Report
-            {
-                Type = ReportType.Warning,
-                Line = 0,
-                Span = (0, 1),
-                Message = MISSING_HEADER_MESSAGE
-            });
+            Reports?.Add(CreateReport(
+                1,
+                MISSING_HEADER_MESSAGE,
+                ReportType.Warning,
+                0,
+                (0, 1)
+            ));
         }
 
         public override void EnterProgram(ProgramContext context)

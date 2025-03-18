@@ -9,6 +9,7 @@ namespace AppRefiner.Linters
     /// </summary>
     public class RecursiveFunctionLinter : BaseLintRule
     {
+        public override string LINTER_ID => "RECURSIVE_FUNC";
         private Dictionary<string, FunctionDefinitionContext> functions = new Dictionary<string, FunctionDefinitionContext>();
         private string currentFunction = "";
         
@@ -47,13 +48,13 @@ namespace AppRefiner.Linters
                 var functionContext = functions[currentFunction];
                 if (!HasSafeTerminationCondition(functionContext))
                 {
-                    Reports?.Add(new Report
-                    {
-                        Type = Type,
-                        Line = context.Start.Line - 1,
-                        Span = (context.Start.StartIndex, context.Stop.StopIndex),
-                        Message = "Potentially unsafe recursive function call. Ensure there is a proper termination condition."
-                    });
+                    Reports?.Add(CreateReport(
+                        1,
+                        "Potentially unsafe recursive function call. Ensure there is a proper termination condition.",
+                        Type,
+                        context.Start.Line - 1,
+                        (context.Start.StartIndex, context.Stop.StopIndex)
+                    ));
                 }
             }
         }

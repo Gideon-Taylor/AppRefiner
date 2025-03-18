@@ -9,6 +9,8 @@ namespace AppRefiner.Linters
 {
     public class GetHTMLTextVariableCount : BaseLintRule
     {
+        public override string LINTER_ID => "HTML_VAR_COUNT";
+        
         public GetHTMLTextVariableCount()
         {
             Description = "Validate bind counts in GetHTMLText function calls.";
@@ -46,13 +48,13 @@ namespace AppRefiner.Linters
             var htmlDef = DataManager.GetHtmlDefinition(htmlRef);
             if (htmlDef == null || string.IsNullOrEmpty(htmlDef.Content))
             {
-                Reports?.Add(new Report
-                {
-                    Type = ReportType.Error,
-                    Line = firstArg.Start.Line - 1,
-                    Span = (firstArg.Start.StartIndex, firstArg.Stop.StopIndex),
-                    Message = $"Invalid HTML definition: {htmlRef}"
-                });
+                Reports?.Add(CreateReport(
+                    1,
+                    $"Invalid HTML definition: {htmlRef}",
+                    ReportType.Error,
+                    firstArg.Start.Line - 1,
+                    (firstArg.Start.StartIndex, firstArg.Stop.StopIndex)
+                ));
                 return;
             }
 
@@ -62,23 +64,23 @@ namespace AppRefiner.Linters
 
             if (providedBinds < bindCount)
             {
-                Reports?.Add(new Report
-                {
-                    Type = ReportType.Error,
-                    Line = context.Start.Line - 1,
-                    Span = (context.Start.StartIndex, context.Stop.StopIndex),
-                    Message = $"GetHTMLText has too few bind parameters. Expected {bindCount}, got {providedBinds}."
-                });
+                Reports?.Add(CreateReport(
+                    2,
+                    $"GetHTMLText has too few bind parameters. Expected {bindCount}, got {providedBinds}.",
+                    ReportType.Error,
+                    context.Start.Line - 1,
+                    (context.Start.StartIndex, context.Stop.StopIndex)
+                ));
             }
             else if (providedBinds > bindCount && bindCount > 0)
             {
-                Reports?.Add(new Report
-                {
-                    Type = ReportType.Warning,
-                    Line = context.Start.Line - 1,
-                    Span = (context.Start.StartIndex, context.Stop.StopIndex),
-                    Message = $"GetHTMLText has more bind parameters than needed. Expected {bindCount}, got {providedBinds}."
-                });
+                Reports?.Add(CreateReport(
+                    3,
+                    $"GetHTMLText has more bind parameters than needed. Expected {bindCount}, got {providedBinds}.",
+                    ReportType.Warning,
+                    context.Start.Line - 1,
+                    (context.Start.StartIndex, context.Stop.StopIndex)
+                ));
             }
         }
 
