@@ -213,8 +213,7 @@ namespace AppRefiner.Linters
         
         public override void EnterMethod([NotNull] PeopleCodeParser.MethodContext context)
         {
-            _currentScopeStartLine = context.Start.Line;
-            ProcessScopeEntrySuppressions(_currentScopeStartLine);
+            ProcessScopeEntrySuppressions(context.Start.Line);
         }
 
         public override void ExitMethod([NotNull] PeopleCodeParser.MethodContext context)
