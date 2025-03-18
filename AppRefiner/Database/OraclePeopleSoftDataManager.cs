@@ -238,11 +238,11 @@ namespace AppRefiner.Database
         
 
         /// <summary>
-        /// Gets all PeopleCode definitions for a specified project
+        /// Gets metadata for PeopleCode items in a project without loading program text
         /// </summary>
         /// <param name="projectName">Name of the project</param>
-        /// <returns>List of tuples containing object type, path and content</returns>
-        public List<PeopleCodeItem> GetPeopleCodeItemsForProject(string projectName)
+        /// <returns>List of PeopleCodeItem objects with metadata only</returns>
+        public List<PeopleCodeItem> GetPeopleCodeItemMetadataForProject(string projectName)
         {
             if (!IsConnected)
             {
@@ -290,51 +290,7 @@ namespace AppRefiner.Database
                     // Convert project item object IDs to program object IDs
                     List<Tuple<int,string>> programFields = projectItem.ToProgramFields();
                     
-                    // Fixed query to retrieve the actual PeopleCode from PSPCMPROG with all 7 fields
-                    string query = @"
-                        SELECT PROGTXT FROM PSPCMPROG 
-                        WHERE OBJECTID1 = :objId1 AND OBJECTVALUE1 = :objVal1
-                        AND OBJECTID2 = :objId2 AND OBJECTVALUE2 = :objVal2
-                        AND OBJECTID3 = :objId3 AND OBJECTVALUE3 = :objVal3
-                        AND OBJECTID4 = :objId4 AND OBJECTVALUE4 = :objVal4
-                        AND OBJECTID5 = :objId5 AND OBJECTVALUE5 = :objVal5
-                        AND OBJECTID6 = :objId6 AND OBJECTVALUE6 = :objVal6
-                        AND OBJECTID7 = :objId7 AND OBJECTVALUE7 = :objVal7
-                        ORDER BY PROGSEQ";
-                    
-                    Dictionary<string, object> progParameters = new Dictionary<string, object>();
-                    
-                    // Set parameters for all 7 object ID/value pairs
-                    for (int i = 0; i < 7; i++)
-                    {
-                        // Parameter index is 1-based in the query
-                        int paramIndex = i + 1;
-                        
-                        // Use values from programFields list or defaults for empty fields
-                        int objId = (i < programFields.Count) ? programFields[i].Item1 : 0;
-                        string objVal = (i < programFields.Count) ? programFields[i].Item2 : " ";
-                        
-                        progParameters[$":objId{paramIndex}"] = objId;
-                        progParameters[$":objVal{paramIndex}"] = objVal;
-                    }
-                    
-                    DataTable programData = _connection.ExecuteQuery(query, progParameters);
-                    
-                    // Create a new PeopleCodeItem with the program text data
-                    List<byte[]> progTextParts = new List<byte[]>();
-                    foreach (DataRow progRow in programData.Rows)
-                    {
-                        byte[] blobData = (byte[])progRow["PROGTXT"];
-                        progTextParts.Add(blobData);
-                    }
-                    
-                    // Combine all byte arrays
-                    byte[] combinedProgramText = CombineBinaryData(progTextParts);
-                    if(combinedProgramText.Length == 0)
-                    {
-                        int i = 3;
-                    }
-                    // Create a PeopleCodeItem
+                    // Create a PeopleCodeItem with empty program text
                     PeopleCodeItem peopleCodeItem = new PeopleCodeItem(
                         new int[] {
                             programFields[0].Item1, programFields[1].Item1, programFields[2].Item1,
@@ -346,13 +302,106 @@ namespace AppRefiner.Database
                             programFields[3].Item2, programFields[4].Item2, programFields[5].Item2,
                             programFields[6].Item2
                         },
-                        combinedProgramText,
-                        GetNameReferencesForProgram(programFields)
+                        Array.Empty<byte>(), // Empty program text
+                        new List<NameReference>() // Empty name references
                     );
                     
                     results.Add(peopleCodeItem);
                 }
             }
+            return results;
+        }
+
+        /// <summary>
+        /// Loads program text and references for a specific PeopleCode item
+        /// </summary>
+        /// <param name="item">The PeopleCode item to load content for</param>
+        /// <returns>True if loading was successful</returns>
+        public bool LoadPeopleCodeItemContent(PeopleCodeItem item)
+        {
+            if (!IsConnected)
+            {
+                throw new InvalidOperationException("Database connection is not open");
+            }
+            
+            // Convert object IDs and values to Tuple format needed for queries
+            List<Tuple<int, string>> programFields = new List<Tuple<int, string>>();
+            for (int i = 0; i < item.ObjectIDs.Length; i++)
+            {
+                programFields.Add(new Tuple<int, string>(item.ObjectIDs[i], item.ObjectValues[i]));
+            }
+            
+            // Query to retrieve the actual PeopleCode from PSPCMPROG with all 7 fields
+            string query = @"
+                SELECT PROGTXT FROM PSPCMPROG 
+                WHERE OBJECTID1 = :objId1 AND OBJECTVALUE1 = :objVal1
+                AND OBJECTID2 = :objId2 AND OBJECTVALUE2 = :objVal2
+                AND OBJECTID3 = :objId3 AND OBJECTVALUE3 = :objVal3
+                AND OBJECTID4 = :objId4 AND OBJECTVALUE4 = :objVal4
+                AND OBJECTID5 = :objId5 AND OBJECTVALUE5 = :objVal5
+                AND OBJECTID6 = :objId6 AND OBJECTVALUE6 = :objVal6
+                AND OBJECTID7 = :objId7 AND OBJECTVALUE7 = :objVal7
+                ORDER BY PROGSEQ";
+            
+            Dictionary<string, object> progParameters = new Dictionary<string, object>();
+            
+            // Set parameters for all 7 object ID/value pairs
+            for (int i = 0; i < 7; i++)
+            {
+                // Parameter index is 1-based in the query
+                int paramIndex = i + 1;
+                
+                // Use values from programFields list or defaults for empty fields
+                int objId = (i < programFields.Count) ? programFields[i].Item1 : 0;
+                string objVal = (i < programFields.Count) ? programFields[i].Item2 : " ";
+                
+                progParameters[$":objId{paramIndex}"] = objId;
+                progParameters[$":objVal{paramIndex}"] = objVal;
+            }
+            
+            DataTable programData = _connection.ExecuteQuery(query, progParameters);
+            
+            // Create a new PeopleCodeItem with the program text data
+            List<byte[]> progTextParts = new List<byte[]>();
+            foreach (DataRow progRow in programData.Rows)
+            {
+                byte[] blobData = (byte[])progRow["PROGTXT"];
+                progTextParts.Add(blobData);
+            }
+            
+            // Combine all byte arrays
+            byte[] combinedProgramText = CombineBinaryData(progTextParts);
+            if (combinedProgramText.Length == 0)
+            {
+                return false;
+            }
+            
+            // Get name references
+            List<NameReference> nameReferences = GetNameReferencesForProgram(programFields);
+            
+            // Update the item with the loaded content
+            item.SetProgramText(combinedProgramText);
+            item.SetNameReferences(nameReferences);
+            
+            return true;
+        }
+        
+        /// <summary>
+        /// Gets all PeopleCode definitions for a specified project
+        /// </summary>
+        /// <param name="projectName">Name of the project</param>
+        /// <returns>List of tuples containing object type, path and content</returns>
+        public List<PeopleCodeItem> GetPeopleCodeItemsForProject(string projectName)
+        {
+            // Get metadata first
+            List<PeopleCodeItem> results = GetPeopleCodeItemMetadataForProject(projectName);
+            
+            // Load content for each item
+            foreach (var item in results)
+            {
+                LoadPeopleCodeItemContent(item);
+            }
+            
             return results;
         }
         

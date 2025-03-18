@@ -71,12 +71,12 @@ namespace AppRefiner.Database.Models
         /// <summary>
         /// Gets the program text as a byte array
         /// </summary>
-        public byte[] ProgramText { get; }
+        public byte[] ProgramText { get; private set; }
         
         /// <summary>
         /// Gets the list of name references
         /// </summary>
-        public List<NameReference> NameReferences { get; }
+        public List<NameReference> NameReferences { get; private set; }
 
         public PeopleCodeType Type;
 
@@ -188,6 +188,24 @@ namespace AppRefiner.Database.Models
             Type = (PeopleCodeType)ObjectIDs[0];
         }
 
+        /// <summary>
+        /// Sets the program text after creation
+        /// </summary>
+        /// <param name="programText">The program binary data</param>
+        public void SetProgramText(byte[] programText)
+        {
+            ProgramText = programText ?? Array.Empty<byte>();
+        }
+        
+        /// <summary>
+        /// Sets the name references after creation
+        /// </summary>
+        /// <param name="nameReferences">The list of name references</param>
+        public void SetNameReferences(List<NameReference> nameReferences)
+        {
+            NameReferences = nameReferences ?? new List<NameReference>();
+        }
+        
         /// <summary>
         /// Gets the program text as a string using the specified encoding
         /// </summary>

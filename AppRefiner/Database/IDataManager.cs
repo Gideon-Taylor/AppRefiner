@@ -63,5 +63,19 @@ namespace AppRefiner.Database
         /// <param name="projectName">Name of the project</param>
         /// <returns>List of tuples containing path and content (initially empty)</returns>
         List<PeopleCodeItem> GetPeopleCodeItemsForProject(string projectName);
+    
+        /// <summary>
+        /// Gets metadata for PeopleCode items in a project without loading program text
+        /// </summary>
+        /// <param name="projectName">Name of the project</param>
+        /// <returns>List of PeopleCodeItem objects with metadata only</returns>
+        List<PeopleCodeItem> GetPeopleCodeItemMetadataForProject(string projectName);
+    
+        /// <summary>
+        /// Loads program text and references for a specific PeopleCode item
+        /// </summary>
+        /// <param name="item">The PeopleCode item to load content for</param>
+        /// <returns>True if loading was successful</returns>
+        bool LoadPeopleCodeItemContent(PeopleCodeItem item);
     }
 }

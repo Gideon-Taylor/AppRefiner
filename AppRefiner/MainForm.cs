@@ -352,18 +352,13 @@ namespace AppRefiner
             string reportFileName = $"{projectName}_LintReport_{timestamp}.html";
             string reportPath = Path.Combine(lintReportPath, reportFileName);
 
-            // TODO: This will be implemented later to scan all files in the project
-            // and generate a consolidated report
-
-            var ppcProgs = editor.DataManager.GetPeopleCodeItemsForProject(projectName);
-            var emptyPrograms = ppcProgs.Where(p => p.ProgramText.Length == 0);
-            var emptyCount = emptyPrograms.Count();
-            var emptyTypes = emptyPrograms.Select(p => p.ObjectIDs[0]).Distinct();
+            // Get metadata for all programs in the project without loading content
+            var ppcProgsMeta = editor.DataManager.GetPeopleCodeItemMetadataForProject(projectName);
             var activeLinters = linterRules.Where(a => a.Active).ToList();
             
             // Message to show progress
             this.Invoke(() => {
-                lblStatus.Text = "Linting project...";
+                lblStatus.Text = $"Linting project - found {ppcProgsMeta.Count} items...";
                 progressBar1.Style = ProgressBarStyle.Marquee;
                 progressBar1.MarqueeAnimationSpeed = 30;
             });
@@ -372,15 +367,36 @@ namespace AppRefiner
             List<(PeopleCodeItem Program, Report LintReport)> allReports = new List<(PeopleCodeItem, Report)>();
             var parseCount = 0;
             var emptyProgs = 0;
-            // Process each program in the project
-            foreach (var ppcProg in ppcProgs)
+            var processedCount = 0;
+            
+            // Process each program in the project, one at a time
+            foreach (var ppcProg in ppcProgsMeta)
             {
+                processedCount++;
+                
+                // Update progress periodically
+                if (processedCount % 10 == 0)
+                {
+                    this.Invoke(() => {
+                        lblStatus.Text = $"Linting project - processed {processedCount} of {ppcProgsMeta.Count} items...";
+                    });
+                }
+                
+                // Load the content for this specific program
+                if (!editor.DataManager.LoadPeopleCodeItemContent(ppcProg))
+                {
+                    emptyProgs++;
+                    continue;
+                }
+                
+                // Get the program text as string
                 var programText = ppcProg.GetProgramTextAsString();
                 if (string.IsNullOrEmpty(programText))
                 {
                     emptyProgs++;
                     continue;
                 }
+                
                 // Create lexer and parser for this program
                 PeopleCodeLexer lexer = new PeopleCodeLexer(new Antlr4.Runtime.AntlrInputStream(programText));
                 var stream = new Antlr4.Runtime.CommonTokenStream(lexer);
@@ -397,7 +413,6 @@ namespace AppRefiner
                 var program = parser.program();
                 parseCount++;
                 parser.Interpreter.ClearDFA();
-                GC.Collect();
 
                 // Collection for reports from this program
                 List<Report> programReports = new List<Report>();
@@ -430,15 +445,23 @@ namespace AppRefiner
                 // Clean up walker listeners for next program
                 foreach (var linter in activeLinters)
                 {
-                    programReports.Clear();
-                    comments.Clear();
+                    linter.Reset();
                 }
+                
+                programReports.Clear();
+                comments.Clear();
                 
                 // Free up resources
                 lexer = null;
                 parser = null;
                 stream = null;
                 program = null;
+                
+                // Clear program text to free memory
+                ppcProg.SetProgramText(Array.Empty<byte>());
+                ppcProg.SetNameReferences(new List<NameReference>());
+                
+                GC.Collect();
             }
             
             // Always generate the HTML report, even if no issues found
