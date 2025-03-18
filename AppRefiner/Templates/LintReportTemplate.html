@@ -37,6 +37,7 @@
     .hide-error .issue-error { display: none; }
     .hide-warning .issue-warning { display: none; }
     .hide-info .issue-info { display: none; }
+    .program-item.empty { display: none; }
   </style>
 </head>
 <body>
@@ -86,7 +87,7 @@
       document.getElementById('projectName').textContent = data.projectName;
       document.getElementById('timestamp').textContent = data.timestamp;
       
-      // Set summary statistics
+      // Set initial summary statistics
       document.getElementById('totalErrors').textContent = data.totalErrors;
       document.getElementById('totalWarnings').textContent = data.totalWarnings;
       document.getElementById('totalInfo').textContent = data.totalInfo;
@@ -211,26 +212,57 @@
             // 'all' or default - show everything
           }
           
-          // Update the issue count for each program
+          // Update the issue count for each program and hide empty programs
           updateProgramCounts();
         });
       });
       
       function updateProgramCounts() {
-        // For each program, count visible issues and update the header
+        // For each program, count visible issues and update the header or hide if empty
         document.querySelectorAll('.program-item').forEach(program => {
           const programId = program.querySelector('.program-content').id;
-          const visibleIssues = program.querySelectorAll('tr.issue-row:not([style*="display: none"])').length;
+          const visibleIssues = program.querySelectorAll('tbody tr.issue-row:not([style*="display: none"])');
+          const visibleCount = visibleIssues.length;
           const countDisplay = program.querySelector('.issue-count');
+          
+          // Update issue count
           if (countDisplay) {
-            countDisplay.textContent = `(${visibleIssues} issues)`;
+            countDisplay.textContent = `(${visibleCount} issues)`;
+          }
+          
+          // Hide program if it has no visible issues
+          if (visibleCount === 0) {
+            program.classList.add('empty');
+          } else {
+            program.classList.remove('empty');
           }
         });
+        
+        // Update total visible counts
+        updateTotalVisibleCounts();
+      }
+      
+      function updateTotalVisibleCounts() {
+        // Count visible issues by type
+        const visibleErrors = document.querySelectorAll('.program-item:not(.empty) .issue-error:not([style*="display: none"])').length;
+        const visibleWarnings = document.querySelectorAll('.program-item:not(.empty) .issue-warning:not([style*="display: none"])').length;
+        const visibleInfo = document.querySelectorAll('.program-item:not(.empty) .issue-info:not([style*="display: none"])').length;
+        const totalVisible = visibleErrors + visibleWarnings + visibleInfo;
+        const visiblePrograms = document.querySelectorAll('.program-item:not(.empty)').length;
+        
+        // Update summary statistics with visible counts
+        document.getElementById('totalPrograms').textContent = visiblePrograms;
+        document.getElementById('totalIssues').textContent = totalVisible;
+        document.getElementById('summaryErrors').textContent = visibleErrors;
+        document.getElementById('summaryWarnings').textContent = visibleWarnings;
+        document.getElementById('summaryInfo').textContent = visibleInfo;
       }
       
       // Check for embedded data and load it if present
       if (reportJSON) {
         loadReportData(reportJSON);
+        // Initialize visible counts based on default filter (all)
+        updateProgramCounts();
       }
     });
   </script>
