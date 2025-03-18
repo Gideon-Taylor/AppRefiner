@@ -6,6 +6,9 @@ using System.Text.RegularExpressions;
 
 namespace AppRefiner.Linters
 {
+    /* Issues:
+     * SetOperations can be recursively SetOperations, so GetOutputCount and HasWildcard need to be recursive
+     */
     /// <summary>
     /// Common helper methods for SQL-related linting operations
     /// </summary>
@@ -56,6 +59,10 @@ namespace AppRefiner.Linters
         /// <returns>The number of output columns</returns>
         public static int GetOutputCount(Statement.Select statement)
         {
+            if (statement.Query.Body is SetExpression.SetOperation set)
+            {
+                return set.Left.AsSelectExpression().Select.Projection.Count;
+            }
             return statement.Query.Body.AsSelectExpression().Select.Projection.Count;
         }
 
