@@ -102,24 +102,24 @@ namespace AppRefiner.Linters
                             var sqlText = DataManager.GetSqlDefinition(defName);
                             if (string.IsNullOrWhiteSpace(sqlText))
                             {
-                                Reports?.Add(AddReport(
+                                AddReport(
                                     1,
                                     $"Invalid SQL definition: {defName}",
                                     ReportType.Error,
                                     expr.Start.Line - 1,
                                     (expr.Start.StartIndex, expr.Stop.StopIndex)
-                                ));
+                                );
                                 return (null, expr.Start.StartIndex, expr.Stop.StopIndex);
                             }
                             return (sqlText, expr.Start.StartIndex, expr.Stop.StopIndex);
                         }
-                        Reports?.Add(AddReport(
+                        AddReport(
                             2,
                             "Connect to DB to validate this SQL usage.",
                             ReportType.Info,
                             expr.Start.Line - 1,
                             (expr.Start.StartIndex, expr.Stop.StopIndex)
-                        ));
+                        );
                         return (null, expr.Start.StartIndex, expr.Stop.StopIndex);
                     }
                     
