@@ -97,10 +97,73 @@ namespace AppRefiner.Linters
             _tokenStream = tokenStream ?? throw new ArgumentNullException(nameof(tokenStream));
             
             // Extract all comments from the token stream
-            _comments = comments;
+            _comments = comments ?? throw new ArgumentNullException(nameof(comments));
             
             // Process global suppressions (above imports block)
             ProcessGlobalSuppressions();
+            
+            // Process line-specific suppressions for all comments
+            ProcessAllLineSpecificSuppressions();
+        }
+        
+        /// <summary>
+        /// Processes all comments to find line-specific suppressions
+        /// Each suppression comment applies to the next line of code
+        /// </summary>
+        private void ProcessAllLineSpecificSuppressions()
+        {
+            // Sort comments by line
+            var sortedComments = _comments.OrderBy(c => c.Line).ToList();
+            
+            // Process each comment
+            for (int i = 0; i < sortedComments.Count; i++)
+            {
+                var comment = sortedComments[i];
+                
+                // Find the next line with actual code after this comment
+                int nextCodeLine = FindNextCodeLine(comment.Line);
+                
+                if (nextCodeLine > 0)
+                {
+                    if (!_lineSpecificSuppressions.TryGetValue(nextCodeLine, out var suppressions))
+                    {
+                        suppressions = new HashSet<SuppressionInfo>();
+                        _lineSpecificSuppressions[nextCodeLine] = suppressions;
+                    }
+                    
+                    ProcessSuppressionComment(comment, suppressions);
+                }
+            }
+        }
+        
+        /// <summary>
+        /// Finds the next line containing code after the given line
+        /// </summary>
+        private int FindNextCodeLine(int commentLine)
+        {
+            int nextLine = int.MaxValue;
+            
+            for (int i = 0; i < _tokenStream.Size; i++)
+            {
+                var token = _tokenStream.Get(i);
+                
+                // Skip tokens on or before the comment line or on comment channel
+                if (token.Line <= commentLine || token.Channel == PeopleCodeLexer.COMMENTS_CHANNEL)
+                    continue;
+                
+                // Skip insignificant tokens like semicolons
+                if (token.Type == PeopleCodeParser.SEMI)
+                    continue;
+                
+                // Found the next code token
+                if (token.Line < nextLine)
+                {
+                    nextLine = token.Line;
+                    break;
+                }
+            }
+            
+            return nextLine != int.MaxValue ? nextLine : -1;
         }
 
         private void ProcessGlobalSuppressions()
@@ -264,15 +327,6 @@ namespace AppRefiner.Linters
         
         #endregion
 
-        #region Line-specific handling
-        
-        public override void EnterStatement([NotNull] PeopleCodeParser.StatementContext context)
-        {
-            ProcessLineSpecificSuppressions(context.Start.Line);
-        }
-        
-        #endregion
-
         private void ProcessScopeEntrySuppressions(int scopeStartLine)
         {
             var scopeSuppressions = new HashSet<SuppressionInfo>();
@@ -333,43 +387,12 @@ namespace AppRefiner.Linters
             _currentScopeStartLine = -1;
         }
 
+        // This method is now handled by ProcessAllLineSpecificSuppressions
+        // and is kept here only as reference - it's not called anymore
         private void ProcessLineSpecificSuppressions(int line)
         {
-            // Find comments above this line
-            var lineComments = _comments
-                .Where(c => c.Line < line)
-                .OrderByDescending(c => c.Line)
-                .ToList();
-
-            if (lineComments.Count > 0)
-            {
-                var firstComment = lineComments.First();
-                
-                // Check if there's any code between the comment and this line
-                bool isAdjacent = true;
-                for (int i = 0; i < _tokenStream.Size; i++)
-                {
-                    var token = _tokenStream.Get(i);
-                    if (token.Line > firstComment.Line && token.Line < line && 
-                        token.Channel == Lexer.DefaultTokenChannel && 
-                        token.Type != PeopleCodeParser.SEMI)
-                    {
-                        isAdjacent = false;
-                        break;
-                    }
-                }
-
-                if (isAdjacent)
-                {
-                    if (!_lineSpecificSuppressions.TryGetValue(line, out var suppressions))
-                    {
-                        suppressions = new HashSet<SuppressionInfo>();
-                        _lineSpecificSuppressions[line] = suppressions;
-                    }
-                    
-                    ProcessSuppressionComment(firstComment, suppressions);
-                }
-            }
+            // This functionality has been moved to ProcessAllLineSpecificSuppressions
+            // which runs once at initialization
         }
 
         /// <summary>
