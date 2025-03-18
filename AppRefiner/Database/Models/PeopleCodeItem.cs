@@ -38,6 +38,21 @@ namespace AppRefiner.Database.Models
         }
     }
     
+    public enum PeopleCodeType
+    {
+        ApplicationEngine = 66,
+        ApplicationPackage = 104,
+        ComponentInterface = 74,
+        Component = 10,
+        ComponentRecField = 999, // this is set via logic and not direct value
+        ComponentRecord = 998, // this is set via logic and not direct value
+        Menu = 3,
+        Message = 997,  // this is set via logic and not direct value
+        Page = 9,
+        Record = 1,
+        Subscription = 996 // this is set via logic and not direct value
+    }
+
     /// <summary>
     /// Represents a PeopleSoft PeopleCode item, storing object ID/value pairs and program text
     /// </summary>
@@ -62,7 +77,9 @@ namespace AppRefiner.Database.Models
         /// Gets the list of name references
         /// </summary>
         public List<NameReference> NameReferences { get; }
-        
+
+        public PeopleCodeType Type;
+
         /// <summary>
         /// Creates a new PeopleCode item with the specified object ID/value pairs and program text
         /// </summary>
@@ -110,6 +127,9 @@ namespace AppRefiner.Database.Models
             
             ProgramText = programText ?? Array.Empty<byte>();
             NameReferences = nameReferences ?? new List<NameReference>();
+
+            SetPeopleCodeType();
+
         }
         
         /// <summary>
@@ -141,8 +161,33 @@ namespace AppRefiner.Database.Models
             
             ProgramText = programText ?? Array.Empty<byte>();
             NameReferences = nameReferences ?? new List<NameReference>();
+            SetPeopleCodeType();
         }
         
+        public void SetPeopleCodeType()
+        {
+            if (ObjectIDs[0] == 10)
+            {
+                if (ObjectIDs[2] == 12)
+                    Type = PeopleCodeType.Component;
+                if (ObjectIDs[2] == 1 && ObjectIDs[3] == 12)
+                    Type = PeopleCodeType.ComponentRecord;
+                if (ObjectIDs[2] == 1 && ObjectIDs[3] == 2)
+                    Type = PeopleCodeType.ComponentRecField;
+                return;
+            }
+            else if (ObjectIDs[0] == 60)
+            {
+                if (ObjectIDs[1] == 12)
+                    Type = PeopleCodeType.Message;
+                else
+                    Type = PeopleCodeType.Subscription;
+                return;
+            }
+
+            Type = (PeopleCodeType)ObjectIDs[0];
+        }
+
         /// <summary>
         /// Gets the program text as a string using the specified encoding
         /// </summary>
@@ -157,21 +202,66 @@ namespace AppRefiner.Database.Models
             return decoder.ParsePPC(ProgramText, NameReferences);
         }
         
-        /// <summary>
+
         /// Builds a path from the object values
         /// </summary>
         /// <returns>A colon-separated path of non-empty object values</returns>
         public string BuildPath()
         {
             List<string> pathParts = new List<string>();
-            
-            for (int i = 0; i < ObjectValues.Length; i++)
+
+            switch (Type)
             {
-                if (!string.IsNullOrEmpty(ObjectValues[i]?.Trim()))
-                    pathParts.Add(ObjectValues[i]);
+                case PeopleCodeType.ApplicationEngine:
+                    pathParts.Add(ObjectValues[0]);
+                    pathParts.Add($"{ObjectValues[1]}.{ObjectValues[5]}.{ObjectValues[6]}");
+                    break;
+                case PeopleCodeType.ApplicationPackage:
+                    pathParts.Add(ObjectValues[0]);
+                    pathParts.Add(string.Join(".", ObjectValues.Where((value, index) => ObjectIDs[index] != 66 && ObjectIDs[index] != 12)));
+                    break;
+                case PeopleCodeType.ComponentInterface:
+                    pathParts.Add(ObjectValues[0]);
+                    pathParts.Add($"{ObjectValues[1]}");
+                    break;
+                case PeopleCodeType.Component:
+                    pathParts.Add(ObjectValues[0]);
+                    pathParts.Add($"{ObjectValues[1]}");
+                    break;
+                case PeopleCodeType.ComponentRecField:
+                    pathParts.Add(ObjectValues[0]);
+                    pathParts.Add($"{ObjectValues[2]}.{ObjectValues[3]}.{ObjectValues[4]}");
+                    break;
+                case PeopleCodeType.ComponentRecord:
+                    pathParts.Add(ObjectValues[0]);
+                    pathParts.Add($"{ObjectValues[2]}.{ObjectValues[3]}");
+                    break;
+                case PeopleCodeType.Menu:
+                    pathParts.Add(ObjectValues[0]);
+                    pathParts.Add($"{ObjectValues[1]}.{ObjectValues[2]}.{ObjectValues[3]}");
+                    break;
+                case PeopleCodeType.Message:
+                    pathParts.Add(ObjectValues[0]);
+                    pathParts.Add($"{ObjectValues[1]}{(ObjectIDs[3] != 0? $".{ObjectValues[3]}" : "")}");
+                    break;
+                case PeopleCodeType.Page:
+                    pathParts.Add(ObjectValues[0]);
+                    pathParts.Add(ObjectValues[1]);
+                    break;
+                case PeopleCodeType.Record:
+                    pathParts.Add(ObjectValues[0]);
+                    pathParts.Add(ObjectValues[1]);
+                    break;
+                case PeopleCodeType.Subscription:
+                    pathParts.Add(ObjectValues[0]);
+                    pathParts.Add($"\"{ObjectValues[1]}\"");
+                    // Add logic here if needed
+                    break;
+                default:
+                    throw new ArgumentOutOfRangeException();
             }
-            
-            return string.Join(":", pathParts);
+
+            return string.Join(" ", pathParts);
         }
         
         /// <summary>
