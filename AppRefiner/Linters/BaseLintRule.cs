@@ -27,8 +27,8 @@ namespace AppRefiner.Linters
         // Add collection to store comments from lexer
         public IList<IToken>? Comments;
         
-        // The suppression listener for this linter
-        public LinterSuppressionListener? SuppressionListener;
+        // The suppression listener shared across all linters
+        public static LinterSuppressionListener? SuppressionListener;
         
         public abstract void Reset();
         
@@ -53,7 +53,7 @@ namespace AppRefiner.Linters
             }
             
             // Only add the report if it's not suppressed
-            if (SuppressionListener == null || !IsSuppressed(report, SuppressionListener))
+            if (SuppressionListener == null || !SuppressionListener.IsSuppressed(report.LinterId, report.ReportNumber, report.Line))
             {
                 Reports.Add(report);
             }

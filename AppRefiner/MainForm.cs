@@ -417,10 +417,16 @@ namespace AppRefiner
                 parseCount++;
                 parser.Interpreter.ClearDFA();
 
+                // Create the linter suppression listener
+                BaseLintRule.SuppressionListener = new LinterSuppressionListener(stream, comments);
+
                 // Collection for reports from this program
                 List<Report> programReports = new List<Report>();
                 
                 MultiParseTreeWalker walker = new();
+                
+                // Add the suppression listener first
+                walker.AddListener(BaseLintRule.SuppressionListener);
                 
                 // Configure and run each active linter
                 foreach (var linter in activeLinters)
@@ -1152,6 +1158,12 @@ namespace AppRefiner
             var program = parser.program();
             parser.Interpreter.ClearDFA();
             GC.Collect();
+            
+            // Create the linter suppression listener
+            BaseLintRule.SuppressionListener = new LinterSuppressionListener(stream, comments);
+
+            // Create the linter suppression listener
+            BaseLintRule.SuppressionListener = new LinterSuppressionListener(stream, comments);
 
             var activeLinters = linterRules.Where(a => a.Active);
 
@@ -1175,6 +1187,9 @@ namespace AppRefiner
                 activeEditor.DataManager = value;
             }
 
+            // Add the suppression listener first
+            walker.AddListener(BaseLintRule.SuppressionListener);
+            
             IDataManager? dataManger = activeEditor.DataManager;
             foreach (var linter in activeLinters)
             {
@@ -1532,6 +1547,9 @@ namespace AppRefiner
                 activeEditor.DataManager = value;
             }
 
+            // Add the suppression listener first
+            walker.AddListener(BaseLintRule.SuppressionListener);
+            
             IDataManager? dataManger = activeEditor.DataManager;
             
             // Configure and run the specific linter
