@@ -10,10 +10,6 @@ using static AppRefiner.PeopleCode.PeopleCodeParser;
 
 namespace AppRefiner.Linters
 {
-    /* Issues: 
-     * SQL that fails to parse should indicate this on the SQLInfo object, and further checks against this object should be skipped
-     * SQL Text starting with "%Insert" should not be evaluated 
-     */
     public class CreateSQLVariableCount : ScopedLintRule<SQLStatementInfo>
     {
         private enum ValidationMode
@@ -140,12 +136,19 @@ namespace AppRefiner.Linters
         {
             if (string.IsNullOrWhiteSpace(sqlText))
                 return;
+                
+            // Skip SQL that starts with %Insert
+            if (sqlText.Trim().StartsWith("%Insert", StringComparison.OrdinalIgnoreCase))
+                return;
 
             try
             {
                 var statement = SQLHelper.ParseSQL(sqlText);
                 if (statement == null)
+                {
+                    sqlInfo.ParseFailed = true;
                     return;
+                }
 
                 if (statement is Statement.Select select)
                 {
@@ -158,6 +161,7 @@ namespace AppRefiner.Linters
                 // Update SQLStatementInfo
                 sqlInfo.SqlText = sqlText;
                 sqlInfo.BindCount = bindCount;
+                sqlInfo.ParseFailed = false;
 
                 if (validationMode == ValidationMode.CreateOrGet && totalInOutArgs == 0 )
                 {
@@ -211,7 +215,8 @@ namespace AppRefiner.Linters
             }
             catch (Exception)
             {
-                // SQL parsing failed - ignore
+                // SQL parsing failed - mark as failed and skip further validation
+                sqlInfo.ParseFailed = true;
             }
         }
 
