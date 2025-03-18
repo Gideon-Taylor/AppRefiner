@@ -356,6 +356,9 @@ namespace AppRefiner
             // and generate a consolidated report
 
             var ppcProgs = editor.DataManager.GetPeopleCodeItemsForProject(projectName);
+            var emptyPrograms = ppcProgs.Where(p => p.ProgramText.Length == 0);
+            var emptyCount = emptyPrograms.Count();
+            var emptyTypes = emptyPrograms.Select(p => p.ObjectIDs[0]).Distinct();
             var activeLinters = linterRules.Where(a => a.Active).ToList();
             
             // Message to show progress
@@ -368,13 +371,16 @@ namespace AppRefiner
             // Master collection of all linting reports
             List<(PeopleCodeItem Program, Report LintReport)> allReports = new List<(PeopleCodeItem, Report)>();
             var parseCount = 0;
+            var emptyProgs = 0;
             // Process each program in the project
             foreach (var ppcProg in ppcProgs)
             {
                 var programText = ppcProg.GetProgramTextAsString();
                 if (string.IsNullOrEmpty(programText))
+                {
+                    emptyProgs++;
                     continue;
-                
+                }
                 // Create lexer and parser for this program
                 PeopleCodeLexer lexer = new PeopleCodeLexer(new Antlr4.Runtime.AntlrInputStream(programText));
                 var stream = new Antlr4.Runtime.CommonTokenStream(lexer);

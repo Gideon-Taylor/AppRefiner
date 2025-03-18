@@ -286,9 +286,7 @@ namespace AppRefiner.Database
                 string path = projectItem.BuildPath();
                 
                 if (!string.IsNullOrEmpty(path))
-                {
-                    string content = string.Empty;
-                    
+                {                    
                     // Convert project item object IDs to program object IDs
                     List<Tuple<int,string>> programFields = projectItem.ToProgramFields();
                     
@@ -314,7 +312,7 @@ namespace AppRefiner.Database
                         
                         // Use values from programFields list or defaults for empty fields
                         int objId = (i < programFields.Count) ? programFields[i].Item1 : 0;
-                        string objVal = (i < programFields.Count) ? programFields[i].Item2 : "";
+                        string objVal = (i < programFields.Count) ? programFields[i].Item2 : " ";
                         
                         progParameters[$":objId{paramIndex}"] = objId;
                         progParameters[$":objVal{paramIndex}"] = objVal;
@@ -332,7 +330,10 @@ namespace AppRefiner.Database
                     
                     // Combine all byte arrays
                     byte[] combinedProgramText = CombineBinaryData(progTextParts);
-                    
+                    if(combinedProgramText.Length == 0)
+                    {
+                        int i = 3;
+                    }
                     // Create a PeopleCodeItem
                     PeopleCodeItem peopleCodeItem = new PeopleCodeItem(
                         new int[] {

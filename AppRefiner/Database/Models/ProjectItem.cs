@@ -82,7 +82,7 @@ namespace AppRefiner.Database.Models
             // First key is always the ObjectType
             result.Add(new Tuple<int, string>(ObjectIDs[0], ObjectValues[0]));
 
-            if (objectType == 58)
+            if (ObjectIDs[0] == 58)
             {
                 // For objectType 58, only add values with non-zero ObjectIDs
                 for (var i = 1; i < 4; i++)
@@ -102,7 +102,7 @@ namespace AppRefiner.Database.Models
                     result.Add(new Tuple<int, string>(0, " "));
                 }
             }
-            else if (objectType == 66)
+            else if (ObjectIDs[0] == 66)
             {
                 // For objectType 66, we need to split the composite in projectItem.ObjectValues[1]
                 var composite = ObjectValues[1];
@@ -114,17 +114,43 @@ namespace AppRefiner.Database.Models
                 string component4 = composite.Length > 20 ? composite.Substring(20).Trim() : string.Empty;
 
                 // Add the components
-                result.Add(new Tuple<int, string>(0, component1));
-                result.Add(new Tuple<int, string>(0, component2));
-                result.Add(new Tuple<int, string>(0, component3));
-                result.Add(new Tuple<int, string>(0, component4));
+                result.Add(new Tuple<int, string>(77, component1));
+                result.Add(new Tuple<int, string>(39, component2));
+                result.Add(new Tuple<int, string>(20, component3));
+                result.Add(new Tuple<int, string>(21, component4));
 
                 // Add the last two keys
                 result.Add(new Tuple<int, string>(ObjectIDs[2], ObjectValues[2]));
                 result.Add(new Tuple<int, string>(ObjectIDs[3], ObjectValues[3]));
             }
-            else if (objectType == 10 && ObjectValues[3].Length > 18)
+            else if (ObjectIDs[0] == 104)
             {
+                /* add each object id/value that isn't ID == 0 */
+                for (var x = 1; x < 4; x++)
+                {
+                    if (ObjectIDs[x] != 0)
+                    {
+                        result.Add(new Tuple<int, string>(ObjectIDs[x], ObjectValues[x]));
+                    }
+                }
+
+                /* add final 12, OnExecute */
+                result.Add(new Tuple<int, string>(12, "OnExecute"));
+
+                /* add remaining until we have 7 */
+                while (result.Count < 7)
+                {
+                    result.Add(new Tuple<int, string>(0, " "));
+                }
+
+                int i = 3;
+            }
+            else if (ObjectIDs[0] == 10 && ObjectValues[3].Length > 18)
+            {
+                if (ObjectIDs[1] == 39)
+                {
+                    int i = 3;
+                }
                 // For objectType 10 with long ObjectValues[3]
                 // Add the next 2 keys as they are
                 for (var i = 1; i < 3; i++)
@@ -137,12 +163,12 @@ namespace AppRefiner.Database.Models
                 var key5 = ObjectValues[3].Substring(18).Trim();
 
                 result.Add(new Tuple<int, string>(ObjectIDs[3], key4));
-                result.Add(new Tuple<int, string>(0, key5));
+                result.Add(new Tuple<int, string>(12, key5));
 
                 // Fill the rest with empty entries
                 while (result.Count < 7)
                 {
-                    result.Add(new Tuple<int, string>(0, string.Empty));
+                    result.Add(new Tuple<int, string>(0, " "));
                 }
             }
             else

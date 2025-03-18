@@ -49,7 +49,7 @@ namespace AppRefiner.Database.Models
         Menu = 3,
         Message = 997,  // this is set via logic and not direct value
         Page = 9,
-        Record = 1,
+        RecordField = 1,
         Subscription = 996 // this is set via logic and not direct value
     }
 
@@ -217,8 +217,7 @@ namespace AppRefiner.Database.Models
                     pathParts.Add($"{ObjectValues[1]}.{ObjectValues[5]}.{ObjectValues[6]}");
                     break;
                 case PeopleCodeType.ApplicationPackage:
-                    pathParts.Add(ObjectValues[0]);
-                    pathParts.Add(string.Join(".", ObjectValues.Where((value, index) => ObjectIDs[index] != 66 && ObjectIDs[index] != 12)));
+                    pathParts.Add(string.Join(":", ObjectValues.Where((value, index) => ObjectIDs[index] != 12 && ObjectIDs[index] != 0)));
                     break;
                 case PeopleCodeType.ComponentInterface:
                     pathParts.Add(ObjectValues[0]);
@@ -245,12 +244,10 @@ namespace AppRefiner.Database.Models
                     pathParts.Add($"{ObjectValues[1]}{(ObjectIDs[3] != 0? $".{ObjectValues[3]}" : "")}");
                     break;
                 case PeopleCodeType.Page:
-                    pathParts.Add(ObjectValues[0]);
-                    pathParts.Add(ObjectValues[1]);
+                    pathParts.Add($"{ObjectValues[0]}.{ObjectValues[1]}");
                     break;
-                case PeopleCodeType.Record:
-                    pathParts.Add(ObjectValues[0]);
-                    pathParts.Add(ObjectValues[1]);
+                case PeopleCodeType.RecordField:
+                    pathParts.Add($"{ObjectValues[0]}.{ObjectValues[1]}.{ObjectValues[2]}");
                     break;
                 case PeopleCodeType.Subscription:
                     pathParts.Add(ObjectValues[0]);
