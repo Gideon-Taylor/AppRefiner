@@ -178,7 +178,7 @@ namespace AppRefiner
             // If a command was selected, execute it with progress dialog
             if (result == DialogResult.OK)
             {
-                Action? selectedAction = palette.GetSelectedAction();
+                CommandAction? selectedAction = palette.GetSelectedAction();
                 if (selectedAction != null)
                 {
                     await ExecuteCommandWithProgressAsync(selectedAction, mainHandle);
@@ -186,7 +186,7 @@ namespace AppRefiner
             }
         }
         
-        private async Task ExecuteCommandWithProgressAsync(Action commandAction, IntPtr parentHandle)
+        private async Task ExecuteCommandWithProgressAsync(CommandAction commandAction, IntPtr parentHandle)
         {
             // Create progress dialog with parent handle
             var progressDialog = new CommandProgressDialog(parentHandle);
@@ -205,7 +205,7 @@ namespace AppRefiner
                 await Task.Run(() => {
                     try
                     {
-                        commandAction();
+                        commandAction(progressDialog);
                         tcs.SetResult(true);
                     }
                     catch (Exception ex)
@@ -313,7 +313,7 @@ namespace AppRefiner
         /// Generate lint reports for all files in the current project
         /// </summary>
         /// <param name="editor">The active editor, used to identify the project</param>
-        private void LintProject(ScintillaEditor editor)
+        private void LintProject(ScintillaEditor editor, CommandProgressDialog progressDialog)
         {
             if (editor == null || editor.DataManager == null)
             {
@@ -379,6 +379,7 @@ namespace AppRefiner
                 {
                     this.Invoke(() => {
                         lblStatus.Text = $"Linting project - processed {processedCount} of {ppcProgsMeta.Count} items...";
+                        progressDialog.UpdateHeader($"Linting project - processed {processedCount} of {ppcProgsMeta.Count} items...");
                     });
                 }
                 
@@ -463,7 +464,12 @@ namespace AppRefiner
                 
                 GC.Collect();
             }
-            
+
+            this.Invoke(() => {
+                lblStatus.Text = $"Finalizing Report...";
+                progressDialog.UpdateHeader($"Finalizing Report...");
+            });
+
             // Always generate the HTML report, even if no issues found
             GenerateHtmlReport(reportPath, projectName, allReports);
             

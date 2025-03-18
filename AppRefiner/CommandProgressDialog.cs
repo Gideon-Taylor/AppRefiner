@@ -31,6 +31,14 @@ namespace AppRefiner
             PositionInParent();
         }
 
+        public void UpdateHeader(string text)
+        {
+            this.Invoke(() =>
+            {
+                headerLabel.Text = text;
+            });
+        }
+
         private void PositionInParent()
         {
             if (parentHandle != IntPtr.Zero)

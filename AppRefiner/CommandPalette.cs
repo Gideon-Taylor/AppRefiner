@@ -8,7 +8,7 @@ using System.Runtime.InteropServices;
 namespace AppRefiner
 {
     // Define delegate for command actions that can receive progress dialog
-    public delegate void CommandAction(CommandProgressDialog? progressDialog = null);
+    public delegate void CommandAction(CommandProgressDialog progressDialog);
 
     public class Command
     {
