@@ -29,10 +29,11 @@ namespace AppRefiner.Linters
         
         public abstract void Reset();
         
-        // Helper method to create a report with the proper linter ID set
-        protected Report CreateReport(int reportNumber, string message, ReportType type, int line, (int Start, int Stop) span)
+        // Helper method to create a report with the proper linter ID set and add it to the Reports list
+        // if it's not suppressed by a pragma directive
+        protected void CreateReport(int reportNumber, string message, ReportType type, int line, (int Start, int Stop) span)
         {
-            return new Report
+            Report report = new Report
             {
                 LinterId = LINTER_ID,
                 ReportNumber = reportNumber,
@@ -41,6 +42,18 @@ namespace AppRefiner.Linters
                 Line = line,
                 Span = span
             };
+            
+            // Initialize Reports list if needed
+            if (Reports == null)
+            {
+                Reports = new List<Report>();
+            }
+            
+            // Only add the report if it's not suppressed
+            if (Comments == null || !IsSuppressed(report, Comments))
+            {
+                Reports.Add(report);
+            }
         }
         
         // Finds all suppression directives that apply to the given report
