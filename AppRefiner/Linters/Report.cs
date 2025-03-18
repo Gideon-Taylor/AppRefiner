@@ -16,7 +16,6 @@ namespace AppRefiner.Linters
     }
     public class Report
     {
-        public int RuleCode;
         public string Message = "";
         public ReportType Type;
         public int Line;
@@ -26,6 +25,12 @@ namespace AppRefiner.Linters
         public bool IsError => Type == ReportType.Error;
         public bool IsWarning => Type == ReportType.Warning;
         public bool IsInfo => Type == ReportType.Info;
-
+        
+        // New fields for identifying reports for suppression
+        public string LinterId { get; set; } = string.Empty;
+        public int ReportNumber { get; set; }
+        
+        // Helper method to get the full identifier of a report (for suppression)
+        public string GetFullId() => $"{LinterId}:{ReportNumber}";
     }
 }
