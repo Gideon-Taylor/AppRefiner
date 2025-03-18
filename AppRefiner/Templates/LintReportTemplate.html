@@ -169,8 +169,10 @@
             else if (report.type === 'Info') filteredData.totalInfo++;
           });
         });
-        
+
         renderReport(filteredData);
+        // click the active filter button to trigger its filtering
+        document.querySelector("button.filter-btn.active").click();
       }
     }
 
