@@ -1,13 +1,15 @@
 using SqlParser;
 using SqlParser.Ast;
 using SqlParser.Dialects;
+using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text.RegularExpressions;
 
 namespace AppRefiner.Linters
 {
-    /* Issues:
-     * SetOperations can be recursively SetOperations, so GetOutputCount and HasWildcard need to be recursive
+    /* 
+     * Helper methods for SQL-related linting operations
      */
     /// <summary>
     /// Common helper methods for SQL-related linting operations
@@ -59,11 +61,27 @@ namespace AppRefiner.Linters
         /// <returns>The number of output columns</returns>
         public static int GetOutputCount(Statement.Select statement)
         {
-            if (statement.Query.Body is SetExpression.SetOperation set)
+            return GetOutputCount(statement.Query.Body);
+        }
+
+        /// <summary>
+        /// Recursively counts the number of output columns in a query expression
+        /// </summary>
+        /// <param name="expression">The query expression to analyze</param>
+        /// <returns>The number of output columns</returns>
+        private static int GetOutputCount(SetExpression expression)
+        {
+            if (expression is SetExpression.SetOperation setOp)
             {
-                return set.Left.AsSelectExpression().Select.Projection.Count;
+                // For set operations like UNION, INTERSECT, etc.
+                // We can use either left or right side as they must have the same number of columns
+                return GetOutputCount(setOp.Left);
             }
-            return statement.Query.Body.AsSelectExpression().Select.Projection.Count;
+            else
+            {
+                // Base case: we have a select expression
+                return expression.AsSelectExpression().Select.Projection.Count;
+            }
         }
 
         /// <summary>
@@ -75,18 +93,31 @@ namespace AppRefiner.Linters
         {
             try
             {
-                if (statement.Query.Body is SetExpression.SetOperation set)
-                {
-                    return set.Left.AsSelectExpression().Select.Projection.Any(x => x is SelectItem.Wildcard || x is SelectItem.QualifiedWildcard) ||
-                        set.Right.AsSelectExpression().Select.Projection.Any(x => x is SelectItem.Wildcard || x is SelectItem.QualifiedWildcard);
-                }
-
-                var columns = statement.Query.Body.AsSelectExpression().Select.Projection;
-                return columns.Any(x => x is SelectItem.Wildcard || x is SelectItem.QualifiedWildcard);
-
-            }catch(Exception ex)
+                return HasWildcard(statement.Query.Body);
+            }
+            catch (Exception)
             {
                 return false;
+            }
+        }
+
+        /// <summary>
+        /// Recursively checks if a query expression uses wildcards
+        /// </summary>
+        /// <param name="expression">The query expression to analyze</param>
+        /// <returns>True if wildcards are used, false otherwise</returns>
+        private static bool HasWildcard(SetExpression expression)
+        {
+            if (expression is SetExpression.SetOperation setOp)
+            {
+                // Recursively check both sides of the set operation
+                return HasWildcard(setOp.Left) || HasWildcard(setOp.Right);
+            }
+            else
+            {
+                // Base case: check if any projection item is a wildcard
+                var columns = expression.AsSelectExpression().Select.Projection;
+                return columns.Any(x => x is SelectItem.Wildcard || x is SelectItem.QualifiedWildcard);
             }
         }
 
