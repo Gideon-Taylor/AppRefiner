@@ -16,6 +16,7 @@ namespace AppRefiner.Linters.Models
         public bool InVarsBound { get; set; }
         public bool NeedsOpenOrExec { get; set; }
         public bool ParseFailed { get; set; }
+        public bool HasValidSqlText => !string.IsNullOrWhiteSpace(SqlText);
 
         public SQLStatementInfo(string? sqlText, int bindCount, int outputColumnCount, int line, (int Start, int Stop) span, string varName)
         {

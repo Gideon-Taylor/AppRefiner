@@ -348,14 +348,26 @@ namespace AppRefiner.Linters
             {
                 ValidateOpenCall(context, args, sqlInfo);
             }
-            else
+            else // Execute 
             {
                 sqlInfo.InVarsBound = true;
+                
+                if (!sqlInfo.HasValidSqlText)
+                {
+                    Reports?.Add(new Report
+                    {
+                        Type = ReportType.Warning,
+                        Line = context.Start.Line - 1,
+                        Span = (context.Start.StartIndex, context.Stop.StopIndex),
+                        Message = $"Cannot validate SQL.{functionName} - SQL text is empty or could not be resolved."
+                    });
+                    return;
+                }
+                
                 // Existing Execute validation
                 var argCount = args.expression()?.Length ?? 0;
                 if (argCount == sqlInfo.BindCount)
                 {
-                    
                     return;
                 }
 
@@ -374,30 +386,67 @@ namespace AppRefiner.Linters
 
         private void ValidateOpenCall(DotAccessContext context, FunctionCallArgumentsContext args, SQLStatementInfo sqlInfo)
         {
-            var firstArg = args.expression()[0];
-
-            // Check recursively if the first argument contains a concatenation operator
-            if (ContainsConcatenation(firstArg))
+            if (!sqlInfo.HasValidSqlText && args?.expression()?.Length > 0)
             {
-                Reports?.Add(new Report()
+                var firstArg = args.expression()[0];
+                
+                // Check recursively if the first argument contains a concatenation operator
+                if (ContainsConcatenation(firstArg))
                 {
-                    Type = Type,
-                    Line = firstArg.Start.Line - 1,
-                    Span = (firstArg.Start.StartIndex, firstArg.Stop.StopIndex),
-                    Message = $"Found SQL using string concatenation."
+                    Reports?.Add(new Report()
+                    {
+                        Type = Type,
+                        Line = firstArg.Start.Line - 1,
+                        Span = (firstArg.Start.StartIndex, firstArg.Stop.StopIndex),
+                        Message = $"Found SQL using string concatenation."
+                    });
+                }
+
+                var (sqlText, start, stop) = GetSqlText(firstArg);
+                
+                // If we now have SQL text, update the sqlInfo
+                if (!string.IsNullOrWhiteSpace(sqlText))
+                {
+                    sqlInfo.SqlText = sqlText;
+                    
+                    // Validate arguments and update SQLStatementInfo
+                    ValidateArguments(sqlText, args, sqlInfo, context, ValidationMode.Open);
+                    return;
+                }
+            }
+            
+            // If we still don't have valid SQL text, check if this requires parameters
+            if (!sqlInfo.HasValidSqlText && args?.expression()?.Length > 0)
+            {
+                Reports?.Add(new Report
+                {
+                    Type = ReportType.Warning,
+                    Line = context.Start.Line - 1,
+                    Span = (context.Start.StartIndex, context.Stop.StopIndex),
+                    Message = "Cannot validate SQL.Open - SQL text is empty or could not be resolved."
                 });
             }
-
-            var (sqlText, start, stop) = GetSqlText(firstArg);
-
-            // Validate arguments and update SQLStatementInfo
-            ValidateArguments(sqlText, args, sqlInfo, context, ValidationMode.Open);
+            else if (sqlInfo.HasValidSqlText)
+            {
+                // Validate arguments with the existing SQL text
+                ValidateArguments(sqlInfo.SqlText, args, sqlInfo, context, ValidationMode.Open);
+            }
         }
 
         private void ValidateFetchCall(DotAccessContext context, FunctionCallArgumentsContext args, SQLStatementInfo sqlInfo)
         {
             /* Cannot validate calls where we don't have the SQL text... */
-            if (sqlInfo.SqlText == null) return;
+            if (!sqlInfo.HasValidSqlText) 
+            {
+                Reports?.Add(new Report
+                {
+                    Type = ReportType.Warning,
+                    Line = context.Start.Line - 1,
+                    Span = (context.Start.StartIndex, context.Stop.StopIndex),
+                    Message = "Cannot validate SQL.Fetch - SQL text is empty or could not be resolved."
+                });
+                return;
+            }
 
             if (sqlInfo.InVarsBound == false && sqlInfo.BindCount > 0)
             {
