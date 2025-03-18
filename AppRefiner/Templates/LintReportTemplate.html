@@ -218,11 +218,21 @@
       });
       
       function updateProgramCounts() {
+        // Determine which types are currently visible based on applied filters
+        const errorVisible = !document.body.classList.contains('hide-error');
+        const warningVisible = !document.body.classList.contains('hide-warning');
+        const infoVisible = !document.body.classList.contains('hide-info');
+        
         // For each program, count visible issues and update the header or hide if empty
         document.querySelectorAll('.program-item').forEach(program => {
           const programId = program.querySelector('.program-content').id;
-          const visibleIssues = program.querySelectorAll('tbody tr.issue-row:not([style*="display: none"])');
-          const visibleCount = visibleIssues.length;
+          
+          // Count items that match the current filter
+          let visibleCount = 0;
+          if (errorVisible) visibleCount += program.querySelectorAll('tbody tr.issue-error').length;
+          if (warningVisible) visibleCount += program.querySelectorAll('tbody tr.issue-warning').length;
+          if (infoVisible) visibleCount += program.querySelectorAll('tbody tr.issue-info').length;
+          
           const countDisplay = program.querySelector('.issue-count');
           
           // Update issue count
