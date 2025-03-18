@@ -368,7 +368,7 @@ namespace AppRefiner
             var parseCount = 0;
             var emptyProgs = 0;
             var processedCount = 0;
-            
+            PeopleCodeItem largestPPC;
             // Process each program in the project, one at a time
             foreach (var ppcProg in ppcProgsMeta)
             {
@@ -377,12 +377,14 @@ namespace AppRefiner
                 // Update progress periodically
                 if (processedCount % 10 == 0)
                 {
-                    this.Invoke(() => {
+                    this.Invoke(() =>
+                    {
                         lblStatus.Text = $"Linting project - processed {processedCount} of {ppcProgsMeta.Count} items...";
                         progressDialog.UpdateHeader($"Linting project - processed {processedCount} of {ppcProgsMeta.Count} items...");
                     });
+                    GC.Collect();
                 }
-                
+
                 // Load the content for this specific program
                 if (!editor.DataManager.LoadPeopleCodeItemContent(ppcProg))
                 {
@@ -462,7 +464,6 @@ namespace AppRefiner
                 ppcProg.SetProgramText(Array.Empty<byte>());
                 ppcProg.SetNameReferences(new List<NameReference>());
                 
-                GC.Collect();
             }
 
             this.Invoke(() => {

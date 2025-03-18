@@ -140,12 +140,22 @@ namespace AppRefiner.Linters
             if (string.IsNullOrWhiteSpace(sqlText))
                 return;
             
-            string [] metaSQLToSkip = ["%UpdatePairs", "%KeyEqual", "%Insert", "%SelectAll"];
+            string [] metaSQLToSkip = ["%UpdatePairs", "%KeyEqual", "%Insert", "%SelectAll", "%Delete", "%Update"];
 
             foreach (var metaSQL in metaSQLToSkip)
             {
                 if (sqlText.Trim().Contains(metaSQL, StringComparison.OrdinalIgnoreCase))
+                {
+                    Reports?.Add(new Report
+                    {
+                        Type = ReportType.Info,
+                        Line = context.Start.Line - 1,
+                        Span = (args.expression()[0].Start.StartIndex, context.Stop.StopIndex),
+                        Message = $"Cannot validate SQL using certain MetaSQL constructs like %Inser, %Update, %SelectAll etc."
+                    });
                     return;
+                }
+                    
             }
 
 
