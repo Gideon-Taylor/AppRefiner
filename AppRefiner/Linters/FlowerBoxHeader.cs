@@ -33,13 +33,13 @@ namespace AppRefiner.Linters
 
         public override void EnterProgram(ProgramContext context)
         {
-            var firstComment = Comments?.First();
-            
-            if (firstComment == null)
+            if (Comments?.Count == 0)
             {
                 AddMissingHeaderReport();
                 return;
             }
+
+            var firstComment = Comments?.First();
 
             if (firstComment.Type != PeopleCodeLexer.BLOCK_COMMENT_SLASH)
             {

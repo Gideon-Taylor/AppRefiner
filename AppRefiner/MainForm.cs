@@ -213,7 +213,7 @@ namespace AppRefiner
                         // Handle any exceptions during command execution
                         this.Invoke(() => {
                             MessageBox.Show(new WindowWrapper(parentHandle), 
-                                $"Error executing command: {ex.Message}", 
+                                $"Error executing command: {ex.Message} {ex.StackTrace}", 
                                 "Command Error", 
                                 MessageBoxButtons.OK, 
                                 MessageBoxIcon.Error);
@@ -1681,10 +1681,10 @@ namespace AppRefiner
                 string templateHtml;
                 
                 // Check if template file exists
-                if (File.Exists(templatePath))
+                if (System.IO.File.Exists(templatePath))
                 {
                     // Read the template file
-                    templateHtml = File.ReadAllText(templatePath);
+                    templateHtml = System.IO.File.ReadAllText(templatePath);
                 }
                 else
                 {
@@ -1717,7 +1717,7 @@ namespace AppRefiner
                     $"<script>const reportJSON = {reportJson};</script>\n</head>");
                 
                 // Write the final HTML to the report file
-                File.WriteAllText(reportPath, finalHtml);
+                System.IO.File.WriteAllText(reportPath, finalHtml);
             }
             catch (Exception ex)
             {
@@ -1725,11 +1725,7 @@ namespace AppRefiner
                     MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
-        
-        private void RenameByShortcut()
-        {
 
-        }
         private void ShowGeneratedTemplateDialog(string content, string templateName)
         {
             Form dialog = new Form

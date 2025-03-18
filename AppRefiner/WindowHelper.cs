@@ -58,7 +58,7 @@ namespace AppRefiner
             static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);
             
             IntPtr foundWindow = IntPtr.Zero;
-            
+            string windowCaption = string.Empty;
             // Enumerate all top-level windows
             EnumWindows((hWnd, lParam) => {
                 // Check if this window belongs to our process
@@ -68,7 +68,8 @@ namespace AppRefiner
                     // Check if window is visible and has a title
                     StringBuilder caption = new StringBuilder(256);
                     int length = GetWindowText(hWnd, caption, caption.Capacity);
-                    if (length > 0)
+                    windowCaption = caption.ToString();
+                    if (length > 0 && windowCaption.StartsWith("Application Designer"))
                     {
                         foundWindow = hWnd;
                         return false; // Stop enumeration
@@ -77,18 +78,7 @@ namespace AppRefiner
                 return true; // Continue enumeration
             }, IntPtr.Zero);
             
-            // If we found a window, get its caption
-            if (foundWindow != IntPtr.Zero)
-            {
-                StringBuilder caption = new StringBuilder(256);
-                int length = GetWindowText(foundWindow, caption, caption.Capacity);
-                if (length > 0)
-                {
-                    return caption.ToString();
-                }
-            }
-            
-            return string.Empty;
+            return windowCaption;
         }
 
         /// <summary>

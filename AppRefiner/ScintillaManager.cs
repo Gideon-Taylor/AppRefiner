@@ -1139,13 +1139,7 @@ namespace AppRefiner
                 }
             }
             
-            // Fallback to the editor's caption or a default value if we couldn't extract the project name
-            if (editor.Caption != null)
-            {
-                return editor.Caption;
-            }
-            
-            return "Project";
+            return string.Empty;
         }
 
         /// <summary>
