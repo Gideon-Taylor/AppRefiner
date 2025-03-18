@@ -27,6 +27,9 @@ namespace AppRefiner.Linters
         // Add collection to store comments from lexer
         public IList<IToken>? Comments;
         
+        // The suppression listener for this linter
+        public LinterSuppressionListener? SuppressionListener;
+        
         public abstract void Reset();
         
         // Helper method to create a report with the proper linter ID set and add it to the Reports list
@@ -50,13 +53,14 @@ namespace AppRefiner.Linters
             }
             
             // Only add the report if it's not suppressed
-            if (Comments == null || !IsSuppressed(report, Comments))
+            if (SuppressionListener == null || !IsSuppressed(report, SuppressionListener))
             {
                 Reports.Add(report);
             }
         }
         
         // Finds all suppression directives that apply to the given report
+        [Obsolete("Use LinterSuppressionListener instead")]
         public static List<string> GetSuppressedWarnings(IList<IToken> comments, int line)
         {
             var suppressions = new List<string>();
@@ -99,18 +103,13 @@ namespace AppRefiner.Linters
             return suppressions;
         }
         
-        // Checks if a specific report should be suppressed based on pragma directives
-        public static bool IsSuppressed(Report report, IList<IToken> comments)
+        // Checks if a specific report should be suppressed based on the suppression listener
+        public static bool IsSuppressed(Report report, LinterSuppressionListener suppressionListener)
         {
-            if (comments == null || report == null)
+            if (suppressionListener == null || report == null)
                 return false;
                 
-            var suppressions = GetSuppressedWarnings(comments, report.Line);
-            
-            // Check if the report ID is in the suppression list
-            string reportId = report.GetFullId();
-            
-            return suppressions.Contains(reportId);
+            return suppressionListener.IsSuppressed(report.LinterId, report.ReportNumber, report.Line);
         }
     }
 }
