@@ -41,7 +41,7 @@ namespace AppRefiner.Linters
                         if (statement is Statement.Select select && SQLHelper.HasWildcard(select))
                         {
                             /* Report WARNING that there is a wildcard in a select statement */
-                            Reports?.Add(CreateReport(
+                            Reports?.Add(AddReport(
                                 1,
                                 "SQL has a wildcard in select statement.",
                                 this.Type,

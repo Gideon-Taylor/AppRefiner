@@ -48,7 +48,7 @@ namespace AppRefiner.Linters
                 var functionContext = functions[currentFunction];
                 if (!HasSafeTerminationCondition(functionContext))
                 {
-                    Reports?.Add(CreateReport(
+                    Reports?.Add(AddReport(
                         1,
                         "Potentially unsafe recursive function call. Ensure there is a proper termination condition.",
                         Type,

@@ -8,7 +8,7 @@ namespace AppRefiner.Linters
     /// </summary>
     public class FunctionParameterCountLinter : BaseLintRule
     {
-        public override string LINTER_ID => "PARAM_COUNT";
+        public override string LINTER_ID => "FUNC_PARAM_COUNT";
         private const int MaxMethodParameters = 5;
         private const int MaxFunctionParameters = 5;
         
@@ -29,7 +29,7 @@ namespace AppRefiner.Linters
             
             if (paramCount > MaxMethodParameters)
             {
-                Reports?.Add(CreateReport(
+                Reports?.Add(AddReport(
                     1,
                     $"Method has {paramCount} parameters, which exceeds recommended maximum of {MaxMethodParameters}. Consider refactoring.",
                     Type,
@@ -49,7 +49,7 @@ namespace AppRefiner.Linters
             
             if (paramCount > MaxFunctionParameters)
             {
-                Reports?.Add(CreateReport(
+                Reports?.Add(AddReport(
                     2,
                     $"Function has {paramCount} parameters, which exceeds recommended maximum of {MaxFunctionParameters}. Consider using a compound parameter object.",
                     Type,

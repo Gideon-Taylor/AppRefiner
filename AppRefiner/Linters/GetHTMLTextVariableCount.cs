@@ -48,7 +48,7 @@ namespace AppRefiner.Linters
             var htmlDef = DataManager.GetHtmlDefinition(htmlRef);
             if (htmlDef == null || string.IsNullOrEmpty(htmlDef.Content))
             {
-                Reports?.Add(CreateReport(
+                Reports?.Add(AddReport(
                     1,
                     $"Invalid HTML definition: {htmlRef}",
                     ReportType.Error,
@@ -64,7 +64,7 @@ namespace AppRefiner.Linters
 
             if (providedBinds < bindCount)
             {
-                Reports?.Add(CreateReport(
+                Reports?.Add(AddReport(
                     2,
                     $"GetHTMLText has too few bind parameters. Expected {bindCount}, got {providedBinds}.",
                     ReportType.Error,
@@ -74,7 +74,7 @@ namespace AppRefiner.Linters
             }
             else if (providedBinds > bindCount && bindCount > 0)
             {
-                Reports?.Add(CreateReport(
+                Reports?.Add(AddReport(
                     3,
                     $"GetHTMLText has more bind parameters than needed. Expected {bindCount}, got {providedBinds}.",
                     ReportType.Warning,

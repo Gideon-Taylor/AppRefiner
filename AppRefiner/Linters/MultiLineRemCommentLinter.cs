@@ -37,7 +37,7 @@ namespace AppRefiner.Linters
                 // If line count is greater than 1 and no proper terminator, flag it
                 if (comment.Text.Split("\n").Length > 1)
                 {
-                    Reports?.Add(CreateReport(
+                    Reports?.Add(AddReport(
                         1,
                         "REM comment spans multiple lines, possible missing semicolon termination.",
                         Type,

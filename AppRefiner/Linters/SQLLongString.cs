@@ -35,7 +35,7 @@ namespace AppRefiner.Linters
                         if (sqlText.Length > MaxSqlLength)
                         {
                             /* Report that the SQL statement is too long */
-                            Reports?.Add(CreateReport(
+                            Reports?.Add(AddReport(
                                 1,
                                 "Long literal SQL statements should be SQL objects.",
                                 Type,

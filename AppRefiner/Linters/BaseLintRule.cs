@@ -31,7 +31,7 @@ namespace AppRefiner.Linters
         
         // Helper method to create a report with the proper linter ID set and add it to the Reports list
         // if it's not suppressed by a pragma directive
-        protected void CreateReport(int reportNumber, string message, ReportType type, int line, (int Start, int Stop) span)
+        protected void AddReport(int reportNumber, string message, ReportType type, int line, (int Start, int Stop) span)
         {
             Report report = new Report
             {
@@ -73,7 +73,7 @@ namespace AppRefiner.Linters
                     
                     // Extract suppression directives using regex
                     // Format: REM #pragma suppress LINTER_ID:REPORT_NUMBER [, LINTER_ID:REPORT_NUMBER]
-                    Match match = Regex.Match(commentText, @"(?:REM|/\*)\s*#pragma\s+suppress\s+(.+?)(?:\*/|\s*$)", RegexOptions.IgnoreCase);
+                    Match match = Regex.Match(commentText, @"(?:REM|/\*)\s*#AppRefiner\s+suppress\s+(.+?)(?:\*/|\s*$)", RegexOptions.IgnoreCase);
                     if (match.Success)
                     {
                         string suppressionList = match.Groups[1].Value.Trim();
@@ -111,19 +111,6 @@ namespace AppRefiner.Linters
             string reportId = report.GetFullId();
             
             return suppressions.Contains(reportId);
-        }
-    }
-
-
-    class PeopleSoftSQLDialect : GenericDialect
-    {
-        public override bool IsIdentifierStart(char character)
-        {
-            return char.IsLetter(character) ||
-                   character is Symbols.Underscore
-                       or Symbols.Num
-                       or Symbols.At
-                       or Symbols.Percent;
         }
     }
 }

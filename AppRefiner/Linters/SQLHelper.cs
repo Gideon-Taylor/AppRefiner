@@ -8,6 +8,17 @@ using System.Text.RegularExpressions;
 
 namespace AppRefiner.Linters
 {
+    class PeopleSoftSQLDialect : GenericDialect
+    {
+        public override bool IsIdentifierStart(char character)
+        {
+            return char.IsLetter(character) ||
+                   character is Symbols.Underscore
+                       or Symbols.Num
+                       or Symbols.At
+                       or Symbols.Percent;
+        }
+    }
     /* 
      * Helper methods for SQL-related linting operations
      */

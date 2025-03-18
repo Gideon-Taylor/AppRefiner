@@ -37,7 +37,7 @@ namespace AppRefiner.Linters
                 // Get the outermost If statement to report on
                 var outermost = ifContextStack.Last();
                 
-                Reports?.Add(CreateReport(
+                Reports?.Add(AddReport(
                     1,
                     $"Deeply nested If/Else blocks (level {currentNestingLevel}). Consider refactoring using Evaluate or early returns.",
                     Type,
@@ -76,7 +76,7 @@ namespace AppRefiner.Linters
                         // Only report each top-level if statement once
                         if (!reportedIfStatements.Contains(outermost))
                         {
-                            Reports?.Add(CreateReport(
+                            Reports?.Add(AddReport(
                                 2,
                                 "Multiple IF-ELSE-IF chains detected. Consider using Evaluate statement for better readability.",
                                 ReportType.Info,

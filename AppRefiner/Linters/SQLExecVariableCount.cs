@@ -10,7 +10,7 @@ namespace AppRefiner.Linters
 {
     public class SQLExecVariableCount : BaseLintRule
     {
-        public override string LINTER_ID => "SQL_EXEC_VAR";
+        public override string LINTER_ID => "SQL_EXEC";
         
         public SQLExecVariableCount()
         {
@@ -38,7 +38,7 @@ namespace AppRefiner.Linters
                             var sqlText = DataManager.GetSqlDefinition(defName);
                             if (string.IsNullOrWhiteSpace(sqlText))
                             {
-                                Reports?.Add(CreateReport(
+                                Reports?.Add(AddReport(
                                     1,
                                     $"Invalid SQL definition: {defName}",
                                     ReportType.Error,
@@ -109,7 +109,7 @@ namespace AppRefiner.Linters
             // Check recursively if the first argument contains a concatenation operator
             if (ContainsConcatenation(firstArg))
             {
-                Reports?.Add(CreateReport(
+                Reports?.Add(AddReport(
                     2,
                     "Found SQL using string concatenation.",
                     Type,
@@ -143,7 +143,7 @@ namespace AppRefiner.Linters
                 if (totalInOutArgs != (outputCount + bindCount))
                 {
                     /* Report that there are an incorrect number of In/Out parameters and how many there should be */
-                    Reports?.Add(CreateReport(
+                    Reports?.Add(AddReport(
                         3,
                         $"SQL has incorrect number of In/Out parameters. Expected {bindCount + outputCount}, got {totalInOutArgs}.",
                         ReportType.Error,

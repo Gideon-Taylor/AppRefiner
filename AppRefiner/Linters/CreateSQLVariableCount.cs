@@ -15,7 +15,7 @@ namespace AppRefiner.Linters
      */
     public class CreateSQLVariableCount : ScopedLintRule<SQLStatementInfo>
     {
-        public override string LINTER_ID => "CREATE_SQL_VAR";
+        public override string LINTER_ID => "CREATE_SQL";
         
         private enum ValidationMode
         {
@@ -102,7 +102,7 @@ namespace AppRefiner.Linters
                             var sqlText = DataManager.GetSqlDefinition(defName);
                             if (string.IsNullOrWhiteSpace(sqlText))
                             {
-                                Reports?.Add(CreateReport(
+                                Reports?.Add(AddReport(
                                     1,
                                     $"Invalid SQL definition: {defName}",
                                     ReportType.Error,
@@ -113,7 +113,7 @@ namespace AppRefiner.Linters
                             }
                             return (sqlText, expr.Start.StartIndex, expr.Stop.StopIndex);
                         }
-                        Reports?.Add(CreateReport(
+                        Reports?.Add(AddReport(
                             2,
                             "Connect to DB to validate this SQL usage.",
                             ReportType.Info,
@@ -148,7 +148,7 @@ namespace AppRefiner.Linters
             {
                 if (sqlText.Trim().Contains(metaSQL, StringComparison.OrdinalIgnoreCase))
                 {
-                    Reports?.Add(CreateReport(
+                    Reports?.Add(AddReport(
                         3,
                         "Cannot validate SQL using certain MetaSQL constructs like %Inser, %Update, %SelectAll etc.",
                         ReportType.Info,
@@ -196,7 +196,7 @@ namespace AppRefiner.Linters
 
                     if (totalInOutArgs != bindCount)
                     {
-                        Reports?.Add(CreateReport(
+                        Reports?.Add(AddReport(
                             4,
                             $"SQL statement has incorrect number of input parameters. Expected {bindCount}, got {totalInOutArgs}.",
                             ReportType.Error,
@@ -211,7 +211,7 @@ namespace AppRefiner.Linters
                 {
                     if (totalInOutArgs != sqlInfo.BindCount)
                     {
-                        Reports?.Add(CreateReport(
+                        Reports?.Add(AddReport(
                             5,
                             $"SQL statement has incorrect number of input parameters. Expected {bindCount}, got {totalInOutArgs}.",
                             ReportType.Error,
@@ -224,7 +224,7 @@ namespace AppRefiner.Linters
 
                 if (totalInOutArgs != bindCount + sqlInfo.OutputColumnCount)
                 {
-                    Reports?.Add(CreateReport(
+                    Reports?.Add(AddReport(
                         6,
                         $"SQL statement has incorrect number of In/Out parameters. Expected {bindCount + sqlInfo.OutputColumnCount}, got {totalInOutArgs}.",
                         ReportType.Error,
@@ -284,7 +284,7 @@ namespace AppRefiner.Linters
             // Check recursively if the first argument contains a concatenation operator
             if (ContainsConcatenation(firstArg))
             {
-                Reports?.Add(CreateReport(
+                Reports?.Add(AddReport(
                     7,
                     "Found SQL using string concatenation.",
                     Type,
@@ -366,7 +366,7 @@ namespace AppRefiner.Linters
                 
                 if (!sqlInfo.HasValidSqlText)
                 {
-                    Reports?.Add(CreateReport(
+                    Reports?.Add(AddReport(
                         8,
                         $"Cannot validate SQL.{functionName} - SQL text is empty or could not be resolved.",
                         ReportType.Info,
@@ -385,7 +385,7 @@ namespace AppRefiner.Linters
 
                 if (argCount != sqlInfo.BindCount)
                 {
-                    Reports?.Add(CreateReport(
+                    Reports?.Add(AddReport(
                         9,
                         $"SQL.{functionName} has incorrect number of bind parameters. Expected {sqlInfo.BindCount}, got {argCount}.",
                         ReportType.Error,
@@ -405,7 +405,7 @@ namespace AppRefiner.Linters
                 // Check recursively if the first argument contains a concatenation operator
                 if (ContainsConcatenation(firstArg))
                 {
-                    Reports?.Add(CreateReport(
+                    Reports?.Add(AddReport(
                         10,
                         "Found SQL using string concatenation.",
                         Type,
@@ -430,7 +430,7 @@ namespace AppRefiner.Linters
             // If we still don't have valid SQL text, check if this requires parameters
             if (!sqlInfo.HasValidSqlText && args?.expression()?.Length > 0)
             {
-                Reports?.Add(CreateReport(
+                Reports?.Add(AddReport(
                     11,
                     "Cannot validate SQL.Open - SQL text is empty or could not be resolved.",
                     ReportType.Info,
@@ -450,7 +450,7 @@ namespace AppRefiner.Linters
             /* Cannot validate calls where we don't have the SQL text... */
             if (!sqlInfo.HasValidSqlText) 
             {
-                Reports?.Add(CreateReport(
+                Reports?.Add(AddReport(
                     12,
                     "Cannot validate SQL.Fetch - SQL text is empty or could not be resolved.",
                     ReportType.Info,
@@ -462,7 +462,7 @@ namespace AppRefiner.Linters
 
             if (sqlInfo.InVarsBound == false && sqlInfo.BindCount > 0)
             {
-                Reports?.Add(CreateReport(
+                Reports?.Add(AddReport(
                     13,
                     "SQL.Fetch called before bind values were provided. Make sure to call Open/Execute before Fetch.",
                     ReportType.Error,
@@ -475,7 +475,7 @@ namespace AppRefiner.Linters
             var expressions = args.expression();
             if (expressions == null || expressions.Length == 0)
             {
-                Reports?.Add(CreateReport(
+                Reports?.Add(AddReport(
                     14,
                     "SQL.Fetch requires at least one output parameter.",
                     ReportType.Error,
@@ -502,7 +502,7 @@ namespace AppRefiner.Linters
                     }
                     else
                     {
-                        Reports?.Add(CreateReport(
+                        Reports?.Add(AddReport(
                             15,
                             $"SQL.Fetch parameter is not an array or record which is needed to handle {sqlInfo.OutputColumnCount} output columns.",
                             ReportType.Error,
@@ -518,7 +518,7 @@ namespace AppRefiner.Linters
                 // Multiple parameters must match the exact number of output columns
                 if (expressions.Length != sqlInfo.OutputColumnCount)
                 {
-                    Reports?.Add(CreateReport(
+                    Reports?.Add(AddReport(
                         16,
                         $"SQL.Fetch has incorrect number of output parameters. Expected {sqlInfo.OutputColumnCount}, got {expressions.Length}.",
                         ReportType.Error,

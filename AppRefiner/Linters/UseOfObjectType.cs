@@ -68,7 +68,7 @@ namespace AppRefiner.Linters
             // Check if the assignment is a create expression
             if (context.expression() is ObjectCreateExprContext)
             {
-                Reports?.Add(CreateReport(
+                Reports?.Add(AddReport(
                     1,
                     "Variable is declared as 'object' but assigned a specific type.",
                     ReportType.Warning,
@@ -93,7 +93,7 @@ namespace AppRefiner.Linters
                     // Check if right side is a create expression
                     if (context.expression(1) is ObjectCreateExprContext)
                     {
-                        Reports?.Add(CreateReport(
+                        Reports?.Add(AddReport(
                             2,
                             "Variable is declared as 'object' but assigned a specific type.",
                             ReportType.Warning,

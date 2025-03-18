@@ -77,7 +77,7 @@ namespace AppRefiner.Linters
             var expressionText = context.GetText();
             if (expressionText.Length > MaxExpressionLength)
             {
-                Reports?.Add(CreateReport(
+                Reports?.Add(AddReport(
                     1,
                     $"Expression is too long ({expressionText.Length} chars). Consider breaking it down into smaller parts.",
                     Type,
@@ -91,7 +91,7 @@ namespace AppRefiner.Linters
             int operatorCount = CountOperators(context);
             if (operatorCount > MaxOperatorCount)
             {
-                Reports?.Add(CreateReport(
+                Reports?.Add(AddReport(
                     2,
                     $"Expression is too complex with {operatorCount} operators. Consider simplifying.",
                     Type,
