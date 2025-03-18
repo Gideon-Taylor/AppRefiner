@@ -154,6 +154,7 @@ namespace AppRefiner
         private const int SALMON_HIGLIGHTER = 0;
         private const int GRAY_HIGLIGHTER = 1;
         private const int BLUE_HIGLIGHTER = 2;
+        private const int LINTER_SUPPRESSION_HIGHLIGHTER = 3;
 
         // font colors
         private const int GRAY_TEXT = 250;
@@ -479,6 +480,12 @@ namespace AppRefiner
             editor.SendMessage(SCI_INDICSETFORE, (IntPtr)BLUE_HIGLIGHTER, (IntPtr)0xD9D6A5); /* Blue-orange in BGR format */
             editor.SendMessage(SCI_INDICSETALPHA, (IntPtr)BLUE_HIGLIGHTER, (IntPtr)0x60);
             editor.SendMessage(SCI_INDICSETUNDER, (IntPtr)BLUE_HIGLIGHTER, (IntPtr)1);
+
+            /* Create Linter Suppression Highlighter */
+            editor.SendMessage(SCI_INDICSETSTYLE, (IntPtr)LINTER_SUPPRESSION_HIGHLIGHTER, (IntPtr)INDIC_FULLBOX);
+            editor.SendMessage(SCI_INDICSETFORE, (IntPtr)LINTER_SUPPRESSION_HIGHLIGHTER, (IntPtr)0x50CB50); /* Green in BGR format */
+            editor.SendMessage(SCI_INDICSETALPHA, (IntPtr)LINTER_SUPPRESSION_HIGHLIGHTER, (IntPtr)0x70);
+            editor.SendMessage(SCI_INDICSETUNDER, (IntPtr)LINTER_SUPPRESSION_HIGHLIGHTER, (IntPtr)1);
 
             editor.FoldEnabled = true;
         }
@@ -1259,7 +1266,8 @@ namespace AppRefiner
     {
         Salmon = 0,
         Gray = 1,
-        Blue = 2
+        Blue = 2,
+        LinterSuppression = 3
     }
 
     public enum FontColor
