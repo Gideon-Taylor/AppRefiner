@@ -10,6 +10,10 @@ using static AppRefiner.PeopleCode.PeopleCodeParser;
 
 namespace AppRefiner.Linters
 {
+    /* Issues: 
+     * SQL that fails to parse should indicate this on the SQLInfo object, and further checks against this object should be skipped
+     * SQL Text starting with "%Insert" should not be evaluated 
+     */
     public class CreateSQLVariableCount : ScopedLintRule<SQLStatementInfo>
     {
         private enum ValidationMode
@@ -417,9 +421,9 @@ namespace AppRefiner.Linters
                     var singleArg = expressions[0];
 
                     TryGetVariableInfo(singleArg.GetText(), out var info);
-                    if (info != null && info.Type.StartsWith("Array", StringComparison.OrdinalIgnoreCase))
+                    if (info != null && info.Type.StartsWith("Array", StringComparison.OrdinalIgnoreCase) || info.Type.Equals("Record",StringComparison.OrdinalIgnoreCase))
                     {
-                        // If it's an array type, we can proceed
+                        // If it's an array type or a Record, we can proceed
                         return;
                     }
                     else
@@ -429,7 +433,7 @@ namespace AppRefiner.Linters
                             Type = ReportType.Error,
                             Line = context.Start.Line - 1,
                             Span = (context.Start.StartIndex, context.Stop.StopIndex),
-                            Message = $"SQL.Fetch parameter is not an array which is needed to handle {sqlInfo.OutputColumnCount} output columns."
+                            Message = $"SQL.Fetch parameter is not an array or record which is needed to handle {sqlInfo.OutputColumnCount} output columns."
                         });
                     }
                 }
