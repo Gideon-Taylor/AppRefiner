@@ -27,9 +27,13 @@ namespace AppRefiner.Linters
     ///    /* #AppRefiner suppress (LINTER_ID:ReportNumber) */
     ///    var x = SomeMethod(); // This specific line is suppressed
     /// 
+    /// 4. Wildcard Suppression (suppresses all reports from a specific linter):
+    ///    /* #AppRefiner suppress (LINTER_ID:*) */
+    ///    // Suppresses all reports from the specified linter
+    /// 
     /// Usage Examples:
     /// 
-    /// /* #AppRefiner suppress (CODE_STYLE:1, NAMING:2) */
+    /// /* #AppRefiner suppress (CODE_STYLE:1, NAMING:2, SQL_EXEC:*) */
     /// import PTCS_PORTAL:*;
     /// 
     /// class MyClass 
@@ -47,23 +51,26 @@ namespace AppRefiner.Linters
         {
             public string LinterId { get; }
             public int ReportNumber { get; }
+            public bool IsWildcard { get; }
 
-            public SuppressionInfo(string linterId, int reportNumber)
+            public SuppressionInfo(string linterId, int reportNumber, bool isWildcard = false)
             {
                 LinterId = linterId;
                 ReportNumber = reportNumber;
+                IsWildcard = isWildcard;
             }
 
             public override bool Equals(object? obj)
             {
                 return obj is SuppressionInfo info &&
                        LinterId == info.LinterId &&
-                       ReportNumber == info.ReportNumber;
+                       ReportNumber == info.ReportNumber &&
+                       IsWildcard == info.IsWildcard;
             }
 
             public override int GetHashCode()
             {
-                return HashCode.Combine(LinterId, ReportNumber);
+                return HashCode.Combine(LinterId, ReportNumber, IsWildcard);
             }
         }
 
@@ -74,7 +81,7 @@ namespace AppRefiner.Linters
         private readonly Stack<HashSet<SuppressionInfo>> _scopeSuppressionStack = new();
     
         private static readonly Regex _suppressionRegex = new(
-            @"#AppRefiner\s+suppress\s+\(([\w\:_\s,]+)\)",
+            @"#AppRefiner\s+suppress\s+\(([\w\:_\s,\*]+)\)",
             RegexOptions.Compiled);
 
         public LinterSuppressionListener(ITokenStream tokenStream, List<IToken> comments)
@@ -201,9 +208,17 @@ namespace AppRefiner.Linters
                 foreach (var item in suppressionList.Split(','))
                 {
                     var parts = item.Trim().Split(':');
-                    if (parts.Length == 2 && int.TryParse(parts[1], out int reportNumber))
+                    if (parts.Length == 2)
                     {
-                        targetCollection.Add(new SuppressionInfo(parts[0], reportNumber));
+                        if (parts[1] == "*")
+                        {
+                            // Wildcard suppression
+                            targetCollection.Add(new SuppressionInfo(parts[0], -1, true));
+                        }
+                        else if (int.TryParse(parts[1], out int reportNumber))
+                        {
+                            targetCollection.Add(new SuppressionInfo(parts[0], reportNumber));
+                        }
                     }
                 }
             }
@@ -375,30 +390,34 @@ namespace AppRefiner.Linters
         /// <returns>True if the report should be suppressed, false otherwise</returns>
         public bool IsSuppressed(string linterId, int reportNumber, int line)
         {
-            var suppressionInfo = new SuppressionInfo(linterId, reportNumber);
-        
+            // Create a specific suppression info for exact match check
+            var specificSuppression = new SuppressionInfo(linterId, reportNumber);
+            
+            // Create a wildcard suppression info for wildcard match check
+            var wildcardSuppression = new SuppressionInfo(linterId, -1, true);
+            
             // 1. Check global suppressions first
-            if (_globalSuppressions.Contains(suppressionInfo))
+            if (_globalSuppressions.Contains(specificSuppression) || _globalSuppressions.Contains(wildcardSuppression))
             {
                 return true;
             }
-        
+            
             // 2. Check active scope suppressions from the stack
             foreach (var scopeSuppressions in _scopeSuppressionStack)
             {
-                if (scopeSuppressions.Contains(suppressionInfo))
+                if (scopeSuppressions.Contains(specificSuppression) || scopeSuppressions.Contains(wildcardSuppression))
                 {
                     return true;
                 }
             }
-        
+            
             // 3. Check line-specific suppressions
-            if (_lineSpecificSuppressions.TryGetValue(line, out var lineSuppressions) && 
-                lineSuppressions.Contains(suppressionInfo))
+            if (_lineSpecificSuppressions.TryGetValue(line, out var lineSuppressions) &&
+                (lineSuppressions.Contains(specificSuppression) || lineSuppressions.Contains(wildcardSuppression)))
             {
                 return true;
             }
-        
+            
             return false;
         }
 
@@ -414,7 +433,9 @@ namespace AppRefiner.Linters
             // Add global suppressions
             foreach (var suppression in _globalSuppressions)
             {
-                result.Add((suppression.LinterId, suppression.ReportNumber));
+                // For wildcard suppressions, use -1 as a special value
+                int reportNum = suppression.IsWildcard ? -1 : suppression.ReportNumber;
+                result.Add((suppression.LinterId, reportNum));
             }
         
             // Add active scope suppressions from the stack
@@ -422,7 +443,8 @@ namespace AppRefiner.Linters
             {
                 foreach (var suppression in scopeSuppressions)
                 {
-                    result.Add((suppression.LinterId, suppression.ReportNumber));
+                    int reportNum = suppression.IsWildcard ? -1 : suppression.ReportNumber;
+                    result.Add((suppression.LinterId, reportNum));
                 }
             }
         
@@ -431,7 +453,8 @@ namespace AppRefiner.Linters
             {
                 foreach (var suppression in lineSuppressions)
                 {
-                    result.Add((suppression.LinterId, suppression.ReportNumber));
+                    int reportNum = suppression.IsWildcard ? -1 : suppression.ReportNumber;
+                    result.Add((suppression.LinterId, reportNum));
                 }
             }
         
