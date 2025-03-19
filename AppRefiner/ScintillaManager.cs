@@ -1,4 +1,4 @@
-﻿using AppRefiner.Database;
+using AppRefiner.Database;
 using AppRefiner.Linters;
 using SQL.Formatter;
 using SQL.Formatter.Core;
@@ -146,13 +146,6 @@ namespace AppRefiner
         // Element identifiers
         private const int SC_ELEMENT_SELECTION_BACK = 31;
         private const int SC_ELEMENT_SELECTION_TEXT = 32;
-
-
-        // indicators 
-        private const int SALMON_HIGLIGHTER = 0;
-        private const int GRAY_HIGLIGHTER = 1;
-        private const int BLUE_HIGLIGHTER = 2;
-        private const int LINTER_SUPPRESSION_HIGHLIGHTER = 3;
 
         // font colors
         private const int GRAY_TEXT = 250;
@@ -451,19 +444,21 @@ namespace AppRefiner
 
 
             editor.SendMessage(SCI_SETFOLDFLAGS, 16 | 4, 0); //Display a horizontal line above and below the line after folding 
+            editor.FoldEnabled = true;
 
-            /* Use marker 21 for salmon highlight */
+            /* Use marker 21 for salmon highlight 
             editor.SendMessage(SCI_MARKERDEFINE, 21, SC_MARK_BACKGROUND);
             editor.SendMessage(SCI_MARKERSETBACK, 21, 0x7AA0FF);
 
-            /* Use marker 22 for gray highlight */
+             Use marker 22 for gray highlight 
             editor.SendMessage(SCI_MARKERDEFINE, 22, SC_MARK_BACKGROUND);
             editor.SendMessage(SCI_MARKERSETBACK, 22, 0x808080);
+*/
 
             /* Set up indicators */
 
             /* Create Salmon Highlighter */
-            editor.SendMessage(SCI_INDICSETSTYLE, SALMON_HIGLIGHTER, INDIC_FULLBOX);
+            /* editor.SendMessage(SCI_INDICSETSTYLE, SALMON_HIGLIGHTER, INDIC_FULLBOX);
             editor.SendMessage(SCI_INDICSETFORE, SALMON_HIGLIGHTER, 0x4DB7FF);
             editor.SendMessage(SCI_INDICSETALPHA, SALMON_HIGLIGHTER, 0x80);
             editor.SendMessage(SCI_INDICSETUNDER, SALMON_HIGLIGHTER, 1);
@@ -473,42 +468,43 @@ namespace AppRefiner
             editor.SendMessage(SCI_INDICSETALPHA, GRAY_HIGLIGHTER, 0x60);
             editor.SendMessage(SCI_INDICSETUNDER, GRAY_HIGLIGHTER, 1);
 
-            /* Create Blue Highlighter */
+             Create Blue Highlighter 
             editor.SendMessage(SCI_INDICSETSTYLE, BLUE_HIGLIGHTER, INDIC_FULLBOX);
-            editor.SendMessage(SCI_INDICSETFORE, BLUE_HIGLIGHTER, 0xD9D6A5); /* Blue-orange in BGR format */
+            editor.SendMessage(SCI_INDICSETFORE, BLUE_HIGLIGHTER, 0xD9D6A5); 
             editor.SendMessage(SCI_INDICSETALPHA, BLUE_HIGLIGHTER, 0x60);
             editor.SendMessage(SCI_INDICSETUNDER, BLUE_HIGLIGHTER, 1);
 
-            /* Create Linter Suppression Highlighter */
+             Create Linter Suppression Highlighter 
             editor.SendMessage(SCI_INDICSETSTYLE, LINTER_SUPPRESSION_HIGHLIGHTER, INDIC_FULLBOX);
-            editor.SendMessage(SCI_INDICSETFORE, LINTER_SUPPRESSION_HIGHLIGHTER, 0x50CB50); /* Purpleish in BGR format */
+            editor.SendMessage(SCI_INDICSETFORE, LINTER_SUPPRESSION_HIGHLIGHTER, 0x50CB50); 
             editor.SendMessage(SCI_INDICSETALPHA, LINTER_SUPPRESSION_HIGHLIGHTER, 0x40);
             editor.SendMessage(SCI_INDICSETUNDER, LINTER_SUPPRESSION_HIGHLIGHTER, 1);
 
-            editor.FoldEnabled = true;
+            // Initialize the ColorToHighlighterMap with the predefined highlighters
+            editor.ColorToHighlighterMap[0x4DB7FF] = SALMON_HIGLIGHTER;    // Salmon
+            editor.ColorToHighlighterMap[0x808080] = GRAY_HIGLIGHTER;      // Gray
+            editor.ColorToHighlighterMap[0xD9D6A5] = BLUE_HIGLIGHTER;      // Blue
+            editor.ColorToHighlighterMap[0x50CB50] = LINTER_SUPPRESSION_HIGHLIGHTER; // Linter Suppression
+            */            
         }
 
-        public static void HighlightText(ScintillaEditor editor, HighlightColor color, int start, int length)
+        private static void HighlightText(ScintillaEditor editor, int highlighterNumber, int start, int length)
         {
-            int indicatorNumber = 0;
-            switch (color)
-            {
-                case HighlightColor.Salmon:
-                    indicatorNumber = SALMON_HIGLIGHTER;
-                    break;
-                case HighlightColor.Gray:
-                    indicatorNumber = GRAY_HIGLIGHTER;
-                    break;
-                case HighlightColor.Blue:
-                    indicatorNumber = BLUE_HIGLIGHTER;
-                    break;
-                case HighlightColor.LinterSuppression:
-                    indicatorNumber = LINTER_SUPPRESSION_HIGHLIGHTER;
-                    break;
-            }
-
-            editor.SendMessage(SCI_SETINDICATORCURRENT, indicatorNumber, IntPtr.Zero);
+            editor.SendMessage(SCI_SETINDICATORCURRENT, highlighterNumber, IntPtr.Zero);
             editor.SendMessage(SCI_INDICATORFILLRANGE, start, length);
+        }
+        /// <summary>
+        /// Highlights text with a highlighter of the specified BGRA color.
+        /// If a highlighter with the color doesn't exist, it creates a new one.
+        /// </summary>
+        /// <param name="editor">The ScintillaEditor to highlight text in</param>
+        /// <param name="color">The BGRA color value for the highlighter</param>
+        /// <param name="start">The start position of the text to highlight</param>
+        /// <param name="length">The length of the text to highlight</param>
+        public static void HighlightTextWithColor(ScintillaEditor editor, uint color, int start, int length)
+        {
+            int highlighterNumber = editor.GetHighlighter(color);
+            HighlightText(editor, highlighterNumber, start, length);
         }
 
         public static void InitAnnotationStyles(ScintillaEditor editor)
@@ -741,10 +737,6 @@ namespace AppRefiner
             editor.SendMessage(SCI_MARKERSETBACK, SC_MARKNUM_FOLDERTAIL, 0x1A1A1A);
 
             // Collapse Label Color
-            editor.SendMessage(SCI_MARKERSETBACK, SC_MARKNUM_FOLDERSUB, 0x0);
-            editor.SendMessage(SCI_MARKERSETBACK, SC_MARKNUM_FOLDERMIDTAIL, 0x0);
-            editor.SendMessage(SCI_MARKERSETBACK, SC_MARKNUM_FOLDERTAIL, 0x0);
-
             editor.SendMessage(SCI_MARKERSETBACK, SC_MARK_FULLRECT, 0x1A1A1A);
             editor.SendMessage(SCI_MARKERSETBACK, SC_MARK_BACKGROUND, 0x1A1A1A);
 
@@ -1200,6 +1192,29 @@ namespace AppRefiner
             return editor == null ? -1 : (int)editor.SendMessage(SCI_LINEFROMPOSITION, editor.SendMessage(SCI_GETCURRENTPOS, 0, 0), 0);
         }
 
+        /// <summary>
+        /// Creates a new highlighter with the specified BGRA color
+        /// </summary>
+        /// <param name="editor">The ScintillaEditor to create the highlighter for</param>
+        /// <param name="color">The BGRA color value</param>
+        /// <returns>The highlighter number</returns>
+        public static int CreateHighlighter(ScintillaEditor editor, uint bgraColor)
+        {
+            int highlighterNumber = editor.NextHighlighterNumber;
+            
+            var bgrColor = (bgraColor & 0xFFFFFF00) >> 8; // Remove alpha
+            var alpha = bgraColor & 0x000000FF; // Extract alpha
+            editor.SendMessage(SCI_INDICSETSTYLE, highlighterNumber, INDIC_FULLBOX);
+            editor.SendMessage(SCI_INDICSETFORE, highlighterNumber, new IntPtr(bgrColor));
+            editor.SendMessage(SCI_INDICSETALPHA, highlighterNumber, new IntPtr(alpha));
+            editor.SendMessage(SCI_INDICSETUNDER, highlighterNumber, 1);
+            
+            editor.ColorToHighlighterMap[bgraColor] = highlighterNumber;
+            editor.NextHighlighterNumber++;
+            
+            return highlighterNumber;
+        }
+
     }
     public enum EditorType
     {
@@ -1238,6 +1253,27 @@ namespace AppRefiner
         public IDataManager? DataManager = null;
 
         public Dictionary<int, List<Report>> LineToReports = new();
+
+        public Dictionary<uint, int> ColorToHighlighterMap = new();
+        public int NextHighlighterNumber = 0;
+
+        /// <summary>
+        /// Gets a highlighter number for the specified BGRA color.
+        /// If the color doesn't exist in the dictionary, it creates a new highlighter.
+        /// </summary>
+        /// <param name="color">The BGRA color value</param>
+        /// <returns>The highlighter number</returns>
+        public int GetHighlighter(uint color)
+        {
+            if (ColorToHighlighterMap.TryGetValue(color, out int value))
+            {
+                return value;
+            }
+            else
+            {
+                return ScintillaManager.CreateHighlighter(this, color);
+            }
+        }
 
         public ScintillaEditor(IntPtr hWnd, uint procID, string caption)
         {
@@ -1297,14 +1333,7 @@ namespace AppRefiner
             return IsWindow(hWnd);
         }
     }
-    public enum HighlightColor
-    {
-        Salmon = 0,
-        Gray = 1,
-        Blue = 2,
-        LinterSuppression = 3
-    }
-
+    
     public enum FontColor
     {
         Gray = 0

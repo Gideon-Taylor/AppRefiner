@@ -1109,7 +1109,7 @@ namespace AppRefiner
 
             foreach (var highlight in highlights)
             {
-                ScintillaManager.HighlightText(editor, highlight.Color, highlight.Start, highlight.Length);
+                ScintillaManager.HighlightTextWithColor(editor, highlight.Color, highlight.Start, highlight.Length);
             }
 
             foreach (var color in colors)

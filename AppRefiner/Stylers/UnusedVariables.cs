@@ -5,6 +5,7 @@ namespace AppRefiner.Stylers
 {
     public class UnusedLocalVariableStyler : ScopedStyler<object>
     {
+        private const uint HIGHLIGHT_COLOR = 0x80808060;
         public UnusedLocalVariableStyler()
         {
             Description = "Grays out unused local variables.";
@@ -21,7 +22,7 @@ namespace AppRefiner.Stylers
                     // Add both highlight and color for unused variables
                     Highlights?.Add(new CodeHighlight()
                     {
-                        Color = HighlightColor.Gray,
+                        Color = HIGHLIGHT_COLOR,
                         Start = variable.Span.Start,
                         Length = variable.Span.Stop - variable.Span.Start + 1
                     });
@@ -39,7 +40,7 @@ namespace AppRefiner.Stylers
                 {
                     Highlights?.Add(new CodeHighlight()
                     {
-                        Color = HighlightColor.Gray,
+                        Color = HIGHLIGHT_COLOR,
                         Start = variable.Span.Start,
                         Length = variable.Span.Stop - variable.Span.Start + 1
                     });

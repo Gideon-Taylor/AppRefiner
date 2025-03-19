@@ -6,6 +6,7 @@ namespace AppRefiner.Stylers
 {
     public class MeaninglessVariableNameStyler : BaseStyler
     {
+        private const uint HIGHLIGHT_COLOR = 0xD9D6A560;
         private HashSet<string> meaninglessNames = new(StringComparer.OrdinalIgnoreCase)
         {
             "a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m", "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z",
@@ -78,7 +79,7 @@ namespace AppRefiner.Stylers
                 {
                     Start = token.StartIndex,
                     Length = token.StopIndex - token.StartIndex + 1,
-                    Color = HighlightColor.Blue
+                    Color = HIGHLIGHT_COLOR
                 };
                 Highlights?.Add(highlight);
             }

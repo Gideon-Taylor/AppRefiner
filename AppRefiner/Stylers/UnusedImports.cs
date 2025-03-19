@@ -4,6 +4,7 @@ namespace AppRefiner.Stylers
 {
     public class UnusedImportsListener : BaseStyler
     {
+        private const uint HIGHLIGHT_COLOR = 0x80808060;
         class ImportInfo
         {
             public string Name { get; }
@@ -36,10 +37,8 @@ namespace AppRefiner.Stylers
 
         public override void EnterImportDeclaration(ImportDeclarationContext context)
         {
-            string packageName = "";
-
             var appPackageAll = context.appPackageAll();
-            packageName = appPackageAll != null ? appPackageAll.GetText().TrimEnd('*') : context.appClassPath().GetText();
+            string packageName = appPackageAll != null ? appPackageAll.GetText().TrimEnd('*') : context.appClassPath().GetText();
 
             var importInfo = new ImportInfo(packageName, context.Start.Line, context.Start.StartIndex, context.Stop.StopIndex);
 
@@ -81,24 +80,13 @@ namespace AppRefiner.Stylers
             {
                 if (!import.Value.Used)
                 {
-                    string suffix = import.Value.Name.EndsWith(":") ? "*" : "";
-
                     CodeHighlight highlight = new()
                     {
                         Start = import.Value.StartIndex,
                         Length = import.Value.StopIndex - import.Value.StartIndex + 1,
-                        Color = HighlightColor.Gray
+                        Color = HIGHLIGHT_COLOR
                     };
                     Highlights?.Add(highlight);
-
-
-                    /* CodeColor color = new CodeColor()
-                    {
-                        Start = import.Value.StartIndex,
-                        Length = import.Value.StopIndex - import.Value.StartIndex + 1,
-                        Color = FontColor.Gray
-                    };
-                    Colors?.Add(color); */
                 }
             }
         }

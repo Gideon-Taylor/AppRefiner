@@ -5,6 +5,7 @@ namespace AppRefiner.Stylers
 {
     class PropertyAsVariable : BaseStyler
     {
+        private const uint HIGHLIGHT_COLOR = 0x4DB7FF80;
         private HashSet<string> publicProperties = new();
         private bool inPublicProtected = false;
         private bool inConstructor = false;
@@ -82,7 +83,7 @@ namespace AppRefiner.Stylers
                     {
                         Start = userVariable.Symbol.StartIndex,
                         Length = userVariable.Symbol.Text.Length,
-                        Color = HighlightColor.Salmon
+                        Color = HIGHLIGHT_COLOR
                     });
                 }
             }

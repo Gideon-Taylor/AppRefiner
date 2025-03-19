@@ -6,6 +6,7 @@ namespace AppRefiner.Stylers
 {
     public class LinterSuppressionStyler : BaseStyler
     {
+        private const uint HILIGHT_COLOR = 0x50CB5040;
         private readonly Regex suppressionPattern = new(@"#AppRefiner\s+suppress\s+\((.*?)\)", RegexOptions.Compiled);
 
         public LinterSuppressionStyler()
@@ -45,13 +46,8 @@ namespace AppRefiner.Stylers
                         {
                             Start = comment.StartIndex,
                             Length = comment.Text.Length,
-                            Color = HighlightColor.LinterSuppression
+                            Color = HILIGHT_COLOR
                         });
-
-                        // We could parse the suppressions if needed
-                        string suppressionContent = match.Groups[1].Value;
-                        // Extract individual suppressions (ID:Number or ID:* format)
-                        // string[] suppressions = suppressionContent.Split(',');
                     }
                 }
             }
