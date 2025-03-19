@@ -175,6 +175,46 @@ The `BaseRefactor` class is the foundation for all refactoring operations in App
 ```csharp
 public abstract class BaseRefactor
 {
+    /// <summary>
+    /// Gets the display name for this refactor
+    /// </summary>
+    public static string RefactorName => "Base Refactor";
+
+    /// <summary>
+    /// Gets the description for this refactor
+    /// </summary>
+    public static string RefactorDescription => "Base refactoring operation";
+
+    /// <summary>
+    /// Gets whether this refactor requires a user input dialog
+    /// </summary>
+    public virtual bool RequiresUserInputDialog => false;
+
+    /// <summary>
+    /// Gets whether this refactor should have a keyboard shortcut registered
+    /// </summary>
+    public static bool RegisterKeyboardShortcut => false;
+
+    /// <summary>
+    /// Gets the keyboard shortcut modifier keys for this refactor
+    /// </summary>
+    public static ModifierKeys ShortcutModifiers => ModifierKeys.Control;
+
+    /// <summary>
+    /// Gets the keyboard shortcut key for this refactor
+    /// </summary>
+    public static Keys ShortcutKey => Keys.None;
+
+    /// <summary>
+    /// Shows the dialog for this refactor
+    /// </summary>
+    /// <returns>True if the user confirmed, false if canceled</returns>
+    public virtual bool ShowRefactorDialog()
+    {
+        // Base implementation just returns true (no dialog needed)
+        return true;
+    }
+
     // Initialize the refactor with source code and token stream
     public virtual void Initialize(string sourceCode, CommonTokenStream tokens, int? cursorPosition = null);
 
@@ -225,11 +265,54 @@ public abstract class BaseRefactor
 - `GetResult`: Returns the result of the refactoring operation
 - `GetRefactoredCode`: Returns the modified source code
 - `GetUpdatedCursorPosition`: Returns the new cursor position after refactoring
+- `RequiresUserInputDialog`: Indicates whether this refactor needs user input via a dialog
+- `ShowRefactorDialog`: Shows a dialog to gather user input for the refactoring operation
 - Helper methods for adding different types of changes:
   - `ReplaceNode`/`ReplaceText`: Replace text
   - `InsertText`/`InsertAfter`/`InsertBefore`: Insert text
   - `DeleteText`/`DeleteNode`: Delete text
 - `GetOriginalText`: Extracts the original text from a parser rule context
+
+## Dialog-Driven Refactoring
+
+AppRefiner supports a "bring your own UI" pattern for refactoring operations that require user input:
+
+1. Override the `RequiresUserInputDialog` property to return `true` in your refactor class
+2. Implement the `ShowRefactorDialog` method to display your custom dialog
+3. Use the dialog result to configure your refactoring operation
+
+Example:
+
+```csharp
+public class MyCustomRefactorWithDialog : BaseRefactor
+{
+    private string newName;
+    
+    // Indicate that this refactor needs a dialog
+    public override bool RequiresUserInputDialog => true;
+    
+    // Implement the dialog display method
+    public override bool ShowRefactorDialog()
+    {
+        using var dialog = new MyCustomDialog();
+        
+        // Show dialog with the editor's main window as owner
+        var wrapper = new WindowWrapper(GetEditorMainWindowHandle());
+        DialogResult result = dialog.ShowDialog(wrapper);
+        
+        // If user confirmed, update the refactor parameters
+        if (result == DialogResult.OK)
+        {
+            newName = dialog.EnteredName;
+            return true;
+        }
+        
+        return false;
+    }
+    
+    // Rest of the refactor implementation...
+}
+```
 
 ## Creating a Custom Refactoring
 
@@ -294,6 +377,7 @@ public class MyCustomRefactor : BaseRefactor
 3. **Undo Support**: Ensure refactorings can be undone
 4. **Error Handling**: Handle parsing errors gracefully
 5. **Documentation**: Document what your refactoring does and when it should be used
+6. **User Input**: For refactorings that require parameters, use the dialog-driven approach
 
 ## See Also
 

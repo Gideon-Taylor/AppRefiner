@@ -68,9 +68,17 @@ public struct CodeHighlight
 {
     public int Start { get; set; }
     public int Length { get; set; }
-    public HighlightColor Color { get; set; }
+    public uint Color { get; set; }
 }
 ```
+
+The `Color` property is a BGRA (Blue-Green-Red-Alpha) color value where:
+- Bits 31-24: Blue component
+- Bits 23-16: Green component
+- Bits 15-8: Red component
+- Bits 7-0: Alpha (transparency) component
+
+This allows for custom highlight colors beyond the predefined ones, giving stylers the flexibility to use any color with transparency.
 
 ### CodeColor
 
@@ -170,12 +178,15 @@ public class MyCustomStyler : BaseStyler
 
     public override void EnterSomeGrammarRule(SomeGrammarRuleContext context)
     {
-        // Add a highlight for this rule
+        // Add a highlight with a custom color (BGRA format)
+        // 0xRRGGBBAA format where AA is the alpha (transparency)
+        uint customHighlightColor = 0x4DB7FF80; // Salmon color with 50% transparency
+        
         Highlights?.Add(new CodeHighlight
         {
             Start = context.Start.StartIndex,
             Length = context.Stop.StopIndex - context.Start.StartIndex + 1,
-            Color = HighlightColor.Yellow
+            Color = customHighlightColor
         });
 
         // Add an annotation
@@ -216,7 +227,7 @@ public class UnusedLocalVariableStyler : ScopedStyler<object>
                 // Add highlight for unused variables
                 Highlights?.Add(new CodeHighlight()
                 {
-                    Color = HighlightColor.Gray,
+                    Color = 0xFFAAAAAA, // Gray color with 100% transparency
                     Start = variable.Span.Start,
                     Length = variable.Span.Stop - variable.Span.Start + 1
                 });

@@ -56,7 +56,9 @@ The Command Palette works similarly to VS Code, providing quick access to all Ap
 
 ## Customizing Shortcuts
 
-Currently, AppRefiner does not support customizing keyboard shortcuts through the user interface. However, power users can modify shortcuts by editing the application configuration files.
+Currently, AppRefiner does not support customizing keyboard shortcuts. However custom built plugins (linters/stylers/refactors) are able to register their own keyboard shortcuts.
+
+**Note** Custom build plugins 
 
 ## Next Steps
 

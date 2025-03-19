@@ -46,46 +46,29 @@ Adds a standardized documentation header (flower box) to your PeopleCode.
 3. Fill in the required information in the dialog
 4. Click **Apply** to insert the header
 
-### Suppress Linter Warning
+### Suppress Linter Reports
 
-Adds a suppression comment to disable specific linter warnings.
+Adds a suppression comment to disable specific linter reports.
 
 **Usage:**
-1. Right-click on a linter warning in the Linting Results panel
-2. Select **Suppress Warning**
-3. Choose whether to suppress just this instance or all warnings of this type
+1. Position your cursor on the line that has the linter report(s) you want to suppress
+2. Open the Command Palette (Ctrl+Shift+P)
+3. Type "Suppress Report" and select the command
+4. In the dialog that appears, select the scope of the suppression:
+   - **Line**: Suppresses the warning for just this line
+   - **Nearest Block**: Suppresses the warning for the current code block (If, While, For, etc.)
+   - **Method/Function**: Suppresses the warning for the entire method or function (getters and setters included)
+   - **Global**: Suppresses the warning for the entire file
+5. Click **OK** to add the suppression comment
 
-## Batch Refactoring
-
-AppRefiner supports applying refactorings to multiple files at once:
-
-1. Select **Refactor > Batch Refactor** from the menu
-2. Choose the refactoring operation to apply
-3. Select the files or project to refactor
-4. Review the changes and click **Apply**
-
-## Refactoring Preview
-
-Before applying any refactoring, AppRefiner shows you a preview of the changes:
-
-- Changed lines are highlighted
-- You can toggle individual changes on/off
-- A summary of all changes is provided
-- You can save the changes to a different file if desired
+**Note:** If a line has multiple linter reports, the suppression comment will suppress all of them. You can edit the suppression comment manually afterward to remove specific suppressions if needed.
 
 ## Undo Refactoring
 
 If you're not satisfied with a refactoring result:
 
 1. Press `Ctrl+Z` immediately after applying the refactoring
-2. Or select **Edit > Undo** from the menu
-
-## Best Practices
-
-- Always save your work before performing major refactorings
-- Use the preview feature to verify changes before applying them
-- Consider running linters after refactoring to ensure code quality
-- For complex refactorings, break them down into smaller, manageable steps
+2. Or execute the `Restore Snapshot` command from the Command Palette
 
 ## Next Steps
 
