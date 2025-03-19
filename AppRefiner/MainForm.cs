@@ -1,8 +1,9 @@
-﻿using Antlr4.Runtime.Tree;
+using Antlr4.Runtime.Tree;
 using AppRefiner.Database;
 using AppRefiner.Database.Models;
 using AppRefiner.Linters;
 using AppRefiner.PeopleCode;
+using AppRefiner.Plugins;
 using AppRefiner.Refactors;
 using AppRefiner.Stylers;
 using AppRefiner.Templates;
@@ -74,7 +75,6 @@ namespace AppRefiner
 
         // Path for linting report output
         private string lintReportPath;
-
         public MainForm()
         {
             InitializeComponent();
@@ -839,6 +839,17 @@ namespace AppRefiner
                 .SelectMany(s => s.GetTypes())
                 .Where(p => typeof(BaseLintRule).IsAssignableFrom(p) && !p.IsAbstract);
 
+            // Load plugins from the plugin directory
+            string pluginDirectory = Path.Combine(
+                Path.GetDirectoryName(Application.ExecutablePath) ?? string.Empty,
+                Properties.Settings.Default.PluginDirectory);
+
+            PluginManager.LoadPlugins(pluginDirectory);
+
+            // Add plugin linter types
+            var pluginLinters = PluginManager.DiscoverLinterTypes();
+            linters = linters.Concat(pluginLinters);
+
             foreach (var type in linters)
             {
                 /* Create instance of the linter */
@@ -1028,6 +1039,10 @@ namespace AppRefiner
             var stylerTypes = AppDomain.CurrentDomain.GetAssemblies()
                 .SelectMany(s => s.GetTypes())
                 .Where(p => typeof(BaseStyler).IsAssignableFrom(p) && !p.IsAbstract);
+
+            // Add plugin styler types
+            var pluginStylers = PluginManager.DiscoverStylerTypes();
+            stylerTypes = stylerTypes.Concat(pluginStylers);
 
             foreach (var type in stylerTypes)
             {
@@ -2236,6 +2251,23 @@ namespace AppRefiner
                 () => activeEditor != null && activeEditor.DataManager != null
             ));
 
+        }
+
+        private void btnPlugins_Click(object sender, EventArgs e)
+        {
+
+            // Load plugins from the plugin directory
+            string pluginDirectory = Path.Combine(
+                Path.GetDirectoryName(Application.ExecutablePath) ?? string.Empty,
+                Properties.Settings.Default.PluginDirectory);
+
+            PluginManagerDialog dialog = new(pluginDirectory);
+            if (dialog.ShowDialog(this) == DialogResult.OK)
+            {
+                // Update the PluginDirectory setting and save it
+                Properties.Settings.Default.PluginDirectory = dialog.PluginDirectory;
+                Properties.Settings.Default.Save();
+            }
         }
     }
 

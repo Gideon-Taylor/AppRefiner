@@ -118,5 +118,17 @@ namespace AppRefiner.Properties {
                 this["LintReportPath"] = value;
             }
         }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("Plugins")]
+        public string PluginDirectory {
+            get {
+                return ((string)(this["PluginDirectory"]));
+            }
+            set {
+                this["PluginDirectory"] = value;
+            }
+        }
     }
 }

@@ -1,0 +1,46 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": ".NET Core Launch (console)",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "build",
+            "program": "${workspaceFolder}/AppRefiner/bin/Debug/net8.0-windows/AppRefiner.dll",
+            "args": [],
+            "cwd": "${workspaceFolder}/AppRefiner",
+            "console": "internalConsole",
+            "stopAtEntry": false
+        },
+        {
+            "name": "Run AppRefiner.exe",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "build",
+            "program": "${workspaceFolder}/AppRefiner/bin/Debug/net8.0-windows/AppRefiner.exe",
+            "args": [],
+            "cwd": "${workspaceFolder}/AppRefiner",
+            "console": "internalConsole",
+            "stopAtEntry": false
+        },
+        {
+            "name": "Run AppRefiner.exe (No Build)",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "run-exe-no-build",
+            "program": "${workspaceFolder}/AppRefiner/bin/Debug/net8.0-windows/AppRefiner.exe",
+            "args": [],
+            "cwd": "${workspaceFolder}/AppRefiner",
+            "console": "internalConsole",
+            "stopAtEntry": false
+        },
+        {
+            "name": ".NET Core Attach",
+            "type": "coreclr",
+            "request": "attach"
+        }
+    ]
+}

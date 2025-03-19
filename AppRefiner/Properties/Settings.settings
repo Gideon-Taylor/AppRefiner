@@ -1,4 +1,4 @@
-﻿<?xml version='1.0' encoding='utf-8'?>
+<?xml version='1.0' encoding='utf-8'?>
 <SettingsFile xmlns="http://schemas.microsoft.com/VisualStudio/2004/01/settings" CurrentProfile="(Default)" GeneratedClassNamespace="AppRefiner.Properties" GeneratedClassName="Settings">
   <Profiles />
   <Settings>
@@ -25,6 +25,9 @@
     </Setting>
     <Setting Name="LintReportPath" Type="System.String" Scope="User">
       <Value Profile="(Default)">LintingReports</Value>
+    </Setting>
+    <Setting Name="PluginDirectory" Type="System.String" Scope="User">
+      <Value Profile="(Default)">Plugins</Value>
     </Setting>
   </Settings>
 </SettingsFile>

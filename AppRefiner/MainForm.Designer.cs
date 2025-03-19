@@ -64,6 +64,7 @@
             label1 = new Label();
             tabPage3 = new TabPage();
             grpRefactors = new GroupBox();
+            btnResolveImports = new Button();
             btnRenameLocalVar = new Button();
             btnOptimizeImports = new Button();
             btnAddFlowerBox = new Button();
@@ -74,7 +75,7 @@
             cmbTemplates = new ComboBox();
             progressBar1 = new ProgressBar();
             lblStatus = new Label();
-            btnResolveImports = new Button();
+            btnPlugins = new Button();
             ((System.ComponentModel.ISupportInitialize)splitContainer1).BeginInit();
             splitContainer1.Panel1.SuspendLayout();
             splitContainer1.Panel2.SuspendLayout();
@@ -218,6 +219,7 @@
             // 
             // grpEditorSettings
             // 
+            grpEditorSettings.Controls.Add(btnPlugins);
             grpEditorSettings.Controls.Add(chkBetterSQL);
             grpEditorSettings.Controls.Add(chkOnlyPPC);
             grpEditorSettings.Controls.Add(chkInitCollapsed);
@@ -518,6 +520,16 @@
             grpRefactors.TabStop = false;
             grpRefactors.Text = "Quick Edits";
             // 
+            // btnResolveImports
+            // 
+            btnResolveImports.Location = new Point(121, 51);
+            btnResolveImports.Name = "btnResolveImports";
+            btnResolveImports.Size = new Size(109, 23);
+            btnResolveImports.TabIndex = 5;
+            btnResolveImports.Text = "Resolve Imports";
+            btnResolveImports.UseVisualStyleBackColor = true;
+            btnResolveImports.Click += btnResolveImports_Click;
+            // 
             // btnRenameLocalVar
             // 
             btnRenameLocalVar.Location = new Point(236, 22);
@@ -625,15 +637,15 @@
             lblStatus.Text = "Stopped";
             lblStatus.TextAlign = ContentAlignment.MiddleCenter;
             // 
-            // btnResolveImports
+            // btnPlugins
             // 
-            btnResolveImports.Location = new Point(121, 51);
-            btnResolveImports.Name = "btnResolveImports";
-            btnResolveImports.Size = new Size(109, 23);
-            btnResolveImports.TabIndex = 5;
-            btnResolveImports.Text = "Resolve Imports";
-            btnResolveImports.UseVisualStyleBackColor = true;
-            btnResolveImports.Click += btnResolveImports_Click;
+            btnPlugins.Location = new Point(424, 18);
+            btnPlugins.Name = "btnPlugins";
+            btnPlugins.Size = new Size(85, 23);
+            btnPlugins.TabIndex = 24;
+            btnPlugins.Text = "Plugins...";
+            btnPlugins.UseVisualStyleBackColor = true;
+            btnPlugins.Click += btnPlugins_Click;
             // 
             // MainForm
             // 
@@ -727,5 +739,6 @@
         private Panel pnlTemplateParams;
         private Button btnApplyTemplate;
         private Button btnResolveImports;
+        private Button btnPlugins;
     }
 }
