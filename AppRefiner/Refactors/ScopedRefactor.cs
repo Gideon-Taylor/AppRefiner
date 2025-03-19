@@ -5,16 +5,30 @@ namespace AppRefiner.Refactors
 {
     public abstract class ScopedRefactor<T> : BaseRefactor
     {
+        /// <summary>
+        /// Gets the display name of this refactoring operation
+        /// </summary>
+        public new static string RefactorName => "Scoped Refactor";
+
+        /// <summary>
+        /// Gets the description of this refactoring operation
+        /// </summary>
+        public new static string RefactorDescription => "Refactoring operation with scope tracking";
+
         protected readonly Stack<Dictionary<string, T>> scopeStack = new();
         protected readonly Stack<Dictionary<string, VariableInfo>> variableScopeStack = new();
 
-        protected ScopedRefactor()
+        /// <summary>
+        /// Initializes a new instance of the <see cref="ScopedRefactor{T}"/> class
+        /// </summary>
+        /// <param name="editor">The Scintilla editor instance</param>
+        protected ScopedRefactor(ScintillaEditor editor) : base(editor)
         {
             // Start with a global scope
-            scopeStack.Push(new Dictionary<string, T>());
-            variableScopeStack.Push(new Dictionary<string, VariableInfo>());
+            scopeStack.Push([]);
+            variableScopeStack.Push([]);
         }
-
+        
         // Variable tracking methods
         protected void AddLocalVariable(string name, string type, int line, int start, int stop)
         {
@@ -153,7 +167,7 @@ namespace AppRefiner.Refactors
         {
             // Extract type information from the type context
             var typeContext = context.typeT();
-            string typeName = GetTypeFromContext(typeContext);
+            string typeName = ScopedRefactor<T>.GetTypeFromContext(typeContext);
 
             // Process each variable declaration in the list
             foreach (var varNode in context.USER_VARIABLE())
@@ -174,7 +188,7 @@ namespace AppRefiner.Refactors
         {
             // Extract type information from the type context
             var typeContext = context.typeT();
-            string typeName = GetTypeFromContext(typeContext);
+            string typeName = ScopedRefactor<T>.GetTypeFromContext(typeContext);
 
             // Process the single variable declaration
             var varNode = context.USER_VARIABLE();
@@ -219,12 +233,12 @@ namespace AppRefiner.Refactors
         }
 
         // Helper method to extract type information from the type context
-        private string GetTypeFromContext(TypeTContext typeContext)
+        private static string GetTypeFromContext(TypeTContext typeContext)
         {
             if (typeContext is ArrayTypeContext arrayType)
             {
                 var baseType = arrayType.typeT() != null
-                    ? GetTypeFromContext(arrayType.typeT())
+                    ? ScopedRefactor<T>.GetTypeFromContext(arrayType.typeT())
                     : "Any";
                 return $"Array of {baseType}";
             }

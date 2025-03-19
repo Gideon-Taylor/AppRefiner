@@ -108,6 +108,36 @@ namespace AppRefiner.Plugins
         }
 
         /// <summary>
+        /// Discovers all refactor types from loaded plugin assemblies
+        /// </summary>
+        /// <returns>Collection of refactor types from plugins</returns>
+        public static IEnumerable<Type> DiscoverRefactorTypes()
+        {
+            var refactorTypes = new List<Type>();
+
+            foreach (var assembly in LoadedPluginAssemblies)
+            {
+                try
+                {
+                    // Find all non-abstract types that inherit from BaseRefactor
+                    var types = assembly.GetTypes()
+                        .Where(t => typeof(Refactors.BaseRefactor).IsAssignableFrom(t) && 
+                               !t.IsAbstract && 
+                               t != typeof(Refactors.ScopedRefactor<>));
+                    
+                    refactorTypes.AddRange(types);
+                }
+                catch (Exception ex)
+                {
+                    // Log the error but continue with other assemblies
+                    System.Diagnostics.Debug.WriteLine($"Error discovering refactor types in assembly {assembly.FullName}: {ex.Message}");
+                }
+            }
+
+            return refactorTypes;
+        }
+
+        /// <summary>
         /// Gets metadata about all loaded plugin assemblies
         /// </summary>
         /// <returns>List of plugin metadata</returns>
@@ -125,13 +155,19 @@ namespace AppRefiner.Plugins
                     var stylerCount = assembly.GetTypes()
                         .Count(t => typeof(BaseStyler).IsAssignableFrom(t) && !t.IsAbstract);
 
+                    var refactorCount = assembly.GetTypes()
+                        .Count(t => typeof(Refactors.BaseRefactor).IsAssignableFrom(t) && 
+                               !t.IsAbstract && 
+                               t != typeof(Refactors.ScopedRefactor<>));
+
                     var plugin = new PluginMetadata
                     {
                         AssemblyName = assembly.GetName().Name ?? "Unknown",
                         Version = assembly.GetName().Version?.ToString() ?? "Unknown",
                         FilePath = assembly.Location,
                         LinterCount = linterCount,
-                        StylerCount = stylerCount
+                        StylerCount = stylerCount,
+                        RefactorCount = refactorCount
                     };
 
                     metadata.Add(plugin);
@@ -157,10 +193,11 @@ namespace AppRefiner.Plugins
         public string FilePath { get; set; } = string.Empty;
         public int LinterCount { get; set; }
         public int StylerCount { get; set; }
+        public int RefactorCount { get; set; }
 
         public override string ToString()
         {
-            return $"{AssemblyName} v{Version} ({LinterCount} linters, {StylerCount} stylers)";
+            return $"{AssemblyName} v{Version} ({LinterCount} linters, {StylerCount} stylers, {RefactorCount} refactors)";
         }
     }
 }

@@ -1,5 +1,7 @@
-﻿using Antlr4.Runtime;
+using Antlr4.Runtime;
+using Antlr4.Runtime.Tree;
 using AppRefiner.PeopleCode;
+using System.Diagnostics;
 using System.Text;
 
 namespace AppRefiner.Refactors
@@ -267,38 +269,89 @@ namespace AppRefiner.Refactors
     /// <summary>
     /// Base class for implementing PeopleCode refactoring operations
     /// </summary>
-    public abstract class BaseRefactor : PeopleCodeParserBaseListener
+    /// <remarks>
+    /// Creates a new instance of the BaseRefactor class
+    /// </remarks>
+    /// <param name="editor">The ScintillaEditor instance to use for this refactor</param>
+    /// <remarks>
+    /// Creates a new instance of the BaseRefactor class
+    /// </remarks>
+    /// <param name="editor">The ScintillaEditor instance to use for this refactor</param>
+    /// <param name="currentPosition">The current cursor position in the editor</param>
+    /// <param name="lineNumber">The current line number in the editor</param>
+    public abstract class BaseRefactor(ScintillaEditor editor) : AppRefiner.PeopleCode.PeopleCodeParserBaseListener
     {
-        private readonly List<CodeChange> _changes = new();
-        private int _initialCursorPosition = -1;
-        private int _updatedCursorPosition = -1;
+        /// <summary>
+        /// Gets the display name for this refactor
+        /// </summary>
+        public static string RefactorName => "Base Refactor";
 
         /// <summary>
-        /// The token stream of the source code being refactored
+        /// Gets the description for this refactor
         /// </summary>
-        protected ITokenStream? TokenStream { get; private set; }
+        public static string RefactorDescription => "Base refactoring operation";
 
         /// <summary>
-        /// The source text being refactored
+        /// Gets whether this refactor requires a user input dialog
         /// </summary>
-        protected string? SourceText { get; private set; }
+        public virtual bool RequiresUserInputDialog => false;
 
         /// <summary>
-        /// The current result of the refactoring operation
+        /// Gets whether this refactor should have a keyboard shortcut registered
         /// </summary>
-        protected RefactorResult Result { get; set; } = RefactorResult.Successful;
+        public static bool RegisterKeyboardShortcut => false;
+
+        /// <summary>
+        /// Gets the keyboard shortcut modifier keys for this refactor
+        /// </summary>
+        public static ModifierKeys ShortcutModifiers => ModifierKeys.Control;
+
+        /// <summary>
+        /// Gets the keyboard shortcut key for this refactor
+        /// </summary>
+        public static Keys ShortcutKey => Keys.None;
+
+        protected ScintillaEditor Editor { get; } = editor ?? throw new ArgumentNullException(nameof(editor));
+        protected int CurrentPosition { get; } = ScintillaManager.GetCursorPosition(editor);
+        protected int LineNumber { get; } = ScintillaManager.GetCurrentLine(editor);
+
+        private string? source;
+        private CommonTokenStream? tokenStream;
+        private int cursorPosition = -1;
+        private bool failed;
+        private string? failureMessage;
+        private readonly List<CodeChange> changes = new();
+
+        /// <summary>
+        /// Gets the main window handle for the editor
+        /// </summary>
+        /// <returns>The main window handle</returns>
+        protected IntPtr GetEditorMainWindowHandle()
+        {
+            return Process.GetProcessById((int)Editor.ProcessId).MainWindowHandle;
+        }
+
+        /// <summary>
+        /// Shows the dialog for this refactor
+        /// </summary>
+        /// <returns>True if the user confirmed, false if canceled</returns>
+        public virtual bool ShowRefactorDialog()
+        {
+            // Base implementation just returns true (no dialog needed)
+            return true;
+        }
 
         /// <summary>
         /// Initializes the refactor with source code and token stream
         /// </summary>
-        public void Initialize(string sourceText, ITokenStream tokenStream, int cursorPosition = -1)
+        public void Initialize(string sourceText, CommonTokenStream tokenStream, int cursorPosition = -1)
         {
-            SourceText = sourceText;
-            TokenStream = tokenStream;
-            _changes.Clear();
-            Result = RefactorResult.Successful;
-            _initialCursorPosition = cursorPosition;
-            _updatedCursorPosition = cursorPosition;
+            source = sourceText;
+            this.tokenStream = tokenStream;
+            changes.Clear();
+            failed = false;
+            failureMessage = null;
+            this.cursorPosition = cursorPosition;
         }
 
         /// <summary>
@@ -306,34 +359,35 @@ namespace AppRefiner.Refactors
         /// </summary>
         protected void SetFailure(string message)
         {
-            Result = RefactorResult.Failed(message);
+            failed = true;
+            failureMessage = message;
         }
 
         /// <summary>
         /// Gets the result of the refactoring operation
         /// </summary>
-        public RefactorResult GetResult() => Result;
+        public RefactorResult GetResult() => failed ? RefactorResult.Failed(failureMessage ?? "Unknown error") : RefactorResult.Successful;
 
         /// <summary>
         /// Gets the refactored source code with all changes applied
         /// </summary>
         public string? GetRefactoredCode()
         {
-            if (!Result.Success) return null;
+            if (failed) return null;
 
-            if (_changes.Count == 0) return SourceText;
+            if (changes.Count == 0) return source;
 
             // Sort changes from last to first to avoid index shifting
-            _changes.Sort((a, b) => b.StartIndex.CompareTo(a.StartIndex));
+            changes.Sort((a, b) => b.StartIndex.CompareTo(a.StartIndex));
 
-            var result = new StringBuilder(SourceText);
+            var result = new StringBuilder(source);
 
             // Process each change and update cursor position
-            foreach (var change in _changes)
+            foreach (var change in changes)
             {
-                if (_initialCursorPosition >= 0)
+                if (cursorPosition >= 0)
                 {
-                    _updatedCursorPosition = change.UpdateCursorPosition(_updatedCursorPosition);
+                    cursorPosition = change.UpdateCursorPosition(cursorPosition);
                 }
                 change.Apply(result);
             }
@@ -347,13 +401,13 @@ namespace AppRefiner.Refactors
         /// <returns>The new cursor position, or -1 if no cursor position was provided</returns>
         public int GetUpdatedCursorPosition()
         {
-            return _updatedCursorPosition;
+            return cursorPosition;
         }
 
         /// <summary>
         /// Gets the list of changes that will be applied
         /// </summary>
-        public IReadOnlyList<CodeChange> GetChanges() => _changes.AsReadOnly();
+        public IReadOnlyList<CodeChange> GetChanges() => changes.AsReadOnly();
 
         /// <summary>
         /// Adds a new replacement change using parser context
@@ -372,7 +426,7 @@ namespace AppRefiner.Refactors
             else
             {
                 // Normal case - replace the entire node
-                _changes.Add(new ReplaceChange(
+                changes.Add(new ReplaceChange(
                     context.Start.StartIndex,
                     context.Stop.StopIndex,
                     newText,
@@ -390,7 +444,7 @@ namespace AppRefiner.Refactors
         /// <param name="description">A description of what is being replaced</param>
         protected void ReplaceText(int startIndex, int endIndex, string newText, string description)
         {
-            _changes.Add(new ReplaceChange(startIndex, endIndex, newText, description));
+            changes.Add(new ReplaceChange(startIndex, endIndex, newText, description));
         }
 
         /// <summary>
@@ -401,7 +455,7 @@ namespace AppRefiner.Refactors
         /// <param name="description">A description of what is being inserted</param>
         protected void InsertText(int position, string textToInsert, string description)
         {
-            _changes.Add(new InsertChange(position, textToInsert, description));
+            changes.Add(new InsertChange(position, textToInsert, description));
         }
 
         /// <summary>
@@ -412,7 +466,7 @@ namespace AppRefiner.Refactors
         /// <param name="description">A description of what is being inserted</param>
         protected void InsertAfter(ParserRuleContext context, string textToInsert, string description)
         {
-            _changes.Add(new InsertChange(context.Stop.StopIndex + 1, textToInsert, description));
+            changes.Add(new InsertChange(context.Stop.StopIndex + 1, textToInsert, description));
         }
 
         /// <summary>
@@ -423,7 +477,7 @@ namespace AppRefiner.Refactors
         /// <param name="description">A description of what is being inserted</param>
         protected void InsertBefore(ParserRuleContext context, string textToInsert, string description)
         {
-            _changes.Add(new InsertChange(context.Start.StartIndex, textToInsert, description));
+            changes.Add(new InsertChange(context.Start.StartIndex, textToInsert, description));
         }
 
         /// <summary>
@@ -434,7 +488,7 @@ namespace AppRefiner.Refactors
         /// <param name="description">A description of what is being deleted</param>
         protected void DeleteText(int startIndex, int endIndex, string description)
         {
-            _changes.Add(new DeleteChange(startIndex, endIndex, description));
+            changes.Add(new DeleteChange(startIndex, endIndex, description));
         }
 
         /// <summary>
@@ -444,7 +498,7 @@ namespace AppRefiner.Refactors
         /// <param name="description">A description of what is being deleted</param>
         protected void DeleteNode(ParserRuleContext context, string description)
         {
-            _changes.Add(new DeleteChange(
+            changes.Add(new DeleteChange(
                 context.Start.StartIndex,
                 context.Stop.StopIndex,
                 description
@@ -456,9 +510,9 @@ namespace AppRefiner.Refactors
         /// </summary>
         protected string? GetOriginalText(ParserRuleContext context)
         {
-            return SourceText == null
+            return source == null
                 ? null
-                : SourceText.Substring(
+                : source.Substring(
                 context.Start.StartIndex,
                 context.Stop.StopIndex - context.Start.StartIndex + 1
             );

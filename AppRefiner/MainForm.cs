@@ -7,10 +7,19 @@ using AppRefiner.Plugins;
 using AppRefiner.Refactors;
 using AppRefiner.Stylers;
 using AppRefiner.Templates;
+using System;
+using System.Collections.Generic;
+using System.ComponentModel;
 using System.Data;
 using System.Diagnostics;
+using System.Drawing;
+using System.IO;
+using System.Linq;
+using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Text;
+using System.Threading.Tasks;
+using System.Windows.Forms;
 
 namespace AppRefiner
 {
@@ -47,6 +56,12 @@ namespace AppRefiner
         private bool timerRunning = false;
         private object scanningLock = new();
         private ScintillaEditor? activeEditor = null;
+        
+        /// <summary>
+        /// Gets the currently active editor
+        /// </summary>
+        public ScintillaEditor? ActiveEditor => activeEditor;
+        
         private List<BaseLintRule> linterRules = new();
         private List<BaseStyler> stylers = new(); // Changed from List<BaseStyler> analyzers
 
@@ -58,19 +73,23 @@ namespace AppRefiner
         // Static list of available commands
         public static List<Command> AvailableCommands = new();
 
-        KeyboardHook renameVarHook = new();
-        KeyboardHook lintCodeHook = new();
+        // Standard keyboard hooks
         KeyboardHook collapseLevel = new();
         KeyboardHook expandLevel = new();
         KeyboardHook collapseAll = new();
         KeyboardHook expandAll = new();
         KeyboardHook commandPaletteHook = new();
-        KeyboardHook resolveImportsHook = new();
+        KeyboardHook lintCodeHook = new();
+
         private class RuleState
         {
             public string TypeName { get; set; } = "";
             public bool Active { get; set; }
         }
+
+        // Dictionary to track registered keyboard shortcuts and their key combinations
+        private Dictionary<string, KeyboardHook> refactorShortcuts = new();
+        private Dictionary<string, (ModifierKeys, Keys)> registeredShortcuts = new();
 
         // Path for linting report output
         private string? lintReportPath;
@@ -104,29 +123,34 @@ namespace AppRefiner
             }
 
             LoadSettings();
-            renameVarHook.KeyPressed += renameVariable;
-            renameVarHook.RegisterHotKey(AppRefiner.ModifierKeys.Control | AppRefiner.ModifierKeys.Shift, Keys.R);
-
             collapseLevel.KeyPressed += collapseLevelHandler;
-            collapseLevel.RegisterHotKey(AppRefiner.ModifierKeys.Alt, Keys.Left);
+            collapseLevel.RegisterHotKey(AppRefiner.ModifierKeys.Alt, System.Windows.Forms.Keys.Left);
 
             expandLevel.KeyPressed += expandLevelHandler;
-            expandLevel.RegisterHotKey(AppRefiner.ModifierKeys.Alt, Keys.Right);
+            expandLevel.RegisterHotKey(AppRefiner.ModifierKeys.Alt, System.Windows.Forms.Keys.Right);
 
             collapseAll.KeyPressed += collapseAllHandler;
-            collapseAll.RegisterHotKey(AppRefiner.ModifierKeys.Control | AppRefiner.ModifierKeys.Alt, Keys.Left);
+            collapseAll.RegisterHotKey(AppRefiner.ModifierKeys.Control | AppRefiner.ModifierKeys.Alt, System.Windows.Forms.Keys.Left);
 
             expandAll.KeyPressed += expandAllHandler;
-            expandAll.RegisterHotKey(AppRefiner.ModifierKeys.Control | AppRefiner.ModifierKeys.Alt, Keys.Right);
+            expandAll.RegisterHotKey(AppRefiner.ModifierKeys.Control | AppRefiner.ModifierKeys.Alt, System.Windows.Forms.Keys.Right);
 
             lintCodeHook.KeyPressed += lintCodeHandler;
-            lintCodeHook.RegisterHotKey(AppRefiner.ModifierKeys.Control | AppRefiner.ModifierKeys.Alt, Keys.L);
+            lintCodeHook.RegisterHotKey(AppRefiner.ModifierKeys.Control | AppRefiner.ModifierKeys.Alt, System.Windows.Forms.Keys.L);
 
             commandPaletteHook.KeyPressed += ShowCommandPalette;
-            commandPaletteHook.RegisterHotKey(AppRefiner.ModifierKeys.Control | AppRefiner.ModifierKeys.Shift, Keys.P);
+            commandPaletteHook.RegisterHotKey(AppRefiner.ModifierKeys.Control | AppRefiner.ModifierKeys.Shift, System.Windows.Forms.Keys.P);
 
-            resolveImportsHook.KeyPressed += resolveImportsHandler;
-            resolveImportsHook.RegisterHotKey(AppRefiner.ModifierKeys.Control | AppRefiner.ModifierKeys.Shift, Keys.I);
+            // Register standard shortcuts in the tracking dictionary
+            registeredShortcuts["CollapseLevel"] = (AppRefiner.ModifierKeys.Alt, System.Windows.Forms.Keys.Left);
+            registeredShortcuts["ExpandLevel"] = (AppRefiner.ModifierKeys.Alt, System.Windows.Forms.Keys.Right);
+            registeredShortcuts["CollapseAll"] = (AppRefiner.ModifierKeys.Control | AppRefiner.ModifierKeys.Alt, System.Windows.Forms.Keys.Left);
+            registeredShortcuts["ExpandAll"] = (AppRefiner.ModifierKeys.Control | AppRefiner.ModifierKeys.Alt, System.Windows.Forms.Keys.Right);
+            registeredShortcuts["LintCode"] = (AppRefiner.ModifierKeys.Control | AppRefiner.ModifierKeys.Alt, System.Windows.Forms.Keys.L);
+            registeredShortcuts["CommandPalette"] = (AppRefiner.ModifierKeys.Control | AppRefiner.ModifierKeys.Shift, System.Windows.Forms.Keys.P);
+
+            // Register keyboard shortcuts for refactors
+            this.RegisterRefactorShortcuts();
 
             // Automatically start the scanning timer
             timerRunning = true;
@@ -138,12 +162,6 @@ namespace AppRefiner
         {
             if (activeEditor == null) return;
             ProcessLinters();
-        }
-
-        private void resolveImportsHandler(object? sender, KeyPressedEventArgs e)
-        {
-            if (activeEditor == null) return;
-            ProcessRefactor(new ResolveImports());
         }
 
         private async void ShowCommandPalette(object? sender, KeyPressedEventArgs e)
@@ -198,8 +216,7 @@ namespace AppRefiner
                         // Handle any exceptions during command execution
                         this.Invoke(() =>
                         {
-                            MessageBox.Show(new WindowWrapper(parentHandle),
-                                $"Error executing command: {ex.Message} {ex.StackTrace}",
+                            MessageBox.Show("Error executing command: " + ex.Message,
                                 "Command Error",
                                 MessageBoxButtons.OK,
                                 MessageBoxIcon.Error);
@@ -241,26 +258,6 @@ namespace AppRefiner
         {
             if (activeEditor == null) return;
             ScintillaManager.SetLineFoldStatus(activeEditor, true);
-        }
-
-        private void renameVariable(object? sender, KeyPressedEventArgs e)
-        {
-            if (activeEditor == null) return;
-            /* Ask the user for a new variable name */
-            string newName = "";
-
-            var mainHandle = Process.GetProcessById((int)activeEditor.ProcessId).MainWindowHandle;
-
-            var dlgResult = ShowInputDialog("New variable name", "Enter new variable name", ref newName, mainHandle);
-
-            if (dlgResult != DialogResult.OK) return;
-
-            /* Get the current cursor position */
-            int cursorPosition = ScintillaManager.GetCursorPosition(activeEditor);
-
-            /* Create a new instance of the refactoring class */
-            RenameLocalVariable refactor = new(cursorPosition, newName);
-            ProcessRefactor(refactor, mainHandle);
         }
 
         protected override void OnFormClosing(FormClosingEventArgs e)
@@ -1385,10 +1382,11 @@ namespace AppRefiner
 
         private void btnAddFlowerBox_Click(object sender, EventArgs e)
         {
-            ProcessRefactor(new AddFlowerBox());
+            if (activeEditor == null) return;
+            ProcessRefactor(new AddFlowerBox(activeEditor));
         }
 
-        private void ProcessRefactor(BaseRefactor refactorClass, IntPtr owner = 0)
+        private void ProcessRefactor(BaseRefactor refactorClass)
         {
             if (activeEditor == null) return;
             ScintillaManager.ClearAnnotations(activeEditor);
@@ -1406,6 +1404,19 @@ namespace AppRefiner
             {
                 btnRestoreSnapshot.Enabled = true;
             });
+
+            // Check if this refactor requires user input dialog
+            if (refactorClass.RequiresUserInputDialog)
+            {
+                // Show the dialog and check if user confirmed
+                bool dialogConfirmed = refactorClass.ShowRefactorDialog();
+                
+                // If user canceled, abort the refactoring
+                if (!dialogConfirmed)
+                {
+                    return;
+                }
+            }
 
             // Parse the code
             PeopleCodeLexer lexer = new(new Antlr4.Runtime.AntlrInputStream(freshText));
@@ -1428,7 +1439,7 @@ namespace AppRefiner
                 this.Invoke(() =>
                 {
                     MessageBox.Show(
-                        owner != IntPtr.Zero ? new WindowWrapper(owner) : this,
+                        this,
                         result.Message,
                         "Refactoring Failed",
                         MessageBoxButtons.OK,
@@ -1456,12 +1467,14 @@ namespace AppRefiner
 
         private void btnOptimizeImports_Click(object sender, EventArgs e)
         {
-            ProcessRefactor(new OptimizeImports());
+            if (activeEditor == null) return;
+            ProcessRefactor(new OptimizeImports(activeEditor));
         }
 
         private void btnResolveImports_Click(object sender, EventArgs e)
         {
-            ProcessRefactor(new ResolveImports());
+            if (activeEditor == null) return;
+            ProcessRefactor(new ResolveImports(activeEditor));
         }
 
         private void btnConnectDB_Click(object sender, EventArgs e)
@@ -1604,17 +1617,9 @@ namespace AppRefiner
 
         private void btnRenameLocalVar_Click(object sender, EventArgs e)
         {
-            /* Ask the user for a new variable name */
-            string newName = "";
-            var dlgResult = ShowInputDialog("New variable name", "Enter new variable name", ref newName);
+            if (activeEditor == null) return;
 
-            if (dlgResult != DialogResult.OK) return;
-
-            /* Get the current cursor position */
-            int cursorPosition = ScintillaManager.GetCursorPosition(activeEditor);
-
-            /* Create a new instance of the refactoring class */
-            RenameLocalVariable refactor = new(cursorPosition, newName);
+            RenameLocalVariable refactor = new(activeEditor);
             ProcessRefactor(refactor);
         }
 
@@ -1863,7 +1868,7 @@ namespace AppRefiner
 
             // Add editor commands with "Editor:" prefix
             AvailableCommands.Add(new Command(
-                "Editor: Lint Current Code",
+                "Editor: Lint Current Code (Ctrl+Alt+L)",
                 "Run linting rules against the current editor",
                 (progressDialog) =>
                 {
@@ -1889,7 +1894,7 @@ namespace AppRefiner
             ));
 
             AvailableCommands.Add(new Command(
-                "Editor: Collapse All",
+                "Editor: Collapse All (Ctrl+Alt+Left)",
                 "Collapse all foldable sections",
                 () =>
                 {
@@ -1899,7 +1904,7 @@ namespace AppRefiner
             ));
 
             AvailableCommands.Add(new Command(
-                "Editor: Expand All",
+                "Editor: Expand All (Ctrl+Alt+Right)",
                 "Expand all foldable sections",
                 () =>
                 {
@@ -2015,116 +2020,68 @@ namespace AppRefiner
             }
 
             // Add refactoring commands
-            AvailableCommands.Add(new Command(
-                "Refactor: Add Flower Box",
-                "Add a flower box header to the current file",
-                () =>
-                {
-                    if (activeEditor != null)
-                        ProcessRefactor(new AddFlowerBox());
-                }
-            ));
+            var refactorTypes = DiscoverRefactorTypes();
+            foreach (var type in refactorTypes)
+            {
+                // Get the static properties for display name and description
+                string refactorName = "Refactor";
+                string refactorDescription = "Perform refactoring operation";
 
-            AvailableCommands.Add(new Command(
-                "Refactor: Optimize Imports",
-                "Clean up and organize import statements",
-                () =>
+                try
                 {
-                    if (activeEditor != null)
-                        ProcessRefactor(new OptimizeImports());
-                }
-            ));
-
-            AvailableCommands.Add(new Command(
-                "Refactor: Resolve Imports",
-                "Create explicit imports for all class references (Ctrl+Shift+I)",
-                () =>
-                {
-                    if (activeEditor != null)
-                        ProcessRefactor(new ResolveImports());
-                }
-            ));
-
-            AvailableCommands.Add(new Command(
-                "Refactor: Rename Variable",
-                "Rename the variable at the current cursor position",
-                () =>
-                {
-                    if (activeEditor != null)
+                    var nameProperty = type.GetProperty("RefactorName", BindingFlags.Public | BindingFlags.Static | BindingFlags.NonPublic);
+                    if (nameProperty != null)
                     {
-                        string newName = "";
-                        var mainHandle = Process.GetProcessById((int)activeEditor.ProcessId).MainWindowHandle;
-                        var dlgResult = ShowInputDialog("New variable name", "Enter new variable name", ref newName, mainHandle);
+                        refactorName = nameProperty.GetValue(null) as string ?? "Refactor";
+                    }
 
-                        if (dlgResult == DialogResult.OK)
-                        {
-                            int cursorPosition = ScintillaManager.GetCursorPosition(activeEditor);
-                            RenameLocalVariable refactor = new(cursorPosition, newName);
-                            ProcessRefactor(refactor, mainHandle);
-                        }
+                    var descProperty = type.GetProperty("RefactorDescription", BindingFlags.Public | BindingFlags.Static | BindingFlags.NonPublic);
+                    if (descProperty != null)
+                    {
+                        refactorDescription = descProperty.GetValue(null) as string ?? "Perform refactoring operation";
                     }
                 }
-            ));
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"Error getting refactor properties for {type.Name}: {ex.Message}");
+                }
 
+                // Create a command for this refactor
+                AvailableCommands.Add(new Command(
+                    $"Refactor: {refactorName}{GetShortcutText(type)}",
+                    refactorDescription,
+                    () =>
+                    {
+                        if (activeEditor != null)
+                        {
+                            // Create an instance of the refactor with the standard parameters
+                            var refactor = (BaseRefactor?)Activator.CreateInstance(
+                                type, 
+                                [activeEditor]
+                            );
+                            
+                            if (refactor != null)
+                            {
+                                ProcessRefactor(refactor);
+                            }
+                        }
+                    }
+                ));
+            }
+
+            // Add the suppress lint errors command (special case that needs the current line)
             AvailableCommands.Add(new Command(
-                "Linter: Suppress lint errors for this line",
-                "Suppress lint errors for the current line",
+                "Linter: Suppress lint errors",
+                "Suppress lint errors with configurable scope",
                 () =>
                 {
                     if (activeEditor != null)
                     {
                         var line = ScintillaManager.GetCurrentLine(activeEditor);
+                        int currentPosition = ScintillaManager.GetCursorPosition(activeEditor);
                         if (line != -1)
                         {
-                            ProcessRefactor(new SuppressReportRefactor(activeEditor, line, SuppressReportMode.LINE));
-                        }
-                    }
-                }
-            ));
-
-            AvailableCommands.Add(new Command(
-                "Linter: Suppress lint errors for current block",
-                "Suppress lint errors for the current block",
-                () =>
-                {
-                    if (activeEditor != null)
-                    {
-                        var line = ScintillaManager.GetCurrentLine(activeEditor);
-                        if (line != -1)
-                        {
-                            ProcessRefactor(new SuppressReportRefactor(activeEditor, line, SuppressReportMode.NEAREST_BLOCK));
-                        }
-                    }
-                }
-            ));
-
-            AvailableCommands.Add(new Command(
-                "Linter: Suppress lint errors for this method/function",
-                "Suppress lint errors for the current method/function",
-                () =>
-                {
-                    if (activeEditor != null)
-                    {
-                        var line = ScintillaManager.GetCurrentLine(activeEditor);
-                        if (line != -1)
-                        {
-                            ProcessRefactor(new SuppressReportRefactor(activeEditor, line, SuppressReportMode.METHOD_OR_FUNC));
-                        }
-                    }
-                }
-            ));
-
-            AvailableCommands.Add(new Command(
-                "Linter: Suppress lint errors for this file",
-                "Suppress lint errors for the current file",
-                () =>
-                {
-                    if (activeEditor != null)
-                    {
-                        var line = ScintillaManager.GetCurrentLine(activeEditor);
-                        if (line != -1)
-                        {
-                            ProcessRefactor(new SuppressReportRefactor(activeEditor, line, SuppressReportMode.GLOBAL));
+                            ProcessRefactor(new SuppressReportRefactor(activeEditor));
                         }
                     }
                 }
@@ -2173,15 +2130,10 @@ namespace AppRefiner
                 {
                     if (activeEditor != null)
                     {
-                        // Get the main window handle of the process that owns the active editor
-                        var mainHandle = Process.GetProcessById((int)activeEditor.ProcessId).MainWindowHandle;
-
-                        // Create the dialog with proper parenting
                         DBConnectDialog dialog = new();
                         dialog.StartPosition = FormStartPosition.CenterParent;
 
-                        // Show dialog with parent window
-                        if (dialog.ShowDialog(new WindowWrapper(mainHandle)) == DialogResult.OK)
+                        if (dialog.ShowDialog(this) == DialogResult.OK)
                         {
                             IDataManager? manager = dialog.DataManager;
                             if (manager != null)
@@ -2268,20 +2220,183 @@ namespace AppRefiner
                 Properties.Settings.Default.Save();
             }
         }
-    }
 
-    public class WindowWrapper : System.Windows.Forms.IWin32Window
-    {
-        public WindowWrapper(IntPtr handle)
+        /// <summary>
+        /// Discovers all available refactor types in the application and plugins
+        /// </summary>
+        /// <returns>A collection of refactor types</returns>
+        private IEnumerable<Type> DiscoverRefactorTypes()
         {
-            _hwnd = handle;
+            // Get refactor types from the main assembly
+            var refactorTypes = AppDomain.CurrentDomain.GetAssemblies()
+                .SelectMany(s => s.GetTypes())
+                .Where(p => typeof(BaseRefactor).IsAssignableFrom(p) && !p.IsAbstract && p != typeof(ScopedRefactor<>) && p != typeof(BaseRefactor));
+
+            // Get refactor types from plugins
+            var pluginRefactors = PluginManager.DiscoverRefactorTypes();
+            if (pluginRefactors != null)
+            {
+                refactorTypes = refactorTypes.Concat(pluginRefactors);
+            }
+
+            return refactorTypes;
         }
 
-        public IntPtr Handle
+        private void RegisterRefactorShortcuts()
         {
-            get { return _hwnd; }
+            // Clean up any existing refactor shortcuts
+            foreach (var hook in refactorShortcuts.Values)
+            {
+                hook.Dispose();
+            }
+            refactorShortcuts.Clear();
+
+            // Get all refactor types
+            // Add refactoring commands
+            var refactorTypes = DiscoverRefactorTypes();
+            foreach (var type in refactorTypes)
+            {
+                // Get the static properties for display name and description
+                bool registerShortcut = false;
+                ModifierKeys modifiers = (ModifierKeys)Keys.None;
+                Keys key = Keys.None;
+                string refactorName = string.Empty;
+                
+                try
+                {
+                    var registerShortcutProperty = type.GetProperty("RegisterKeyboardShortcut", BindingFlags.Public | BindingFlags.Static | BindingFlags.NonPublic);
+                    if (registerShortcutProperty != null)
+                    {
+                        registerShortcut = (bool)registerShortcutProperty.GetValue(null)!;
+                    }
+
+                    var modifiersProperty = type.GetProperty("ShortcutModifiers", BindingFlags.Public | BindingFlags.Static | BindingFlags.NonPublic);
+                    if (modifiersProperty != null)
+                    {
+                        modifiers = (ModifierKeys)modifiersProperty.GetValue(null)!;
+                    }
+
+                    var keyProperty = type.GetProperty("ShortcutKey", BindingFlags.Public | BindingFlags.Static | BindingFlags.NonPublic);
+                    if (keyProperty != null)
+                    {
+                        key = (Keys)keyProperty.GetValue(null)!;
+                    }
+
+                    var nameProperty = type.GetProperty("RefactorName", BindingFlags.Public | BindingFlags.Static | BindingFlags.NonPublic);
+                    if (nameProperty != null)
+                    {
+                        refactorName = (string)nameProperty.GetValue(null)!;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"Error getting refactor properties for {type.Name}: {ex.Message}");
+                }
+                    // Check if this refactor wants a keyboard shortcut
+                if (registerShortcut && key != Keys.None)
+                {
+                    // Check for collision with existing shortcuts
+                    bool hasCollision = false;
+                    string? collisionName = null;
+                    
+                    foreach (var entry in registeredShortcuts)
+                    {
+                        if (entry.Value.Item1 == modifiers && entry.Value.Item2 == key)
+                        {
+                            hasCollision = true;
+                            collisionName = entry.Key;
+                            break;
+                        }
+                    }
+                    
+                    if (hasCollision)
+                    {
+                        // Show warning about collision
+                        MessageBox.Show(
+                            $"Failed to register keyboard shortcut for refactor '{refactorName}' due to a collision with '{collisionName}'. The refactor is still available in the command palette.",
+                            "Shortcut Collision",
+                            MessageBoxButtons.OK,
+                            MessageBoxIcon.Warning
+                        );
+                    }
+                    else
+                    {
+                        // Register the shortcut
+                        var hook = new KeyboardHook();
+                        
+                        // Create a handler that creates and processes the refactor
+                        hook.KeyPressed += (sender, e) =>
+                        {
+                            if (activeEditor == null) return;
+                            
+                            var newRefactor = (BaseRefactor?)Activator.CreateInstance(type, [activeEditor]);
+                            if (newRefactor != null)
+                            {
+                                ProcessRefactor(newRefactor);
+                            }
+                        };
+                        
+                        // Register the hotkey
+                        hook.RegisterHotKey(modifiers, key);
+                        
+                        // Store in our dictionaries
+                        refactorShortcuts[type.FullName ?? type.Name] = hook;
+                        registeredShortcuts[refactorName] = (modifiers, key);
+                    }
+                }
+
+            }
         }
 
-        private IntPtr _hwnd;
+        private string GetShortcutText(Type refactorType)
+        {
+            try
+            {
+                // Check if this refactor has a keyboard shortcut
+                var registerShortcutProperty = refactorType.GetProperty("RegisterKeyboardShortcut", 
+                    BindingFlags.Public | BindingFlags.Static | BindingFlags.NonPublic);
+                
+                if (registerShortcutProperty != null && (bool)registerShortcutProperty.GetValue(null)!)
+                {
+                    // Get the modifier keys and key
+                    var modifiersProperty = refactorType.GetProperty("ShortcutModifiers", 
+                        BindingFlags.Public | BindingFlags.Static | BindingFlags.NonPublic);
+                    var keyProperty = refactorType.GetProperty("ShortcutKey", 
+                        BindingFlags.Public | BindingFlags.Static | BindingFlags.NonPublic);
+                    
+                    if (modifiersProperty != null && keyProperty != null)
+                    {
+                        ModifierKeys modifiers = (ModifierKeys)modifiersProperty.GetValue(null)!;
+                        Keys key = (Keys)keyProperty.GetValue(null)!;
+                        
+                        if (key != Keys.None)
+                        {
+                            // Format the shortcut text
+                            StringBuilder shortcutText = new StringBuilder(" (");
+                            
+                            if ((modifiers & AppRefiner.ModifierKeys.Control) == AppRefiner.ModifierKeys.Control)
+                                shortcutText.Append("Ctrl+");
+                            
+                            if ((modifiers & AppRefiner.ModifierKeys.Shift) == AppRefiner.ModifierKeys.Shift)
+                                shortcutText.Append("Shift+");
+                            
+                            if ((modifiers & AppRefiner.ModifierKeys.Alt) == AppRefiner.ModifierKeys.Alt)
+                                shortcutText.Append("Alt+");
+                            
+                            shortcutText.Append(key.ToString());
+                            shortcutText.Append(")");
+                            
+                            return shortcutText.ToString();
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error getting shortcut text for {refactorType.Name}: {ex.Message}");
+            }
+            
+            return string.Empty;
+        }
     }
 }

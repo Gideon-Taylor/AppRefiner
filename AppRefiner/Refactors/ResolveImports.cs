@@ -7,16 +7,33 @@ namespace AppRefiner.Refactors
     /// <summary>
     /// Refactoring operation that resolves all class references in the code and creates explicit imports for each one
     /// </summary>
-    public class ResolveImports : BaseRefactor
+    public class ResolveImports(ScintillaEditor editor) : BaseRefactor(editor)
     {
+        public new static string RefactorName => "Resolve Imports";
+        public new static string RefactorDescription => "Resolves all class references in the code and creates explicit imports for each one";
         // Tracks unique application class paths used in the code
-        private readonly HashSet<string> usedClassPaths = new();
+        private readonly HashSet<string> usedClassPaths = [];
 
         // The imports block if found
         private ImportsBlockContext? importsBlockContext;
 
         // Whether we're tracking class references after the imports block
         private bool trackingReferences = false;
+
+        /// <summary>
+        /// Gets whether this refactor should register a keyboard shortcut
+        /// </summary>
+        public new static bool RegisterKeyboardShortcut => true;
+
+        /// <summary>
+        /// Gets the modifier keys for the keyboard shortcut
+        /// </summary>
+        public new static ModifierKeys ShortcutModifiers => ModifierKeys.Control | ModifierKeys.Shift;
+
+        /// <summary>
+        /// Gets the key for the keyboard shortcut
+        /// </summary>
+        public new static Keys ShortcutKey => Keys.I;
 
         /// <summary>
         /// When entering an app class path, record it as used if we're in tracking mode

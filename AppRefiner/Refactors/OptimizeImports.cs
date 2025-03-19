@@ -6,7 +6,7 @@ namespace AppRefiner.Refactors
     /// <summary>
     /// Refactoring operation that optimizes and organizes import statements in PeopleCode
     /// </summary>
-    public class OptimizeImports : BaseRefactor
+    public class OptimizeImports(ScintillaEditor editor) : BaseRefactor(editor)
     {
         private class ImportEntry
         {
