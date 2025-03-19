@@ -62,6 +62,7 @@ namespace AppRefiner
         private const int SCI_FOLDLINE = 2237;
         private const int SCI_GETCURRENTPOS = 2008;
         private const int SCI_LINEFROMPOSITION = 2166;
+        private const int SCI_POSITIONFROMLINE = 2167;
         private const int SCI_GETFOLDLEVEL = 2223;
         private const int SCI_STYLECLEARALL = 2050;
         private const int SCI_STYLESETFORE = 2051;
@@ -1186,6 +1187,23 @@ namespace AppRefiner
                 // Toggle the fold (will expand if collapsed)
                 activeEditor.SendMessage(SCI_TOGGLEFOLD, (IntPtr)lineNum, IntPtr.Zero);
             }
+        }
+        
+        /// <summary>
+        /// Gets the start index of the previous line.
+        /// </summary>
+        /// <param name="editor">The Scintilla editor instance</param>
+        /// <param name="line">The current line number</param>
+        /// <returns>The start index of the previous line, or -1 if there is no previous line</returns>
+        public static int GetPreviousLineStartIndex(ScintillaEditor editor, int line)
+        {
+            if (editor == null || line < 1)
+            {
+                return -1; // No previous line for line 0 or invalid inputs
+            }
+            
+            int previousLine = line - 1;
+            return (int)editor.SendMessage(SCI_POSITIONFROMLINE, (IntPtr)previousLine, IntPtr.Zero);
         }
     }
     public enum EditorType
