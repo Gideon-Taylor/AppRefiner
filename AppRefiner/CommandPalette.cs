@@ -1,10 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Drawing;
-using System.Linq;
-using System.Windows.Forms;
-using System.Runtime.InteropServices;
-
 namespace AppRefiner
 {
     // Define delegate for command actions that can receive progress dialog
@@ -17,33 +10,29 @@ namespace AppRefiner
         private Func<string> _dynamicDescription;
         public Action? LegacyExecute { get; set; }
         public CommandAction? ExecuteWithProgress { get; set; }
-    
+
         // New properties for enabled state
         private bool _isEnabled = true;
         private Func<bool>? _dynamicEnabled;
 
-        public string Description 
-        { 
-            get 
+        public string Description
+        {
+            get
             {
-                if (_dynamicDescription != null)
-                    return _dynamicDescription();
-                return _description;
+                return _dynamicDescription != null ? _dynamicDescription() : _description;
             }
-            set 
+            set
             {
                 _description = value;
                 _dynamicDescription = null;
             }
         }
-    
+
         public bool Enabled
         {
             get
             {
-                if (_dynamicEnabled != null)
-                    return _dynamicEnabled();
-                return _isEnabled;
+                return _dynamicEnabled != null ? _dynamicEnabled() : _isEnabled;
             }
             set
             {
@@ -66,7 +55,7 @@ namespace AppRefiner
             _dynamicDescription = dynamicDescription;
             LegacyExecute = execute;
         }
-    
+
         public Command(string title, string description, Action execute, bool enabled)
         {
             Title = title;
@@ -74,7 +63,7 @@ namespace AppRefiner
             LegacyExecute = execute;
             _isEnabled = enabled;
         }
-    
+
         public Command(string title, string description, Action execute, Func<bool> dynamicEnabled)
         {
             Title = title;
@@ -82,7 +71,7 @@ namespace AppRefiner
             LegacyExecute = execute;
             _dynamicEnabled = dynamicEnabled;
         }
-    
+
         public Command(string title, Func<string> dynamicDescription, Action execute, Func<bool> dynamicEnabled)
         {
             Title = title;
@@ -90,7 +79,7 @@ namespace AppRefiner
             LegacyExecute = execute;
             _dynamicEnabled = dynamicEnabled;
         }
-        
+
         // New constructors using CommandAction for progress reporting
         public Command(string title, string description, CommandAction execute)
         {
@@ -105,7 +94,7 @@ namespace AppRefiner
             _dynamicDescription = dynamicDescription;
             ExecuteWithProgress = execute;
         }
-    
+
         public Command(string title, string description, CommandAction execute, bool enabled)
         {
             Title = title;
@@ -113,7 +102,7 @@ namespace AppRefiner
             ExecuteWithProgress = execute;
             _isEnabled = enabled;
         }
-    
+
         public Command(string title, string description, CommandAction execute, Func<bool> dynamicEnabled)
         {
             Title = title;
@@ -121,7 +110,7 @@ namespace AppRefiner
             ExecuteWithProgress = execute;
             _dynamicEnabled = dynamicEnabled;
         }
-    
+
         public Command(string title, Func<string> dynamicDescription, CommandAction execute, Func<bool> dynamicEnabled)
         {
             Title = title;
@@ -149,7 +138,7 @@ namespace AppRefiner
             ConfigureForm();
             PopulateCommandList();
         }
-        
+
         public CommandAction? GetSelectedAction()
         {
             return selectedAction;
@@ -163,13 +152,13 @@ namespace AppRefiner
             this.commandListView = new ListView();
             this.headerPanel.SuspendLayout();
             this.SuspendLayout();
-            
+
             // headerPanel
             this.headerPanel.BackColor = Color.FromArgb(50, 50, 60);
             this.headerPanel.Dock = DockStyle.Top;
             this.headerPanel.Height = 30;
             this.headerPanel.Controls.Add(this.headerLabel);
-            
+
             // headerLabel
             this.headerLabel.Text = "AppRefiner - Command Palette";
             this.headerLabel.ForeColor = Color.White;
@@ -204,7 +193,7 @@ namespace AppRefiner
             this.commandListView.View = View.Tile;
             this.commandListView.MouseDoubleClick += new MouseEventHandler(this.CommandListView_MouseDoubleClick);
             this.commandListView.KeyDown += new KeyEventHandler(this.CommandListView_KeyDown);
-            
+
             // CommandPalette
             this.ClientSize = new Size(550, 380); // Made slightly taller to accommodate header
             this.Controls.Add(this.commandListView);
@@ -225,11 +214,11 @@ namespace AppRefiner
             // Change the view to TileView to show both title and description
             commandListView.View = View.Tile;
             commandListView.TileSize = new Size(commandListView.Width - 10, 50);
-            
+
             // Configure the list view for title and description
             commandListView.Columns.Add("Title", 250);
             commandListView.Columns.Add("Description", 250);
-            
+
             // Show item tooltips
             commandListView.ShowItemToolTips = true;
         }
@@ -237,22 +226,22 @@ namespace AppRefiner
         private void PopulateCommandList()
         {
             commandListView.Items.Clear();
-            
+
             foreach (var command in filteredCommands)
             {
                 var item = new ListViewItem(command.Title);
                 item.SubItems.Add(command.Description);
                 item.Tag = command;
-                
+
                 // Add tooltip with description
                 item.ToolTipText = command.Description;
-                
+
                 // Apply visual style for disabled commands
                 if (!command.Enabled)
                 {
                     item.ForeColor = SystemColors.GrayText;
                 }
-                
+
                 commandListView.Items.Add(item);
             }
 
@@ -273,19 +262,19 @@ namespace AppRefiner
             {
                 filter = filter.ToLower();
                 filteredCommands = allCommands
-                    .Where(c => c.Title.ToLower().Contains(filter) || 
+                    .Where(c => c.Title.ToLower().Contains(filter) ||
                                 c.Description.ToLower().Contains(filter))
                     .ToList();
             }
-            
+
             PopulateCommandList();
-            
+
             if (commandListView.Items.Count > 0)
             {
                 commandListView.Items[0].Selected = true;
                 commandListView.EnsureVisible(0);
             }
-            
+
             // Ensure focus stays in the search box
             searchBox.Focus();
         }
@@ -347,7 +336,7 @@ namespace AppRefiner
         {
             SelectCommand();
         }
-        
+
         private void CommandListView_KeyDown(object sender, KeyEventArgs e)
         {
             if (e.KeyCode == Keys.Enter)
@@ -374,7 +363,7 @@ namespace AppRefiner
             if (commandListView.SelectedItems.Count > 0)
             {
                 var command = (Command)commandListView.SelectedItems[0].Tag;
-                
+
                 // Only select if the command is enabled
                 if (command.Enabled)
                 {
@@ -388,7 +377,7 @@ namespace AppRefiner
                         // Wrap the legacy action in a CommandAction delegate
                         selectedAction = (progressDialog) => command.LegacyExecute?.Invoke();
                     }
-                    
+
                     // Close the form with DialogResult.OK
                     this.DialogResult = DialogResult.OK;
                     this.Hide();
@@ -412,13 +401,13 @@ namespace AppRefiner
         {
             base.OnShown(e);
             searchBox.Focus();
-            
+
             // Add drop shadow effect to the form
             const int CS_DROPSHADOW = 0x00020000;
             CreateParams cp = this.CreateParams;
             cp.ClassStyle |= CS_DROPSHADOW;
         }
-        
+
         protected override CreateParams CreateParams
         {
             get

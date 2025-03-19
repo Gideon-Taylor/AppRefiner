@@ -1,6 +1,4 @@
-﻿using Antlr4.Runtime.Tree;
-using AppRefiner.Linters.Models;
-using AppRefiner.PeopleCode;
+﻿using AppRefiner.Linters.Models;
 using static AppRefiner.PeopleCode.PeopleCodeParser;
 
 namespace AppRefiner.Stylers

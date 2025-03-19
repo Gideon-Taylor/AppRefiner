@@ -1,5 +1,4 @@
-﻿using AppRefiner.PeopleCode;
-using SqlParser.Ast;
+﻿using SqlParser.Ast;
 using static AppRefiner.PeopleCode.PeopleCodeParser;
 
 namespace AppRefiner.Linters
@@ -7,7 +6,7 @@ namespace AppRefiner.Linters
     class SQLWildCard : BaseLintRule
     {
         public override string LINTER_ID => "SQL_WILDCARD";
-        
+
         public SQLWildCard()
         {
             Description = "Reports any SQL using * wildcards";
@@ -32,7 +31,7 @@ namespace AppRefiner.Linters
                     {
                         var sqlText = SQLHelper.ExtractSQLFromLiteral(firstArg.GetText());
                         var statement = SQLHelper.ParseSQL(sqlText);
-                        
+
                         if (statement == null)
                         {
                             return;

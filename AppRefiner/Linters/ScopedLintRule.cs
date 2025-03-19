@@ -1,5 +1,3 @@
-using System;
-using System.Collections.Generic;
 using AppRefiner.Linters.Models;
 using static AppRefiner.PeopleCode.PeopleCodeParser;
 
@@ -118,8 +116,8 @@ namespace AppRefiner.Linters
         {
             if (typeContext is ArrayTypeContext arrayType)
             {
-                var baseType = arrayType.typeT() != null 
-                    ? GetTypeFromContext(arrayType.typeT()) 
+                var baseType = arrayType.typeT() != null
+                    ? GetTypeFromContext(arrayType.typeT())
                     : "Any";
                 return $"Array of {baseType}";
             }
@@ -258,13 +256,13 @@ namespace AppRefiner.Linters
         // Protected virtual methods for derived classes to handle scope changes
         protected virtual void OnEnterScope() { }
         protected virtual void OnExitScope(Dictionary<string, T> scope) { }
-        
+
         /// <summary>
         /// Override of the OnExitScope method with additional variable scope information.
         /// Provided for backwards compatibility.
         /// </summary>
-        protected virtual void OnExitScope(Dictionary<string, T> scope, Dictionary<string, VariableInfo> variableScope) 
-        { 
+        protected virtual void OnExitScope(Dictionary<string, T> scope, Dictionary<string, VariableInfo> variableScope)
+        {
             OnExitScope(scope);
         }
     }

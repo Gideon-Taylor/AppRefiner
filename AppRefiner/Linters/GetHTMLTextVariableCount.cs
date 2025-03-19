@@ -1,8 +1,4 @@
-using Antlr4.Runtime;
 using AppRefiner.Database;
-using AppRefiner.Linters.Models;
-using AppRefiner.PeopleCode;
-using System.Text.RegularExpressions;
 using static AppRefiner.PeopleCode.PeopleCodeParser;
 
 namespace AppRefiner.Linters
@@ -10,7 +6,7 @@ namespace AppRefiner.Linters
     public class GetHTMLTextVariableCount : BaseLintRule
     {
         public override string LINTER_ID => "HTML_VAR_COUNT";
-        
+
         public GetHTMLTextVariableCount()
         {
             Description = "Validate bind counts in GetHTMLText function calls.";
@@ -90,7 +86,7 @@ namespace AppRefiner.Linters
             if (expr is DotAccessExprContext dotAccess)
             {
                 var leftExpr = dotAccess.expression();
-                if (leftExpr is IdentifierExprContext idExpr && 
+                if (leftExpr is IdentifierExprContext idExpr &&
                     idExpr.ident().GetText().Equals("HTML", StringComparison.OrdinalIgnoreCase))
                 {
                     if (dotAccess.children[1] is DotAccessContext dotAccessCtx)

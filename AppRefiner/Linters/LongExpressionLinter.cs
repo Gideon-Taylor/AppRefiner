@@ -1,4 +1,3 @@
-using AppRefiner.PeopleCode;
 using static AppRefiner.PeopleCode.PeopleCodeParser;
 
 namespace AppRefiner.Linters
@@ -11,7 +10,7 @@ namespace AppRefiner.Linters
         public override string LINTER_ID => "LONG_EXPR";
         private const int MaxExpressionLength = 200; // Maximum character length for an expression
         private const int MaxOperatorCount = 5; // Maximum number of operators in a single expression
-        
+
         public LongExpressionLinter()
         {
             Description = "Detects overly complex expressions";
@@ -72,7 +71,7 @@ namespace AppRefiner.Linters
             // Skip expressions within expressions to avoid duplication
             if (context.Parent is ExpressionContext)
                 return;
-                
+
             // Check expression length
             var expressionText = context.GetText();
             if (expressionText.Length > MaxExpressionLength)
@@ -86,7 +85,7 @@ namespace AppRefiner.Linters
                 );
                 return;
             }
-            
+
             // Count operators in complex expressions
             int operatorCount = CountOperators(context);
             if (operatorCount > MaxOperatorCount)
@@ -100,30 +99,30 @@ namespace AppRefiner.Linters
                 );
             }
         }
-        
+
         private int CountOperators(ExpressionContext context)
         {
             int count = 0;
-            
+
             // Count operators in this expression
-            if (context is AddSubtrExprContext || 
-                context is MultDivExprContext || 
-                context is EqualityExprContext || 
-                context is ComparisonExprContext || 
-                context is AndOrExprContext || 
+            if (context is AddSubtrExprContext ||
+                context is MultDivExprContext ||
+                context is EqualityExprContext ||
+                context is ComparisonExprContext ||
+                context is AndOrExprContext ||
                 context is ConcatenationExprContext ||
                 context is ExponentialExprContext)
             {
                 count++;
             }
-            
+
             // Function calls, method calls, and object creation can add complexity
             if (context is FunctionCallExprContext)
             {
                 // Count parameter expressions separately via children iteration
                 count++;  // Count the call itself as an operation
             }
-            
+
             // Recursively count operators in child expressions
             if (context.children != null)
             {
@@ -135,7 +134,7 @@ namespace AppRefiner.Linters
                     }
                 }
             }
-            
+
             return count;
         }
 

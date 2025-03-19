@@ -1,8 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 
@@ -17,12 +12,12 @@ namespace AppRefiner.Templates
         /// The ID of the field this condition depends on
         /// </summary>
         public string Field { get; set; }
-    
+
         /// <summary>
         /// The comparison operator (equals, notEquals, etc.)
         /// </summary>
         public string Operator { get; set; }
-    
+
         /// <summary>
         /// The value to compare against
         /// </summary>
@@ -63,7 +58,7 @@ namespace AppRefiner.Templates
         /// Additional description or help text
         /// </summary>
         public string Description { get; set; }
-    
+
         /// <summary>
         /// Display condition that determines whether this input should be shown
         /// </summary>
@@ -94,17 +89,17 @@ namespace AppRefiner.Templates
         /// The template text with {{marker}} placeholders
         /// </summary>
         public string TemplateText { get; set; }
-        
+
         /// <summary>
         /// Position to place the cursor after applying the template (-1 if not specified)
         /// </summary>
         public int CursorPosition { get; private set; } = -1;
-        
+
         /// <summary>
         /// Starting position of the selection range (-1 if not specified)
         /// </summary>
         public int SelectionStart { get; private set; } = -1;
-        
+
         /// <summary>
         /// Ending position of the selection range (-1 if not specified)
         /// </summary>
@@ -126,7 +121,7 @@ namespace AppRefiner.Templates
                 throw new FileNotFoundException($"Template file not found: {filePath}");
 
             string extension = Path.GetExtension(filePath).ToLowerInvariant();
-            
+
             if (extension == ".template")
             {
                 // Parse combined template file format
@@ -157,13 +152,13 @@ namespace AppRefiner.Templates
                 // Split the content at the delimiter
                 const string delimiter = "---";
                 int delimiterIndex = content.IndexOf(delimiter);
-                
+
                 if (delimiterIndex < 0)
                     throw new FormatException("Template file is missing the '---' delimiter between JSON and template text");
-                
+
                 string json = content.Substring(0, delimiterIndex).Trim();
                 string templateText = content.Substring(delimiterIndex + delimiter.Length).Trim();
-                
+
                 // Load the JSON part
                 var options = new JsonSerializerOptions
                 {
@@ -171,7 +166,7 @@ namespace AppRefiner.Templates
                 };
 
                 var jsonDoc = JsonSerializer.Deserialize<JsonElement>(json, options);
-                
+
                 // Create template with properties from JSON
                 var template = new Template
                 {
@@ -180,7 +175,7 @@ namespace AppRefiner.Templates
                     Inputs = new List<TemplateInput>(),
                     TemplateText = templateText
                 };
-                
+
                 var inputs = jsonDoc.GetProperty("inputs");
                 foreach (var input in inputs.EnumerateArray())
                 {
@@ -190,12 +185,12 @@ namespace AppRefiner.Templates
                         Label = input.GetProperty("label").GetString(),
                         Type = input.GetProperty("type").GetString(),
                         Required = input.GetProperty("required").GetBoolean(),
-                        DefaultValue = input.TryGetProperty("defaultValue", out var defaultValue) ? 
+                        DefaultValue = input.TryGetProperty("defaultValue", out var defaultValue) ?
                             defaultValue.GetString() : null,
-                        Description = input.TryGetProperty("description", out var description) ? 
+                        Description = input.TryGetProperty("description", out var description) ?
                             description.GetString() : null
                     };
-                    
+
                     // Parse display condition if present
                     if (input.TryGetProperty("displayCondition", out var displayConditionProp))
                     {
@@ -206,10 +201,10 @@ namespace AppRefiner.Templates
                             Value = GetValueFromJsonElement(displayConditionProp.GetProperty("value"))
                         };
                     }
-                    
+
                     template.Inputs.Add(templateInput);
                 }
-                
+
                 return template;
             }
             catch (Exception ex)
@@ -244,24 +239,24 @@ namespace AppRefiner.Templates
         {
             if (condition == null || string.IsNullOrEmpty(condition.Field))
                 return true;
-                
+
             if (!values.TryGetValue(condition.Field, out string fieldValue))
                 return false;
-                
+
             switch (condition.Operator.ToLower())
             {
                 case "equals":
                     if (condition.Value is bool boolValue)
-                        return (fieldValue.ToLower() == "true") == boolValue;
+                        return fieldValue.ToLower() == "true" == boolValue;
                     return fieldValue.Equals(condition.Value?.ToString(), StringComparison.OrdinalIgnoreCase);
-                    
+
                 case "notequals":
                     if (condition.Value is bool boolNotValue)
-                        return (fieldValue.ToLower() == "true") != boolNotValue;
+                        return fieldValue.ToLower() == "true" != boolNotValue;
                     return !fieldValue.Equals(condition.Value?.ToString(), StringComparison.OrdinalIgnoreCase);
-                    
+
                 // Add more operators as needed
-                    
+
                 default:
                     return true;
             }
@@ -279,7 +274,7 @@ namespace AppRefiner.Templates
                 // Skip validation if the field has a display condition that isn't met
                 if (input.DisplayCondition != null && !IsDisplayConditionMet(input.DisplayCondition, values))
                     continue;
-                    
+
                 if (!values.ContainsKey(input.Id) || string.IsNullOrWhiteSpace(values[input.Id]))
                 {
                     return false;
@@ -297,7 +292,7 @@ namespace AppRefiner.Templates
         {
             // Reset cursor position
             CursorPosition = -1;
-            
+
             // Fill in default values for any missing inputs
             var allValues = new Dictionary<string, string>(values);
             foreach (var input in Inputs)
@@ -317,7 +312,7 @@ namespace AppRefiner.Templates
                 string replacementValue = allValues.ContainsKey(marker) ? allValues[marker] : string.Empty;
                 processedTemplate = processedTemplate.Replace("{{" + marker + "}}", replacementValue);
             }
-            
+
             // Process cursor position marker
             int cursorMarkerIndex = processedTemplate.IndexOf("[[cursor]]");
             if (cursorMarkerIndex >= 0)
@@ -325,17 +320,17 @@ namespace AppRefiner.Templates
                 CursorPosition = cursorMarkerIndex;
                 processedTemplate = processedTemplate.Replace("[[cursor]]", string.Empty);
             }
-            
+
             // Process selection range markers
             int selectStartIndex = processedTemplate.IndexOf("[[select]]");
             int selectEndIndex = processedTemplate.IndexOf("[[/select]]");
-            
+
             if (selectStartIndex >= 0 && selectEndIndex >= 0 && selectEndIndex > selectStartIndex)
             {
                 // Store the positions, adjusting for the marker lengths
                 SelectionStart = selectStartIndex;
                 SelectionEnd = selectEndIndex - "[[select]]".Length;
-                
+
                 // Remove the markers
                 processedTemplate = processedTemplate.Replace("[[select]]", string.Empty);
                 processedTemplate = processedTemplate.Replace("[[/select]]", string.Empty);
@@ -402,7 +397,7 @@ namespace AppRefiner.Templates
                     return null;
             }
         }
-        
+
         /// <summary>
         /// Loads a template from a JSON string (legacy format)
         /// </summary>
@@ -419,7 +414,7 @@ namespace AppRefiner.Templates
                 };
 
                 var jsonDoc = JsonSerializer.Deserialize<JsonElement>(json, options);
-                
+
                 // Create template with properties from JSON
                 var template = new Template
                 {
@@ -427,11 +422,11 @@ namespace AppRefiner.Templates
                     Description = jsonDoc.GetProperty("description").GetString(),
                     Inputs = new List<TemplateInput>()
                 };
-                
+
                 // Load template text from associated .txt file
                 string jsonFilePath = filePath ?? throw new ArgumentNullException(nameof(filePath));
                 string templateFilePath = Path.ChangeExtension(jsonFilePath, ".txt");
-                
+
                 if (File.Exists(templateFilePath))
                 {
                     template.TemplateText = File.ReadAllText(templateFilePath);
@@ -439,14 +434,9 @@ namespace AppRefiner.Templates
                 else
                 {
                     // Fallback to template property in JSON if it exists
-                    if (jsonDoc.TryGetProperty("template", out var templateProp))
-                    {
-                        template.TemplateText = templateProp.GetString();
-                    }
-                    else
-                    {
-                        throw new FileNotFoundException($"Template text file not found: {templateFilePath}");
-                    }
+                    template.TemplateText = jsonDoc.TryGetProperty("template", out var templateProp)
+                        ? templateProp.GetString()
+                        : throw new FileNotFoundException($"Template text file not found: {templateFilePath}");
                 }
 
                 var inputs = jsonDoc.GetProperty("inputs");
@@ -458,12 +448,12 @@ namespace AppRefiner.Templates
                         Label = input.GetProperty("label").GetString(),
                         Type = input.GetProperty("type").GetString(),
                         Required = input.GetProperty("required").GetBoolean(),
-                        DefaultValue = input.TryGetProperty("defaultValue", out var defaultValue) ? 
+                        DefaultValue = input.TryGetProperty("defaultValue", out var defaultValue) ?
                             defaultValue.GetString() : null,
-                        Description = input.TryGetProperty("description", out var description) ? 
+                        Description = input.TryGetProperty("description", out var description) ?
                             description.GetString() : null
                     };
-                    
+
                     // Parse display condition if present
                     if (input.TryGetProperty("displayCondition", out var displayConditionProp))
                     {
@@ -474,7 +464,7 @@ namespace AppRefiner.Templates
                             Value = GetValueFromJsonElement(displayConditionProp.GetProperty("value"))
                         };
                     }
-                    
+
                     template.Inputs.Add(templateInput);
                 }
 
@@ -494,7 +484,7 @@ namespace AppRefiner.Templates
         {
             var templates = new List<Template>();
             string templatesDirectory = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Templates");
-            
+
             if (Directory.Exists(templatesDirectory))
             {
                 // Look for .template files first (new format)
@@ -510,18 +500,18 @@ namespace AppRefiner.Templates
                         Console.WriteLine($"Error loading template {file}: {ex.Message}");
                     }
                 }
-                
+
                 // Then look for .json files (legacy format) that don't have a corresponding .template file
                 foreach (var file in Directory.GetFiles(templatesDirectory, "*.json"))
                 {
                     try
                     {
                         string templateFile = Path.ChangeExtension(file, ".template");
-                        
+
                         // Skip if we already loaded a .template version
                         if (File.Exists(templateFile))
                             continue;
-                            
+
                         templates.Add(LoadFromFile(file));
                     }
                     catch (Exception ex)
@@ -531,7 +521,7 @@ namespace AppRefiner.Templates
                     }
                 }
             }
-            
+
             return templates;
         }
     }

@@ -1,31 +1,15 @@
-﻿using AppRefiner.Stylers;
+﻿using Antlr4.Runtime.Tree;
+using AppRefiner.Database;
+using AppRefiner.Database.Models;
 using AppRefiner.Linters;
 using AppRefiner.PeopleCode;
-using System;
-using System.Collections.Generic;
-using System.ComponentModel;
+using AppRefiner.Refactors;
+using AppRefiner.Stylers;
+using AppRefiner.Templates;
 using System.Data;
 using System.Diagnostics;
-using System.Drawing;
-using System.IO;
-using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
-using System.Threading.Tasks;
-using System.Windows.Forms;
-using System.IO;
-using static AppRefiner.PeopleCode.PeopleCodeParser;
-using static SqlParser.Ast.CopyTarget;
-using Antlr4.Build.Tasks;
-using AppRefiner.Refactors;
-using SharpCompress.Readers;
-using Antlr4.Runtime.Tree;
-using AppRefiner.Database;
-using AppRefiner.Templates;
-using System.Web;
-using AppRefiner.Database.Models;
-using Antlr4.Runtime.Atn;
-using SharpCompress.Compressors.Xz;
 
 namespace AppRefiner
 {
@@ -67,27 +51,27 @@ namespace AppRefiner
         private List<BaseStyler> stylers = new(); // Changed from List<BaseStyler> analyzers
 
         // Map of process IDs to their corresponding data managers
-        private Dictionary<uint, IDataManager> processDataManagers = new Dictionary<uint, IDataManager>();
-        private Dictionary<string, Control> templateInputControls = new Dictionary<string, Control>();
-        private Dictionary<string, Control> templateInputLabels = new Dictionary<string, Control>();
-        private Dictionary<string, DisplayCondition> templateInputsDisplayConditions = new Dictionary<string, DisplayCondition>();
+        private Dictionary<uint, IDataManager> processDataManagers = new();
+        private Dictionary<string, Control> templateInputControls = new();
+        private Dictionary<string, Control> templateInputLabels = new();
+        private Dictionary<string, DisplayCondition> templateInputsDisplayConditions = new();
         // Static list of available commands
-        public static List<Command> AvailableCommands = new List<Command>();
-        
-        KeyboardHook renameVarHook = new KeyboardHook();
-        KeyboardHook lintCodeHook = new KeyboardHook();
-        KeyboardHook collapseLevel = new KeyboardHook();
-        KeyboardHook expandLevel = new KeyboardHook();
-        KeyboardHook collapseAll = new KeyboardHook();
-        KeyboardHook expandAll = new KeyboardHook();
-        KeyboardHook commandPaletteHook = new KeyboardHook();
-        KeyboardHook resolveImportsHook = new KeyboardHook();
+        public static List<Command> AvailableCommands = new();
+
+        KeyboardHook renameVarHook = new();
+        KeyboardHook lintCodeHook = new();
+        KeyboardHook collapseLevel = new();
+        KeyboardHook expandLevel = new();
+        KeyboardHook collapseAll = new();
+        KeyboardHook expandAll = new();
+        KeyboardHook commandPaletteHook = new();
+        KeyboardHook resolveImportsHook = new();
         private class RuleState
         {
             public string TypeName { get; set; } = "";
             public bool Active { get; set; }
         }
-        
+
         // Path for linting report output
         private string lintReportPath;
 
@@ -105,7 +89,7 @@ namespace AppRefiner
             lintReportPath = Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
                 Properties.Settings.Default.LintReportPath);
-            
+
             // Ensure the directory exists
             if (!Directory.Exists(lintReportPath))
             {
@@ -119,7 +103,7 @@ namespace AppRefiner
                         "Warning", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 }
             }
-            
+
             LoadSettings();
             renameVarHook.KeyPressed += renameVariable;
             renameVarHook.RegisterHotKey(AppRefiner.ModifierKeys.Control | AppRefiner.ModifierKeys.Shift, Keys.R);
@@ -156,7 +140,7 @@ namespace AppRefiner
             if (activeEditor == null) return;
             ProcessLinters();
         }
-        
+
         private void resolveImportsHandler(object? sender, KeyPressedEventArgs e)
         {
             if (activeEditor == null) return;
@@ -166,16 +150,16 @@ namespace AppRefiner
         private async void ShowCommandPalette(object? sender, KeyPressedEventArgs e)
         {
             if (activeEditor == null) return;
-            
+
             // Create the command palette dialog
             var palette = new CommandPalette(AvailableCommands);
-            
+
             // Set the owner to the editor's parent window
             var mainHandle = Process.GetProcessById((int)activeEditor.ProcessId).MainWindowHandle;
-            
+
             // Show the dialog
             DialogResult result = palette.ShowDialog(new WindowWrapper(mainHandle));
-            
+
             // If a command was selected, execute it with progress dialog
             if (result == DialogResult.OK)
             {
@@ -186,24 +170,25 @@ namespace AppRefiner
                 }
             }
         }
-        
+
         private async Task ExecuteCommandWithProgressAsync(CommandAction commandAction, IntPtr parentHandle)
         {
             // Create progress dialog with parent handle
             var progressDialog = new CommandProgressDialog(parentHandle);
-            
+
             // Create a task completion source to wait for command execution
             var tcs = new TaskCompletionSource<bool>();
-            
+
             try
             {
                 // Show the dialog without blocking so we can execute the command
                 progressDialog.Show(new WindowWrapper(parentHandle));
                 progressDialog.BringToFront();
                 Application.DoEvents();
-                
+
                 // Execute the command asynchronously
-                await Task.Run(() => {
+                await Task.Run(() =>
+                {
                     try
                     {
                         commandAction(progressDialog);
@@ -212,17 +197,18 @@ namespace AppRefiner
                     catch (Exception ex)
                     {
                         // Handle any exceptions during command execution
-                        this.Invoke(() => {
-                            MessageBox.Show(new WindowWrapper(parentHandle), 
-                                $"Error executing command: {ex.Message} {ex.StackTrace}", 
-                                "Command Error", 
-                                MessageBoxButtons.OK, 
+                        this.Invoke(() =>
+                        {
+                            MessageBox.Show(new WindowWrapper(parentHandle),
+                                $"Error executing command: {ex.Message} {ex.StackTrace}",
+                                "Command Error",
+                                MessageBoxButtons.OK,
                                 MessageBoxIcon.Error);
                         });
                         tcs.SetResult(false);
                     }
                 });
-                
+
                 // Wait for a short delay to ensure progress is visible
                 await Task.Delay(200);
             }
@@ -274,7 +260,7 @@ namespace AppRefiner
             int cursorPosition = ScintillaManager.GetCursorPosition(activeEditor);
 
             /* Create a new instance of the refactoring class */
-            RenameLocalVariable refactor = new RenameLocalVariable(cursorPosition, newName);
+            RenameLocalVariable refactor = new(cursorPosition, newName);
             ProcessRefactor(refactor, mainHandle);
         }
 
@@ -289,7 +275,7 @@ namespace AppRefiner
         private void SetLintReportDirectory()
         {
             // Create folder browser dialog
-            FolderBrowserDialog folderDialog = new FolderBrowserDialog
+            FolderBrowserDialog folderDialog = new()
             {
                 Description = "Select directory for linting reports",
                 UseDescriptionForTitle = true,
@@ -302,14 +288,14 @@ namespace AppRefiner
                 lintReportPath = folderDialog.SelectedPath;
                 Properties.Settings.Default.LintReportPath = lintReportPath;
                 Properties.Settings.Default.Save();
-                
-                MessageBox.Show($"Lint reports will be saved to: {lintReportPath}", 
-                    "Lint Report Directory Updated", 
-                    MessageBoxButtons.OK, 
+
+                MessageBox.Show($"Lint reports will be saved to: {lintReportPath}",
+                    "Lint Report Directory Updated",
+                    MessageBoxButtons.OK,
                     MessageBoxIcon.Information);
             }
         }
-        
+
         /// <summary>
         /// Generate lint reports for all files in the current project
         /// </summary>
@@ -318,32 +304,32 @@ namespace AppRefiner
         {
             if (editor == null || editor.DataManager == null)
             {
-                MessageBox.Show("Database connection required for project linting.", 
-                    "Database Required", 
-                    MessageBoxButtons.OK, 
+                MessageBox.Show("Database connection required for project linting.",
+                    "Database Required",
+                    MessageBoxButtons.OK,
                     MessageBoxIcon.Warning);
                 return;
             }
-            
+
             // Get project name
             string projectName = ScintillaManager.GetProjectName(editor);
-    
+
             // Check if project name is "Untitled", which means no project is open
             if (projectName == "Untitled")
             {
-                MessageBox.Show("Please open a project before running the lint tool.", 
-                    "No Project Open", 
-                    MessageBoxButtons.OK, 
+                MessageBox.Show("Please open a project before running the lint tool.",
+                    "No Project Open",
+                    MessageBoxButtons.OK,
                     MessageBoxIcon.Warning);
                 return;
             }
-    
+
             // Check if string.Empty is returned, which indicates a failure to get the project name
             if (string.IsNullOrEmpty(projectName))
             {
-                MessageBox.Show("Unable to determine the project name. Linting cannot be completed.", 
-                    "Project Name Error", 
-                    MessageBoxButtons.OK, 
+                MessageBox.Show("Unable to determine the project name. Linting cannot be completed.",
+                    "Project Name Error",
+                    MessageBoxButtons.OK,
                     MessageBoxIcon.Error);
                 return;
             }
@@ -356,25 +342,25 @@ namespace AppRefiner
             // Get metadata for all programs in the project without loading content
             var ppcProgsMeta = editor.DataManager.GetPeopleCodeItemMetadataForProject(projectName);
             var activeLinters = linterRules.Where(a => a.Active).ToList();
-            
+
             // Message to show progress
-            this.Invoke(() => {
+            this.Invoke(() =>
+            {
                 lblStatus.Text = $"Linting project - found {ppcProgsMeta.Count} items...";
                 progressBar1.Style = ProgressBarStyle.Marquee;
                 progressBar1.MarqueeAnimationSpeed = 30;
             });
-            
+
             // Master collection of all linting reports
-            List<(PeopleCodeItem Program, Report LintReport)> allReports = new List<(PeopleCodeItem, Report)>();
+            List<(PeopleCodeItem Program, Report LintReport)> allReports = new();
             var parseCount = 0;
             var emptyProgs = 0;
             var processedCount = 0;
-            PeopleCodeItem largestPPC;
             // Process each program in the project, one at a time
             foreach (var ppcProg in ppcProgsMeta)
             {
                 processedCount++;
-                
+
                 // Update progress periodically
                 if (processedCount % 10 == 0)
                 {
@@ -392,7 +378,7 @@ namespace AppRefiner
                     emptyProgs++;
                     continue;
                 }
-                
+
                 // Get the program text as string
                 var programText = ppcProg.GetProgramTextAsString();
                 if (string.IsNullOrEmpty(programText))
@@ -400,39 +386,39 @@ namespace AppRefiner
                     emptyProgs++;
                     continue;
                 }
-                
+
                 // Create lexer and parser for this program
-                PeopleCodeLexer lexer = new PeopleCodeLexer(new Antlr4.Runtime.AntlrInputStream(programText));
+                PeopleCodeLexer lexer = new(new Antlr4.Runtime.AntlrInputStream(programText));
                 var stream = new Antlr4.Runtime.CommonTokenStream(lexer);
-                
+
                 // Get all tokens including those on hidden channels
                 stream.Fill();
-                
+
                 // Collect all comments from both comment channels
                 var comments = stream.GetTokens()
                     .Where(token => token.Channel == PeopleCodeLexer.COMMENTS || token.Channel == PeopleCodeLexer.API_COMMENTS)
                     .ToList();
-                
-                PeopleCodeParser parser = new PeopleCodeParser(stream);
+
+                PeopleCodeParser parser = new(stream);
                 var program = parser.program();
                 parseCount++;
                 parser.Interpreter.ClearDFA();
 
                 // Collection for reports from this program
-                List<Report> programReports = new List<Report>();
-                
+                List<Report> programReports = new();
+
                 MultiParseTreeWalker walker = new();
 
                 // Add the suppression listener first
                 var suppresionListner = new LinterSuppressionListener(stream, comments);
                 walker.AddListener(suppresionListner);
-                
+
                 // Configure and run each active linter
                 foreach (var linter in activeLinters)
                 {
                     // Reset linter state
                     linter.Reset();
-                    
+
                     // Configure linter for this program
                     linter.DataManager = editor.DataManager;
                     linter.Reports = programReports;
@@ -440,60 +426,62 @@ namespace AppRefiner
                     linter.SuppressionListener = suppresionListner;
                     walker.AddListener(linter);
                 }
-                
+
                 // Process the program with all linters at once
                 walker.Walk(program);
-                
+
                 // Store reports with the program they came from
                 foreach (var report in programReports)
                 {
                     allReports.Add((ppcProg, report));
                 }
-                
+
                 // Clean up walker listeners for next program
                 foreach (var linter in activeLinters)
                 {
                     linter.Reset();
                 }
-                
+
                 programReports.Clear();
                 comments.Clear();
-                
+
                 // Free up resources
                 lexer = null;
                 parser = null;
                 stream = null;
                 program = null;
-                
+
                 // Clear program text to free memory
                 ppcProg.SetProgramText(Array.Empty<byte>());
                 ppcProg.SetNameReferences(new List<NameReference>());
-                
+
             }
 
-            this.Invoke(() => {
+            this.Invoke(() =>
+            {
                 lblStatus.Text = $"Finalizing Report...";
                 progressDialog.UpdateHeader($"Finalizing Report...");
             });
 
             // Always generate the HTML report, even if no issues found
             GenerateHtmlReport(reportPath, projectName, allReports);
-            
+
             // Reset UI and show confirmation with link to report
-            this.Invoke(() => {
+            this.Invoke(() =>
+            {
                 lblStatus.Text = "Monitoring...";
                 progressBar1.Style = ProgressBarStyle.Blocks;
-                
-                string message = allReports.Count > 0 
+
+                string message = allReports.Count > 0
                     ? $"Project linting complete. {allReports.Count} issues found.\n\nWould you like to open the report?"
                     : "Project linting complete. No issues found.\n\nWould you like to open the report?";
-                
+
                 var result = MessageBox.Show(
-                    message, 
-                    "Project Linting Complete", 
-                    MessageBoxButtons.YesNo, 
+                    message,
+                    "Project Linting Complete",
+                    MessageBoxButtons.YesNo,
                     MessageBoxIcon.Information);
-                    
+
                 if (result == DialogResult.Yes)
                 {
                     // Open the report in default browser
@@ -556,7 +544,7 @@ namespace AppRefiner
             foreach (var input in template.Inputs)
             {
                 // Create label for parameter
-                Label label = new Label
+                Label label = new()
                 {
                     Text = input.Label + ":",
                     Location = new Point(horizontalPadding, currentY + 3),
@@ -577,7 +565,7 @@ namespace AppRefiner
                             Checked = !string.IsNullOrEmpty(input.DefaultValue) &&
                                       (input.DefaultValue.ToLower() == "true" || input.DefaultValue == "1" ||
                                        input.DefaultValue.ToLower() == "yes"),
-                            Location = new Point(labelWidth + horizontalPadding * 2, currentY),
+                            Location = new Point(labelWidth + (horizontalPadding * 2), currentY),
                             Size = new Size(controlWidth, 23),
                             Text = "", // No text needed since we have the label
                             Tag = input.Id // Store input ID in Tag for easier reference
@@ -590,7 +578,7 @@ namespace AppRefiner
                         inputControl = new TextBox
                         {
                             Text = input.DefaultValue ?? string.Empty,
-                            Location = new Point(labelWidth + horizontalPadding * 2, currentY),
+                            Location = new Point(labelWidth + (horizontalPadding * 2), currentY),
                             Size = new Size(controlWidth, 23),
                             Tag = input.Id // Store input ID in Tag for easier reference
                         };
@@ -600,7 +588,7 @@ namespace AppRefiner
                 // Add tooltip if description is available
                 if (!string.IsNullOrEmpty(input.Description))
                 {
-                    ToolTip tooltip = new ToolTip();
+                    ToolTip tooltip = new();
                     tooltip.SetToolTip(inputControl, input.Description);
                     tooltip.SetToolTip(label, input.Description);
                 }
@@ -652,7 +640,7 @@ namespace AppRefiner
                 if (templateInputControls.TryGetValue(inputId, out Control control))
                 {
                     bool shouldDisplay = Template.IsDisplayConditionMet(condition, currentValues);
-                    visibilityChanged |= (control.Visible != shouldDisplay);
+                    visibilityChanged |= control.Visible != shouldDisplay;
                     control.Visible = shouldDisplay;
 
                     // Also update the label visibility
@@ -818,7 +806,7 @@ namespace AppRefiner
 
         private void EnableUIActions()
         {
-            this.Invoke((Action)(() =>
+            this.Invoke(() =>
             {
                 grpEditorActions.Enabled = true;
                 btnLintCode.Enabled = true;
@@ -826,29 +814,22 @@ namespace AppRefiner
                 grpRefactors.Enabled = true;
                 btnApplyTemplate.Text = "Apply Template";
 
-                if (activeEditor?.DataManager == null)
-                {
-                    btnConnectDB.Text = "Connect DB...";
-                }
-                else
-                {
-                    btnConnectDB.Text = "Disconnect DB";
-                }
+                btnConnectDB.Text = activeEditor?.DataManager == null ? "Connect DB..." : "Disconnect DB";
 
-            }));
+            });
 
         }
 
         private void DisableUIActions()
         {
-            this.Invoke((Action)(() =>
+            this.Invoke(() =>
             {
                 grpEditorActions.Enabled = false;
                 btnLintCode.Enabled = false;
                 btnClearLint.Enabled = false;
                 grpRefactors.Enabled = false;
                 btnApplyTemplate.Text = "Generate Template";
-            }));
+            });
         }
 
         private void InitLinterOptions()
@@ -882,9 +863,7 @@ namespace AppRefiner
             if (activeWindow == new IntPtr(-1)) return activeEditor;
 
             /* If the active window is not a Scintilla editor, return null */
-            if (activeWindow == IntPtr.Zero) return null;
-
-            return ScintillaManager.GetEditor(activeWindow);
+            return activeWindow == IntPtr.Zero ? null : ScintillaManager.GetEditor(activeWindow);
         }
         private void PerformScan()
         {
@@ -933,7 +912,7 @@ namespace AppRefiner
                     ScintillaManager.ApplyBetterSQL(activeEditor);
                 }
 
-                if (!activeEditor.HasLexilla || (activeEditor.Type == EditorType.SQL || activeEditor.Type == EditorType.Other))
+                if (!activeEditor.HasLexilla || activeEditor.Type == EditorType.SQL || activeEditor.Type == EditorType.Other)
                 {
                     /* Perform folding ourselves 
                         1. if they are missing Lexilla
@@ -988,7 +967,7 @@ namespace AppRefiner
                     ProcessStylers(activeEditor);
                 }
 
-                if (!activeEditor.HasLexilla || (activeEditor.Type == EditorType.SQL || activeEditor.Type == EditorType.Other))
+                if (!activeEditor.HasLexilla || activeEditor.Type == EditorType.SQL || activeEditor.Type == EditorType.Other)
                 {
                     /* Perform folding ourselves 
                         1. if they are missing Lexilla
@@ -1018,12 +997,12 @@ namespace AppRefiner
             }
 
             // Set the status label and progress bar before starting the background task
-            this.Invoke((Action)(() =>
+            this.Invoke(() =>
             {
                 lblStatus.Text = "Folding...";
                 progressBar1.Style = ProgressBarStyle.Marquee;
                 progressBar1.MarqueeAnimationSpeed = 30;
-            }));
+            });
             Application.DoEvents();
             // Run the folding operation in a background thread
             await Task.Run(() =>
@@ -1036,11 +1015,11 @@ namespace AppRefiner
             });
 
             // Update the UI after the background task completes
-            this.Invoke((Action)(() =>
+            this.Invoke(() =>
             {
                 lblStatus.Text = "Monitoring...";
                 progressBar1.Style = ProgressBarStyle.Blocks;
-            }));
+            });
             Application.DoEvents();
 
         }
@@ -1075,9 +1054,9 @@ namespace AppRefiner
             }
 
             // Create parse tree
-            PeopleCodeLexer lexer = new PeopleCodeLexer(new Antlr4.Runtime.AntlrInputStream(editor.ContentString));
+            PeopleCodeLexer lexer = new(new Antlr4.Runtime.AntlrInputStream(editor.ContentString));
             var stream = new Antlr4.Runtime.CommonTokenStream(lexer);
-            PeopleCodeParser parser = new PeopleCodeParser(stream);
+            PeopleCodeParser parser = new(stream);
             var program = parser.program();
             parser.Interpreter.ClearDFA();
             GC.Collect();
@@ -1149,7 +1128,7 @@ namespace AppRefiner
                 activeEditor.ContentString = ScintillaManager.GetScintillaText(activeEditor);
             }
 
-            PeopleCodeLexer? lexer = new PeopleCodeLexer(new Antlr4.Runtime.AntlrInputStream(activeEditor.ContentString));
+            PeopleCodeLexer? lexer = new(new Antlr4.Runtime.AntlrInputStream(activeEditor.ContentString));
             var stream = new Antlr4.Runtime.CommonTokenStream(lexer);
 
             // Get all tokens including those on hidden channels
@@ -1160,7 +1139,7 @@ namespace AppRefiner
                 .Where(token => token.Channel == PeopleCodeLexer.COMMENTS || token.Channel == PeopleCodeLexer.API_COMMENTS)
                 .ToList();
 
-            PeopleCodeParser? parser = new PeopleCodeParser(stream);
+            PeopleCodeParser? parser = new(stream);
             var program = parser.program();
             parser.Interpreter.ClearDFA();
             GC.Collect();
@@ -1185,7 +1164,7 @@ namespace AppRefiner
             // Add the suppression listener first
             var suppressionListener = new LinterSuppressionListener(stream, comments);
             walker.AddListener(suppressionListener);
-            
+
             IDataManager? dataManger = activeEditor.DataManager;
             foreach (var linter in activeLinters)
             {
@@ -1217,11 +1196,11 @@ namespace AppRefiner
 
                 foreach (var report in g)
                 {
-                    this.Invoke((Action)(() =>
+                    this.Invoke(() =>
                     {
                         int rowIndex = dataGridView2.Rows.Add(report.Type, report.Message, report.Line);
                         dataGridView2.Rows[rowIndex].Tag = report;
-                    }));
+                    });
 
                     if (chkLintAnnotate.Checked)
                     {
@@ -1271,13 +1250,13 @@ namespace AppRefiner
         private async void btnLintCode_Click(object sender, EventArgs e)
         {
             // Set the status label and progress bar before starting the background task
-            this.Invoke((Action)(() =>
+            this.Invoke(() =>
             {
                 lblStatus.Text = "Linting...";
                 progressBar1.Style = ProgressBarStyle.Marquee;
                 progressBar1.MarqueeAnimationSpeed = 30;
                 dataGridView2.Rows.Clear();
-            }));
+            });
             Application.DoEvents();
             // Run the folding operation in a background thread
             await Task.Run(() =>
@@ -1287,11 +1266,11 @@ namespace AppRefiner
             });
 
             // Update the UI after the background task completes
-            this.Invoke((Action)(() =>
+            this.Invoke(() =>
             {
                 lblStatus.Text = "Monitoring...";
                 progressBar1.Style = ProgressBarStyle.Blocks;
-            }));
+            });
             Application.DoEvents();
 
         }
@@ -1378,13 +1357,13 @@ namespace AppRefiner
 
             ScintillaManager.ClearAnnotations(activeEditor);
             ScintillaManager.SetScintillaText(activeEditor, activeEditor.SnapshotText);
-            
+
             // Restore cursor position if it was saved
             if (activeEditor.SnapshotCursorPosition.HasValue)
             {
                 ScintillaManager.SetCursorPosition(activeEditor, activeEditor.SnapshotCursorPosition.Value);
             }
-            
+
             activeEditor.SnapshotText = null;
             activeEditor.SnapshotCursorPosition = null;
             btnRestoreSnapshot.Enabled = false;
@@ -1409,20 +1388,21 @@ namespace AppRefiner
             // Take a snapshot before refactoring
             activeEditor.SnapshotText = freshText;
             activeEditor.SnapshotCursorPosition = currentCursorPosition;
-            this.Invoke(() => {
+            this.Invoke(() =>
+            {
                 btnRestoreSnapshot.Enabled = true;
             });
 
             // Parse the code
-            PeopleCodeLexer lexer = new PeopleCodeLexer(new Antlr4.Runtime.AntlrInputStream(freshText));
+            PeopleCodeLexer lexer = new(new Antlr4.Runtime.AntlrInputStream(freshText));
             var stream = new Antlr4.Runtime.CommonTokenStream(lexer);
-            PeopleCodeParser parser = new PeopleCodeParser(stream);
+            PeopleCodeParser parser = new(stream);
             var program = parser.program();
             parser.Interpreter.ClearDFA();
             GC.Collect();
             // Initialize the refactor with cursor position
             refactorClass.Initialize(freshText, stream, currentCursorPosition);
-            
+
             // Run the refactor
             ParseTreeWalker walker = new();
             walker.Walk(refactorClass, program);
@@ -1431,7 +1411,8 @@ namespace AppRefiner
             var result = refactorClass.GetResult();
             if (!result.Success)
             {
-                this.Invoke(() => {
+                this.Invoke(() =>
+                {
                     MessageBox.Show(
                         owner != IntPtr.Zero ? new WindowWrapper(owner) : this,
                         result.Message,
@@ -1439,7 +1420,7 @@ namespace AppRefiner
                         MessageBoxButtons.OK,
                         MessageBoxIcon.Warning
                     );
-                
+
                     btnRestoreSnapshot.Enabled = false;
                 });
                 return;
@@ -1450,7 +1431,7 @@ namespace AppRefiner
             if (newText == null) return;
 
             ScintillaManager.SetScintillaText(activeEditor, newText);
-            
+
             // Get and set the updated cursor position
             int updatedCursorPosition = refactorClass.GetUpdatedCursorPosition();
             if (updatedCursorPosition >= 0)
@@ -1463,7 +1444,7 @@ namespace AppRefiner
         {
             ProcessRefactor(new OptimizeImports());
         }
-        
+
         private void btnResolveImports_Click(object sender, EventArgs e)
         {
             ProcessRefactor(new ResolveImports());
@@ -1481,7 +1462,7 @@ namespace AppRefiner
                 return;
             }
 
-            DBConnectDialog dialog = new DBConnectDialog();
+            DBConnectDialog dialog = new();
             if (dialog.ShowDialog() == DialogResult.OK)
             {
                 IDataManager? manager = dialog.DataManager;
@@ -1499,24 +1480,25 @@ namespace AppRefiner
             if (activeEditor == null) return;
 
             ScintillaManager.ClearAnnotations(activeEditor);
-            
+
             // Clear previous lint results
-            this.Invoke((Action)(() => {
+            this.Invoke(() =>
+            {
                 dataGridView2.Rows.Clear();
-            }));
+            });
 
             if (activeEditor.Type != EditorType.PeopleCode)
             {
                 MessageBox.Show("Linting is only available for PeopleCode editors", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return;
             }
-            
+
             if (activeEditor.ContentString == null)
             {
                 activeEditor.ContentString = ScintillaManager.GetScintillaText(activeEditor);
             }
 
-            PeopleCodeLexer? lexer = new PeopleCodeLexer(new Antlr4.Runtime.AntlrInputStream(activeEditor.ContentString));
+            PeopleCodeLexer? lexer = new(new Antlr4.Runtime.AntlrInputStream(activeEditor.ContentString));
             var stream = new Antlr4.Runtime.CommonTokenStream(lexer);
 
             // Get all tokens including those on hidden channels
@@ -1527,7 +1509,7 @@ namespace AppRefiner
                 .Where(token => token.Channel == PeopleCodeLexer.COMMENTS || token.Channel == PeopleCodeLexer.API_COMMENTS)
                 .ToList();
 
-            PeopleCodeParser? parser = new PeopleCodeParser(stream);
+            PeopleCodeParser? parser = new(stream);
             var program = parser.program();
             parser.Interpreter.ClearDFA();
             GC.Collect();
@@ -1553,15 +1535,15 @@ namespace AppRefiner
             walker.AddListener(suppressionListener);
 
             IDataManager? dataManger = activeEditor.DataManager;
-            
+
             // Configure and run the specific linter
             linter.DataManager = dataManger;
             linter.Reports = reports;
             linter.Comments = comments;
-            
+
             walker.AddListener(linter);
             walker.Walk(program);
-            
+
             // Reset the linter state
             linter.Reset();
 
@@ -1580,11 +1562,11 @@ namespace AppRefiner
 
                 foreach (var report in g)
                 {
-                    this.Invoke((Action)(() =>
+                    this.Invoke(() =>
                     {
                         int rowIndex = dataGridView2.Rows.Add(report.Type, report.Message, report.Line);
                         dataGridView2.Rows[rowIndex].Tag = report;
-                    }));
+                    });
 
                     if (chkLintAnnotate.Checked)
                     {
@@ -1618,7 +1600,7 @@ namespace AppRefiner
             int cursorPosition = ScintillaManager.GetCursorPosition(activeEditor);
 
             /* Create a new instance of the refactoring class */
-            RenameLocalVariable refactor = new RenameLocalVariable(cursorPosition, newName);
+            RenameLocalVariable refactor = new(cursorPosition, newName);
             ProcessRefactor(refactor);
         }
 
@@ -1683,7 +1665,7 @@ namespace AppRefiner
         /// <param name="reportPath">The path where the report should be saved</param>
         /// <param name="projectName">The name of the project</param>
         /// <param name="reportData">The collection of programs and their lint reports</param>
-        private void GenerateHtmlReport(string reportPath, string projectName, 
+        private void GenerateHtmlReport(string reportPath, string projectName,
             List<(PeopleCodeItem Program, Report LintReport)> reportData)
         {
             try
@@ -1693,12 +1675,12 @@ namespace AppRefiner
                     .GroupBy(r => r.Program.BuildPath())
                     .OrderBy(g => g.Key)
                     .ToList();
-                
+
                 // Calculate statistics
                 int totalErrors = reportData.Count(r => r.LintReport.Type == ReportType.Error);
                 int totalWarnings = reportData.Count(r => r.LintReport.Type == ReportType.Warning);
                 int totalInfo = reportData.Count(r => r.LintReport.Type == ReportType.Info);
-                
+
                 // Get active linters
                 var activeLinterInfo = linterRules
                     .Where(l => l.Active)
@@ -1720,7 +1702,7 @@ namespace AppRefiner
                         programPath = pg.Key,
                         // Include the PeopleCodeType information
                         peopleCodeType = pg.First().Program.Type.ToString(),
-                        reports = pg.Select(item => new 
+                        reports = pg.Select(item => new
                         {
                             type = item.LintReport.Type.ToString(),
                             line = item.LintReport.Line + 1,
@@ -1728,14 +1710,14 @@ namespace AppRefiner
                         }).OrderBy(r => r.line).ToList()
                     }).ToList()
                 };
-                
+
                 // Convert the report object to JSON
                 string reportJson = System.Text.Json.JsonSerializer.Serialize(report);
-                
+
                 // Get the template file path
                 string templatePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Templates", "LintReportTemplate.html");
                 string templateHtml;
-                
+
                 // Check if template file exists
                 if (System.IO.File.Exists(templatePath))
                 {
@@ -1757,41 +1739,41 @@ namespace AppRefiner
                         else
                         {
                             // Fallback message if template isn't found
-                            MessageBox.Show("Lint report template not found. Please check your installation.", 
+                            MessageBox.Show("Lint report template not found. Please check your installation.",
                                 "Template Missing", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                             return;
                         }
                     }
                 }
-                
+
                 // Inject the JSON data into the HTML
                 string finalHtml = templateHtml.Replace("{{projectName}}", projectName)
                                              .Replace("{{timestamp}}", DateTime.Now.ToString());
-                
+
                 // Add the report data as a JavaScript variable
-                finalHtml = finalHtml.Replace("</head>", 
+                finalHtml = finalHtml.Replace("</head>",
                     $"<script>const reportJSON = {reportJson};</script>\n</head>");
-                
+
                 // Write the final HTML to the report file
                 System.IO.File.WriteAllText(reportPath, finalHtml);
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Error creating report: {ex.Message}", "Report Error", 
+                MessageBox.Show($"Error creating report: {ex.Message}", "Report Error",
                     MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
         private void ShowGeneratedTemplateDialog(string content, string templateName)
         {
-            Form dialog = new Form
+            Form dialog = new()
             {
                 Text = $"Generated {templateName}",
                 Size = new Size(600, 400),
                 StartPosition = FormStartPosition.CenterParent
             };
 
-            TextBox textBox = new TextBox
+            TextBox textBox = new()
             {
                 Multiline = true,
                 ScrollBars = ScrollBars.Both,
@@ -1801,7 +1783,7 @@ namespace AppRefiner
                 WordWrap = false
             };
 
-            Button copyButton = new Button
+            Button copyButton = new()
             {
                 Text = "Copy to Clipboard",
                 Dock = DockStyle.Bottom
@@ -1822,21 +1804,21 @@ namespace AppRefiner
 
         private static DialogResult ShowInputDialog(string title, string text, ref string result, IntPtr owner = 0)
         {
-            Size size = new Size(300, 70);
-            Form inputBox = new Form();
+            Size size = new(300, 70);
+            Form inputBox = new();
 
             inputBox.FormBorderStyle = FormBorderStyle.FixedDialog;
             inputBox.ClientSize = size;
             inputBox.Text = title;
             inputBox.StartPosition = FormStartPosition.CenterParent;
 
-            TextBox textBox = new TextBox();
+            TextBox textBox = new();
             textBox.Size = new Size(size.Width - 10, 23);
             textBox.Location = new Point(5, 5);
             textBox.Text = text;
             inputBox.Controls.Add(textBox);
 
-            Button okButton = new Button();
+            Button okButton = new();
             okButton.DialogResult = DialogResult.OK;
             okButton.Name = "okButton";
             okButton.Size = new Size(75, 23);
@@ -1844,7 +1826,7 @@ namespace AppRefiner
             okButton.Location = new Point(size.Width - 80 - 80, 39);
             inputBox.Controls.Add(okButton);
 
-            Button cancelButton = new Button();
+            Button cancelButton = new();
             cancelButton.DialogResult = DialogResult.Cancel;
             cancelButton.Name = "cancelButton";
             cancelButton.Size = new Size(75, 23);
@@ -1859,137 +1841,154 @@ namespace AppRefiner
             result = textBox.Text;
             return dlgResult;
         }
-        
+
         private void RegisterCommands()
         {
             // Clear any existing commands
             AvailableCommands.Clear();
-            
+
             // Add editor commands with "Editor:" prefix
             AvailableCommands.Add(new Command(
-                "Editor: Lint Current Code", 
+                "Editor: Lint Current Code",
                 "Run linting rules against the current editor",
-                (progressDialog) => { 
-                    if (activeEditor != null) {
+                (progressDialog) =>
+                {
+                    if (activeEditor != null)
+                    {
                         progressDialog?.UpdateHeader("Running linters...");
-                        ProcessLinters(); 
+                        ProcessLinters();
                     }
                 }
             ));
-            
+
             AvailableCommands.Add(new Command(
-                "Editor: Dark Mode", 
+                "Editor: Dark Mode",
                 "Apply dark mode to the current editor",
-                (progressDialog) => { 
-                    if (activeEditor != null) {
+                (progressDialog) =>
+                {
+                    if (activeEditor != null)
+                    {
                         progressDialog?.UpdateHeader("Applying dark mode...");
-                        ScintillaManager.SetDarkMode(activeEditor); 
+                        ScintillaManager.SetDarkMode(activeEditor);
                     }
                 }
             ));
-            
+
             AvailableCommands.Add(new Command(
-                "Editor: Collapse All", 
+                "Editor: Collapse All",
                 "Collapse all foldable sections",
-                () => { 
-                    if (activeEditor != null) 
-                        ScintillaManager.CollapseTopLevel(activeEditor); 
+                () =>
+                {
+                    if (activeEditor != null)
+                        ScintillaManager.CollapseTopLevel(activeEditor);
                 }
             ));
-            
+
             AvailableCommands.Add(new Command(
-                "Editor: Expand All", 
+                "Editor: Expand All",
                 "Expand all foldable sections",
-                () => { 
-                    if (activeEditor != null) 
-                        ScintillaManager.ExpandTopLevel(activeEditor); 
+                () =>
+                {
+                    if (activeEditor != null)
+                        ScintillaManager.ExpandTopLevel(activeEditor);
                 }
             ));
-            
+
             AvailableCommands.Add(new Command(
-                "Editor: Take Snapshot", 
+                "Editor: Take Snapshot",
                 "Take a snapshot of the current editor content",
-                () => { 
-                    if (activeEditor != null) {
+                () =>
+                {
+                    if (activeEditor != null)
+                    {
                         activeEditor.SnapshotText = ScintillaManager.GetScintillaText(activeEditor);
                         activeEditor.SnapshotCursorPosition = ScintillaManager.GetCursorPosition(activeEditor);
-                        this.Invoke(() => {
+                        this.Invoke(() =>
+                        {
                             btnRestoreSnapshot.Enabled = true;
                         });
-                        
+
                     }
                 }
             ));
-            
+
             AvailableCommands.Add(new Command(
-                "Editor: Restore Snapshot", 
+                "Editor: Restore Snapshot",
                 "Restore editor content from the last snapshot",
-                () => { 
-                    if (activeEditor != null && activeEditor.SnapshotText != null) {
+                () =>
+                {
+                    if (activeEditor != null && activeEditor.SnapshotText != null)
+                    {
                         ScintillaManager.ClearAnnotations(activeEditor);
                         ScintillaManager.SetScintillaText(activeEditor, activeEditor.SnapshotText);
-                        
+
                         // Restore cursor position if it was saved
                         if (activeEditor.SnapshotCursorPosition.HasValue)
                         {
                             ScintillaManager.SetCursorPosition(activeEditor, activeEditor.SnapshotCursorPosition.Value);
                         }
-                        
+
                         activeEditor.SnapshotText = null;
                         activeEditor.SnapshotCursorPosition = null;
-                        this.Invoke(() => {
+                        this.Invoke(() =>
+                        {
                             btnRestoreSnapshot.Enabled = false;
                         });
                     }
                 }
             ));
-            
+
             // Add toggle commands for MainForm checkboxes
             AvailableCommands.Add(new Command(
-                "Editor: Toggle Auto Collapse", 
+                "Editor: Toggle Auto Collapse",
                 () => chkInitCollapsed.Checked ? "Auto Collapse is ON - Click to disable" : "Auto Collapse is OFF - Click to enable",
-                () => { 
+                () =>
+                {
                     chkInitCollapsed.Checked = !chkInitCollapsed.Checked;
                 }
             ));
-            
+
             AvailableCommands.Add(new Command(
-                "Editor: Toggle Only PeopleCode Editors", 
+                "Editor: Toggle Only PeopleCode Editors",
                 () => chkOnlyPPC.Checked ? "Only PeopleCode is ON - Click to disable" : "Only PeopleCode is OFF - Click to enable",
-                () => { 
+                () =>
+                {
                     chkOnlyPPC.Checked = !chkOnlyPPC.Checked;
                 }
             ));
-            
+
             AvailableCommands.Add(new Command(
-                "Editor: Toggle Auto Dark Mode", 
+                "Editor: Toggle Auto Dark Mode",
                 () => chkAutoDark.Checked ? "Auto Dark Mode is ON - Click to disable" : "Auto Dark Mode is OFF - Click to enable",
-                () => { 
+                () =>
+                {
                     chkAutoDark.Checked = !chkAutoDark.Checked;
                 }
             ));
-            
+
             AvailableCommands.Add(new Command(
-                "Editor: Toggle Auto Format SQL", 
+                "Editor: Toggle Auto Format SQL",
                 () => chkBetterSQL.Checked ? "Auto Format SQL is ON - Click to disable" : "Auto Format SQL is OFF - Click to enable",
-                () => { 
+                () =>
+                {
                     chkBetterSQL.Checked = !chkBetterSQL.Checked;
                 }
             ));
-            
+
             // Add styler toggle commands with "Styler:" prefix
             foreach (var styler in stylers)
             {
                 AvailableCommands.Add(new Command(
                     $"Styler: Toggle {styler.Description}",
                     () => styler.Active ? $"Currently enabled - Click to disable" : $"Currently disabled - Click to enable",
-                    () => {
+                    () =>
+                    {
                         styler.Active = !styler.Active;
                         if (activeEditor != null)
                         {
                             ProcessStylers(activeEditor);
                         }
-                        
+
                         // Update corresponding grid row if exists
                         var row = dataGridView3.Rows.Cast<DataGridViewRow>()
                             .FirstOrDefault(r => r.Tag is BaseStyler s && s == styler);
@@ -2000,47 +1999,53 @@ namespace AppRefiner
                     }
                 ));
             }
-            
+
             // Add refactoring commands
             AvailableCommands.Add(new Command(
-                "Refactor: Add Flower Box", 
+                "Refactor: Add Flower Box",
                 "Add a flower box header to the current file",
-                () => { 
+                () =>
+                {
                     if (activeEditor != null)
                         ProcessRefactor(new AddFlowerBox());
                 }
             ));
-            
+
             AvailableCommands.Add(new Command(
-                "Refactor: Optimize Imports", 
+                "Refactor: Optimize Imports",
                 "Clean up and organize import statements",
-                () => { 
+                () =>
+                {
                     if (activeEditor != null)
                         ProcessRefactor(new OptimizeImports());
                 }
             ));
-            
+
             AvailableCommands.Add(new Command(
-                "Refactor: Resolve Imports", 
+                "Refactor: Resolve Imports",
                 "Create explicit imports for all class references (Ctrl+Shift+I)",
-                () => { 
+                () =>
+                {
                     if (activeEditor != null)
                         ProcessRefactor(new ResolveImports());
                 }
             ));
-            
+
             AvailableCommands.Add(new Command(
-                "Refactor: Rename Variable", 
+                "Refactor: Rename Variable",
                 "Rename the variable at the current cursor position",
-                () => { 
-                    if (activeEditor != null) {
+                () =>
+                {
+                    if (activeEditor != null)
+                    {
                         string newName = "";
                         var mainHandle = Process.GetProcessById((int)activeEditor.ProcessId).MainWindowHandle;
                         var dlgResult = ShowInputDialog("New variable name", "Enter new variable name", ref newName, mainHandle);
-                        
-                        if (dlgResult == DialogResult.OK) {
+
+                        if (dlgResult == DialogResult.OK)
+                        {
                             int cursorPosition = ScintillaManager.GetCursorPosition(activeEditor);
-                            RenameLocalVariable refactor = new RenameLocalVariable(cursorPosition, newName);
+                            RenameLocalVariable refactor = new(cursorPosition, newName);
                             ProcessRefactor(refactor, mainHandle);
                         }
                     }
@@ -2117,22 +2122,24 @@ namespace AppRefiner
                 AvailableCommands.Add(new Command(
                     $"Lint: {linter.Description}",
                     $"Run {linter.Description} linting rule",
-                    () => {
+                    () =>
+                    {
                         if (activeEditor != null)
                             ProcessSingleLinter(linter);
                     }
                 ));
             }
-            
+
             // Add linter toggle commands
             foreach (var linter in linterRules)
             {
                 AvailableCommands.Add(new Command(
                     $"Lint: Toggle {linter.Description}",
                     () => linter.Active ? $"Currently enabled - Click to disable" : $"Currently disabled - Click to enable",
-                    () => {
+                    () =>
+                    {
                         linter.Active = !linter.Active;
-                        
+
                         // Update corresponding grid row if exists
                         var row = dataGridView1.Rows.Cast<DataGridViewRow>()
                             .FirstOrDefault(r => r.Tag is BaseLintRule l && l == linter);
@@ -2143,20 +2150,22 @@ namespace AppRefiner
                     }
                 ));
             }
-            
+
             // Add database commands with dynamic enabled states
             AvailableCommands.Add(new Command(
                 "Database: Connect to DB",
                 "Connect to database for advanced functionality",
-                () => {
-                    if (activeEditor != null) {
+                () =>
+                {
+                    if (activeEditor != null)
+                    {
                         // Get the main window handle of the process that owns the active editor
                         var mainHandle = Process.GetProcessById((int)activeEditor.ProcessId).MainWindowHandle;
-                        
+
                         // Create the dialog with proper parenting
-                        DBConnectDialog dialog = new DBConnectDialog();
+                        DBConnectDialog dialog = new();
                         dialog.StartPosition = FormStartPosition.CenterParent;
-                        
+
                         // Show dialog with parent window
                         if (dialog.ShowDialog(new WindowWrapper(mainHandle)) == DialogResult.OK)
                         {
@@ -2176,8 +2185,10 @@ namespace AppRefiner
             AvailableCommands.Add(new Command(
                 "Database: Disconnect DB",
                 "Disconnect from current database",
-                () => {
-                    if (activeEditor != null && activeEditor.DataManager != null) {
+                () =>
+                {
+                    if (activeEditor != null && activeEditor.DataManager != null)
+                    {
                         activeEditor.DataManager.Disconnect();
                         processDataManagers.Remove(activeEditor.ProcessId);
                         activeEditor.DataManager = null;
@@ -2186,40 +2197,45 @@ namespace AppRefiner
                 },
                 () => activeEditor != null && activeEditor.DataManager != null
             ));
-            
+
             // Add clear annotations command
             AvailableCommands.Add(new Command(
                 "Editor: Clear Annotations",
                 "Clear all annotations from the current editor",
-                () => {
-                    if (activeEditor != null) {
+                () =>
+                {
+                    if (activeEditor != null)
+                    {
                         ScintillaManager.ClearAnnotations(activeEditor);
                         dataGridView2.Rows.Clear();
                     }
                 }
             ));
-            
+
             // Add project linting commands
             AvailableCommands.Add(new Command(
                 "Project: Set Lint Report Directory",
                 $"Current directory: {lintReportPath}",
-                (progressDialog) => {
+                (progressDialog) =>
+                {
                     SetLintReportDirectory();
                 }
             ));
-            
+
             AvailableCommands.Add(new Command(
                 "Project: Lint Project",
                 "Run all linters on the entire project and generate a report",
-                (progressDialog) => {
-                    if (activeEditor != null) {
+                (progressDialog) =>
+                {
+                    if (activeEditor != null)
+                    {
                         progressDialog?.UpdateHeader("Initializing project linting...");
                         LintProject(activeEditor, progressDialog);
                     }
                 },
                 () => activeEditor != null && activeEditor.DataManager != null
             ));
-           
+
         }
     }
 

@@ -1,7 +1,5 @@
 ﻿using Antlr4.Runtime;
-using Antlr4.Runtime.Misc;
 using AppRefiner.PeopleCode;
-using System.Collections.Generic;
 using System.Text;
 
 namespace AppRefiner.Refactors
@@ -15,12 +13,12 @@ namespace AppRefiner.Refactors
         /// Whether the refactoring was successful
         /// </summary>
         public bool Success { get; }
-        
+
         /// <summary>
         /// Optional message providing details about the result
         /// </summary>
         public string? Message { get; }
-        
+
         /// <summary>
         /// Creates a new refactoring result
         /// </summary>
@@ -31,18 +29,18 @@ namespace AppRefiner.Refactors
             Success = success;
             Message = message;
         }
-        
+
         /// <summary>
         /// Creates a successful result
         /// </summary>
-        public static RefactorResult Successful => new RefactorResult(true);
-        
+        public static RefactorResult Successful => new(true);
+
         /// <summary>
         /// Creates a failed result with the specified error message
         /// </summary>
-        public static RefactorResult Failed(string message) => new RefactorResult(false, message);
+        public static RefactorResult Failed(string message) => new(false, message);
     }
-    
+
     /// <summary>
     /// Represents a change to be applied to the source code
     /// </summary>
@@ -52,12 +50,12 @@ namespace AppRefiner.Refactors
         /// The starting index in the source where the change begins
         /// </summary>
         public int StartIndex { get; }
-        
+
         /// <summary>
         /// A description of what this change does
         /// </summary>
         public string Description { get; }
-        
+
         /// <summary>
         /// Creates a new code change
         /// </summary>
@@ -68,12 +66,12 @@ namespace AppRefiner.Refactors
             StartIndex = startIndex;
             Description = description;
         }
-        
+
         /// <summary>
         /// Applies this change to the given source code builder
         /// </summary>
         public abstract void Apply(StringBuilder source);
-        
+
         /// <summary>
         /// Calculates how this change affects a cursor position
         /// </summary>
@@ -81,7 +79,7 @@ namespace AppRefiner.Refactors
         /// <returns>The new cursor position after applying this change</returns>
         public abstract int UpdateCursorPosition(int cursorPosition);
     }
-    
+
     /// <summary>
     /// Represents a change that deletes text from the source
     /// </summary>
@@ -91,12 +89,12 @@ namespace AppRefiner.Refactors
         /// The ending index (inclusive) in the source where the deletion ends
         /// </summary>
         public int EndIndex { get; }
-        
+
         /// <summary>
         /// Length of the deleted text
         /// </summary>
         public int DeleteLength => EndIndex - StartIndex + 1;
-        
+
         /// <summary>
         /// Creates a new deletion change
         /// </summary>
@@ -108,7 +106,7 @@ namespace AppRefiner.Refactors
         {
             EndIndex = endIndex;
         }
-        
+
         /// <summary>
         /// Applies the deletion to the source
         /// </summary>
@@ -116,7 +114,7 @@ namespace AppRefiner.Refactors
         {
             source.Remove(StartIndex, DeleteLength);
         }
-        
+
         /// <summary>
         /// Updates cursor position based on this deletion
         /// </summary>
@@ -141,7 +139,7 @@ namespace AppRefiner.Refactors
             }
         }
     }
-    
+
     /// <summary>
     /// Represents a change that inserts text into the source
     /// </summary>
@@ -151,7 +149,7 @@ namespace AppRefiner.Refactors
         /// The text to insert at the start index
         /// </summary>
         public string TextToInsert { get; }
-        
+
         /// <summary>
         /// Creates a new insertion change
         /// </summary>
@@ -163,7 +161,7 @@ namespace AppRefiner.Refactors
         {
             TextToInsert = textToInsert;
         }
-        
+
         /// <summary>
         /// Applies the insertion to the source
         /// </summary>
@@ -171,7 +169,7 @@ namespace AppRefiner.Refactors
         {
             source.Insert(StartIndex, TextToInsert);
         }
-        
+
         /// <summary>
         /// Updates cursor position based on this insertion
         /// </summary>
@@ -184,14 +182,14 @@ namespace AppRefiner.Refactors
                 // Cursor is before insertion point, no change needed
                 return cursorPosition;
             }
-            else 
+            else
             {
                 // Cursor is at or after insertion point, shift forward by inserted text length
                 return cursorPosition + TextToInsert.Length;
             }
         }
     }
-    
+
     /// <summary>
     /// Represents a change that replaces text in the source
     /// </summary>
@@ -201,22 +199,22 @@ namespace AppRefiner.Refactors
         /// The ending index (inclusive) in the source where the replacement ends
         /// </summary>
         public int EndIndex { get; }
-        
+
         /// <summary>
         /// The new text to replace the old text with
         /// </summary>
         public string NewText { get; }
-        
+
         /// <summary>
         /// The length of the original text being replaced
         /// </summary>
         public int OldLength => EndIndex - StartIndex + 1;
-        
+
         /// <summary>
         /// The net change in length (positive if new text is longer, negative if shorter)
         /// </summary>
         public int LengthDelta => NewText.Length - OldLength;
-        
+
         /// <summary>
         /// Creates a new replacement change
         /// </summary>
@@ -230,7 +228,7 @@ namespace AppRefiner.Refactors
             EndIndex = endIndex;
             NewText = newText;
         }
-        
+
         /// <summary>
         /// Applies the replacement to the source
         /// </summary>
@@ -239,7 +237,7 @@ namespace AppRefiner.Refactors
             source.Remove(StartIndex, OldLength);
             source.Insert(StartIndex, NewText);
         }
-        
+
         /// <summary>
         /// Updates cursor position based on this replacement
         /// </summary>
@@ -265,7 +263,7 @@ namespace AppRefiner.Refactors
             }
         }
     }
-    
+
     /// <summary>
     /// Base class for implementing PeopleCode refactoring operations
     /// </summary>
@@ -274,22 +272,22 @@ namespace AppRefiner.Refactors
         private readonly List<CodeChange> _changes = new();
         private int _initialCursorPosition = -1;
         private int _updatedCursorPosition = -1;
-        
+
         /// <summary>
         /// The token stream of the source code being refactored
         /// </summary>
         protected ITokenStream? TokenStream { get; private set; }
-        
+
         /// <summary>
         /// The source text being refactored
         /// </summary>
         protected string? SourceText { get; private set; }
-        
+
         /// <summary>
         /// The current result of the refactoring operation
         /// </summary>
         protected RefactorResult Result { get; set; } = RefactorResult.Successful;
-        
+
         /// <summary>
         /// Initializes the refactor with source code and token stream
         /// </summary>
@@ -322,14 +320,14 @@ namespace AppRefiner.Refactors
         public string? GetRefactoredCode()
         {
             if (!Result.Success) return null;
-            
+
             if (_changes.Count == 0) return SourceText;
 
             // Sort changes from last to first to avoid index shifting
             _changes.Sort((a, b) => b.StartIndex.CompareTo(a.StartIndex));
 
             var result = new StringBuilder(SourceText);
-            
+
             // Process each change and update cursor position
             foreach (var change in _changes)
             {
@@ -342,7 +340,7 @@ namespace AppRefiner.Refactors
 
             return result.ToString();
         }
-        
+
         /// <summary>
         /// Gets the updated cursor position after refactoring
         /// </summary>
@@ -375,9 +373,9 @@ namespace AppRefiner.Refactors
             {
                 // Normal case - replace the entire node
                 _changes.Add(new ReplaceChange(
-                    context.Start.StartIndex, 
-                    context.Stop.StopIndex, 
-                    newText, 
+                    context.Start.StartIndex,
+                    context.Stop.StopIndex,
+                    newText,
                     description
                 ));
             }
@@ -405,7 +403,7 @@ namespace AppRefiner.Refactors
         {
             _changes.Add(new InsertChange(position, textToInsert, description));
         }
-                
+
         /// <summary>
         /// Adds a new insertion change after a parser rule context
         /// </summary>
@@ -416,7 +414,7 @@ namespace AppRefiner.Refactors
         {
             _changes.Add(new InsertChange(context.Stop.StopIndex + 1, textToInsert, description));
         }
-        
+
         /// <summary>
         /// Adds a new insertion change before a parser rule context
         /// </summary>
@@ -438,7 +436,7 @@ namespace AppRefiner.Refactors
         {
             _changes.Add(new DeleteChange(startIndex, endIndex, description));
         }
-        
+
         /// <summary>
         /// Adds a new deletion change to remove a parser rule context
         /// </summary>
@@ -447,8 +445,8 @@ namespace AppRefiner.Refactors
         protected void DeleteNode(ParserRuleContext context, string description)
         {
             _changes.Add(new DeleteChange(
-                context.Start.StartIndex, 
-                context.Stop.StopIndex, 
+                context.Start.StartIndex,
+                context.Stop.StopIndex,
                 description
             ));
         }
@@ -458,9 +456,9 @@ namespace AppRefiner.Refactors
         /// </summary>
         protected string? GetOriginalText(ParserRuleContext context)
         {
-            if (SourceText == null) return null;
-            
-            return SourceText.Substring(
+            return SourceText == null
+                ? null
+                : SourceText.Substring(
                 context.Start.StartIndex,
                 context.Stop.StopIndex - context.Start.StartIndex + 1
             );

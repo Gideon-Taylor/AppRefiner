@@ -1,10 +1,7 @@
-using System;
-using System.Collections.Generic;
-using System.Data;
-using System.IO;
-using System.Text.RegularExpressions;
-using System.Text;
 using AppRefiner.Database.Models;
+using System.Data;
+using System.Text;
+using System.Text.RegularExpressions;
 
 namespace AppRefiner.Database
 {
@@ -15,17 +12,17 @@ namespace AppRefiner.Database
     {
         private IDbConnection _connection;
         private readonly string _connectionString;
-        
+
         /// <summary>
         /// Gets the underlying database connection
         /// </summary>
         public IDbConnection Connection => _connection;
-        
+
         /// <summary>
         /// Gets whether the manager is connected
         /// </summary>
         public bool IsConnected => _connection?.State == ConnectionState.Open;
-        
+
         /// <summary>
         /// Creates a new PeopleSoft data manager with the specified connection string
         /// </summary>
@@ -35,7 +32,7 @@ namespace AppRefiner.Database
             _connectionString = connectionString;
             _connection = new OracleDbConnection(connectionString);
         }
-        
+
         /// <summary>
         /// Connect to the database
         /// </summary>
@@ -56,7 +53,7 @@ namespace AppRefiner.Database
                 return false;
             }
         }
-        
+
         /// <summary>
         /// Disconnect from the database
         /// </summary>
@@ -67,7 +64,7 @@ namespace AppRefiner.Database
                 _connection.Close();
             }
         }
-        
+
         /// <summary>
         /// Retrieves the SQL definition for a given object name
         /// </summary>
@@ -79,7 +76,7 @@ namespace AppRefiner.Database
             {
                 throw new InvalidOperationException("Database connection is not open");
             }
-            
+
             // PeopleSoft stores SQL definitions in PSSQLDEFN/PSSQLTEXTDEFN tables
             string sql = @"
                 SELECT B.SQLTEXT
@@ -87,29 +84,29 @@ namespace AppRefiner.Database
                 WHERE A.SQLID = B.SQLID
                 AND A.SQLID = :objectName
                 ORDER BY B.SEQNUM";
-                
-            Dictionary<string, object> parameters = new Dictionary<string, object>
+
+            Dictionary<string, object> parameters = new()
             {
                 { ":objectName", objectName }
             };
-            
+
             DataTable result = _connection.ExecuteQuery(sql, parameters);
-            
+
             if (result.Rows.Count == 0)
             {
                 return string.Empty;
             }
-            
+
             // Concatenate all parts of the SQL definition
-            System.Text.StringBuilder sqlDef = new System.Text.StringBuilder();
+            System.Text.StringBuilder sqlDef = new();
             foreach (DataRow row in result.Rows)
             {
                 sqlDef.Append(row["SQLTEXT"]);
             }
-            
+
             return sqlDef.ToString();
         }
-        
+
         /// <summary>
         /// Retrieves all available SQL definitions
         /// </summary>
@@ -120,9 +117,9 @@ namespace AppRefiner.Database
             {
                 throw new InvalidOperationException("Database connection is not open");
             }
-            
-            Dictionary<string, string> definitions = new Dictionary<string, string>();
-            
+
+            Dictionary<string, string> definitions = new();
+
             // Query to get all SQL object names
             string sqlNames = @"
                 SELECT DISTINCT A.SQLID
@@ -131,9 +128,9 @@ namespace AppRefiner.Database
                     SELECT 1 FROM PSSQLTEXTDEFN B
                     WHERE A.SQLID = B.SQLID
                 )";
-                
+
             DataTable namesResult = _connection.ExecuteQuery(sqlNames);
-            
+
             foreach (DataRow row in namesResult.Rows)
             {
                 string? objectName = row["SQLID"].ToString();
@@ -143,10 +140,10 @@ namespace AppRefiner.Database
                     definitions[objectName] = definition;
                 }
             }
-            
+
             return definitions;
         }
-        
+
         /// <summary>
         /// Retrieves the HTML definition for a given object name
         /// </summary>
@@ -158,40 +155,40 @@ namespace AppRefiner.Database
             {
                 throw new InvalidOperationException("Database connection is not open");
             }
-            
+
             // PeopleSoft stores HTML definitions in PSCONTENT table
             string sql = @"
                 SELECT CONTDATA
                 FROM PSCONTENT
                 WHERE CONTNAME = :objectName
                 ORDER BY SEQNUM";
-                
-            Dictionary<string, object> parameters = new Dictionary<string, object>
+
+            Dictionary<string, object> parameters = new()
             {
                 { ":objectName", objectName }
             };
-            
+
             DataTable result = _connection.ExecuteQuery(sql, parameters);
-            
+
             if (result.Rows.Count == 0)
             {
                 return new HtmlDefinition(string.Empty, 0);
             }
-            
+
             // Concatenate all parts of the HTML definition
-            StringBuilder htmlContent = new StringBuilder();
+            StringBuilder htmlContent = new();
             foreach (DataRow row in result.Rows)
             {
                 htmlContent.Append(Encoding.Unicode.GetString((byte[])row["CONTDATA"]));
             }
-            
+
             string content = htmlContent.ToString();
-            
+
             // Find the highest bind number in the form %Bind(:n)
             int maxBindNumber = 0;
-            Regex bindRegex = new Regex(@"%Bind\(:(\d+)\)", RegexOptions.IgnoreCase);
+            Regex bindRegex = new(@"%Bind\(:(\d+)\)", RegexOptions.IgnoreCase);
             MatchCollection matches = bindRegex.Matches(content);
-            
+
             foreach (Match match in matches)
             {
                 if (match.Groups.Count > 1 && int.TryParse(match.Groups[1].Value, out int bindNumber))
@@ -199,7 +196,7 @@ namespace AppRefiner.Database
                     maxBindNumber = Math.Max(maxBindNumber, bindNumber);
                 }
             }
-            
+
             return new HtmlDefinition(content, maxBindNumber);
         }
 
@@ -213,16 +210,16 @@ namespace AppRefiner.Database
             {
                 throw new InvalidOperationException("Database connection is not open");
             }
-            
-            Dictionary<string, HtmlDefinition> definitions = new Dictionary<string, HtmlDefinition>();
-            
+
+            Dictionary<string, HtmlDefinition> definitions = new();
+
             // Query to get all HTML object names
             string sqlNames = @"
                 SELECT DISTINCT CONTNAME
                 FROM PSCONTENT";
-                
+
             DataTable namesResult = _connection.ExecuteQuery(sqlNames);
-            
+
             foreach (DataRow row in namesResult.Rows)
             {
                 string? objectName = row["CONTNAME"].ToString();
@@ -232,10 +229,10 @@ namespace AppRefiner.Database
                     definitions[objectName] = definition;
                 }
             }
-            
+
             return definitions;
         }
-        
+
 
         /// <summary>
         /// Gets metadata for PeopleCode items in a project without loading program text
@@ -248,9 +245,9 @@ namespace AppRefiner.Database
             {
                 throw new InvalidOperationException("Database connection is not open");
             }
-            
-            List<PeopleCodeItem> results = new List<PeopleCodeItem>();
-            
+
+            List<PeopleCodeItem> results = new();
+
             // PeopleSoft stores project items in PSPROJECTITEM table
             // We're looking for PeopleCode object types
             string sql = @"
@@ -262,36 +259,36 @@ namespace AppRefiner.Database
                 FROM PSPROJECTITEM
                 WHERE PROJECTNAME = :projectName
                 AND OBJECTTYPE IN ( 8, 9, 39, 40, 42, 43, 44, 45, 46, 47, 48, 58, 66 )"; // PeopleCode object types
-                
-            Dictionary<string, object> parameters = new Dictionary<string, object>
+
+            Dictionary<string, object> parameters = new()
             {
                 { ":projectName", projectName }
             };
-            
+
             DataTable projectItems = _connection.ExecuteQuery(sql, parameters);
-            
+
             foreach (DataRow row in projectItems.Rows)
             {
                 int objectType = Convert.ToInt32(row["OBJECTTYPE"]);
-                
+
                 // Create ProjectItem instance
-                ProjectItem projectItem = new ProjectItem(
+                ProjectItem projectItem = new(
                     objectType,
                     Convert.ToInt32(row["OBJECTID1"]), row["OBJECTVALUE1"]?.ToString() ?? " ",
                     Convert.ToInt32(row["OBJECTID2"]), row["OBJECTVALUE2"]?.ToString() ?? " ",
                     Convert.ToInt32(row["OBJECTID3"]), row["OBJECTVALUE3"]?.ToString() ?? " ",
                     Convert.ToInt32(row["OBJECTID4"]), row["OBJECTVALUE4"]?.ToString() ?? " "
                 );
-                
+
                 string path = projectItem.BuildPath();
-                
+
                 if (!string.IsNullOrEmpty(path))
-                {                    
+                {
                     // Convert project item object IDs to program object IDs
-                    List<Tuple<int,string>> programFields = projectItem.ToProgramFields();
-                    
+                    List<Tuple<int, string>> programFields = projectItem.ToProgramFields();
+
                     // Create a PeopleCodeItem with empty program text
-                    PeopleCodeItem peopleCodeItem = new PeopleCodeItem(
+                    PeopleCodeItem peopleCodeItem = new(
                         new int[] {
                             programFields[0].Item1, programFields[1].Item1, programFields[2].Item1,
                             programFields[3].Item1, programFields[4].Item1, programFields[5].Item1,
@@ -305,7 +302,7 @@ namespace AppRefiner.Database
                         Array.Empty<byte>(), // Empty program text
                         new List<NameReference>() // Empty name references
                     );
-                    
+
                     results.Add(peopleCodeItem);
                 }
             }
@@ -323,14 +320,14 @@ namespace AppRefiner.Database
             {
                 throw new InvalidOperationException("Database connection is not open");
             }
-            
+
             // Convert object IDs and values to Tuple format needed for queries
-            List<Tuple<int, string>> programFields = new List<Tuple<int, string>>();
+            List<Tuple<int, string>> programFields = new();
             for (int i = 0; i < item.ObjectIDs.Length; i++)
             {
                 programFields.Add(new Tuple<int, string>(item.ObjectIDs[i], item.ObjectValues[i]));
             }
-            
+
             // Query to retrieve the actual PeopleCode from PSPCMPROG with all 7 fields
             string query = @"
                 SELECT PROGTXT FROM PSPCMPROG 
@@ -342,50 +339,50 @@ namespace AppRefiner.Database
                 AND OBJECTID6 = :objId6 AND OBJECTVALUE6 = :objVal6
                 AND OBJECTID7 = :objId7 AND OBJECTVALUE7 = :objVal7
                 ORDER BY PROGSEQ";
-            
-            Dictionary<string, object> progParameters = new Dictionary<string, object>();
-            
+
+            Dictionary<string, object> progParameters = new();
+
             // Set parameters for all 7 object ID/value pairs
             for (int i = 0; i < 7; i++)
             {
                 // Parameter index is 1-based in the query
                 int paramIndex = i + 1;
-                
+
                 // Use values from programFields list or defaults for empty fields
                 int objId = (i < programFields.Count) ? programFields[i].Item1 : 0;
                 string objVal = (i < programFields.Count) ? programFields[i].Item2 : " ";
-                
+
                 progParameters[$":objId{paramIndex}"] = objId;
                 progParameters[$":objVal{paramIndex}"] = objVal;
             }
-            
+
             DataTable programData = _connection.ExecuteQuery(query, progParameters);
-            
+
             // Create a new PeopleCodeItem with the program text data
-            List<byte[]> progTextParts = new List<byte[]>();
+            List<byte[]> progTextParts = new();
             foreach (DataRow progRow in programData.Rows)
             {
                 byte[] blobData = (byte[])progRow["PROGTXT"];
                 progTextParts.Add(blobData);
             }
-            
+
             // Combine all byte arrays
             byte[] combinedProgramText = CombineBinaryData(progTextParts);
             if (combinedProgramText.Length == 0)
             {
                 return false;
             }
-            
+
             // Get name references
             List<NameReference> nameReferences = GetNameReferencesForProgram(programFields);
-            
+
             // Update the item with the loaded content
             item.SetProgramText(combinedProgramText);
             item.SetNameReferences(nameReferences);
-            
+
             return true;
         }
-        
+
         /// <summary>
         /// Gets all PeopleCode definitions for a specified project
         /// </summary>
@@ -395,16 +392,16 @@ namespace AppRefiner.Database
         {
             // Get metadata first
             List<PeopleCodeItem> results = GetPeopleCodeItemMetadataForProject(projectName);
-            
+
             // Load content for each item
             foreach (var item in results)
             {
                 LoadPeopleCodeItemContent(item);
             }
-            
+
             return results;
         }
-        
+
         /// <summary>
         /// Disposes of the connection
         /// </summary>
@@ -412,7 +409,7 @@ namespace AppRefiner.Database
         {
             _connection?.Dispose();
         }
-        
+
         /// <summary>
         /// Combines multiple byte arrays into a single byte array
         /// </summary>
@@ -422,27 +419,27 @@ namespace AppRefiner.Database
         {
             if (byteArrays == null || byteArrays.Count == 0)
                 return Array.Empty<byte>();
-                
+
             // Calculate total length
             int totalLength = 0;
             foreach (byte[] array in byteArrays)
             {
                 totalLength += array.Length;
             }
-            
+
             // Create new array and copy data
             byte[] result = new byte[totalLength];
             int offset = 0;
-            
+
             foreach (byte[] array in byteArrays)
             {
                 Buffer.BlockCopy(array, 0, result, offset, array.Length);
                 offset += array.Length;
             }
-            
+
             return result;
         }
-        
+
         /// <summary>
         /// Retrieves name references for a PeopleCode program
         /// </summary>
@@ -450,8 +447,8 @@ namespace AppRefiner.Database
         /// <returns>List of name references</returns>
         private List<NameReference> GetNameReferencesForProgram(List<Tuple<int, string>> programFields)
         {
-            List<NameReference> nameReferences = new List<NameReference>();
-            
+            List<NameReference> nameReferences = new();
+
             // Query to get name references from PSPCMNAME table
             string query = @"
                 SELECT NAMENUM, RECNAME, REFNAME
@@ -464,36 +461,36 @@ namespace AppRefiner.Database
                 AND OBJECTID6 = :objId6 AND OBJECTVALUE6 = :objVal6
                 AND OBJECTID7 = :objId7 AND OBJECTVALUE7 = :objVal7
                 ORDER BY NAMENUM";
-                
-            Dictionary<string, object> parameters = new Dictionary<string, object>();
-            
+
+            Dictionary<string, object> parameters = new();
+
             // Set parameters for all 7 object ID/value pairs
             for (int i = 0; i < 7; i++)
             {
                 // Parameter index is 1-based in the query
                 int paramIndex = i + 1;
-                
+
                 // Use values from programFields list or defaults for empty fields
                 int objId = (i < programFields.Count) ? programFields[i].Item1 : 0;
                 string objVal = (i < programFields.Count) ? programFields[i].Item2 : "";
-                
+
                 parameters[$":objId{paramIndex}"] = objId;
                 parameters[$":objVal{paramIndex}"] = objVal;
             }
-            
+
             DataTable nameData = _connection.ExecuteQuery(query, parameters);
-            
+
             foreach (DataRow row in nameData.Rows)
             {
                 int nameNum = Convert.ToInt32(row["NAMENUM"]);
                 string recName = row["RECNAME"]?.ToString() ?? string.Empty;
                 string refName = row["REFNAME"]?.ToString() ?? string.Empty;
-                
+
                 nameReferences.Add(new NameReference(nameNum, recName, refName));
             }
-            
+
             return nameReferences;
         }
-        
+
     }
 }

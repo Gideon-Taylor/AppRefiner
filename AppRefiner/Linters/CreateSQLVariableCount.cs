@@ -1,11 +1,7 @@
 using Antlr4.Runtime;
 using AppRefiner.Database;
 using AppRefiner.Linters.Models;
-using AppRefiner.PeopleCode;
-using SqlParser;
 using SqlParser.Ast;
-using SqlParser.Dialects;
-using System.Text.RegularExpressions;
 using static AppRefiner.PeopleCode.PeopleCodeParser;
 
 namespace AppRefiner.Linters
@@ -16,7 +12,7 @@ namespace AppRefiner.Linters
     public class CreateSQLVariableCount : ScopedLintRule<SQLStatementInfo>
     {
         public override string LINTER_ID => "CREATE_SQL";
-        
+
         private enum ValidationMode
         {
             CreateOrGet, Open, Execute, Fetch
@@ -91,7 +87,7 @@ namespace AppRefiner.Linters
             if (expr is DotAccessExprContext dotAccess)
             {
                 var leftExpr = dotAccess.expression();
-                if (leftExpr is IdentifierExprContext idExpr && 
+                if (leftExpr is IdentifierExprContext idExpr &&
                     idExpr.ident().GetText().Equals("SQL", StringComparison.OrdinalIgnoreCase))
                 {
                     if (dotAccess.children[1] is DotAccessContext dotAccessCtx)
@@ -122,7 +118,7 @@ namespace AppRefiner.Linters
                         );
                         return (null, expr.Start.StartIndex, expr.Stop.StopIndex);
                     }
-                    
+
                 }
             }
             // Handle string literal
@@ -141,8 +137,8 @@ namespace AppRefiner.Linters
         {
             if (string.IsNullOrWhiteSpace(sqlText))
                 return;
-            
-            string [] metaSQLToSkip = ["%UpdatePairs", "%KeyEqual", "%Insert", "%SelectAll", "%Delete", "%Update"];
+
+            string[] metaSQLToSkip = ["%UpdatePairs", "%KeyEqual", "%Insert", "%SelectAll", "%Delete", "%Update"];
 
             foreach (var metaSQL in metaSQLToSkip)
             {
@@ -157,7 +153,7 @@ namespace AppRefiner.Linters
                     );
                     return;
                 }
-                    
+
             }
 
 
@@ -183,7 +179,7 @@ namespace AppRefiner.Linters
                 sqlInfo.BindCount = bindCount;
                 sqlInfo.ParseFailed = false;
 
-                if (validationMode == ValidationMode.CreateOrGet && totalInOutArgs == 0 )
+                if (validationMode == ValidationMode.CreateOrGet && totalInOutArgs == 0)
                 {
                     sqlInfo.NeedsOpenOrExec = true;
                     sqlInfo.InVarsBound = false;
@@ -271,7 +267,7 @@ namespace AppRefiner.Linters
         public override void EnterSimpleFunctionCall(SimpleFunctionCallContext context)
         {
             var functionName = context.genericID().GetText();
-            if (!functionName.Equals("CreateSQL", StringComparison.OrdinalIgnoreCase) 
+            if (!functionName.Equals("CreateSQL", StringComparison.OrdinalIgnoreCase)
                 && !functionName.Equals("GetSQL", StringComparison.OrdinalIgnoreCase))
                 return;
 
@@ -307,14 +303,14 @@ namespace AppRefiner.Linters
             }
 
             var (sqlText, start, stop) = GetSqlText(firstArg);
-            
+
             // Create SQLStatementInfo even if sqlText is null to track the variable
             var sqlInfo = new SQLStatementInfo(
-                sqlText, 
-                0, 
-                0, 
-                context.Start.Line, 
-                (start, stop), 
+                sqlText,
+                0,
+                0,
+                context.Start.Line,
+                (start, stop),
                 varName ?? ""
             );
 
@@ -363,7 +359,7 @@ namespace AppRefiner.Linters
             else // Execute 
             {
                 sqlInfo.InVarsBound = true;
-                
+
                 if (!sqlInfo.HasValidSqlText)
                 {
                     AddReport(
@@ -375,7 +371,7 @@ namespace AppRefiner.Linters
                     );
                     return;
                 }
-                
+
                 // Existing Execute validation
                 var argCount = args.expression()?.Length ?? 0;
                 if (argCount == sqlInfo.BindCount)
@@ -401,7 +397,7 @@ namespace AppRefiner.Linters
             if (!sqlInfo.HasValidSqlText && args?.expression()?.Length > 0)
             {
                 var firstArg = args.expression()[0];
-                
+
                 // Check recursively if the first argument contains a concatenation operator
                 if (ContainsConcatenation(firstArg))
                 {
@@ -415,18 +411,18 @@ namespace AppRefiner.Linters
                 }
 
                 var (sqlText, start, stop) = GetSqlText(firstArg);
-                
+
                 // If we now have SQL text, update the sqlInfo
                 if (!string.IsNullOrWhiteSpace(sqlText))
                 {
                     sqlInfo.SqlText = sqlText;
-                    
+
                     // Validate arguments and update SQLStatementInfo
                     ValidateArguments(sqlText, args, sqlInfo, context, ValidationMode.Open);
                     return;
                 }
             }
-            
+
             // If we still don't have valid SQL text, check if this requires parameters
             if (!sqlInfo.HasValidSqlText && args?.expression()?.Length > 0)
             {
@@ -448,7 +444,7 @@ namespace AppRefiner.Linters
         private void ValidateFetchCall(DotAccessContext context, FunctionCallArgumentsContext args, SQLStatementInfo sqlInfo)
         {
             /* Cannot validate calls where we don't have the SQL text... */
-            if (!sqlInfo.HasValidSqlText) 
+            if (!sqlInfo.HasValidSqlText)
             {
                 AddReport(
                     12,
@@ -495,7 +491,7 @@ namespace AppRefiner.Linters
                     var singleArg = expressions[0];
 
                     TryGetVariableInfo(singleArg.GetText(), out var info);
-                    if (info != null && info.Type.StartsWith("Array", StringComparison.OrdinalIgnoreCase) || info.Type.Equals("Record",StringComparison.OrdinalIgnoreCase))
+                    if ((info != null && info.Type.StartsWith("Array", StringComparison.OrdinalIgnoreCase)) || info.Type.Equals("Record", StringComparison.OrdinalIgnoreCase))
                     {
                         // If it's an array type or a Record, we can proceed
                         return;

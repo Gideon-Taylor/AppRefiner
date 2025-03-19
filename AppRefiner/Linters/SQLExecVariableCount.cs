@@ -1,8 +1,4 @@
-﻿using Antlr4.Runtime;
-using AppRefiner.Database;
-using AppRefiner.Linters.Models;
-using AppRefiner.PeopleCode;
-using SqlParser;
+﻿using AppRefiner.Database;
 using SqlParser.Ast;
 using static AppRefiner.PeopleCode.PeopleCodeParser;
 
@@ -11,7 +7,7 @@ namespace AppRefiner.Linters
     public class SQLExecVariableCount : BaseLintRule
     {
         public override string LINTER_ID => "SQL_EXEC";
-        
+
         public SQLExecVariableCount()
         {
             Description = "Validate bind counts in SQLExec functions.";
@@ -27,7 +23,7 @@ namespace AppRefiner.Linters
             if (expr is DotAccessExprContext dotAccess)
             {
                 var leftExpr = dotAccess.expression();
-                if (leftExpr is IdentifierExprContext idExpr && 
+                if (leftExpr is IdentifierExprContext idExpr &&
                     idExpr.ident().GetText().Equals("SQL", StringComparison.OrdinalIgnoreCase))
                 {
                     if (dotAccess.children[1] is DotAccessContext dotAccessCtx)
@@ -139,7 +135,7 @@ namespace AppRefiner.Linters
                 /* Count the binds */
                 var bindCount = SQLHelper.GetBindCount(statement);
                 var totalInOutArgs = args.expression().Length - 1;
-                
+
                 if (totalInOutArgs != (outputCount + bindCount))
                 {
                     /* Report that there are an incorrect number of In/Out parameters and how many there should be */

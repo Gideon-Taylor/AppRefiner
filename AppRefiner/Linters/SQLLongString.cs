@@ -1,5 +1,4 @@
-﻿using AppRefiner.PeopleCode;
-using static AppRefiner.PeopleCode.PeopleCodeParser;
+﻿using static AppRefiner.PeopleCode.PeopleCodeParser;
 
 namespace AppRefiner.Linters
 {
@@ -7,7 +6,7 @@ namespace AppRefiner.Linters
     {
         public override string LINTER_ID => "SQL_LONG";
         private const int MaxSqlLength = 120;
-        
+
         public SQLLongString()
         {
             Description = "Reports SQL strings > 120 characters.";

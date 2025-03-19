@@ -1,9 +1,6 @@
 using SqlParser;
 using SqlParser.Ast;
 using SqlParser.Dialects;
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Text.RegularExpressions;
 
 namespace AppRefiner.Linters
@@ -27,8 +24,8 @@ namespace AppRefiner.Linters
     /// </summary>
     public static class SQLHelper
     {
-        private static readonly Regex PlaceHolderRegex = new Regex("Placeholder { Value = (:[0-9]+) }");
-        
+        private static readonly Regex PlaceHolderRegex = new("Placeholder { Value = (:[0-9]+) }");
+
         /// <summary>
         /// Parses SQL text and returns the first statement
         /// </summary>
@@ -55,13 +52,13 @@ namespace AppRefiner.Linters
         public static int GetBindCount(Statement statement)
         {
             var matches = PlaceHolderRegex.Matches(statement.ToString());
-            HashSet<string> placeHolders = new HashSet<string>();
-            
+            HashSet<string> placeHolders = new();
+
             foreach (Match match in matches)
             {
                 placeHolders.Add(match.Groups[1].Value);
             }
-            
+
             return placeHolders.Count;
         }
 
@@ -139,10 +136,7 @@ namespace AppRefiner.Linters
         /// <returns>The SQL text without quotes</returns>
         public static string ExtractSQLFromLiteral(string literalText)
         {
-            if (string.IsNullOrEmpty(literalText) || literalText.Length < 2)
-                return literalText;
-                
-            return literalText.Substring(1, literalText.Length - 2);
+            return string.IsNullOrEmpty(literalText) || literalText.Length < 2 ? literalText : literalText.Substring(1, literalText.Length - 2);
         }
     }
 }

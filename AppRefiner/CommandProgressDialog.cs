@@ -1,7 +1,4 @@
-using System;
-using System.Drawing;
 using System.Runtime.InteropServices;
-using System.Windows.Forms;
 
 namespace AppRefiner
 {
@@ -68,13 +65,13 @@ namespace AppRefiner
             this.progressBar = new ProgressBar();
             this.headerPanel.SuspendLayout();
             this.SuspendLayout();
-            
+
             // headerPanel
             this.headerPanel.BackColor = Color.FromArgb(50, 50, 60);
             this.headerPanel.Dock = DockStyle.Top;
             this.headerPanel.Height = 30;
             this.headerPanel.Controls.Add(this.headerLabel);
-            
+
             // headerLabel
             this.headerLabel.Text = "Executing Command...";
             this.headerLabel.ForeColor = Color.White;
@@ -89,7 +86,7 @@ namespace AppRefiner
             this.progressBar.Location = new Point(0, 30);
             this.progressBar.Name = "progressBar";
             this.progressBar.Size = new Size(300, 20);
-            
+
             // CommandProgressDialog
             this.ClientSize = new Size(300, 70);
             this.Controls.Add(this.progressBar);

@@ -1,7 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Text;
-
 namespace AppRefiner.Database.Models
 {
     /// <summary>
@@ -13,12 +9,12 @@ namespace AppRefiner.Database.Models
         /// Gets the HTML content
         /// </summary>
         public string Content { get; }
-        
+
         /// <summary>
         /// Gets the maximum bind number found in the HTML
         /// </summary>
         public int BindCount { get; }
-        
+
         /// <summary>
         /// Creates a new HTML definition
         /// </summary>

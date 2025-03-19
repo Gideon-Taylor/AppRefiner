@@ -1,8 +1,6 @@
-using System;
-using System.Collections.Generic;
+using Oracle.ManagedDataAccess.Client;
 using System.Data;
 using System.Text.RegularExpressions;
-using Oracle.ManagedDataAccess.Client;
 
 namespace AppRefiner.Database
 {
@@ -12,27 +10,27 @@ namespace AppRefiner.Database
     public class OracleDbConnection : IDbConnection
     {
         private OracleConnection _connection;
-        
+
         /// <summary>
         /// Gets or sets the connection string
         /// </summary>
-        public string ConnectionString 
-        { 
+        public string ConnectionString
+        {
             get => _connection.ConnectionString;
             set => _connection.ConnectionString = value;
         }
-        
+
         /// <summary>
         /// Gets the current state of the connection
         /// </summary>
         public ConnectionState State => _connection.State;
-        
+
         /// <summary>
         /// Gets the name of the database server
         /// </summary>
-        public string ServerName 
-        { 
-            get 
+        public string ServerName
+        {
+            get
             {
                 try
                 {
@@ -45,11 +43,11 @@ namespace AppRefiner.Database
                 {
                     // Ignore errors when getting server version
                 }
-                
+
                 return "Oracle";
             }
         }
-        
+
         /// <summary>
         /// Creates a new Oracle connection
         /// </summary>
@@ -58,7 +56,7 @@ namespace AppRefiner.Database
         {
             _connection = new OracleConnection(connectionString);
         }
-        
+
         /// <summary>
         /// Opens the database connection
         /// </summary>
@@ -66,7 +64,7 @@ namespace AppRefiner.Database
         {
             _connection.Open();
         }
-        
+
         /// <summary>
         /// Closes the database connection
         /// </summary>
@@ -74,7 +72,7 @@ namespace AppRefiner.Database
         {
             _connection.Close();
         }
-        
+
         /// <summary>
         /// Creates a command associated with this connection
         /// </summary>
@@ -82,7 +80,7 @@ namespace AppRefiner.Database
         {
             return _connection.CreateCommand();
         }
-        
+
         /// <summary>
         /// Executes a query and returns the results as a DataTable
         /// </summary>
@@ -91,28 +89,28 @@ namespace AppRefiner.Database
             using (var command = _connection.CreateCommand())
             {
                 command.CommandText = sql;
-                
+
                 if (parameters != null)
                 {
                     foreach (var param in parameters)
                     {
-                        OracleParameter oracleParam = command.CreateParameter() as OracleParameter;
+                        OracleParameter oracleParam = command.CreateParameter();
                         oracleParam.ParameterName = param.Key;
                         oracleParam.Value = param.Value ?? DBNull.Value;
                         command.Parameters.Add(oracleParam);
                     }
                 }
-                
-                DataTable dataTable = new DataTable();
-                using (var adapter = new OracleDataAdapter(command as OracleCommand))
+
+                DataTable dataTable = new();
+                using (var adapter = new OracleDataAdapter(command))
                 {
                     adapter.Fill(dataTable);
                 }
-                
+
                 return dataTable;
             }
         }
-        
+
         /// <summary>
         /// Executes a non-query command and returns the number of rows affected
         /// </summary>
@@ -121,22 +119,22 @@ namespace AppRefiner.Database
             using (var command = _connection.CreateCommand())
             {
                 command.CommandText = sql;
-                
+
                 if (parameters != null)
                 {
                     foreach (var param in parameters)
                     {
-                        OracleParameter oracleParam = command.CreateParameter() as OracleParameter;
+                        OracleParameter oracleParam = command.CreateParameter();
                         oracleParam.ParameterName = param.Key;
                         oracleParam.Value = param.Value ?? DBNull.Value;
                         command.Parameters.Add(oracleParam);
                     }
                 }
-                
+
                 return command.ExecuteNonQuery();
             }
         }
-        
+
         /// <summary>
         /// Disposes the connection
         /// </summary>
@@ -151,7 +149,7 @@ namespace AppRefiner.Database
         /// <returns>A list of TNS names</returns>
         public static List<string> GetAllTnsNames()
         {
-            List<string> tnsNames = new List<string>();
+            List<string> tnsNames = new();
             string? tnsNamesPath = GetTnsNamesPath();
 
             if (string.IsNullOrEmpty(tnsNamesPath) || !File.Exists(tnsNamesPath))
@@ -164,7 +162,7 @@ namespace AppRefiner.Database
                 string content = File.ReadAllText(tnsNamesPath);
 
                 // Regular expression to find TNS entries
-                Regex regex = new Regex(@"^\s*([a-zA-Z0-9_\-]+)\s*=", RegexOptions.Multiline);
+                Regex regex = new(@"^\s*([a-zA-Z0-9_\-]+)\s*=", RegexOptions.Multiline);
                 MatchCollection matches = regex.Matches(content);
 
                 foreach (Match match in matches)

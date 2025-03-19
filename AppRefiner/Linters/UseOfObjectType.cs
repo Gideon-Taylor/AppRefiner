@@ -7,7 +7,7 @@ namespace AppRefiner.Linters
     public class UseOfObjectType : ScopedLintRule<VariableInfo>
     {
         public override string LINTER_ID => "OBJECT_TYPE";
-        
+
         public UseOfObjectType()
         {
             Description = "Check for variables declared as 'object' that are assigned specific types.";

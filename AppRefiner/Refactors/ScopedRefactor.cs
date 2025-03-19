@@ -1,6 +1,4 @@
-using Antlr4.Runtime;
 using AppRefiner.Linters.Models;
-using System.Collections.Generic;
 using static AppRefiner.PeopleCode.PeopleCodeParser;
 
 namespace AppRefiner.Refactors
@@ -225,8 +223,8 @@ namespace AppRefiner.Refactors
         {
             if (typeContext is ArrayTypeContext arrayType)
             {
-                var baseType = arrayType.typeT() != null 
-                    ? GetTypeFromContext(arrayType.typeT()) 
+                var baseType = arrayType.typeT() != null
+                    ? GetTypeFromContext(arrayType.typeT())
                     : "Any";
                 return $"Array of {baseType}";
             }

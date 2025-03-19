@@ -1,12 +1,7 @@
-﻿using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Text;
+﻿using AppRefiner.Database.Models;
 using System.Diagnostics;
 using System.Numerics;
-using Oracle.ManagedDataAccess.Client;
-using AppRefiner.Database.Models;
+using System.Text;
 //Note: This code taken and adapted from Pivet (https://github.com/tslater2/Pivet) by Tim Slater
 namespace AppRefiner
 {
@@ -51,7 +46,7 @@ namespace AppRefiner
         bool isCompOrGblDefn = false;
         int unMatchedParens;
         MemoryStream ms;
-        Stack<BooleanFrame> booleanFrames = new Stack<BooleanFrame>();
+        Stack<BooleanFrame> booleanFrames = new();
 
         BooleanFrame currentBoolFrame
         {
@@ -61,7 +56,7 @@ namespace AppRefiner
             }
         }
 
-        StringBuilder OutputText = new StringBuilder();
+        StringBuilder OutputText = new();
         List<NameReference> References;
         private static string[] refKeywords = new string[] {"Component","Panel","RecName", "Scroll", "MenuName", "BarName", "ItemName", "CompIntfc",
                 "Image", "Interlink", "StyleSheet", "FileLayout", "Page", "PanelGroup", "Message", "BusProcess", "BusEvent", "BusActivity",
@@ -86,7 +81,7 @@ namespace AppRefiner
 
         private string ReadPureString()
         {
-            MemoryStream bytesRead = new MemoryStream();
+            MemoryStream bytesRead = new();
             byte[] currentChar = new byte[2];
 
             ms.Read(currentChar, 0, 2);
@@ -151,7 +146,7 @@ namespace AppRefiner
                 {
                     number = "0" + number;
                 }
-                number = number.Insert(number.Length - (decimalPlace), ".");
+                number = number.Insert(number.Length - decimalPlace, ".");
             }
             if (number.StartsWith("."))
             {
@@ -171,7 +166,7 @@ namespace AppRefiner
             var index1 = ms.ReadByte();
             var index2 = ms.ReadByte();
 
-            var index = index2 * 256 + index1;
+            var index = (index2 * 256) + index1;
 
             var reference = References.Where(p => p.NameNum == (index + 1)).First();
 
@@ -195,13 +190,9 @@ namespace AppRefiner
             {
                 return ReferenceName;
             }
-            else if (nextByte == 72)
-            {
-                return $"{RecordName}.\"{ReferenceName.Trim()}\"";
-            }
             else
             {
-                return "";
+                return nextByte == 72 ? $"{RecordName}.\"{ReferenceName.Trim()}\"" : "";
             }
 
         }
@@ -280,7 +271,7 @@ namespace AppRefiner
             }
         }
 
-        
+
         public string ParsePPC(byte[] ppcBytes, List<NameReference> refs)
         {
             References = refs;
@@ -872,7 +863,7 @@ namespace AppRefiner
                         {
                             Write("\r\n");
                         }*/
-                        if (isInsideIf && (lastByte != 24 && lastByte != 30) || (isAppClass && afterClassDefn == false && unMatchedParens > 0))
+                        if (isInsideIf && lastByte != 24 && lastByte != 30 || (isAppClass && afterClassDefn == false && unMatchedParens > 0))
                         {
                             /* do nothing */
                         }

@@ -1,17 +1,12 @@
 using Antlr4.Runtime;
 using Antlr4.Runtime.Misc;
-using Antlr4.Runtime.Tree;
-using AppRefiner.PeopleCode;
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using static AppRefiner.PeopleCode.PeopleCodeParser;
 
 namespace AppRefiner.Stylers
 {
     public class MeaninglessVariableNameStyler : BaseStyler
     {
-        private HashSet<string> meaninglessNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        private HashSet<string> meaninglessNames = new(StringComparer.OrdinalIgnoreCase)
         {
             "a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m", "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z",
             "aa", "bb", "cc", "dd", "ee", "ff", "gg", "hh", "ii", "jj", "kk", "ll", "mm", "nn", "oo", "pp", "qq", "rr", "ss", "tt", "uu", "vv", "ww", "xx", "yy", "zz",
@@ -79,7 +74,7 @@ namespace AppRefiner.Stylers
             if (meaninglessNames.Contains(cleanName))
             {
                 // Add a report for this meaningless variable name
-                CodeHighlight highlight = new CodeHighlight()
+                CodeHighlight highlight = new()
                 {
                     Start = token.StartIndex,
                     Length = token.StopIndex - token.StartIndex + 1,

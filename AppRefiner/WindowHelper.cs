@@ -1,10 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-
-namespace AppRefiner
+﻿namespace AppRefiner
 {
     using System;
     using System.Runtime.InteropServices;
@@ -14,7 +8,7 @@ namespace AppRefiner
     {
         // Delegate for EnumWindows callback function
         private delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
-        
+
         // Retrieves the handle to the foreground window (i.e. the currently focused window).
         [DllImport("user32.dll")]
         private static extern IntPtr GetForegroundWindow();
@@ -52,21 +46,22 @@ namespace AppRefiner
             // Import the EnumWindows function from user32.dll
             [DllImport("user32.dll")]
             static extern bool EnumWindows(EnumWindowsProc enumProc, IntPtr lParam);
-            
+
             // Import the GetWindowThreadProcessId function from user32.dll
             [DllImport("user32.dll", SetLastError = true)]
             static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);
-            
+
             IntPtr foundWindow = IntPtr.Zero;
             string windowCaption = string.Empty;
             // Enumerate all top-level windows
-            EnumWindows((hWnd, lParam) => {
+            EnumWindows((hWnd, lParam) =>
+            {
                 // Check if this window belongs to our process
                 GetWindowThreadProcessId(hWnd, out uint winProcessId);
                 if (winProcessId == processId)
                 {
                     // Check if window is visible and has a title
-                    StringBuilder caption = new StringBuilder(256);
+                    StringBuilder caption = new(256);
                     int length = GetWindowText(hWnd, caption, caption.Capacity);
                     windowCaption = caption.ToString();
                     if (length > 0 && windowCaption.StartsWith("Application Designer"))
@@ -77,7 +72,7 @@ namespace AppRefiner
                 }
                 return true; // Continue enumeration
             }, IntPtr.Zero);
-            
+
             return windowCaption;
         }
 
@@ -104,13 +99,9 @@ namespace AppRefiner
             }
 
             // Prepare a buffer to hold the window caption.
-            StringBuilder caption = new StringBuilder(256);
+            StringBuilder caption = new(256);
             int length = GetWindowText(grandparent, caption, caption.Capacity);
-            if (length > 0)
-            {
-                return caption.ToString();
-            }
-            return string.Empty;
+            return length > 0 ? caption.ToString() : string.Empty;
         }
     }
 

@@ -1,6 +1,3 @@
-using System;
-using System.Collections.Generic;
-
 namespace AppRefiner.Database.Models
 {
     /// <summary>
@@ -12,17 +9,17 @@ namespace AppRefiner.Database.Models
         /// Gets the object type code
         /// </summary>
         public int ObjectType { get; }
-        
+
         /// <summary>
         /// Gets the object type code
         /// </summary>
         public int[] ObjectIDs { get; }
-        
+
         /// <summary>
         /// Gets the object values
         /// </summary>
         public string[] ObjectValues { get; }
-        
+
         /// <summary>
         /// Creates a new project item with the specified object type and ID/value pairs
         /// </summary>
@@ -44,37 +41,37 @@ namespace AppRefiner.Database.Models
         {
             ObjectType = objectType;
             ObjectIDs = new int[4] { objectId1, objectId2, objectId3, objectId4 };
-            ObjectValues = new string[4] 
-            { 
+            ObjectValues = new string[4]
+            {
                 objectValue1 ?? string.Empty,
                 objectValue2 ?? string.Empty,
                 objectValue3 ?? string.Empty,
                 objectValue4 ?? string.Empty
             };
         }
-        
+
         /// <summary>
         /// Builds a path from the object values
         /// </summary>
         /// <returns>A colon-separated path of non-empty object values</returns>
         public string BuildPath()
         {
-            List<string> pathParts = new List<string>();
-            
+            List<string> pathParts = new();
+
             for (int i = 0; i < ObjectValues.Length; i++)
             {
                 if (!string.IsNullOrEmpty(ObjectValues[i]?.Trim()))
                     pathParts.Add(ObjectValues[i]);
             }
-            
+
             return string.Join(":", pathParts);
         }
-        
+
         /// <summary>
         /// Converts project item object IDs/values to program object IDs/values (7 pairs)
         /// </summary>
         /// <returns>Dictionary mapping column names to values for PSPCMPROG query</returns>
-        public List<Tuple<int,string>> ToProgramFields()
+        public List<Tuple<int, string>> ToProgramFields()
         {
             var result = new List<Tuple<int, string>>(7); // Initialize with capacity for 7 items
             var objectType = ObjectType;
@@ -142,14 +139,11 @@ namespace AppRefiner.Database.Models
                 {
                     result.Add(new Tuple<int, string>(0, " "));
                 }
-
-                int i = 3;
             }
             else if (ObjectIDs[0] == 10 && ObjectValues[3].Length > 18)
             {
                 if (ObjectIDs[1] == 39)
                 {
-                    int i = 3;
                 }
                 // For objectType 10 with long ObjectValues[3]
                 // Add the next 2 keys as they are

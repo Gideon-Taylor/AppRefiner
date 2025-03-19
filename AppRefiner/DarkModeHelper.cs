@@ -1,14 +1,9 @@
-﻿using System;
-using System.Runtime.InteropServices;
-using System.Text;
-using System.Drawing;
-
-namespace AppRefiner
+﻿namespace AppRefiner
 {
     using System;
+    using System.Drawing;
     using System.Runtime.InteropServices;
     using System.Text;
-    using System.Drawing;
 
     public static class DarkModeHelper
     {
@@ -85,7 +80,7 @@ namespace AppRefiner
         private static void ProcessWindowAndChildren(IntPtr hWnd)
         {
             // Retrieve the window's class name.
-            StringBuilder className = new StringBuilder(256);
+            StringBuilder className = new(256);
             if (GetClassName(hWnd, className, className.Capacity) != 0)
             {
                 string clsName = className.ToString();

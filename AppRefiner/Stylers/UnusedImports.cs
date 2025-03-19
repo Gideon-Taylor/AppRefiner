@@ -1,11 +1,4 @@
-﻿using Antlr4.Runtime.Tree;
-using AppRefiner.Linters;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using static AppRefiner.PeopleCode.PeopleCodeParser;
+﻿using static AppRefiner.PeopleCode.PeopleCodeParser;
 
 namespace AppRefiner.Stylers
 {
@@ -46,14 +39,7 @@ namespace AppRefiner.Stylers
             string packageName = "";
 
             var appPackageAll = context.appPackageAll();
-            if (appPackageAll != null)
-            {
-                packageName = appPackageAll.GetText().TrimEnd('*');
-            }
-            else
-            {
-                packageName = context.appClassPath().GetText();
-            }
+            packageName = appPackageAll != null ? appPackageAll.GetText().TrimEnd('*') : context.appClassPath().GetText();
 
             var importInfo = new ImportInfo(packageName, context.Start.Line, context.Start.StartIndex, context.Stop.StopIndex);
 
@@ -97,7 +83,7 @@ namespace AppRefiner.Stylers
                 {
                     string suffix = import.Value.Name.EndsWith(":") ? "*" : "";
 
-                    CodeHighlight highlight = new CodeHighlight()
+                    CodeHighlight highlight = new()
                     {
                         Start = import.Value.StartIndex,
                         Length = import.Value.StopIndex - import.Value.StartIndex + 1,

@@ -1,13 +1,6 @@
 ﻿using Antlr4.Runtime;
 using Antlr4.Runtime.Misc;
-using AppRefiner.Linters;
 using AppRefiner.PeopleCode;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Text.RegularExpressions;
-using System.Threading.Tasks;
 
 namespace AppRefiner.Refactors
 {
@@ -35,7 +28,7 @@ namespace AppRefiner.Refactors
             this.line = line;
             this.type = type;
         }
-       
+
         public override void EnterMethod([NotNull] PeopleCodeParser.MethodContext context)
         {
             ProcessScopeEntry(context, ScopeType.METHOD);
@@ -58,7 +51,7 @@ namespace AppRefiner.Refactors
 
         public override void EnterGetter([NotNull] PeopleCodeParser.GetterContext context)
         {
-            ProcessScopeEntry(context,  ScopeType.FUNCTION);
+            ProcessScopeEntry(context, ScopeType.FUNCTION);
         }
 
         public override void ExitGetter([NotNull] PeopleCodeParser.GetterContext context)
@@ -68,7 +61,7 @@ namespace AppRefiner.Refactors
 
         public override void EnterSetter([NotNull] PeopleCodeParser.SetterContext context)
         {
-            ProcessScopeEntry(context,  ScopeType.FUNCTION);
+            ProcessScopeEntry(context, ScopeType.FUNCTION);
         }
 
         public override void ExitSetter([NotNull] PeopleCodeParser.SetterContext context)
@@ -78,12 +71,12 @@ namespace AppRefiner.Refactors
 
         public override void EnterImportsBlock([NotNull] PeopleCodeParser.ImportsBlockContext context)
         {
-            ProcessScopeEntry(context,  ScopeType.GLOBAL);
+            ProcessScopeEntry(context, ScopeType.GLOBAL);
         }
 
         public override void EnterIfStatement([NotNull] PeopleCodeParser.IfStatementContext context)
         {
-            ProcessScopeEntry(context,  ScopeType.BLOCK);
+            ProcessScopeEntry(context, ScopeType.BLOCK);
         }
 
         public override void ExitIfStatement([NotNull] PeopleCodeParser.IfStatementContext context)
@@ -93,7 +86,7 @@ namespace AppRefiner.Refactors
 
         public override void EnterForStatement([NotNull] PeopleCodeParser.ForStatementContext context)
         {
-            ProcessScopeEntry(context,  ScopeType.BLOCK);
+            ProcessScopeEntry(context, ScopeType.BLOCK);
         }
 
         public override void ExitForStatement([NotNull] PeopleCodeParser.ForStatementContext context)
@@ -103,7 +96,7 @@ namespace AppRefiner.Refactors
 
         public override void EnterWhileStatement([NotNull] PeopleCodeParser.WhileStatementContext context)
         {
-            ProcessScopeEntry(context,  ScopeType.BLOCK);
+            ProcessScopeEntry(context, ScopeType.BLOCK);
         }
 
         public override void ExitWhileStatement([NotNull] PeopleCodeParser.WhileStatementContext context)
@@ -113,7 +106,7 @@ namespace AppRefiner.Refactors
 
         public override void EnterRepeatStatement([NotNull] PeopleCodeParser.RepeatStatementContext context)
         {
-            ProcessScopeEntry(context,  ScopeType.BLOCK);
+            ProcessScopeEntry(context, ScopeType.BLOCK);
         }
 
         public override void ExitRepeatStatement([NotNull] PeopleCodeParser.RepeatStatementContext context)
@@ -123,7 +116,7 @@ namespace AppRefiner.Refactors
 
         public override void EnterEvaluateStatement([NotNull] PeopleCodeParser.EvaluateStatementContext context)
         {
-            ProcessScopeEntry(context,  ScopeType.BLOCK);
+            ProcessScopeEntry(context, ScopeType.BLOCK);
         }
 
         public override void ExitEvaluateStatement([NotNull] PeopleCodeParser.EvaluateStatementContext context)
@@ -133,7 +126,7 @@ namespace AppRefiner.Refactors
 
         public override void EnterTryCatchBlock([NotNull] PeopleCodeParser.TryCatchBlockContext context)
         {
-            ProcessScopeEntry(context,  ScopeType.BLOCK);
+            ProcessScopeEntry(context, ScopeType.BLOCK);
         }
 
         public override void ExitTryCatchBlock([NotNull] PeopleCodeParser.TryCatchBlockContext context)
@@ -145,7 +138,7 @@ namespace AppRefiner.Refactors
         {
             base.ExitProgram(context);
 
-            GenerateChange();    
+            GenerateChange();
         }
 
         private void GenerateChange()
@@ -216,8 +209,8 @@ namespace AppRefiner.Refactors
 
                 if (contextToInsertBefore != null)
                 {
-                    var insertPos = ScintillaManager.GetLineStartIndex(editor, contextToInsertBefore.Start.Line - 1 > 0 ? contextToInsertBefore.Start.Line -1 : 1);
-                    InsertText (insertPos, newSuppressLine, "Suppress report");
+                    var insertPos = ScintillaManager.GetLineStartIndex(editor, contextToInsertBefore.Start.Line - 1 > 0 ? contextToInsertBefore.Start.Line - 1 : 1);
+                    InsertText(insertPos, newSuppressLine, "Suppress report");
                     changeGenerated = true;
                 }
                 else
@@ -225,7 +218,8 @@ namespace AppRefiner.Refactors
                     SetFailure("Unable to find line to insert suppress report.");
                 }
 
-            } else
+            }
+            else
             {
                 SetFailure("No report found at cursor position. Please place cursor on a line with a report.");
             }

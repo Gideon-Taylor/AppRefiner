@@ -1,7 +1,3 @@
-using Antlr4.Runtime;
-using AppRefiner.Linters.Models;
-using System;
-using System.Text.RegularExpressions;
 using static AppRefiner.PeopleCode.PeopleCodeParser;
 
 namespace AppRefiner.Linters

@@ -1,8 +1,5 @@
-using Antlr4.Runtime;
 using Antlr4.Runtime.Misc;
 using AppRefiner.Linters.Models;
-using System.Collections.Generic;
-using System.Linq;
 using static AppRefiner.PeopleCode.PeopleCodeParser;
 
 namespace AppRefiner.Refactors
@@ -23,13 +20,13 @@ namespace AppRefiner.Refactors
 
             this.newVariableName = newVariableName;
         }
-        
+
         // Called when a variable is declared
         protected override void OnVariableDeclared(VariableInfo varInfo)
         {
             // Add this declaration to our tracking
             AddOccurrence(varInfo.Name, varInfo.Span);
-            
+
             // Check if cursor is within this variable declaration
             if (varInfo.Span.Item1 <= cursorPosition && cursorPosition <= varInfo.Span.Item2 + 1)
             {
@@ -37,17 +34,17 @@ namespace AppRefiner.Refactors
                 targetScope = GetCurrentScope();
             }
         }
-        
+
         // Override the base method for tracking variable usage
         public override void EnterIdentUserVariable(IdentUserVariableContext context)
         {
             base.EnterIdentUserVariable(context);
-            
+
             string varName = context.GetText();
             var span = (context.Start.StartIndex, context.Stop.StopIndex);
-            
+
             AddOccurrence(varName, span, true);
-            
+
             // Check if cursor is within this variable reference
             if (span.Item1 <= cursorPosition && cursorPosition <= span.Item2 + 1)
             {
@@ -55,11 +52,11 @@ namespace AppRefiner.Refactors
                 targetScope = GetCurrentScope();
             }
         }
-        
+
         // Helper method to add an occurrence to the appropriate scope
         private void AddOccurrence(string varName, (int, int) span, bool mustExist = false)
         {
-            
+
             // If not found, add to current scope
             var currentScope = GetCurrentScope();
 
@@ -107,13 +104,13 @@ namespace AppRefiner.Refactors
 
             // Sort occurrences in reverse order to avoid position shifting
             allOccurrences.Sort((a, b) => b.Item1.CompareTo(a.Item1));
-            
+
             // Generate replacement changes for each occurrence
             foreach (var (start, end) in allOccurrences)
             {
                 ReplaceText(
-                    start, 
-                    end, 
+                    start,
+                    end,
                     newVariableName,
                     $"Rename variable '{variableToRename}' to '{newVariableName}'"
                 );

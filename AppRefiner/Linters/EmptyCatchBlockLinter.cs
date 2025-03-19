@@ -1,4 +1,3 @@
-using AppRefiner.PeopleCode;
 using static AppRefiner.PeopleCode.PeopleCodeParser;
 
 namespace AppRefiner.Linters
@@ -9,7 +8,7 @@ namespace AppRefiner.Linters
     public class EmptyCatchBlockLinter : BaseLintRule
     {
         public override string LINTER_ID => "EMPTY_CATCH";
-        
+
         public EmptyCatchBlockLinter()
         {
             Description = "Detects empty catch blocks that silently swallow exceptions";
@@ -21,11 +20,11 @@ namespace AppRefiner.Linters
         {
             // Check if there's a statement block
             var statementBlock = context.statementBlock();
-            
+
             // If there's no statement block or it's empty
-            if (statementBlock == null || 
-                statementBlock.statements() == null || 
-                statementBlock.statements().statement() == null || 
+            if (statementBlock == null ||
+                statementBlock.statements() == null ||
+                statementBlock.statements().statement() == null ||
                 statementBlock.statements().statement().Length == 0)
             {
                 AddReport(

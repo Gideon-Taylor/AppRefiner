@@ -1,7 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Text;
-
 namespace AppRefiner.Database.Models
 {
     /// <summary>
@@ -13,17 +9,17 @@ namespace AppRefiner.Database.Models
         /// Gets the name number
         /// </summary>
         public int NameNum { get; }
-        
+
         /// <summary>
         /// Gets the record name
         /// </summary>
         public string RecName { get; }
-        
+
         /// <summary>
         /// Gets the reference name
         /// </summary>
         public string RefName { get; }
-        
+
         /// <summary>
         /// Creates a new name reference with the specified values
         /// </summary>
@@ -37,7 +33,7 @@ namespace AppRefiner.Database.Models
             RefName = refName ?? string.Empty;
         }
     }
-    
+
     public enum PeopleCodeType
     {
         ApplicationEngine = 66,
@@ -62,17 +58,17 @@ namespace AppRefiner.Database.Models
         /// Gets the object IDs
         /// </summary>
         public int[] ObjectIDs { get; }
-        
+
         /// <summary>
         /// Gets the object values
         /// </summary>
         public string[] ObjectValues { get; }
-        
+
         /// <summary>
         /// Gets the program text as a byte array
         /// </summary>
         public byte[] ProgramText { get; private set; }
-        
+
         /// <summary>
         /// Gets the list of name references
         /// </summary>
@@ -110,12 +106,12 @@ namespace AppRefiner.Database.Models
             byte[] programText,
             List<NameReference> nameReferences = null)
         {
-            ObjectIDs = new int[7] { 
-                objectId1, objectId2, objectId3, objectId4, 
-                objectId5, objectId6, objectId7 
+            ObjectIDs = new int[7] {
+                objectId1, objectId2, objectId3, objectId4,
+                objectId5, objectId6, objectId7
             };
-            
-            ObjectValues = new string[7] { 
+
+            ObjectValues = new string[7] {
                 objectValue1 ?? string.Empty,
                 objectValue2 ?? string.Empty,
                 objectValue3 ?? string.Empty,
@@ -124,14 +120,14 @@ namespace AppRefiner.Database.Models
                 objectValue6 ?? string.Empty,
                 objectValue7 ?? string.Empty
             };
-            
+
             ProgramText = programText ?? Array.Empty<byte>();
             NameReferences = nameReferences ?? new List<NameReference>();
 
             SetPeopleCodeType();
 
         }
-        
+
         /// <summary>
         /// Creates a new PeopleCode item with arrays of object IDs and values
         /// </summary>
@@ -140,30 +136,30 @@ namespace AppRefiner.Database.Models
         /// <param name="programText">The program text as a byte array</param>
         /// <param name="nameReferences">The list of name references</param>
         public PeopleCodeItem(
-            int[] objectIDs, 
-            string[] objectValues, 
+            int[] objectIDs,
+            string[] objectValues,
             byte[] programText,
             List<NameReference> nameReferences = null)
         {
             if (objectIDs == null || objectIDs.Length != 7)
                 throw new ArgumentException("ObjectIDs array must contain exactly 7 elements", nameof(objectIDs));
-                
+
             if (objectValues == null || objectValues.Length != 7)
                 throw new ArgumentException("ObjectValues array must contain exactly 7 elements", nameof(objectValues));
-                
+
             ObjectIDs = (int[])objectIDs.Clone();
-            
+
             ObjectValues = new string[7];
             for (int i = 0; i < 7; i++)
             {
                 ObjectValues[i] = objectValues[i] ?? string.Empty;
             }
-            
+
             ProgramText = programText ?? Array.Empty<byte>();
             NameReferences = nameReferences ?? new List<NameReference>();
             SetPeopleCodeType();
         }
-        
+
         public void SetPeopleCodeType()
         {
             if (ObjectIDs[0] == 10)
@@ -178,10 +174,7 @@ namespace AppRefiner.Database.Models
             }
             else if (ObjectIDs[0] == 60)
             {
-                if (ObjectIDs[1] == 12)
-                    Type = PeopleCodeType.Message;
-                else
-                    Type = PeopleCodeType.Subscription;
+                Type = ObjectIDs[1] == 12 ? PeopleCodeType.Message : PeopleCodeType.Subscription;
                 return;
             }
 
@@ -196,7 +189,7 @@ namespace AppRefiner.Database.Models
         {
             ProgramText = programText ?? Array.Empty<byte>();
         }
-        
+
         /// <summary>
         /// Sets the name references after creation
         /// </summary>
@@ -205,7 +198,7 @@ namespace AppRefiner.Database.Models
         {
             NameReferences = nameReferences ?? new List<NameReference>();
         }
-        
+
         /// <summary>
         /// Gets the program text as a string using the specified encoding
         /// </summary>
@@ -216,17 +209,17 @@ namespace AppRefiner.Database.Models
             if (ProgramText == null || ProgramText.Length == 0)
                 return string.Empty;
 
-            PeopleCodeDecoder decoder = new PeopleCodeDecoder();
+            PeopleCodeDecoder decoder = new();
             return decoder.ParsePPC(ProgramText, NameReferences);
         }
-        
+
 
         /// Builds a path from the object values
         /// </summary>
         /// <returns>A colon-separated path of non-empty object values</returns>
         public string BuildPath()
         {
-            List<string> pathParts = new List<string>();
+            List<string> pathParts = new();
 
             switch (Type)
             {
@@ -259,7 +252,7 @@ namespace AppRefiner.Database.Models
                     break;
                 case PeopleCodeType.Message:
                     pathParts.Add(ObjectValues[0]);
-                    pathParts.Add($"{ObjectValues[1]}{(ObjectIDs[3] != 0? $".{ObjectValues[3]}" : "")}");
+                    pathParts.Add($"{ObjectValues[1]}{(ObjectIDs[3] != 0 ? $".{ObjectValues[3]}" : "")}");
                     break;
                 case PeopleCodeType.Page:
                     pathParts.Add($"{ObjectValues[0]}.{ObjectValues[1]}");
@@ -278,7 +271,7 @@ namespace AppRefiner.Database.Models
 
             return string.Join(" ", pathParts);
         }
-        
+
         /// <summary>
         /// Creates a ProjectItem from this PeopleCode item
         /// </summary>
@@ -287,7 +280,7 @@ namespace AppRefiner.Database.Models
         {
             // Derive object type based on object IDs or other logic
             int objectType = DeriveObjectType();
-            
+
             return new ProjectItem(
                 objectType,
                 ObjectIDs[0], ObjectValues[0],
@@ -296,7 +289,7 @@ namespace AppRefiner.Database.Models
                 ObjectIDs[3], ObjectValues[3]
             );
         }
-        
+
         /// <summary>
         /// Derives the object type based on this PeopleCode item's characteristics
         /// </summary>
@@ -306,7 +299,7 @@ namespace AppRefiner.Database.Models
             // This is a placeholder method - actual implementation would need
             // to determine the appropriate object type based on the ObjectIDs/ObjectValues
             // and potentially other factors
-            
+
             // For now, just return a default value
             return 8; // A default PeopleCode object type
         }

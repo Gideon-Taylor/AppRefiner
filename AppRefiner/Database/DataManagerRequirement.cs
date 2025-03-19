@@ -1,5 +1,3 @@
-using System;
-
 namespace AppRefiner.Database
 {
     /// <summary>
@@ -11,12 +9,12 @@ namespace AppRefiner.Database
         /// The rule requires a database connection to function
         /// </summary>
         Required,
-        
+
         /// <summary>
         /// The rule can optionally use a database connection if available
         /// </summary>
         Optional,
-        
+
         /// <summary>
         /// The rule does not require a database connection
         /// </summary>

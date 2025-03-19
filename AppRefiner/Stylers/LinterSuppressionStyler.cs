@@ -1,15 +1,12 @@
-using Antlr4.Runtime;
 using Antlr4.Runtime.Misc;
 using AppRefiner.PeopleCode;
-using System;
-using System.Collections.Generic;
 using System.Text.RegularExpressions;
 
 namespace AppRefiner.Stylers
 {
     public class LinterSuppressionStyler : BaseStyler
     {
-        private readonly Regex suppressionPattern = new Regex(@"#AppRefiner\s+suppress\s+\((.*?)\)", RegexOptions.Compiled);
+        private readonly Regex suppressionPattern = new(@"#AppRefiner\s+suppress\s+\((.*?)\)", RegexOptions.Compiled);
 
         public LinterSuppressionStyler()
         {
@@ -36,7 +33,7 @@ namespace AppRefiner.Stylers
             foreach (var comment in Comments)
             {
                 string text = comment.Text;
-                
+
                 // Check if this is a block comment
                 if (text.StartsWith("/*") && text.EndsWith("*/"))
                 {

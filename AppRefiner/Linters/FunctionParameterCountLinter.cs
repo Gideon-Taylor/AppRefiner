@@ -1,4 +1,3 @@
-using AppRefiner.PeopleCode;
 using static AppRefiner.PeopleCode.PeopleCodeParser;
 
 namespace AppRefiner.Linters
@@ -11,7 +10,7 @@ namespace AppRefiner.Linters
         public override string LINTER_ID => "FUNC_PARAM_COUNT";
         private const int MaxMethodParameters = 5;
         private const int MaxFunctionParameters = 5;
-        
+
         public FunctionParameterCountLinter()
         {
             Description = "Detects functions with too many parameters";
@@ -24,9 +23,9 @@ namespace AppRefiner.Linters
             var args = context.methodArguments();
             if (args == null)
                 return;
-                
+
             var paramCount = args.methodArgument().Length;
-            
+
             if (paramCount > MaxMethodParameters)
             {
                 AddReport(
@@ -38,15 +37,15 @@ namespace AppRefiner.Linters
                 );
             }
         }
-        
+
         public override void EnterFunctionDefinition(FunctionDefinitionContext context)
         {
             var args = context.functionArguments();
             if (args == null)
                 return;
-                
+
             var paramCount = args.functionArgument().Length;
-            
+
             if (paramCount > MaxFunctionParameters)
             {
                 AddReport(

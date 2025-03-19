@@ -1,23 +1,19 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using AppRefiner.Database;
+using AppRefiner.Linters;
+using SQL.Formatter;
+using SQL.Formatter.Core;
+using SQL.Formatter.Language;
 using System.Diagnostics;
+using System.IO.Hashing;
 using System.Runtime.InteropServices;
 using System.Text;
 
-using System.IO.Hashing;
-using SQL.Formatter.Core;
-using SQL.Formatter.Language;
-using SQL.Formatter;
-using AppRefiner.Database;
-using System.CodeDom;
-using AppRefiner.Linters;
-
 namespace AppRefiner
 {
-    public enum AnnotationStyle 
+    public enum AnnotationStyle
     {
         Gray = 0,
-        Yellow = 1, 
+        Yellow = 1,
         Red = 2
     }
 
@@ -146,7 +142,7 @@ namespace AppRefiner
         private const int SCI_SETSELBACK = 2068;
         private const int SCI_SETSELALPHA = 2478;
         private const int SCI_SETELEMENTCOLOUR = 2753;
-        
+
         // Element identifiers
         private const int SC_ELEMENT_SELECTION_BACK = 31;
         private const int SC_ELEMENT_SELECTION_TEXT = 32;
@@ -212,14 +208,14 @@ namespace AppRefiner
 
         public static void FixEditorTabs(ScintillaEditor editor, bool funkySQLTabs = false)
         {
-            editor.SendMessage(SCI_SETTABINDENTS, (IntPtr)1, (IntPtr)0);
+            editor.SendMessage(SCI_SETTABINDENTS, 1, 0);
             var width = 4;
             if (editor.Type == EditorType.PeopleCode || (editor.Type == EditorType.SQL && funkySQLTabs))
             {
                 width = 3;
             }
-            editor.SendMessage(SCI_SETTABWIDTH, (IntPtr)width, (IntPtr)0);
-            editor.SendMessage(SCI_SETBACKSPACEUNINDENTS, (IntPtr)1, (IntPtr)0);
+            editor.SendMessage(SCI_SETTABWIDTH, width, 0);
+            editor.SendMessage(SCI_SETBACKSPACEUNINDENTS, 1, 0);
         }
 
         public static void InitEditor(IntPtr hWnd)
@@ -340,7 +336,7 @@ namespace AppRefiner
         /// <param name="text">The text to set in the editor.</param>
         /// <returns>True if the text was successfully set; false otherwise.</returns>
         public static bool SetScintillaText(ScintillaEditor editor, string text)
-        {                
+        {
             // Convert the new text into a byte array using the default encoding.
             // We need to include an extra byte for the terminating null.
             byte[] textBytes = Encoding.Default.GetBytes(text ?? string.Empty);
@@ -369,7 +365,7 @@ namespace AppRefiner
             // Calculate combined buffer size: property name + null terminator + property value + null terminator.
             int combinedSize = propName.Length + 1 + propValue.Length + 1;
             byte[] combinedBuffer = new byte[combinedSize];
-            
+
             // Encode the strings as ASCII.
             Encoding ascii = Encoding.ASCII;
             byte[] nameBytes = ascii.GetBytes(propName);
@@ -422,72 +418,72 @@ namespace AppRefiner
             }
 
             // margin stuff
-            editor.SendMessage(SCI_SETMARGINTYPEN, (IntPtr)2, (IntPtr)SC_MARGIN_SYMBOL);
-            editor.SendMessage(SCI_SETMARGINWIDTHN, (IntPtr)2, (IntPtr)20);      // width in pixels
-            editor.SendMessage(SCI_SETMARGINSENSITIVEN, (IntPtr)2, (IntPtr)1);
-            editor.SendMessage(SCI_SETMARGINMASKN, (IntPtr)2, unchecked((IntPtr)SC_MASK_FOLDERS));
+            editor.SendMessage(SCI_SETMARGINTYPEN, 2, SC_MARGIN_SYMBOL);
+            editor.SendMessage(SCI_SETMARGINWIDTHN, 2, 20);      // width in pixels
+            editor.SendMessage(SCI_SETMARGINSENSITIVEN, 2, 1);
+            editor.SendMessage(SCI_SETMARGINMASKN, 2, unchecked((IntPtr)SC_MASK_FOLDERS));
             // Collapse Label Style
-            editor.SendMessage(SCI_MARKERDEFINE, (IntPtr)SC_MARKNUM_FOLDER, (IntPtr)SC_MARK_BOXPLUS);
-            editor.SendMessage(SCI_MARKERDEFINE, (IntPtr)SC_MARKNUM_FOLDEROPEN, (IntPtr)SC_MARK_BOXMINUS);
-            editor.SendMessage(SCI_MARKERDEFINE, (IntPtr)SC_MARKNUM_FOLDEREND, (IntPtr)SC_MARK_BOXPLUSCONNECTED);
-            editor.SendMessage(SCI_MARKERDEFINE, (IntPtr)SC_MARKNUM_FOLDEROPENMID, (IntPtr)SC_MARK_BOXMINUSCONNECTED);
-            editor.SendMessage(SCI_MARKERDEFINE, (IntPtr)SC_MARKNUM_FOLDERMIDTAIL, (IntPtr)SC_MARK_TCORNER);
-            editor.SendMessage(SCI_MARKERDEFINE, (IntPtr)SC_MARKNUM_FOLDERSUB, (IntPtr)SC_MARK_VLINE);
-            editor.SendMessage(SCI_MARKERDEFINE, (IntPtr)SC_MARKNUM_FOLDERTAIL, (IntPtr)SC_MARK_LCORNER);
+            editor.SendMessage(SCI_MARKERDEFINE, SC_MARKNUM_FOLDER, SC_MARK_BOXPLUS);
+            editor.SendMessage(SCI_MARKERDEFINE, SC_MARKNUM_FOLDEROPEN, SC_MARK_BOXMINUS);
+            editor.SendMessage(SCI_MARKERDEFINE, SC_MARKNUM_FOLDEREND, SC_MARK_BOXPLUSCONNECTED);
+            editor.SendMessage(SCI_MARKERDEFINE, SC_MARKNUM_FOLDEROPENMID, SC_MARK_BOXMINUSCONNECTED);
+            editor.SendMessage(SCI_MARKERDEFINE, SC_MARKNUM_FOLDERMIDTAIL, SC_MARK_TCORNER);
+            editor.SendMessage(SCI_MARKERDEFINE, SC_MARKNUM_FOLDERSUB, SC_MARK_VLINE);
+            editor.SendMessage(SCI_MARKERDEFINE, SC_MARKNUM_FOLDERTAIL, SC_MARK_LCORNER);
 
             // Collapse Label Color
-            editor.SendMessage(SCI_MARKERSETBACK, (IntPtr)SC_MARKNUM_FOLDER, (IntPtr)0x0);
-            editor.SendMessage(SCI_MARKERSETBACK, (IntPtr)SC_MARKNUM_FOLDEROPEN, (IntPtr)0x0);
-            editor.SendMessage(SCI_MARKERSETBACK, (IntPtr)SC_MARKNUM_FOLDEREND, (IntPtr)0x0);
-            editor.SendMessage(SCI_MARKERSETBACK, (IntPtr)SC_MARKNUM_FOLDEROPENMID, (IntPtr)0x0);
-            editor.SendMessage(SCI_MARKERSETBACK, (IntPtr)SC_MARKNUM_FOLDERMIDTAIL, (IntPtr)0x0);
-            editor.SendMessage(SCI_MARKERSETBACK, (IntPtr)SC_MARKNUM_FOLDERSUB, (IntPtr)0x0);
-            editor.SendMessage(SCI_MARKERSETBACK, (IntPtr)SC_MARKNUM_FOLDERTAIL, (IntPtr)0x0);
+            editor.SendMessage(SCI_MARKERSETBACK, SC_MARKNUM_FOLDER, 0x0);
+            editor.SendMessage(SCI_MARKERSETBACK, SC_MARKNUM_FOLDEROPEN, 0x0);
+            editor.SendMessage(SCI_MARKERSETBACK, SC_MARKNUM_FOLDEREND, 0x0);
+            editor.SendMessage(SCI_MARKERSETBACK, SC_MARKNUM_FOLDEROPENMID, 0x0);
+            editor.SendMessage(SCI_MARKERSETBACK, SC_MARKNUM_FOLDERMIDTAIL, 0x0);
+            editor.SendMessage(SCI_MARKERSETBACK, SC_MARKNUM_FOLDERSUB, 0x0);
+            editor.SendMessage(SCI_MARKERSETBACK, SC_MARKNUM_FOLDERTAIL, 0x0);
 
-            editor.SendMessage(SCI_MARKERSETFORE, (IntPtr)SC_MARKNUM_FOLDER, (IntPtr)0xFFFFFF);
-            editor.SendMessage(SCI_MARKERSETFORE, (IntPtr)SC_MARKNUM_FOLDEROPEN, (IntPtr)0xFFFFFF);
-            editor.SendMessage(SCI_MARKERSETFORE, (IntPtr)SC_MARKNUM_FOLDEREND, (IntPtr)0xFFFFFF);
-            editor.SendMessage(SCI_MARKERSETFORE, (IntPtr)SC_MARKNUM_FOLDEROPENMID, (IntPtr)0xFFFFFF);
-            editor.SendMessage(SCI_MARKERSETFORE, (IntPtr)SC_MARKNUM_FOLDERMIDTAIL, (IntPtr)0xFFFFFF);
-            editor.SendMessage(SCI_MARKERSETFORE, (IntPtr)SC_MARKNUM_FOLDERSUB, (IntPtr)0xFFFFFF);
-            editor.SendMessage(SCI_MARKERSETFORE, (IntPtr)SC_MARKNUM_FOLDERTAIL, (IntPtr)0xFFFFFF);
+            editor.SendMessage(SCI_MARKERSETFORE, SC_MARKNUM_FOLDER, 0xFFFFFF);
+            editor.SendMessage(SCI_MARKERSETFORE, SC_MARKNUM_FOLDEROPEN, 0xFFFFFF);
+            editor.SendMessage(SCI_MARKERSETFORE, SC_MARKNUM_FOLDEREND, 0xFFFFFF);
+            editor.SendMessage(SCI_MARKERSETFORE, SC_MARKNUM_FOLDEROPENMID, 0xFFFFFF);
+            editor.SendMessage(SCI_MARKERSETFORE, SC_MARKNUM_FOLDERMIDTAIL, 0xFFFFFF);
+            editor.SendMessage(SCI_MARKERSETFORE, SC_MARKNUM_FOLDERSUB, 0xFFFFFF);
+            editor.SendMessage(SCI_MARKERSETFORE, SC_MARKNUM_FOLDERTAIL, 0xFFFFFF);
 
 
 
-            editor.SendMessage(SCI_SETFOLDFLAGS, (IntPtr)(16 | 4), (IntPtr)0); //Display a horizontal line above and below the line after folding 
+            editor.SendMessage(SCI_SETFOLDFLAGS, 16 | 4, 0); //Display a horizontal line above and below the line after folding 
 
             /* Use marker 21 for salmon highlight */
-            editor.SendMessage(SCI_MARKERDEFINE, (IntPtr)21, (IntPtr)SC_MARK_BACKGROUND);
-            editor.SendMessage(SCI_MARKERSETBACK, (IntPtr)21, (IntPtr)0x7AA0FF);
+            editor.SendMessage(SCI_MARKERDEFINE, 21, SC_MARK_BACKGROUND);
+            editor.SendMessage(SCI_MARKERSETBACK, 21, 0x7AA0FF);
 
             /* Use marker 22 for gray highlight */
-            editor.SendMessage(SCI_MARKERDEFINE, (IntPtr)22, (IntPtr)SC_MARK_BACKGROUND);
-            editor.SendMessage(SCI_MARKERSETBACK, (IntPtr)22, (IntPtr)0x808080);
+            editor.SendMessage(SCI_MARKERDEFINE, 22, SC_MARK_BACKGROUND);
+            editor.SendMessage(SCI_MARKERSETBACK, 22, 0x808080);
 
             /* Set up indicators */
 
             /* Create Salmon Highlighter */
-            editor.SendMessage(SCI_INDICSETSTYLE, (IntPtr)SALMON_HIGLIGHTER, (IntPtr)INDIC_FULLBOX);
-            editor.SendMessage(SCI_INDICSETFORE, (IntPtr)SALMON_HIGLIGHTER, (IntPtr)0x4DB7FF);
-            editor.SendMessage(SCI_INDICSETALPHA, (IntPtr)SALMON_HIGLIGHTER, (IntPtr)0x80);
-            editor.SendMessage(SCI_INDICSETUNDER, (IntPtr)SALMON_HIGLIGHTER, (IntPtr)1);
+            editor.SendMessage(SCI_INDICSETSTYLE, SALMON_HIGLIGHTER, INDIC_FULLBOX);
+            editor.SendMessage(SCI_INDICSETFORE, SALMON_HIGLIGHTER, 0x4DB7FF);
+            editor.SendMessage(SCI_INDICSETALPHA, SALMON_HIGLIGHTER, 0x80);
+            editor.SendMessage(SCI_INDICSETUNDER, SALMON_HIGLIGHTER, 1);
 
-            editor.SendMessage(SCI_INDICSETSTYLE, (IntPtr)GRAY_HIGLIGHTER, (IntPtr)INDIC_FULLBOX);
-            editor.SendMessage(SCI_INDICSETFORE, (IntPtr)GRAY_HIGLIGHTER, (IntPtr)0x808080);
-            editor.SendMessage(SCI_INDICSETALPHA, (IntPtr)GRAY_HIGLIGHTER, (IntPtr)0x60);
-            editor.SendMessage(SCI_INDICSETUNDER, (IntPtr)GRAY_HIGLIGHTER, (IntPtr)1);
+            editor.SendMessage(SCI_INDICSETSTYLE, GRAY_HIGLIGHTER, INDIC_FULLBOX);
+            editor.SendMessage(SCI_INDICSETFORE, GRAY_HIGLIGHTER, 0x808080);
+            editor.SendMessage(SCI_INDICSETALPHA, GRAY_HIGLIGHTER, 0x60);
+            editor.SendMessage(SCI_INDICSETUNDER, GRAY_HIGLIGHTER, 1);
 
             /* Create Blue Highlighter */
-            editor.SendMessage(SCI_INDICSETSTYLE, (IntPtr)BLUE_HIGLIGHTER, (IntPtr)INDIC_FULLBOX);
-            editor.SendMessage(SCI_INDICSETFORE, (IntPtr)BLUE_HIGLIGHTER, (IntPtr)0xD9D6A5); /* Blue-orange in BGR format */
-            editor.SendMessage(SCI_INDICSETALPHA, (IntPtr)BLUE_HIGLIGHTER, (IntPtr)0x60);
-            editor.SendMessage(SCI_INDICSETUNDER, (IntPtr)BLUE_HIGLIGHTER, (IntPtr)1);
+            editor.SendMessage(SCI_INDICSETSTYLE, BLUE_HIGLIGHTER, INDIC_FULLBOX);
+            editor.SendMessage(SCI_INDICSETFORE, BLUE_HIGLIGHTER, 0xD9D6A5); /* Blue-orange in BGR format */
+            editor.SendMessage(SCI_INDICSETALPHA, BLUE_HIGLIGHTER, 0x60);
+            editor.SendMessage(SCI_INDICSETUNDER, BLUE_HIGLIGHTER, 1);
 
             /* Create Linter Suppression Highlighter */
-            editor.SendMessage(SCI_INDICSETSTYLE, (IntPtr)LINTER_SUPPRESSION_HIGHLIGHTER, (IntPtr)INDIC_FULLBOX);
-            editor.SendMessage(SCI_INDICSETFORE, (IntPtr)LINTER_SUPPRESSION_HIGHLIGHTER, (IntPtr)0x50CB50); /* Purpleish in BGR format */
-            editor.SendMessage(SCI_INDICSETALPHA, (IntPtr)LINTER_SUPPRESSION_HIGHLIGHTER, (IntPtr)0x40);
-            editor.SendMessage(SCI_INDICSETUNDER, (IntPtr)LINTER_SUPPRESSION_HIGHLIGHTER, (IntPtr)1);
+            editor.SendMessage(SCI_INDICSETSTYLE, LINTER_SUPPRESSION_HIGHLIGHTER, INDIC_FULLBOX);
+            editor.SendMessage(SCI_INDICSETFORE, LINTER_SUPPRESSION_HIGHLIGHTER, 0x50CB50); /* Purpleish in BGR format */
+            editor.SendMessage(SCI_INDICSETALPHA, LINTER_SUPPRESSION_HIGHLIGHTER, 0x40);
+            editor.SendMessage(SCI_INDICSETUNDER, LINTER_SUPPRESSION_HIGHLIGHTER, 1);
 
             editor.FoldEnabled = true;
         }
@@ -495,7 +491,7 @@ namespace AppRefiner
         public static void HighlightText(ScintillaEditor editor, HighlightColor color, int start, int length)
         {
             int indicatorNumber = 0;
-            switch(color)
+            switch (color)
             {
                 case HighlightColor.Salmon:
                     indicatorNumber = SALMON_HIGLIGHTER;
@@ -511,8 +507,8 @@ namespace AppRefiner
                     break;
             }
 
-            editor.SendMessage(SCI_SETINDICATORCURRENT, (IntPtr)indicatorNumber, IntPtr.Zero);
-            editor.SendMessage(SCI_INDICATORFILLRANGE, (IntPtr)start, (IntPtr)length);
+            editor.SendMessage(SCI_SETINDICATORCURRENT, indicatorNumber, IntPtr.Zero);
+            editor.SendMessage(SCI_INDICATORFILLRANGE, start, length);
         }
 
         public static void InitAnnotationStyles(ScintillaEditor editor)
@@ -522,20 +518,20 @@ namespace AppRefiner
                 if (editor.AnnotationStyleOffset == IntPtr.Zero)
                 {
                     const int EXTRA_STYLES = 64; // Reduced from 256 to a more reasonable number
-                    var newStyleOffset = editor.SendMessage(SCI_ALLOCATEEXTENDEDSTYLES, (IntPtr)EXTRA_STYLES, IntPtr.Zero);
+                    var newStyleOffset = editor.SendMessage(SCI_ALLOCATEEXTENDEDSTYLES, EXTRA_STYLES, IntPtr.Zero);
                     editor.AnnotationStyleOffset = newStyleOffset;
 
                     // Set the annotation style offset
-                    editor.SendMessage(SCI_ANNOTATIONSETSTYLEOFFSET, (IntPtr)newStyleOffset, IntPtr.Zero);
+                    editor.SendMessage(SCI_ANNOTATIONSETSTYLEOFFSET, newStyleOffset, IntPtr.Zero);
                 }
 
 
                 // Enable annotations and set visibility mode first
-                editor.SendMessage(SCI_ANNOTATIONSETVISIBLE, (IntPtr)ANNOTATION_BOXED, IntPtr.Zero);
+                editor.SendMessage(SCI_ANNOTATIONSETVISIBLE, ANNOTATION_BOXED, IntPtr.Zero);
 
                 // Define colors in BGR format based on the mode
                 int GRAY_BACK, GRAY_FORE, YELLOW_BACK, YELLOW_FORE, RED_BACK, RED_FORE;
-                
+
                 if (editor.IsDarkMode)
                 {
                     // Dark mode colors
@@ -559,16 +555,16 @@ namespace AppRefiner
 
 
                 // Configure Gray style
-                editor.SendMessage(SCI_STYLESETFORE, (IntPtr)(editor.AnnotationStyleOffset + (int)AnnotationStyle.Gray), (IntPtr)GRAY_FORE);
-                editor.SendMessage(SCI_STYLESETBACK, (IntPtr)(editor.AnnotationStyleOffset + (int)AnnotationStyle.Gray), (IntPtr)GRAY_BACK);
+                editor.SendMessage(SCI_STYLESETFORE, editor.AnnotationStyleOffset + (int)AnnotationStyle.Gray, GRAY_FORE);
+                editor.SendMessage(SCI_STYLESETBACK, editor.AnnotationStyleOffset + (int)AnnotationStyle.Gray, GRAY_BACK);
 
                 // Configure Yellow style
-                editor.SendMessage(SCI_STYLESETFORE, (IntPtr)(editor.AnnotationStyleOffset + (int)AnnotationStyle.Yellow), (IntPtr)YELLOW_FORE);
-                editor.SendMessage(SCI_STYLESETBACK, (IntPtr)(editor.AnnotationStyleOffset + (int)AnnotationStyle.Yellow), (IntPtr)YELLOW_BACK);
+                editor.SendMessage(SCI_STYLESETFORE, editor.AnnotationStyleOffset + (int)AnnotationStyle.Yellow, YELLOW_FORE);
+                editor.SendMessage(SCI_STYLESETBACK, editor.AnnotationStyleOffset + (int)AnnotationStyle.Yellow, YELLOW_BACK);
 
                 // Configure Red style
-                editor.SendMessage(SCI_STYLESETFORE, (IntPtr)(editor.AnnotationStyleOffset + (int)AnnotationStyle.Red), (IntPtr)RED_FORE);
-                editor.SendMessage(SCI_STYLESETBACK, (IntPtr)(editor.AnnotationStyleOffset + (int)AnnotationStyle.Red), (IntPtr)RED_BACK);
+                editor.SendMessage(SCI_STYLESETFORE, editor.AnnotationStyleOffset + (int)AnnotationStyle.Red, RED_FORE);
+                editor.SendMessage(SCI_STYLESETBACK, editor.AnnotationStyleOffset + (int)AnnotationStyle.Red, RED_BACK);
 
                 // Store initialization state
                 editor.AnnotationsInitialized = true;
@@ -634,18 +630,18 @@ namespace AppRefiner
                 editor.ContentString = null;
 
                 CloseHandle(editor.hProc);
-                
+
             }
             editors.Clear();
         }
 
         public static void CollapseTopLevel(ScintillaEditor editor)
         {
-            editor.SendMessage(SCI_FOLDALL, (IntPtr)0, (IntPtr)0);
+            editor.SendMessage(SCI_FOLDALL, 0, 0);
         }
         public static void ExpandTopLevel(ScintillaEditor editor)
         {
-            editor.SendMessage(SCI_FOLDALL, (IntPtr)1, (IntPtr)0);
+            editor.SendMessage(SCI_FOLDALL, 1, 0);
         }
 
         internal static void SetLineFoldStatus(ScintillaEditor activeEditor, bool folded)
@@ -654,16 +650,16 @@ namespace AppRefiner
             int cursorPos = (int)activeEditor.SendMessage(SCI_GETCURRENTPOS, IntPtr.Zero, IntPtr.Zero);
 
             // Get line number from position
-            int lineNum = (int)activeEditor.SendMessage(SCI_LINEFROMPOSITION, (IntPtr)cursorPos, IntPtr.Zero);
+            int lineNum = (int)activeEditor.SendMessage(SCI_LINEFROMPOSITION, cursorPos, IntPtr.Zero);
 
             // Check if the line is a fold point and toggle it
-            int foldLevel = (int)activeEditor.SendMessage(SCI_GETFOLDLEVEL, (IntPtr)lineNum, IntPtr.Zero);
+            int foldLevel = (int)activeEditor.SendMessage(SCI_GETFOLDLEVEL, lineNum, IntPtr.Zero);
             int currentLineLevel = foldLevel & SC_FOLDLEVELNUMBERMASK;
             // Check if the line is a fold header (can be folded)
             if ((foldLevel & SC_FOLDLEVELHEADERFLAG) != 0)
             {
                 // Toggle the fold (will collapse if expanded)
-                activeEditor.SendMessage(SCI_FOLDLINE, (IntPtr)lineNum, folded ? 0 : 1);
+                activeEditor.SendMessage(SCI_FOLDLINE, lineNum, folded ? 0 : 1);
             }
             else
             {
@@ -671,18 +667,18 @@ namespace AppRefiner
                 int parentLine = lineNum - 1;
                 while (parentLine >= 0)
                 {
-                    foldLevel = (int)activeEditor.SendMessage(SCI_GETFOLDLEVEL, (IntPtr)parentLine, IntPtr.Zero);
+                    foldLevel = (int)activeEditor.SendMessage(SCI_GETFOLDLEVEL, parentLine, IntPtr.Zero);
                     if ((foldLevel & SC_FOLDLEVELHEADERFLAG) != 0 && (foldLevel & SC_FOLDLEVELNUMBERMASK) < currentLineLevel)
                     {
-                        activeEditor.SendMessage(SCI_FOLDLINE, (IntPtr)parentLine, (IntPtr)(folded ? 0 : 1));
+                        activeEditor.SendMessage(SCI_FOLDLINE, parentLine, folded ? 0 : 1);
                         /* Set cursor to the end of the parent line */
-                        activeEditor.SendMessage(SCI_GOTOPOS, (IntPtr)activeEditor.SendMessage(SCI_GETLINEENDPOSITION, (IntPtr)parentLine, IntPtr.Zero), IntPtr.Zero);
+                        activeEditor.SendMessage(SCI_GOTOPOS, activeEditor.SendMessage(SCI_GETLINEENDPOSITION, parentLine, IntPtr.Zero), IntPtr.Zero);
                         break;
                     }
                     parentLine--;
                 }
 
-                
+
             }
         }
 
@@ -703,46 +699,46 @@ namespace AppRefiner
             //foreach (var s in styles)
 
             // Darker background for better contrast
-            editor.SendMessage(SCI_STYLESETBACK, (IntPtr)32, (IntPtr)0x1A1A1A);
-            editor.SendMessage(SCI_STYLESETBACK, (IntPtr)33, (IntPtr)0x1A1A1A);
+            editor.SendMessage(SCI_STYLESETBACK, 32, 0x1A1A1A);
+            editor.SendMessage(SCI_STYLESETBACK, 33, 0x1A1A1A);
             // Brighter text for better readability
-            editor.SendMessage(SCI_STYLESETFORE, (IntPtr)32, (IntPtr)0xE8E8E8);
-            editor.SendMessage(SCI_STYLECLEARALL, (IntPtr)0, (IntPtr)0);
+            editor.SendMessage(SCI_STYLESETFORE, 32, 0xE8E8E8);
+            editor.SendMessage(SCI_STYLECLEARALL, 0, 0);
 
             // Keywords (orange in Visual Studio Code style)
-            editor.SendMessage(SCI_STYLESETFORE, (IntPtr)3, (IntPtr)0x2C8BE2);
+            editor.SendMessage(SCI_STYLESETFORE, 3, 0x2C8BE2);
             // Strings (green)
-            editor.SendMessage(SCI_STYLESETFORE, (IntPtr)4, (IntPtr)0x64D356);
+            editor.SendMessage(SCI_STYLESETFORE, 4, 0x64D356);
             // Secondary keywords (cyan/light blue)
-            editor.SendMessage(SCI_STYLESETFORE, (IntPtr)10, (IntPtr)0xD5AA6F);
+            editor.SendMessage(SCI_STYLESETFORE, 10, 0xD5AA6F);
             // Tertiary keywords (softer blue/teal)
-            editor.SendMessage(SCI_STYLESETFORE, (IntPtr)11, (IntPtr)0xC7953B);
+            editor.SendMessage(SCI_STYLESETFORE, 11, 0xC7953B);
             // Comments (green-gray)
-            editor.SendMessage(SCI_STYLESETFORE, (IntPtr)1, (IntPtr)0x6A9955);
+            editor.SendMessage(SCI_STYLESETFORE, 1, 0x6A9955);
             // Block comments (same as line comments)
-            editor.SendMessage(SCI_STYLESETFORE, (IntPtr)24, (IntPtr)0x6A9955);
+            editor.SendMessage(SCI_STYLESETFORE, 24, 0x6A9955);
             // Numbers (purplish blue)
-            editor.SendMessage(SCI_STYLESETFORE, (IntPtr)2, (IntPtr)0xB682AA);
-            
+            editor.SendMessage(SCI_STYLESETFORE, 2, 0xB682AA);
+
             // Set white cursor color (hex FFFFFF)
-            editor.SendMessage(SCI_SETCARETFORE, (IntPtr)0xFFFFFF, IntPtr.Zero);
-    
+            editor.SendMessage(SCI_SETCARETFORE, 0xFFFFFF, IntPtr.Zero);
+
             // Make cursor slightly wider for better visibility
-            editor.SendMessage(SCI_SETCARETWIDTH, (IntPtr)2, IntPtr.Zero);
-    
+            editor.SendMessage(SCI_SETCARETWIDTH, 2, IntPtr.Zero);
+
             // Set selection colors: navy blue background with white text
-            editor.SendMessage(SCI_SETELEMENTCOLOUR, (IntPtr)SC_ELEMENT_SELECTION_BACK, (IntPtr)0xC19429FF); // Navy blue in BGR (800000 = RGB 0,0,128)
-            editor.SendMessage(SCI_SETELEMENTCOLOUR, (IntPtr)SC_ELEMENT_SELECTION_TEXT, (IntPtr)0xFF00FFFF); // White text (hex FFFFFF)
+            editor.SendMessage(SCI_SETELEMENTCOLOUR, SC_ELEMENT_SELECTION_BACK, (IntPtr)0xC19429FF); // Navy blue in BGR (800000 = RGB 0,0,128)
+            editor.SendMessage(SCI_SETELEMENTCOLOUR, SC_ELEMENT_SELECTION_TEXT, (IntPtr)0xFF00FFFF); // White text (hex FFFFFF)
 
             /* fold margin colors */
             // Collapse Label Style
-            editor.SendMessage(SCI_MARKERSETBACK, (IntPtr)SC_MARKNUM_FOLDER, (IntPtr)0x1A1A1A);
-            editor.SendMessage(SCI_MARKERSETBACK, (IntPtr)SC_MARKNUM_FOLDEROPEN, (IntPtr)0x1A1A1A);
-            editor.SendMessage(SCI_MARKERSETBACK, (IntPtr)SC_MARKNUM_FOLDEREND, (IntPtr)0x1A1A1A);
-            editor.SendMessage(SCI_MARKERSETBACK, (IntPtr)SC_MARKNUM_FOLDEROPENMID, (IntPtr)0x1A1A1A);
-            editor.SendMessage(SCI_MARKERSETBACK, (IntPtr)SC_MARKNUM_FOLDERMIDTAIL, (IntPtr)0x1A1A1A);
-            editor.SendMessage(SCI_MARKERSETBACK, (IntPtr)SC_MARKNUM_FOLDERSUB, (IntPtr)0x1A1A1A);
-            editor.SendMessage(SCI_MARKERSETBACK, (IntPtr)SC_MARKNUM_FOLDERTAIL, (IntPtr)0x1A1A1A);
+            editor.SendMessage(SCI_MARKERSETBACK, SC_MARKNUM_FOLDER, 0x1A1A1A);
+            editor.SendMessage(SCI_MARKERSETBACK, SC_MARKNUM_FOLDEROPEN, 0x1A1A1A);
+            editor.SendMessage(SCI_MARKERSETBACK, SC_MARKNUM_FOLDEREND, 0x1A1A1A);
+            editor.SendMessage(SCI_MARKERSETBACK, SC_MARKNUM_FOLDEROPENMID, 0x1A1A1A);
+            editor.SendMessage(SCI_MARKERSETBACK, SC_MARKNUM_FOLDERMIDTAIL, 0x1A1A1A);
+            editor.SendMessage(SCI_MARKERSETBACK, SC_MARKNUM_FOLDERSUB, 0x1A1A1A);
+            editor.SendMessage(SCI_MARKERSETBACK, SC_MARKNUM_FOLDERTAIL, 0x1A1A1A);
 
             // Collapse Label Color
             editor.SendMessage(SCI_MARKERSETBACK, SC_MARKNUM_FOLDERSUB, 0x0);
@@ -750,19 +746,19 @@ namespace AppRefiner
             editor.SendMessage(SCI_MARKERSETBACK, SC_MARKNUM_FOLDERTAIL, 0x0);
 
             editor.SendMessage(SCI_MARKERSETBACK, SC_MARK_FULLRECT, 0x1A1A1A);
-            editor.SendMessage(SCI_MARKERSETBACK, SC_MARK_BACKGROUND , 0x1A1A1A);
+            editor.SendMessage(SCI_MARKERSETBACK, SC_MARK_BACKGROUND, 0x1A1A1A);
 
-            editor.SendMessage(SCI_MARKERSETFORE, (IntPtr)SC_MARKNUM_FOLDER, (IntPtr)0xFFFFFF);
-            editor.SendMessage(SCI_MARKERSETFORE, (IntPtr)SC_MARKNUM_FOLDEROPEN, (IntPtr)0xFFFFFF);
-            editor.SendMessage(SCI_MARKERSETFORE, (IntPtr)SC_MARKNUM_FOLDEREND, (IntPtr)0xFFFFFF);
-            editor.SendMessage(SCI_MARKERSETFORE, (IntPtr)SC_MARKNUM_FOLDEROPENMID, (IntPtr)0xFFFFFF);
-            editor.SendMessage(SCI_MARKERSETFORE, (IntPtr)SC_MARKNUM_FOLDERMIDTAIL, (IntPtr)0xFFFFFF);
-            editor.SendMessage(SCI_MARKERSETFORE, (IntPtr)SC_MARKNUM_FOLDERSUB, (IntPtr)0xFFFFFF);
-            editor.SendMessage(SCI_MARKERSETFORE, (IntPtr)SC_MARKNUM_FOLDERTAIL, (IntPtr)0xFFFFFF);
+            editor.SendMessage(SCI_MARKERSETFORE, SC_MARKNUM_FOLDER, 0xFFFFFF);
+            editor.SendMessage(SCI_MARKERSETFORE, SC_MARKNUM_FOLDEROPEN, 0xFFFFFF);
+            editor.SendMessage(SCI_MARKERSETFORE, SC_MARKNUM_FOLDEREND, 0xFFFFFF);
+            editor.SendMessage(SCI_MARKERSETFORE, SC_MARKNUM_FOLDEROPENMID, 0xFFFFFF);
+            editor.SendMessage(SCI_MARKERSETFORE, SC_MARKNUM_FOLDERMIDTAIL, 0xFFFFFF);
+            editor.SendMessage(SCI_MARKERSETFORE, SC_MARKNUM_FOLDERSUB, 0xFFFFFF);
+            editor.SendMessage(SCI_MARKERSETFORE, SC_MARKNUM_FOLDERTAIL, 0xFFFFFF);
 
             // Set dark mode flag
             editor.IsDarkMode = true;
-            
+
             // Also update annotation styles for dark mode
             InitAnnotationStyles(editor);
 
@@ -777,7 +773,7 @@ namespace AppRefiner
 
         internal static bool IsEditorClean(ScintillaEditor editor)
         {
-            return editor.SendMessage(SCI_GETMODIFY, (IntPtr)0, (IntPtr)0) == (IntPtr)0;
+            return editor.SendMessage(SCI_GETMODIFY, 0, 0) == 0;
         }
 
         internal static int GetContentHash(ScintillaEditor editor)
@@ -785,13 +781,7 @@ namespace AppRefiner
             /* make crc32 hash of content string */
             var content = GetScintillaText(editor);
             editor.ContentString = content;
-            if (content != null)
-            {
-                return GetContentHashFromString(content);
-            } else
-            {
-                return 0;
-            }
+            return content != null ? GetContentHashFromString(content) : 0;
         }
 
         internal static int GetContentHashFromString(string content)
@@ -802,7 +792,7 @@ namespace AppRefiner
 
         internal static void SetFoldRegions(ScintillaEditor editor)
         {
-           
+
             if (editor.ContentString == null)
             {
                 editor.ContentString = GetScintillaText(editor);
@@ -855,7 +845,7 @@ namespace AppRefiner
 
                 // Send the message to set the fold level for this line.
                 // The wParam is the line number, and lParam is the fold level value.
-                editor.SendMessage(SCI_SETFOLDLEVEL, (IntPtr)line, (IntPtr)level);
+                editor.SendMessage(SCI_SETFOLDLEVEL, line, level);
             }
         }
 
@@ -901,7 +891,7 @@ namespace AppRefiner
             editor.ContentString ??= GetScintillaText(editor);
 
             var formatted = SqlFormatter.Of(Dialect.StandardSql)
-                .Extend(cfg => cfg.PlusSpecialWordChars("%").PlusNamedPlaceholderTypes(new string[] { ":" }).PlusOperators(new string[] {"%Concat"}))
+                .Extend(cfg => cfg.PlusSpecialWordChars("%").PlusNamedPlaceholderTypes(new string[] { ":" }).PlusOperators(new string[] { "%Concat" }))
                 .Format(editor.ContentString, formatConfig).Replace("\n", "\r\n");
             if (string.IsNullOrEmpty(formatted))
             {
@@ -909,7 +899,7 @@ namespace AppRefiner
             }
             editor.ContentString = formatted;
             SetScintillaText(editor, formatted);
-            editor.SendMessage(SCI_SETSAVEPOINT, (IntPtr)0, (IntPtr)0);
+            editor.SendMessage(SCI_SETSAVEPOINT, 0, 0);
 
 
             /* update local content hash */
@@ -919,10 +909,10 @@ namespace AppRefiner
         internal static void ApplySquiggles(ScintillaEditor editor)
         {
             /* set indicator to indicator 0 */
-            editor.SendMessage(SCI_SETINDICATORCURRENT, (IntPtr)0, (IntPtr)0);
+            editor.SendMessage(SCI_SETINDICATORCURRENT, 0, 0);
 
             /* fill in the first 10 characters */
-            editor.SendMessage(SCI_INDICATORFILLRANGE, (IntPtr)0, (IntPtr)10);
+            editor.SendMessage(SCI_INDICATORFILLRANGE, 0, 10);
 
             SetAnnotation(editor, 0, "Import is not needed");
         }
@@ -942,8 +932,8 @@ namespace AppRefiner
                 var pointer = editor.AnnotationPointers.ContainsKey(text) ? editor.AnnotationPointers[text] : IntPtr.Zero;
                 if (pointer != IntPtr.Zero)
                 {
-                    editor.SendMessage(SCI_ANNOTATIONSETSTYLE, (IntPtr)line, (IntPtr)((int)style));
-                    editor.SendMessage(SCI_ANNOTATIONSETTEXT, (IntPtr)line, pointer);
+                    editor.SendMessage(SCI_ANNOTATIONSETSTYLE, line, (int)style);
+                    editor.SendMessage(SCI_ANNOTATIONSETTEXT, line, pointer);
                     return;
                 }
 
@@ -951,7 +941,7 @@ namespace AppRefiner
                 var textBytes = Encoding.Default.GetBytes(text);
                 var neededSize = textBytes.Length + 1;
                 var remoteBuffer = VirtualAllocEx(editor.hProc, IntPtr.Zero, (uint)neededSize, MEM_COMMIT, PAGE_READWRITE);
-                
+
                 if (remoteBuffer == IntPtr.Zero)
                 {
                     Debug.WriteLine($"Failed to allocate memory for annotation: {Marshal.GetLastWin32Error()}");
@@ -966,8 +956,8 @@ namespace AppRefiner
                 }
 
                 editor.AnnotationPointers[text] = remoteBuffer;
-                editor.SendMessage(SCI_ANNOTATIONSETSTYLE, (IntPtr)line, (IntPtr)((int)style));
-                editor.SendMessage(SCI_ANNOTATIONSETTEXT, (IntPtr)line, remoteBuffer);
+                editor.SendMessage(SCI_ANNOTATIONSETSTYLE, line, (int)style);
+                editor.SendMessage(SCI_ANNOTATIONSETTEXT, line, remoteBuffer);
             }
             catch (Exception ex)
             {
@@ -990,11 +980,11 @@ namespace AppRefiner
         /// <param name="endIndex">The ending position of the selection</param>
         public static void SetSelection(ScintillaEditor editor, int startIndex, int endIndex)
         {
-            editor.SendMessage(SCI_SETSEL, (IntPtr)startIndex, (IntPtr)endIndex);
+            editor.SendMessage(SCI_SETSEL, startIndex, endIndex);
         }
-        
+
         public static void ColorText(ScintillaEditor editor, FontColor color, int start, int length)
-        { 
+        {
             // Create a temporary style for colored text
             const int TEMP_STYLE = 35; // Using a high style number to avoid conflicts
 
@@ -1002,9 +992,9 @@ namespace AppRefiner
             //editor.SendMessage(SCI_STYLESETFORE, (IntPtr)TEMP_STYLE, (IntPtr)foreColor);
 
             // Start styling at the specified position
-            editor.SendMessage(SCI_STARTSTYLING, (IntPtr)start, 0);
+            editor.SendMessage(SCI_STARTSTYLING, start, 0);
 
-            editor.SendMessage(SCI_SETSTYLING, (IntPtr)length, (IntPtr)TEMP_STYLE);
+            editor.SendMessage(SCI_SETSTYLING, length, TEMP_STYLE);
         }
 
         public static void ClearAnnotations(ScintillaEditor editor)
@@ -1053,14 +1043,14 @@ namespace AppRefiner
                 // Create style bytes array matching exact text bytes length
                 var styleBytes = new byte[neededSize];
                 int currentPos = 0;
-                
+
                 // Fill style bytes array for each formatted annotation including prefix and newline
                 for (int i = 0; i < formattedAnnotations.Count; i++)
                 {
                     var annotationWithPrefix = formattedAnnotations[i];
                     var bytesForThisLine = Encoding.Default.GetByteCount(annotationWithPrefix);
-                    var styleValue = (byte)((int)styles[i]);
-                    
+                    var styleValue = (byte)(int)styles[i];
+
                     // Style all bytes for this line including prefix
                     for (int j = 0; j < bytesForThisLine; j++)
                     {
@@ -1101,8 +1091,8 @@ namespace AppRefiner
                 }
 
                 // Set the annotation text and styles
-                editor.SendMessage(SCI_ANNOTATIONSETTEXT, (IntPtr)line, remoteTextBuffer);
-                editor.SendMessage(SCI_ANNOTATIONSETSTYLES, (IntPtr)line, remoteStyleBuffer);
+                editor.SendMessage(SCI_ANNOTATIONSETTEXT, line, remoteTextBuffer);
+                editor.SendMessage(SCI_ANNOTATIONSETSTYLES, line, remoteStyleBuffer);
 
                 // Store buffers for cleanup
                 editor.AnnotationPointers[combinedText] = remoteTextBuffer;
@@ -1117,17 +1107,16 @@ namespace AppRefiner
 
         internal static void ResetStyles(ScintillaEditor activeEditor)
         {
-            activeEditor.SendMessage(SCI_CLEARDOCUMENTSTYLE, (IntPtr)0, (IntPtr)0);
+            activeEditor.SendMessage(SCI_CLEARDOCUMENTSTYLE, 0, 0);
             var docLength = activeEditor.SendMessage(SCI_GETLENGTH, 0, 0);
             activeEditor.SendMessage(SCI_COLOURISE, 0, docLength);
         }
 
         internal static int GetCursorPosition(ScintillaEditor? activeEditor)
         {
-            if (activeEditor == null) return -1;
-            return (int)activeEditor.SendMessage(SCI_GETCURRENTPOS, 0, 0);
+            return activeEditor == null ? -1 : (int)activeEditor.SendMessage(SCI_GETCURRENTPOS, 0, 0);
         }
-        
+
         /// <summary>
         /// Gets the project name for the current editor
         /// </summary>
@@ -1137,12 +1126,12 @@ namespace AppRefiner
         {
             // Get the caption from the main window of the editor's process
             string caption = WindowHelper.GetMainWindowCaption(editor.ProcessId);
-            
+
             if (!string.IsNullOrEmpty(caption))
             {
                 // Split the caption on "-" character
                 string[] parts = caption.Split('-');
-                
+
                 // Check if we have at least 3 parts (to access the third item)
                 if (parts.Length >= 3)
                 {
@@ -1150,7 +1139,7 @@ namespace AppRefiner
                     return parts[2].Trim();
                 }
             }
-            
+
             return string.Empty;
         }
 
@@ -1162,10 +1151,10 @@ namespace AppRefiner
         public static void SetCursorPosition(ScintillaEditor editor, int position)
         {
             if (editor == null) return;
-            
+
             // Set the cursor position
-            editor.SendMessage(SCI_GOTOPOS, (IntPtr)position, IntPtr.Zero);
-            
+            editor.SendMessage(SCI_GOTOPOS, position, IntPtr.Zero);
+
             // Ensure the position is visible by scrolling to it
             editor.SendMessage(SCI_SCROLLCARET, IntPtr.Zero, IntPtr.Zero);
         }
@@ -1174,21 +1163,21 @@ namespace AppRefiner
         {
             // Get current cursor position
             int cursorPos = (int)activeEditor.SendMessage(SCI_GETCURRENTPOS, IntPtr.Zero, IntPtr.Zero);
-            
+
             // Get line number from position
-            int lineNum = (int)activeEditor.SendMessage(SCI_LINEFROMPOSITION, (IntPtr)cursorPos, IntPtr.Zero);
-            
+            int lineNum = (int)activeEditor.SendMessage(SCI_LINEFROMPOSITION, cursorPos, IntPtr.Zero);
+
             // Check if the line is a fold point and toggle it
-            int foldLevel = (int)activeEditor.SendMessage(SCI_GETFOLDLEVEL, (IntPtr)lineNum, IntPtr.Zero);
-            
+            int foldLevel = (int)activeEditor.SendMessage(SCI_GETFOLDLEVEL, lineNum, IntPtr.Zero);
+
             // Check if the line is a fold header (can be folded)
             if ((foldLevel & SC_FOLDLEVELHEADERFLAG) != 0)
             {
                 // Toggle the fold (will expand if collapsed)
-                activeEditor.SendMessage(SCI_TOGGLEFOLD, (IntPtr)lineNum, IntPtr.Zero);
+                activeEditor.SendMessage(SCI_TOGGLEFOLD, lineNum, IntPtr.Zero);
             }
         }
-        
+
         /// <summary>
         /// Gets the start index of the previous line.
         /// </summary>
@@ -1201,15 +1190,14 @@ namespace AppRefiner
             {
                 return -1; // No previous line for line 0 or invalid inputs
             }
-            
-            return (int)editor.SendMessage(SCI_POSITIONFROMLINE, (IntPtr)line, IntPtr.Zero);
+
+            return (int)editor.SendMessage(SCI_POSITIONFROMLINE, line, IntPtr.Zero);
         }
 
 
         public static int GetCurrentLine(ScintillaEditor editor)
         {
-            if (editor == null) return -1;
-            return (int)editor.SendMessage(SCI_LINEFROMPOSITION, (IntPtr)editor.SendMessage(SCI_GETCURRENTPOS, 0, 0), 0);
+            return editor == null ? -1 : (int)editor.SendMessage(SCI_LINEFROMPOSITION, editor.SendMessage(SCI_GETCURRENTPOS, 0, 0), 0);
         }
 
     }
@@ -1224,7 +1212,7 @@ namespace AppRefiner
         private static extern IntPtr SendMessage(IntPtr hWnd, int Msg, IntPtr wParam, IntPtr lParam);
 
         public int? SnapshotCursorPosition { get; set; }
-        
+
         [DllImport("user32.dll")]
         [return: MarshalAs(UnmanagedType.Bool)]
         static extern bool IsWindow(IntPtr hWnd);
@@ -1269,13 +1257,9 @@ namespace AppRefiner
             {
                 Type = EditorType.SQL;
             }
-            else if (caption.Contains("(StyleSheet)"))
-            {
-                Type = EditorType.CSS;
-            }
             else
             {
-                Type = EditorType.Other;
+                Type = caption.Contains("(StyleSheet)") ? EditorType.CSS : EditorType.Other;
             }
 
             // TODO: move these into manager method

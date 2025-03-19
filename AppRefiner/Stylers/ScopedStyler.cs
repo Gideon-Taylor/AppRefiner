@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using AppRefiner.Linters.Models;
 using static AppRefiner.PeopleCode.PeopleCodeParser;
 
@@ -223,8 +222,8 @@ namespace AppRefiner.Stylers
         {
             if (typeContext is ArrayTypeContext arrayType)
             {
-                var baseType = arrayType.typeT() != null 
-                    ? GetTypeFromContext(arrayType.typeT()) 
+                var baseType = arrayType.typeT() != null
+                    ? GetTypeFromContext(arrayType.typeT())
                     : "Any";
                 return $"Array of {baseType}";
             }

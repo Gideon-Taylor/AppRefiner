@@ -1,9 +1,6 @@
 using Antlr4.Runtime;
 using Antlr4.Runtime.Misc;
 using AppRefiner.PeopleCode;
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Text.RegularExpressions;
 
 namespace AppRefiner.Linters
@@ -79,7 +76,7 @@ namespace AppRefiner.Linters
         private readonly HashSet<SuppressionInfo> _globalSuppressions = new();
         private readonly Dictionary<int, HashSet<SuppressionInfo>> _lineSpecificSuppressions = new();
         private readonly Stack<HashSet<SuppressionInfo>> _scopeSuppressionStack = new();
-    
+
         private static readonly Regex _suppressionRegex = new(
             @"#AppRefiner\s+suppress\s+\(([\w\:_\s,\*]+)\)",
             RegexOptions.Compiled);
@@ -87,20 +84,20 @@ namespace AppRefiner.Linters
         public LinterSuppressionListener(ITokenStream tokenStream, List<IToken> comments)
         {
             _tokenStream = tokenStream ?? throw new ArgumentNullException(nameof(tokenStream));
-        
+
             // Extract all comments from the token stream
             _comments = comments ?? throw new ArgumentNullException(nameof(comments));
-        
+
             // Clear any existing suppressions
             Reset();
-        
+
             // Process global suppressions (above imports block)
             ProcessGlobalSuppressions();
-        
+
             // Process line-specific suppressions for all comments
             ProcessAllLineSpecificSuppressions();
         }
-    
+
         /// <summary>
         /// Resets the listener state, clearing all suppression information
         /// </summary>
@@ -108,11 +105,11 @@ namespace AppRefiner.Linters
         {
             _globalSuppressions.Clear();
             _lineSpecificSuppressions.Clear();
-        
+
             // Clear the scope stack
             _scopeSuppressionStack.Clear();
         }
-        
+
         /// <summary>
         /// Processes all comments to find line-specific suppressions
         /// Each suppression comment applies to the next line of code
@@ -121,15 +118,15 @@ namespace AppRefiner.Linters
         {
             // Sort comments by line
             var sortedComments = _comments.OrderBy(c => c.Line).ToList();
-            
+
             // Process each comment
             for (int i = 0; i < sortedComments.Count; i++)
             {
                 var comment = sortedComments[i];
-                
+
                 // Find the next line with actual code after this comment
                 int nextCodeLine = FindNextCodeLine(comment.Line);
-                
+
                 if (nextCodeLine > 0)
                 {
                     if (!_lineSpecificSuppressions.TryGetValue(nextCodeLine, out var suppressions))
@@ -137,31 +134,31 @@ namespace AppRefiner.Linters
                         suppressions = new HashSet<SuppressionInfo>();
                         _lineSpecificSuppressions[nextCodeLine] = suppressions;
                     }
-                    
+
                     ProcessSuppressionComment(comment, suppressions);
                 }
             }
         }
-        
+
         /// <summary>
         /// Finds the next line containing code after the given line
         /// </summary>
         private int FindNextCodeLine(int commentLine)
         {
             int nextLine = int.MaxValue;
-            
+
             for (int i = 0; i < _tokenStream.Size; i++)
             {
                 var token = _tokenStream.Get(i);
-                
+
                 // Skip tokens on or before the comment line or on comment channel
                 if (token.Line <= commentLine || token.Channel == PeopleCodeLexer.COMMENTS)
                     continue;
-                
+
                 // Skip insignificant tokens like semicolons
                 if (token.Type == PeopleCodeParser.SEMI)
                     continue;
-                
+
                 // Found the next code token
                 if (token.Line < nextLine)
                 {
@@ -169,7 +166,7 @@ namespace AppRefiner.Linters
                     break;
                 }
             }
-            
+
             return nextLine != int.MaxValue ? nextLine : -1;
         }
 
@@ -180,8 +177,8 @@ namespace AppRefiner.Linters
             for (int i = 0; i < _tokenStream.Size; i++)
             {
                 var token = _tokenStream.Get(i);
-                if (token.Type == PeopleCodeParser.IMPORT || 
-                    token.Type == PeopleCodeParser.CLASS || 
+                if (token.Type == PeopleCodeParser.IMPORT ||
+                    token.Type == PeopleCodeParser.CLASS ||
                     token.Type == PeopleCodeParser.INTERFACE)
                 {
                     importsLineStart = token.Line;
@@ -225,7 +222,7 @@ namespace AppRefiner.Linters
         }
 
         #region Method/Function Scope Handling
-        
+
         public override void EnterMethod([NotNull] PeopleCodeParser.MethodContext context)
         {
             ProcessScopeEntrySuppressions(context.Start.Line);
@@ -265,11 +262,11 @@ namespace AppRefiner.Linters
         {
             PopScopeSuppressions();
         }
-        
+
         #endregion
 
         #region Statement Block Scope Handling
-        
+
         public override void EnterIfStatement([NotNull] PeopleCodeParser.IfStatementContext context)
         {
             ProcessScopeEntrySuppressions(context.Start.Line);
@@ -329,13 +326,13 @@ namespace AppRefiner.Linters
         {
             PopScopeSuppressions();
         }
-        
+
         #endregion
 
         private void ProcessScopeEntrySuppressions(int scopeStartLine)
         {
             var scopeSuppressions = new HashSet<SuppressionInfo>();
-        
+
             // Find comments immediately above this scope
             var scopeComments = _comments
                 .Where(c => c.Line < scopeStartLine)
@@ -350,8 +347,8 @@ namespace AppRefiner.Linters
                 for (int i = 0; i < _tokenStream.Size; i++)
                 {
                     var token = _tokenStream.Get(i);
-                    if (token.Line > comment.Line && token.Line < scopeStartLine && 
-                        token.Channel == Lexer.DefaultTokenChannel && 
+                    if (token.Line > comment.Line && token.Line < scopeStartLine &&
+                        token.Channel == Lexer.DefaultTokenChannel &&
                         token.Type != PeopleCodeParser.SEMI)
                     {
                         foundGap = true;
@@ -392,16 +389,16 @@ namespace AppRefiner.Linters
         {
             // Create a specific suppression info for exact match check
             var specificSuppression = new SuppressionInfo(linterId, reportNumber);
-            
+
             // Create a wildcard suppression info for wildcard match check
             var wildcardSuppression = new SuppressionInfo(linterId, -1, true);
-            
+
             // 1. Check global suppressions first
             if (_globalSuppressions.Contains(specificSuppression) || _globalSuppressions.Contains(wildcardSuppression))
             {
                 return true;
             }
-            
+
             // 2. Check active scope suppressions from the stack
             foreach (var scopeSuppressions in _scopeSuppressionStack)
             {
@@ -410,15 +407,10 @@ namespace AppRefiner.Linters
                     return true;
                 }
             }
-            
+
             // 3. Check line-specific suppressions
-            if (_lineSpecificSuppressions.TryGetValue(line, out var lineSuppressions) &&
-                (lineSuppressions.Contains(specificSuppression) || lineSuppressions.Contains(wildcardSuppression)))
-            {
-                return true;
-            }
-            
-            return false;
+            return _lineSpecificSuppressions.TryGetValue(line, out var lineSuppressions) &&
+                (lineSuppressions.Contains(specificSuppression) || lineSuppressions.Contains(wildcardSuppression));
         }
 
         /// <summary>
@@ -429,7 +421,7 @@ namespace AppRefiner.Linters
         public List<(string LinterId, int ReportNumber)> GetSuppressionsForLine(int line)
         {
             var result = new List<(string, int)>();
-        
+
             // Add global suppressions
             foreach (var suppression in _globalSuppressions)
             {
@@ -437,7 +429,7 @@ namespace AppRefiner.Linters
                 int reportNum = suppression.IsWildcard ? -1 : suppression.ReportNumber;
                 result.Add((suppression.LinterId, reportNum));
             }
-        
+
             // Add active scope suppressions from the stack
             foreach (var scopeSuppressions in _scopeSuppressionStack)
             {
@@ -447,7 +439,7 @@ namespace AppRefiner.Linters
                     result.Add((suppression.LinterId, reportNum));
                 }
             }
-        
+
             // Add line-specific suppressions
             if (_lineSpecificSuppressions.TryGetValue(line, out var lineSuppressions))
             {
@@ -457,7 +449,7 @@ namespace AppRefiner.Linters
                     result.Add((suppression.LinterId, reportNum));
                 }
             }
-        
+
             return result;
         }
     }

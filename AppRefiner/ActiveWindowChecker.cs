@@ -1,7 +1,6 @@
-﻿using System;
-using System.Text;
+﻿using System.Diagnostics;
 using System.Runtime.InteropServices;
-using System.Diagnostics;
+using System.Text;
 namespace AppRefiner
 {
     public class ActiveWindowChecker
@@ -61,7 +60,7 @@ namespace AppRefiner
             }
 
             // Get the GUI thread info to find the focused window
-            GUITHREADINFO guiInfo = new GUITHREADINFO();
+            GUITHREADINFO guiInfo = new();
             guiInfo.cbSize = Marshal.SizeOf(guiInfo);
 
             if (GetGUIThreadInfo(threadId, ref guiInfo))
@@ -80,7 +79,7 @@ namespace AppRefiner
         /// </summary>
         private static bool IsScintillaWindow(IntPtr hwnd)
         {
-            StringBuilder className = new StringBuilder(256);
+            StringBuilder className = new(256);
             GetClassName(hwnd, className, className.Capacity);
             return className.ToString() == "Scintilla";
         }
