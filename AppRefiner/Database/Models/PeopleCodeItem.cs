@@ -104,7 +104,7 @@ namespace AppRefiner.Database.Models
             int objectId6, string objectValue6,
             int objectId7, string objectValue7,
             byte[] programText,
-            List<NameReference> nameReferences = null)
+            List<NameReference>? nameReferences = null)
         {
             ObjectIDs = new int[7] {
                 objectId1, objectId2, objectId3, objectId4,
@@ -139,7 +139,7 @@ namespace AppRefiner.Database.Models
             int[] objectIDs,
             string[] objectValues,
             byte[] programText,
-            List<NameReference> nameReferences = null)
+            List<NameReference>? nameReferences = null)
         {
             if (objectIDs == null || objectIDs.Length != 7)
                 throw new ArgumentException("ObjectIDs array must contain exactly 7 elements", nameof(objectIDs));

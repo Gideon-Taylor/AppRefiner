@@ -732,8 +732,6 @@
         private Button btnLintCode;
         private Button btnRenameLocalVar;
         private TabPage tabPage5;
-        private Button button1;
-        private Panel panel1;
         private ComboBox cmbTemplates;
         private SplitContainer splitContainer3;
         private Panel pnlTemplateParams;

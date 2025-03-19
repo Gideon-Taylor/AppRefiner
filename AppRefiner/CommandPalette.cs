@@ -6,8 +6,8 @@ namespace AppRefiner
     public class Command
     {
         public string Title { get; set; }
-        private string _description;
-        private Func<string> _dynamicDescription;
+        private string _description = "";
+        private Func<string>? _dynamicDescription;
         public Action? LegacyExecute { get; set; }
         public CommandAction? ExecuteWithProgress { get; set; }
 
@@ -122,11 +122,11 @@ namespace AppRefiner
 
     public partial class CommandPalette : Form
     {
-        private Panel headerPanel;
-        private Label headerLabel;
-        private TextBox searchBox;
-        private ListView commandListView;
-        private List<Command> allCommands;
+        private readonly Panel headerPanel;
+        private readonly Label headerLabel;
+        private readonly TextBox searchBox;
+        private readonly ListView commandListView;
+        private readonly List<Command> allCommands;
         private List<Command> filteredCommands;
         private CommandAction? selectedAction;
 
@@ -134,6 +134,10 @@ namespace AppRefiner
         {
             allCommands = commands;
             filteredCommands = new List<Command>(allCommands);
+            this.headerPanel = new Panel();
+            this.headerLabel = new Label();
+            this.searchBox = new TextBox();
+            this.commandListView = new ListView();
             InitializeComponent();
             ConfigureForm();
             PopulateCommandList();
@@ -145,11 +149,7 @@ namespace AppRefiner
         }
 
         private void InitializeComponent()
-        {
-            this.headerPanel = new Panel();
-            this.headerLabel = new Label();
-            this.searchBox = new TextBox();
-            this.commandListView = new ListView();
+        {   
             this.headerPanel.SuspendLayout();
             this.SuspendLayout();
 
@@ -201,7 +201,6 @@ namespace AppRefiner
             this.Controls.Add(this.headerPanel);
             this.FormBorderStyle = FormBorderStyle.None;
             this.StartPosition = FormStartPosition.CenterParent;
-            this.Name = "CommandPalette";
             this.Text = "Command Palette";
             this.ShowInTaskbar = false;
             this.headerPanel.ResumeLayout(false);
@@ -279,12 +278,12 @@ namespace AppRefiner
             searchBox.Focus();
         }
 
-        private void SearchBox_TextChanged(object sender, EventArgs e)
+        private void SearchBox_TextChanged(object? sender, EventArgs e)
         {
             FilterCommands(searchBox.Text);
         }
 
-        private void SearchBox_KeyDown(object sender, KeyEventArgs e)
+        private void SearchBox_KeyDown(object? sender, KeyEventArgs e)
         {
             if (e.KeyCode == Keys.Down)
             {
@@ -332,12 +331,12 @@ namespace AppRefiner
             }
         }
 
-        private void CommandListView_MouseDoubleClick(object sender, MouseEventArgs e)
+        private void CommandListView_MouseDoubleClick(object? sender, MouseEventArgs e)
         {
             SelectCommand();
         }
 
-        private void CommandListView_KeyDown(object sender, KeyEventArgs e)
+        private void CommandListView_KeyDown(object? sender, KeyEventArgs e)
         {
             if (e.KeyCode == Keys.Enter)
             {
@@ -362,17 +361,17 @@ namespace AppRefiner
         {
             if (commandListView.SelectedItems.Count > 0)
             {
-                var command = (Command)commandListView.SelectedItems[0].Tag;
+                var command = (Command?)commandListView.SelectedItems[0].Tag;
 
                 // Only select if the command is enabled
-                if (command.Enabled)
+                if (command?.Enabled ?? false)
                 {
                     // Store the command to execute, prioritizing the progress-aware action
-                    if (command.ExecuteWithProgress != null)
+                    if (command?.ExecuteWithProgress != null)
                     {
                         selectedAction = command.ExecuteWithProgress;
                     }
-                    else if (command.LegacyExecute != null)
+                    else if (command?.LegacyExecute != null)
                     {
                         // Wrap the legacy action in a CommandAction delegate
                         selectedAction = (progressDialog) => command.LegacyExecute?.Invoke();

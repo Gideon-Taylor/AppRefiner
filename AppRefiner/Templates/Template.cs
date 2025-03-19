@@ -11,17 +11,17 @@ namespace AppRefiner.Templates
         /// <summary>
         /// The ID of the field this condition depends on
         /// </summary>
-        public string Field { get; set; }
+        public required string Field { get; set; }
 
         /// <summary>
         /// The comparison operator (equals, notEquals, etc.)
         /// </summary>
-        public string Operator { get; set; }
+        public required string Operator { get; set; }
 
         /// <summary>
         /// The value to compare against
         /// </summary>
-        public object Value { get; set; }
+        public required object Value { get; set; }
     }
 
     /// <summary>
@@ -32,37 +32,37 @@ namespace AppRefiner.Templates
         /// <summary>
         /// Identifier used in template markers (e.g., {{id}})
         /// </summary>
-        public string Id { get; set; }
+        public required string Id { get; set; }
 
         /// <summary>
         /// User-friendly label for the input field
         /// </summary>
-        public string Label { get; set; }
+        public required string Label { get; set; }
 
         /// <summary>
         /// Data type of the input (string, number, boolean, etc.)
         /// </summary>
-        public string Type { get; set; }
+        public required string Type { get; set; }
 
         /// <summary>
         /// Whether this input is required
         /// </summary>
-        public bool Required { get; set; }
+        public required bool Required { get; set; }
 
         /// <summary>
         /// Default value for this input
         /// </summary>
-        public string DefaultValue { get; set; }
+        public required string DefaultValue { get; set; }
 
         /// <summary>
         /// Additional description or help text
         /// </summary>
-        public string Description { get; set; }
+        public required string Description { get; set; }
 
         /// <summary>
         /// Display condition that determines whether this input should be shown
         /// </summary>
-        public DisplayCondition DisplayCondition { get; set; }
+        public DisplayCondition? DisplayCondition { get; set; }
     }
 
     /// <summary>
@@ -73,22 +73,22 @@ namespace AppRefiner.Templates
         /// <summary>
         /// Display name of the template
         /// </summary>
-        public string TemplateName { get; set; }
+        public required string TemplateName { get; set; }
 
         /// <summary>
         /// Description of what the template does
         /// </summary>
-        public string Description { get; set; }
+        public required string Description { get; set; }
 
         /// <summary>
         /// Collection of input fields required by the template
         /// </summary>
-        public List<TemplateInput> Inputs { get; set; }
+        public List<TemplateInput>? Inputs { get; set; }
 
         /// <summary>
         /// The template text with {{marker}} placeholders
         /// </summary>
-        public string TemplateText { get; set; }
+        public string? TemplateText { get; set; }
 
         /// <summary>
         /// Position to place the cursor after applying the template (-1 if not specified)
@@ -156,8 +156,8 @@ namespace AppRefiner.Templates
                 if (delimiterIndex < 0)
                     throw new FormatException("Template file is missing the '---' delimiter between JSON and template text");
 
-                string json = content.Substring(0, delimiterIndex).Trim();
-                string templateText = content.Substring(delimiterIndex + delimiter.Length).Trim();
+                string json = content[..delimiterIndex].Trim();
+                string templateText = content[(delimiterIndex + delimiter.Length)..].Trim();
 
                 // Load the JSON part
                 var options = new JsonSerializerOptions
@@ -170,8 +170,8 @@ namespace AppRefiner.Templates
                 // Create template with properties from JSON
                 var template = new Template
                 {
-                    TemplateName = jsonDoc.GetProperty("templateName").GetString(),
-                    Description = jsonDoc.GetProperty("description").GetString(),
+                    TemplateName = jsonDoc.GetProperty("templateName").GetString()!,
+                    Description = jsonDoc.GetProperty("description").GetString()!,
                     Inputs = new List<TemplateInput>(),
                     TemplateText = templateText
                 };
@@ -181,14 +181,14 @@ namespace AppRefiner.Templates
                 {
                     var templateInput = new TemplateInput
                     {
-                        Id = input.GetProperty("id").GetString(),
-                        Label = input.GetProperty("label").GetString(),
-                        Type = input.GetProperty("type").GetString(),
+                        Id = input.GetProperty("id").GetString()!,
+                        Label = input.GetProperty("label").GetString()!,
+                        Type = input.GetProperty("type").GetString()!,
                         Required = input.GetProperty("required").GetBoolean(),
                         DefaultValue = input.TryGetProperty("defaultValue", out var defaultValue) ?
-                            defaultValue.GetString() : null,
+                            defaultValue.GetString()! : "",
                         Description = input.TryGetProperty("description", out var description) ?
-                            description.GetString() : null
+                            description.GetString()! : ""
                     };
 
                     // Parse display condition if present
@@ -196,9 +196,9 @@ namespace AppRefiner.Templates
                     {
                         templateInput.DisplayCondition = new DisplayCondition
                         {
-                            Field = displayConditionProp.GetProperty("field").GetString(),
-                            Operator = displayConditionProp.GetProperty("operator").GetString(),
-                            Value = GetValueFromJsonElement(displayConditionProp.GetProperty("value"))
+                            Field = displayConditionProp.GetProperty("field").GetString()!,
+                            Operator = displayConditionProp.GetProperty("operator").GetString()!,
+                            Value = GetValueFromJsonElement(displayConditionProp.GetProperty("value"))!
                         };
                     }
 
@@ -219,6 +219,8 @@ namespace AppRefiner.Templates
         /// <returns>A list of unique marker names without braces</returns>
         public List<string> GetMarkers()
         {
+            if (TemplateText == null) return new List<string>();
+
             var markers = new HashSet<string>();
             // Match {{name}} but not {{#if name}} or {{/if}}
             var regex = new Regex(@"{{(?!\#if\s)(?!\/if)([^{}]+)}}");
@@ -240,19 +242,19 @@ namespace AppRefiner.Templates
             if (condition == null || string.IsNullOrEmpty(condition.Field))
                 return true;
 
-            if (!values.TryGetValue(condition.Field, out string fieldValue))
+            if (!values.TryGetValue(condition.Field, out string? fieldValue))
                 return false;
 
             switch (condition.Operator.ToLower())
             {
                 case "equals":
                     if (condition.Value is bool boolValue)
-                        return fieldValue.ToLower() == "true" == boolValue;
+                        return fieldValue.Equals("true", StringComparison.CurrentCultureIgnoreCase) == boolValue;
                     return fieldValue.Equals(condition.Value?.ToString(), StringComparison.OrdinalIgnoreCase);
 
                 case "notequals":
                     if (condition.Value is bool boolNotValue)
-                        return fieldValue.ToLower() == "true" != boolNotValue;
+                        return fieldValue.Equals("true", StringComparison.CurrentCultureIgnoreCase) != boolNotValue;
                     return !fieldValue.Equals(condition.Value?.ToString(), StringComparison.OrdinalIgnoreCase);
 
                 // Add more operators as needed
@@ -269,13 +271,16 @@ namespace AppRefiner.Templates
         /// <returns>True if all required values are provided, false otherwise</returns>
         public bool ValidateInputs(Dictionary<string, string> values)
         {
+            if (Inputs == null)
+                return true;
+
             foreach (var input in Inputs.Where(i => i.Required))
             {
                 // Skip validation if the field has a display condition that isn't met
                 if (input.DisplayCondition != null && !IsDisplayConditionMet(input.DisplayCondition, values))
                     continue;
 
-                if (!values.ContainsKey(input.Id) || string.IsNullOrWhiteSpace(values[input.Id]))
+                if (!values.TryGetValue(input.Id, out string? value) || string.IsNullOrWhiteSpace(value))
                 {
                     return false;
                 }
@@ -290,16 +295,20 @@ namespace AppRefiner.Templates
         /// <returns>The processed template text with markers replaced by values</returns>
         public string Apply(Dictionary<string, string> values)
         {
+            if (TemplateText == null) return string.Empty;
             // Reset cursor position
             CursorPosition = -1;
 
             // Fill in default values for any missing inputs
             var allValues = new Dictionary<string, string>(values);
-            foreach (var input in Inputs)
+            if (Inputs != null)
             {
-                if (!allValues.ContainsKey(input.Id) && !string.IsNullOrEmpty(input.DefaultValue))
+                foreach (var input in Inputs)
                 {
-                    allValues[input.Id] = input.DefaultValue;
+                    if (!allValues.ContainsKey(input.Id) && !string.IsNullOrEmpty(input.DefaultValue))
+                    {
+                        allValues[input.Id] = input.DefaultValue;
+                    }
                 }
             }
 
@@ -364,10 +373,10 @@ namespace AppRefiner.Templates
                     string content = match.Groups[2].Value;
 
                     bool conditionValue = false;
-                    if (values.TryGetValue(condition, out string value))
+                    if (values.TryGetValue(condition, out string? value))
                     {
                         // Evaluate the condition as a boolean
-                        conditionValue = value.ToLower() == "true" || value == "1" || value.ToLower() == "yes";
+                        conditionValue = value.Equals("true", StringComparison.OrdinalIgnoreCase) || value == "1" || value.Equals("yes", StringComparison.OrdinalIgnoreCase);
                     }
 
                     return conditionValue ? content : "";
@@ -380,7 +389,7 @@ namespace AppRefiner.Templates
         /// <summary>
         /// Extracts a strongly typed value from a JsonElement based on its kind
         /// </summary>
-        private static object GetValueFromJsonElement(JsonElement element)
+        private static object? GetValueFromJsonElement(JsonElement element)
         {
             switch (element.ValueKind)
             {
@@ -392,7 +401,7 @@ namespace AppRefiner.Templates
                         return intValue;
                     return element.GetDouble();
                 case JsonValueKind.String:
-                    return element.GetString();
+                    return element.GetString()!;
                 default:
                     return null;
             }
@@ -404,7 +413,7 @@ namespace AppRefiner.Templates
         /// <param name="json">JSON string containing template definition</param>
         /// <param name="filePath">Optional path to the JSON file (needed to find associated template text file)</param>
         /// <returns>A populated Template object</returns>
-        public static Template LoadFromJson(string json, string filePath = null)
+        public static Template LoadFromJson(string json, string? filePath = null)
         {
             try
             {
@@ -418,8 +427,8 @@ namespace AppRefiner.Templates
                 // Create template with properties from JSON
                 var template = new Template
                 {
-                    TemplateName = jsonDoc.GetProperty("templateName").GetString(),
-                    Description = jsonDoc.GetProperty("description").GetString(),
+                    TemplateName = jsonDoc.GetProperty("templateName").GetString()!,
+                    Description = jsonDoc.GetProperty("description").GetString()!,
                     Inputs = new List<TemplateInput>()
                 };
 
@@ -435,7 +444,7 @@ namespace AppRefiner.Templates
                 {
                     // Fallback to template property in JSON if it exists
                     template.TemplateText = jsonDoc.TryGetProperty("template", out var templateProp)
-                        ? templateProp.GetString()
+                        ? templateProp.GetString()!
                         : throw new FileNotFoundException($"Template text file not found: {templateFilePath}");
                 }
 
@@ -444,14 +453,14 @@ namespace AppRefiner.Templates
                 {
                     var templateInput = new TemplateInput
                     {
-                        Id = input.GetProperty("id").GetString(),
-                        Label = input.GetProperty("label").GetString(),
-                        Type = input.GetProperty("type").GetString(),
+                        Id = input.GetProperty("id").GetString()!,
+                        Label = input.GetProperty("label").GetString()!,
+                        Type = input.GetProperty("type").GetString()!,
                         Required = input.GetProperty("required").GetBoolean(),
                         DefaultValue = input.TryGetProperty("defaultValue", out var defaultValue) ?
-                            defaultValue.GetString() : null,
+                            defaultValue.GetString()! : "",
                         Description = input.TryGetProperty("description", out var description) ?
-                            description.GetString() : null
+                            description.GetString()! : ""
                     };
 
                     // Parse display condition if present
@@ -459,9 +468,9 @@ namespace AppRefiner.Templates
                     {
                         templateInput.DisplayCondition = new DisplayCondition
                         {
-                            Field = displayConditionProp.GetProperty("field").GetString(),
-                            Operator = displayConditionProp.GetProperty("operator").GetString(),
-                            Value = GetValueFromJsonElement(displayConditionProp.GetProperty("value"))
+                            Field = displayConditionProp.GetProperty("field").GetString()!,
+                            Operator = displayConditionProp.GetProperty("operator").GetString()!,
+                            Value = GetValueFromJsonElement(displayConditionProp.GetProperty("value"))!
                         };
                     }
 

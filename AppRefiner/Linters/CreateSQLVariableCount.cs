@@ -340,8 +340,13 @@ namespace AppRefiner.Linters
             var varName = idExpr.ident().GetText();
 
             // Check if this is a SQL variable we're tracking
-            if (!TryFindInScopes(varName, out var sqlInfo))
+            if (!TryFindInScopes(varName, out SQLStatementInfo? sqlInfo))
                 return;
+
+            if (sqlInfo == null)
+            {
+                return;
+            }
 
             // Validate the function call arguments
             var args = context.functionCallArguments();
@@ -394,7 +399,10 @@ namespace AppRefiner.Linters
 
         private void ValidateOpenCall(DotAccessContext context, FunctionCallArgumentsContext args, SQLStatementInfo sqlInfo)
         {
-            if (!sqlInfo.HasValidSqlText && args?.expression()?.Length > 0)
+            if (args == null)
+                return;
+
+            if (!sqlInfo.HasValidSqlText && args.expression()?.Length > 0)
             {
                 var firstArg = args.expression()[0];
 
@@ -424,7 +432,7 @@ namespace AppRefiner.Linters
             }
 
             // If we still don't have valid SQL text, check if this requires parameters
-            if (!sqlInfo.HasValidSqlText && args?.expression()?.Length > 0)
+            if (!sqlInfo.HasValidSqlText && args.expression()?.Length > 0)
             {
                 AddReport(
                     11,
@@ -491,7 +499,7 @@ namespace AppRefiner.Linters
                     var singleArg = expressions[0];
 
                     TryGetVariableInfo(singleArg.GetText(), out var info);
-                    if ((info != null && info.Type.StartsWith("Array", StringComparison.OrdinalIgnoreCase)) || info.Type.Equals("Record", StringComparison.OrdinalIgnoreCase))
+                    if (info != null && (info.Type.StartsWith("Array", StringComparison.OrdinalIgnoreCase) || info.Type.Equals("Record", StringComparison.OrdinalIgnoreCase)))
                     {
                         // If it's an array type or a Record, we can proceed
                         return;

@@ -45,7 +45,7 @@ namespace AppRefiner
         bool isInsideIf = false;
         bool isCompOrGblDefn = false;
         int unMatchedParens;
-        MemoryStream ms;
+        MemoryStream? ms;
         Stack<BooleanFrame> booleanFrames = new();
 
         BooleanFrame currentBoolFrame
@@ -57,7 +57,7 @@ namespace AppRefiner
         }
 
         StringBuilder OutputText = new();
-        List<NameReference> References;
+        List<NameReference>? References;
         private static string[] refKeywords = new string[] {"Component","Panel","RecName", "Scroll", "MenuName", "BarName", "ItemName", "CompIntfc",
                 "Image", "Interlink", "StyleSheet", "FileLayout", "Page", "PanelGroup", "Message", "BusProcess", "BusEvent", "BusActivity",
                 "Field", "Record","Operation","Portal","Node"};
@@ -81,6 +81,7 @@ namespace AppRefiner
 
         private string ReadPureString()
         {
+            if (ms == null) { return ""; }
             MemoryStream bytesRead = new();
             byte[] currentChar = new byte[2];
 
@@ -105,7 +106,7 @@ namespace AppRefiner
             {
                 Write("\r\n");
             }*/
-            if (OutputText.Length > 0 && OutputText[OutputText.Length - 1] != '\n')
+            if (OutputText.Length > 0 && OutputText[^1] != '\n')
             {
                 bool onlyWhitespace = true;
                 var x = OutputText.Length - 1;
@@ -126,6 +127,7 @@ namespace AppRefiner
         }
         private string ReadNumber()
         {
+            if (ms == null) { return ""; }
             int numBytes = 18;
 
             int firstByte = ms.ReadByte();
@@ -161,17 +163,18 @@ namespace AppRefiner
 
         private string ReadReference()
         {
-
+            if (References == null) { return ""; }
+            if (ms == null) { return ""; }
 
             var index1 = ms.ReadByte();
             var index2 = ms.ReadByte();
 
             var index = (index2 * 256) + index1;
 
-            var reference = References.Where(p => p.NameNum == (index + 1)).First();
+            var reference = References.Where(p => p.NameNum == (index + 1)).FirstOrDefault();
 
-            var RecordName = reference.RecName;
-            var ReferenceName = reference.RefName;
+            var RecordName = reference?.RecName ?? "";
+            var ReferenceName = reference?.RefName ?? "";
 
             foreach (String keyword in refKeywords)
             {
@@ -201,6 +204,8 @@ namespace AppRefiner
         {
             const int WIDE_AND = 0xff;
             const int COMM_LEN_BYTE2_MULTIPLIER = 256;
+
+            if (ms == null) { return ""; }
 
             int commLen = ms.ReadByte() & WIDE_AND;
             commLen += (ms.ReadByte() & WIDE_AND) * COMM_LEN_BYTE2_MULTIPLIER;

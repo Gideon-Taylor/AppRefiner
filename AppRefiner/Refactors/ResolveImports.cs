@@ -89,9 +89,19 @@ namespace AppRefiner.Refactors
                 if (firstChild != null)
                 {
                     // Add the imports block before the first node
-                    InsertBefore(context.GetChild(0) as ParserRuleContext,
-                        imports + Environment.NewLine + Environment.NewLine,
-                        "Add missing imports");
+                    if (context.GetChild(0) is ParserRuleContext firstChildContext)
+                    {
+                        InsertBefore(firstChildContext,
+                            imports + Environment.NewLine + Environment.NewLine,
+                            "Add missing imports");
+                    }
+                    else
+                    {
+                        // Fall back to using InsertText if the cast fails
+                        InsertText(context.Start.StartIndex,
+                            imports + Environment.NewLine + Environment.NewLine,
+                            "Add missing imports");
+                    }
                 }
                 else
                 {

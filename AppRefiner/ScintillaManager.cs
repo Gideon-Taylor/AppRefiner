@@ -727,8 +727,8 @@ namespace AppRefiner
             editor.SendMessage(SCI_SETCARETWIDTH, 2, IntPtr.Zero);
 
             // Set selection colors: navy blue background with white text
-            editor.SendMessage(SCI_SETELEMENTCOLOUR, SC_ELEMENT_SELECTION_BACK, (IntPtr)0xC19429FF); // Navy blue in BGR (800000 = RGB 0,0,128)
-            editor.SendMessage(SCI_SETELEMENTCOLOUR, SC_ELEMENT_SELECTION_TEXT, (IntPtr)0xFF00FFFF); // White text (hex FFFFFF)
+            editor.SendMessage(SCI_SETELEMENTCOLOUR, SC_ELEMENT_SELECTION_BACK, new IntPtr(0xC19429FF)); // Navy blue in BGR (800000 = RGB 0,0,128)
+            editor.SendMessage(SCI_SETELEMENTCOLOUR, SC_ELEMENT_SELECTION_TEXT, new IntPtr(0xFF00FFFF)); // White text (hex FFFFFF)
 
             /* fold margin colors */
             // Collapse Label Style

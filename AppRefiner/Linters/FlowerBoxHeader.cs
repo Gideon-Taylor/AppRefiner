@@ -39,6 +39,12 @@ namespace AppRefiner.Linters
 
             var firstComment = Comments?.First();
 
+            if (firstComment == null)
+            {
+                AddMissingHeaderReport();
+                return;
+            }
+
             if (firstComment.Type != PeopleCodeLexer.BLOCK_COMMENT_SLASH)
             {
                 AddMissingHeaderReport();

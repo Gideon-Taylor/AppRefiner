@@ -149,7 +149,7 @@ namespace AppRefiner.Refactors
             if (editor.LineToReports.TryGetValue(line, out var reports))
             {
                 var newSuppressLine = $"/* #AppRefiner suppress ({string.Join(",", reports.Select(r => r.GetFullId()))}) */\r\n";
-                ParserRuleContext contextToInsertBefore = null;
+                ParserRuleContext? contextToInsertBefore = null;
 
                 if (type == SuppressReportMode.LINE)
                 {

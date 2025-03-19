@@ -31,7 +31,6 @@ namespace AppRefiner
         [DllImport("user32.dll", SetLastError = true, CharSet = CharSet.Auto)]
         private static extern int GetClassName(IntPtr hWnd, StringBuilder lpClassName, int nMaxCount);
 
-        // Import GetWindowRect from user32.dll.
         [DllImport("user32.dll", SetLastError = true)]
         private static extern bool GetWindowRect(IntPtr hWnd, out RECT lpRect);
 
@@ -44,7 +43,7 @@ namespace AppRefiner
             public int Bottom;
         }
 
-        System.Threading.Timer scanTimer;
+        System.Threading.Timer? scanTimer;
         private bool timerRunning = false;
         private object scanningLock = new();
         private ScintillaEditor? activeEditor = null;
@@ -74,7 +73,7 @@ namespace AppRefiner
         }
 
         // Path for linting report output
-        private string lintReportPath;
+        private string? lintReportPath;
         public MainForm()
         {
             InitializeComponent();
@@ -279,7 +278,7 @@ namespace AppRefiner
             {
                 Description = "Select directory for linting reports",
                 UseDescriptionForTitle = true,
-                SelectedPath = lintReportPath
+                SelectedPath = lintReportPath ?? string.Empty
             };
 
             // Show dialog and update path if OK
@@ -300,7 +299,7 @@ namespace AppRefiner
         /// Generate lint reports for all files in the current project
         /// </summary>
         /// <param name="editor">The active editor, used to identify the project</param>
-        private void LintProject(ScintillaEditor editor, CommandProgressDialog progressDialog)
+        private void LintProject(ScintillaEditor editor, CommandProgressDialog? progressDialog)
         {
             if (editor == null || editor.DataManager == null)
             {
@@ -337,7 +336,7 @@ namespace AppRefiner
             // Create a timestamp for the report filename
             string timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
             string reportFileName = $"{projectName}_LintReport_{timestamp}.html";
-            string reportPath = Path.Combine(lintReportPath, reportFileName);
+            string reportPath = Path.Combine(lintReportPath ?? string.Empty, reportFileName);
 
             // Get metadata for all programs in the project without loading content
             var ppcProgsMeta = editor.DataManager.GetPeopleCodeItemMetadataForProject(projectName);
@@ -367,7 +366,7 @@ namespace AppRefiner
                     this.Invoke(() =>
                     {
                         lblStatus.Text = $"Linting project - processed {processedCount} of {ppcProgsMeta.Count} items...";
-                        progressDialog.UpdateHeader($"Linting project - processed {processedCount} of {ppcProgsMeta.Count} items...");
+                        progressDialog?.UpdateHeader($"Linting project - processed {processedCount} of {ppcProgsMeta.Count} items...");
                     });
                     GC.Collect();
                 }
@@ -388,7 +387,7 @@ namespace AppRefiner
                 }
 
                 // Create lexer and parser for this program
-                PeopleCodeLexer lexer = new(new Antlr4.Runtime.AntlrInputStream(programText));
+                PeopleCodeLexer? lexer = new(new Antlr4.Runtime.AntlrInputStream(programText));
                 var stream = new Antlr4.Runtime.CommonTokenStream(lexer);
 
                 // Get all tokens including those on hidden channels
@@ -399,7 +398,7 @@ namespace AppRefiner
                     .Where(token => token.Channel == PeopleCodeLexer.COMMENTS || token.Channel == PeopleCodeLexer.API_COMMENTS)
                     .ToList();
 
-                PeopleCodeParser parser = new(stream);
+                PeopleCodeParser? parser = new(stream);
                 var program = parser.program();
                 parseCount++;
                 parser.Interpreter.ClearDFA();
@@ -460,7 +459,7 @@ namespace AppRefiner
             this.Invoke(() =>
             {
                 lblStatus.Text = $"Finalizing Report...";
-                progressDialog.UpdateHeader($"Finalizing Report...");
+                progressDialog?.UpdateHeader($"Finalizing Report...");
             });
 
             // Always generate the HTML report, even if no issues found
@@ -637,14 +636,14 @@ namespace AppRefiner
                 string inputId = kvp.Key;
                 DisplayCondition condition = kvp.Value;
 
-                if (templateInputControls.TryGetValue(inputId, out Control control))
+                if (templateInputControls.TryGetValue(inputId, out Control? control))
                 {
                     bool shouldDisplay = Template.IsDisplayConditionMet(condition, currentValues);
                     visibilityChanged |= control.Visible != shouldDisplay;
                     control.Visible = shouldDisplay;
 
                     // Also update the label visibility
-                    if (templateInputLabels.TryGetValue(inputId, out Control label))
+                    if (templateInputLabels.TryGetValue(inputId, out Control? label))
                     {
                         label.Visible = shouldDisplay;
                     }
@@ -669,8 +668,8 @@ namespace AppRefiner
 
             foreach (var inputId in orderedInputs)
             {
-                if (templateInputControls.TryGetValue(inputId, out Control control) &&
-                    templateInputLabels.TryGetValue(inputId, out Control label))
+                if (templateInputControls.TryGetValue(inputId, out Control? control) &&
+                    templateInputLabels.TryGetValue(inputId, out Control? label))
                 {
                     if (control.Visible)
                     {
@@ -996,7 +995,7 @@ namespace AppRefiner
             PerformScan();
             if (timerRunning)
             {
-                scanTimer.Change(1000, Timeout.Infinite);
+                scanTimer?.Change(1000, Timeout.Infinite);
             }
         }
 
@@ -1069,9 +1068,9 @@ namespace AppRefiner
             }
 
             // Create parse tree
-            PeopleCodeLexer lexer = new(new Antlr4.Runtime.AntlrInputStream(editor.ContentString));
+            PeopleCodeLexer? lexer = new(new Antlr4.Runtime.AntlrInputStream(editor.ContentString));
             var stream = new Antlr4.Runtime.CommonTokenStream(lexer);
-            PeopleCodeParser parser = new(stream);
+            PeopleCodeParser? parser = new(stream);
             var program = parser.program();
             parser.Interpreter.ClearDFA();
             GC.Collect();
@@ -1620,7 +1619,7 @@ namespace AppRefiner
         }
 
 
-        private void CmbTemplates_SelectedIndexChanged(object sender, EventArgs e)
+        private void CmbTemplates_SelectedIndexChanged(object? sender, EventArgs e)
         {
             if (cmbTemplates.SelectedItem is Template selectedTemplate)
             {
@@ -1628,7 +1627,7 @@ namespace AppRefiner
             }
         }
 
-        private void btnApplyTemplate_Click(object sender, EventArgs e)
+        private void btnApplyTemplate_Click(object? sender, EventArgs e)
         {
             if (cmbTemplates.SelectedItem is Template selectedTemplate)
             {

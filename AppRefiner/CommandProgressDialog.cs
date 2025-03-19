@@ -24,6 +24,9 @@ namespace AppRefiner
         public CommandProgressDialog(IntPtr parentHwnd)
         {
             this.parentHandle = parentHwnd;
+            this.headerPanel = new Panel();
+            this.headerLabel = new Label();
+            this.progressBar = new ProgressBar();
             InitializeComponent();
             PositionInParent();
         }
@@ -60,9 +63,7 @@ namespace AppRefiner
 
         private void InitializeComponent()
         {
-            this.headerPanel = new Panel();
-            this.headerLabel = new Label();
-            this.progressBar = new ProgressBar();
+
             this.headerPanel.SuspendLayout();
             this.SuspendLayout();
 

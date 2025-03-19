@@ -1,4 +1,4 @@
-﻿using System.Runtime.InteropServices;
+using System.Runtime.InteropServices;
 
 namespace AppRefiner
 {
@@ -40,12 +40,11 @@ namespace AppRefiner
                     ModifierKeys modifier = (ModifierKeys)((int)m.LParam & 0xFFFF);
 
                     // invoke the event to notify the parent.
-                    if (KeyPressed != null)
-                        KeyPressed(this, new KeyPressedEventArgs(modifier, key));
+                    KeyPressed?.Invoke(this, new KeyPressedEventArgs(modifier, key));
                 }
             }
 
-            public event EventHandler<KeyPressedEventArgs> KeyPressed;
+            public event EventHandler<KeyPressedEventArgs>? KeyPressed;
 
             #region IDisposable Members
 
@@ -63,10 +62,9 @@ namespace AppRefiner
         public KeyboardHook()
         {
             // register the event of the inner native window.
-            _window.KeyPressed += delegate (object sender, KeyPressedEventArgs args)
+            _window.KeyPressed += delegate (object? sender, KeyPressedEventArgs args)
             {
-                if (KeyPressed != null)
-                    KeyPressed(this, args);
+                KeyPressed?.Invoke(this, args);
             };
         }
 
@@ -88,7 +86,7 @@ namespace AppRefiner
         /// <summary>
         /// A hot key has been pressed.
         /// </summary>
-        public event EventHandler<KeyPressedEventArgs> KeyPressed;
+        public event EventHandler<KeyPressedEventArgs>? KeyPressed;
 
         #region IDisposable Members
 
