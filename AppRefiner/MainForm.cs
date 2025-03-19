@@ -2178,6 +2178,28 @@ namespace AppRefiner
                 }
             ));
 
+            // Add Force Refresh command
+            AvailableCommands.Add(new Command(
+                "Editor: Force Refresh",
+                "Force the editor to refresh styles",
+                () =>
+                {
+                    if (activeEditor != null)
+                    {
+                        // Reset the content hash to force processing on next scan
+                        activeEditor.LastContentHash = 0;
+                        // Clear content string to force re-reading
+                        activeEditor.ContentString = null;
+                        // Clear annotations
+                        ScintillaManager.ClearAnnotations(activeEditor);
+                        // Reset styles
+                        ScintillaManager.ResetStyles(activeEditor);
+                        // Update status
+                        lblStatus.Text = "Force refreshing editor...";
+                    }
+                }
+            ));
+
             // Add project linting commands
             AvailableCommands.Add(new Command(
                 "Project: Set Lint Report Directory",
