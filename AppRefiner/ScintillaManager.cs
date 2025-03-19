@@ -10,6 +10,7 @@ using SQL.Formatter.Language;
 using SQL.Formatter;
 using AppRefiner.Database;
 using System.CodeDom;
+using AppRefiner.Linters;
 
 namespace AppRefiner
 {
@@ -1223,6 +1224,8 @@ namespace AppRefiner
         public IntPtr AnnotationStyleOffset = IntPtr.Zero;
         public IDataManager? DataManager = null;
 
+        public Dictionary<int, List<Report>> LineToReports = new();
+
         public ScintillaEditor(IntPtr hWnd, uint procID, string caption)
         {
             this.hWnd = hWnd;
@@ -1258,6 +1261,26 @@ namespace AppRefiner
         public IntPtr SendMessage(int Msg, IntPtr wParam, IntPtr lParam)
         {
             return SendMessage(hWnd, Msg, wParam, lParam);
+        }
+
+        public void SetLinterReports(List<Report> reports)
+        {
+            /* clear out any old lists and then clear the dictionary */
+            foreach (var list in LineToReports.Values)
+            {
+                list.Clear();
+            }
+            LineToReports.Clear();
+
+            /* for each report, add it to the editor's LineToReports dictionary */
+            foreach (var report in reports)
+            {
+                if (!LineToReports.ContainsKey(report.Line))
+                {
+                    LineToReports[report.Line] = new List<Report>();
+                }
+                LineToReports[report.Line].Add(report);
+            }
         }
 
         public bool IsValid()
