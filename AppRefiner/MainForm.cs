@@ -1208,6 +1208,8 @@ namespace AppRefiner
             lexer = null;
             parser = null;
             stream = null;
+
+            activeEditor.SetLinterReports(reports);
             foreach (var g in reports.GroupBy(r => r.Line).OrderBy(b => b.First().Line))
             {
                 List<string> messages = new();
@@ -1429,14 +1431,15 @@ namespace AppRefiner
             var result = refactorClass.GetResult();
             if (!result.Success)
             {
-                MessageBox.Show(
-                    owner != IntPtr.Zero ? new WindowWrapper(owner) : this, 
-                    result.Message, 
-                    "Refactoring Failed", 
-                    MessageBoxButtons.OK, 
-                    MessageBoxIcon.Warning
-                );
                 this.Invoke(() => {
+                    MessageBox.Show(
+                        owner != IntPtr.Zero ? new WindowWrapper(owner) : this,
+                        result.Message,
+                        "Refactoring Failed",
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Warning
+                    );
+                
                     btnRestoreSnapshot.Enabled = false;
                 });
                 return;
@@ -1568,6 +1571,7 @@ namespace AppRefiner
             parser = null;
             stream = null;
 
+            activeEditor.SetLinterReports(reports);
             // Process and display reports
             foreach (var g in reports.GroupBy(r => r.Line).OrderBy(b => b.First().Line))
             {
@@ -2042,7 +2046,71 @@ namespace AppRefiner
                     }
                 }
             ));
-            
+
+            AvailableCommands.Add(new Command(
+                "Linter: Suppress lint errors for this line",
+                "Suppress lint errors for the current line",
+                () =>
+                {
+                    if (activeEditor != null)
+                    {
+                        var line = ScintillaManager.GetCurrentLine(activeEditor);
+                        if (line != -1)
+                        {
+                            ProcessRefactor(new SuppressReportRefactor(activeEditor, line, SuppressReportMode.LINE));
+                        }
+                    }
+                }
+            ));
+
+            AvailableCommands.Add(new Command(
+                "Linter: Suppress lint errors for current block",
+                "Suppress lint errors for the current block",
+                () =>
+                {
+                    if (activeEditor != null)
+                    {
+                        var line = ScintillaManager.GetCurrentLine(activeEditor);
+                        if (line != -1)
+                        {
+                            ProcessRefactor(new SuppressReportRefactor(activeEditor, line, SuppressReportMode.NEAREST_BLOCK));
+                        }
+                    }
+                }
+            ));
+
+            AvailableCommands.Add(new Command(
+                "Linter: Suppress lint errors for this method/function",
+                "Suppress lint errors for the current method/function",
+                () =>
+                {
+                    if (activeEditor != null)
+                    {
+                        var line = ScintillaManager.GetCurrentLine(activeEditor);
+                        if (line != -1)
+                        {
+                            ProcessRefactor(new SuppressReportRefactor(activeEditor, line, SuppressReportMode.METHOD_OR_FUNC));
+                        }
+                    }
+                }
+            ));
+
+            AvailableCommands.Add(new Command(
+                "Linter: Suppress lint errors for this file",
+                "Suppress lint errors for the current file",
+                () =>
+                {
+                    if (activeEditor != null)
+                    {
+                        var line = ScintillaManager.GetCurrentLine(activeEditor);
+                        if (line != -1)
+                        {
+                            ProcessRefactor(new SuppressReportRefactor(activeEditor, line, SuppressReportMode.GLOBAL));
+                        }
+                    }
+                }
+            ));
+
             // Add individual linter commands with "Lint: " prefix
             foreach (var linter in linterRules)
             {

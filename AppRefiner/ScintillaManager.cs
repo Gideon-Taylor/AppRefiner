@@ -1195,16 +1195,23 @@ namespace AppRefiner
         /// <param name="editor">The Scintilla editor instance</param>
         /// <param name="line">The current line number</param>
         /// <returns>The start index of the previous line, or -1 if there is no previous line</returns>
-        public static int GetPreviousLineStartIndex(ScintillaEditor editor, int line)
+        public static int GetLineStartIndex(ScintillaEditor editor, int line)
         {
             if (editor == null || line < 1)
             {
                 return -1; // No previous line for line 0 or invalid inputs
             }
             
-            int previousLine = line - 1;
-            return (int)editor.SendMessage(SCI_POSITIONFROMLINE, (IntPtr)previousLine, IntPtr.Zero);
+            return (int)editor.SendMessage(SCI_POSITIONFROMLINE, (IntPtr)line, IntPtr.Zero);
         }
+
+
+        public static int GetCurrentLine(ScintillaEditor editor)
+        {
+            if (editor == null) return -1;
+            return (int)editor.SendMessage(SCI_LINEFROMPOSITION, (IntPtr)editor.SendMessage(SCI_GETCURRENTPOS, 0, 0), 0);
+        }
+
     }
     public enum EditorType
     {
