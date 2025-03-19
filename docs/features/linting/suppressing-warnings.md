@@ -1,0 +1,205 @@
+# Suppressing Lint Warnings
+
+While lint warnings are valuable for maintaining code quality, there are legitimate cases where you may need to suppress them. AppRefiner provides several methods to suppress lint warnings in your code.
+
+## Why Suppress Warnings?
+
+There are several valid reasons to suppress lint warnings:
+
+1. **False positives**: When a lint rule incorrectly flags valid code
+2. **Legacy code**: When working with older code that cannot be immediately refactored
+3. **Special cases**: When you have a specific reason to deviate from the standard
+4. **Generated code**: For automatically generated code that you don't control
+5. **Third-party code**: For code from external sources that you cannot modify
+
+## Suppression Methods
+
+AppRefiner provides multiple ways to suppress lint warnings:
+
+### 1. Inline Suppression Comments
+
+The most common way to suppress a specific warning is with an inline comment:
+
+```peoplecode
+/* lint:disable RULE-ID */
+Local string &unusedVariable;  /* This warning is now suppressed */
+/* lint:enable RULE-ID */
+```
+
+You can suppress multiple rules at once:
+
+```peoplecode
+/* lint:disable RULE-ID-1 RULE-ID-2 */
+Local string &unusedVariable;
+Local number &anotherUnused;
+/* lint:enable RULE-ID-1 RULE-ID-2 */
+```
+
+Or suppress all rules for a section of code:
+
+```peoplecode
+/* lint:disable-all */
+Local string &unusedVariable;
+Local number &anotherUnused;
+/* lint:enable-all */
+```
+
+### 2. Line-Specific Suppression
+
+To suppress a warning for just a single line:
+
+```peoplecode
+Local string &unusedVariable;  /* lint:disable-line RULE-ID */
+```
+
+Or suppress all warnings for a line:
+
+```peoplecode
+Local string &unusedVariable;  /* lint:disable-line */
+```
+
+### 3. Next-Line Suppression
+
+To suppress a warning for the next line:
+
+```peoplecode
+/* lint:disable-next-line RULE-ID */
+Local string &unusedVariable;
+```
+
+### 4. File-Level Suppression
+
+To suppress a specific rule for the entire file, add this at the top of the file:
+
+```peoplecode
+/* lint:disable-file RULE-ID */
+```
+
+Or suppress all linting for the file:
+
+```peoplecode
+/* lint:disable-file */
+```
+
+### 5. Project-Level Suppression
+
+For project-wide suppression, you can create a configuration file:
+
+1. Create a file named `.apprefiner` in your project root
+2. Add rule suppressions in JSON format:
+
+```json
+{
+  "linting": {
+    "disabled": ["RULE-ID-1", "RULE-ID-2"],
+    "reduced-severity": {
+      "RULE-ID-3": "information",
+      "RULE-ID-4": "hint"
+    }
+  }
+}
+```
+
+### 6. UI-Based Suppression
+
+You can also suppress rules through the AppRefiner UI:
+
+1. Go to **Tools > Options > AppRefiner > Linting**
+2. Find the rule you want to suppress
+3. Set its severity to **Disabled**
+
+## Best Practices for Suppressing Warnings
+
+### 1. Document Your Suppressions
+
+Always include a comment explaining why you're suppressing a warning:
+
+```peoplecode
+/* 
+ * lint:disable UNUSED-VAR
+ * This variable is required for the third-party API but not used directly
+ */
+Local string &apiRequiredVar;
+```
+
+### 2. Use the Most Specific Suppression
+
+Apply suppressions at the most specific level possible:
+
+- Use line-specific suppressions instead of block suppressions
+- Use block suppressions instead of file suppressions
+- Use file suppressions instead of project suppressions
+
+### 3. Re-enable Rules When Possible
+
+Always re-enable rules after the code section that needs suppression:
+
+```peoplecode
+/* lint:disable RULE-ID */
+// Code that needs suppression
+/* lint:enable RULE-ID */
+```
+
+### 4. Regularly Review Suppressions
+
+Periodically review your code to see if suppressions can be removed:
+
+1. Search for `lint:disable` comments in your codebase
+2. Evaluate if the suppression is still necessary
+3. Consider refactoring the code to fix the underlying issue
+
+### 5. Track Suppressions
+
+Keep track of suppressions, especially in larger projects:
+
+1. Consider creating a suppressions log
+2. Document the reason for each suppression
+3. Include a target date for addressing the underlying issue
+
+## Example Scenarios
+
+### Suppressing Unused Variable Warnings
+
+```peoplecode
+Function ProcessData(&data As array of string)
+   /* 
+    * lint:disable UNUSED-VAR
+    * This variable is used for debugging during development
+    */
+   Local string &debugInfo = "Processing " | &data.Len | " items";
+   
+   /* Process data... */
+End-Function;
+```
+
+### Suppressing Multiple Warnings
+
+```peoplecode
+/* 
+ * lint:disable COMPLEX-FUNC LONG-FUNC
+ * This function is complex due to business requirements
+ * and will be refactored in the next release
+ */
+Function CalculateComplexFormula(&input As number) Returns number
+   /* Complex calculation with many branches... */
+End-Function;
+/* lint:enable COMPLEX-FUNC LONG-FUNC */
+```
+
+### Suppressing Warnings for Generated Code
+
+```peoplecode
+/* 
+ * lint:disable-file
+ * This file is auto-generated by the AppGenerator tool.
+ * Do not modify directly.
+ */
+
+/* Generated code... */
+```
+
+## Related Features
+
+- [Linting Overview](overview.md)
+- [Available Lint Rules](available-rules.md)
+- [Custom Lint Rules](custom-rules.md)
