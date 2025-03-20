@@ -28,16 +28,75 @@ When you open a SQL definition in Application Designer:
 
 ### Application Designer's Default Format (at save time)
 
+Here is a made up example of complex SQL statement to demonstrate the benefits of App Refiner's SQL formatting:
+
 ```sql
-select a.field1,a.field2,b.field1 from ps_record a,ps_record2 b where a.field1=b.field1 and a.field3='Value' order by a.field1
+SELECT  tc.CUSTOMER_ID
+ ,  tc.CUSTOMER_NAME
+ ,  tc.TOTAL_SALES
+ ,  tc.NUM_ORDERS
+ ,  o.ORDER_ID
+ ,  o.ORDER_DATE
+ ,  o.ORDER_AMOUNT
+ ,  (  
+ SELECT  COUNT(*)  
+  FROM  (  
+ SELECT  r.ORDER_ID  
+  FROM  PS_RETURNS r  JOIN PS_RETURN_DETAILS rd ON r.RETURN_ID = rd.RETURN_ID  JOIN PS_ITEMS i ON rd.ITEM_ID = i.ITEM_ID  
+ WHERE  r.ORDER_ID = o.ORDER_ID  ) NESTED_RETURNS  ) AS RETURN_COUNT,  (  
+ SELECT  SUM(inv.INVOICE_AMOUNT)  
+  FROM  PS_INVOICES inv  JOIN (  
+ SELECT  oi_inner.INVOICE_ID  
+  FROM  PS_ORDER_INVOICES oi_inner  JOIN PS_ORDERS o_inner ON oi_inner.ORDER_ID = o_inner.ORDER_ID  
+ WHERE  o_inner.CUSTOMER_ID = tc.CUSTOMER_ID  ) ORDER_INV ON inv.INVOICE_ID = ORDER_INV.INVOICE_ID  ) AS TOTAL_INVOICES 
+  FROM  PS_TOP_CUSTOMERS tc  JOIN PS_ORDERS o ON tc.CUSTOMER_ID = o.CUSTOMER_ID 
+ WHERE  tc.RANK <= 10
 ```
 
 ### App Refiner's Improved Format (for editing)
 
 ```sql
-SELECT a.field1, a.field2, b.field1
-FROM   ps_record a, ps_record2 b
-WHERE  a.field1 = b.field1
-AND    a.field3 = 'Value'
-ORDER BY a.field1
+SELECT
+  tc.CUSTOMER_ID,
+  tc.CUSTOMER_NAME,
+  tc.TOTAL_SALES,
+  tc.NUM_ORDERS,
+  o.ORDER_ID,
+  o.ORDER_DATE,
+  o.ORDER_AMOUNT,
+  (
+    SELECT
+      COUNT(*)
+    FROM
+      (
+        SELECT
+          r.ORDER_ID
+        FROM
+          PS_RETURNS r
+          JOIN PS_RETURN_DETAILS rd ON r.RETURN_ID = rd.RETURN_ID
+          JOIN PS_ITEMS i ON rd.ITEM_ID = i.ITEM_ID
+        WHERE
+          r.ORDER_ID = o.ORDER_ID
+      ) NESTED_RETURNS
+  ) AS RETURN_COUNT,
+  (
+    SELECT
+      SUM(inv.INVOICE_AMOUNT)
+    FROM
+      PS_INVOICES inv
+      JOIN (
+        SELECT
+          oi_inner.INVOICE_ID
+        FROM
+          PS_ORDER_INVOICES oi_inner
+          JOIN PS_ORDERS o_inner ON oi_inner.ORDER_ID = o_inner.ORDER_ID
+        WHERE
+          o_inner.CUSTOMER_ID = tc.CUSTOMER_ID
+      ) ORDER_INV ON inv.INVOICE_ID = ORDER_INV.INVOICE_ID
+  ) AS TOTAL_INVOICES
+FROM
+  PS_TOP_CUSTOMERS tc
+  JOIN PS_ORDERS o ON tc.CUSTOMER_ID = o.CUSTOMER_ID
+WHERE
+  tc.RANK <= 10
 ```

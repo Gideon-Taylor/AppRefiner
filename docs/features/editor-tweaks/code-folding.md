@@ -22,6 +22,7 @@ PeopleCode files can become lengthy and complex, especially when they contain mu
 
 ## Foldable Sections
 
+### PeopleCode
 AppRefiner automatically identifies the following sections as foldable:
 
 - **Function definitions**
@@ -34,18 +35,17 @@ AppRefiner automatically identifies the following sections as foldable:
 - **Evaluate/When blocks**
 - **Multi-line comments**
 
-## Customizing Code Folding
+**Note** Folding is actually done by indentation level, but since Application Designer enforces indentation, it effectively works as mentioned above.
 
-You can customize code folding behavior in AppRefiner through the Settings menu:
+**Note** Folding is most performant in 8.61 where the foldable sections are defined by the language grammar. In earlier versions AppRefiner has to set the folding levels each line of the program. Excessively large programs may see significant delays while folding is being processed.
 
-1. Go to **Tools > Options > Text Editor > PeopleCode > Advanced**
-2. Under the **Outlining** section, you can:
-   - Enable or disable automatic outlining
-   - Choose which code elements should be foldable
-   - Set the default state (expanded or collapsed) for newly opened files
+### HTML
+AppRefiner sets folding levels by indentation level like it does for PeopleCode.
+
+### SQL
+AppRefiner sets folding levels by indentation level like it does for PeopleCode. Due to the Application Designer formatting rules this isn't always great, but with AppRefiner's [SQL formatting](sql-formatting.md) feature you can improve the formatting and thereby improve the effectiveness of the folding.
 
 ## Benefits
-
 - **Improved readability**: Focus on the code sections that matter most
 - **Easier navigation**: Quickly scroll through large files by collapsing irrelevant sections
 - **Better code organization**: Visualize the structure of your code through the folding hierarchy

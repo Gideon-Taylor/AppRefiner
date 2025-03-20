@@ -2,373 +2,395 @@
 
 AppRefiner includes a comprehensive set of lint rules designed specifically for PeopleCode development. This document provides a detailed reference of all available lint rules.
 
-## Syntax Rules
+## Code Structure Rules
 
-### Missing Semicolon (SYNTAX-001)
-
-**Severity**: Warning
-
-Detects missing semicolons at the end of statements.
-
-```peoplecode
-/* Incorrect */
-Local string &name = "John"
-
-/* Correct */
-Local string &name = "John";
-```
-
-### Unmatched Brackets (SYNTAX-002)
-
-**Severity**: Error
-
-Identifies unmatched parentheses, brackets, or braces.
-
-```peoplecode
-/* Incorrect */
-If (&value > 10 {
-   &result = "High";
-}
-
-/* Correct */
-If (&value > 10) {
-   &result = "High";
-}
-```
-
-### Invalid Operator Usage (SYNTAX-003)
-
-**Severity**: Error
-
-Detects invalid operator combinations or usage.
-
-```peoplecode
-/* Incorrect */
-&result = &value1 +* &value2;
-
-/* Correct */
-&result = &value1 + &value2;
-```
-
-## Variable Rules
-
-### Unused Variable (VAR-001)
+### Empty Catch Block (EMPTY_CATCH-1)
 
 **Severity**: Warning
 
-Identifies variables that are declared but never used.
+Detects empty catch blocks that silently swallow exceptions.
+
+```peoplecode
+/* Incorrect */
+try
+   &result = DoSomething();
+catch Exception &e
+   /* Empty catch block silently swallows the exception */
+end-try;
+
+/* Correct */
+try
+   &result = DoSomething();
+catch Exception &e
+   WriteToLog(0, "Error: " | &e.ToString());
+   throw;
+end-try;
+```
+
+### Flowerbox Header (FLOWERBOX-1)
+
+**Severity**: Warning
+
+Validates that files start with a flowerbox header comment.
 
 ```peoplecode
 /* Incorrect */
 Local string &name = "John";
 Local number &age = 30;
-Return &name;  /* &age is never used */
 
 /* Correct */
+/* ===== My PeopleCode Program ===== */
 Local string &name = "John";
-Return &name;
+Local number &age = 30;
 ```
 
-### Undeclared Variable (VAR-002)
-
-**Severity**: Error
-
-Detects variables that are used without being declared.
-
-```peoplecode
-/* Incorrect */
-&result = &value * 2;  /* &value not declared */
-
-/* Correct */
-Local number &value = 10;
-&result = &value * 2;
-```
-
-### Shadowed Variable (VAR-003)
+### Class Method Parameter Count (FUNC_PARAM_COUNT-1)
 
 **Severity**: Warning
 
-Identifies variables that shadow (redeclare) variables from an outer scope.
+Detects methods with too many parameters (more than 5).
 
 ```peoplecode
 /* Incorrect */
-Local string &name = "Global";
-
-Function ProcessName()
-   Local string &name = "Local";  /* Shadows outer &name */
-   /* ... */
-End-Function;
+class MyClass
+   method MyMethod(&param1, &param2, &param3, &param4, &param5, &param6);
+end-class;
 
 /* Correct */
-Local string &globalName = "Global";
-
-Function ProcessName()
-   Local string &localName = "Local";
-   /* ... */
-End-Function;
+class MyClass
+   method MyMethod(&param1, &param2, &param3, &param4, &param5);
+end-class;
 ```
 
-### Unused Parameter (VAR-004)
+### Function Parameter Count (FUNC_PARAM_COUNT-2)
 
 **Severity**: Warning
 
-Detects function parameters that are never used within the function.
+Detects functions with too many parameters (more than 5).
 
 ```peoplecode
 /* Incorrect */
-Function Calculate(&value1 As number, &value2 As number) Returns number
-   Return &value1 * 2;  /* &value2 is never used */
-End-Function;
+Function ProcessData(&id, &name, &email, &phone, &address, &city)
+   /* Function implementation */
+end-function;
 
 /* Correct */
-Function Calculate(&value1 As number) Returns number
-   Return &value1 * 2;
-End-Function;
+Function ProcessData(&id, &name, &email, &phone, &address)
+   /* Function implementation */
+end-function;
+
+/* Even Better - Using a compound parameter object */
+Function ProcessData(&customerData)
+   /* Function implementation using &customerData.id, &customerData.name, etc. */
+end-function;
 ```
 
-## Control Flow Rules
-
-### Unreachable Code (FLOW-001)
+### Long Expression (LONG_EXPR-1)
 
 **Severity**: Warning
 
-Identifies code that will never be executed due to preceding return statements, breaks, or other control flow issues.
+Detects expressions that are too long (more than 200 characters).
 
 ```peoplecode
 /* Incorrect */
-Function ProcessValue(&value As number)
-   If &value < 0 Then
-      Return "Negative";
+&result = &value1 + &value2 + &value3 + &value4 + &value5 + &value6 + &value7 + &value8 + &value9 + &value10 + &value11 + &value12 + &value13 + &value14 + &value15 + &value16 + &value17 + &value18 + &value19 + &value20;
+
+/* Correct */
+&subtotal1 = &value1 + &value2 + &value3 + &value4 + &value5;
+&subtotal2 = &value6 + &value7 + &value8 + &value9 + &value10;
+&subtotal3 = &value11 + &value12 + &value13 + &value14 + &value15;
+&subtotal4 = &value16 + &value17 + &value18 + &value19 + &value20;
+&result = &subtotal1 + &subtotal2 + &subtotal3 + &subtotal4;
+```
+
+### Long Expression (LONG_EXPR-2)
+
+**Severity**: Warning
+
+Detects expressions that are too complex (more than 5 operators).
+
+```peoplecode
+/* Incorrect */
+&result = (&value1 * &value2) + (&value3 / &value4) - (&value5 * &value6) + (&value7 - &value8);
+
+/* Correct */
+&part1 = &value1 * &value2;
+&part2 = &value3 / &value4;
+&part3 = &value5 * &value6;
+&part4 = &value7 - &value8;
+&result = &part1 + &part2 - &part3 + &part4;
+```
+
+### Nested If Statements (NESTED_IF-1)
+
+**Severity**: Warning
+
+Identifies deeply nested If/Else blocks (more than 3 levels deep).
+
+```peoplecode
+/* Incorrect */
+If &condition1 Then
+   If &condition2 Then
+      If &condition3 Then
+         If &condition4 Then
+            /* Too deeply nested */
+         End-If;
+      End-If;
    End-If;
-   Return "Positive";
-   &value = &value * 2;  /* Unreachable code */
-End-Function;
+End-If;
 
 /* Correct */
-Function ProcessValue(&value As number)
-   If &value < 0 Then
-      Return "Negative";
-   End-If;
-   &value = &value * 2;
-   Return "Positive";
-End-Function;
+If Not &condition1 Then
+   Return;
+End-If;
+
+If Not &condition2 Then
+   Return;
+End-If;
+
+If Not &condition3 Then
+   Return;
+End-If;
+
+If &condition4 Then
+   /* Process when all conditions are met */
+End-If;
 ```
 
-### Empty Block (FLOW-002)
+### If-Else-If Chains (NESTED_IF-2)
 
 **Severity**: Information
 
-Detects empty code blocks that may indicate incomplete implementation.
+Detects multiple IF-ELSE-IF chains that could be replaced with Evaluate.
 
 ```peoplecode
 /* Incorrect */
-If &value < 0 Then
-   /* Empty block */
+If &status = "New" Then
+   &result = "Process new request";
+Else
+   If &status = "Pending" Then
+      &result = "Process pending request";
+   Else
+      If &status = "Approved" Then
+         &result = "Process approved request";
+      Else
+         &result = "Unknown status";
+      End-If;
+   End-If;
 End-If;
 
 /* Correct */
-If &value < 0 Then
-   &result = "Negative";
-End-If;
+Evaluate &status
+When = "New"
+   &result = "Process new request";
+When = "Pending"
+   &result = "Process pending request";
+When = "Approved"
+   &result = "Process approved request";
+When-Other
+   &result = "Unknown status";
+End-Evaluate;
 ```
 
-### Assignment in Condition (FLOW-003)
+### Recursive Function (RECURSIVE_FUNC-1)
 
 **Severity**: Warning
 
-Identifies assignments within conditional expressions, which may be a typo for a comparison.
+Detects potentially unsafe recursive functions without proper termination conditions.
 
 ```peoplecode
 /* Incorrect */
-If (&value = 10) Then  /* Assignment instead of comparison */
-   /* ... */
-End-If;
-
-/* Correct */
-If (&value = 10) Then  /* Comparison */
-   /* ... */
-End-If;
-```
-
-## Function Rules
-
-### Missing Return (FUNC-001)
-
-**Severity**: Error
-
-Detects functions with a return type that don't have a return statement on all code paths.
-
-```peoplecode
-/* Incorrect */
-Function GetValue(&id As number) Returns string
-   If &id > 0 Then
-      Return "Positive";
-   End-If;
-   /* Missing return for &id <= 0 */
+Function ProcessNode(&node)
+   /* No termination condition */
+   ProcessNode(&node.GetChildNode());
 End-Function;
 
 /* Correct */
-Function GetValue(&id As number) Returns string
-   If &id > 0 Then
-      Return "Positive";
-   Else
-      Return "Non-positive";
+Function ProcessNode(&node)
+   If None(&node) Then
+      Return;
    End-If;
+   
+   /* Process the node */
+   ProcessNode(&node.GetChildNode());
 End-Function;
 ```
 
-### Function Complexity (FUNC-002)
+### Multiline REM Comment (MULTILINE_REM-1)
 
 **Severity**: Warning
 
-Identifies functions that exceed a complexity threshold (cyclomatic complexity).
-
-```peoplecode
-/* Incorrect - Too complex */
-Function ProcessData(&value As number) Returns string
-   /* Function with many nested if statements and loops */
-End-Function;
-
-/* Correct */
-Function ProcessData(&value As number) Returns string
-   /* Break down into smaller, more focused functions */
-   If &value < 0 Then
-      Return ProcessNegative(&value);
-   Else
-      Return ProcessPositive(&value);
-   End-If;
-End-Function;
-```
-
-### Missing Documentation (FUNC-003)
-
-**Severity**: Information
-
-Detects functions without proper documentation comments.
+Detects REM comments that span multiple lines, which may indicate missing semicolon termination.
 
 ```peoplecode
 /* Incorrect */
-Function CalculateTotal(&values As array of number) Returns number
-   /* ... */
-End-Function;
+rem This is a comment that spans
+Local integer &i = 3;
 
 /* Correct */
-/* 
- * Calculates the total sum of all values in the array
- * @param &values Array of numbers to sum
- * @returns The total sum
- */
-Function CalculateTotal(&values As array of number) Returns number
-   /* ... */
-End-Function;
+rem This is a comment that is properly terminated;
+Local integer &i = 3;
+```
+
+## Variable and Type Rules
+
+### Object Type Usage (OBJECT_TYPE-1)
+
+**Severity**: Warning
+
+Checks for variables declared as 'object' that are assigned specific types.
+
+```peoplecode
+/* Incorrect */
+Local object &myGrid = create MY:TestClass();
+
+/* Correct */
+Local MY:TestClass &myGrid = create MY:TestClass();
 ```
 
 ## SQL Rules
-
-### Unbounded SQL Query (SQL-001)
+**Note**: Database connection is required to lint SQL methods using SQL objects instead of strings. 
+### SQL Wildcard (SQL_WILDCARD-1)
 
 **Severity**: Warning
 
-Identifies SQL queries without a WHERE clause or with a potentially unbounded WHERE clause.
+Reports any SQL using * wildcards.
 
 ```peoplecode
 /* Incorrect */
-&sql = CreateSQL("SELECT FIELD1, FIELD2 FROM PS_RECORD");
+&sql = CreateSQL("SELECT * FROM PS_JOB");
 
 /* Correct */
-&sql = CreateSQL("SELECT FIELD1, FIELD2 FROM PS_RECORD WHERE FIELD1 = :1", &value);
+&sql = CreateSQL("SELECT EMPLID, EMPL_RCD, EFFDT, EFFSEQ, JOBCODE FROM PS_JOB");
 ```
 
-### SQL Injection Risk (SQL-002)
+### SQL Long String (SQL_LONG-1)
+
+**Severity**: Warning
+
+Reports SQL strings longer than 120 characters.
+
+```peoplecode
+/* Incorrect */
+&sql = CreateSQL("SELECT EMPLID, NAME, EMAIL, PHONE, ADDRESS1, ADDRESS2, CITY, STATE, POSTAL, COUNTRY FROM PS_PERSONAL_DATA WHERE EMPLID = :1 AND EFFDT = (SELECT MAX(EFFDT) FROM PS_PERSONAL_DATA WHERE EMPLID = :2)", &emplid, &emplid);
+
+/* Correct */
+/* Use a SQL definition in App Designer instead */
+&sql = CreateSQL(SQL.PERSONAL_DATA_CURRENT);
+```
+
+### SQLExec With String Concatenation (SQL_EXEC-2)
 
 **Severity**: Error
 
-Detects potential SQL injection vulnerabilities where user input is directly concatenated into SQL strings.
+Detects SQL using string concatenation.
 
 ```peoplecode
 /* Incorrect */
-&sql = CreateSQL("SELECT FIELD1, FIELD2 FROM PS_RECORD WHERE FIELD1 = '" | &userInput | "'");
+&whereClause = " WHERE EMPLID = '" | &emplid | "'";
+SQLExec("SELECT NAME FROM PS_PERSONAL_DATA" | &whereClause, &name);
 
 /* Correct */
-&sql = CreateSQL("SELECT FIELD1, FIELD2 FROM PS_RECORD WHERE FIELD1 = :1", &userInput);
+SQLExec("SELECT NAME FROM PS_PERSONAL_DATA WHERE EMPLID = :1", &emplid, &name);
 ```
 
-### Incorrect Binding Usage (SQL-003)
+### SQLExec Variable Count (SQL_EXEC-3)
 
 **Severity**: Error
 
-Identifies incorrect usage of SQL binding variables.
+Validates that SQLExec calls have the correct number of input and output parameters.
+
+```peoplecode
+/* Incorrect - Missing output parameter */
+SQLExec("SELECT NAME FROM PS_PERSONAL_DATA WHERE EMPLID = :1", &emplid);
+
+/* Incorrect - Too many parameters */
+SQLExec("SELECT NAME FROM PS_PERSONAL_DATA WHERE EMPLID = :1", &emplid, &name, &email);
+
+/* Correct */
+SQLExec("SELECT NAME FROM PS_PERSONAL_DATA WHERE EMPLID = :1", &emplid, &name);
+```
+
+### Invalid SQL Defintion (CREATE_SQL-1)
+
+**Severity**: Error
+
+Reports invalid SQL definitions.
 
 ```peoplecode
 /* Incorrect */
-&sql = CreateSQL("SELECT FIELD1, FIELD2 FROM PS_RECORD WHERE FIELD1 = :1 AND FIELD2 = :1", &value1, &value2);
+&sql = CreateSQL(SQL.INVALID_DEFINITION);
 
 /* Correct */
-&sql = CreateSQL("SELECT FIELD1, FIELD2 FROM PS_RECORD WHERE FIELD1 = :1 AND FIELD2 = :2", &value1, &value2);
+&sql = CreateSQL(SQL.VALID_DEFINITION);
 ```
 
-## PeopleSoft-Specific Rules
+### CreateSQL Variable Count (CREATE_SQL-3)
 
-### Improper Component Buffer Access (PS-001)
+**Severity**: Information
 
+Cannot validate SQL using certain MetaSQL constructs.
+
+```peoplecode
+/* Cannot validate due to MetaSQL */
+&sql = CreateSQL("%SelectAll(:1) WHERE EMPLID = :2", Record.JOB, &emplid);
+```
+
+### CreateSQL Variable Count (CREATE_SQL-4)
+
+**Severity**: Error
+
+Validates that CreateSQL calls have the correct number of input parameters.
+
+```peoplecode
+/* Incorrect - Too few parameters */
+&sql = CreateSQL("SELECT NAME FROM PS_PERSONAL_DATA WHERE EMPLID = :1 AND DEPTID = :2", &emplid);
+
+/* Incorrect - Too many parameters */
+&sql = CreateSQL("SELECT NAME FROM PS_PERSONAL_DATA WHERE EMPLID = :1", &emplid, &deptid);
+
+/* Correct */
+&sql = CreateSQL("SELECT NAME FROM PS_PERSONAL_DATA WHERE EMPLID = :1 AND DEPTID = :2", &emplid, &deptid);
+```
+
+## HTML Rules
+**Note**: Database connection is required to lint HTML objects. 
+
+### Invalid HTML Defintion (HTML_VAR_COUNT-1)
+**Severity**: Error
+
+Reports invalid HTML definitions.
+
+```peoplecode
+/* Incorrect */
+&html = GetHTMLText(HTML.INVALID_DEFINITION);
+
+/* Correct */
+&html = GetHTMLText(HTML.VALID_DEFINITION);
+```
+
+### HTML Variable Count  (HTML_VAR_COUNT-2)
+**Severity**: Error
+
+Validates that GetHTMLText calls have enough bind parameters.
+
+```peoplecode
+/* Incorrect - Missing parameters */
+&html = GetHTMLText(HTML.MY_TEMPLATE, &param1); /* Template requires 2 parameters */
+
+/* Correct */
+&html = GetHTMLText(HTML.MY_TEMPLATE, &param1, &param2);
+```
+
+### HTML Variable Count (HTML_VAR_COUNT-3)
 **Severity**: Warning
 
-Detects improper access patterns for the component buffer.
+Validates that GetHTMLText calls don't have too many bind parameters.
 
 ```peoplecode
-/* Incorrect */
-&rec = GetRecord(Record.RECORD_NAME);
-&rec.FIELD.Value = "New Value";
-/* Missing call to RowInit or other appropriate event */
+/* Incorrect - Too many parameters */
+&html = GetHTMLText(HTML.MY_TEMPLATE, &param1, &param2, &param3); /* Template only requires 2 parameters */
 
 /* Correct */
-&rec = GetRecord(Record.RECORD_NAME);
-&rec.RowInit();
-&rec.FIELD.Value = "New Value";
+&html = GetHTMLText(HTML.MY_TEMPLATE, &param1, &param2);
 ```
-
-### Deprecated PeopleCode Function (PS-002)
-
-**Severity**: Warning
-
-Identifies usage of deprecated PeopleCode functions or methods.
-
-```peoplecode
-/* Incorrect */
-WinMessage("Debug message");  /* Deprecated */
-
-/* Correct */
-MessageBox(0, "", 0, 0, "Debug message");
-```
-
-### Missing SaveEdit Validation (PS-003)
-
-**Severity**: Warning
-
-Detects field changes without proper SaveEdit validation.
-
-```peoplecode
-/* Incorrect */
-&rec.FIELD.Value = &newValue;
-/* Missing validation */
-
-/* Correct */
-If ValidateField(&newValue) Then
-   &rec.FIELD.Value = &newValue;
-End-If;
-```
-
-## Configuring Lint Rules
-
-You can configure the severity and behavior of lint rules in AppRefiner:
-
-1. Go to **Tools > Options > AppRefiner > Linting**
-2. Select a rule from the list
-3. Adjust its severity level (Error, Warning, Information, Hint, or Disabled)
-4. Configure any rule-specific parameters
-
-## Related Features
-
-- [Linting Overview](overview.md)
-- [Custom Lint Rules](custom-rules.md)
-- [Suppressing Lint Warnings](suppressing-warnings.md)

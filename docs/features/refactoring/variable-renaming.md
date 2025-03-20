@@ -6,33 +6,11 @@ Variable renaming is one of the most common and important refactoring operations
 
 Renaming variables is essential for maintaining clean, readable code. As code evolves, variable names may become outdated or no longer reflect their purpose. AppRefiner adds variable renaming functionality to Application Designer, allowing you to safely rename variables throughout your codebase while respecting PeopleCode's scoping rules.
 
+AppRefiner supports renaming both local variables and function/method parameters, ensuring all references are consistently updated.
+
 ## Features of Variable Renaming
 
-### 1. Context-Aware Renaming
-
-AppRefiner's variable renaming is context-aware:
-
-- **Scope recognition**: Understands local, global, and class-level variable scopes
-- **Type awareness**: Recognizes variable types (string, number, object, etc.)
-- **Name collision detection**: Prevents renaming that would cause naming conflicts
-- **Reference tracking**: Identifies all references to the variable being renamed
-
-### 2. Multi-File Renaming
-
-When a variable is used across multiple files, AppRefiner can:
-
-- **Find all references**: Locate all occurrences across the entire project
-- **Update consistently**: Apply the rename operation to all references
-- **Respect file boundaries**: Only modify files where the variable is in scope
-
-### 3. Preview and Control
-
-Before applying changes, AppRefiner provides:
-
-- **Change preview**: See all occurrences that will be renamed
-- **Selective application**: Choose which occurrences to rename
-- **Conflict warnings**: Get notified about potential naming conflicts
-- **Syntax validation**: Verify that the new name is valid in PeopleCode
+The renaming operation will only rename local variables in the current file and will take into account the scope of the variable. (e.g. local variables renamed in a function/method will not be renamed in a different function/method)
 
 ## How to Rename Variables
 
@@ -52,29 +30,6 @@ Before applying changes, AppRefiner provides:
 3. Enter the new variable name
 4. Review the preview of changes
 5. Press **Enter** to apply or **Escape** to cancel
-
-## Variable Renaming Options
-
-When renaming variables, AppRefiner provides several options:
-
-### 1. Search Scope
-
-- **Current file only**: Rename only in the current file
-- **Current function/method**: Rename only within the current function or method
-- **Current class**: Rename within the current class
-- **Entire project**: Rename across all project files
-
-### 2. Reference Types
-
-- **All references**: Rename both read and write references
-- **Write references only**: Rename only places where the variable is assigned
-- **Read references only**: Rename only places where the variable is read
-
-### 3. Additional Options
-
-- **Preview changes**: Show all occurrences before applying
-- **Comments and strings**: Whether to search within comments and string literals
-- **Case sensitivity**: Whether to match case when finding references
 
 ## Examples of Variable Renaming
 
@@ -98,47 +53,86 @@ Function CalculateTotal(&amount As number) Returns number
 End-Function;
 ```
 
+### Function Parameter Renaming
+
+Before:
+```peoplecode
+Function ProcessRecord(&recField As Record) Returns boolean
+   Local string &fieldName = &recField.Name;
+   If &recField.IsChanged Then
+      &recField.Update();
+      Return True;
+   End-If;
+   Return False;
+End-Function;
+```
+
+After renaming `&recField` to `&record`:
+```peoplecode
+Function ProcessRecord(&record As Record) Returns boolean
+   Local string &fieldName = &record.Name;
+   If &record.IsChanged Then
+      &record.Update();
+      Return True;
+   End-If;
+   Return False;
+End-Function;
+```
+
 ### Class Member Renaming
+**Note**: Due to not being able to access external references we can only rename private members of the current class.
 
 Before:
 ```peoplecode
 class MyClass
-   property number &val;
-   
-   method MyClass();
-   method Calculate() Returns number;
+   method MyMethod();
 private
-   instance number &multiplier;
+   instance number &myVar;
 end-class;
 
-method MyClass
-   &val = 0;
-   &multiplier = 2;
-end-method;
-
-method Calculate
-   Return &val * &multiplier;
+method MyMethod
+   &myVar = 1;
 end-method;
 ```
 
-After renaming `&val` to `&value`:
+After renaming `&myVar` to `&myVariable`:
 ```peoplecode
 class MyClass
-   property number &value;
-   
-   method MyClass();
-   method Calculate() Returns number;
+   method MyMethod();
 private
-   instance number &multiplier;
+   instance number &myVariable;
 end-class;
 
-method MyClass
-   &value = 0;
-   &multiplier = 2;
+method MyMethod
+   &myVariable = 1;
 end-method;
+```
 
-method Calculate
-   Return &value * &multiplier;
+### Method Parameter Renaming
+
+Before:
+```peoplecode
+class Logger
+private
+   instance string &logPrefix;
+   method LogMessage(&msg As string);
+end-class;
+
+method LogMessage
+   &this.WriteToLog(&logPrefix | ": " | &msg);
+end-method;
+```
+
+After renaming `&msg` to `&message`:
+```peoplecode
+class Logger
+private
+   instance string &logPrefix;
+   method LogMessage(&message As string);
+end-class;
+
+method LogMessage
+   &this.WriteToLog(&logPrefix | ": " | &message);
 end-method;
 ```
 
