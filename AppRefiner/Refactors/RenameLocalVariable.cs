@@ -20,12 +20,12 @@ namespace AppRefiner.Refactors
         /// <summary>
         /// Gets the display name of this refactoring operation
         /// </summary>
-        public new static string RefactorName => "Rename Variable";
+        public new static string RefactorName => "Rename Variable or Method";
 
         /// <summary>
         /// Gets the description of this refactoring operation
         /// </summary>
-        public new static string RefactorDescription => "Rename a local variable, parameter, private instance variable, or private constant and all its references";
+        public new static string RefactorDescription => "Rename a local variable, parameter, private instance variable, private method, or private constant and all its references";
 
         private string? newVariableName;
         private string? variableToRename;
@@ -33,15 +33,26 @@ namespace AppRefiner.Refactors
         private bool isInstanceVariable = false;
         private bool isParameter = false;
         private bool isConstant = false;
+        private bool isPrivateMethod = false;
         
         // Track method parameters for later association with method scopes
         private readonly Dictionary<string, List<(string paramName, (int, int) span)>> pendingMethodParameters = new();
         private string? currentMethodName;
         
+        // Track private methods in class declarations
+        private readonly Dictionary<string, (int, int)> privateMethods = new();
+        private readonly Dictionary<string, List<(int, int)>> methodCalls = new();
+        private readonly Dictionary<string, List<(int, int)>> methodImplementations = new();
+        
         /// <summary>
         /// Indicates that this refactor requires a user input dialog
         /// </summary>
         public override bool RequiresUserInputDialog => true;
+
+        /// <summary>
+        /// Indicates that this refactor should defer showing the dialog until after the visitor has run
+        /// </summary>
+        public override bool DeferDialogUntilAfterVisitor => true;
 
         /// <summary>
         /// Indicates that this refactor should have a keyboard shortcut registered
@@ -59,6 +70,18 @@ namespace AppRefiner.Refactors
         public new static Keys ShortcutKey => Keys.R;
 
         /// <summary>
+        /// Enum to represent the type of token being renamed
+        /// </summary>
+        private enum RenameTokenType
+        {
+            LocalVariable,
+            InstanceVariable,
+            Parameter,
+            Constant,
+            PrivateMethod
+        }
+
+        /// <summary>
         /// Dialog form for renaming variables
         /// </summary>
         private class RenameVariableDialog : Form
@@ -71,12 +94,16 @@ namespace AppRefiner.Refactors
             private Label headerLabel = new();
 
             public string NewVariableName { get; private set; }
+            private RenameTokenType tokenType;
 
-            public RenameVariableDialog(string initialName = "")
+            public RenameVariableDialog(string initialName = "", RenameTokenType tokenType = RenameTokenType.LocalVariable)
             {
                 NewVariableName = initialName;
+                this.tokenType = tokenType;
                 InitializeComponent();
-                txtNewName.Text = initialName.TrimStart('&');
+                
+                // For methods, don't add the & prefix
+                txtNewName.Text = tokenType == RenameTokenType.PrivateMethod ? initialName : initialName.TrimStart('&');
                 
                 // Set focus to the text box
                 this.ActiveControl = txtNewName;
@@ -94,7 +121,7 @@ namespace AppRefiner.Refactors
                 this.headerPanel.Controls.Add(this.headerLabel);
                 
                 // headerLabel
-                this.headerLabel.Text = "Rename Variable";
+                this.headerLabel.Text = GetHeaderText();
                 this.headerLabel.ForeColor = Color.White;
                 this.headerLabel.Font = new Font("Segoe UI", 9F, FontStyle.Regular, GraphicsUnit.Point);
                 this.headerLabel.Dock = DockStyle.Fill;
@@ -106,7 +133,7 @@ namespace AppRefiner.Refactors
                 this.lblPrompt.Name = "lblPrompt";
                 this.lblPrompt.Size = new System.Drawing.Size(116, 15);
                 this.lblPrompt.TabIndex = 0;
-                this.lblPrompt.Text = "Enter new variable name:";
+                this.lblPrompt.Text = GetPromptText();
                 
                 // txtNewName
                 this.txtNewName.BorderStyle = BorderStyle.FixedSingle;
@@ -150,10 +177,34 @@ namespace AppRefiner.Refactors
                 this.MinimizeBox = false;
                 this.Name = "RenameVariableDialog";
                 this.StartPosition = FormStartPosition.CenterParent;
-                this.Text = "Rename Variable";
+                this.Text = GetHeaderText();
                 this.ShowInTaskbar = false;
                 this.ResumeLayout(false);
                 this.PerformLayout();
+            }
+
+            private string GetHeaderText()
+            {
+                return tokenType switch
+                {
+                    RenameTokenType.PrivateMethod => "Rename Method",
+                    RenameTokenType.Parameter => "Rename Parameter",
+                    RenameTokenType.InstanceVariable => "Rename Instance Variable",
+                    RenameTokenType.Constant => "Rename Constant",
+                    _ => "Rename Variable"
+                };
+            }
+
+            private string GetPromptText()
+            {
+                return tokenType switch
+                {
+                    RenameTokenType.PrivateMethod => "Enter new method name:",
+                    RenameTokenType.Parameter => "Enter new parameter name:",
+                    RenameTokenType.InstanceVariable => "Enter new instance variable name:",
+                    RenameTokenType.Constant => "Enter new constant name:",
+                    _ => "Enter new variable name:"
+                };
             }
 
             private void TxtNewName_KeyDown(object? sender, KeyEventArgs e)
@@ -181,13 +232,13 @@ namespace AppRefiner.Refactors
                 string name = txtNewName.Text.Trim();
                 if (string.IsNullOrEmpty(name))
                 {
-                    MessageBox.Show("Please enter a variable name.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    MessageBox.Show("Please enter a name.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
                     DialogResult = DialogResult.None;
                     return;
                 }
 
-                // Ensure the variable name starts with &
-                if (!name.StartsWith('&'))
+                // Ensure the variable name starts with & if it's not a method
+                if (tokenType != RenameTokenType.PrivateMethod && !name.StartsWith('&'))
                 {
                     name = $"&{name}";
                 }
@@ -209,12 +260,28 @@ namespace AppRefiner.Refactors
         }
 
         /// <summary>
+        /// Determines the type of token being renamed
+        /// </summary>
+        private RenameTokenType GetTokenType()
+        {
+            if (isPrivateMethod)
+                return RenameTokenType.PrivateMethod;
+            if (isInstanceVariable)
+                return RenameTokenType.InstanceVariable;
+            if (isParameter)
+                return RenameTokenType.Parameter;
+            if (isConstant)
+                return RenameTokenType.Constant;
+            return RenameTokenType.LocalVariable;
+        }
+
+        /// <summary>
         /// Shows the dialog to get the new variable name from the user
         /// </summary>
         /// <returns>True if the user confirmed, false if canceled</returns>
         public override bool ShowRefactorDialog()
         {
-            using var dialog = new RenameVariableDialog(newVariableName ?? "");
+            using var dialog = new RenameVariableDialog(newVariableName ?? "", GetTokenType());
             
             // Show dialog with the specified owner
             var wrapper = new WindowWrapper(GetEditorMainWindowHandle());
@@ -224,6 +291,10 @@ namespace AppRefiner.Refactors
             if (result == DialogResult.OK)
             {
                 newVariableName = dialog.NewVariableName;
+                
+                // Since we're using deferred dialog, generate changes now that we have user input
+                GenerateChanges();
+                
                 return true;
             }
 
@@ -267,14 +338,40 @@ namespace AppRefiner.Refactors
         {
             base.EnterMethodHeader(context);
             
-            // Store the method name for later use with parameters
-            var methodName = context.genericID().GetText();
-            currentMethodName = methodName;
-            
-            // Initialize the parameter list for this method if it doesn't exist
-            if (!pendingMethodParameters.ContainsKey(methodName))
+            var genericIdNode = context.genericID();
+            if (genericIdNode != null)
             {
-                pendingMethodParameters[methodName] = new List<(string, (int, int))>();
+                var methodName = genericIdNode.GetText();
+                currentMethodName = methodName;
+                
+                if (!pendingMethodParameters.ContainsKey(methodName))
+                {
+                    pendingMethodParameters[methodName] = new List<(string, (int, int))>();
+                }
+                
+                var parentContext = context.Parent;
+                if (parentContext is PrivateMethodHeaderContext)
+                {
+                    // Store just the span of the method name, not the entire header
+                    var span = (genericIdNode.Start.StartIndex, genericIdNode.Stop.StopIndex);
+                    privateMethods[methodName] = span;
+                    
+                    // Add to global scope for renaming
+                    var globalScope = scopeStack.Last();
+                    if (!globalScope.ContainsKey(methodName))
+                    {
+                        globalScope[methodName] = new List<(int, int)>();
+                    }
+                    globalScope[methodName].Add(span);
+                    
+                    // Check if cursor is within this method declaration
+                    if (span.Item1 <= CurrentPosition && CurrentPosition <= span.Item2 + 1)
+                    {
+                        variableToRename = methodName;
+                        isPrivateMethod = true;
+                        targetScope = globalScope;
+                    }
+                }
             }
         }
         
@@ -312,26 +409,59 @@ namespace AppRefiner.Refactors
         {
             base.EnterMethod(context);
             
-            var methodName = context.genericID().GetText();
-            
-            // Check if we have pending parameters for this method
-            if (pendingMethodParameters.TryGetValue(methodName, out var parameters))
+            var genericIdNode = context.genericID();
+            if (genericIdNode != null)
             {
-                var currentScope = GetCurrentScope();
+                var methodName = genericIdNode.GetText();
                 
-                // Add each parameter to the current method scope
-                foreach (var (paramName, span) in parameters)
+                // Check if we have pending parameters for this method
+                if (pendingMethodParameters.TryGetValue(methodName, out var parameters))
                 {
-                    if (!currentScope.ContainsKey(paramName))
-                    {
-                        currentScope[paramName] = new List<(int, int)>();
-                    }
-                    currentScope[paramName].Add(span);
+                    var currentScope = GetCurrentScope();
                     
-                    // If this is the parameter we want to rename, update targetScope
-                    if (isParameter && variableToRename == paramName && targetScope == null)
+                    // Add each parameter to the current method scope
+                    foreach (var (paramName, span) in parameters)
                     {
-                        targetScope = currentScope;
+                        if (!currentScope.ContainsKey(paramName))
+                        {
+                            currentScope[paramName] = new List<(int, int)>();
+                        }
+                        currentScope[paramName].Add(span);
+                        
+                        // If this is the parameter we want to rename, update targetScope
+                        if (isParameter && variableToRename == paramName && targetScope == null)
+                        {
+                            targetScope = currentScope;
+                        }
+                    }
+                }
+                
+                if (privateMethods.ContainsKey(methodName))
+                {
+                    // Store just the span of the method name, not the entire method
+                    var span = (genericIdNode.Start.StartIndex, genericIdNode.Stop.StopIndex);
+                    
+                    // Add to method implementations
+                    if (!methodImplementations.ContainsKey(methodName))
+                    {
+                        methodImplementations[methodName] = new List<(int, int)>();
+                    }
+                    methodImplementations[methodName].Add(span);
+                    
+                    // Add to global scope for renaming
+                    var globalScope = scopeStack.Last();
+                    if (!globalScope.ContainsKey(methodName))
+                    {
+                        globalScope[methodName] = new List<(int, int)>();
+                    }
+                    globalScope[methodName].Add(span);
+                    
+                    // Check if cursor is within this method implementation
+                    if (span.Item1 <= CurrentPosition && CurrentPosition <= span.Item2 + 1)
+                    {
+                        variableToRename = methodName;
+                        isPrivateMethod = true;
+                        targetScope = globalScope;
                     }
                 }
             }
@@ -493,7 +623,7 @@ namespace AppRefiner.Refactors
                     
                     // Add this parameter annotation to the current scope
                     AddOccurrence(varName, span, true);
-                    
+
                     // Check if cursor is within this parameter annotation
                     if (span.Item1 <= CurrentPosition && CurrentPosition <= span.Item2 + 1)
                     {
@@ -504,12 +634,111 @@ namespace AppRefiner.Refactors
                 }
             }
         }
+        
+        // Track method calls with %THIS
+        public override void EnterDotAccessExpr(DotAccessExprContext context)
+        {
+            base.EnterDotAccessExpr(context);
+            
+            // Check if the expression is %THIS
+            var expr = context.expression();
+            if (expr != null && expr.GetText().Equals("%THIS", StringComparison.OrdinalIgnoreCase))
+            {
+                // Get the method name from the dot access
+                var dotAccesses = context.dotAccess();
+                if (dotAccesses != null && dotAccesses.Length > 0)
+                {
+                    var firstDotAccess = dotAccesses[0];
+                    var methodName = firstDotAccess.genericID()?.GetText();
+                    
+                    if (methodName != null && privateMethods.ContainsKey(methodName))
+                    {
+                        // This is a call to a private method
+                        // Get just the span of the method name, not the entire expression
+                        var genericIdNode = firstDotAccess.genericID();
+                        if (genericIdNode != null)
+                        {
+                            var span = (genericIdNode.Start.StartIndex, genericIdNode.Stop.StopIndex);
+                            
+                            // Track this method call
+                            if (!methodCalls.ContainsKey(methodName))
+                            {
+                                methodCalls[methodName] = new List<(int, int)>();
+                            }
+                            methodCalls[methodName].Add(span);
+                            
+                            // Add to global scope for renaming
+                            var globalScope = scopeStack.Last();
+                            if (!globalScope.ContainsKey(methodName))
+                            {
+                                globalScope[methodName] = new List<(int, int)>();
+                            }
+                            globalScope[methodName].Add(span);
+                            
+                            // Check if cursor is within this method call
+                            if (span.Item1 <= CurrentPosition && CurrentPosition <= span.Item2 + 1)
+                            {
+                                variableToRename = methodName;
+                                isPrivateMethod = true;
+                                targetScope = globalScope;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        // Track simple function calls that might be private methods
+        public override void EnterFunctionCallExpr(FunctionCallExprContext context)
+        {
+            base.EnterFunctionCallExpr(context);
+            
+            var simpleFunctionCall = context.simpleFunctionCall();
+            if (simpleFunctionCall != null)
+            {
+                var genericIdNode = simpleFunctionCall.genericID();
+                if (genericIdNode != null)
+                {
+                    var methodName = genericIdNode.GetText();
+                    
+                    if (privateMethods.ContainsKey(methodName))
+                    {
+                        // This is a call to a private method without %THIS
+                        // Get just the span of the method name, not the entire expression
+                        var span = (genericIdNode.Start.StartIndex, genericIdNode.Stop.StopIndex);
+                        
+                        // Track this method call
+                        if (!methodCalls.ContainsKey(methodName))
+                        {
+                            methodCalls[methodName] = new List<(int, int)>();
+                        }
+                        methodCalls[methodName].Add(span);
+                        
+                        // Add to global scope for renaming
+                        var globalScope = scopeStack.Last();
+                        if (!globalScope.ContainsKey(methodName))
+                        {
+                            globalScope[methodName] = new List<(int, int)>();
+                        }
+                        globalScope[methodName].Add(span);
+                        
+                        // Check if cursor is within this method call
+                        if (span.Item1 <= CurrentPosition && CurrentPosition <= span.Item2 + 1)
+                        {
+                            variableToRename = methodName;
+                            isPrivateMethod = true;
+                            targetScope = globalScope;
+                        }
+                    }
+                }
+            }
+        }
 
         // Helper method to add an occurrence to the appropriate scope
         private void AddOccurrence(string varName, (int, int) span, bool mustExist = false)
         {
-            // For instance variables or constants, check the global scope first
-            if (!mustExist && (isInstanceVariable || isConstant) && variableToRename == varName)
+            // For instance variables, constants, or methods, check the global scope first
+            if (!mustExist && (isInstanceVariable || isConstant || isPrivateMethod) && variableToRename == varName)
             {
                 var globalScope = scopeStack.Last();
                 if (!globalScope.ContainsKey(varName))
@@ -546,7 +775,14 @@ namespace AppRefiner.Refactors
 
         public override void ExitProgram([NotNull] ProgramContext context)
         {
-            GenerateChanges();
+            // With deferred dialog, we don't generate changes here
+            // The changes will be generated after the dialog is shown
+            // We just validate that we found a variable to rename
+            if (variableToRename == null || targetScope == null)
+            {
+                // No variable found at cursor position
+                SetFailure("No variable or method found at cursor position. Please place cursor on a variable or method name.");
+            }
         }
         
         // Generate the refactoring changes
@@ -555,7 +791,7 @@ namespace AppRefiner.Refactors
             if (variableToRename == null || targetScope == null || newVariableName == null)
             {
                 // No variable found at cursor position
-                SetFailure("No variable found at cursor position. Please place cursor on a variable name.");
+                SetFailure("No variable or method found at cursor position. Please place cursor on a variable or method name.");
                 return;
             }
 
@@ -564,7 +800,7 @@ namespace AppRefiner.Refactors
             /* If newVariableName is already in the scope, report failure to the user, cannot rename to existing variable name */
             if (targetScope.ContainsKey(newVariableName))
             {
-                SetFailure($"Variable '{newVariableName}' already exists in the current scope. Please choose a different name.");
+                SetFailure($"'{newVariableName}' already exists in the current scope. Please choose a different name.");
                 return;
             }
 
@@ -573,7 +809,8 @@ namespace AppRefiner.Refactors
                 // No occurrences found
                 string errorVarType = isInstanceVariable ? "private instance variable" : 
                                       isParameter ? "parameter" : 
-                                      isConstant ? "private constant" : "local variable";
+                                      isConstant ? "private constant" :
+                                      isPrivateMethod ? "private method" : "local variable";
                 SetFailure($"Target '{variableToRename}' is not a {errorVarType}. Only {errorVarType}s can be renamed.");
                 return;
             }
@@ -583,7 +820,8 @@ namespace AppRefiner.Refactors
 
             string varTypeDescription = isInstanceVariable ? "private instance variable" : 
                                   isParameter ? "parameter" : 
-                                  isConstant ? "private constant" : "local variable";
+                                  isConstant ? "private constant" :
+                                  isPrivateMethod ? "private method" : "local variable";
             
             // Generate replacement changes for each occurrence
             foreach (var (start, end) in allOccurrences)

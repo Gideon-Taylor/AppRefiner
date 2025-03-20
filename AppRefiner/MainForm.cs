@@ -919,16 +919,6 @@ namespace AppRefiner
                     ScintillaManager.ApplyBetterSQL(activeEditor);
                 }
 
-                if (!activeEditor.HasLexilla || activeEditor.Type == EditorType.SQL || activeEditor.Type == EditorType.Other)
-                {
-                    /* Perform folding ourselves 
-                        1. if they are missing Lexilla
-                        2. if it is a SQL object 
-                        3. if its an editor type we don't know
-                    */
-                    DoExplicitFolding();
-                }
-
                 if (chkInitCollapsed.Checked)
                 {
                     ScintillaManager.CollapseTopLevel(activeEditor);
@@ -1405,8 +1395,8 @@ namespace AppRefiner
                 btnRestoreSnapshot.Enabled = true;
             });
 
-            // Check if this refactor requires user input dialog
-            if (refactorClass.RequiresUserInputDialog)
+            // Check if this refactor requires user input dialog and is not deferred
+            if (refactorClass.RequiresUserInputDialog && !refactorClass.DeferDialogUntilAfterVisitor)
             {
                 // Show the dialog and check if user confirmed
                 bool dialogConfirmed = refactorClass.ShowRefactorDialog();
@@ -1449,6 +1439,19 @@ namespace AppRefiner
                     btnRestoreSnapshot.Enabled = false;
                 });
                 return;
+            }
+
+            // Check if this refactor requires a deferred user input dialog
+            if (refactorClass.RequiresUserInputDialog && refactorClass.DeferDialogUntilAfterVisitor)
+            {
+                // Show the dialog and check if user confirmed
+                bool dialogConfirmed = refactorClass.ShowRefactorDialog();
+                
+                // If user canceled, abort the refactoring
+                if (!dialogConfirmed)
+                {
+                    return;
+                }
             }
 
             // Apply the refactored code
