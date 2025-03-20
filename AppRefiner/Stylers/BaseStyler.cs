@@ -1,4 +1,4 @@
-﻿using AppRefiner.PeopleCode;
+using AppRefiner.PeopleCode;
 
 namespace AppRefiner.Stylers
 {
