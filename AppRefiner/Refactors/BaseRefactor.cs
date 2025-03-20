@@ -297,6 +297,11 @@ namespace AppRefiner.Refactors
         public virtual bool RequiresUserInputDialog => false;
 
         /// <summary>
+        /// Gets whether this refactor should defer showing the dialog until after the visitor has run
+        /// </summary>
+        public virtual bool DeferDialogUntilAfterVisitor => false;
+
+        /// <summary>
         /// Gets whether this refactor should have a keyboard shortcut registered
         /// </summary>
         public static bool RegisterKeyboardShortcut => false;

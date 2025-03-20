@@ -191,6 +191,11 @@ public abstract class BaseRefactor
     public virtual bool RequiresUserInputDialog => false;
 
     /// <summary>
+    /// Gets whether this refactor should defer showing the dialog until after the visitor has run
+    /// </summary>
+    public virtual bool DeferDialogUntilAfterVisitor => false;
+
+    /// <summary>
     /// Gets whether this refactor should have a keyboard shortcut registered
     /// </summary>
     public static bool RegisterKeyboardShortcut => false;
@@ -258,7 +263,6 @@ public abstract class BaseRefactor
     protected string GetOriginalText(ParserRuleContext context);
 }
 ```
-
 ### Key Methods
 
 - `Initialize`: Sets up the refactor with source code and token stream
@@ -266,6 +270,7 @@ public abstract class BaseRefactor
 - `GetRefactoredCode`: Returns the modified source code
 - `GetUpdatedCursorPosition`: Returns the new cursor position after refactoring
 - `RequiresUserInputDialog`: Indicates whether this refactor needs user input via a dialog
+- `DeferDialogUntilAfterVisitor`: Indicates whether the dialog should be shown after the visitor has run
 - `ShowRefactorDialog`: Shows a dialog to gather user input for the refactoring operation
 - Helper methods for adding different types of changes:
   - `ReplaceNode`/`ReplaceText`: Replace text
@@ -281,7 +286,9 @@ AppRefiner supports a "bring your own UI" pattern for refactoring operations tha
 2. Implement the `ShowRefactorDialog` method to display your custom dialog
 3. Use the dialog result to configure your refactoring operation
 
-Example:
+### Standard Dialog Approach
+
+In the standard approach, the dialog is shown before the visitor traverses the parse tree:
 
 ```csharp
 public class MyCustomRefactorWithDialog : BaseRefactor
@@ -311,6 +318,69 @@ public class MyCustomRefactorWithDialog : BaseRefactor
     }
     
     // Rest of the refactor implementation...
+}
+```
+
+### Deferred Dialog Approach
+
+Sometimes you need to gather information during the visitor's traversal before showing the dialog. For example, you might need to determine what type of token is being refactored before customizing the dialog. In these cases, use the deferred dialog approach:
+
+1. Override `RequiresUserInputDialog` to return `true`
+2. Override `DeferDialogUntilAfterVisitor` to return `true`
+3. Implement `ShowRefactorDialog` to display your custom dialog
+4. In your visitor's exit method (e.g., `ExitProgram`), only validate that you found something to refactor
+5. In your `ShowRefactorDialog` method, generate the changes after the dialog is confirmed
+
+```csharp
+public class DeferredDialogRefactor : BaseRefactor
+{
+    private string newName;
+    private TokenType tokenType;
+    
+    // Indicate that this refactor needs a dialog
+    public override bool RequiresUserInputDialog => true;
+    
+    // Indicate that the dialog should be shown after the visitor has run
+    public override bool DeferDialogUntilAfterVisitor => true;
+    
+    // Override visitor methods to gather information
+    public override void ExitProgram(ProgramContext context)
+    {
+        // Just validate that we found something to refactor
+        if (tokenToRename == null)
+        {
+            SetFailure("No token found at cursor position.");
+        }
+        // Don't generate changes here - wait for dialog confirmation
+    }
+    
+    // Implement the dialog display method
+    public override bool ShowRefactorDialog()
+    {
+        // Use information gathered during traversal to customize the dialog
+        using var dialog = new CustomDialog(GetTokenType());
+        
+        var wrapper = new WindowWrapper(GetEditorMainWindowHandle());
+        DialogResult result = dialog.ShowDialog(wrapper);
+        
+        if (result == DialogResult.OK)
+        {
+            newName = dialog.EnteredName;
+            
+            // Generate changes now that we have user input
+            GenerateChanges();
+            
+            return true;
+        }
+        
+        return false;
+    }
+    
+    // Method to generate changes after dialog confirmation
+    private void GenerateChanges()
+    {
+        // Implementation of change generation
+    }
 }
 ```
 
