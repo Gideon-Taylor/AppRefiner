@@ -965,6 +965,39 @@ namespace AppRefiner
         }
 
         /// <summary>
+        /// Gets the currently selected text in the Scintilla editor
+        /// </summary>
+        /// <param name="editor">The editor to get the selected text from</param>
+        /// <returns>The selected text as a string, or null if no text is selected</returns>
+        public static (string?, int, int) GetSelectedText(ScintillaEditor editor)
+        {
+            var selectionStart = (int)editor.SendMessage(SCI_GETSELECTIONSTART, IntPtr.Zero, IntPtr.Zero);
+            var selectionEnd = (int)editor.SendMessage(SCI_GETSELECTIONEND, IntPtr.Zero, IntPtr.Zero);
+            
+            // Return null if there's no selection
+            if (selectionStart == selectionEnd)
+            {
+                return (null, 0, 0);
+            }
+            
+            // Get the full text
+            var fullText = GetScintillaText(editor);
+            if (fullText == null)
+            {
+                return (null, 0, 0);
+            }
+            
+            // Extract the selected portion
+            int length = selectionEnd - selectionStart;
+            if (selectionStart < 0 || length <= 0 || selectionStart + length > fullText.Length)
+            {
+                return (null, 0, 0);
+            }
+            
+            return (fullText.Substring(selectionStart, length), selectionStart, selectionEnd);
+        }
+
+        /// <summary>
         /// Sets the selection range in the Scintilla editor
         /// </summary>
         /// <param name="editor">The editor to set the selection in</param>

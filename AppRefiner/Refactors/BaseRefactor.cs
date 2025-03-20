@@ -344,7 +344,7 @@ namespace AppRefiner.Refactors
         /// <summary>
         /// Initializes the refactor with source code and token stream
         /// </summary>
-        public void Initialize(string sourceText, CommonTokenStream tokenStream, int cursorPosition = -1)
+        public virtual void Initialize(string sourceText, CommonTokenStream tokenStream, int cursorPosition = -1)
         {
             source = sourceText;
             this.tokenStream = tokenStream;

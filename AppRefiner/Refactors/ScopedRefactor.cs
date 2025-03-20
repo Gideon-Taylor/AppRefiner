@@ -233,7 +233,7 @@ namespace AppRefiner.Refactors
         }
 
         // Helper method to extract type information from the type context
-        private static string GetTypeFromContext(TypeTContext typeContext)
+        public static string GetTypeFromContext(TypeTContext typeContext)
         {
             if (typeContext is ArrayTypeContext arrayType)
             {
