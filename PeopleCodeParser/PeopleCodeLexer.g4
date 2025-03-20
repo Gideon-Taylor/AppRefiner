@@ -38,7 +38,9 @@ BLOCK_COMMENT_SLASH
 API_COMMENT : '/**' ~[/] .*? '*/' {!REGEX_3_STAR.IsMatch(Text)}? -> channel(API_COMMENTS) ;
 WS : [\p{White_Space}]+ -> channel(WHITESPACE) ;
 BLOCK_COMMENT_NEST : '<*' (BLOCK_COMMENT_NEST | .)*? '*>' -> channel(COMMENTS) ;
-BLOCK_COMMENT_PLUS : '/+' .*? '+/' ';'? -> channel(COMMENTS) ;
+
+//BLOCK_COMMENT_PLUS : '/+' .*? '+/' ';'? -> channel(COMMENTS) ;
+
 LINE_COMMENT : R E M (A R K)? .*? ';' {REGEX_REM.IsMatch(Text)}? -> channel(COMMENTS) ;
 DIR_IF : '#' IF -> channel(DIRECTIVES), pushMode(DIRECTIVE) ;
 DIR_ELSE : '#' ELSE SEMI* -> channel(DIRECTIVES) ;
@@ -56,7 +58,8 @@ CATCH : C A T C H ;
 CLASS : C L A S S ;
 COLON : ':' ;
 COMMA : ',' ;
-
+SLASH_PLUS : '/+';
+PLUS_SLASH : '+/';
 COMPONENT
 	:	C O M P O N E N T L I F E
 	|	C O M P O N E N T

@@ -94,7 +94,7 @@ namespace AppRefiner.Linters
                     if (context.expression(1) is ObjectCreateExprContext)
                     {
                         AddReport(
-                            2,
+                            1,
                             "Variable is declared as 'object' but assigned a specific type.",
                             ReportType.Warning,
                             context.Start.Line - 1,

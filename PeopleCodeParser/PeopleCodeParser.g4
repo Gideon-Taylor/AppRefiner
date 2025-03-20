@@ -110,7 +110,7 @@ methodArguments
 	;
 
 methodArgument
-	:	USER_VARIABLE AS typeT OUT?
+	:	USER_VARIABLE (AS typeT)?
 	;
 
 simpleType
@@ -222,7 +222,7 @@ classMember
 	;
 
 method
-	:	METHOD genericID SEMI* statements? END_METHOD
+	:	METHOD genericID SEMI* methodAnnotations? statements? END_METHOD
 	;
 
 getter
@@ -438,4 +438,19 @@ functionArguments
 
 functionArgument
 	:	USER_VARIABLE (AS typeT)?
+	;
+
+// Method annotations for parameter and return type information
+methodAnnotations
+	:	methodParameterAnnotation* methodReturnAnnotation
+	|   methodParameterAnnotation+
+	|	methodReturnAnnotation
+	;
+
+methodParameterAnnotation
+	:	SLASH_PLUS methodArgument COMMA? PLUS_SLASH SEMI*
+	;
+
+methodReturnAnnotation
+	:	SLASH_PLUS RETURNS typeT PLUS_SLASH SEMI*
 	;
