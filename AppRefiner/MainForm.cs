@@ -1092,6 +1092,9 @@ namespace AppRefiner
 
             ScintillaManager.ResetStyles(editor);
 
+            // Store the annotations for later use after linter processing
+            editor.StylerAnnotations = new List<CodeAnnotation>(annotations);
+
             foreach (var annotation in annotations)
             {
                 ScintillaManager.SetAnnotation(editor, annotation.LineNumber, annotation.Message);
@@ -1219,6 +1222,15 @@ namespace AppRefiner
                 if (chkLintAnnotate.Checked)
                 {
                     ScintillaManager.SetAnnotations(activeEditor, messages, g.First().Line, styles);
+                }
+            }
+            
+            // Re-apply styler annotations after linter processing
+            if (activeEditor.StylerAnnotations != null && activeEditor.StylerAnnotations.Count > 0)
+            {
+                foreach (var annotation in activeEditor.StylerAnnotations)
+                {
+                    ScintillaManager.SetAnnotation(activeEditor, annotation.LineNumber, annotation.Message);
                 }
             }
         }

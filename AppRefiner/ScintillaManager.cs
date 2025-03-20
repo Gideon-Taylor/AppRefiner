@@ -1,5 +1,6 @@
-using AppRefiner.Database;
+﻿using AppRefiner.Database;
 using AppRefiner.Linters;
+using AppRefiner.Stylers;
 using SQL.Formatter;
 using SQL.Formatter.Core;
 using SQL.Formatter.Language;
@@ -1041,6 +1042,18 @@ namespace AppRefiner
         }
 
         /// <summary>
+        /// Clears the stored styler annotations for an editor
+        /// </summary>
+        /// <param name="editor">The editor to clear styler annotations for</param>
+        public static void ClearStylerAnnotations(ScintillaEditor editor)
+        {
+            if (editor.StylerAnnotations != null)
+            {
+                editor.StylerAnnotations.Clear();
+            }
+        }
+
+        /// <summary>
         /// Sets multiple annotations on a single line with different styles per annotation.
         /// Each character in the combined annotation text can have its own style.
         /// </summary>
@@ -1289,6 +1302,11 @@ namespace AppRefiner
 
         public Dictionary<uint, int> ColorToHighlighterMap = new();
         public int NextHighlighterNumber = 0;
+
+        /// <summary>
+        /// Stores annotations created by stylers so they can be restored after linter processing
+        /// </summary>
+        public List<CodeAnnotation>? StylerAnnotations { get; set; } = new List<CodeAnnotation>();
 
         /// <summary>
         /// Gets a highlighter number for the specified BGRA color.

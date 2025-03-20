@@ -43,9 +43,21 @@ Identifies variables with non-descriptive names (like a, b, x, etc.).
 
 Detects when properties are accessed directly instead of through getter/setter methods.
 
+### Todo/Fixme Comments
+
+Highlights TODO, FIXME, NOTE, and other special comment markers with different colors:
+- **TODO** comments are highlighted in orange
+- **FIXME** comments are highlighted in red
+- **NOTE** and **TBD** comments are highlighted in yellow
+- **HACK** and **BUG** comments are highlighted in bright green
+
+This styler also provides a summary annotation at the end of the file listing all marked comments, making it easy to track tasks that need attention.
+
 ### Linter Suppression
 
 Highlights areas where linter warnings have been suppressed.
+
+> **For Developers:** For technical details about styler implementation, see the [Styler API Reference](../api-reference/core-api/styler-api.md).
 
 ## Enabling and Configuring Stylers
 
@@ -116,4 +128,4 @@ Share your code style settings with your team:
 
 ## Next Steps
 
-To learn about database integration features in AppRefiner, proceed to the [Database Integration](database-integration.md) section.
+To learn about database integration features in AppRefiner, proceed to the [Database Integration](../user-guide/database-integration.md) section.

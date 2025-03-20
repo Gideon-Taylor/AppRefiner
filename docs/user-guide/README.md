@@ -8,7 +8,7 @@ This guide provides detailed instructions on how to use AppRefiner as a companio
 - [Keyboard Shortcuts](keyboard-shortcuts.md)
 - [Working with Linters](working-with-linters.md)
 - [Using Refactoring Tools](using-refactoring-tools.md)
-- [Code Styling](code-styling.md)
+- [Code Styling](../features/code-styling.md)
 - [Database Integration](database-integration.md)
 - [Templates](templates.md)
 - [Command Palette](command-palette.md)
