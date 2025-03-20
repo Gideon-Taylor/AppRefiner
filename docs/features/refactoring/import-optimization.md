@@ -1,203 +1,131 @@
 # Import Optimization
 
-Import optimization in AppRefiner helps you manage import statements in your PeopleCode files, ensuring they are organized, necessary, and efficient.
+AppRefiner provides two powerful refactoring tools for managing import statements in your PeopleCode files: **Optimize Imports** and **Resolve Imports**.
 
 ## Overview
 
-PeopleCode applications often require importing various packages, classes, and interfaces. Over time, as code evolves, import statements can become disorganized, redundant, or missing. AppRefiner's import optimization feature helps you maintain clean, efficient import statements.
+PeopleCode applications often require importing various packages, classes, and interfaces. Over time, as code evolves, import statements can become disorganized, redundant, or missing. AppRefiner's import optimization features help you maintain clean, efficient import statements.
 
-## Key Features
+## Optimize Imports
 
-### 1. Remove Unused Imports
+The **Optimize Imports** refactor helps you clean up and organize your existing import statements by:
 
-AppRefiner can identify and remove import statements that aren't used in your code:
+### Key Features
 
-- **Usage analysis**: Scans your code to determine which imports are actually used
-- **Safe removal**: Only removes imports that are definitely unused
-- **Preservation options**: Optionally preserve certain imports even if unused
+1. **Removing Unused Imports**
+   - Analyzes your code to identify which imports are actually used
+   - Automatically removes imports that aren't referenced in your code
+   - Preserves imports that are used, either directly or through wildcards
 
-### 2. Add Missing Imports
+2. **Consolidating Imports**
+   - Converts multiple imports from the same package into a single wildcard import
+   - Only applies consolidation when there are more than 2 imports from the same package
 
-AppRefiner can identify and add import statements that are needed but missing:
+3. **Organizing Imports by Package**
+   - Groups imports by their root package
+   - Orders imports alphabetically by package name
+   - Maintains a clean, consistent structure
 
-- **Reference detection**: Identifies unresolved references that require imports
-- **Import suggestion**: Suggests appropriate import statements
-- **Ambiguity resolution**: Helps resolve ambiguous references
+### How It Works
 
-### 3. Organize Imports
+The Optimize Imports refactor:
 
-AppRefiner can reorganize import statements according to configurable rules:
+1. Scans your code for all import statements
+2. Tracks which imports are actually used in your code
+3. Removes any imports that aren't referenced
+4. Consolidates multiple imports from the same package into wildcards when appropriate
+5. Organizes the remaining imports by package hierarchy
+6. Replaces the original imports block with the optimized version
 
-- **Grouping**: Group imports by category (system, application, custom)
-- **Sorting**: Sort imports alphabetically within groups
-- **Formatting**: Apply consistent formatting to import statements
-- **Duplicate removal**: Eliminate duplicate import statements
+### Example
+
+**Before Optimization:**
+
+```peoplecode
+import PT_PEOPLESOFT:API:Logger;
+import MYAPP:Utilities;
+import PT_PEOPLESOFT:API:Configuration;
+import MYAPP:Constants;
+import PT_PEOPLESOFT:API:Errors;
+```
+
+**After Optimization:**
+
+```peoplecode
+import MYAPP:Constants;
+import MYAPP:Utilities;
+import PT_PEOPLESOFT:API:*;
+```
+
+## Resolve Imports
+
+The **Resolve Imports** refactor helps you ensure all class references have proper import statements by:
+
+### Key Features
+
+1. **Identifying Used Classes**
+   - Scans your code for all fully qualified class references
+   - Creates a list of unique class paths that need to be imported
+
+2. **Creating Explicit Imports**
+   - Generates explicit import statements for each class reference
+   - Ensures all used classes are properly imported
+
+3. **Organizing Imports Alphabetically**
+   - Orders all imports alphabetically by the full class path
+   - Creates a clean, consistent imports section
+
+### How It Works
+
+The Resolve Imports refactor:
+
+1. Scans your code for all fully qualified class references (containing ":")
+2. Builds a list of unique class paths that are used
+3. Generates explicit import statements for each class path
+4. Orders the imports alphabetically
+5. Either replaces the existing imports block or adds a new one at the beginning of the file
+
+### Example
+
+If your code contains references to classes like:
+
+```peoplecode
+Local PT_PEOPLESOFT:API:Logger &logger = create PT_PEOPLESOFT:API:Logger();
+Local MYAPP:Utilities:StringHelper &helper = create MYAPP:Utilities:StringHelper();
+```
+
+The Resolve Imports refactor will generate:
+
+```peoplecode
+import MYAPP:Utilities:StringHelper;
+import PT_PEOPLESOFT:API:Logger;
+```
 
 ## How to Use Import Optimization
 
-### Using the Context Menu
-
-1. Right-click anywhere in a PeopleCode file
-2. Select **Refactor > Optimize Imports**
-3. Review the preview of changes
-4. Click **Apply** to perform the optimization
 
 ### Using Keyboard Shortcuts
 
-1. Press **Ctrl+R, O** in a PeopleCode file
-2. Review the preview of changes
-3. Press **Enter** to apply or **Escape** to cancel
-
-### Using the Refactor Menu
-
-1. Go to **Edit > Refactor > Optimize Imports**
-2. Review the preview of changes
-3. Click **Apply** to perform the optimization
-
-### Automatic Import Optimization
-
-You can configure AppRefiner to automatically optimize imports:
-
-1. Go to **Tools > Options > AppRefiner > Code Editing**
-2. Enable **Optimize imports on save**
-3. Configure the optimization options
-
-## Import Optimization Options
-
-When optimizing imports, AppRefiner provides several configuration options:
-
-### 1. Removal Options
-
-- **Remove unused imports**: Whether to remove imports that aren't used
-- **Keep commented imports**: Whether to preserve imports that have comments
-- **Preserve specific imports**: List of imports to never remove even if unused
-
-### 2. Organization Options
-
-- **Group imports**: Whether to group imports by category
-- **Sort imports**: Whether to sort imports alphabetically
-- **Group order**: The order in which import groups should appear
-- **Blank lines between groups**: Whether to add blank lines between groups
-
-### 3. Formatting Options
-
-- **Import statement style**: Format of import statements (one per line, grouped, etc.)
-- **Indentation**: How to indent import statements
-- **Comments**: How to handle comments associated with imports
-
-## Examples of Import Optimization
-
-### Before Optimization
-
-```peoplecode
-import PT_PEOPLESOFT:API:*;  /* Unused */
-import PT_PEOPLESOFT:API:Logger;
-import MYAPP:Utilities;
-import PT_PEOPLESOFT:API:Configuration;
-import java:util:*;
-import MYAPP:Constants;  /* Unused */
-import java:io:*;  /* Unused */
-```
-
-### After Optimization
-
-```peoplecode
-/* System imports */
-import java:util:*;
-
-/* PeopleSoft imports */
-import PT_PEOPLESOFT:API:Configuration;
-import PT_PEOPLESOFT:API:Logger;
-
-/* Application imports */
-import MYAPP:Utilities;
-```
+- For **Optimize Imports**: Use the Command Palette and type "Optimize Imports"
+- For **Resolve Imports**: Press **Ctrl+Shift+I** in a PeopleCode file or use the Command Palette and type "Resolve Imports"
 
 ## Best Practices for Import Management
 
-1. **Use specific imports**: Import specific classes rather than using wildcards when possible
-2. **Organize imports logically**: Group related imports together
-3. **Comment import purpose**: Add comments to explain non-obvious imports
-4. **Regularly optimize**: Run import optimization regularly to keep imports clean
-5. **Be consistent**: Follow consistent import organization patterns across your codebase
+1. **Use Resolve Imports first**: If you have missing imports, run Resolve Imports to add them
+2. **Then use Optimize Imports**: After resolving imports, run Optimize Imports to clean up and organize them
+3. **Review the changes**: Always review the changes made by the refactoring tools
+4. **Run regularly**: Use these tools regularly to maintain clean import statements
 
-## Common Import Patterns in PeopleCode
+## When to Use Each Refactor
 
-AppRefiner supports various import organization patterns:
+- **Use Optimize Imports when**:
+  - You have unused imports that need to be removed
+  - Your imports are disorganized
+  - You want to consolidate multiple imports into wildcards
 
-### 1. Category-Based Organization
+- **Use Resolve Imports when**:
+  - You have fully qualified class references without imports
+  - You want to ensure all used classes have explicit imports
+  - You're starting a new file and want to generate all necessary imports
 
-```peoplecode
-/* System imports */
-import java:io:*;
-import java:util:*;
-
-/* PeopleSoft imports */
-import PT_PEOPLESOFT:API:*;
-
-/* Application imports */
-import MYAPP:*;
-```
-
-### 2. Alphabetical Organization
-
-```peoplecode
-import java:io:*;
-import java:util:*;
-import MYAPP:Constants;
-import MYAPP:Utilities;
-import PT_PEOPLESOFT:API:Configuration;
-import PT_PEOPLESOFT:API:Logger;
-```
-
-### 3. Purpose-Based Organization
-
-```peoplecode
-/* Utility imports */
-import java:util:*;
-import MYAPP:Utilities;
-
-/* Configuration imports */
-import PT_PEOPLESOFT:API:Configuration;
-import MYAPP:Constants;
-
-/* Logging imports */
-import PT_PEOPLESOFT:API:Logger;
-```
-
-## Handling Special Cases
-
-### 1. Imports with Side Effects
-
-Some imports may have side effects (initialization code that runs when imported). AppRefiner preserves these imports even if they appear unused:
-
-```peoplecode
-import MYAPP:Initializer;  /* Has side effects - preserved */
-```
-
-### 2. Conditional Imports
-
-AppRefiner handles conditional imports appropriately:
-
-```peoplecode
-If %ApplicationRelease >= "9.2" Then
-   import PT_PEOPLESOFT:API:NewFeature;
-Else
-   import PT_PEOPLESOFT:API:LegacyFeature;
-End-If;
-```
-
-### 3. Dynamic Imports
-
-AppRefiner recognizes dynamic imports:
-
-```peoplecode
-Local string &packageName = "MYAPP:Modules:" | &moduleName;
-import @(&packageName);
-```
-
-## Related Features
-
-- [Refactoring Overview](overview.md)
-- [Variable Renaming](variable-renaming.md)
-- [FlowerBox Headers](flowerbox-headers.md)
+By combining these two powerful refactoring tools, you can ensure your PeopleCode files have clean, efficient, and properly organized import statements.

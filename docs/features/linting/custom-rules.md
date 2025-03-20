@@ -35,13 +35,13 @@ namespace MyCompany.AppRefiner.CustomLinters
             // Your lint rule logic here
             
             // If an issue is found, add a report
-            Reports?.Add(new Report
-            {
-                Message = "Description of the issue found",
-                Line = context.Start.Line,
-                Type = ReportType.Warning,
-                Span = (context.Start.StartIndex, context.Stop.StopIndex)
-            });
+            AddReport(
+                1, // Report number
+                "Description of the issue found",
+                ReportType.Warning,
+                context.Start.Line,
+                (context.Start.StartIndex, context.Stop.StopIndex)
+            );
         }
     }
 }
@@ -62,13 +62,13 @@ Your custom lint rule can override any of the listener methods from the ANTLR4 p
 When your rule detects an issue, you can add a report to notify the user:
 
 ```csharp
-Reports?.Add(new Report
-{
-    Message = "Variable name does not follow naming convention",
-    Line = context.Start.Line,
-    Type = ReportType.Warning,
-    Span = (context.Start.StartIndex, context.Stop.StopIndex)
-});
+AddReport(
+    1, // Report number
+    "Variable name does not follow naming convention",
+    ReportType.Warning,
+    context.Start.Line,
+    (context.Start.StartIndex, context.Stop.StopIndex)
+);
 ```
 
 ## Example Custom Lint Rules
@@ -103,13 +103,13 @@ public class FunctionLengthRule : BaseLintRule
         
         if (functionLength > MAX_FUNCTION_LENGTH)
         {
-            Reports?.Add(new Report
-            {
-                Message = $"Function exceeds maximum length of {MAX_FUNCTION_LENGTH} lines (actual: {functionLength})",
-                Line = startLine,
-                Type = ReportType.Warning,
-                Span = (context.Start.StartIndex, context.Stop.StopIndex)
-            });
+            AddReport(
+                1, // Report number
+                $"Function exceeds maximum length of {MAX_FUNCTION_LENGTH} lines (actual: {functionLength})",
+                ReportType.Warning,
+                startLine,
+                (context.Start.StartIndex, context.Stop.StopIndex)
+            );
         }
     }
 }
@@ -141,13 +141,13 @@ public class NamingConventionRule : BaseLintRule
             
             if (!localVarPattern.IsMatch(varName))
             {
-                Reports?.Add(new Report
-                {
-                    Message = $"Local variable '{varName}' does not follow the naming convention &lCamelCase",
-                    Line = context.Start.Line,
-                    Type = ReportType.Warning,
-                    Span = (context.variableName().Start.StartIndex, context.variableName().Stop.StopIndex)
-                });
+                AddReport(
+                    1, // Report number
+                    $"Local variable '{varName}' does not follow the naming convention &lCamelCase",
+                    ReportType.Warning,
+                    context.Start.Line,
+                    (context.variableName().Start.StartIndex, context.variableName().Stop.StopIndex)
+                );
             }
         }
     }
@@ -159,31 +159,27 @@ public class NamingConventionRule : BaseLintRule
 To install custom lint rules in AppRefiner:
 
 1. Compile your custom lint rules into a DLL
-2. Place the DLL in the AppRefiner plugins directory:
-   - `%APPDATA%\AppRefiner\Plugins` (for user-specific plugins)
-   - `[AppRefiner Installation Directory]\Plugins` (for all users)
+2. Place the DLL in the AppRefiner plugins directory.
 3. Restart AppRefiner
+
+**Note**: The Plugin directoy can be changed via the "Plugins..." button on AppRefiner's main window.
 
 ## Managing Custom Lint Rules
 
 Once installed, custom lint rules appear alongside built-in rules in the AppRefiner settings:
 
-1. Go to **Tools > Options > AppRefiner > Linting**
-2. Your custom rules will appear in the list with their LINTER_ID
-3. You can enable/disable them and adjust their severity level
-
 ## Best Practices for Custom Lint Rules
 
 1. **Use clear, descriptive IDs**: Make your LINTER_ID descriptive and include a company prefix
-2. **Provide helpful messages**: Error messages should clearly explain the issue and how to fix it
-3. **Consider performance**: Lint rules run frequently, so keep them efficient
-4. **Test thoroughly**: Test your rules with various code patterns to avoid false positives
-5. **Document your rules**: Create documentation explaining the purpose and rationale of each rule
-6. **Version your rules**: Use versioning to track changes to your custom rules
+2. **Provide helpful messages**: Error messages should clearly explain the issue
+3. **Test thoroughly**: Test your rules with various code patterns to avoid false positives
+4. **Document your rules**: Create documentation explaining the purpose and rationale of each rule
+5. **Version your rules**: Use versioning to track changes to your custom rules
 
 ## Advanced Features
 
 ### Rule Configuration
+**Note**: Currently configurations for linter rules is not supported. This is a planned feature. Below is how it might look:
 
 You can make your rules configurable by adding properties that can be set in the AppRefiner UI:
 
@@ -209,7 +205,7 @@ public class RecordFieldExistsRule : BaseLintRule
     
     public override DataManagerRequirement DatabaseRequirement => DataManagerRequirement.Required;
     
-    // Implementation that uses DataManager to validate record fields
+    // Implementation that uses DataManager to validate data against database
 }
 ```
 
