@@ -448,6 +448,35 @@ namespace AppRefiner.Refactors
             }
         }
         
+        // Handle top-level constants in non-class programs
+        public override void EnterConstantDeclaration(ConstantDeclarationContext context)
+        {
+            base.EnterConstantDeclaration(context);
+            
+            var varNode = context.USER_VARIABLE();
+            if (varNode != null)
+            {
+                string varName = varNode.GetText();
+                var span = (varNode.Symbol.StartIndex, varNode.Symbol.StopIndex);
+                
+                // Add to current scope
+                var currentScope = GetCurrentScope();
+                if (!currentScope.ContainsKey(varName))
+                {
+                    currentScope[varName] = new List<(int, int)>();
+                }
+                currentScope[varName].Add(span);
+                
+                // Check if cursor is within this constant variable
+                if (span.Item1 <= CurrentPosition && CurrentPosition <= span.Item2 + 1)
+                {
+                    variableToRename = varName;
+                    targetScope = currentScope;
+                    isConstant = true;
+                }
+            }
+        }
+        
         // Handle method parameter annotations that appear after the method header
         public override void EnterMethodParameterAnnotation(MethodParameterAnnotationContext context)
         {
