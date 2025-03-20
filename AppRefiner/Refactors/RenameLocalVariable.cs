@@ -25,11 +25,17 @@ namespace AppRefiner.Refactors
         /// <summary>
         /// Gets the description of this refactoring operation
         /// </summary>
-        public new static string RefactorDescription => "Rename a local variable and all its references";
+        public new static string RefactorDescription => "Rename a local variable, parameter, or private instance variable and all its references";
 
         private string? newVariableName;
         private string? variableToRename;
         private Dictionary<string, List<(int, int)>>? targetScope;
+        private bool isInstanceVariable = false;
+        private bool isParameter = false;
+        
+        // Track method parameters for later association with method scopes
+        private readonly Dictionary<string, List<(string paramName, (int, int) span)>> pendingMethodParameters = new();
+        private string? currentMethodName;
         
         /// <summary>
         /// Indicates that this refactor requires a user input dialog
@@ -254,18 +260,219 @@ namespace AppRefiner.Refactors
                 targetScope = GetCurrentScope();
             }
         }
+        
+        // Track method header declarations to associate parameters later
+        public override void EnterMethodHeader(MethodHeaderContext context)
+        {
+            base.EnterMethodHeader(context);
+            
+            // Store the method name for later use with parameters
+            var methodName = context.genericID().GetText();
+            currentMethodName = methodName;
+            
+            // Initialize the parameter list for this method if it doesn't exist
+            if (!pendingMethodParameters.ContainsKey(methodName))
+            {
+                pendingMethodParameters[methodName] = new List<(string, (int, int))>();
+            }
+        }
+        
+        // Handle method parameters - store them for later association with method scope
+        public override void EnterMethodArgument(MethodArgumentContext context)
+        {
+            base.EnterMethodArgument(context);
+            
+            if (currentMethodName == null)
+            {
+                return; // Safety check
+            }
+            
+            var varNode = context.USER_VARIABLE();
+            if (varNode != null)
+            {
+                string varName = varNode.GetText();
+                var span = (varNode.Symbol.StartIndex, varNode.Symbol.StopIndex);
+                
+                // Store the parameter for later association with method scope
+                pendingMethodParameters[currentMethodName].Add((varName, span));
+                
+                // Check if cursor is within this parameter
+                if (span.Item1 <= CurrentPosition && CurrentPosition <= span.Item2 + 1)
+                {
+                    variableToRename = varName;
+                    isParameter = true;
+                    // We'll set targetScope when we enter the method implementation
+                }
+            }
+        }
+        
+        // When entering a method implementation, associate any pending parameters with this scope
+        public override void EnterMethod(MethodContext context)
+        {
+            base.EnterMethod(context);
+            
+            var methodName = context.genericID().GetText();
+            
+            // Check if we have pending parameters for this method
+            if (pendingMethodParameters.TryGetValue(methodName, out var parameters))
+            {
+                var currentScope = GetCurrentScope();
+                
+                // Add each parameter to the current method scope
+                foreach (var (paramName, span) in parameters)
+                {
+                    if (!currentScope.ContainsKey(paramName))
+                    {
+                        currentScope[paramName] = new List<(int, int)>();
+                    }
+                    currentScope[paramName].Add(span);
+                    
+                    // If this is the parameter we want to rename, update targetScope
+                    if (isParameter && variableToRename == paramName && targetScope == null)
+                    {
+                        targetScope = currentScope;
+                    }
+                }
+            }
+        }
+        
+        // Track function definitions to associate parameters
+        public override void EnterFunctionDefinition(FunctionDefinitionContext context)
+        {
+            base.EnterFunctionDefinition(context);
+            
+            // Process function arguments if the cursor is on a parameter
+            if (isParameter && variableToRename != null && targetScope == null)
+            {
+                var currentScope = GetCurrentScope();
+                
+                // If we have a parameter to rename but no target scope yet,
+                // this is the right scope for function parameters
+                targetScope = currentScope;
+            }
+        }
+        
+        // Handle function parameters directly in the function scope
+        public override void EnterFunctionArgument(FunctionArgumentContext context)
+        {
+            base.EnterFunctionArgument(context);
+            
+            var varNode = context.USER_VARIABLE();
+            if (varNode != null)
+            {
+                string varName = varNode.GetText();
+                var span = (varNode.Symbol.StartIndex, varNode.Symbol.StopIndex);
+                
+                // Add to current scope (which should be the function scope)
+                var currentScope = GetCurrentScope();
+                if (!currentScope.ContainsKey(varName))
+                {
+                    currentScope[varName] = new List<(int, int)>();
+                }
+                currentScope[varName].Add(span);
+                
+                // Check if cursor is within this parameter
+                if (span.Item1 <= CurrentPosition && CurrentPosition <= span.Item2 + 1)
+                {
+                    variableToRename = varName;
+                    targetScope = currentScope;
+                    isParameter = true;
+                }
+            }
+        }
+        
+        // Handle private instance variables
+        public override void EnterPrivateProperty(PrivatePropertyContext context)
+        {
+            base.EnterPrivateProperty(context);
+            
+            var instanceDeclContext = context.instanceDeclaration();
+            if (instanceDeclContext is InstanceDeclContext instanceDecl)
+            {
+                // Process each variable in the instance declaration
+                foreach (var varNode in instanceDecl.USER_VARIABLE())
+                {
+                    string varName = varNode.GetText();
+                    var span = (varNode.Symbol.StartIndex, varNode.Symbol.StopIndex);
+                    
+                    // Add to global scope (first scope in the stack)
+                    var globalScope = scopeStack.Last();
+                    if (!globalScope.ContainsKey(varName))
+                    {
+                        globalScope[varName] = new List<(int, int)>();
+                    }
+                    globalScope[varName].Add(span);
+                    
+                    // Check if cursor is within this instance variable
+                    if (span.Item1 <= CurrentPosition && CurrentPosition <= span.Item2 + 1)
+                    {
+                        variableToRename = varName;
+                        targetScope = globalScope;
+                        isInstanceVariable = true;
+                    }
+                }
+            }
+        }
+        
+        // Handle method parameter annotations that appear after the method header
+        public override void EnterMethodParameterAnnotation(MethodParameterAnnotationContext context)
+        {
+            base.EnterMethodParameterAnnotation(context);
+            
+            var methodArgCtx = context.methodArgument();
+            if (methodArgCtx != null)
+            {
+                var varNode = methodArgCtx.USER_VARIABLE();
+                if (varNode != null)
+                {
+                    string varName = varNode.GetText();
+                    var span = (varNode.Symbol.StartIndex, varNode.Symbol.StopIndex);
+                    
+                    // Add this parameter annotation to the current scope
+                    AddOccurrence(varName, span, true);
+                    
+                    // Check if cursor is within this parameter annotation
+                    if (span.Item1 <= CurrentPosition && CurrentPosition <= span.Item2 + 1)
+                    {
+                        variableToRename = varName;
+                        targetScope = GetCurrentScope();
+                        isParameter = true;
+                    }
+                }
+            }
+        }
 
         // Helper method to add an occurrence to the appropriate scope
         private void AddOccurrence(string varName, (int, int) span, bool mustExist = false)
         {
+            // For instance variables, check the global scope first
+            if (!mustExist && isInstanceVariable && variableToRename == varName)
+            {
+                var globalScope = scopeStack.Last();
+                if (!globalScope.ContainsKey(varName))
+                {
+                    globalScope[varName] = new List<(int, int)>();
+                }
+                globalScope[varName].Add(span);
+                return;
+            }
+            
+            // For regular variables, try to find in any scope
+            if (mustExist)
+            {
+                foreach (var scope in scopeStack)
+                {
+                    if (scope.ContainsKey(varName))
+                    {
+                        scope[varName].Add(span);
+                        return;
+                    }
+                }
+                return;
+            } 
 
             // If not found, add to current scope
             var currentScope = GetCurrentScope();
-
-            if (mustExist && !currentScope.ContainsKey(varName))
-            {
-                return;
-            }
 
             if (!currentScope.ContainsKey(varName))
             {
@@ -278,6 +485,7 @@ namespace AppRefiner.Refactors
         {
             GenerateChanges();
         }
+        
         // Generate the refactoring changes
         public void GenerateChanges()
         {
@@ -300,13 +508,18 @@ namespace AppRefiner.Refactors
             if (allOccurrences == null || allOccurrences.Count == 0)
             {
                 // No occurrences found
-                SetFailure($"Target '{variableToRename}' is not a local variable. Only local variables can be renamed.");
+                string errorVarType = isInstanceVariable ? "private instance variable" : 
+                                      isParameter ? "parameter" : "local variable";
+                SetFailure($"Target '{variableToRename}' is not a {errorVarType}. Only {errorVarType}s can be renamed.");
                 return;
             }
 
             // Sort occurrences in reverse order to avoid position shifting
             allOccurrences.Sort((a, b) => b.Item1.CompareTo(a.Item1));
 
+            string varTypeDescription = isInstanceVariable ? "private instance variable" : 
+                                  isParameter ? "parameter" : "local variable";
+            
             // Generate replacement changes for each occurrence
             foreach (var (start, end) in allOccurrences)
             {
@@ -314,7 +527,7 @@ namespace AppRefiner.Refactors
                     start,
                     end,
                     newVariableName,
-                    $"Rename variable '{variableToRename}' to '{newVariableName}'"
+                    $"Rename {varTypeDescription} '{variableToRename}' to '{newVariableName}'"
                 );
             }
         }

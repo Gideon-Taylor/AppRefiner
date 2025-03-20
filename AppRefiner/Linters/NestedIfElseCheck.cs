@@ -14,6 +14,7 @@ namespace AppRefiner.Linters
         private int currentNestingLevel = 0;
         private Stack<IfStatementContext> ifContextStack = new();
         private HashSet<IfStatementContext> reportedIfStatements = new();
+        private Dictionary<IfStatementContext, int> maxNestingLevelMap = new();
 
         public NestedIfElseCheck()
         {
@@ -26,25 +27,29 @@ namespace AppRefiner.Linters
         {
             currentNestingLevel++;
             ifContextStack.Push(context);
-
-            // Check if we've exceeded the maximum nesting level
-            if (currentNestingLevel > MaxNestingLevel)
-            {
-                // Get the outermost If statement to report on
-                var outermost = ifContextStack.Last();
-
-                AddReport(
-                    1,
-                    $"Deeply nested If/Else blocks (level {currentNestingLevel}). Consider refactoring using Evaluate or early returns.",
-                    Type,
-                    outermost.Start.Line - 1,
-                    (outermost.Start.StartIndex, outermost.Stop.StopIndex)
-                );
-            }
+            
+            // Initialize the max nesting level for this context
+            maxNestingLevelMap[context] = currentNestingLevel;
         }
 
         public override void ExitIfStatement(IfStatementContext context)
         {
+            // When exiting an if statement, check if its max depth exceeded the threshold
+            // and issue a report if needed, but only for the outermost if that wasn't already reported
+            if (ifContextStack.Count == 1 && maxNestingLevelMap[context] > MaxNestingLevel && !reportedIfStatements.Contains(context))
+            {
+                AddReport(
+                    1,
+                    $"Deeply nested If/Else blocks (max level {maxNestingLevelMap[context]}). Consider refactoring using Evaluate or early returns.",
+                    Type,
+                    context.Start.Line - 1,
+                    (context.Start.StartIndex, context.Stop.StopIndex)
+                );
+                
+                // Mark this if statement as reported
+                reportedIfStatements.Add(context);
+            }
+            
             currentNestingLevel--;
             ifContextStack.Pop();
         }
@@ -88,11 +93,32 @@ namespace AppRefiner.Linters
             }
         }
 
+        // Update the max nesting level for all parent contexts in the stack
+        private void UpdateMaxNestingLevels()
+        {
+            foreach (var ctx in ifContextStack)
+            {
+                maxNestingLevelMap[ctx] = Math.Max(maxNestingLevelMap[ctx], currentNestingLevel);
+            }
+        }
+
+        public override void EnterEveryRule(Antlr4.Runtime.ParserRuleContext context)
+        {
+            base.EnterEveryRule(context);
+            
+            // Update max nesting levels for all if statements in the stack
+            if (ifContextStack.Count > 0)
+            {
+                UpdateMaxNestingLevels();
+            }
+        }
+
         public override void Reset()
         {
             currentNestingLevel = 0;
             ifContextStack.Clear();
             reportedIfStatements.Clear();
+            maxNestingLevelMap.Clear();
         }
     }
 }
