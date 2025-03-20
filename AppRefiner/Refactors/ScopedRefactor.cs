@@ -203,6 +203,27 @@ namespace AppRefiner.Refactors
             OnVariableDeclared(variableScopeStack.Peek()[varName]);
         }
 
+        public override void EnterConstantDeclaration(ConstantDeclarationContext context)
+        {
+            // Extract variable information
+            var varNode = context.USER_VARIABLE();
+            if (varNode != null)
+            {
+                string varName = varNode.GetText();
+                
+                // Constants are implicitly typed based on their literal value
+                // For simplicity, we'll just use "Constant" as the type
+                AddLocalVariable(
+                    varName,
+                    "Constant",
+                    varNode.Symbol.Line,
+                    varNode.Symbol.StartIndex,
+                    varNode.Symbol.StopIndex
+                );
+                OnVariableDeclared(variableScopeStack.Peek()[varName]);
+            }
+        }
+
         public override void EnterIdentUserVariable(IdentUserVariableContext context)
         {
             string varName = context.GetText();

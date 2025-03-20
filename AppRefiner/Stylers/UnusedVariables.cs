@@ -55,6 +55,27 @@ namespace AppRefiner.Stylers
             }
         }
 
+        // Handle top-level constants in non-class programs
+        public override void EnterConstantDeclaration(ConstantDeclarationContext context)
+        {
+            base.EnterConstantDeclaration(context);
+            
+            var varNode = context.USER_VARIABLE();
+            if (varNode != null)
+            {
+                string varName = varNode.GetText();
+                
+                // Add to the current scope
+                AddLocalVariable(
+                    varName,
+                    "Constant",
+                    varNode.Symbol.Line,
+                    varNode.Symbol.StartIndex,
+                    varNode.Symbol.StopIndex
+                );
+            }
+        }
+
         protected override void OnExitScope(Dictionary<string, object> scope, Dictionary<string, VariableInfo> variableScope)
         {
             // Check for unused variables in the current scope
