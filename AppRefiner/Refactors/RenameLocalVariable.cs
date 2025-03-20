@@ -25,13 +25,14 @@ namespace AppRefiner.Refactors
         /// <summary>
         /// Gets the description of this refactoring operation
         /// </summary>
-        public new static string RefactorDescription => "Rename a local variable, parameter, or private instance variable and all its references";
+        public new static string RefactorDescription => "Rename a local variable, parameter, private instance variable, or private constant and all its references";
 
         private string? newVariableName;
         private string? variableToRename;
         private Dictionary<string, List<(int, int)>>? targetScope;
         private bool isInstanceVariable = false;
         private bool isParameter = false;
+        private bool isConstant = false;
         
         // Track method parameters for later association with method scopes
         private readonly Dictionary<string, List<(string paramName, (int, int) span)>> pendingMethodParameters = new();
@@ -414,6 +415,39 @@ namespace AppRefiner.Refactors
             }
         }
         
+        // Handle private constant declarations
+        public override void EnterPrivateConstant(PrivateConstantContext context)
+        {
+            base.EnterPrivateConstant(context);
+            
+            var constDeclContext = context.constantDeclaration();
+            if (constDeclContext != null)
+            {
+                var varNode = constDeclContext.USER_VARIABLE();
+                if (varNode != null)
+                {
+                    string varName = varNode.GetText();
+                    var span = (varNode.Symbol.StartIndex, varNode.Symbol.StopIndex);
+                    
+                    // Add to global scope (first scope in the stack)
+                    var globalScope = scopeStack.Last();
+                    if (!globalScope.ContainsKey(varName))
+                    {
+                        globalScope[varName] = new List<(int, int)>();
+                    }
+                    globalScope[varName].Add(span);
+                    
+                    // Check if cursor is within this constant variable
+                    if (span.Item1 <= CurrentPosition && CurrentPosition <= span.Item2 + 1)
+                    {
+                        variableToRename = varName;
+                        targetScope = globalScope;
+                        isConstant = true;
+                    }
+                }
+            }
+        }
+        
         // Handle method parameter annotations that appear after the method header
         public override void EnterMethodParameterAnnotation(MethodParameterAnnotationContext context)
         {
@@ -445,8 +479,8 @@ namespace AppRefiner.Refactors
         // Helper method to add an occurrence to the appropriate scope
         private void AddOccurrence(string varName, (int, int) span, bool mustExist = false)
         {
-            // For instance variables, check the global scope first
-            if (!mustExist && isInstanceVariable && variableToRename == varName)
+            // For instance variables or constants, check the global scope first
+            if (!mustExist && (isInstanceVariable || isConstant) && variableToRename == varName)
             {
                 var globalScope = scopeStack.Last();
                 if (!globalScope.ContainsKey(varName))
@@ -509,7 +543,8 @@ namespace AppRefiner.Refactors
             {
                 // No occurrences found
                 string errorVarType = isInstanceVariable ? "private instance variable" : 
-                                      isParameter ? "parameter" : "local variable";
+                                      isParameter ? "parameter" : 
+                                      isConstant ? "private constant" : "local variable";
                 SetFailure($"Target '{variableToRename}' is not a {errorVarType}. Only {errorVarType}s can be renamed.");
                 return;
             }
@@ -518,7 +553,8 @@ namespace AppRefiner.Refactors
             allOccurrences.Sort((a, b) => b.Item1.CompareTo(a.Item1));
 
             string varTypeDescription = isInstanceVariable ? "private instance variable" : 
-                                  isParameter ? "parameter" : "local variable";
+                                  isParameter ? "parameter" : 
+                                  isConstant ? "private constant" : "local variable";
             
             // Generate replacement changes for each occurrence
             foreach (var (start, end) in allOccurrences)
