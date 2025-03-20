@@ -1,68 +1,38 @@
 # SQL Formatting
 
-SQL formatting in AppRefiner helps you write clean, readable, and consistent SQL code within your PeopleCode files.
+App Refiner provides improved SQL formatting for better readability while editing SQL definitions in Application Designer.
 
 ## Overview
 
-When working with SQL in PeopleCode, proper formatting is essential for readability and maintainability. AppRefiner provides automatic SQL formatting capabilities that help standardize your SQL statements according to best practices.
+Application Designer enforces its own SQL formatting when saving SQL definitions, which is optimized for storage rather than readability. This can make SQL difficult to understand and edit while working with it.
 
-## Features
+App Refiner detects when a SQL definition is open and automatically reformats it to a more readable format for editing purposes. This reformatting is temporary and only affects the display during editing - it does not change the underlying format that Application Designer enforces when saving.
 
-### Automatic SQL Detection
+## How It Works
 
-AppRefiner automatically detects SQL statements in your PeopleCode, including:
+When you open a SQL definition in Application Designer:
 
-- **SQLExec statements**
-- **CreateSQL calls**
-- **SQL string literals assigned to variables**
-- **SQL statements in App Engine PeopleCode**
+1. App Refiner detects that a SQL definition is being edited
+2. It automatically reformats the SQL to a more readable structure with proper indentation and alignment
+3. You can edit the SQL in this readable format
+4. When you save, Application Designer will apply its own formatting to the SQL for storage
 
-### Formatting Options
+## Benefits
 
-The SQL formatter provides several formatting options:
-
-- **Keyword capitalization**: Automatically capitalize SQL keywords (SELECT, FROM, WHERE, etc.)
-- **Clause alignment**: Align clauses on new lines with proper indentation
-- **Comma placement**: Configure whether commas should appear at the beginning or end of lines
-- **Indentation style**: Choose between different indentation styles for nested queries
-- **Whitespace control**: Add appropriate spacing around operators and parentheses
-
-## How to Use SQL Formatting
-
-### Manual Formatting
-
-1. Select the SQL statement you want to format
-2. Right-click and select **Format SQL** from the context menu
-3. Alternatively, use the keyboard shortcut **Ctrl+K, Ctrl+F** when your cursor is within an SQL statement
-
-### Automatic Formatting
-
-You can configure AppRefiner to automatically format SQL statements:
-
-1. Go to **Tools > Options > AppRefiner > SQL Formatting**
-2. Enable the **Format SQL on paste** option
-3. Enable the **Format SQL on save** option if desired
-
-## Customizing SQL Formatting
-
-AppRefiner allows you to customize SQL formatting rules to match your team's coding standards:
-
-1. Go to **Tools > Options > AppRefiner > SQL Formatting**
-2. Adjust the following settings:
-   - **Keyword case**: UPPERCASE, lowercase, or Capitalize
-   - **Indent size**: Number of spaces for each indentation level
-   - **Comma style**: End of line or beginning of line
-   - **Alignment style**: Simple, stacked, or compact
+- **Improved readability**: SQL is displayed with proper indentation, line breaks, and alignment
+- **Easier editing**: Working with well-formatted SQL reduces errors and improves productivity
+- **No conflicts**: The reformatting doesn't interfere with Application Designer's required format for storage
+- **Seamless experience**: The reformatting happens automatically without requiring manual intervention
 
 ## Example
 
-### Before Formatting
+### Application Designer's Default Format (at save time)
 
 ```sql
 select a.field1,a.field2,b.field1 from ps_record a,ps_record2 b where a.field1=b.field1 and a.field3='Value' order by a.field1
 ```
 
-### After Formatting
+### App Refiner's Improved Format (for editing)
 
 ```sql
 SELECT a.field1, a.field2, b.field1
@@ -71,15 +41,3 @@ WHERE  a.field1 = b.field1
 AND    a.field3 = 'Value'
 ORDER BY a.field1
 ```
-
-## Benefits
-
-- **Improved readability**: Consistently formatted SQL is easier to read and understand
-- **Error reduction**: Proper formatting helps identify syntax errors more easily
-- **Maintainability**: Standardized formatting makes code maintenance simpler
-- **Team consistency**: Ensures all team members follow the same SQL formatting standards
-
-## Related Features
-
-- [SQL Binding Validation](../sql-validation/binding-validation.md)
-- [SQL Injection Prevention](../sql-validation/injection-prevention.md)

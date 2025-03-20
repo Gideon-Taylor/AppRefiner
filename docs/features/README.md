@@ -9,6 +9,7 @@ This section provides detailed information about each feature AppRefiner adds to
 - [SQL Formatting](editor-tweaks/sql-formatting.md)
 - [Dark Mode](editor-tweaks/dark-mode.md)
 - [Annotations](editor-tweaks/annotations.md)
+- [Code Styling](styling.md)
 
 ### Code Analysis
 - [Linting Overview](linting/overview.md)

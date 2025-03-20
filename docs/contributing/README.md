@@ -1,14 +1,17 @@
 # Contributing to AppRefiner
 
-This section provides information on how to contribute to the AppRefiner project.
+We welcome contributions to AppRefiner! This document provides a brief overview of how you can contribute to the project.
 
-## Contents
+## How to Contribute
 
-- [Development Environment Setup](development-environment.md)
-- [Coding Standards](coding-standards.md)
-- [Pull Request Process](pull-request-process.md)
-- [Testing Guidelines](testing-guidelines.md)
-- [Documentation Guidelines](documentation-guidelines.md)
-- [Issue Reporting](issue-reporting.md)
-- [Feature Requests](feature-requests.md)
-- [Community Guidelines](community-guidelines.md)
+- **Pull Requests**: We welcome pull requests for bug fixes, features, and improvements. By submitting a pull request, you agree that your code will be licensed under the project's MIT license.
+
+- **Issues**: Report bugs or suggest features through the issue tracker.
+
+- **Documentation**: Help improve our documentation.
+
+## License
+
+All contributions that are merged into the project will be covered by the project's [MIT license](../../LICENSE). By submitting a pull request, you are agreeing to have your code distributed under this license.
+
+Thank you for contributing to AppRefiner!
