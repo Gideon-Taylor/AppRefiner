@@ -1,143 +1,85 @@
 # AppRefiner
 
-AppRefiner is a powerful code analysis and refactoring tool specifically designed for PeopleCode development. It helps developers identify potential issues, optimize code quality, and apply best practices through linting, styling, and automated refactoring.
+AppRefiner is a powerful companion application designed to enhance PeopleSoft's Application Designer with modern development features. It adds code folding, linting, syntax highlighting, and refactoring tools that are not available in the native Application Designer environment.
 
-Additionally it unlocks features such as code folding and improves the formatting of SQL objects during development.
+Rather than replacing Application Designer, AppRefiner seamlessly integrates with it to provide additional functionality while you work with PeopleCode. The most efficient way to access AppRefiner's features is through the Command Palette (Ctrl+Shift+P), which works similarly to VS Code and provides quick access to all functionality.
 
-## Features
+## Key Features
 
-### Editor Tweaks
-- Provides code folding capabilities
-- Better edit-time formatting for SQL objects
-- Supports annotations for in-line visual feedback
-- Dark mode support for code editors
-- Tab key will insert 3 spaces, allowing you to align your code without saving.
+### Editor Enhancements
+- **Code Folding**: Collapse and expand code blocks for better organization
+- **SQL Formatting**: Improved edit-time formatting for SQL objects
+- **Annotations**: In-line visual feedback directly in the editor
+- **Dark Mode**: Support for dark mode in code editors
 
 ### Code Analysis
-- **Linting**: Automatically detect issues like:
-  - Empty catch blocks
-  - Nested if-else statements
-  - Long expressions
-  - SQL wildcard usage
-  - Recursive function calls
-  - Missing FlowerBox headers
-  - And many more
-
-### SQL Validation
-- **SQL Binding Validation**: Automatic validation of SQL parameter binding:
-  - Validates SQLExec calls have the correct number of bind and output variables
-  - Validates CreateSQL/GetSQL statements have proper parameter counts
-  - Checks SQL.Execute, SQL.Open, and SQL.Fetch method calls for correct parameter usage
-  - Detects string concatenation in SQL statements (potential SQL injection risk)
-  - Validates SQL definition references when connected to a database
-  - Warns when bind values aren't provided before SQL.Fetch calls
-  - Validates array usage for multi-column result sets
+- **Linting**: Automatically detect issues like empty catch blocks, nested if-else statements, SQL wildcard usage, and more
+- **SQL Validation**: Validate SQL parameter binding, detect potential SQL injection risks, and validate SQL definition references
+- **Style Analysis**: Highlight style issues such as meaningless variable names, properties used as variables, and unused imports
 
 ### Code Refactoring
-- **Automated Refactoring**: Improve your code with:
-  - Local variable renaming
-  - Import optimization
-  - Add proper FlowerBox headers
-
-### Style Analysis
-- **Code Styling**: Highlight style issues such as:
-  - Meaningless variable names
-  - Properties used as variables
-  - Unused imports and variables
-
-### Database Integration
-- Optionally Connect to Oracle PeopleSoft databases
-- Enhances the capabilities of some linting rules 
+- **Variable Renaming**: Easily rename local variables, parameters, and more
+- **Import Optimization**: Clean up and organize import statements
+- **FlowerBox Headers**: Add proper documentation headers to your code
 
 ### Productivity Features
-- Global hotkey support for quick access
-- Templates for common code patterns
-- Dark mode support
+- **Command Palette**: Quick access to all features (Ctrl+Shift+P)
+- **Templates**: Pre-built code templates for common patterns
+- **Database Integration**: Connect to Oracle PeopleSoft databases to enhance linting capabilities
+- **Global Hotkeys**: Keyboard shortcuts that work directly inside Application Designer
 
 ## Getting Started
 
 ### Prerequisites
 - Windows operating system
-- .NET 8 
+- .NET 8 Runtime or SDK
+- PeopleSoft Application Designer installed and functioning
 
 ### Installation
-1. Clone this repository or download the latest release
-2. Build the solution using Visual Studio
-3. Run the AppRefiner.exe application
-
-### Basic Usage
-1. Launch the application
-2. Use the hotkey (configurable) to analyze the code in your current editor
-3. Review the reported issues
-4. Apply suggested refactorings as needed
+1. Download the latest AppRefiner release
+2. Extract to a location of your choice
+3. Run AppRefiner.exe
+4. AppRefiner will automatically detect Application Designer and begin enhancing its functionality
 
 ### Keyboard Shortcuts
-AppRefiner provides seamless keyboard shortcuts that work directly inside Application Designer without needing to switch back to the AppRefiner window:
-
-- **Alt+Left**: Collapse current section
-- **Alt+Right**: Expand current section
-- **Ctrl+Alt+Left**: Collapse all top-level sections
-- **Ctrl+Alt+Right**: Expand all top-level sections
-- **Ctrl+Shift+R**: Rename local variable (cursor must be in a variable name or have it highlighted)
+- **Ctrl+Shift+P**: Open Command Palette
+- **Alt+Left/Right**: Collapse/Expand current section
+- **Ctrl+Alt+Left/Right**: Collapse/Expand all top-level sections
+- **Ctrl+Shift+R**: Rename local variable
 - **Ctrl+Alt+L**: Trigger code linting
 
-## Database Connection
-For database-related functions:
-1. Use the DB Connect dialog
-2. Select your Oracle TNS name
-3. Provide bootstrap credentials
+## Documentation
 
-## Templates
-AppRefiner includes several code templates for common patterns:
-- GT Grid/form events
-- Plain classes
+For more detailed information about AppRefiner's features and how to use them, please refer to the [documentation](docs/README.md).
+
+## Extensibility
+
+AppRefiner is designed to be extensible through plugins, allowing you to create custom functionality that integrates seamlessly with the application.
+
+### Creating Custom Plugins
+
+You can extend AppRefiner with your own custom Stylers, Linters, and Refactors by following these steps:
+
+1. Clone or download the AppRefiner repository
+2. Create a new .NET 8 class library project in Visual Studio
+3. Add a reference to the AppRefiner project in your solution
+4. Create your custom classes by inheriting from the base classes:
+   - For Linters: Inherit from `BaseLinter` or `ScopedLinter` (for scope-aware linting)
+   - For Stylers: Inherit from `BaseStyler` or `ScopedStyler` (for scope-aware styling)
+   - For Refactors: Inherit from `BaseRefactor` or `ScopedRefactor` (for scope-aware refactoring)
+5. Compile your project and copy the resulting DLL to the AppRefiner's Plugins directory
+6. Restart AppRefiner to load your custom plugins
+
+Your custom functionality will appear alongside the built-in features in the Command Palette and other relevant menus.
+
+For more detailed information about the APIs available for plugin development, refer to the [Core API documentation](docs/api-reference/core-api/README.md).
+
+### Requesting New Features
+
+If you have ideas for new Linters, Stylers, or Refactors but don't want to implement them yourself, you can open an issue on our GitHub repository. While we can't guarantee implementation of all requests, we welcome community input to help guide AppRefiner's development priorities.
 
 ## License
 See the [LICENSE](LICENSE) file for details.
 
 ## Contributing
 Contributions are welcome! Please feel free to submit a Pull Request.
-
-## Screenshots
-### Main interface
-![Editor Tweaks](images/EditorTweaks.png)
-![Stylers](images/Stylers.png)
-![Linters](images/Linting.png)
-![Refactor](images/Refactor.png)
-![Templates](images/Templates.png)
-
-
-### Editor Tweaks
-*Example of PeopleCode with code folding enabled*
-![Code Folding](images/code_folding.png)
-
-
-#### Improved SQL formatting in the editor
-
-##### Before 
-![SQL Format Before](images/sql_format_before.png)
-
-##### After
-![SQL Format After](images/sql_format_after.png)
-
-![Annotations](screenshots/annotations.png)
-*In-line annotations providing feedback directly in the editor*
-
-### Linters in Action
-*Linter identifying potential issues in the code. Clicking on results navigates the editor*
-![Linter Results](images/linter_results.png)
-
-*SQL binding validation in action*
-![SQL Validation](images/sql_bind_checks.png)
-
-### Stylers
-*Shown here is an unused import and a meaningless variable name*
-![Style Analysis](images/styler_example.png)
-
-*Shown here is styling of class properties accessed like variables and an unused variable*
-![Props As Vars](images/styler_props_as_vars.png)
-
-### Database Integration
-*Database connection dialog for Oracle PeopleSoft integration*
-![Database Connection](images/db_connect.png)
-
