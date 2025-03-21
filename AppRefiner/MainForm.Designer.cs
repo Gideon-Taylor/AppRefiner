@@ -1,4 +1,4 @@
-﻿namespace AppRefiner
+namespace AppRefiner
 {
     partial class MainForm
     {
@@ -51,7 +51,7 @@
             dataGridView1 = new DataGridView();
             colActive = new DataGridViewCheckBoxColumn();
             colDescr = new DataGridViewTextBoxColumn();
-            colLevel = new DataGridViewComboBoxColumn();
+            colConfigure = new DataGridViewButtonColumn();
             splitContainer2 = new SplitContainer();
             btnConnectDB = new Button();
             btnLintCode = new Button();
@@ -350,7 +350,7 @@
             dataGridView1.AllowUserToDeleteRows = false;
             dataGridView1.AllowUserToResizeColumns = false;
             dataGridView1.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.AutoSize;
-            dataGridView1.Columns.AddRange(new DataGridViewColumn[] { colActive, colDescr, colLevel });
+            dataGridView1.Columns.AddRange(new DataGridViewColumn[] { colActive, colDescr, colConfigure });
             dataGridView1.Dock = DockStyle.Fill;
             dataGridView1.Location = new Point(0, 40);
             dataGridView1.Name = "dataGridView1";
@@ -375,13 +375,14 @@
             colDescr.ReadOnly = true;
             colDescr.Width = 410;
             // 
-            // colLevel
+            // colConfigure
             // 
-            colLevel.FillWeight = 114.213196F;
-            colLevel.HeaderText = "Level";
-            colLevel.Items.AddRange(new object[] { "GrayOut", "Style", "Error", "Warning", "Info" });
-            colLevel.Name = "colLevel";
-            colLevel.Width = 75;
+            colConfigure.FillWeight = 114.213196F;
+            colConfigure.HeaderText = "Configure";
+            colConfigure.Name = "colConfigure";
+            colConfigure.Text = "Configure...";
+            colConfigure.UseColumnTextForButtonValue = true;
+            colConfigure.Width = 75;
             // 
             // splitContainer2
             // 
@@ -651,7 +652,7 @@
             // 
             AutoScaleDimensions = new SizeF(7F, 15F);
             AutoScaleMode = AutoScaleMode.Font;
-            ClientSize = new Size(531, 561);
+            ClientSize = new Size(570, 561);
             Controls.Add(splitContainer1);
             Name = "MainForm";
             Text = "App Refiner";
@@ -721,7 +722,7 @@
         private DataGridView dataGridView1;
         private DataGridViewCheckBoxColumn colActive;
         private DataGridViewTextBoxColumn colDescr;
-        private DataGridViewComboBoxColumn colLevel;
+        private DataGridViewButtonColumn colConfigure;
         private Button btnClearLint;
         private Button btnRestoreSnapshot;
         private Button btnTakeSnapshot;

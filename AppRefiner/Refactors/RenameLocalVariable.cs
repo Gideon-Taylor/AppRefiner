@@ -281,7 +281,7 @@ namespace AppRefiner.Refactors
         /// <returns>True if the user confirmed, false if canceled</returns>
         public override bool ShowRefactorDialog()
         {
-            using var dialog = new RenameVariableDialog(newVariableName ?? "", GetTokenType());
+            using var dialog = new RenameVariableDialog(variableToRename ?? "", GetTokenType());
             
             // Show dialog with the specified owner
             var wrapper = new WindowWrapper(GetEditorMainWindowHandle());

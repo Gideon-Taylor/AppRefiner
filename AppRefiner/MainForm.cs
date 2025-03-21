@@ -842,6 +842,9 @@ namespace AppRefiner
 
             PluginManager.LoadPlugins(pluginDirectory);
 
+            // Load linter configurations
+            LinterConfigManager.LoadLinterConfigs();
+
             // Add plugin linter types
             var pluginLinters = PluginManager.DiscoverLinterTypes();
             linters = linters.Concat(pluginLinters);
@@ -854,172 +857,68 @@ namespace AppRefiner
                 if (linter != null)
                 {
                     /* Create row for datadgridview */
-                    int rowIndex = dataGridView1.Rows.Add(linter.Active, linter.Description, linter.Type.ToString());
+                    int rowIndex = dataGridView1.Rows.Add(linter.Active, linter.Description);
                     dataGridView1.Rows[rowIndex].Tag = linter;
+                    
+                    // Set the button text based on whether the linter has configurable properties
+                    var configurableProperties = linter.GetConfigurableProperties();
+                    DataGridViewButtonCell buttonCell = (DataGridViewButtonCell)dataGridView1.Rows[rowIndex].Cells[2];
+                    
+                    if (configurableProperties.Count > 0)
+                    {
+                        buttonCell.Value = "Configure...";
+                        // Clear any tag that might indicate no configuration
+                        dataGridView1.Rows[rowIndex].Cells[2].Tag = null;
+                    }
+                    else
+                    {
+                        // Hide the button for linters with no configurable properties
+                        buttonCell.Value = " ";
+                        buttonCell.FlatStyle = FlatStyle.Flat;
+                        buttonCell.Style.BackColor = SystemColors.Control;
+                        buttonCell.Style.SelectionBackColor = SystemColors.Control;
+                        buttonCell.Style.ForeColor = SystemColors.Control;
+                        buttonCell.Style.SelectionForeColor = SystemColors.Control;
+                        buttonCell.Style.SelectionBackColor = SystemColors.Control;
+                        // Store info about configurability in the cell's tag
+                        dataGridView1.Rows[rowIndex].Cells[2].Tag = "NoConfig";
+                    }
+                    
                     linterRules.Add(linter);
                 }
             }
+            
+            // Apply saved configurations to linters
+            LinterConfigManager.ApplyConfigurations(linterRules);
         }
-
-
-        private ScintillaEditor? GetActiveEditor()
+        
+        private void dataGridView1_CellContentClick(object sender, DataGridViewCellEventArgs e)
         {
-            var activeWindow = ActiveWindowChecker.GetActiveScintillaWindow();
-
-            /* If currently focused window is *not* owned by PSIDE, return the last active editor */
-            if (activeWindow == new IntPtr(-1)) return activeEditor;
-
-            /* If the active window is not a Scintilla editor, return null */
-            return activeWindow == IntPtr.Zero ? null : ScintillaManager.GetEditor(activeWindow);
-        }
-        private void PerformScan()
-        {
-            var currentEditor = GetActiveEditor();
-            if (currentEditor == null)
+            dataGridView1.CommitEdit(DataGridViewDataErrorContexts.Commit);
+            
+            // Check if the clicked cell is in the Configure column
+            if (e.ColumnIndex == 2 && e.RowIndex >= 0)
             {
-                return;
-            }
-
-            /* Make sure the hwnd is still valid */
-            if (!currentEditor.IsValid())
-            {
-                /* Releases any annotation buffers */
-                ScintillaManager.CleanupEditor(currentEditor);
-
-                currentEditor = null;
-                activeEditor = null;
-                DisableUIActions();
-                return;
-            }
-
-            EnableUIActions();
-
-            activeEditor = currentEditor;
-
-
-            /* If "only PPC" is checked and the editor is not PPC, skip */
-            if (chkOnlyPPC.Checked && activeEditor.Type != EditorType.PeopleCode)
-            {
-                return;
-            }
-
-
-            if (!activeEditor.FoldEnabled)
-            {
-                if (chkAutoDark.Checked)
+                // Get the linter from the row's Tag
+                if (dataGridView1.Rows[e.RowIndex].Tag is BaseLintRule linter)
                 {
-                    ScintillaManager.SetDarkMode(activeEditor);
+                    // Check if the linter has configurable properties
+                    if (dataGridView1.Rows[e.RowIndex].Cells[e.ColumnIndex].Tag?.ToString() != "NoConfig")
+                    {
+                        // Show the linter configuration dialog
+                        using (var dialog = new LinterConfigDialog(linter))
+                        {
+                            if (dialog.ShowDialog(this) == DialogResult.OK)
+                            {
+                                // Configuration was updated and saved by the dialog
+                                // No need to do anything else here
+                            }
+                        }
+                    }
                 }
-                ScintillaManager.EnableFolding(activeEditor);
-                ScintillaManager.FixEditorTabs(activeEditor, !chkBetterSQL.Checked);
-                activeEditor.FoldEnabled = true;
-
-                if (chkBetterSQL.Checked && activeEditor.Type == EditorType.SQL)
-                {
-                    ScintillaManager.ApplyBetterSQL(activeEditor);
-                }
-
-                if (chkInitCollapsed.Checked)
-                {
-                    ScintillaManager.CollapseTopLevel(activeEditor);
-                }
-
-                return;
-            }
-
-            /* This will trigger for editors that have already had fold enabled */
-            /* We only want to operate on "clean" editor states */
-            if (ScintillaManager.IsEditorClean(activeEditor))
-            {
-                /* If there is a text selection, maybe the save failed and the error was highlighted... */
-                if (activeEditor.Type == EditorType.PeopleCode && ScintillaManager.GetSelectionLength(activeEditor) > 0)
-                {
-                    /* We want to update our content hash to match so we don't process it next tick. */
-                    activeEditor.LastContentHash = ScintillaManager.GetContentHash(activeEditor);
-                    return;
-                }
-
-
-                /* compare content hash to see if things have changed */
-                var contentHash = ScintillaManager.GetContentHash(activeEditor);
-                if (contentHash == activeEditor.LastContentHash)
-                {
-                    return;
-                }
-
-                if (chkBetterSQL.Checked && activeEditor.Type == EditorType.SQL)
-                {
-                    ScintillaManager.ApplyBetterSQL(activeEditor);
-                }
-
-                // Apply dark mode whenever content changes if auto dark mode is enabled
-                if (chkAutoDark.Checked)
-                {
-                    ScintillaManager.SetDarkMode(activeEditor);
-                }
-
-                /* Process stylers for PeopleCode */
-                if (activeEditor.Type == EditorType.PeopleCode)
-                {
-                    ProcessStylers(activeEditor);
-                }
-
-                if (!activeEditor.HasLexilla || activeEditor.Type == EditorType.SQL || activeEditor.Type == EditorType.Other)
-                {
-                    /* Perform folding ourselves 
-                        1. if they are missing Lexilla
-                        2. if it is a SQL object 
-                        3. if its an editor type we don't know
-                    */
-                    DoExplicitFolding();
-                }
-
-                activeEditor.LastContentHash = contentHash;
-            }
-        }
-        private void ScanTick(object? state)
-        {
-            PerformScan();
-            if (timerRunning)
-            {
-                scanTimer?.Change(1000, Timeout.Infinite);
             }
         }
 
-        private async void DoExplicitFolding()
-        {
-            if (activeEditor == null)
-            {
-                return;
-            }
-
-            // Set the status label and progress bar before starting the background task
-            this.Invoke(() =>
-            {
-                lblStatus.Text = "Folding...";
-                progressBar1.Style = ProgressBarStyle.Marquee;
-                progressBar1.MarqueeAnimationSpeed = 30;
-            });
-            Application.DoEvents();
-            // Run the folding operation in a background thread
-            await Task.Run(() =>
-            {
-                // Ensure the activeEditor is not null before proceeding
-                if (activeEditor != null)
-                {
-                    ScintillaManager.SetFoldRegions(activeEditor);
-                }
-            });
-
-            // Update the UI after the background task completes
-            this.Invoke(() =>
-            {
-                lblStatus.Text = "Monitoring...";
-                progressBar1.Style = ProgressBarStyle.Blocks;
-            });
-            Application.DoEvents();
-
-        }
         private void InitStylerOptions() // Changed from InitAnalyzerOptions
         {
             var stylerTypes = AppDomain.CurrentDomain.GetAssemblies()
@@ -1170,6 +1069,8 @@ namespace AppRefiner
             walker.AddListener(suppressionListener);
 
             IDataManager? dataManger = activeEditor.DataManager;
+
+            // Configure and run each active linter
             foreach (var linter in activeLinters)
             {
                 linter.DataManager = dataManger;
@@ -1193,6 +1094,7 @@ namespace AppRefiner
             stream = null;
 
             activeEditor.SetLinterReports(reports);
+            // Process and display reports
             foreach (var g in reports.GroupBy(r => r.Line).OrderBy(b => b.First().Line))
             {
                 List<string> messages = new();
@@ -1260,34 +1162,6 @@ namespace AppRefiner
             }
         }
 
-        private async void btnLintCode_Click(object sender, EventArgs e)
-        {
-            // Set the status label and progress bar before starting the background task
-            this.Invoke(() =>
-            {
-                lblStatus.Text = "Linting...";
-                progressBar1.Style = ProgressBarStyle.Marquee;
-                progressBar1.MarqueeAnimationSpeed = 30;
-                dataGridView2.Rows.Clear();
-            });
-            Application.DoEvents();
-            // Run the folding operation in a background thread
-            await Task.Run(() =>
-            {
-                // Ensure the activeEditor is not null before proceeding
-                ProcessLinters();
-            });
-
-            // Update the UI after the background task completes
-            this.Invoke(() =>
-            {
-                lblStatus.Text = "Monitoring...";
-                progressBar1.Style = ProgressBarStyle.Blocks;
-            });
-            Application.DoEvents();
-
-        }
-
         private void dataGridView1_CellValueChanged(object sender, DataGridViewCellEventArgs e)
         {
             if (e.RowIndex < 0)
@@ -1306,11 +1180,6 @@ namespace AppRefiner
             {
                 linter.Active = (bool)dataGridView1.Rows[e.RowIndex].Cells[0].Value;
             }
-        }
-
-        private void dataGridView1_CellContentClick(object sender, DataGridViewCellEventArgs e)
-        {
-            dataGridView1.CommitEdit(DataGridViewDataErrorContexts.Commit);
         }
 
 
@@ -1517,6 +1386,41 @@ namespace AppRefiner
             }
         }
 
+        private async void btnLintCode_Click(object sender, EventArgs e)
+        {
+            // Set the status label and progress bar before starting the background task
+            this.Invoke(() =>
+            {
+                lblStatus.Text = "Linting...";
+                progressBar1.Style = ProgressBarStyle.Marquee;
+                progressBar1.MarqueeAnimationSpeed = 30;
+                dataGridView2.Rows.Clear();
+            });
+            Application.DoEvents();
+            // Run the folding operation in a background thread
+            await Task.Run(() =>
+            {
+                // Ensure the activeEditor is not null before proceeding
+                ProcessLinters();
+            });
+
+            // Update the UI after the background task completes
+            this.Invoke(() =>
+            {
+                lblStatus.Text = "Monitoring...";
+                progressBar1.Style = ProgressBarStyle.Blocks;
+            });
+            Application.DoEvents();
+        }
+
+        private void btnRenameLocalVar_Click(object sender, EventArgs e)
+        {
+            if (activeEditor == null) return;
+
+            RenameLocalVariable refactor = new(activeEditor);
+            ProcessRefactor(refactor);
+        }
+
         private void ProcessSingleLinter(BaseLintRule linter)
         {
             if (activeEditor == null) return;
@@ -1582,6 +1486,7 @@ namespace AppRefiner
             linter.DataManager = dataManger;
             linter.Reports = reports;
             linter.Comments = comments;
+            linter.SuppressionListener = suppressionListener;
 
             walker.AddListener(linter);
             walker.Walk(program);
@@ -1629,15 +1534,6 @@ namespace AppRefiner
                 }
             }
         }
-
-        private void btnRenameLocalVar_Click(object sender, EventArgs e)
-        {
-            if (activeEditor == null) return;
-
-            RenameLocalVariable refactor = new(activeEditor);
-            ProcessRefactor(refactor);
-        }
-
 
         private void CmbTemplates_SelectedIndexChanged(object? sender, EventArgs e)
         {
@@ -2201,7 +2097,7 @@ namespace AppRefiner
                 {
                     if (activeEditor != null)
                     {
-                        // Reset the content hash to force processing on next scan
+                        // Reset the content hash to match so we don't process it next tick.
                         activeEditor.LastContentHash = 0;
                         // Clear content string to force re-reading
                         activeEditor.ContentString = null;
@@ -2301,25 +2197,30 @@ namespace AppRefiner
                 
                 try
                 {
-                    var registerShortcutProperty = type.GetProperty("RegisterKeyboardShortcut", BindingFlags.Public | BindingFlags.Static | BindingFlags.NonPublic);
+                    var registerShortcutProperty = type.GetProperty("RegisterKeyboardShortcut", 
+                        BindingFlags.Public | BindingFlags.Static | BindingFlags.NonPublic);
+                    
                     if (registerShortcutProperty != null)
                     {
                         registerShortcut = (bool)registerShortcutProperty.GetValue(null)!;
                     }
 
-                    var modifiersProperty = type.GetProperty("ShortcutModifiers", BindingFlags.Public | BindingFlags.Static | BindingFlags.NonPublic);
+                    var modifiersProperty = type.GetProperty("ShortcutModifiers", 
+                        BindingFlags.Public | BindingFlags.Static | BindingFlags.NonPublic);
                     if (modifiersProperty != null)
                     {
                         modifiers = (ModifierKeys)modifiersProperty.GetValue(null)!;
                     }
 
-                    var keyProperty = type.GetProperty("ShortcutKey", BindingFlags.Public | BindingFlags.Static | BindingFlags.NonPublic);
+                    var keyProperty = type.GetProperty("ShortcutKey", 
+                        BindingFlags.Public | BindingFlags.Static | BindingFlags.NonPublic);
                     if (keyProperty != null)
                     {
                         key = (Keys)keyProperty.GetValue(null)!;
                     }
 
-                    var nameProperty = type.GetProperty("RefactorName", BindingFlags.Public | BindingFlags.Static | BindingFlags.NonPublic);
+                    var nameProperty = type.GetProperty("RefactorName", 
+                        BindingFlags.Public | BindingFlags.Static | BindingFlags.NonPublic);
                     if (nameProperty != null)
                     {
                         refactorName = (string)nameProperty.GetValue(null)!;
@@ -2434,6 +2335,164 @@ namespace AppRefiner
             }
             
             return string.Empty;
+        }
+
+        private ScintillaEditor? GetActiveEditor()
+        {
+            var activeWindow = ActiveWindowChecker.GetActiveScintillaWindow();
+
+            /* If currently focused window is *not* owned by PSIDE, return the last active editor */
+            if (activeWindow == new IntPtr(-1)) return activeEditor;
+
+            /* If the active window is not a Scintilla editor, return null */
+            return activeWindow == IntPtr.Zero ? null : ScintillaManager.GetEditor(activeWindow);
+        }
+        private void PerformScan()
+        {
+            var currentEditor = GetActiveEditor();
+            if (currentEditor == null)
+            {
+                return;
+            }
+
+            /* Make sure the hwnd is still valid */
+            if (!currentEditor.IsValid())
+            {
+                /* Releases any annotation buffers */
+                ScintillaManager.CleanupEditor(currentEditor);
+
+                currentEditor = null;
+                activeEditor = null;
+                DisableUIActions();
+                return;
+            }
+
+            EnableUIActions();
+
+            activeEditor = currentEditor;
+
+
+            /* If "only PPC" is checked and the editor is not PPC, skip */
+            if (chkOnlyPPC.Checked && activeEditor.Type != EditorType.PeopleCode)
+            {
+                return;
+            }
+
+
+            if (!activeEditor.FoldEnabled)
+            {
+                if (chkAutoDark.Checked)
+                {
+                    ScintillaManager.SetDarkMode(activeEditor);
+                }
+                ScintillaManager.EnableFolding(activeEditor);
+                ScintillaManager.FixEditorTabs(activeEditor, !chkBetterSQL.Checked);
+                activeEditor.FoldEnabled = true;
+
+                if (chkBetterSQL.Checked && activeEditor.Type == EditorType.SQL)
+                {
+                    ScintillaManager.ApplyBetterSQL(activeEditor);
+                }
+
+                if (chkInitCollapsed.Checked)
+                {
+                    ScintillaManager.CollapseTopLevel(activeEditor);
+                }
+
+                return;
+            }
+
+            /* This will trigger for editors that have already had fold enabled */
+            /* We only want to operate on "clean" editor states */
+            if (ScintillaManager.IsEditorClean(activeEditor))
+            {
+                /* If there is a text selection, maybe the save failed and the error was highlighted... */
+                if (activeEditor.Type == EditorType.PeopleCode && ScintillaManager.GetSelectionLength(activeEditor) > 0)
+                {
+                    /* We want to update our content hash to match so we don't process it next tick. */
+                    activeEditor.LastContentHash = ScintillaManager.GetContentHash(activeEditor);
+                    return;
+                }
+
+
+                /* compare content hash to see if things have changed */
+                var contentHash = ScintillaManager.GetContentHash(activeEditor);
+                if (contentHash == activeEditor.LastContentHash)
+                {
+                    return;
+                }
+
+                if (chkBetterSQL.Checked && activeEditor.Type == EditorType.SQL)
+                {
+                    ScintillaManager.ApplyBetterSQL(activeEditor);
+                }
+
+                // Apply dark mode whenever content changes if auto dark mode is enabled
+                if (chkAutoDark.Checked)
+                {
+                    ScintillaManager.SetDarkMode(activeEditor);
+                }
+
+                /* Process stylers for PeopleCode */
+                if (activeEditor.Type == EditorType.PeopleCode)
+                {
+                    ProcessStylers(activeEditor);
+                }
+
+                if (!activeEditor.HasLexilla || activeEditor.Type == EditorType.SQL || activeEditor.Type == EditorType.Other)
+                {
+                    /* Perform folding ourselves 
+                        1. if they are missing Lexilla
+                        2. if it is a SQL object 
+                        3. if its an editor type we don't know
+                    */
+                    DoExplicitFolding();
+                }
+
+                activeEditor.LastContentHash = contentHash;
+            }
+        }
+        private void ScanTick(object? state)
+        {
+            PerformScan();
+            if (timerRunning)
+            {
+                scanTimer?.Change(1000, Timeout.Infinite);
+            }
+        }
+
+        private async void DoExplicitFolding()
+        {
+            if (activeEditor == null)
+            {
+                return;
+            }
+
+            // Set the status label and progress bar before starting the background task
+            this.Invoke(() =>
+            {
+                lblStatus.Text = "Folding...";
+                progressBar1.Style = ProgressBarStyle.Marquee;
+                progressBar1.MarqueeAnimationSpeed = 30;
+            });
+            Application.DoEvents();
+            // Run the folding operation in a background thread
+            await Task.Run(() =>
+            {
+                // Ensure the activeEditor is not null before proceeding
+                if (activeEditor != null)
+                {
+                    ScintillaManager.SetFoldRegions(activeEditor);
+                }
+            });
+
+            // Update the UI after the background task completes
+            this.Invoke(() =>
+            {
+                lblStatus.Text = "Monitoring...";
+                progressBar1.Style = ProgressBarStyle.Blocks;
+            });
+            Application.DoEvents();
         }
     }
 }
