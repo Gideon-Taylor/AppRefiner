@@ -362,7 +362,7 @@ namespace AppRefiner.Templates
         /// <returns>The processed template with conditional blocks evaluated</returns>
         private string ProcessConditionalBlocks(string template, Dictionary<string, string> values)
         {
-            var ifBlockRegex = new Regex(@"{{#if\s+([^}]+)}}\r?\n(.*?){{/if}}\r?\n", RegexOptions.Singleline);
+            var ifBlockRegex = new Regex(@"{{#if\s+([^}]+)}}\r?\n?(.*?){{/if}}\r?\n?", RegexOptions.Singleline);
             var result = template;
 
             while (ifBlockRegex.IsMatch(result))

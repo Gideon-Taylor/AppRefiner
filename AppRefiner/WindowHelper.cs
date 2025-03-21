@@ -1,8 +1,9 @@
-﻿namespace AppRefiner
+namespace AppRefiner
 {
     using System;
     using System.Runtime.InteropServices;
     using System.Text;
+    using System.Windows.Forms; // Added this line
 
     public static class WindowHelper
     {
@@ -23,6 +24,19 @@
 
         [DllImport("user32.dll", SetLastError = true)]
         private static extern bool SetForegroundWindow(IntPtr hWnd);
+
+        [DllImport("user32.dll", SetLastError = true)]
+        private static extern bool GetWindowRect(IntPtr hWnd, out RECT lpRect);
+
+        [StructLayout(LayoutKind.Sequential)]
+        public struct RECT
+        {
+            public int Left;
+            public int Top;
+            public int Right;
+            public int Bottom;
+        }
+
         /// <summary>
         /// Returns the handle (hWnd) of the currently focused (foreground) window.
         /// </summary>
@@ -102,6 +116,33 @@
             StringBuilder caption = new(256);
             int length = GetWindowText(grandparent, caption, caption.Capacity);
             return length > 0 ? caption.ToString() : string.Empty;
+        }
+
+        /// <summary>
+        /// Centers a form on the specified window.
+        /// </summary>
+        /// <param name="form">The form to center.</param>
+        /// <param name="ownerWindow">The window to center on.</param>
+        public static void CenterFormOnWindow(Form form, IntPtr ownerWindow)
+        {
+            if (ownerWindow == IntPtr.Zero)
+                return;
+
+            // Get the owner window's rectangle
+            if (GetWindowRect(ownerWindow, out RECT ownerRect))
+            {
+                int ownerWidth = ownerRect.Right - ownerRect.Left;
+                int ownerHeight = ownerRect.Bottom - ownerRect.Top;
+                int ownerCenterX = ownerRect.Left + (ownerWidth / 2);
+                int ownerCenterY = ownerRect.Top + (ownerHeight / 2);
+
+                // Calculate the form's position
+                int formX = ownerCenterX - (form.Width / 2);
+                int formY = ownerCenterY - (form.Height / 2);
+
+                // Set the form's position
+                form.Location = new System.Drawing.Point(formX, formY);
+            }
         }
     }
 
