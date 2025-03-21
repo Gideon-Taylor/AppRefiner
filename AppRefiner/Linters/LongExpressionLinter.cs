@@ -8,8 +8,16 @@ namespace AppRefiner.Linters
     public class LongExpressionLinter : BaseLintRule
     {
         public override string LINTER_ID => "LONG_EXPR";
-        private const int MaxExpressionLength = 200; // Maximum character length for an expression
-        private const int MaxOperatorCount = 5; // Maximum number of operators in a single expression
+        
+        /// <summary>
+        /// Maximum character length for an expression before it's considered too long
+        /// </summary>
+        public int MaxExpressionLength { get; set; } = 200;
+        
+        /// <summary>
+        /// Maximum number of operators in a single expression before it's considered too complex
+        /// </summary>
+        public int MaxOperatorCount { get; set; } = 5;
 
         public LongExpressionLinter()
         {
@@ -136,10 +144,6 @@ namespace AppRefiner.Linters
             }
 
             return count;
-        }
-
-        public override void Reset()
-        {
         }
     }
 }

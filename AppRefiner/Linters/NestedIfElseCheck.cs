@@ -10,7 +10,17 @@ namespace AppRefiner.Linters
     public class NestedIfElseCheck : BaseLintRule
     {
         public override string LINTER_ID => "NESTED_IF";
-        private const int MaxNestingLevel = 3;
+        
+        /// <summary>
+        /// Maximum allowed nesting level for If/Else blocks before reporting a warning
+        /// </summary>
+        public int MaxNestingLevel { get; set; } = 3;
+        
+        /// <summary>
+        /// Whether to report on "else if" chains that could be replaced with Evaluate statements
+        /// </summary>
+        public bool ReportElseIfChains { get; set; } = true;
+        
         private int currentNestingLevel = 0;
         private Stack<IfStatementContext> ifContextStack = new();
         private HashSet<IfStatementContext> reportedIfStatements = new();
@@ -68,7 +78,7 @@ namespace AppRefiner.Linters
                 if (statements?.statement()?.Length > 0 &&
                     statements.statement(0) is IfStmtContext)
                 {
-                    if (currentNestingLevel >= 2)
+                    if (ReportElseIfChains && currentNestingLevel >= 2)
                     {
                         // This is an "else if" pattern that's already nested a bit
                         // and would benefit from using EVALUATE instead

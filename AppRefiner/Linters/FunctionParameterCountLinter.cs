@@ -8,8 +8,16 @@ namespace AppRefiner.Linters
     public class FunctionParameterCountLinter : BaseLintRule
     {
         public override string LINTER_ID => "FUNC_PARAM_COUNT";
-        private const int MaxMethodParameters = 5;
-        private const int MaxFunctionParameters = 5;
+        
+        /// <summary>
+        /// Maximum recommended number of parameters for a method
+        /// </summary>
+        public int MaxMethodParameters { get; set; } = 5;
+        
+        /// <summary>
+        /// Maximum recommended number of parameters for a function
+        /// </summary>
+        public int MaxFunctionParameters { get; set; } = 5;
 
         public FunctionParameterCountLinter()
         {
