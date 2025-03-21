@@ -1,9 +1,10 @@
 namespace AppRefiner
 {
     using System;
+    using System.Drawing;
     using System.Runtime.InteropServices;
     using System.Text;
-    using System.Windows.Forms; // Added this line
+    using System.Windows.Forms;
 
     public static class WindowHelper
     {
@@ -28,6 +29,12 @@ namespace AppRefiner
         [DllImport("user32.dll", SetLastError = true)]
         private static extern bool GetWindowRect(IntPtr hWnd, out RECT lpRect);
 
+        [DllImport("user32.dll")]
+        private static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+
+        [DllImport("user32.dll")]
+        private static extern bool IsIconic(IntPtr hWnd);
+
         [StructLayout(LayoutKind.Sequential)]
         public struct RECT
         {
@@ -38,8 +45,9 @@ namespace AppRefiner
         }
 
         /// <summary>
-        /// Returns the handle (hWnd) of the currently focused (foreground) window.
+        /// Gets the handle of the currently focused window
         /// </summary>
+        /// <returns>The handle of the foreground window</returns>
         public static IntPtr GetCurrentlyFocusedWindow()
         {
             return GetForegroundWindow();
@@ -119,33 +127,39 @@ namespace AppRefiner
         }
 
         /// <summary>
-        /// Centers a form on the specified window.
+        /// Centers a form on another window
         /// </summary>
-        /// <param name="form">The form to center.</param>
-        /// <param name="ownerWindow">The window to center on.</param>
-        public static void CenterFormOnWindow(Form form, IntPtr ownerWindow)
+        /// <param name="form">The form to center</param>
+        /// <param name="ownerHandle">The handle of the window to center on</param>
+        public static void CenterFormOnWindow(Form form, IntPtr ownerHandle)
         {
-            if (ownerWindow == IntPtr.Zero)
+            if (ownerHandle == IntPtr.Zero)
                 return;
 
-            // Get the owner window's rectangle
-            if (GetWindowRect(ownerWindow, out RECT ownerRect))
+            // Get the owner window's position
+            if (GetWindowRect(ownerHandle, out RECT ownerRect))
             {
+                // Calculate the center point of the owner window
                 int ownerWidth = ownerRect.Right - ownerRect.Left;
                 int ownerHeight = ownerRect.Bottom - ownerRect.Top;
                 int ownerCenterX = ownerRect.Left + (ownerWidth / 2);
                 int ownerCenterY = ownerRect.Top + (ownerHeight / 2);
 
-                // Calculate the form's position
+                // Calculate the new position for the form
                 int formX = ownerCenterX - (form.Width / 2);
                 int formY = ownerCenterY - (form.Height / 2);
 
+                // Ensure the form is not positioned off-screen
+                Rectangle screenBounds = Screen.FromHandle(form.Handle).WorkingArea;
+                formX = Math.Max(screenBounds.Left, Math.Min(formX, screenBounds.Right - form.Width));
+                formY = Math.Max(screenBounds.Top, Math.Min(formY, screenBounds.Bottom - form.Height));
+
                 // Set the form's position
-                form.Location = new System.Drawing.Point(formX, formY);
+                form.StartPosition = FormStartPosition.Manual;
+                form.Location = new Point(formX, formY);
             }
         }
     }
-
 
     public class WindowWrapper : IWin32Window
     {

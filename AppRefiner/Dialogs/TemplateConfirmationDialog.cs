@@ -2,7 +2,7 @@ using System;
 using System.Drawing;
 using System.Windows.Forms;
 
-namespace AppRefiner
+namespace AppRefiner.Dialogs
 {
     public class TemplateConfirmationDialog : Form
     {
@@ -12,6 +12,7 @@ namespace AppRefiner
         private readonly Button yesButton;
         private readonly Button noButton;
         private readonly IntPtr owner;
+        private DialogHelper.ModalDialogMouseHandler? mouseHandler;
 
         public TemplateConfirmationDialog(string message, IntPtr owner = default)
         {
@@ -97,6 +98,12 @@ namespace AppRefiner
             if (owner != IntPtr.Zero)
             {
                 WindowHelper.CenterFormOnWindow(this, owner);
+            }
+
+            // Create the mouse handler if this is a modal dialog
+            if (this.Modal && owner != IntPtr.Zero)
+            {
+                mouseHandler = new DialogHelper.ModalDialogMouseHandler(this, headerPanel, owner);
             }
         }
     }

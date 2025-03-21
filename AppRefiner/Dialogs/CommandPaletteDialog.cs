@@ -1,4 +1,4 @@
-namespace AppRefiner
+namespace AppRefiner.Dialogs
 {
     // Define delegate for command actions that can receive progress dialog
     public delegate void CommandAction(CommandProgressDialog progressDialog);
@@ -120,7 +120,7 @@ namespace AppRefiner
         }
     }
 
-    public partial class CommandPalette : Form
+    public partial class CommandPaletteDialog : Form
     {
         private readonly Panel headerPanel;
         private readonly Label headerLabel;
@@ -129,8 +129,10 @@ namespace AppRefiner
         private readonly List<Command> allCommands;
         private List<Command> filteredCommands;
         private CommandAction? selectedAction;
+        private DialogHelper.ModalDialogMouseHandler? mouseHandler;
+        private IntPtr owner;
 
-        public CommandPalette(List<Command> commands)
+        public CommandPaletteDialog(List<Command> commands, IntPtr owner)
         {
             allCommands = commands;
             filteredCommands = new List<Command>(allCommands);
@@ -138,6 +140,7 @@ namespace AppRefiner
             this.headerLabel = new Label();
             this.searchBox = new TextBox();
             this.commandListView = new ListView();
+            this.owner = owner;
             InitializeComponent();
             ConfigureForm();
             PopulateCommandList();
@@ -203,6 +206,16 @@ namespace AppRefiner
             this.StartPosition = FormStartPosition.CenterParent;
             this.Text = "Command Palette";
             this.ShowInTaskbar = false;
+            
+            // Add background color to make dialog stand out
+            this.BackColor = Color.FromArgb(240, 240, 245);
+            
+            // Add a 1-pixel border to make the dialog visually distinct
+            this.Padding = new Padding(1);
+            
+            // Add resize event handler to update tile size when form is resized
+            this.Resize += new EventHandler(this.CommandPalette_Resize);
+            
             this.headerPanel.ResumeLayout(false);
             this.ResumeLayout(false);
             this.PerformLayout();
@@ -212,7 +225,7 @@ namespace AppRefiner
         {
             // Change the view to TileView to show both title and description
             commandListView.View = View.Tile;
-            commandListView.TileSize = new Size(commandListView.Width - 10, 50);
+            commandListView.TileSize = new Size(commandListView.Width - 25, 50);  // Reduced width to prevent horizontal scrolling
 
             // Configure the list view for title and description
             commandListView.Columns.Add("Title", 250);
@@ -405,6 +418,12 @@ namespace AppRefiner
             const int CS_DROPSHADOW = 0x00020000;
             CreateParams cp = this.CreateParams;
             cp.ClassStyle |= CS_DROPSHADOW;
+                        
+            // Create the mouse handler if this is a modal dialog
+            if (this.Modal && owner != IntPtr.Zero)
+            {
+                mouseHandler = new DialogHelper.ModalDialogMouseHandler(this, headerPanel, owner);
+            }
         }
 
         protected override CreateParams CreateParams
@@ -417,6 +436,37 @@ namespace AppRefiner
                 cp.ClassStyle |= CS_DROPSHADOW;
                 return cp;
             }
+        }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            base.OnPaint(e);
+            
+            // Draw a border around the form
+            ControlPaint.DrawBorder(e.Graphics, ClientRectangle, 
+                Color.FromArgb(100, 100, 120), // Border color
+                1, ButtonBorderStyle.Solid,    // Left
+                Color.FromArgb(100, 100, 120), // Border color
+                1, ButtonBorderStyle.Solid,    // Top
+                Color.FromArgb(100, 100, 120), // Border color
+                1, ButtonBorderStyle.Solid,    // Right
+                Color.FromArgb(100, 100, 120), // Border color
+                1, ButtonBorderStyle.Solid);   // Bottom
+        }
+
+        private void CommandPalette_Resize(object? sender, EventArgs e)
+        {
+            // Update tile size when form is resized to prevent horizontal scrolling
+            commandListView.TileSize = new Size(commandListView.Width - 25, 50);
+        }
+
+        protected override void OnFormClosed(FormClosedEventArgs e)
+        {
+            base.OnFormClosed(e);
+            
+            // Dispose the mouse handler
+            mouseHandler?.Dispose();
+            mouseHandler = null;
         }
     }
 }

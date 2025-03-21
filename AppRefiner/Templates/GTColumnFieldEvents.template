@@ -38,7 +38,7 @@
 }
 ---
 import G3FORM:Form;
- 
+
 class {{record_tag}}
 {{#if include_edit}}
    method {{field_tag}}_Edit();

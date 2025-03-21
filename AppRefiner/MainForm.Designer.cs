@@ -31,12 +31,6 @@ namespace AppRefiner
             splitContainer1 = new SplitContainer();
             tabControl1 = new TabControl();
             tabPage1 = new TabPage();
-            grpEditorActions = new GroupBox();
-            btnRestoreSnapshot = new Button();
-            btnTakeSnapshot = new Button();
-            btnCollapseAll = new Button();
-            btnExpand = new Button();
-            btnDarkMode = new Button();
             grpEditorSettings = new GroupBox();
             btnPlugins = new Button();
             chkBetterSQL = new CheckBox();
@@ -76,7 +70,6 @@ namespace AppRefiner
             splitContainer1.SuspendLayout();
             tabControl1.SuspendLayout();
             tabPage1.SuspendLayout();
-            grpEditorActions.SuspendLayout();
             grpEditorSettings.SuspendLayout();
             tabPage4.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)dataGridView3).BeginInit();
@@ -132,7 +125,6 @@ namespace AppRefiner
             // 
             // tabPage1
             // 
-            tabPage1.Controls.Add(grpEditorActions);
             tabPage1.Controls.Add(grpEditorSettings);
             tabPage1.Location = new Point(4, 24);
             tabPage1.Name = "tabPage1";
@@ -141,72 +133,6 @@ namespace AppRefiner
             tabPage1.TabIndex = 0;
             tabPage1.Text = "Editor Tweaks";
             tabPage1.UseVisualStyleBackColor = true;
-            // 
-            // grpEditorActions
-            // 
-            grpEditorActions.Controls.Add(btnRestoreSnapshot);
-            grpEditorActions.Controls.Add(btnTakeSnapshot);
-            grpEditorActions.Controls.Add(btnCollapseAll);
-            grpEditorActions.Controls.Add(btnExpand);
-            grpEditorActions.Controls.Add(btnDarkMode);
-            grpEditorActions.Enabled = false;
-            grpEditorActions.Location = new Point(6, 101);
-            grpEditorActions.Name = "grpEditorActions";
-            grpEditorActions.Size = new Size(528, 106);
-            grpEditorActions.TabIndex = 0;
-            grpEditorActions.TabStop = false;
-            grpEditorActions.Text = "Actions";
-            // 
-            // btnRestoreSnapshot
-            // 
-            btnRestoreSnapshot.Enabled = false;
-            btnRestoreSnapshot.Location = new Point(101, 51);
-            btnRestoreSnapshot.Name = "btnRestoreSnapshot";
-            btnRestoreSnapshot.Size = new Size(110, 23);
-            btnRestoreSnapshot.TabIndex = 25;
-            btnRestoreSnapshot.Text = "Restore Snapshot";
-            btnRestoreSnapshot.UseVisualStyleBackColor = true;
-            btnRestoreSnapshot.Click += btnRestoreSnapshot_Click;
-            // 
-            // btnTakeSnapshot
-            // 
-            btnTakeSnapshot.Location = new Point(101, 22);
-            btnTakeSnapshot.Name = "btnTakeSnapshot";
-            btnTakeSnapshot.Size = new Size(110, 23);
-            btnTakeSnapshot.TabIndex = 24;
-            btnTakeSnapshot.Text = "Take Snapshot";
-            btnTakeSnapshot.UseVisualStyleBackColor = true;
-            btnTakeSnapshot.Click += btnTakeSnapshot_Click;
-            // 
-            // btnCollapseAll
-            // 
-            btnCollapseAll.Location = new Point(10, 22);
-            btnCollapseAll.Name = "btnCollapseAll";
-            btnCollapseAll.Size = new Size(85, 23);
-            btnCollapseAll.TabIndex = 21;
-            btnCollapseAll.Text = "Collapse All";
-            btnCollapseAll.UseVisualStyleBackColor = true;
-            btnCollapseAll.Click += btnCollapseAll_Click;
-            // 
-            // btnExpand
-            // 
-            btnExpand.Location = new Point(10, 51);
-            btnExpand.Name = "btnExpand";
-            btnExpand.Size = new Size(85, 23);
-            btnExpand.TabIndex = 22;
-            btnExpand.Text = "Expand All";
-            btnExpand.UseVisualStyleBackColor = true;
-            btnExpand.Click += btnExpand_Click;
-            // 
-            // btnDarkMode
-            // 
-            btnDarkMode.Location = new Point(424, 22);
-            btnDarkMode.Name = "btnDarkMode";
-            btnDarkMode.Size = new Size(85, 23);
-            btnDarkMode.TabIndex = 23;
-            btnDarkMode.Text = "Dark Mode";
-            btnDarkMode.UseVisualStyleBackColor = true;
-            btnDarkMode.Click += btnDarkMode_Click;
             // 
             // grpEditorSettings
             // 
@@ -217,14 +143,14 @@ namespace AppRefiner
             grpEditorSettings.Controls.Add(chkAutoDark);
             grpEditorSettings.Location = new Point(6, 6);
             grpEditorSettings.Name = "grpEditorSettings";
-            grpEditorSettings.Size = new Size(528, 89);
+            grpEditorSettings.Size = new Size(548, 89);
             grpEditorSettings.TabIndex = 20;
             grpEditorSettings.TabStop = false;
             grpEditorSettings.Text = "Settings";
             // 
             // btnPlugins
             // 
-            btnPlugins.Location = new Point(424, 18);
+            btnPlugins.Location = new Point(457, 18);
             btnPlugins.Name = "btnPlugins";
             btnPlugins.Size = new Size(85, 23);
             btnPlugins.TabIndex = 24;
@@ -588,7 +514,6 @@ namespace AppRefiner
             splitContainer1.ResumeLayout(false);
             tabControl1.ResumeLayout(false);
             tabPage1.ResumeLayout(false);
-            grpEditorActions.ResumeLayout(false);
             grpEditorSettings.ResumeLayout(false);
             grpEditorSettings.PerformLayout();
             tabPage4.ResumeLayout(false);
@@ -620,12 +545,6 @@ namespace AppRefiner
         private Label lblStatus;
         private TabControl tabControl1;
         private TabPage tabPage1;
-        private GroupBox grpEditorActions;
-        private Button btnRestoreSnapshot;
-        private Button btnTakeSnapshot;
-        private Button btnCollapseAll;
-        private Button btnExpand;
-        private Button btnDarkMode;
         private GroupBox grpEditorSettings;
         private Button btnPlugins;
         private CheckBox chkBetterSQL;

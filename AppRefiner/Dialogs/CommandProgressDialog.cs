@@ -1,13 +1,14 @@
 using System.Runtime.InteropServices;
 
-namespace AppRefiner
+namespace AppRefiner.Dialogs
 {
     public class CommandProgressDialog : Form
     {
-        private Panel headerPanel;
-        private Label headerLabel;
-        private ProgressBar progressBar;
-        private IntPtr parentHandle;
+        private readonly Panel headerPanel;
+        private readonly Label headerLabel;
+        private readonly ProgressBar progressBar;
+        private readonly IntPtr parentHandle;
+        private DialogHelper.ModalDialogMouseHandler? mouseHandler;
 
         [DllImport("user32.dll")]
         private static extern bool GetWindowRect(IntPtr hWnd, out RECT lpRect);
@@ -58,6 +59,23 @@ namespace AppRefiner
                         parentCenterY - (this.Height / 2)
                     );
                 }
+            }
+        }
+
+        protected override void OnShown(EventArgs e)
+        {
+            base.OnShown(e);
+            
+            // Center on owner window
+            if (parentHandle != IntPtr.Zero)
+            {
+                WindowHelper.CenterFormOnWindow(this, parentHandle);
+            }
+
+            // Create the mouse handler if this is a modal dialog
+            if (this.Modal && parentHandle != IntPtr.Zero)
+            {
+                mouseHandler = new DialogHelper.ModalDialogMouseHandler(this, headerPanel, parentHandle);
             }
         }
 

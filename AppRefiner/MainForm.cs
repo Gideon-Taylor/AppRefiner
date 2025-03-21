@@ -1,6 +1,7 @@
 using Antlr4.Runtime.Tree;
 using AppRefiner.Database;
 using AppRefiner.Database.Models;
+using AppRefiner.Dialogs;
 using AppRefiner.Linters;
 using AppRefiner.PeopleCode;
 using AppRefiner.Plugins;
@@ -172,15 +173,13 @@ namespace AppRefiner
         private async void ShowCommandPalette(object? sender, KeyPressedEventArgs e)
         {
             if (activeEditor == null) return;
-
-            // Create the command palette dialog
-            var palette = new CommandPalette(AvailableCommands);
-
-            // Set the owner to the editor's parent window
             var mainHandle = Process.GetProcessById((int)activeEditor.ProcessId).MainWindowHandle;
+            var handleWrapper = new WindowWrapper(mainHandle);
+            // Create the command palette dialog
+            var palette = new CommandPaletteDialog(AvailableCommands, mainHandle);
 
             // Show the dialog
-            DialogResult result = palette.ShowDialog(new WindowWrapper(mainHandle));
+            DialogResult result = palette.ShowDialog(handleWrapper);
 
             // If a command was selected, execute it with progress dialog
             if (result == DialogResult.OK)
@@ -809,7 +808,6 @@ namespace AppRefiner
         {
             this.Invoke(() =>
             {
-                grpEditorActions.Enabled = true;
                 btnLintCode.Enabled = true;
                 btnClearLint.Enabled = true;
                 btnApplyTemplate.Text = "Apply Template";
@@ -824,7 +822,6 @@ namespace AppRefiner
         {
             this.Invoke(() =>
             {
-                grpEditorActions.Enabled = false;
                 btnLintCode.Enabled = false;
                 btnClearLint.Enabled = false;
                 btnApplyTemplate.Text = "Generate Template";
@@ -1232,7 +1229,6 @@ namespace AppRefiner
             if (activeEditor == null) return;
             activeEditor.SnapshotText = ScintillaManager.GetScintillaText(activeEditor);
             activeEditor.SnapshotCursorPosition = ScintillaManager.GetCursorPosition(activeEditor);
-            btnRestoreSnapshot.Enabled = true;
         }
 
         private void btnRestoreSnapshot_Click(object sender, EventArgs e)
@@ -1251,7 +1247,6 @@ namespace AppRefiner
 
             activeEditor.SnapshotText = null;
             activeEditor.SnapshotCursorPosition = null;
-            btnRestoreSnapshot.Enabled = false;
         }
 
         private void btnAddFlowerBox_Click(object sender, EventArgs e)
@@ -1274,10 +1269,6 @@ namespace AppRefiner
             // Take a snapshot before refactoring
             activeEditor.SnapshotText = freshText;
             activeEditor.SnapshotCursorPosition = currentCursorPosition;
-            this.Invoke(() =>
-            {
-                btnRestoreSnapshot.Enabled = true;
-            });
 
             // Check if this refactor requires user input dialog and is not deferred
             if (refactorClass.RequiresUserInputDialog && !refactorClass.DeferDialogUntilAfterVisitor)
@@ -1319,8 +1310,6 @@ namespace AppRefiner
                         MessageBoxButtons.OK,
                         MessageBoxIcon.Warning
                     );
-
-                    btnRestoreSnapshot.Enabled = false;
                 });
                 return;
             }
@@ -1792,11 +1781,6 @@ namespace AppRefiner
                     {
                         activeEditor.SnapshotText = ScintillaManager.GetScintillaText(activeEditor);
                         activeEditor.SnapshotCursorPosition = ScintillaManager.GetCursorPosition(activeEditor);
-                        this.Invoke(() =>
-                        {
-                            btnRestoreSnapshot.Enabled = true;
-                        });
-
                     }
                 }
             ));
@@ -1819,10 +1803,6 @@ namespace AppRefiner
 
                         activeEditor.SnapshotText = null;
                         activeEditor.SnapshotCursorPosition = null;
-                        this.Invoke(() =>
-                        {
-                            btnRestoreSnapshot.Enabled = false;
-                        });
                     }
                 }
             ));
@@ -2528,10 +2508,6 @@ namespace AppRefiner
                 // Take a snapshot of the current content and cursor position
                 activeEditor.SnapshotText = ScintillaManager.GetScintillaText(activeEditor);
                 activeEditor.SnapshotCursorPosition = ScintillaManager.GetCursorPosition(activeEditor);
-                this.Invoke(() =>
-                {
-                    btnRestoreSnapshot.Enabled = true;
-                });
 
                 // Set the generated content in the editor
                 ScintillaManager.SetScintillaText(activeEditor, generatedContent);

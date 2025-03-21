@@ -4,7 +4,7 @@ using System.Drawing;
 using System.Windows.Forms;
 using AppRefiner.Templates;
 
-namespace AppRefiner
+namespace AppRefiner.Dialogs
 {
     public class TemplateSelectionDialog : Form
     {
@@ -16,6 +16,7 @@ namespace AppRefiner
         private List<Template> filteredTemplates;
         private Template? selectedTemplate;
         private readonly IntPtr owner;
+        private DialogHelper.ModalDialogMouseHandler? mouseHandler;
 
         public Template? SelectedTemplate => selectedTemplate;
 
@@ -88,6 +89,16 @@ namespace AppRefiner
             this.StartPosition = FormStartPosition.Manual;
             this.Text = "Select Template";
             this.ShowInTaskbar = false;
+            
+            // Add background color to make dialog stand out
+            this.BackColor = Color.FromArgb(240, 240, 245);
+            
+            // Add a 1-pixel border to make the dialog visually distinct
+            this.Padding = new Padding(1);
+            
+            // Add resize event handler to update tile size when form is resized
+            this.Resize += new EventHandler(this.TemplateSelectionDialog_Resize);
+            
             this.headerPanel.ResumeLayout(false);
             this.ResumeLayout(false);
             this.PerformLayout();
@@ -97,7 +108,7 @@ namespace AppRefiner
         {
             // Change the view to TileView to show both title and description
             templateListView.View = View.Tile;
-            templateListView.TileSize = new Size(templateListView.Width - 10, 50);
+            templateListView.TileSize = new Size(templateListView.Width - 25, 50);
 
             // Configure the list view for title and description
             templateListView.Columns.Add("Name", 250);
@@ -262,6 +273,22 @@ namespace AppRefiner
             return base.ProcessCmdKey(ref msg, keyData);
         }
 
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            base.OnPaint(e);
+            
+            // Draw a border around the form
+            ControlPaint.DrawBorder(e.Graphics, ClientRectangle, 
+                Color.FromArgb(100, 100, 120), // Border color
+                1, ButtonBorderStyle.Solid,    // Left
+                Color.FromArgb(100, 100, 120), // Border color
+                1, ButtonBorderStyle.Solid,    // Top
+                Color.FromArgb(100, 100, 120), // Border color
+                1, ButtonBorderStyle.Solid,    // Right
+                Color.FromArgb(100, 100, 120), // Border color
+                1, ButtonBorderStyle.Solid);   // Bottom
+        }
+
         protected override void OnShown(EventArgs e)
         {
             base.OnShown(e);
@@ -272,6 +299,27 @@ namespace AppRefiner
             {
                 WindowHelper.CenterFormOnWindow(this, owner);
             }
+            
+            // Create the mouse handler if this is a modal dialog
+            if (this.Modal && owner != IntPtr.Zero)
+            {
+                mouseHandler = new DialogHelper.ModalDialogMouseHandler(this, headerPanel, owner);
+            }
+        }
+
+        private void TemplateSelectionDialog_Resize(object? sender, EventArgs e)
+        {
+            // Update tile size when form is resized to prevent horizontal scrolling
+            templateListView.TileSize = new Size(templateListView.Width - 25, 50);
+        }
+
+        protected override void OnFormClosed(FormClosedEventArgs e)
+        {
+            base.OnFormClosed(e);
+            
+            // Dispose the mouse handler
+            mouseHandler?.Dispose();
+            mouseHandler = null;
         }
     }
 }

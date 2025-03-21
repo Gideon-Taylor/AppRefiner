@@ -4,7 +4,7 @@ using System.Drawing;
 using System.Windows.Forms;
 using AppRefiner.Templates;
 
-namespace AppRefiner
+namespace AppRefiner.Dialogs
 {
     public class TemplateParameterDialog : Form
     {
@@ -18,6 +18,7 @@ namespace AppRefiner
         private readonly Dictionary<string, Label> inputLabels = new();
         private readonly Dictionary<string, DisplayCondition> inputsDisplayConditions = new();
         private readonly IntPtr owner;
+        private DialogHelper.ModalDialogMouseHandler? mouseHandler;
         
         private const int RightMargin = 20; // Add a margin from the right edge
 
@@ -92,7 +93,6 @@ namespace AppRefiner
             this.ShowInTaskbar = false;
             this.KeyPreview = true;
             this.AcceptButton = this.applyButton;
-
             this.headerPanel.ResumeLayout(false);
             this.ResumeLayout(false);
         }
@@ -302,6 +302,12 @@ namespace AppRefiner
             {
                 inputControls.Values.First().Focus();
             }
+            
+            // Create the mouse handler if this is a modal dialog
+            if (this.Modal && owner != IntPtr.Zero)
+            {
+                mouseHandler = new DialogHelper.ModalDialogMouseHandler(this, headerPanel, owner);
+            }
         }
 
         protected override bool ProcessDialogKey(Keys keyData)
@@ -314,5 +320,15 @@ namespace AppRefiner
             }
             return base.ProcessDialogKey(keyData);
         }
+
+        protected override void OnFormClosed(FormClosedEventArgs e)
+        {
+            base.OnFormClosed(e);
+            
+            // Dispose the mouse handler
+            mouseHandler?.Dispose();
+            mouseHandler = null;
+        }
+
     }
 }
