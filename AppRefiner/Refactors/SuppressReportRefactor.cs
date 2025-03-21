@@ -375,6 +375,7 @@ namespace AppRefiner.Refactors
                     }
                     InsertText(startIndex, newSuppressLine, "Add suppression comment");
                     changeGenerated = true;
+                    return;
                 }
                 else if (type == SuppressReportMode.NEAREST_BLOCK)
                 {
