@@ -80,6 +80,7 @@ namespace AppRefiner
         KeyboardHook expandAll = new();
         KeyboardHook commandPaletteHook = new();
         KeyboardHook lintCodeHook = new();
+        KeyboardHook applyTemplateHook = new();
 
         private class RuleState
         {
@@ -141,6 +142,9 @@ namespace AppRefiner
             commandPaletteHook.KeyPressed += ShowCommandPalette;
             commandPaletteHook.RegisterHotKey(AppRefiner.ModifierKeys.Control | AppRefiner.ModifierKeys.Shift, System.Windows.Forms.Keys.P);
 
+            applyTemplateHook.KeyPressed += (s, e) => ApplyTemplateCommand();
+            applyTemplateHook.RegisterHotKey(AppRefiner.ModifierKeys.Control | AppRefiner.ModifierKeys.Alt, System.Windows.Forms.Keys.T);
+
             // Register standard shortcuts in the tracking dictionary
             registeredShortcuts["CollapseLevel"] = (AppRefiner.ModifierKeys.Alt, System.Windows.Forms.Keys.Left);
             registeredShortcuts["ExpandLevel"] = (AppRefiner.ModifierKeys.Alt, System.Windows.Forms.Keys.Right);
@@ -148,6 +152,7 @@ namespace AppRefiner
             registeredShortcuts["ExpandAll"] = (AppRefiner.ModifierKeys.Control | AppRefiner.ModifierKeys.Alt, System.Windows.Forms.Keys.Right);
             registeredShortcuts["LintCode"] = (AppRefiner.ModifierKeys.Control | AppRefiner.ModifierKeys.Alt, System.Windows.Forms.Keys.L);
             registeredShortcuts["CommandPalette"] = (AppRefiner.ModifierKeys.Control | AppRefiner.ModifierKeys.Shift, System.Windows.Forms.Keys.P);
+            registeredShortcuts["ApplyTemplate"] = (AppRefiner.ModifierKeys.Control | AppRefiner.ModifierKeys.Alt, System.Windows.Forms.Keys.T);
 
             // Register keyboard shortcuts for refactors
             this.RegisterRefactorShortcuts();
@@ -807,7 +812,6 @@ namespace AppRefiner
                 grpEditorActions.Enabled = true;
                 btnLintCode.Enabled = true;
                 btnClearLint.Enabled = true;
-                grpRefactors.Enabled = true;
                 btnApplyTemplate.Text = "Apply Template";
 
                 btnConnectDB.Text = activeEditor?.DataManager == null ? "Connect DB..." : "Disconnect DB";
@@ -823,7 +827,6 @@ namespace AppRefiner
                 grpEditorActions.Enabled = false;
                 btnLintCode.Enabled = false;
                 btnClearLint.Enabled = false;
-                grpRefactors.Enabled = false;
                 btnApplyTemplate.Text = "Generate Template";
             });
         }
@@ -1557,35 +1560,7 @@ namespace AppRefiner
                 }
 
                 string generatedContent = selectedTemplate.Apply(parameterValues);
-
-                if (activeEditor != null)
-                {
-                    // Take a snapshot of the current content and cursor position
-                    activeEditor.SnapshotText = ScintillaManager.GetScintillaText(activeEditor);
-                    activeEditor.SnapshotCursorPosition = ScintillaManager.GetCursorPosition(activeEditor);
-                    btnRestoreSnapshot.Enabled = true;
-
-                    // Set the generated content in the editor
-                    ScintillaManager.SetScintillaText(activeEditor, generatedContent);
-
-                    // Handle cursor position or selection range if specified in the template
-                    if (selectedTemplate.SelectionStart >= 0 && selectedTemplate.SelectionEnd >= 0)
-                    {
-                        // Set the selection range
-                        ScintillaManager.SetSelection(activeEditor, selectedTemplate.SelectionStart, selectedTemplate.SelectionEnd);
-                        WindowHelper.FocusWindow(activeEditor.hWnd);
-                    }
-                    else if (selectedTemplate.CursorPosition >= 0)
-                    {
-                        ScintillaManager.SetCursorPosition(activeEditor, selectedTemplate.CursorPosition);
-                        WindowHelper.FocusWindow(activeEditor.hWnd);
-                    }
-                }
-                else
-                {
-                    // If no editor is active, show the content in a dialog
-                    ShowGeneratedTemplateDialog(generatedContent, selectedTemplate.TemplateName);
-                }
+                ApplyGeneratedTemplate(selectedTemplate, generatedContent);
             }
         }
 
@@ -1694,41 +1669,25 @@ namespace AppRefiner
             }
         }
 
-        private void ShowGeneratedTemplateDialog(string content, string templateName)
+        private void ShowGeneratedTemplateDialog(string content, string title)
         {
-            Form dialog = new()
+            var dialog = new Form
             {
-                Text = $"Generated {templateName}",
-                Size = new Size(600, 400),
+                Text = $"Generated Template: {title}",
+                Size = new Size(800, 600),
                 StartPosition = FormStartPosition.CenterParent
             };
 
-            TextBox textBox = new()
+            var textBox = new TextBox
             {
                 Multiline = true,
-                ScrollBars = ScrollBars.Both,
                 Dock = DockStyle.Fill,
-                Font = new Font("Consolas", 10),
+                ScrollBars = ScrollBars.Both,
                 Text = content,
-                WordWrap = false
-            };
-
-            Button copyButton = new()
-            {
-                Text = "Copy to Clipboard",
-                Dock = DockStyle.Bottom
-            };
-
-            copyButton.Click += (s, e) =>
-            {
-                Clipboard.SetText(content);
-                MessageBox.Show("Content copied to clipboard!", "Success",
-                    MessageBoxButtons.OK, MessageBoxIcon.Information);
+                Font = new Font("Consolas", 10)
             };
 
             dialog.Controls.Add(textBox);
-            dialog.Controls.Add(copyButton);
-
             dialog.ShowDialog();
         }
 
@@ -2135,6 +2094,15 @@ namespace AppRefiner
                 () => activeEditor != null && activeEditor.DataManager != null
             ));
 
+            AvailableCommands.Add(new Command(
+                "Template: Apply Template (Ctrl+Alt+T)",
+                "Apply a template to the current editor",
+                () =>
+                {
+                    ApplyTemplateCommand();
+                },
+                () => activeEditor != null
+            ));
         }
 
         private void btnPlugins_Click(object sender, EventArgs e)
@@ -2493,6 +2461,99 @@ namespace AppRefiner
                 progressBar1.Style = ProgressBarStyle.Blocks;
             });
             Application.DoEvents();
+        }
+
+        private void ApplyTemplateCommand()
+        {
+            /* only work if there's an active editor */
+            if (activeEditor == null) return;
+            
+            // Get all available templates
+            var templates = Template.GetAvailableTemplates();
+            
+            if (templates.Count == 0)
+            {
+                MessageBox.Show("No templates found.", "No Templates", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+            var mainHandle = Process.GetProcessById((int)activeEditor.ProcessId).MainWindowHandle;
+            var handleWrapper = new WindowWrapper(mainHandle);
+            // Check if editor is not empty and warn user
+            if (!string.IsNullOrWhiteSpace(ScintillaManager.GetScintillaText(activeEditor)))
+            {
+                using var confirmDialog = new TemplateConfirmationDialog(
+                    "Applying a template will replace all content in the current editor. Do you want to continue?",
+                    mainHandle);
+                
+                if (confirmDialog.ShowDialog(handleWrapper) != DialogResult.Yes)
+                {
+                    return;
+                }
+            }
+
+            // Show template selection dialog
+            using var templateDialog = new TemplateSelectionDialog(templates, mainHandle);
+            if (templateDialog.ShowDialog(handleWrapper) != DialogResult.OK || templateDialog.SelectedTemplate == null)
+            {
+                return;
+            }
+
+            var selectedTemplate = templateDialog.SelectedTemplate;
+
+            // If the template has inputs, show parameter dialog
+            if (selectedTemplate.Inputs != null && selectedTemplate.Inputs.Count > 0)
+            {
+                using var parameterDialog = new TemplateParameterDialog(selectedTemplate, mainHandle);
+                if (parameterDialog.ShowDialog(handleWrapper) != DialogResult.OK)
+                {
+                    return;
+                }
+
+                var parameterValues = parameterDialog.ParameterValues;
+                string generatedContent = selectedTemplate.Apply(parameterValues);
+                ApplyGeneratedTemplate(selectedTemplate, generatedContent);
+            }
+            else
+            {
+                // Apply template without parameters
+                string generatedContent = selectedTemplate.Apply(new Dictionary<string, string>());
+                ApplyGeneratedTemplate(selectedTemplate, generatedContent);
+            }
+        }
+
+        private void ApplyGeneratedTemplate(Template template, string generatedContent)
+        {
+            if (activeEditor != null)
+            {
+                // Take a snapshot of the current content and cursor position
+                activeEditor.SnapshotText = ScintillaManager.GetScintillaText(activeEditor);
+                activeEditor.SnapshotCursorPosition = ScintillaManager.GetCursorPosition(activeEditor);
+                this.Invoke(() =>
+                {
+                    btnRestoreSnapshot.Enabled = true;
+                });
+
+                // Set the generated content in the editor
+                ScintillaManager.SetScintillaText(activeEditor, generatedContent);
+
+                // Handle cursor position or selection range if specified in the template
+                if (template.SelectionStart >= 0 && template.SelectionEnd >= 0)
+                {
+                    // Set the selection range
+                    ScintillaManager.SetSelection(activeEditor, template.SelectionStart, template.SelectionEnd);
+                    WindowHelper.FocusWindow(activeEditor.hWnd);
+                }
+                else if (template.CursorPosition >= 0)
+                {
+                    ScintillaManager.SetCursorPosition(activeEditor, template.CursorPosition);
+                    WindowHelper.FocusWindow(activeEditor.hWnd);
+                }
+            }
+            else
+            {
+                // If no editor is active, show the content in a dialog
+                ShowGeneratedTemplateDialog(generatedContent, template.TemplateName);
+            }
         }
     }
 }

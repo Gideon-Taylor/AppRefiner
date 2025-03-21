@@ -38,6 +38,7 @@ namespace AppRefiner
             btnExpand = new Button();
             btnDarkMode = new Button();
             grpEditorSettings = new GroupBox();
+            btnPlugins = new Button();
             chkBetterSQL = new CheckBox();
             chkOnlyPPC = new CheckBox();
             chkInitCollapsed = new CheckBox();
@@ -62,12 +63,6 @@ namespace AppRefiner
             colResultMessage = new DataGridViewTextBoxColumn();
             colResultLine = new DataGridViewTextBoxColumn();
             label1 = new Label();
-            tabPage3 = new TabPage();
-            grpRefactors = new GroupBox();
-            btnResolveImports = new Button();
-            btnRenameLocalVar = new Button();
-            btnOptimizeImports = new Button();
-            btnAddFlowerBox = new Button();
             tabPage5 = new TabPage();
             splitContainer3 = new SplitContainer();
             pnlTemplateParams = new Panel();
@@ -75,7 +70,6 @@ namespace AppRefiner
             cmbTemplates = new ComboBox();
             progressBar1 = new ProgressBar();
             lblStatus = new Label();
-            btnPlugins = new Button();
             ((System.ComponentModel.ISupportInitialize)splitContainer1).BeginInit();
             splitContainer1.Panel1.SuspendLayout();
             splitContainer1.Panel2.SuspendLayout();
@@ -97,8 +91,6 @@ namespace AppRefiner
             splitContainer2.Panel2.SuspendLayout();
             splitContainer2.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)dataGridView2).BeginInit();
-            tabPage3.SuspendLayout();
-            grpRefactors.SuspendLayout();
             tabPage5.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)splitContainer3).BeginInit();
             splitContainer3.Panel1.SuspendLayout();
@@ -121,7 +113,7 @@ namespace AppRefiner
             // 
             splitContainer1.Panel2.Controls.Add(progressBar1);
             splitContainer1.Panel2.Controls.Add(lblStatus);
-            splitContainer1.Size = new Size(531, 561);
+            splitContainer1.Size = new Size(570, 561);
             splitContainer1.SplitterDistance = 493;
             splitContainer1.TabIndex = 0;
             // 
@@ -130,13 +122,12 @@ namespace AppRefiner
             tabControl1.Controls.Add(tabPage1);
             tabControl1.Controls.Add(tabPage4);
             tabControl1.Controls.Add(tabPage2);
-            tabControl1.Controls.Add(tabPage3);
             tabControl1.Controls.Add(tabPage5);
             tabControl1.Dock = DockStyle.Fill;
             tabControl1.Location = new Point(0, 0);
             tabControl1.Name = "tabControl1";
             tabControl1.SelectedIndex = 0;
-            tabControl1.Size = new Size(531, 493);
+            tabControl1.Size = new Size(570, 493);
             tabControl1.TabIndex = 3;
             // 
             // tabPage1
@@ -146,7 +137,7 @@ namespace AppRefiner
             tabPage1.Location = new Point(4, 24);
             tabPage1.Name = "tabPage1";
             tabPage1.Padding = new Padding(3);
-            tabPage1.Size = new Size(523, 465);
+            tabPage1.Size = new Size(562, 465);
             tabPage1.TabIndex = 0;
             tabPage1.Text = "Editor Tweaks";
             tabPage1.UseVisualStyleBackColor = true;
@@ -231,6 +222,16 @@ namespace AppRefiner
             grpEditorSettings.TabStop = false;
             grpEditorSettings.Text = "Settings";
             // 
+            // btnPlugins
+            // 
+            btnPlugins.Location = new Point(424, 18);
+            btnPlugins.Name = "btnPlugins";
+            btnPlugins.Size = new Size(85, 23);
+            btnPlugins.TabIndex = 24;
+            btnPlugins.Text = "Plugins...";
+            btnPlugins.UseVisualStyleBackColor = true;
+            btnPlugins.Click += btnPlugins_Click;
+            // 
             // chkBetterSQL
             // 
             chkBetterSQL.AutoSize = true;
@@ -277,7 +278,7 @@ namespace AppRefiner
             tabPage4.Location = new Point(4, 24);
             tabPage4.Name = "tabPage4";
             tabPage4.Padding = new Padding(3);
-            tabPage4.Size = new Size(523, 465);
+            tabPage4.Size = new Size(562, 465);
             tabPage4.TabIndex = 3;
             tabPage4.Text = "Stylers";
             tabPage4.UseVisualStyleBackColor = true;
@@ -293,7 +294,7 @@ namespace AppRefiner
             dataGridView3.Location = new Point(3, 3);
             dataGridView3.Name = "dataGridView3";
             dataGridView3.RowHeadersVisible = false;
-            dataGridView3.Size = new Size(517, 459);
+            dataGridView3.Size = new Size(556, 459);
             dataGridView3.TabIndex = 3;
             dataGridView3.CellContentClick += dataGridView3_CellContentClick;
             dataGridView3.CellValueChanged += dataGridView3_CellValueChanged;
@@ -319,9 +320,9 @@ namespace AppRefiner
             tabPage2.Location = new Point(4, 24);
             tabPage2.Name = "tabPage2";
             tabPage2.Padding = new Padding(3);
-            tabPage2.Size = new Size(523, 465);
+            tabPage2.Size = new Size(562, 465);
             tabPage2.TabIndex = 4;
-            tabPage2.Text = "Linting";
+            tabPage2.Text = "Linters";
             tabPage2.UseVisualStyleBackColor = true;
             // 
             // splitContainerLint
@@ -340,7 +341,7 @@ namespace AppRefiner
             // 
             splitContainerLint.Panel2.Controls.Add(dataGridView2);
             splitContainerLint.Panel2.Controls.Add(label1);
-            splitContainerLint.Size = new Size(517, 459);
+            splitContainerLint.Size = new Size(556, 459);
             splitContainerLint.SplitterDistance = 230;
             splitContainerLint.TabIndex = 0;
             // 
@@ -355,7 +356,7 @@ namespace AppRefiner
             dataGridView1.Location = new Point(0, 40);
             dataGridView1.Name = "dataGridView1";
             dataGridView1.RowHeadersVisible = false;
-            dataGridView1.Size = new Size(517, 190);
+            dataGridView1.Size = new Size(556, 190);
             dataGridView1.TabIndex = 5;
             dataGridView1.CellContentClick += dataGridView1_CellContentClick;
             dataGridView1.CellValueChanged += dataGridView1_CellValueChanged;
@@ -399,14 +400,14 @@ namespace AppRefiner
             // 
             splitContainer2.Panel2.Controls.Add(btnClearLint);
             splitContainer2.Panel2.Controls.Add(chkLintAnnotate);
-            splitContainer2.Size = new Size(517, 40);
-            splitContainer2.SplitterDistance = 352;
+            splitContainer2.Size = new Size(556, 40);
+            splitContainer2.SplitterDistance = 378;
             splitContainer2.TabIndex = 0;
             // 
             // btnConnectDB
             // 
             btnConnectDB.Dock = DockStyle.Right;
-            btnConnectDB.Location = new Point(245, 0);
+            btnConnectDB.Location = new Point(271, 0);
             btnConnectDB.Name = "btnConnectDB";
             btnConnectDB.Size = new Size(107, 40);
             btnConnectDB.TabIndex = 10;
@@ -430,7 +431,7 @@ namespace AppRefiner
             // 
             btnClearLint.Dock = DockStyle.Right;
             btnClearLint.Enabled = false;
-            btnClearLint.Location = new Point(86, 0);
+            btnClearLint.Location = new Point(99, 0);
             btnClearLint.Name = "btnClearLint";
             btnClearLint.Size = new Size(75, 40);
             btnClearLint.TabIndex = 7;
@@ -461,7 +462,7 @@ namespace AppRefiner
             dataGridView2.Name = "dataGridView2";
             dataGridView2.RowHeadersVisible = false;
             dataGridView2.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
-            dataGridView2.Size = new Size(517, 200);
+            dataGridView2.Size = new Size(556, 200);
             dataGridView2.TabIndex = 17;
             dataGridView2.CellClick += dataGridView2_CellClick;
             // 
@@ -491,75 +492,10 @@ namespace AppRefiner
             label1.Dock = DockStyle.Top;
             label1.Location = new Point(0, 0);
             label1.Name = "label1";
-            label1.Size = new Size(517, 25);
+            label1.Size = new Size(556, 25);
             label1.TabIndex = 16;
             label1.Text = "Results";
             label1.TextAlign = ContentAlignment.MiddleCenter;
-            // 
-            // tabPage3
-            // 
-            tabPage3.Controls.Add(grpRefactors);
-            tabPage3.Location = new Point(4, 24);
-            tabPage3.Name = "tabPage3";
-            tabPage3.Padding = new Padding(3);
-            tabPage3.Size = new Size(523, 465);
-            tabPage3.TabIndex = 2;
-            tabPage3.Text = "Refactor";
-            tabPage3.UseVisualStyleBackColor = true;
-            // 
-            // grpRefactors
-            // 
-            grpRefactors.Controls.Add(btnResolveImports);
-            grpRefactors.Controls.Add(btnRenameLocalVar);
-            grpRefactors.Controls.Add(btnOptimizeImports);
-            grpRefactors.Controls.Add(btnAddFlowerBox);
-            grpRefactors.Enabled = false;
-            grpRefactors.Location = new Point(8, 8);
-            grpRefactors.Name = "grpRefactors";
-            grpRefactors.Size = new Size(528, 113);
-            grpRefactors.TabIndex = 2;
-            grpRefactors.TabStop = false;
-            grpRefactors.Text = "Quick Edits";
-            // 
-            // btnResolveImports
-            // 
-            btnResolveImports.Location = new Point(121, 51);
-            btnResolveImports.Name = "btnResolveImports";
-            btnResolveImports.Size = new Size(109, 23);
-            btnResolveImports.TabIndex = 5;
-            btnResolveImports.Text = "Resolve Imports";
-            btnResolveImports.UseVisualStyleBackColor = true;
-            btnResolveImports.Click += btnResolveImports_Click;
-            // 
-            // btnRenameLocalVar
-            // 
-            btnRenameLocalVar.Location = new Point(236, 22);
-            btnRenameLocalVar.Name = "btnRenameLocalVar";
-            btnRenameLocalVar.Size = new Size(109, 23);
-            btnRenameLocalVar.TabIndex = 4;
-            btnRenameLocalVar.Text = "Rename Local Var";
-            btnRenameLocalVar.UseVisualStyleBackColor = true;
-            btnRenameLocalVar.Click += btnRenameLocalVar_Click;
-            // 
-            // btnOptimizeImports
-            // 
-            btnOptimizeImports.Location = new Point(121, 22);
-            btnOptimizeImports.Name = "btnOptimizeImports";
-            btnOptimizeImports.Size = new Size(109, 23);
-            btnOptimizeImports.TabIndex = 3;
-            btnOptimizeImports.Text = "Optimize Imports";
-            btnOptimizeImports.UseVisualStyleBackColor = true;
-            btnOptimizeImports.Click += btnOptimizeImports_Click;
-            // 
-            // btnAddFlowerBox
-            // 
-            btnAddFlowerBox.Location = new Point(6, 22);
-            btnAddFlowerBox.Name = "btnAddFlowerBox";
-            btnAddFlowerBox.Size = new Size(109, 23);
-            btnAddFlowerBox.TabIndex = 2;
-            btnAddFlowerBox.Text = "Add Flowerbox";
-            btnAddFlowerBox.UseVisualStyleBackColor = true;
-            btnAddFlowerBox.Click += btnAddFlowerBox_Click;
             // 
             // tabPage5
             // 
@@ -568,7 +504,7 @@ namespace AppRefiner
             tabPage5.Location = new Point(4, 24);
             tabPage5.Name = "tabPage5";
             tabPage5.Padding = new Padding(3);
-            tabPage5.Size = new Size(523, 465);
+            tabPage5.Size = new Size(562, 465);
             tabPage5.TabIndex = 5;
             tabPage5.Text = "Templates";
             tabPage5.UseVisualStyleBackColor = true;
@@ -587,7 +523,7 @@ namespace AppRefiner
             // splitContainer3.Panel2
             // 
             splitContainer3.Panel2.Controls.Add(btnApplyTemplate);
-            splitContainer3.Size = new Size(517, 436);
+            splitContainer3.Size = new Size(556, 436);
             splitContainer3.SplitterDistance = 403;
             splitContainer3.TabIndex = 1;
             // 
@@ -596,7 +532,7 @@ namespace AppRefiner
             pnlTemplateParams.Dock = DockStyle.Fill;
             pnlTemplateParams.Location = new Point(0, 0);
             pnlTemplateParams.Name = "pnlTemplateParams";
-            pnlTemplateParams.Size = new Size(517, 403);
+            pnlTemplateParams.Size = new Size(556, 403);
             pnlTemplateParams.TabIndex = 3;
             // 
             // btnApplyTemplate
@@ -604,7 +540,7 @@ namespace AppRefiner
             btnApplyTemplate.Dock = DockStyle.Fill;
             btnApplyTemplate.Location = new Point(0, 0);
             btnApplyTemplate.Name = "btnApplyTemplate";
-            btnApplyTemplate.Size = new Size(517, 29);
+            btnApplyTemplate.Size = new Size(556, 29);
             btnApplyTemplate.TabIndex = 1;
             btnApplyTemplate.Text = "Generate Template";
             btnApplyTemplate.UseVisualStyleBackColor = true;
@@ -617,7 +553,7 @@ namespace AppRefiner
             cmbTemplates.FormattingEnabled = true;
             cmbTemplates.Location = new Point(3, 3);
             cmbTemplates.Name = "cmbTemplates";
-            cmbTemplates.Size = new Size(517, 23);
+            cmbTemplates.Size = new Size(556, 23);
             cmbTemplates.TabIndex = 0;
             // 
             // progressBar1
@@ -625,7 +561,7 @@ namespace AppRefiner
             progressBar1.Dock = DockStyle.Bottom;
             progressBar1.Location = new Point(0, 9);
             progressBar1.Name = "progressBar1";
-            progressBar1.Size = new Size(531, 25);
+            progressBar1.Size = new Size(570, 25);
             progressBar1.TabIndex = 22;
             // 
             // lblStatus
@@ -633,20 +569,10 @@ namespace AppRefiner
             lblStatus.Dock = DockStyle.Bottom;
             lblStatus.Location = new Point(0, 34);
             lblStatus.Name = "lblStatus";
-            lblStatus.Size = new Size(531, 30);
+            lblStatus.Size = new Size(570, 30);
             lblStatus.TabIndex = 21;
             lblStatus.Text = "Stopped";
             lblStatus.TextAlign = ContentAlignment.MiddleCenter;
-            // 
-            // btnPlugins
-            // 
-            btnPlugins.Location = new Point(424, 18);
-            btnPlugins.Name = "btnPlugins";
-            btnPlugins.Size = new Size(85, 23);
-            btnPlugins.TabIndex = 24;
-            btnPlugins.Text = "Plugins...";
-            btnPlugins.UseVisualStyleBackColor = true;
-            btnPlugins.Click += btnPlugins_Click;
             // 
             // MainForm
             // 
@@ -679,8 +605,6 @@ namespace AppRefiner
             ((System.ComponentModel.ISupportInitialize)splitContainer2).EndInit();
             splitContainer2.ResumeLayout(false);
             ((System.ComponentModel.ISupportInitialize)dataGridView2).EndInit();
-            tabPage3.ResumeLayout(false);
-            grpRefactors.ResumeLayout(false);
             tabPage5.ResumeLayout(false);
             splitContainer3.Panel1.ResumeLayout(false);
             splitContainer3.Panel2.ResumeLayout(false);
@@ -692,13 +616,18 @@ namespace AppRefiner
         #endregion
 
         private SplitContainer splitContainer1;
+        private ProgressBar progressBar1;
+        private Label lblStatus;
         private TabControl tabControl1;
         private TabPage tabPage1;
         private GroupBox grpEditorActions;
+        private Button btnRestoreSnapshot;
+        private Button btnTakeSnapshot;
         private Button btnCollapseAll;
         private Button btnExpand;
         private Button btnDarkMode;
         private GroupBox grpEditorSettings;
+        private Button btnPlugins;
         private CheckBox chkBetterSQL;
         private CheckBox chkOnlyPPC;
         private CheckBox chkInitCollapsed;
@@ -709,35 +638,24 @@ namespace AppRefiner
         private DataGridViewTextBoxColumn dataGridViewTextBoxColumn1;
         private TabPage tabPage2;
         private SplitContainer splitContainerLint;
+        private DataGridView dataGridView1;
+        private DataGridViewCheckBoxColumn colActive;
+        private DataGridViewTextBoxColumn colDescr;
+        private DataGridViewButtonColumn colConfigure;
+        private SplitContainer splitContainer2;
+        private Button btnConnectDB;
+        private Button btnLintCode;
+        private Button btnClearLint;
+        private CheckBox chkLintAnnotate;
         private DataGridView dataGridView2;
         private DataGridViewTextBoxColumn colResultType;
         private DataGridViewTextBoxColumn colResultMessage;
         private DataGridViewTextBoxColumn colResultLine;
         private Label label1;
-        private TabPage tabPage3;
-        private ProgressBar progressBar1;
-        private Label lblStatus;
-        private SplitContainer splitContainer2;
-        private CheckBox chkLintAnnotate;
-        private DataGridView dataGridView1;
-        private DataGridViewCheckBoxColumn colActive;
-        private DataGridViewTextBoxColumn colDescr;
-        private DataGridViewButtonColumn colConfigure;
-        private Button btnClearLint;
-        private Button btnRestoreSnapshot;
-        private Button btnTakeSnapshot;
-        private GroupBox grpRefactors;
-        private Button btnAddFlowerBox;
-        private Button btnOptimizeImports;
-        private Button btnConnectDB;
-        private Button btnLintCode;
-        private Button btnRenameLocalVar;
         private TabPage tabPage5;
-        private ComboBox cmbTemplates;
         private SplitContainer splitContainer3;
         private Panel pnlTemplateParams;
         private Button btnApplyTemplate;
-        private Button btnResolveImports;
-        private Button btnPlugins;
+        private ComboBox cmbTemplates;
     }
 }
