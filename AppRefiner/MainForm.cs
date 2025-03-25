@@ -1265,10 +1265,14 @@ namespace AppRefiner
 
             // Capture current cursor position
             int currentCursorPosition = ScintillaManager.GetCursorPosition(activeEditor);
+            
+            // Capture current first visible line
+            int currentFirstVisibleLine = ScintillaManager.GetFirstVisibleLine(activeEditor);
 
             // Take a snapshot before refactoring
             activeEditor.SnapshotText = freshText;
             activeEditor.SnapshotCursorPosition = currentCursorPosition;
+            activeEditor.SnapshotFirstVisibleLine = currentFirstVisibleLine;
 
             // Check if this refactor requires user input dialog and is not deferred
             if (refactorClass.RequiresUserInputDialog && !refactorClass.DeferDialogUntilAfterVisitor)
@@ -1337,7 +1341,14 @@ namespace AppRefiner
             int updatedCursorPosition = refactorClass.GetUpdatedCursorPosition();
             if (updatedCursorPosition >= 0)
             {
-                ScintillaManager.SetCursorPosition(activeEditor, updatedCursorPosition);
+                // Set the cursor position without scrolling to it
+                ScintillaManager.SetCursorPositionWithoutScroll(activeEditor, updatedCursorPosition);
+                
+                // Restore the first visible line
+                if (activeEditor.SnapshotFirstVisibleLine.HasValue)
+                {
+                    ScintillaManager.SetFirstVisibleLine(activeEditor, activeEditor.SnapshotFirstVisibleLine.Value);
+                }
             }
         }
 
@@ -1980,17 +1991,18 @@ namespace AppRefiner
                 {
                     if (activeEditor != null)
                     {
-                        DBConnectDialog dialog = new();
+                        var mainHandle = Process.GetProcessById((int)activeEditor.ProcessId).MainWindowHandle;
+                        var handleWrapper = new WindowWrapper(mainHandle);
+                        DBConnectDialog dialog = new(mainHandle);
                         dialog.StartPosition = FormStartPosition.CenterParent;
 
-                        if (dialog.ShowDialog(this) == DialogResult.OK)
+                        if (dialog.ShowDialog(handleWrapper) == DialogResult.OK)
                         {
                             IDataManager? manager = dialog.DataManager;
                             if (manager != null)
                             {
                                 processDataManagers[activeEditor.ProcessId] = manager;
                                 activeEditor.DataManager = manager;
-                                btnConnectDB.Text = "Disconnect DB";
                             }
                         }
                     }
@@ -2008,7 +2020,6 @@ namespace AppRefiner
                         activeEditor.DataManager.Disconnect();
                         processDataManagers.Remove(activeEditor.ProcessId);
                         activeEditor.DataManager = null;
-                        btnConnectDB.Text = "Connect DB...";
                     }
                 },
                 () => activeEditor != null && activeEditor.DataManager != null
@@ -2358,7 +2369,7 @@ namespace AppRefiner
                 if (activeEditor.Type == EditorType.PeopleCode && ScintillaManager.GetSelectionLength(activeEditor) > 0)
                 {
                     /* We want to update our content hash to match so we don't process it next tick. */
-                    activeEditor.LastContentHash = ScintillaManager.GetContentHash(activeEditor);
+                    activeEditor.LastContentHash = 0;
                     return;
                 }
 

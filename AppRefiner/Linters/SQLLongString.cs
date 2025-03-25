@@ -53,28 +53,5 @@ namespace AppRefiner.Linters
                 }
             }
         }
-
-        // Optional: Add a method to check all string literals if CheckOnlySqlFunctions is false
-        public override void EnterLiteralExpr(LiteralExprContext context)
-        {
-            var text = context.GetText();
-            
-            // Check if it looks like a string literal (starts and ends with quotes)
-            if (text.Length >= 2 && (text.StartsWith('"') || text.StartsWith('"'))) 
-            {
-                var sqlText = SQLHelper.ExtractSQLFromLiteral(text);
-                
-                if (sqlText.Length > MaxSqlLength)
-                {
-                    AddReport(
-                        2,
-                        $"SQL string literal is too long (length: {sqlText.Length}). Consider using a SQL object.",
-                        Type,
-                        context.Start.Line - 1,
-                        (context.Start.StartIndex, context.Stop.StopIndex)
-                    );
-                }
-            }
-        }
     }
 }

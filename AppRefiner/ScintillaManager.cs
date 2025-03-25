@@ -1,4 +1,4 @@
-﻿using AppRefiner.Database;
+using AppRefiner.Database;
 using AppRefiner.Linters;
 using AppRefiner.Stylers;
 using SQL.Formatter;
@@ -74,6 +74,8 @@ namespace AppRefiner
         private const int SCI_SETSAVEPOINT = 2014;
         private const int SCI_SETFOLDMARGINCOLOUR = 2290;
         private const int SCI_SETFOLDMARGINHICOLOUR = 2291;
+        private const int SCI_GETFIRSTVISIBLELINE = 2152;
+        private const int SCI_SETFIRSTVISIBLELINE = 2613;
 
         private const int SCI_INDICSETSTYLE = 2080;
         private const int SCI_INDICGETSTYLE = 2081;
@@ -100,7 +102,6 @@ namespace AppRefiner
         private const int SCI_INDICATORSTART = 2508;
         private const int SCI_INDICSETALPHA = 2523;
 
-
         private const int SCI_ANNOTATIONSETTEXT = 2540;
         private const int SCI_ANNOTATIONGETTEXT = 2541;
         private const int SCI_ANNOTATIONSETSTYLE = 2542;
@@ -118,7 +119,7 @@ namespace AppRefiner
         private const int SCI_ANNOTATIONSETSTYLEOFFSET = 2550;
         private const int SCI_ANNOTATIONGETSTYLEOFFSET = 2551;
         private const int SCI_ALLOCATEEXTENDEDSTYLES = 2553;
-
+        private const int SCI_SETUSETABS = 2124;
         private const int SCI_SETTABINDENTS = 2260;
         private const int SCI_GETTABINDENTS = 2261;
         private const int SCI_SETBACKSPACEUNINDENTS = 2262;
@@ -202,6 +203,7 @@ namespace AppRefiner
 
         public static void FixEditorTabs(ScintillaEditor editor, bool funkySQLTabs = false)
         {
+            editor.SendMessage(SCI_SETUSETABS, 0, 0);
             editor.SendMessage(SCI_SETTABINDENTS, 1, 0);
             var width = 4;
             if (editor.Type == EditorType.PeopleCode || (editor.Type == EditorType.SQL && funkySQLTabs))
@@ -1106,6 +1108,7 @@ namespace AppRefiner
 
                 // Allocate and write the annotation text buffer
                 var remoteTextBuffer = VirtualAllocEx(editor.hProc, IntPtr.Zero, (uint)neededSize, MEM_COMMIT, PAGE_READWRITE);
+
                 if (remoteTextBuffer == IntPtr.Zero)
                 {
                     throw new Exception($"Failed to allocate text buffer: {Marshal.GetLastWin32Error()}");
@@ -1189,12 +1192,25 @@ namespace AppRefiner
         public static void SetCursorPosition(ScintillaEditor editor, int position)
         {
             if (editor == null) return;
-
+            
             // Set the cursor position
             editor.SendMessage(SCI_GOTOPOS, position, IntPtr.Zero);
 
             // Ensure the position is visible by scrolling to it
             editor.SendMessage(SCI_SCROLLCARET, IntPtr.Zero, IntPtr.Zero);
+        }
+
+        /// <summary>
+        /// Sets the cursor position in the Scintilla editor without scrolling to it
+        /// </summary>
+        /// <param name="editor">The editor to set the cursor position in</param>
+        /// <param name="position">The position to place the cursor</param>
+        public static void SetCursorPositionWithoutScroll(ScintillaEditor editor, int position)
+        {
+            if (editor == null) return;
+            
+            // Set the cursor position without scrolling
+            editor.SendMessage(SCI_GOTOPOS, position, IntPtr.Zero);
         }
 
         internal static void ExpandCurrent(ScintillaEditor activeEditor)
@@ -1261,7 +1277,30 @@ namespace AppRefiner
             return highlighterNumber;
         }
 
+        /// <summary>
+        /// Gets the first visible line in the Scintilla editor
+        /// </summary>
+        /// <param name="editor">The editor to get the first visible line from</param>
+        /// <returns>The first visible line number</returns>
+        public static int GetFirstVisibleLine(ScintillaEditor editor)
+        {
+            if (editor == null) return 0;
+            return (int)editor.SendMessage(SCI_GETFIRSTVISIBLELINE, IntPtr.Zero, IntPtr.Zero);
+        }
+
+        /// <summary>
+        /// Sets the first visible line in the Scintilla editor
+        /// </summary>
+        /// <param name="editor">The editor to set the first visible line in</param>
+        /// <param name="line">The line number to make the first visible line</param>
+        public static void SetFirstVisibleLine(ScintillaEditor editor, int line)
+        {
+            if (editor == null) return;
+            editor.SendMessage(SCI_SETFIRSTVISIBLELINE, line, IntPtr.Zero);
+        }
+
     }
+
     public enum EditorType
     {
         PeopleCode, HTML, SQL, CSS, Other
@@ -1273,6 +1312,7 @@ namespace AppRefiner
         private static extern IntPtr SendMessage(IntPtr hWnd, int Msg, IntPtr wParam, IntPtr lParam);
 
         public int? SnapshotCursorPosition { get; set; }
+        public int? SnapshotFirstVisibleLine { get; set; }
 
         [DllImport("user32.dll")]
         [return: MarshalAs(UnmanagedType.Bool)]
@@ -1384,7 +1424,7 @@ namespace AppRefiner
             return IsWindow(hWnd);
         }
     }
-    
+
     public enum FontColor
     {
         Gray = 0
