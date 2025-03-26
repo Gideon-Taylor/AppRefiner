@@ -3,6 +3,7 @@
 #include <string>
 #include <cctype>
 #include <psapi.h>
+#include <vector>
 #include "Scintilla.h"
 
 // Custom message for setting pipe name
@@ -66,6 +67,15 @@ std::string GetTrimmedLineText(HWND hwndScintilla, int line) {
     return lineStr;
 }
 
+// Structure to hold block pattern information
+struct BlockPattern {
+    std::string startPattern;
+    std::string endPattern;
+    bool requiresFullMatch;
+    bool requiresAdditionalCheck;
+    std::string additionalPattern;
+};
+
 void HandlePeopleCodeAutoIndentation(HWND hwndScintilla, SCNotification* notification) {
 
     // Get the grandparent window
@@ -85,6 +95,17 @@ void HandlePeopleCodeAutoIndentation(HWND hwndScintilla, SCNotification* notific
 
     // Get the tab width for indentation units
     int tabWidth = SendMessage(hwndScintilla, SCI_GETTABWIDTH, 0, 0);
+
+    // Define block patterns for PeopleCode
+    static const std::vector<BlockPattern> blockPatterns = {
+        // Pattern, End Pattern, Requires Full Match, Requires Additional Check, Additional Pattern
+        {"if ", "end-if;", false, true, " then"},
+        {"for ", "end-for;", false, false, ""},
+        {"while ", "end-while;", false, false, ""},
+        {"method ", "end-method;", false, false, ""},
+        {"function ", "end-function;", false, false, ""},
+        {"else", "", true, false, ""}  // 'else' has no end pattern but increases indentation
+    };
 
     // Handle indentation for new lines, else keyword, and semicolons differently
     if (notification->ch == '\r' || notification->ch == '\n') {
@@ -115,29 +136,28 @@ void HandlePeopleCodeAutoIndentation(HWND hwndScintilla, SCNotification* notific
         // Check if previous line has an indentation-increasing statement
         bool increaseIndent = false;
 
-        // Check for if-then
-        if (lowerLine.find("if ") == 0 && lowerLine.find(" then") != std::string::npos) {
-            increaseIndent = true;
-        }
-        // Check for for loops
-        else if (lowerLine.find("for ") == 0) {
-            increaseIndent = true;
-        }
-        // Check for while loops
-        else if (lowerLine.find("while ") == 0) {
-            increaseIndent = true;
-        }
-        // Check for method declarations
-        else if (lowerLine.find("method ") == 0) {
-            increaseIndent = true;
-        }
-        // Check for function declarations
-        else if (lowerLine.find("function ") == 0) {
-            increaseIndent = true;
-        }
-        // Check for else
-        else if (lowerLine.find("else") == 0) {
-            increaseIndent = true;
+        // Check against all block start patterns
+        for (const auto& pattern : blockPatterns) {
+            bool matches = false;
+            
+            if (pattern.requiresFullMatch) {
+                matches = (lowerLine == pattern.startPattern);
+            } else {
+                matches = (lowerLine.find(pattern.startPattern) == 0);
+            }
+            
+            if (matches) {
+                // If additional check is required, verify it
+                if (pattern.requiresAdditionalCheck) {
+                    if (lowerLine.find(pattern.additionalPattern) != std::string::npos) {
+                        increaseIndent = true;
+                        break;
+                    }
+                } else {
+                    increaseIndent = true;
+                    break;
+                }
+            }
         }
 
         // Apply the indentation to the current line
@@ -170,14 +190,20 @@ void HandlePeopleCodeAutoIndentation(HWND hwndScintilla, SCNotification* notific
 
         // Check if this is an end statement or "else"
         bool shouldDeindent = false;
-        bool isEndStatement = (lowerCurrentLine == "end-if;" ||
-            lowerCurrentLine == "end-for;" ||
-            lowerCurrentLine == "end-while;" ||
-            lowerCurrentLine == "end-method;" ||
-            lowerCurrentLine == "end-function;");
-
+        bool isEndStatement = false;
+        std::string matchingStartPattern;
+        
+        // Check if the current line is an end statement
+        for (const auto& pattern : blockPatterns) {
+            if (!pattern.endPattern.empty() && lowerCurrentLine == pattern.endPattern) {
+                isEndStatement = true;
+                matchingStartPattern = pattern.startPattern;
+                shouldDeindent = true;
+                break;
+            }
+        }
+        
         bool isElse = (lowerCurrentLine == "else");
-
         shouldDeindent = isEndStatement || isElse;
 
         if (shouldDeindent) {
@@ -189,41 +215,89 @@ void HandlePeopleCodeAutoIndentation(HWND hwndScintilla, SCNotification* notific
             int searchLine = currentLine - 1;
             int blockIndentation = 0;
 
-            while (searchLine >= 0) {
-                std::string searchLineStr = GetTrimmedLineText(hwndScintilla, searchLine);
-                std::string lowerSearchLine = ToLowerCase(searchLineStr);
-                int lineIndent = SendMessage(hwndScintilla, SCI_GETLINEINDENTATION, searchLine, 0);
-
-                if (isEndStatement) {
-                    // For end statements, find the matching opening statement
-                    if ((lowerCurrentLine == "end-if;" &&
-                        lowerSearchLine.find("if ") == 0 &&
-                        lowerSearchLine.find(" then") != std::string::npos) ||
-                        (lowerCurrentLine == "end-for;" &&
-                            lowerSearchLine.find("for ") == 0) ||
-                        (lowerCurrentLine == "end-while;" &&
-                            lowerSearchLine.find("while ") == 0) ||
-                        (lowerCurrentLine == "end-method;" &&
-                            lowerSearchLine.find("method ") == 0) ||
-                        (lowerCurrentLine == "end-function;" &&
-                            lowerSearchLine.find("function ") == 0)) {
-
-                        openBlockLine = searchLine;
-                        blockIndentation = lineIndent;
+            if (isEndStatement) {
+                // For end statements, find the matching opening statement
+                // Track nesting level to handle nested blocks
+                int nestingLevel = 0;
+                
+                // Find which end statement we're dealing with
+                std::string endPattern;
+                std::string startPattern;
+                bool requiresFullMatch = false;
+                bool requiresAdditionalCheck = false;
+                std::string additionalPattern;
+                
+                for (const auto& pattern : blockPatterns) {
+                    if (!pattern.endPattern.empty() && lowerCurrentLine == pattern.endPattern) {
+                        endPattern = pattern.endPattern;
+                        startPattern = pattern.startPattern;
+                        requiresFullMatch = pattern.requiresFullMatch;
+                        requiresAdditionalCheck = pattern.requiresAdditionalCheck;
+                        additionalPattern = pattern.additionalPattern;
                         break;
                     }
                 }
-                else if (isElse) {
-                    // For else, find the matching if statement
+
+                while (searchLine >= 0) {
+                    std::string searchLineStr = GetTrimmedLineText(hwndScintilla, searchLine);
+                    std::string lowerSearchLine = ToLowerCase(searchLineStr);
+                    int lineIndent = SendMessage(hwndScintilla, SCI_GETLINEINDENTATION, searchLine, 0);
+
+                    // Check for nested end statements that would increase our nesting level
+                    if (lowerSearchLine == endPattern) {
+                        nestingLevel++;
+                    }
+                    // Check for matching opening statement
+                    else {
+                        bool matches = false;
+                        
+                        if (requiresFullMatch) {
+                            matches = (lowerSearchLine == startPattern);
+                        } else {
+                            matches = (lowerSearchLine.find(startPattern) == 0);
+                        }
+                        
+                        if (matches) {
+                            // If additional check is required, verify it
+                            if (requiresAdditionalCheck) {
+                                if (lowerSearchLine.find(additionalPattern) != std::string::npos) {
+                                    if (nestingLevel == 0) {
+                                        openBlockLine = searchLine;
+                                        blockIndentation = lineIndent;
+                                        break;
+                                    }
+                                    nestingLevel--;
+                                }
+                            } else {
+                                if (nestingLevel == 0) {
+                                    openBlockLine = searchLine;
+                                    blockIndentation = lineIndent;
+                                    break;
+                                }
+                                nestingLevel--;
+                            }
+                        }
+                    }
+
+                    searchLine--;
+                }
+            }
+            else {
+                // For else, find the matching if statement
+                while (searchLine >= 0) {
+                    std::string searchLineStr = GetTrimmedLineText(hwndScintilla, searchLine);
+                    std::string lowerSearchLine = ToLowerCase(searchLineStr);
+                    int lineIndent = SendMessage(hwndScintilla, SCI_GETLINEINDENTATION, searchLine, 0);
+
                     if (lowerSearchLine.find("if ") == 0 &&
                         lowerSearchLine.find(" then") != std::string::npos) {
                         openBlockLine = searchLine;
                         blockIndentation = lineIndent;
                         break;
                     }
-                }
 
-                searchLine--;
+                    searchLine--;
+                }
             }
 
             // Set indentation to match the opening statement
