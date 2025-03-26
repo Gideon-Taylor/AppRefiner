@@ -2,6 +2,7 @@ using Antlr4.Runtime.Tree;
 using AppRefiner.Database;
 using AppRefiner.Database.Models;
 using AppRefiner.Dialogs;
+using AppRefiner.Events;
 using AppRefiner.Linters;
 using AppRefiner.PeopleCode;
 using AppRefiner.Plugins;
@@ -101,6 +102,26 @@ namespace AppRefiner
             InitLinterOptions();
             InitStylerOptions(); // Changed from InitAnalyzerOptions
             RegisterCommands(); // Register the default commands
+
+            EventServer.StartPipeServer();
+            EventServer.OnDwellEvent += EventServer_OnDwellEvent;
+
+        }
+
+        private void EventServer_OnDwellEvent(object sender, DwellEventArgs e)
+        {
+            if (activeEditor == null || activeEditor.hWnd != e.EditorHandle)
+            {
+                return;
+            }
+
+            if (!e.IsStop)
+            {
+                ScintillaManager.ShowCallTip(activeEditor, e.Position, "You are dwelling..."); ;
+            } else
+            {
+                ScintillaManager.HideCallTip(activeEditor);
+            }
         }
 
         protected override void OnLoad(EventArgs e)
@@ -2344,6 +2365,18 @@ namespace AppRefiner
                 {
                     ScintillaManager.SetDarkMode(activeEditor);
                 }
+
+                if(btnAutoIndentation.Checked && File.Exists("AppRefinerHook.dll"))
+                {
+                    if (!EventServer.Running)
+                        EventServer.StartPipeServer();
+
+                    EventServer.SetHook(activeEditor.ThreadID);
+                    EventServer.SendPipeNameToHookedThread(activeEditor.ThreadID, EventServer.PipeID);
+                    ScintillaManager.SetMouseDwellTime(activeEditor, 1000);
+                }
+
+                
                 ScintillaManager.EnableFolding(activeEditor);
                 ScintillaManager.FixEditorTabs(activeEditor, !chkBetterSQL.Checked);
                 activeEditor.FoldEnabled = true;

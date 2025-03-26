@@ -30,6 +30,7 @@ namespace AppRefiner
         private const int SC_FOLDLEVELWHITEFLAG = 0x1000;
         private const int SC_FOLDLEVELHEADERFLAG = 0x2000;
         private const int SC_FOLDLEVELNUMBERMASK = 0x0FFF;
+        private const int SCI_SETMOUSEDWELLTIME = 2264;
         private const int SCI_SETMARGINTYPEN = 2240;
         private const int SCI_SETMARGINWIDTHN = 2242;
         private const int SCI_SETFOLDFLAGS = 2233;
@@ -38,6 +39,8 @@ namespace AppRefiner
         private const int SC_MARGIN_SYMBOL = 0;
         private const uint SC_MASK_FOLDERS = 0xFE000000;
         private const int SCI_MARKERDEFINE = 2040;
+        private const int SCI_CALLTIPSHOW = 2200;
+        private const int SCI_CALLTIPCANCEL = 2201;
         private const int SC_MARKNUM_FOLDEREND = 25;
         private const int SC_MARKNUM_FOLDEROPENMID = 26;
         private const int SC_MARKNUM_FOLDERMIDTAIL = 27;
@@ -223,9 +226,9 @@ namespace AppRefiner
                 caption = WindowHelper.GetGrandparentWindowCaption(hWnd);
             }
             // Get the process ID associated with the Scintilla window.
-            GetWindowThreadProcessId(hWnd, out uint processId);
+            var threadId = GetWindowThreadProcessId(hWnd, out uint processId);
 
-            var editor = new ScintillaEditor(hWnd, processId, caption);
+            var editor = new ScintillaEditor(hWnd, processId, threadId, caption);
             editors.Add(hWnd, editor);
 
             if (processHandles.ContainsKey(processId))
@@ -278,7 +281,7 @@ namespace AppRefiner
             else
             {
                 /* If buffer is too small, free current one and allocate a new one */
-                var (buffer, size) = processBuffers[processId];
+        var(buffer, size) = processBuffers[processId];
                 if (size < neededSize)
                 {
                     VirtualFreeEx(editor.hProc, buffer, 0, MEM_RELEASE);
@@ -913,6 +916,47 @@ namespace AppRefiner
         }
 
 
+        internal static void ShowCallTip(ScintillaEditor editor, IntPtr position, string text)
+        {
+
+            if (editor.CallTipPointer != IntPtr.Zero)
+            {
+                VirtualFreeEx(editor.hProc, editor.CallTipPointer, 0, MEM_RELEASE);
+            }
+
+            // Allocate memory for new annotation text
+            var textBytes = Encoding.Default.GetBytes(text);
+            var neededSize = textBytes.Length + 1;
+            var remoteBuffer = VirtualAllocEx(editor.hProc, IntPtr.Zero, (uint)neededSize, MEM_COMMIT, PAGE_READWRITE);
+
+            if (remoteBuffer == IntPtr.Zero)
+            {
+                Debug.WriteLine($"Failed to allocate memory for annotation: {Marshal.GetLastWin32Error()}");
+                return;
+            }
+
+            if (!WriteProcessMemory(editor.hProc, remoteBuffer, textBytes, neededSize, out int bytesWritten) || bytesWritten != neededSize)
+            {
+                VirtualFreeEx(editor.hProc, remoteBuffer, 0, MEM_RELEASE);
+                Debug.WriteLine($"Failed to write annotation text to memory: {Marshal.GetLastWin32Error()}");
+                return;
+            }
+
+            editor.CallTipPointer = remoteBuffer;
+
+            editor.SendMessage(SCI_CALLTIPSHOW, position, remoteBuffer);
+
+        }
+
+        internal static void HideCallTip(ScintillaEditor editor)
+        {
+            editor.SendMessage(SCI_CALLTIPCANCEL, IntPtr.Zero, IntPtr.Zero);
+            if (editor.CallTipPointer != IntPtr.Zero)
+            {
+                VirtualFreeEx(editor.hProc, editor.CallTipPointer, 0, MEM_RELEASE);
+            }
+        }
+
 
         internal static void SetAnnotation(ScintillaEditor editor, int line, string text, AnnotationStyle style = AnnotationStyle.Gray)
         {
@@ -1299,6 +1343,15 @@ namespace AppRefiner
             editor.SendMessage(SCI_SETFIRSTVISIBLELINE, line, IntPtr.Zero);
         }
 
+        internal static void SetMouseDwellTime(ScintillaEditor activeEditor, int v)
+        {
+            activeEditor.SendMessage(SCI_SETMOUSEDWELLTIME, v, 0);
+        }
+
+        internal static object GetThreadId(ScintillaEditor activeEditor)
+        {
+            throw new NotImplementedException();
+        }
     }
 
     public enum EditorType
@@ -1321,11 +1374,14 @@ namespace AppRefiner
         public IntPtr hWnd;
         public IntPtr hProc;
         public uint ProcessId;
+        public uint ThreadID;
         public string? Caption = null;
         public bool FoldEnabled = false;
         public bool HasLexilla = false;
 
         public EditorType Type;
+
+        public IntPtr CallTipPointer = IntPtr.Zero;
 
         public Dictionary<string, IntPtr> AnnotationPointers = new();
         public List<IntPtr> PropertyBuffers = new();
@@ -1366,10 +1422,11 @@ namespace AppRefiner
             }
         }
 
-        public ScintillaEditor(IntPtr hWnd, uint procID, string caption)
+        public ScintillaEditor(IntPtr hWnd, uint procID, uint threadID, string caption)
         {
             this.hWnd = hWnd;
             ProcessId = procID;
+            ThreadID = threadID;
             Caption = caption;
 
             if (caption.Contains("PeopleCode"))

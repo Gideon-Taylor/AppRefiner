@@ -64,6 +64,7 @@ namespace AppRefiner
             cmbTemplates = new ComboBox();
             progressBar1 = new ProgressBar();
             lblStatus = new Label();
+            btnAutoIndentation = new CheckBox();
             ((System.ComponentModel.ISupportInitialize)splitContainer1).BeginInit();
             splitContainer1.Panel1.SuspendLayout();
             splitContainer1.Panel2.SuspendLayout();
@@ -136,6 +137,7 @@ namespace AppRefiner
             // 
             // grpEditorSettings
             // 
+            grpEditorSettings.Controls.Add(btnAutoIndentation);
             grpEditorSettings.Controls.Add(btnPlugins);
             grpEditorSettings.Controls.Add(chkBetterSQL);
             grpEditorSettings.Controls.Add(chkOnlyPPC);
@@ -143,7 +145,7 @@ namespace AppRefiner
             grpEditorSettings.Controls.Add(chkAutoDark);
             grpEditorSettings.Location = new Point(6, 6);
             grpEditorSettings.Name = "grpEditorSettings";
-            grpEditorSettings.Size = new Size(548, 89);
+            grpEditorSettings.Size = new Size(548, 94);
             grpEditorSettings.TabIndex = 20;
             grpEditorSettings.TabStop = false;
             grpEditorSettings.Text = "Settings";
@@ -500,6 +502,16 @@ namespace AppRefiner
             lblStatus.Text = "Stopped";
             lblStatus.TextAlign = ContentAlignment.MiddleCenter;
             // 
+            // btnAutoIndentation
+            // 
+            btnAutoIndentation.AutoSize = true;
+            btnAutoIndentation.Location = new Point(322, 22);
+            btnAutoIndentation.Name = "btnAutoIndentation";
+            btnAutoIndentation.Size = new Size(116, 19);
+            btnAutoIndentation.TabIndex = 25;
+            btnAutoIndentation.Text = "Auto Indentation";
+            btnAutoIndentation.UseVisualStyleBackColor = true;
+            // 
             // MainForm
             // 
             AutoScaleDimensions = new SizeF(7F, 15F);
@@ -576,5 +588,6 @@ namespace AppRefiner
         private Panel pnlTemplateParams;
         private Button btnApplyTemplate;
         private ComboBox cmbTemplates;
+        private CheckBox btnAutoIndentation;
     }
 }
