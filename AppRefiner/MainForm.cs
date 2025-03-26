@@ -514,7 +514,8 @@ namespace AppRefiner
             chkBetterSQL.Checked = Properties.Settings.Default.betterSQL;
             chkAutoDark.Checked = Properties.Settings.Default.autoDark;
             chkLintAnnotate.Checked = Properties.Settings.Default.lintAnnotate;
-
+            chkAutoIndentation.Checked = Properties.Settings.Default.autoIndent;
+            chkAutoPairing.Checked = Properties.Settings.Default.autoPair;
             LoadStylerStates();
             LoadLinterStates();
             LoadTemplates();
@@ -716,6 +717,7 @@ namespace AppRefiner
                 // Add other control types as needed
 
                 values[kvp.Key] = value;
+                
             }
 
             return values;
@@ -729,6 +731,8 @@ namespace AppRefiner
             Properties.Settings.Default.autoDark = chkAutoDark.Checked;
             Properties.Settings.Default.lintAnnotate = chkLintAnnotate.Checked;
             Properties.Settings.Default.LintReportPath = lintReportPath;
+            Properties.Settings.Default.autoIndent = chkAutoIndentation.Checked;
+            Properties.Settings.Default.autoPair = chkAutoPairing.Checked;
 
             SaveStylerStates();
             SaveLinterStates();
@@ -2386,7 +2390,7 @@ namespace AppRefiner
                     ScintillaManager.SetDarkMode(activeEditor);
                 }
 
-                if(btnAutoIndentation.Checked && File.Exists("AppRefinerHook.dll"))
+                if(chkAutoIndentation.Checked && File.Exists("AppRefinerHook.dll"))
                 {
                     if (!ThreadsWithEventHook.Contains(activeEditor.ThreadID))
                     {

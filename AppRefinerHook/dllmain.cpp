@@ -8,14 +8,12 @@
 
 // Custom message for setting pipe name
 #define WM_SET_CALLBACK_WINDOW (WM_USER + 1001)
+// Message to toggle auto-pairing feature
+#define WM_TOGGLE_AUTO_PAIRING (WM_USER + 1002)
 // Message types for pipe communication
 #define MSG_TYPE_DWELL 1
 
-// Global variables
-HWND g_callbackWindow = NULL;
-HHOOK g_wndProcHook = NULL;
-HHOOK g_getMsgHook = NULL;
-HMODULE g_hModule = NULL;
+// Scintilla notifications
 #define SCN_CHARADDED 2001
 #define SCN_MODIFIED 2008
 #define SCN_DWELLSTART 2016
@@ -25,6 +23,53 @@ HMODULE g_hModule = NULL;
 #define WM_SCN_EVENT_MASK 0x7000
 #define WM_DWELL_START (WM_SCN_EVENT_MASK | SCN_DWELLSTART)
 #define WM_DWELL_END (WM_SCN_EVENT_MASK | SCN_DWELLEND)
+
+// Global variables
+HWND g_callbackWindow = NULL;
+HHOOK g_wndProcHook = NULL;
+HHOOK g_getMsgHook = NULL;
+HMODULE g_hModule = NULL;
+bool g_enableAutoPairing = false;  // Flag to control auto-pairing feature
+
+// Structure to track auto-inserted closing characters per line
+struct AutoPairTracker {
+    int lineNumber;                 // Line where auto-pairing occurred
+    int quoteCount;                 // Count of auto-inserted double quotes
+    int parenthesisCount;           // Count of auto-inserted closing parentheses
+    
+    AutoPairTracker() : lineNumber(-1), quoteCount(0), parenthesisCount(0) {}
+    
+    // Reset counts when line changes
+    void checkLine(int newLine) {
+        if (lineNumber != newLine) {
+            lineNumber = newLine;
+            quoteCount = 0;
+            parenthesisCount = 0;
+        }
+    }
+    
+    // Increment count for a specific character
+    void incrementCount(char ch) {
+        if (ch == '"') quoteCount++;
+        else if (ch == ')') parenthesisCount++;
+    }
+    
+    // Decrement count for a specific character, returns true if there are auto-inserted characters to consume
+    bool decrementCount(char ch) {
+        if (ch == '"' && quoteCount > 0) {
+            quoteCount--;
+            return true;
+        }
+        else if (ch == ')' && parenthesisCount > 0) {
+            parenthesisCount--;
+            return true;
+        }
+        return false;
+    }
+};
+
+// Global tracker for auto-inserted characters
+AutoPairTracker g_autoPairTracker;
 
 // Helper function to convert string to lowercase
 std::string ToLowerCase(const std::string& str) {
@@ -74,7 +119,114 @@ struct BlockPattern {
     bool requiresFullMatch;
     bool requiresAdditionalCheck;
     std::string additionalPattern;
+    bool decreasePreviousLine;  // Whether to decrease indentation of the previous line
+    bool endPatternIsPartial;   // Whether the endPattern is a partial match (string starts with pattern)
+    std::string matchingPattern; // The pattern this should be aligned with (for else, when, catch)
 };
+
+// Handle auto-pairing of quotes and parentheses
+void HandleAutoPairing(HWND hwndScintilla, SCNotification* notification) {
+    // If auto-pairing is disabled, do nothing
+    if (!g_enableAutoPairing) {
+        return;
+    }
+
+    // Get current position and line
+    int currentPos = SendMessage(hwndScintilla, SCI_GETCURRENTPOS, 0, 0);
+    int currentLine = SendMessage(hwndScintilla, SCI_LINEFROMPOSITION, currentPos, 0);
+    
+    // Update the tracker with the current line
+    g_autoPairTracker.checkLine(currentLine);
+    
+    // Handle commas and semicolons - move them outside of auto-paired quotes
+    if (notification->ch == ',' || notification->ch == ';') {
+        // Get the character at the current position
+        char nextChar = (char)SendMessage(hwndScintilla, SCI_GETCHARAT, currentPos, 0);
+        
+        // If the next character is a quote and we have an auto-paired quote to consume
+        if (nextChar == '"' && g_autoPairTracker.quoteCount > 0) {
+            // Delete the typed character (we'll reinsert it after the quote)
+            SendMessage(hwndScintilla, SCI_DELETERANGE, currentPos - 1, 1);
+            
+            // Move cursor past the quote
+            SendMessage(hwndScintilla, SCI_GOTOPOS, currentPos, 0);
+            
+            // Insert the comma or semicolon after the quote
+            char charToInsert[2] = { notification->ch, 0 };
+            SendMessage(hwndScintilla, SCI_ADDTEXT, 1, (LPARAM)charToInsert);
+            
+            // Decrement the quote count since we've effectively consumed it
+            g_autoPairTracker.decrementCount('"');
+            
+            return;
+        }
+        // Otherwise, let the character be inserted normally
+        return;
+    }
+    
+    // Special handling for quotes since opening and closing are the same character
+    if (notification->ch == '"') {
+        // Get the character at the current position
+        char nextChar = (char)SendMessage(hwndScintilla, SCI_GETCHARAT, currentPos, 0);
+        
+        // If the next character is a quote, we might want to skip over it instead of inserting a new one
+        if (nextChar == '"') {
+            // Check if this is an auto-inserted quote we should consume
+            if (g_autoPairTracker.decrementCount('"')) {
+                // Delete the typed quote (we'll skip over the existing one)
+                SendMessage(hwndScintilla, SCI_DELETERANGE, currentPos - 1, 1);
+                // Move cursor forward past the existing quote
+                SendMessage(hwndScintilla, SCI_GOTOPOS, currentPos, 0);
+                return;
+            }
+        } else {
+            // No quote ahead, insert a paired quote and position cursor between them
+            SendMessage(hwndScintilla, SCI_ADDTEXT, 1, (LPARAM)"\"");
+            SendMessage(hwndScintilla, SCI_SETSEL, currentPos, currentPos);
+            // Track the auto-inserted character
+            g_autoPairTracker.incrementCount('"');
+            return;
+        }
+        
+        // If we reach here, just let the quote be inserted normally
+        return;
+    }
+    
+    // Check if we're overtyping a closing parenthesis
+    if (notification->ch == ')') {
+        // Check if we have auto-inserted characters to consume
+        if (g_autoPairTracker.decrementCount(notification->ch)) {
+            // Get the character at the current position
+            char nextChar = (char)SendMessage(hwndScintilla, SCI_GETCHARAT, currentPos, 0);
+            
+            // If the next character matches what we just typed, consume it
+            if (nextChar == notification->ch) {
+                // Delete the typed character (it's already there)
+                SendMessage(hwndScintilla, SCI_DELETERANGE, currentPos - 1, 1);
+                // Move cursor forward
+                SendMessage(hwndScintilla, SCI_GOTOPOS, currentPos, 0);
+                return;
+            }
+            // Otherwise, let the character be inserted normally
+            return;
+        }
+        // If no auto-inserted characters to consume, let the character be inserted normally
+        return;
+    }
+    
+    // Handle auto-pairing for opening characters
+    switch (notification->ch) {
+        case '(': {
+            // Insert closing parenthesis and position cursor between parentheses
+            SendMessage(hwndScintilla, SCI_ADDTEXT, 1, (LPARAM)")");
+            SendMessage(hwndScintilla, SCI_SETSEL, currentPos, currentPos);
+            // Track the auto-inserted character
+            g_autoPairTracker.incrementCount(')');
+            break;
+        }
+        // Add more cases for other pairs if needed
+    }
+}
 
 void HandlePeopleCodeAutoIndentation(HWND hwndScintilla, SCNotification* notification) {
 
@@ -98,13 +250,19 @@ void HandlePeopleCodeAutoIndentation(HWND hwndScintilla, SCNotification* notific
 
     // Define block patterns for PeopleCode
     static const std::vector<BlockPattern> blockPatterns = {
-        // Pattern, End Pattern, Requires Full Match, Requires Additional Check, Additional Pattern
-        {"if ", "end-if;", false, true, " then"},
-        {"for ", "end-for;", false, false, ""},
-        {"while ", "end-while;", false, false, ""},
-        {"method ", "end-method;", false, false, ""},
-        {"function ", "end-function;", false, false, ""},
-        {"else", "", true, false, ""}  // 'else' has no end pattern but increases indentation
+        // Pattern, End Pattern, Requires Full Match, Requires Additional Check, Additional Pattern, Decrease Previous Line, End Pattern Is Partial, Matching Pattern
+        {"if ", "end-if;", false, true, " then", false, false, "if "},
+        {"for ", "end-for;", false, false, "", false, false, "for "},
+        {"while ", "end-while;", false, false, "", false, false, "while "},
+        {"method ", "end-method;", false, false, "", false, false, "method "},
+        {"function ", "end-function;", false, false, "", false, false, "function "},
+        {"else", "", true, false, "", true, false, "if "},  // 'else' has no end pattern but increases indentation and decreases previous line
+        {"evaluate ", "end-evaluate;", false, false, "", false, false, "evaluate "},  // Evaluate block
+        {"when ", "", false, false, "", true, false, "evaluate "},  // When clause should be at same level as Evaluate
+        {"when-other", "", true, false, "", true, false, "evaluate "},  // When-Other should be at same level as Evaluate
+        {"repeat", "until", true, false, "", false, true, "repeat"},  // Repeat/Until loop - uses partial matching for "until"
+        {"try", "end-try;", true, false, "", false, false, "try"},  // Try block
+        {"catch", "", false, false, "", true, false, "try"}  // Catch clause should be at same level as Try
     };
 
     // Handle indentation for new lines, else keyword, and semicolons differently
@@ -135,6 +293,7 @@ void HandlePeopleCodeAutoIndentation(HWND hwndScintilla, SCNotification* notific
 
         // Check if previous line has an indentation-increasing statement
         bool increaseIndent = false;
+        bool decreasePreviousLine = false;
 
         // Check against all block start patterns
         for (const auto& pattern : blockPatterns) {
@@ -147,15 +306,88 @@ void HandlePeopleCodeAutoIndentation(HWND hwndScintilla, SCNotification* notific
             }
             
             if (matches) {
+                // Special case for method declarations in class headers
+                // If the line starts with "method" and ends with semicolon, don't increase indentation
+                if (pattern.startPattern == "method " && lowerLine.length() > 0 && lowerLine[lowerLine.length() - 1] == ';') {
+                    continue;
+                }
+                
                 // If additional check is required, verify it
                 if (pattern.requiresAdditionalCheck) {
                     if (lowerLine.find(pattern.additionalPattern) != std::string::npos) {
                         increaseIndent = true;
+                        decreasePreviousLine = pattern.decreasePreviousLine;
                         break;
                     }
                 } else {
                     increaseIndent = true;
+                    decreasePreviousLine = pattern.decreasePreviousLine;
                     break;
+                }
+            }
+        }
+
+        // If we need to decrease the indentation of the previous line (e.g., for "else")
+        if (decreasePreviousLine) {
+            // Find the matching pattern (if, evaluate, try) to get its indentation
+            int searchLine = previousLine - 1;
+            int matchingIndentation = 0;
+            bool foundMatch = false;
+            
+            // Find which pattern we're looking for
+            std::string patternToMatch = "";
+            for (const auto& pattern : blockPatterns) {
+                if (pattern.decreasePreviousLine) {
+                    if ((pattern.requiresFullMatch && lowerLine == pattern.startPattern) ||
+                        (!pattern.requiresFullMatch && lowerLine.find(pattern.startPattern) == 0)) {
+                        patternToMatch = pattern.matchingPattern;
+                        break;
+                    }
+                }
+            }
+            
+            if (!patternToMatch.empty()) {
+                // Track nesting level to handle nested blocks
+                int nestingLevel = 0;
+                
+                while (searchLine >= 0) {
+                    std::string searchLineStr = GetTrimmedLineText(hwndScintilla, searchLine);
+                    std::string lowerSearchLine = ToLowerCase(searchLineStr);
+                    int lineIndent = SendMessage(hwndScintilla, SCI_GETLINEINDENTATION, searchLine, 0);
+                    
+                    // Check for end statements that would increase our nesting level
+                    for (const auto& pattern : blockPatterns) {
+                        if (!pattern.endPattern.empty() && pattern.matchingPattern == patternToMatch) {
+                            if (pattern.endPatternIsPartial) {
+                                if (lowerSearchLine.find(pattern.endPattern) == 0 && lowerSearchLine.find(";") != std::string::npos) {
+                                    nestingLevel++;
+                                    break;
+                                }
+                            } else if (lowerSearchLine == pattern.endPattern) {
+                                nestingLevel++;
+                                break;
+                            }
+                        }
+                    }
+                    
+                    // Check for matching opening statement
+                    if (lowerSearchLine.find(patternToMatch) == 0) {
+                        if (nestingLevel == 0) {
+                            matchingIndentation = lineIndent;
+                            foundMatch = true;
+                            break;
+                        }
+                        nestingLevel--;
+                    }
+                    
+                    searchLine--;
+                }
+                
+                if (foundMatch) {
+                    // Set the line indentation to match the opening statement
+                    SendMessage(hwndScintilla, SCI_SETLINEINDENTATION, previousLine, matchingIndentation);
+                    // Update our local indentation variable to match
+                    indentation = matchingIndentation;
                 }
             }
         }
@@ -174,8 +406,8 @@ void HandlePeopleCodeAutoIndentation(HWND hwndScintilla, SCNotification* notific
         int newPos = SendMessage(hwndScintilla, SCI_GETLINEINDENTPOSITION, currentLine, 0);
         SendMessage(hwndScintilla, SCI_SETSEL, newPos, newPos);
     }
-    else if (notification->ch == ';' || notification->ch == 'e') {
-        // Handle semicolon for end statements or 'e' which might be part of "else"
+    else if (notification->ch == ';') {
+        // Handle semicolon for end statements
         int currentPos = SendMessage(hwndScintilla, SCI_GETCURRENTPOS, 0, 0);
         int currentLine = SendMessage(hwndScintilla, SCI_LINEFROMPOSITION, currentPos, 0);
 
@@ -195,16 +427,26 @@ void HandlePeopleCodeAutoIndentation(HWND hwndScintilla, SCNotification* notific
         
         // Check if the current line is an end statement
         for (const auto& pattern : blockPatterns) {
-            if (!pattern.endPattern.empty() && lowerCurrentLine == pattern.endPattern) {
-                isEndStatement = true;
-                matchingStartPattern = pattern.startPattern;
-                shouldDeindent = true;
-                break;
+            if (!pattern.endPattern.empty()) {
+                if (pattern.endPatternIsPartial) {
+                    if (lowerCurrentLine.find(pattern.endPattern) == 0 && lowerCurrentLine.find(";") != std::string::npos) {
+                        isEndStatement = true;
+                        matchingStartPattern = pattern.startPattern;
+                        shouldDeindent = true;
+                        break;
+                    }
+                } else {
+                    if (lowerCurrentLine == pattern.endPattern) {
+                        isEndStatement = true;
+                        matchingStartPattern = pattern.startPattern;
+                        shouldDeindent = true;
+                        break;
+                    }
+                }
             }
         }
         
-        bool isElse = (lowerCurrentLine == "else");
-        shouldDeindent = isEndStatement || isElse;
+        shouldDeindent = isEndStatement;
 
         if (shouldDeindent) {
             // For end statements and else, we need to find the matching opening statement
@@ -228,13 +470,26 @@ void HandlePeopleCodeAutoIndentation(HWND hwndScintilla, SCNotification* notific
                 std::string additionalPattern;
                 
                 for (const auto& pattern : blockPatterns) {
-                    if (!pattern.endPattern.empty() && lowerCurrentLine == pattern.endPattern) {
-                        endPattern = pattern.endPattern;
-                        startPattern = pattern.startPattern;
-                        requiresFullMatch = pattern.requiresFullMatch;
-                        requiresAdditionalCheck = pattern.requiresAdditionalCheck;
-                        additionalPattern = pattern.additionalPattern;
-                        break;
+                    if (!pattern.endPattern.empty()) {
+                        if (pattern.endPatternIsPartial) {
+                            if (lowerCurrentLine.find(pattern.endPattern) == 0 && lowerCurrentLine.find(";") != std::string::npos) {
+                                endPattern = pattern.endPattern;
+                                startPattern = pattern.startPattern;
+                                requiresFullMatch = pattern.requiresFullMatch;
+                                requiresAdditionalCheck = pattern.requiresAdditionalCheck;
+                                additionalPattern = pattern.additionalPattern;
+                                break;
+                            }
+                        } else {
+                            if (lowerCurrentLine == pattern.endPattern) {
+                                endPattern = pattern.endPattern;
+                                startPattern = pattern.startPattern;
+                                requiresFullMatch = pattern.requiresFullMatch;
+                                requiresAdditionalCheck = pattern.requiresAdditionalCheck;
+                                additionalPattern = pattern.additionalPattern;
+                                break;
+                            }
+                        }
                     }
                 }
 
@@ -334,6 +589,9 @@ LRESULT CALLBACK WndProcHook(int nCode, WPARAM wParam, LPARAM lParam) {
                     SCNotification* scn = (SCNotification*)cwp->lParam;
 
                     if (scn->nmhdr.code == SCN_CHARADDED) {
+                        // Handle auto-pairing first
+                        HandleAutoPairing((HWND)nmhdr->hwndFrom, scn);
+                        // Then handle auto-indentation
                         HandlePeopleCodeAutoIndentation((HWND)nmhdr->hwndFrom, scn);
                         return CallNextHookEx(g_wndProcHook, nCode, wParam, lParam);
                     }
@@ -362,6 +620,16 @@ LRESULT CALLBACK GetMsgHook(int nCode, WPARAM wParam, LPARAM lParam) {
             g_callbackWindow = (HWND)msg->wParam;
             char debugMsg[100];
             sprintf_s(debugMsg, "Set callback window to: %p\n", g_callbackWindow);
+            OutputDebugStringA(debugMsg);
+
+            // Mark the message as handled
+            msg->message = WM_NULL;
+        }
+        // Check if this is our message to toggle auto-pairing
+        else if (msg->message == WM_TOGGLE_AUTO_PAIRING) {
+            g_enableAutoPairing = (msg->wParam != 0);
+            char debugMsg[100];
+            sprintf_s(debugMsg, "Auto-pairing %s\n", g_enableAutoPairing ? "enabled" : "disabled");
             OutputDebugStringA(debugMsg);
 
             // Mark the message as handled

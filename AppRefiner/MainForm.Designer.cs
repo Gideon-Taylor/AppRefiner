@@ -32,6 +32,7 @@ namespace AppRefiner
             tabControl1 = new TabControl();
             tabPage1 = new TabPage();
             grpEditorSettings = new GroupBox();
+            chkAutoIndentation = new CheckBox();
             btnPlugins = new Button();
             chkBetterSQL = new CheckBox();
             chkOnlyPPC = new CheckBox();
@@ -64,7 +65,7 @@ namespace AppRefiner
             cmbTemplates = new ComboBox();
             progressBar1 = new ProgressBar();
             lblStatus = new Label();
-            btnAutoIndentation = new CheckBox();
+            chkAutoPairing = new CheckBox();
             ((System.ComponentModel.ISupportInitialize)splitContainer1).BeginInit();
             splitContainer1.Panel1.SuspendLayout();
             splitContainer1.Panel2.SuspendLayout();
@@ -137,7 +138,8 @@ namespace AppRefiner
             // 
             // grpEditorSettings
             // 
-            grpEditorSettings.Controls.Add(btnAutoIndentation);
+            grpEditorSettings.Controls.Add(chkAutoPairing);
+            grpEditorSettings.Controls.Add(chkAutoIndentation);
             grpEditorSettings.Controls.Add(btnPlugins);
             grpEditorSettings.Controls.Add(chkBetterSQL);
             grpEditorSettings.Controls.Add(chkOnlyPPC);
@@ -149,6 +151,16 @@ namespace AppRefiner
             grpEditorSettings.TabIndex = 20;
             grpEditorSettings.TabStop = false;
             grpEditorSettings.Text = "Settings";
+            // 
+            // chkAutoIndentation
+            // 
+            chkAutoIndentation.AutoSize = true;
+            chkAutoIndentation.Location = new Point(322, 22);
+            chkAutoIndentation.Name = "chkAutoIndentation";
+            chkAutoIndentation.Size = new Size(116, 19);
+            chkAutoIndentation.TabIndex = 25;
+            chkAutoIndentation.Text = "Auto Indentation";
+            chkAutoIndentation.UseVisualStyleBackColor = true;
             // 
             // btnPlugins
             // 
@@ -163,7 +175,7 @@ namespace AppRefiner
             // chkBetterSQL
             // 
             chkBetterSQL.AutoSize = true;
-            chkBetterSQL.Location = new Point(161, 42);
+            chkBetterSQL.Location = new Point(161, 47);
             chkBetterSQL.Name = "chkBetterSQL";
             chkBetterSQL.Size = new Size(88, 19);
             chkBetterSQL.TabIndex = 17;
@@ -173,7 +185,7 @@ namespace AppRefiner
             // chkOnlyPPC
             // 
             chkOnlyPPC.AutoSize = true;
-            chkOnlyPPC.Location = new Point(10, 42);
+            chkOnlyPPC.Location = new Point(10, 47);
             chkOnlyPPC.Name = "chkOnlyPPC";
             chkOnlyPPC.Size = new Size(76, 19);
             chkOnlyPPC.TabIndex = 16;
@@ -502,15 +514,15 @@ namespace AppRefiner
             lblStatus.Text = "Stopped";
             lblStatus.TextAlign = ContentAlignment.MiddleCenter;
             // 
-            // btnAutoIndentation
+            // chkAutoPairing
             // 
-            btnAutoIndentation.AutoSize = true;
-            btnAutoIndentation.Location = new Point(322, 22);
-            btnAutoIndentation.Name = "btnAutoIndentation";
-            btnAutoIndentation.Size = new Size(116, 19);
-            btnAutoIndentation.TabIndex = 25;
-            btnAutoIndentation.Text = "Auto Indentation";
-            btnAutoIndentation.UseVisualStyleBackColor = true;
+            chkAutoPairing.AutoSize = true;
+            chkAutoPairing.Location = new Point(322, 47);
+            chkAutoPairing.Name = "chkAutoPairing";
+            chkAutoPairing.Size = new Size(146, 19);
+            chkAutoPairing.TabIndex = 26;
+            chkAutoPairing.Text = "Pair quotes and parens";
+            chkAutoPairing.UseVisualStyleBackColor = true;
             // 
             // MainForm
             // 
@@ -588,6 +600,7 @@ namespace AppRefiner
         private Panel pnlTemplateParams;
         private Button btnApplyTemplate;
         private ComboBox cmbTemplates;
-        private CheckBox btnAutoIndentation;
+        private CheckBox chkAutoIndentation;
+        private CheckBox chkAutoPairing;
     }
 }

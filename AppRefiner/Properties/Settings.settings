@@ -29,5 +29,11 @@
     <Setting Name="PluginDirectory" Type="System.String" Scope="User">
       <Value Profile="(Default)">Plugins</Value>
     </Setting>
+    <Setting Name="autoIndent" Type="System.Boolean" Scope="User">
+      <Value Profile="(Default)">False</Value>
+    </Setting>
+    <Setting Name="autoPair" Type="System.Boolean" Scope="User">
+      <Value Profile="(Default)">False</Value>
+    </Setting>
   </Settings>
 </SettingsFile>

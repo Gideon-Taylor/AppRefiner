@@ -130,5 +130,29 @@ namespace AppRefiner.Properties {
                 this["PluginDirectory"] = value;
             }
         }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("False")]
+        public bool autoIndent {
+            get {
+                return ((bool)(this["autoIndent"]));
+            }
+            set {
+                this["autoIndent"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("False")]
+        public bool autoPair {
+            get {
+                return ((bool)(this["autoPair"]));
+            }
+            set {
+                this["autoPair"] = value;
+            }
+        }
     }
 }

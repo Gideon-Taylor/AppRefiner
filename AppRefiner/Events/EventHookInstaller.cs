@@ -13,6 +13,7 @@ namespace AppRefiner.Events
     {
         private const uint WM_USER = 0x400;
         private const uint WM_SET_CALLBACK_WINDOW = WM_USER + 1001;
+        private const uint WM_TOGGLE_AUTO_PAIRING = WM_USER + 1002;
 
         // Win32 API imports
         [DllImport("user32.dll")]
@@ -29,6 +30,9 @@ namespace AppRefiner.Events
         {
             // Send the thread message with the pipe ID
             bool result = PostThreadMessage(threadId, WM_SET_CALLBACK_WINDOW, new IntPtr(windowHandle), IntPtr.Zero);
+
+            result = PostThreadMessage(threadId, WM_TOGGLE_AUTO_PAIRING, 1, IntPtr.Zero);
+
             return result;
         }
     }
