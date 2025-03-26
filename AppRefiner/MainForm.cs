@@ -2,13 +2,13 @@ using Antlr4.Runtime.Tree;
 using AppRefiner.Database;
 using AppRefiner.Database.Models;
 using AppRefiner.Dialogs;
-using AppRefiner.Events;
 using AppRefiner.Linters;
 using AppRefiner.PeopleCode;
 using AppRefiner.Plugins;
 using AppRefiner.Refactors;
 using AppRefiner.Stylers;
 using AppRefiner.Templates;
+using AppRefiner.Events;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
@@ -22,6 +22,7 @@ using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using System.Drawing.Text;
 
 namespace AppRefiner
 {
@@ -72,6 +73,8 @@ namespace AppRefiner
         private Dictionary<string, Control> templateInputControls = new();
         private Dictionary<string, Control> templateInputLabels = new();
         private Dictionary<string, DisplayCondition> templateInputsDisplayConditions = new();
+
+        private static HashSet<uint> ThreadsWithEventHook = new();
         // Static list of available commands
         public static List<Command> AvailableCommands = new();
 
@@ -96,32 +99,21 @@ namespace AppRefiner
 
         // Path for linting report output
         private string? lintReportPath;
+
+        private const int WM_SCN_EVENT_MASK = 0x7000;
+        private const int SCN_DWELLSTART = 2016;
+        private const int SCN_DWELLEND = 2017;
+        private const int WM_DWELLSTART = WM_SCN_EVENT_MASK | SCN_DWELLSTART;
+        private const int WM_DWELLEND= WM_SCN_EVENT_MASK | SCN_DWELLEND;
+
+
+
         public MainForm()
         {
             InitializeComponent();
             InitLinterOptions();
             InitStylerOptions(); // Changed from InitAnalyzerOptions
             RegisterCommands(); // Register the default commands
-
-            EventServer.StartPipeServer();
-            EventServer.OnDwellEvent += EventServer_OnDwellEvent;
-
-        }
-
-        private void EventServer_OnDwellEvent(object sender, DwellEventArgs e)
-        {
-            if (activeEditor == null || activeEditor.hWnd != e.EditorHandle)
-            {
-                return;
-            }
-
-            if (!e.IsStop)
-            {
-                ScintillaManager.ShowCallTip(activeEditor, e.Position, "You are dwelling..."); ;
-            } else
-            {
-                ScintillaManager.HideCallTip(activeEditor);
-            }
         }
 
         protected override void OnLoad(EventArgs e)
@@ -769,8 +761,9 @@ namespace AppRefiner
                     }
                 }
             }
-            catch { /* Use defaults if settings are corrupt */ }
-        }
+            catch { /* Use defaults if settings are corrupt */
+    }
+}
 
         private void SaveStylerStates()
         {
@@ -2327,6 +2320,33 @@ namespace AppRefiner
             /* If the active window is not a Scintilla editor, return null */
             return activeWindow == IntPtr.Zero ? null : ScintillaManager.GetEditor(activeWindow);
         }
+
+        /* TODO: override WndProc */
+        protected override void WndProc(ref Message m)
+        {
+            base.WndProc(ref m);
+            if (activeEditor == null) return;
+
+            /* if message is a WM_SCN_EVENT (check the mask) */
+            if ((m.Msg & WM_SCN_EVENT_MASK) == WM_SCN_EVENT_MASK)
+            {
+                /* remove mask */
+                var eventCode = m.Msg & ~WM_SCN_EVENT_MASK;
+
+                switch(eventCode)
+                {
+                    case SCN_DWELLSTART:
+                        ScintillaManager.ShowCallTip(activeEditor, m.WParam.ToInt32(), "This is a dwell message.");
+                        break;
+                    case SCN_DWELLEND:
+                        ScintillaManager.HideCallTip(activeEditor);
+                        break;
+                }
+            }
+
+        }
+
+
         private void PerformScan()
         {
             var currentEditor = GetActiveEditor();
@@ -2368,14 +2388,17 @@ namespace AppRefiner
 
                 if(btnAutoIndentation.Checked && File.Exists("AppRefinerHook.dll"))
                 {
-                    if (!EventServer.Running)
-                        EventServer.StartPipeServer();
-
-                    EventServer.SetHook(activeEditor.ThreadID);
-                    EventServer.SendPipeNameToHookedThread(activeEditor.ThreadID, EventServer.PipeID);
+                    if (!ThreadsWithEventHook.Contains(activeEditor.ThreadID))
+                    {
+                        EventHookInstaller.SetHook(activeEditor.ThreadID);
+                        this.Invoke(() =>
+                        {
+                            EventHookInstaller.SendWindowHandleToHookedThread(activeEditor.ThreadID, this.Handle);
+                        });
+                        ThreadsWithEventHook.Add(activeEditor.ThreadID);
+                    }
                     ScintillaManager.SetMouseDwellTime(activeEditor, 1000);
                 }
-
                 
                 ScintillaManager.EnableFolding(activeEditor);
                 ScintillaManager.FixEditorTabs(activeEditor, !chkBetterSQL.Checked);

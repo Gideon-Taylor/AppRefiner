@@ -5,47 +5,25 @@
 #include <psapi.h>
 #include "Scintilla.h"
 
-// Custom message for setting callback window (still used for initial communication)
-#define WM_SET_CALLBACK_WINDOW 0x7FFF
 // Custom message for setting pipe name
-#define WM_SET_PIPE_NAME (WM_USER + 1001)
-// Default pipe name (used only as a fallback)
-#define DEFAULT_PIPE_NAME "\\\\.\\pipe\\AppRefinerNotifyPipe"
-// Base pipe name format
-#define PIPE_NAME_FORMAT "\\\\.\\pipe\\AppRefinerNotifyPipe-%X"
-
+#define WM_SET_CALLBACK_WINDOW (WM_USER + 1001)
 // Message types for pipe communication
 #define MSG_TYPE_DWELL 1
-
-// Message header structure
-#pragma pack(push, 1)
-struct MessageHeader {
-    HWND hwndEditor;     // Handle to the editor window
-    UINT messageType;    // Type of message (e.g., MSG_TYPE_DWELL_START)
-};
-
-// Dwell event structure
-struct DwellEventData {
-    int position;        // Position in the document
-    int x;               // X coordinate
-    int y;               // Y coordinate
-    bool isStop;         // If this is a dwell stop (otherwise a start)
-};
-#pragma pack(pop)
 
 // Global variables
 HWND g_callbackWindow = NULL;
 HHOOK g_wndProcHook = NULL;
 HHOOK g_getMsgHook = NULL;
 HMODULE g_hModule = NULL;
-bool g_pipeConnected = false;
-HANDLE g_pipeHandle = INVALID_HANDLE_VALUE;
-char g_pipeName[MAX_PATH] = DEFAULT_PIPE_NAME; // Store the current pipe name
 #define SCN_CHARADDED 2001
 #define SCN_MODIFIED 2008
-#define SCN_HOTSPOTCLICK 2019
 #define SCN_DWELLSTART 2016
 #define SCN_DWELLEND 2017
+
+/* TODO define messages with a mask to indicate "this is a scintilla event message" */
+#define WM_SCN_EVENT_MASK 0x7000
+#define WM_DWELL_START (WM_SCN_EVENT_MASK | SCN_DWELLSTART)
+#define WM_DWELL_END (WM_SCN_EVENT_MASK | SCN_DWELLEND)
 
 // Helper function to convert string to lowercase
 std::string ToLowerCase(const std::string& str) {
@@ -263,119 +241,6 @@ void HandlePeopleCodeAutoIndentation(HWND hwndScintilla, SCNotification* notific
     }
 }
 
-// Helper function to format pipe name based on a 32-bit value
-void FormatPipeNameFromId(DWORD pipeId) {
-    sprintf_s(g_pipeName, MAX_PATH, PIPE_NAME_FORMAT, pipeId);
-
-    char debugMsg[MAX_PATH + 32];
-    sprintf_s(debugMsg, "Formatted pipe name: %s from ID: %X\n", g_pipeName, pipeId);
-    OutputDebugStringA(debugMsg);
-
-    // Reset pipe connection to use the new pipe name
-    if (g_pipeConnected && g_pipeHandle != INVALID_HANDLE_VALUE) {
-        CloseHandle(g_pipeHandle);
-        g_pipeHandle = INVALID_HANDLE_VALUE;
-        g_pipeConnected = false;
-    }
-}
-
-// Helper function to connect to the pipe
-bool ConnectToPipe() {
-    if (g_pipeHandle != INVALID_HANDLE_VALUE) {
-        return true; // Already connected
-    }
-
-    g_pipeHandle = CreateFileA(
-        g_pipeName,
-        GENERIC_WRITE, // Only need write access for one-way communication
-        0,
-        NULL,
-        OPEN_EXISTING,
-        0,
-        NULL
-    );
-
-    if (g_pipeHandle == INVALID_HANDLE_VALUE) {
-        char debugMsg[MAX_PATH + 32];
-        sprintf_s(debugMsg, "Failed to connect to pipe: %s\n", g_pipeName);
-        OutputDebugStringA(debugMsg);
-        return false;
-    }
-
-    // Set pipe to message mode
-    DWORD mode = PIPE_READMODE_MESSAGE;
-    if (!SetNamedPipeHandleState(g_pipeHandle, &mode, NULL, NULL)) {
-        OutputDebugStringA("Failed to set pipe to message mode\n");
-        CloseHandle(g_pipeHandle);
-        g_pipeHandle = INVALID_HANDLE_VALUE;
-        return false;
-    }
-
-    g_pipeConnected = true;
-    char debugMsg[MAX_PATH + 32];
-    sprintf_s(debugMsg, "Connected to pipe: %s\n", g_pipeName);
-    OutputDebugStringA(debugMsg);
-    return true;
-}
-
-// Helper function to send a dwell event through the pipe
-bool SendDwellEvent(HWND hwndEditor, UINT messageType, int position, int x, int y, bool isStop) {
-    if (!ConnectToPipe()) {
-        return false;
-    }
-
-    // Create the message header
-    MessageHeader header;
-    header.hwndEditor = hwndEditor;
-    header.messageType = messageType;
-
-    // Create the dwell event data
-    DwellEventData dwellData;
-    dwellData.isStop = isStop;
-    dwellData.position = position;
-    dwellData.x = x;
-    dwellData.y = y;
-
-    // Log structure sizes
-    char sizeDebugBuffer[256];
-    sprintf_s(sizeDebugBuffer, "Structure sizes - MessageHeader: %zu bytes, DwellEventData: %zu bytes\n",
-        sizeof(MessageHeader), sizeof(DwellEventData));
-    OutputDebugStringA(sizeDebugBuffer);
-
-    // Write the header
-    DWORD bytesWritten = 0;
-    if (!WriteFile(g_pipeHandle, &header, sizeof(header), &bytesWritten, NULL)) {
-        OutputDebugStringA("Failed to write header to pipe\n");
-        CloseHandle(g_pipeHandle);
-        g_pipeHandle = INVALID_HANDLE_VALUE;
-        g_pipeConnected = false;
-        return false;
-    }
-
-    sprintf_s(sizeDebugBuffer, "Header bytes written: %lu of %zu\n", bytesWritten, sizeof(header));
-    OutputDebugStringA(sizeDebugBuffer);
-
-    // Write the dwell data
-    bytesWritten = 0;
-    if (!WriteFile(g_pipeHandle, &dwellData, sizeof(dwellData), &bytesWritten, NULL)) {
-        OutputDebugStringA("Failed to write dwell data to pipe\n");
-        CloseHandle(g_pipeHandle);
-        g_pipeHandle = INVALID_HANDLE_VALUE;
-        g_pipeConnected = false;
-        return false;
-    }
-
-    sprintf_s(sizeDebugBuffer, "Dwell data bytes written: %lu of %zu\n", bytesWritten, sizeof(dwellData));
-    OutputDebugStringA(sizeDebugBuffer);
-
-    char debugBuffer[256];
-    sprintf_s(debugBuffer, "Sent dwell event through pipe - Type: %d, Position: %d, X: %d, Y: %d, IsStop: %d\n",
-        messageType, position, x, y, isStop);
-    OutputDebugStringA(debugBuffer);
-
-    return true;
-}
-
 // WndProc hook procedure - for window messages
 LRESULT CALLBACK WndProcHook(int nCode, WPARAM wParam, LPARAM lParam) {
     if (nCode >= 0) {
@@ -396,26 +261,17 @@ LRESULT CALLBACK WndProcHook(int nCode, WPARAM wParam, LPARAM lParam) {
 
                     if (scn->nmhdr.code == SCN_CHARADDED) {
                         HandlePeopleCodeAutoIndentation((HWND)nmhdr->hwndFrom, scn);
+                        return CallNextHookEx(g_wndProcHook, nCode, wParam, lParam);
                     }
-                    else if (scn->nmhdr.code == SCN_DWELLSTART) {
-                        // Send dwell start event through the pipe
-                        SendDwellEvent((HWND)nmhdr->hwndFrom, MSG_TYPE_DWELL,
-                            (int)scn->position, scn->x, scn->y, false);
-                    }
+
+                    if (scn->nmhdr.code == SCN_DWELLSTART) {
+                        SendMessage(g_callbackWindow, WM_DWELL_START, (WPARAM)scn->position, (LPARAM)0);
+                    } 
                     else if (scn->nmhdr.code == SCN_DWELLEND) {
-                        // Send dwell end event through the pipe
-                        SendDwellEvent((HWND)nmhdr->hwndFrom, MSG_TYPE_DWELL,
-                            (int)scn->position, scn->x, scn->y, true);
+                        SendMessage(g_callbackWindow, WM_DWELL_END, (WPARAM)scn->position, (LPARAM)0);
                     }
                 }
             }
-        }
-        // Check if this is our custom message for setting the callback window
-        else if (cwp->message == WM_SET_CALLBACK_WINDOW) {
-            g_callbackWindow = (HWND)cwp->wParam;
-            char debugMsg[100];
-            sprintf_s(debugMsg, "Set callback window to: %p\n", g_callbackWindow);
-            OutputDebugStringA(debugMsg);
         }
     }
 
@@ -427,10 +283,12 @@ LRESULT CALLBACK GetMsgHook(int nCode, WPARAM wParam, LPARAM lParam) {
     if (nCode >= 0) {
         MSG* msg = (MSG*)lParam;
 
-        // Check if this is our custom message for setting the pipe name
-        if (msg->message == WM_SET_PIPE_NAME) {
-            DWORD pipeId = (DWORD)msg->wParam;
-            FormatPipeNameFromId(pipeId);
+        // Check if this is our custom message for setting the callback window
+        if (msg->message == WM_SET_CALLBACK_WINDOW) {
+            g_callbackWindow = (HWND)msg->wParam;
+            char debugMsg[100];
+            sprintf_s(debugMsg, "Set callback window to: %p\n", g_callbackWindow);
+            OutputDebugStringA(debugMsg);
 
             // Mark the message as handled
             msg->message = WM_NULL;
@@ -438,24 +296,6 @@ LRESULT CALLBACK GetMsgHook(int nCode, WPARAM wParam, LPARAM lParam) {
     }
 
     return CallNextHookEx(g_getMsgHook, nCode, wParam, lParam);
-}
-
-// DLL entry point
-BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserved) {
-    switch (ul_reason_for_call) {
-    case DLL_PROCESS_ATTACH:
-        g_hModule = hModule;
-        DisableThreadLibraryCalls(hModule);
-        break;
-    case DLL_PROCESS_DETACH:
-        // Clean up resources
-        if (g_pipeHandle != INVALID_HANDLE_VALUE) {
-            CloseHandle(g_pipeHandle);
-            g_pipeHandle = INVALID_HANDLE_VALUE;
-        }
-        break;
-    }
-    return TRUE;
 }
 
 // Export functions
@@ -484,12 +324,19 @@ extern "C" {
 
         return result;
     }
+}
 
-    __declspec(dllexport) UINT GetCallbackMessageID() {
-        return WM_SET_CALLBACK_WINDOW;
+// DLL entry point
+BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserved) {
+    switch (ul_reason_for_call) {
+    case DLL_PROCESS_ATTACH:
+        g_hModule = hModule;
+        DisableThreadLibraryCalls(hModule);
+        break;
+    case DLL_PROCESS_DETACH:
+        // Clean up resources
+        Unhook();
+        break;
     }
-
-    __declspec(dllexport) UINT GetPipeNameMessageID() {
-        return WM_SET_PIPE_NAME;
-    }
+    return TRUE;
 }
