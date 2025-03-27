@@ -1,5 +1,10 @@
 #pragma once
 
+// Make sure CALLBACK is defined before any function declarations
+#ifndef CALLBACK
+#define CALLBACK __stdcall
+#endif
+
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #include <string>
