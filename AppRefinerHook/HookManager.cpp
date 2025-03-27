@@ -6,6 +6,7 @@ HHOOK g_wndProcHook = NULL;
 HHOOK g_getMsgHook = NULL;
 HMODULE g_hModule = NULL;
 bool g_enableAutoPairing = false;  // Flag to control auto-pairing feature
+HWND g_lastEditorHwnd = NULL;      // Track the last editor HWND that received SCN_CHARADDED
 
 // WndProc hook procedure - for window messages
 LRESULT CALLBACK WndProcHook(int nCode, WPARAM wParam, LPARAM lParam) {
@@ -37,6 +38,14 @@ LRESULT CALLBACK WndProcHook(int nCode, WPARAM wParam, LPARAM lParam) {
                     SCNotification* scn = (SCNotification*)cwp->lParam;
 
                     if (scn->nmhdr.code == SCN_CHARADDED) {
+                        // Check if this is a different editor HWND
+                        if (g_lastEditorHwnd != nmhdr->hwndFrom) {
+                            // Reset the auto-pair tracker when switching between editors
+                            g_autoPairTracker.reset();
+                            // Update the last editor HWND
+                            g_lastEditorHwnd = (HWND)nmhdr->hwndFrom;
+                        }
+                        
                         // Handle auto-pairing first
                         HandleAutoPairing((HWND)nmhdr->hwndFrom, scn);
                         // Then handle auto-indentation

@@ -10,6 +10,13 @@ struct AutoPairTracker {
     
     AutoPairTracker() : lineNumber(-1), quoteCount(0), parenthesisCount(0) {}
     
+    // Reset all counts and line information (used when switching editors)
+    void reset() {
+        lineNumber = -1;
+        quoteCount = 0;
+        parenthesisCount = 0;
+    }
+    
     // Reset counts when line changes
     void checkLine(int newLine) {
         if (lineNumber != newLine) {
