@@ -141,11 +141,20 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="AutoIndent.h" />
+    <ClInclude Include="AutoPairing.h" />
+    <ClInclude Include="Common.h" />
+    <ClInclude Include="HookManager.h" />
     <ClInclude Include="Scintilla.h" />
     <ClInclude Include="Sci_position.h" />
+    <ClInclude Include="ScintillaUtils.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="AutoIndent.cpp" />
+    <ClCompile Include="AutoPairing.cpp" />
     <ClCompile Include="dllmain.cpp" />
+    <ClCompile Include="HookManager.cpp" />
+    <ClCompile Include="ScintillaUtils.cpp" />
   </ItemGroup>
   <ItemGroup>
     <Text Include="License.txt" />
