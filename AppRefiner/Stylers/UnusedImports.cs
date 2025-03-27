@@ -84,7 +84,8 @@ namespace AppRefiner.Stylers
                     {
                         Start = import.Value.StartIndex,
                         Length = import.Value.StopIndex - import.Value.StartIndex + 1,
-                        Color = HIGHLIGHT_COLOR
+                        Color = HIGHLIGHT_COLOR,
+                        Tooltip = "Unused import"
                     };
                     Highlights?.Add(highlight);
                 }

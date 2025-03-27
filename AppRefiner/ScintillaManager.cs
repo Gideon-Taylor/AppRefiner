@@ -507,10 +507,17 @@ namespace AppRefiner
         /// <param name="color">The BGRA color value for the highlighter</param>
         /// <param name="start">The start position of the text to highlight</param>
         /// <param name="length">The length of the text to highlight</param>
-        public static void HighlightTextWithColor(ScintillaEditor editor, uint color, int start, int length)
+        /// <param name="tooltip">Optional tooltip text to display when hovering over the highlighted text</param>
+        public static void HighlightTextWithColor(ScintillaEditor editor, uint color, int start, int length, string? tooltip = null)
         {
             int highlighterNumber = editor.GetHighlighter(color);
             HighlightText(editor, highlighterNumber, start, length);
+            
+            // Store tooltip if provided
+            if (!string.IsNullOrEmpty(tooltip))
+            {
+                editor.HighlightTooltips[(start, length)] = tooltip;
+            }
         }
 
         public static void InitAnnotationStyles(ScintillaEditor editor)
@@ -916,8 +923,23 @@ namespace AppRefiner
         }
 
 
-        internal static void ShowCallTip(ScintillaEditor editor, IntPtr position, string text)
+        internal static void ShowCallTip(ScintillaEditor editor, IntPtr position)
         {
+            var text = string.Empty;
+            if (editor.HighlightTooltips == null)
+            {
+                editor.HighlightTooltips = new Dictionary<(int Start, int Length), string>();
+                return;
+            }
+            /* check the editor's highlight tooltiops for one that this position is between */
+            if (editor.HighlightTooltips.Count > 0)
+            {
+                var tooltip = editor.HighlightTooltips.FirstOrDefault(t => t.Key.Start <= position.ToInt32() && t.Key.Start + t.Key.Length >= position.ToInt32());
+                if (!tooltip.Equals(default(KeyValuePair<(int Start, int Length), string>)))
+                {
+                    text = tooltip.Value;
+                }
+            }
 
             if (editor.CallTipPointer != IntPtr.Zero)
             {
@@ -1403,6 +1425,11 @@ namespace AppRefiner
         /// Stores annotations created by stylers so they can be restored after linter processing
         /// </summary>
         public List<CodeAnnotation>? StylerAnnotations { get; set; } = new List<CodeAnnotation>();
+
+        /// <summary>
+        /// Stores highlight tooltips created by stylers for displaying when hovering over highlighted text
+        /// </summary>
+        public Dictionary<(int Start, int Length), string> HighlightTooltips { get; set; } = new Dictionary<(int Start, int Length), string>();
 
         /// <summary>
         /// Gets a highlighter number for the specified BGRA color.

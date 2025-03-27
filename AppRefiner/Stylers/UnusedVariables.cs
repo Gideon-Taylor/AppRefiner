@@ -88,7 +88,8 @@ namespace AppRefiner.Stylers
                     {
                         Color = HIGHLIGHT_COLOR,
                         Start = variable.Span.Start,
-                        Length = variable.Span.Stop - variable.Span.Start + 1
+                        Length = variable.Span.Stop - variable.Span.Start + 1,
+                        Tooltip = "Unused variable"
                     });
 
                 }
@@ -106,7 +107,8 @@ namespace AppRefiner.Stylers
                     {
                         Color = HIGHLIGHT_COLOR,
                         Start = variable.Span.Start,
-                        Length = variable.Span.Stop - variable.Span.Start + 1
+                        Length = variable.Span.Stop - variable.Span.Start + 1,
+                        Tooltip = "Unused variable"
                     });
                 }
             }
@@ -120,7 +122,8 @@ namespace AppRefiner.Stylers
                     {
                         Color = HIGHLIGHT_COLOR,
                         Start = variable.Span.Start,
-                        Length = variable.Span.Stop - variable.Span.Start + 1
+                        Length = variable.Span.Stop - variable.Span.Start + 1,
+                        Tooltip = "Unused instance variable"
                     });
                 }
             }

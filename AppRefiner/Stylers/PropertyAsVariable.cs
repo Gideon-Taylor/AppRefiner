@@ -83,7 +83,8 @@ namespace AppRefiner.Stylers
                     {
                         Start = userVariable.Symbol.StartIndex,
                         Length = userVariable.Symbol.Text.Length,
-                        Color = HIGHLIGHT_COLOR
+                        Color = HIGHLIGHT_COLOR,
+                        Tooltip = "Property used as variable outside constructor"
                     });
                 }
             }

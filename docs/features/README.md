@@ -10,6 +10,7 @@ This section provides detailed information about each feature AppRefiner adds to
 - [Dark Mode](editor-tweaks/dark-mode.md)
 - [Annotations](editor-tweaks/annotations.md)
 - [Code Styling](styling.md)
+- [Code Flow](editor-tweaks/code-flow.md)
 
 ### Code Analysis
 - [Linting Overview](linting/overview.md)

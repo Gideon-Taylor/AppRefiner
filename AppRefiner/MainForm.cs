@@ -103,10 +103,9 @@ namespace AppRefiner
         private const int WM_SCN_EVENT_MASK = 0x7000;
         private const int SCN_DWELLSTART = 2016;
         private const int SCN_DWELLEND = 2017;
-        private const int WM_DWELLSTART = WM_SCN_EVENT_MASK | SCN_DWELLSTART;
-        private const int WM_DWELLEND= WM_SCN_EVENT_MASK | SCN_DWELLEND;
+        private const int SCN_SAVEPOINTREACHED = 2002;
 
-
+        private bool isLoadingSettings = false;
 
         public MainForm()
         {
@@ -114,6 +113,46 @@ namespace AppRefiner
             InitLinterOptions();
             InitStylerOptions(); // Changed from InitAnalyzerOptions
             RegisterCommands(); // Register the default commands
+        }
+
+        private void ChkAutoIndentation_CheckedChanged(object? sender, EventArgs e)
+        {
+            if (chkAutoIndentation.Checked == false) return;
+
+            // Skip if we're loading settings or if the feature is already enabled
+            if (isLoadingSettings)
+            {
+                return;
+            }
+
+            var result = MessageBox.Show(
+                "Auto Indentation is currently an experimental feature that could lead to Application Designer instability. Would you like to proceed to enable this feature?",
+                "Experimental Feature Warning",
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Warning);
+
+            if (result == DialogResult.No)
+            {
+                chkAutoIndentation.Checked = false;
+                chkAutoPairing.Checked = false;
+                return;
+            }
+        }
+
+        private void ChkAutoPairing_CheckedChanged(object? sender, EventArgs e)
+        {
+            if (chkAutoPairing.Checked == false) return;
+
+            // First check if auto indentation is enabled
+            if (!chkAutoIndentation.Checked)
+            {
+                MessageBox.Show(
+                    "Auto Pairing requires Auto Indentation to be enabled. Auto Indentation will be enabled automatically.",
+                    "Dependency Notice",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Information);
+                chkAutoIndentation.Checked = true;
+            }
         }
 
         protected override void OnLoad(EventArgs e)
@@ -509,16 +548,24 @@ namespace AppRefiner
 
         private void LoadSettings()
         {
-            chkInitCollapsed.Checked = Properties.Settings.Default.initCollapsed;
-            chkOnlyPPC.Checked = Properties.Settings.Default.onlyPPC;
-            chkBetterSQL.Checked = Properties.Settings.Default.betterSQL;
-            chkAutoDark.Checked = Properties.Settings.Default.autoDark;
-            chkLintAnnotate.Checked = Properties.Settings.Default.lintAnnotate;
-            chkAutoIndentation.Checked = Properties.Settings.Default.autoIndent;
-            chkAutoPairing.Checked = Properties.Settings.Default.autoPair;
-            LoadStylerStates();
-            LoadLinterStates();
-            LoadTemplates();
+            isLoadingSettings = true;
+            try
+            {
+                chkInitCollapsed.Checked = Properties.Settings.Default.initCollapsed;
+                chkOnlyPPC.Checked = Properties.Settings.Default.onlyPPC;
+                chkBetterSQL.Checked = Properties.Settings.Default.betterSQL;
+                chkAutoDark.Checked = Properties.Settings.Default.autoDark;
+                chkLintAnnotate.Checked = Properties.Settings.Default.lintAnnotate;
+                chkAutoIndentation.Checked = Properties.Settings.Default.autoIndent;
+                chkAutoPairing.Checked = Properties.Settings.Default.autoPair;
+                LoadStylerStates();
+                LoadLinterStates();
+                LoadTemplates();
+            }
+            finally
+            {
+                isLoadingSettings = false;
+            }
         }
 
         private void LoadTemplates()
@@ -1011,6 +1058,9 @@ namespace AppRefiner
 
             // Store the annotations for later use after linter processing
             editor.StylerAnnotations = new List<CodeAnnotation>(annotations);
+            
+            // Clear previous highlight tooltips
+            editor.HighlightTooltips.Clear();
 
             foreach (var annotation in annotations)
             {
@@ -1019,7 +1069,7 @@ namespace AppRefiner
 
             foreach (var highlight in highlights)
             {
-                ScintillaManager.HighlightTextWithColor(editor, highlight.Color, highlight.Start, highlight.Length);
+                ScintillaManager.HighlightTextWithColor(editor, highlight.Color, highlight.Start, highlight.Length, highlight.Tooltip);
             }
 
             foreach (var color in colors)
@@ -1044,6 +1094,7 @@ namespace AppRefiner
                 MessageBox.Show("Linting is only available for PeopleCode editors", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return;
             }
+
             if (activeEditor.ContentString == null)
             {
                 activeEditor.ContentString = ScintillaManager.GetScintillaText(activeEditor);
@@ -2340,13 +2391,26 @@ namespace AppRefiner
                 switch(eventCode)
                 {
                     case SCN_DWELLSTART:
-                        ScintillaManager.ShowCallTip(activeEditor, m.WParam.ToInt32(), "This is a dwell message.");
+                        ScintillaManager.ShowCallTip(activeEditor, m.WParam.ToInt32());
                         break;
                     case SCN_DWELLEND:
                         ScintillaManager.HideCallTip(activeEditor);
                         break;
+                    case SCN_SAVEPOINTREACHED:
+                        if (activeEditor != null)
+                        {
+                            activeEditor.LastContentHash = 0;
+                            // Clear content string to force re-reading
+                            activeEditor.ContentString = null;
+                            // Clear annotations
+                            ScintillaManager.ClearAnnotations(activeEditor);
+                            // Reset styles
+                            ScintillaManager.ResetStyles(activeEditor);
+                        }
+                        break;
                 }
             }
+
 
         }
 
@@ -2394,7 +2458,7 @@ namespace AppRefiner
                 {
                     if (!ThreadsWithEventHook.Contains(activeEditor.ThreadID))
                     {
-                        EventHookInstaller.SetHook(activeEditor.ThreadID);
+                        var hookID = EventHookInstaller.SetHook(activeEditor.ThreadID);
                         this.Invoke(() =>
                         {
                             EventHookInstaller.SendWindowHandleToHookedThread(activeEditor.ThreadID, this.Handle);
@@ -2426,10 +2490,11 @@ namespace AppRefiner
             if (ScintillaManager.IsEditorClean(activeEditor))
             {
                 /* If there is a text selection, maybe the save failed and the error was highlighted... */
-                if (activeEditor.Type == EditorType.PeopleCode && ScintillaManager.GetSelectionLength(activeEditor) > 0)
+                if ( ThreadsWithEventHook.Contains(activeEditor.ThreadID) == false &&
+                    activeEditor.Type == EditorType.PeopleCode && ScintillaManager.GetSelectionLength(activeEditor) > 0)
                 {
                     /* We want to update our content hash to match so we don't process it next tick. */
-                    activeEditor.LastContentHash = 0;
+                    //activeEditor.LastContentHash = 0;
                     return;
                 }
 

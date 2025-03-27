@@ -385,6 +385,69 @@ void HandlePeopleCodeAutoIndentation(HWND hwndScintilla, SCNotification* notific
                 }
             }
         }
+        else if (notification->ch == 'f') {
+            // Handle "else if" expansion
+            int currentPos = SendMessage(hwndScintilla, SCI_GETCURRENTPOS, 0, 0);
+            int currentLine = SendMessage(hwndScintilla, SCI_LINEFROMPOSITION, currentPos, 0);
+
+            // Get the current line's text
+            std::string currentLineStr = GetTrimmedLineText(hwndScintilla, currentLine);
+            if (currentLineStr.empty()) {
+                return;
+            }
+
+            // Convert to lowercase for pattern matching
+            std::string lowerCurrentLine = ToLowerCase(currentLineStr);
+
+            // Check if the current line is exactly "else if"
+            if (lowerCurrentLine == "else if") {
+                // Begin undo action
+                SendMessage(hwndScintilla, SCI_BEGINUNDOACTION, 0, 0);
+
+                try {
+                    // Get the indentation of the current line
+                    int currentIndentation = SendMessage(hwndScintilla, SCI_GETLINEINDENTATION, currentLine, 0);
+                    int tabWidth = SendMessage(hwndScintilla, SCI_GETTABWIDTH, 0, 0);
+
+                    // Delete the current line
+                    int lineStartPos = SendMessage(hwndScintilla, SCI_POSITIONFROMLINE, currentLine, 0);
+                    int lineEndPos = SendMessage(hwndScintilla, SCI_GETLINEENDPOSITION, currentLine, 0);
+                    SendMessage(hwndScintilla, SCI_DELETERANGE, lineStartPos, lineEndPos - lineStartPos);
+
+                    // Calculate indentation strings
+                    // We need to de-indent the Else and End-if by one level since we're already in an indented block
+                    int baseIndentation = currentIndentation - tabWidth;
+                    if (baseIndentation < 0) baseIndentation = 0;
+                    
+                    std::string baseIndentStr(baseIndentation / tabWidth, '\t');
+                    std::string ifIndentStr((baseIndentation / tabWidth) + 1, '\t');
+                    
+                    // Create the expanded text with proper indentation
+                    std::string expandedText = baseIndentStr + "Else\n" + 
+                                              ifIndentStr + "If \n" + 
+                                              baseIndentStr + "End-if;";
+
+                    // Insert the expanded text
+                    SendMessage(hwndScintilla, SCI_INSERTTEXT, lineStartPos, (LPARAM)expandedText.c_str());
+
+                    // Position the cursor after "If " (before the newline)
+                    int ifLineLength = ifIndentStr.length() + 3; // "If " is 3 characters
+                    int newCursorPos = lineStartPos + baseIndentStr.length() + 5 + ifLineLength; // "Else\n" is 5+1 characters
+                    SendMessage(hwndScintilla, SCI_SETSEL, newCursorPos, newCursorPos);
+                }
+                catch (const std::exception& e) {
+                    char errorMsg[256];
+                    sprintf_s(errorMsg, "Exception in else-if expansion: %s", e.what());
+                    OutputDebugStringA(errorMsg);
+                }
+                catch (...) {
+                    OutputDebugStringA("Unknown exception in else-if expansion");
+                }
+
+                // End undo action
+                SendMessage(hwndScintilla, SCI_ENDUNDOACTION, 0, 0);
+            }
+        }
     }
     catch (const std::exception& e) {
         char errorMsg[256];

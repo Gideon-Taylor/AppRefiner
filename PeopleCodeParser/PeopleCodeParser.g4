@@ -226,11 +226,11 @@ method
 	;
 
 getter
-	:	GET genericID SEMI* statements END_GET
+	:	GET genericID methodReturnAnnotation SEMI* statements END_GET
 	;
 
 setter
-	:	SET genericID SEMI* statements? END_SET
+	:	SET genericID methodParameterAnnotation SEMI* statements? END_SET
 	;
 
 statements

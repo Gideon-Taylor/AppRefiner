@@ -79,7 +79,8 @@ namespace AppRefiner.Stylers
                 {
                     Start = token.StartIndex,
                     Length = token.StopIndex - token.StartIndex + 1,
-                    Color = HIGHLIGHT_COLOR
+                    Color = HIGHLIGHT_COLOR,
+                    Tooltip = "Meaningless variable name"
                 };
                 Highlights?.Add(highlight);
             }

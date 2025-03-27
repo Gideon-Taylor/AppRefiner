@@ -13,6 +13,7 @@ namespace AppRefiner.Stylers
         public int Start { get; set; }
         public int Length { get; set; }
         public uint Color { get; set; }
+        public string? Tooltip { get; set; }
     }
 
     public struct CodeColor
