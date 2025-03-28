@@ -35,7 +35,7 @@ jobs:
         shell: pwsh
 
       - name: Publish framework-dependent build
-        run: dotnet publish --self-contained false -r win-x64 -c Release -o publish/framework
+        run: dotnet publish AppRefiner/AppRefiner.csproj --self-contained false -r win-x64 -c Release -o publish/framework
         shell: pwsh
 
       - name: Copy AppRefinerHook.dll to release folder
