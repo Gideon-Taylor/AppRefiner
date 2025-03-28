@@ -66,6 +66,7 @@ namespace AppRefiner
             cmbTemplates = new ComboBox();
             progressBar1 = new ProgressBar();
             lblStatus = new Label();
+            btnDebugLog = new Button();
             ((System.ComponentModel.ISupportInitialize)splitContainer1).BeginInit();
             splitContainer1.Panel1.SuspendLayout();
             splitContainer1.Panel2.SuspendLayout();
@@ -127,6 +128,7 @@ namespace AppRefiner
             // 
             // tabPage1
             // 
+            tabPage1.Controls.Add(btnDebugLog);
             tabPage1.Controls.Add(grpEditorSettings);
             tabPage1.Location = new Point(4, 24);
             tabPage1.Name = "tabPage1";
@@ -156,7 +158,7 @@ namespace AppRefiner
             // 
             chkAutoPairing.AutoSize = true;
             chkAutoPairing.ForeColor = Color.Red;
-            chkAutoPairing.Location = new Point(322, 47);
+            chkAutoPairing.Location = new Point(235, 47);
             chkAutoPairing.Name = "chkAutoPairing";
             chkAutoPairing.Size = new Size(146, 19);
             chkAutoPairing.TabIndex = 26;
@@ -168,7 +170,7 @@ namespace AppRefiner
             // 
             chkAutoIndentation.AutoSize = true;
             chkAutoIndentation.ForeColor = Color.Red;
-            chkAutoIndentation.Location = new Point(322, 22);
+            chkAutoIndentation.Location = new Point(235, 22);
             chkAutoIndentation.Name = "chkAutoIndentation";
             chkAutoIndentation.Size = new Size(116, 19);
             chkAutoIndentation.TabIndex = 25;
@@ -189,7 +191,7 @@ namespace AppRefiner
             // chkBetterSQL
             // 
             chkBetterSQL.AutoSize = true;
-            chkBetterSQL.Location = new Point(161, 47);
+            chkBetterSQL.Location = new Point(116, 47);
             chkBetterSQL.Name = "chkBetterSQL";
             chkBetterSQL.Size = new Size(88, 19);
             chkBetterSQL.TabIndex = 17;
@@ -219,7 +221,7 @@ namespace AppRefiner
             // chkAutoDark
             // 
             chkAutoDark.AutoSize = true;
-            chkAutoDark.Location = new Point(161, 22);
+            chkAutoDark.Location = new Point(116, 22);
             chkAutoDark.Name = "chkAutoDark";
             chkAutoDark.Size = new Size(113, 19);
             chkAutoDark.TabIndex = 14;
@@ -528,6 +530,16 @@ namespace AppRefiner
             lblStatus.Text = "Stopped";
             lblStatus.TextAlign = ContentAlignment.MiddleCenter;
             // 
+            // btnDebugLog
+            // 
+            btnDebugLog.Location = new Point(469, 436);
+            btnDebugLog.Name = "btnDebugLog";
+            btnDebugLog.Size = new Size(85, 23);
+            btnDebugLog.TabIndex = 27;
+            btnDebugLog.Text = "Debug Log...";
+            btnDebugLog.UseVisualStyleBackColor = true;
+            btnDebugLog.Click += btnDebugLog_Click;
+            // 
             // MainForm
             // 
             AutoScaleDimensions = new SizeF(7F, 15F);
@@ -606,5 +618,6 @@ namespace AppRefiner
         private ComboBox cmbTemplates;
         private CheckBox chkAutoIndentation;
         private CheckBox chkAutoPairing;
+        private Button btnDebugLog;
     }
 }

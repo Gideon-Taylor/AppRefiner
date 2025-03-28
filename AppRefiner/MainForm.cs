@@ -59,12 +59,12 @@ namespace AppRefiner
         private bool timerRunning = false;
         private object scanningLock = new();
         private ScintillaEditor? activeEditor = null;
-        
+
         /// <summary>
         /// Gets the currently active editor
         /// </summary>
         public ScintillaEditor? ActiveEditor => activeEditor;
-        
+
         private List<BaseLintRule> linterRules = new();
         private List<BaseStyler> stylers = new(); // Changed from List<BaseStyler> analyzers
 
@@ -764,7 +764,7 @@ namespace AppRefiner
                 // Add other control types as needed
 
                 values[kvp.Key] = value;
-                
+
             }
 
             return values;
@@ -812,9 +812,10 @@ namespace AppRefiner
                     }
                 }
             }
-            catch { /* Use defaults if settings are corrupt */
-    }
-}
+            catch
+            { /* Use defaults if settings are corrupt */
+            }
+        }
 
         private void SaveStylerStates()
         {
@@ -924,11 +925,11 @@ namespace AppRefiner
                     /* Create row for datadgridview */
                     int rowIndex = dataGridView1.Rows.Add(linter.Active, linter.Description);
                     dataGridView1.Rows[rowIndex].Tag = linter;
-                    
+
                     // Set the button text based on whether the linter has configurable properties
                     var configurableProperties = linter.GetConfigurableProperties();
                     DataGridViewButtonCell buttonCell = (DataGridViewButtonCell)dataGridView1.Rows[rowIndex].Cells[2];
-                    
+
                     if (configurableProperties.Count > 0)
                     {
                         buttonCell.Value = "Configure...";
@@ -948,19 +949,19 @@ namespace AppRefiner
                         // Store info about configurability in the cell's tag
                         dataGridView1.Rows[rowIndex].Cells[2].Tag = "NoConfig";
                     }
-                    
+
                     linterRules.Add(linter);
                 }
             }
-            
+
             // Apply saved configurations to linters
             LinterConfigManager.ApplyConfigurations(linterRules);
         }
-        
+
         private void dataGridView1_CellContentClick(object sender, DataGridViewCellEventArgs e)
         {
             dataGridView1.CommitEdit(DataGridViewDataErrorContexts.Commit);
-            
+
             // Check if the clicked cell is in the Configure column
             if (e.ColumnIndex == 2 && e.RowIndex >= 0)
             {
@@ -1058,7 +1059,7 @@ namespace AppRefiner
 
             // Store the annotations for later use after linter processing
             editor.StylerAnnotations = new List<CodeAnnotation>(annotations);
-            
+
             // Clear previous highlight tooltips
             editor.HighlightTooltips.Clear();
 
@@ -1195,7 +1196,7 @@ namespace AppRefiner
                     ScintillaManager.SetAnnotations(activeEditor, messages, g.First().Line, styles);
                 }
             }
-            
+
             // Re-apply styler annotations after linter processing
             if (activeEditor.StylerAnnotations != null && activeEditor.StylerAnnotations.Count > 0)
             {
@@ -1334,7 +1335,7 @@ namespace AppRefiner
 
             // Capture current cursor position
             int currentCursorPosition = ScintillaManager.GetCursorPosition(activeEditor);
-            
+
             // Capture current first visible line
             int currentFirstVisibleLine = ScintillaManager.GetFirstVisibleLine(activeEditor);
 
@@ -1348,7 +1349,7 @@ namespace AppRefiner
             {
                 // Show the dialog and check if user confirmed
                 bool dialogConfirmed = refactorClass.ShowRefactorDialog();
-                
+
                 // If user canceled, abort the refactoring
                 if (!dialogConfirmed)
                 {
@@ -1392,7 +1393,7 @@ namespace AppRefiner
             {
                 // Show the dialog and check if user confirmed
                 bool dialogConfirmed = refactorClass.ShowRefactorDialog();
-                
+
                 // If user canceled, abort the refactoring
                 if (!dialogConfirmed)
                 {
@@ -1412,7 +1413,7 @@ namespace AppRefiner
             {
                 // Set the cursor position without scrolling to it
                 ScintillaManager.SetCursorPositionWithoutScroll(activeEditor, updatedCursorPosition);
-                
+
                 // Restore the first visible line
                 if (activeEditor.SnapshotFirstVisibleLine.HasValue)
                 {
@@ -1986,10 +1987,10 @@ namespace AppRefiner
                         {
                             // Create an instance of the refactor with the standard parameters
                             var refactor = (BaseRefactor?)Activator.CreateInstance(
-                                type, 
+                                type,
                                 [activeEditor]
                             );
-                            
+
                             if (refactor != null)
                             {
                                 ProcessRefactor(refactor);
@@ -2222,32 +2223,32 @@ namespace AppRefiner
                 ModifierKeys modifiers = (ModifierKeys)Keys.None;
                 Keys key = Keys.None;
                 string refactorName = string.Empty;
-                
+
                 try
                 {
-                    var registerShortcutProperty = type.GetProperty("RegisterKeyboardShortcut", 
+                    var registerShortcutProperty = type.GetProperty("RegisterKeyboardShortcut",
                         BindingFlags.Public | BindingFlags.Static | BindingFlags.NonPublic);
-                    
+
                     if (registerShortcutProperty != null)
                     {
                         registerShortcut = (bool)registerShortcutProperty.GetValue(null)!;
                     }
 
-                    var modifiersProperty = type.GetProperty("ShortcutModifiers", 
+                    var modifiersProperty = type.GetProperty("ShortcutModifiers",
                         BindingFlags.Public | BindingFlags.Static | BindingFlags.NonPublic);
                     if (modifiersProperty != null)
                     {
                         modifiers = (ModifierKeys)modifiersProperty.GetValue(null)!;
                     }
 
-                    var keyProperty = type.GetProperty("ShortcutKey", 
+                    var keyProperty = type.GetProperty("ShortcutKey",
                         BindingFlags.Public | BindingFlags.Static | BindingFlags.NonPublic);
                     if (keyProperty != null)
                     {
                         key = (Keys)keyProperty.GetValue(null)!;
                     }
 
-                    var nameProperty = type.GetProperty("RefactorName", 
+                    var nameProperty = type.GetProperty("RefactorName",
                         BindingFlags.Public | BindingFlags.Static | BindingFlags.NonPublic);
                     if (nameProperty != null)
                     {
@@ -2258,13 +2259,13 @@ namespace AppRefiner
                 {
                     System.Diagnostics.Debug.WriteLine($"Error getting refactor properties for {type.Name}: {ex.Message}");
                 }
-                    // Check if this refactor wants a keyboard shortcut
+                // Check if this refactor wants a keyboard shortcut
                 if (registerShortcut && key != Keys.None)
                 {
                     // Check for collision with existing shortcuts
                     bool hasCollision = false;
                     string? collisionName = null;
-                    
+
                     foreach (var entry in registeredShortcuts)
                     {
                         if (entry.Value.Item1 == modifiers && entry.Value.Item2 == key)
@@ -2274,7 +2275,7 @@ namespace AppRefiner
                             break;
                         }
                     }
-                    
+
                     if (hasCollision)
                     {
                         // Show warning about collision
@@ -2289,22 +2290,22 @@ namespace AppRefiner
                     {
                         // Register the shortcut
                         var hook = new KeyboardHook();
-                        
+
                         // Create a handler that creates and processes the refactor
                         hook.KeyPressed += (sender, e) =>
                         {
                             if (activeEditor == null) return;
-                            
+
                             var newRefactor = (BaseRefactor?)Activator.CreateInstance(type, [activeEditor]);
                             if (newRefactor != null)
                             {
                                 ProcessRefactor(newRefactor);
                             }
                         };
-                        
+
                         // Register the hotkey
                         hook.RegisterHotKey(modifiers, key);
-                        
+
                         // Store in our dictionaries
                         refactorShortcuts[type.FullName ?? type.Name] = hook;
                         registeredShortcuts[refactorName] = (modifiers, key);
@@ -2319,39 +2320,39 @@ namespace AppRefiner
             try
             {
                 // Check if this refactor has a keyboard shortcut
-                var registerShortcutProperty = refactorType.GetProperty("RegisterKeyboardShortcut", 
+                var registerShortcutProperty = refactorType.GetProperty("RegisterKeyboardShortcut",
                     BindingFlags.Public | BindingFlags.Static | BindingFlags.NonPublic);
-                
+
                 if (registerShortcutProperty != null && (bool)registerShortcutProperty.GetValue(null)!)
                 {
                     // Get the modifier keys and key
-                    var modifiersProperty = refactorType.GetProperty("ShortcutModifiers", 
+                    var modifiersProperty = refactorType.GetProperty("ShortcutModifiers",
                         BindingFlags.Public | BindingFlags.Static | BindingFlags.NonPublic);
-                    var keyProperty = refactorType.GetProperty("ShortcutKey", 
+                    var keyProperty = refactorType.GetProperty("ShortcutKey",
                         BindingFlags.Public | BindingFlags.Static | BindingFlags.NonPublic);
-                    
+
                     if (modifiersProperty != null && keyProperty != null)
                     {
                         ModifierKeys modifiers = (ModifierKeys)modifiersProperty.GetValue(null)!;
                         Keys key = (Keys)keyProperty.GetValue(null)!;
-                        
+
                         if (key != Keys.None)
                         {
                             // Format the shortcut text
                             StringBuilder shortcutText = new StringBuilder(" (");
-                            
+
                             if ((modifiers & AppRefiner.ModifierKeys.Control) == AppRefiner.ModifierKeys.Control)
                                 shortcutText.Append("Ctrl+");
-                            
+
                             if ((modifiers & AppRefiner.ModifierKeys.Shift) == AppRefiner.ModifierKeys.Shift)
                                 shortcutText.Append("Shift+");
-                            
+
                             if ((modifiers & AppRefiner.ModifierKeys.Alt) == AppRefiner.ModifierKeys.Alt)
                                 shortcutText.Append("Alt+");
-                            
+
                             shortcutText.Append(key.ToString());
                             shortcutText.Append(")");
-                            
+
                             return shortcutText.ToString();
                         }
                     }
@@ -2361,19 +2362,49 @@ namespace AppRefiner
             {
                 System.Diagnostics.Debug.WriteLine($"Error getting shortcut text for {refactorType.Name}: {ex.Message}");
             }
-            
+
             return string.Empty;
         }
 
         private ScintillaEditor? GetActiveEditor()
         {
-            var activeWindow = ActiveWindowChecker.GetActiveScintillaWindow();
+            try
+            {
+                var activeWindow = ActiveWindowChecker.GetActiveScintillaWindow();
 
-            /* If currently focused window is *not* owned by PSIDE, return the last active editor */
-            if (activeWindow == new IntPtr(-1)) return activeEditor;
+                /* If currently focused window is *not* owned by PSIDE, return the last active editor */
+                if (activeWindow == new IntPtr(-1)) 
+                {
+                    // Validate the last active editor if it exists
+                    if (activeEditor != null && !activeEditor.IsValid())
+                    {
+                        // Editor is no longer valid, clean it up
+                        ScintillaManager.CleanupEditor(activeEditor);
+                        activeEditor = null;
+                    }
+                    return activeEditor;
+                }
 
-            /* If the active window is not a Scintilla editor, return null */
-            return activeWindow == IntPtr.Zero ? null : ScintillaManager.GetEditor(activeWindow);
+                /* If the active window is not a Scintilla editor, return null */
+                if (activeWindow == IntPtr.Zero) 
+                    return null;
+                
+                // Try to get the editor, this can throw exceptions if window is invalid
+                try
+                {
+                    return ScintillaManager.GetEditor(activeWindow);
+                }
+                catch (Exception ex)
+                {
+                    Debug.Log($"Error getting Scintilla editor: {ex.Message}");
+                    return null;
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.Log($"Exception in GetActiveEditor: {ex.Message}");
+                return null;
+            }
         }
 
         /* TODO: override WndProc */
@@ -2413,8 +2444,6 @@ namespace AppRefiner
 
 
         }
-
-
         private void PerformScan()
         {
             var currentEditor = GetActiveEditor();
@@ -2449,25 +2478,30 @@ namespace AppRefiner
 
             if (!activeEditor.FoldEnabled)
             {
+                // print out the editor HWND, Process, Thread ID
+                Debug.Log($"Found new editor, enabling folding. HWND: {activeEditor.hWnd:X}, PID: {activeEditor.ProcessId:X} Thread: {activeEditor.ThreadID:X}");
                 if (chkAutoDark.Checked)
                 {
                     ScintillaManager.SetDarkMode(activeEditor);
                 }
 
-                if(chkAutoIndentation.Checked && File.Exists("AppRefinerHook.dll"))
+                if (chkAutoIndentation.Checked && File.Exists("AppRefinerHook.dll"))
                 {
                     if (!ThreadsWithEventHook.Contains(activeEditor.ThreadID))
                     {
+                        Debug.Log($"Editor doesn't have hook set for thread: {activeEditor.ThreadID}");
                         var hookID = EventHookInstaller.SetHook(activeEditor.ThreadID);
+                        Debug.Log($"Hook ID: {hookID}");
                         this.Invoke(() =>
                         {
                             EventHookInstaller.SendWindowHandleToHookedThread(activeEditor.ThreadID, this.Handle);
                         });
                         ThreadsWithEventHook.Add(activeEditor.ThreadID);
+                        Debug.Log($"Hook set for thread: {activeEditor.ThreadID:X}");
                     }
                     ScintillaManager.SetMouseDwellTime(activeEditor, 1000);
                 }
-                
+
                 ScintillaManager.EnableFolding(activeEditor);
                 ScintillaManager.FixEditorTabs(activeEditor, !chkBetterSQL.Checked);
                 activeEditor.FoldEnabled = true;
@@ -2490,7 +2524,7 @@ namespace AppRefiner
             if (ScintillaManager.IsEditorClean(activeEditor))
             {
                 /* If there is a text selection, maybe the save failed and the error was highlighted... */
-                if ( ThreadsWithEventHook.Contains(activeEditor.ThreadID) == false &&
+                if (ThreadsWithEventHook.Contains(activeEditor.ThreadID) == false &&
                     activeEditor.Type == EditorType.PeopleCode && ScintillaManager.GetSelectionLength(activeEditor) > 0)
                 {
                     /* We want to update our content hash to match so we don't process it next tick. */
@@ -2583,10 +2617,10 @@ namespace AppRefiner
         {
             /* only work if there's an active editor */
             if (activeEditor == null) return;
-            
+
             // Get all available templates
             var templates = Template.GetAvailableTemplates();
-            
+
             if (templates.Count == 0)
             {
                 MessageBox.Show("No templates found.", "No Templates", MessageBoxButtons.OK, MessageBoxIcon.Information);
@@ -2600,7 +2634,7 @@ namespace AppRefiner
                 using var confirmDialog = new TemplateConfirmationDialog(
                     "Applying a template will replace all content in the current editor. Do you want to continue?",
                     mainHandle);
-                
+
                 if (confirmDialog.ShowDialog(handleWrapper) != DialogResult.Yes)
                 {
                     return;
@@ -2666,6 +2700,12 @@ namespace AppRefiner
                 // If no editor is active, show the content in a dialog
                 ShowGeneratedTemplateDialog(generatedContent, template.TemplateName);
             }
+        }
+
+        private void btnDebugLog_Click(object sender, EventArgs e)
+        {
+            Debug.Log("Displaying debug dialog...");
+            Debug.ShowDebugDialog(Handle);
         }
     }
 }

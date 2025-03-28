@@ -19,6 +19,13 @@ struct AutoPairTracker {
     
     // Reset counts when line changes
     void checkLine(int newLine) {
+        // Validate newLine to avoid crashes with invalid line numbers
+        if (newLine < 0) {
+            // Reset all counts if an invalid line is passed
+            reset();
+            return;
+        }
+        
         if (lineNumber != newLine) {
             lineNumber = newLine;
             quoteCount = 0;

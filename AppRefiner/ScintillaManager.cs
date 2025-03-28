@@ -171,6 +171,10 @@ namespace AppRefiner
         [DllImport("user32.dll", SetLastError = true)]
         private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
 
+        [DllImport("user32.dll", SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static extern bool IsWindow(IntPtr hWnd);
+
         [DllImport("kernel32.dll", SetLastError = true)]
         private static extern IntPtr OpenProcess(uint processAccess, bool bInheritHandle, uint processId);
 
@@ -262,11 +266,40 @@ namespace AppRefiner
 
         public static ScintillaEditor GetEditor(IntPtr hWnd)
         {
+            if (hWnd == IntPtr.Zero)
+            {
+                throw new ArgumentException("Window handle cannot be zero.", nameof(hWnd));
+            }
+
+            if (!IsWindow(hWnd))
+            {
+                throw new ArgumentException("Invalid window handle.", nameof(hWnd));
+            }
+
             if (!editors.ContainsKey(hWnd))
             {
-                InitEditor(hWnd);
+                try
+                {
+                    InitEditor(hWnd);
+                }
+                catch (Exception ex)
+                {
+                    Debug.LogError($"Failed to initialize editor: {ex.Message}");
+                    throw;
+                }
             }
-            return editors[hWnd];
+            
+            // Check that the editor is still valid
+            var editor = editors[hWnd];
+            if (!editor.IsValid())
+            {
+                // Editor is invalid, clean it up and remove from dictionary
+                CleanupEditor(editor);
+                editors.Remove(hWnd);
+                throw new InvalidOperationException("Editor is no longer valid.");
+            }
+            
+            return editor;
         }
 
         public static IntPtr GetProcessBuffer(ScintillaEditor editor, uint neededSize)
@@ -580,7 +613,7 @@ namespace AppRefiner
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"Failed to initialize annotations: {ex.Message}");
+                Debug.LogError($"Failed to initialize annotations: {ex.Message}");
                 editor.AnnotationsInitialized = false;
             }
         }
@@ -855,7 +888,7 @@ namespace AppRefiner
         }
 
         /// <summary>
-        /// Calculates the “indent” amount for a given line.
+        /// Calculates the "indent" amount for a given line.
         /// Returns a value that is SC_FOLDLEVELBASE + number of leading whitespace characters.
         /// For blank or whitespace-only lines, the white flag is also set.
         /// </summary>
@@ -925,57 +958,98 @@ namespace AppRefiner
 
         internal static void ShowCallTip(ScintillaEditor editor, IntPtr position)
         {
-            var text = string.Empty;
-            if (editor.HighlightTooltips == null)
+            try 
             {
-                editor.HighlightTooltips = new Dictionary<(int Start, int Length), string>();
-                return;
-            }
-            /* check the editor's highlight tooltiops for one that this position is between */
-            if (editor.HighlightTooltips.Count > 0)
-            {
-                var tooltip = editor.HighlightTooltips.FirstOrDefault(t => t.Key.Start <= position.ToInt32() && t.Key.Start + t.Key.Length >= position.ToInt32());
-                if (!tooltip.Equals(default(KeyValuePair<(int Start, int Length), string>)))
+                // Validate editor
+                if (editor == null || !editor.IsValid())
                 {
-                    text = tooltip.Value;
+                    Debug.LogError("Cannot show call tip - editor is null or invalid");
+                    return;
                 }
+            
+                var text = string.Empty;
+                if (editor.HighlightTooltips == null)
+                {
+                    editor.HighlightTooltips = new Dictionary<(int Start, int Length), string>();
+                    return;
+                }
+            
+                // Check the editor's highlight tooltips
+                if (editor.HighlightTooltips.Count > 0)
+                {
+                    int pos = position.ToInt32();
+                    var tooltip = editor.HighlightTooltips.FirstOrDefault(t => 
+                        t.Key.Start <= pos && t.Key.Start + t.Key.Length >= pos);
+                    
+                    if (!tooltip.Equals(default(KeyValuePair<(int Start, int Length), string>)))
+                    {
+                        text = tooltip.Value;
+                    }
+                }
+            
+                // Clean up existing call tip if any
+                if (editor.CallTipPointer != IntPtr.Zero)
+                {
+                    VirtualFreeEx(editor.hProc, editor.CallTipPointer, 0, MEM_RELEASE);
+                    editor.CallTipPointer = IntPtr.Zero;
+                }
+            
+                // Don't proceed if text is empty
+                if (string.IsNullOrEmpty(text))
+                {
+                    return;
+                }
+            
+                // Allocate memory for new call tip text
+                var textBytes = Encoding.Default.GetBytes(text);
+                var neededSize = textBytes.Length + 1;
+                var remoteBuffer = VirtualAllocEx(editor.hProc, IntPtr.Zero, (uint)neededSize, MEM_COMMIT, PAGE_READWRITE);
+            
+                if (remoteBuffer == IntPtr.Zero)
+                {
+                    Debug.LogError($"Failed to allocate memory for call tip: {Marshal.GetLastWin32Error()}");
+                    return;
+                }
+            
+                if (!WriteProcessMemory(editor.hProc, remoteBuffer, textBytes, neededSize, out int bytesWritten) || bytesWritten != neededSize)
+                {
+                    VirtualFreeEx(editor.hProc, remoteBuffer, 0, MEM_RELEASE);
+                    Debug.LogError($"Failed to write call tip text to memory: {Marshal.GetLastWin32Error()}");
+                    return;
+                }
+            
+                editor.CallTipPointer = remoteBuffer;
+                editor.SendMessage(SCI_CALLTIPSHOW, position, remoteBuffer);
             }
-
-            if (editor.CallTipPointer != IntPtr.Zero)
+            catch (Exception ex)
             {
-                VirtualFreeEx(editor.hProc, editor.CallTipPointer, 0, MEM_RELEASE);
+                Debug.LogError($"Error showing call tip: {ex.Message}");
             }
-
-            // Allocate memory for new annotation text
-            var textBytes = Encoding.Default.GetBytes(text);
-            var neededSize = textBytes.Length + 1;
-            var remoteBuffer = VirtualAllocEx(editor.hProc, IntPtr.Zero, (uint)neededSize, MEM_COMMIT, PAGE_READWRITE);
-
-            if (remoteBuffer == IntPtr.Zero)
-            {
-                Debug.WriteLine($"Failed to allocate memory for annotation: {Marshal.GetLastWin32Error()}");
-                return;
-            }
-
-            if (!WriteProcessMemory(editor.hProc, remoteBuffer, textBytes, neededSize, out int bytesWritten) || bytesWritten != neededSize)
-            {
-                VirtualFreeEx(editor.hProc, remoteBuffer, 0, MEM_RELEASE);
-                Debug.WriteLine($"Failed to write annotation text to memory: {Marshal.GetLastWin32Error()}");
-                return;
-            }
-
-            editor.CallTipPointer = remoteBuffer;
-
-            editor.SendMessage(SCI_CALLTIPSHOW, position, remoteBuffer);
-
         }
 
         internal static void HideCallTip(ScintillaEditor editor)
         {
-            editor.SendMessage(SCI_CALLTIPCANCEL, IntPtr.Zero, IntPtr.Zero);
-            if (editor.CallTipPointer != IntPtr.Zero)
+            try
             {
-                VirtualFreeEx(editor.hProc, editor.CallTipPointer, 0, MEM_RELEASE);
+                // Validate editor
+                if (editor == null || !editor.IsValid())
+                {
+                    return;
+                }
+                
+                // Cancel the call tip in Scintilla
+                editor.SendMessage(SCI_CALLTIPCANCEL, IntPtr.Zero, IntPtr.Zero);
+                
+                // Free memory used by the call tip
+                if (editor.CallTipPointer != IntPtr.Zero)
+                {
+                    VirtualFreeEx(editor.hProc, editor.CallTipPointer, 0, MEM_RELEASE);
+                    editor.CallTipPointer = IntPtr.Zero;
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError($"Error hiding call tip: {ex.Message}");
             }
         }
 
@@ -1005,14 +1079,14 @@ namespace AppRefiner
 
                 if (remoteBuffer == IntPtr.Zero)
                 {
-                    Debug.WriteLine($"Failed to allocate memory for annotation: {Marshal.GetLastWin32Error()}");
+                    Debug.LogError($"Failed to allocate memory for annotation: {Marshal.GetLastWin32Error()}");
                     return;
                 }
 
                 if (!WriteProcessMemory(editor.hProc, remoteBuffer, textBytes, neededSize, out int bytesWritten) || bytesWritten != neededSize)
                 {
                     VirtualFreeEx(editor.hProc, remoteBuffer, 0, MEM_RELEASE);
-                    Debug.WriteLine($"Failed to write annotation text to memory: {Marshal.GetLastWin32Error()}");
+                    Debug.LogError($"Failed to write annotation text to memory: {Marshal.GetLastWin32Error()}");
                     return;
                 }
 
@@ -1022,7 +1096,7 @@ namespace AppRefiner
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"Error setting annotation: {ex.Message}");
+                Debug.LogError($"Error setting annotation: {ex.Message}");
             }
         }
 
@@ -1207,7 +1281,7 @@ namespace AppRefiner
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"Error setting annotations: {ex.Message}");
+                Debug.LogError($"Error setting annotations: {ex.Message}");
                 throw;
             }
         }
@@ -1480,6 +1554,7 @@ namespace AppRefiner
 
         public IntPtr SendMessage(int Msg, IntPtr wParam, IntPtr lParam)
         {
+            //Debug.Log($"Sending message {Msg} to {hWnd:X} - {wParam:X} -- {lParam:X}");
             return SendMessage(hWnd, Msg, wParam, lParam);
         }
 

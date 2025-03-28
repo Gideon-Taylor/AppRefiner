@@ -34,14 +34,18 @@ void HandlePeopleCodeAutoIndentation(HWND hwndScintilla, SCNotification* notific
     try {
         // Get the grandparent window
         HWND hwndGrandparent = GetParent(GetParent(hwndScintilla));
-        if (hwndGrandparent == NULL) {
+        if (hwndGrandparent == NULL || !IsWindow(hwndGrandparent)) {
             isProcessing = false;
             return;
         }
 
         // Get the caption of the grandparent window
-        char caption[256];
-        GetWindowTextA(hwndGrandparent, caption, sizeof(caption));
+        char caption[256] = {0};
+        if (GetWindowTextA(hwndGrandparent, caption, sizeof(caption)) == 0) {
+            // Failed to get window text
+            isProcessing = false;
+            return;
+        }
 
         // Check if the caption contains "PeopleCode"
         if (!strstr(caption, "PeopleCode")) {
@@ -51,15 +55,29 @@ void HandlePeopleCodeAutoIndentation(HWND hwndScintilla, SCNotification* notific
 
         // Get the tab width for indentation units
         int tabWidth = SendMessage(hwndScintilla, SCI_GETTABWIDTH, 0, 0);
+        if (tabWidth <= 0) {
+            // Use a default tab width if the control returns an invalid value
+            tabWidth = 4;
+        }
 
         // Handle indentation for new lines, else keyword, and semicolons differently
         if (notification->ch == '\r' || notification->ch == '\n') {
             // Get the current position and line
             int currentPos = SendMessage(hwndScintilla, SCI_GETCURRENTPOS, 0, 0);
+            if (currentPos < 0) {
+                isProcessing = false;
+                return;
+            }
+            
             int currentLine = SendMessage(hwndScintilla, SCI_LINEFROMPOSITION, currentPos, 0);
+            if (currentLine < 0) {
+                isProcessing = false;
+                return;
+            }
 
             // If this is the first line, no indentation is needed
             if (currentLine <= 0) {
+                isProcessing = false;
                 return;
             }
 
@@ -69,11 +87,15 @@ void HandlePeopleCodeAutoIndentation(HWND hwndScintilla, SCNotification* notific
             // Get the previous line's text
             std::string prevLineStr = GetTrimmedLineText(hwndScintilla, previousLine);
             if (prevLineStr.empty()) {
+                isProcessing = false;
                 return;
             }
 
             // Get the indentation of the previous line
             int indentation = SendMessage(hwndScintilla, SCI_GETLINEINDENTATION, previousLine, 0);
+            if (indentation < 0) {
+                indentation = 0;
+            }
 
             // Create a lowercase version for matching patterns
             std::string lowerLine = ToLowerCase(prevLineStr);
@@ -142,9 +164,16 @@ void HandlePeopleCodeAutoIndentation(HWND hwndScintilla, SCNotification* notific
                     int iterations = 0;
                     
                     while (searchLine >= 0 && iterations < MAX_ITERATIONS) {
+                        if (!IsWindow(hwndScintilla)) {
+                            // Scintilla control has been destroyed
+                            isProcessing = false;
+                            return;
+                        }
+                        
                         std::string searchLineStr = GetTrimmedLineText(hwndScintilla, searchLine);
                         std::string lowerSearchLine = ToLowerCase(searchLineStr);
                         int lineIndent = SendMessage(hwndScintilla, SCI_GETLINEINDENTATION, searchLine, 0);
+                        if (lineIndent < 0) lineIndent = 0;
                         
                         // Check for end statements that would increase our nesting level
                         for (const auto& pattern : blockPatterns) {
@@ -206,11 +235,21 @@ void HandlePeopleCodeAutoIndentation(HWND hwndScintilla, SCNotification* notific
         else if (notification->ch == ';') {
             // Handle semicolon for end statements
             int currentPos = SendMessage(hwndScintilla, SCI_GETCURRENTPOS, 0, 0);
+            if (currentPos < 0) {
+                isProcessing = false;
+                return;
+            }
+            
             int currentLine = SendMessage(hwndScintilla, SCI_LINEFROMPOSITION, currentPos, 0);
+            if (currentLine < 0) {
+                isProcessing = false;
+                return;
+            }
 
             // Get the current line's text
             std::string currentLineStr = GetTrimmedLineText(hwndScintilla, currentLine);
             if (currentLineStr.empty()) {
+                isProcessing = false;
                 return;
             }
 
@@ -252,6 +291,11 @@ void HandlePeopleCodeAutoIndentation(HWND hwndScintilla, SCNotification* notific
                 // First, find the block's starting line by searching backwards
                 int openBlockLine = -1;
                 int searchLine = currentLine - 1;
+                if (searchLine < 0) {
+                    isProcessing = false;
+                    return;
+                }
+                
                 int blockIndentation = 0;
 
                 if (isEndStatement) {
@@ -295,9 +339,16 @@ void HandlePeopleCodeAutoIndentation(HWND hwndScintilla, SCNotification* notific
                     int iterations = 0;
 
                     while (searchLine >= 0 && iterations < MAX_ITERATIONS) {
+                        if (!IsWindow(hwndScintilla)) {
+                            // Scintilla control has been destroyed
+                            isProcessing = false;
+                            return;
+                        }
+                        
                         std::string searchLineStr = GetTrimmedLineText(hwndScintilla, searchLine);
                         std::string lowerSearchLine = ToLowerCase(searchLineStr);
                         int lineIndent = SendMessage(hwndScintilla, SCI_GETLINEINDENTATION, searchLine, 0);
+                        if (lineIndent < 0) lineIndent = 0;
 
                         // Check for nested end statements that would increase our nesting level
                         if (lowerSearchLine == endPattern) {
@@ -351,6 +402,12 @@ void HandlePeopleCodeAutoIndentation(HWND hwndScintilla, SCNotification* notific
                     int iterations = 0;
                     
                     while (searchLine >= 0 && iterations < MAX_ITERATIONS) {
+                        if (!IsWindow(hwndScintilla)) {
+                            // Scintilla control has been destroyed
+                            isProcessing = false;
+                            return;
+                        }
+                        
                         std::string searchLineStr = GetTrimmedLineText(hwndScintilla, searchLine);
                         std::string lowerSearchLine = ToLowerCase(searchLineStr);
                         int lineIndent = SendMessage(hwndScintilla, SCI_GETLINEINDENTATION, searchLine, 0);

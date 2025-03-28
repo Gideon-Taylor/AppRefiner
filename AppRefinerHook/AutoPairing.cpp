@@ -27,7 +27,16 @@ void HandleAutoPairing(HWND hwndScintilla, SCNotification* notification) {
 
         // Get current position and line
         int currentPos = SendMessage(hwndScintilla, SCI_GETCURRENTPOS, 0, 0);
+        if (currentPos < 0) {
+            isProcessing = false;
+            return;
+        }
+
         int currentLine = SendMessage(hwndScintilla, SCI_LINEFROMPOSITION, currentPos, 0);
+        if (currentLine < 0) {
+            isProcessing = false;
+            return;
+        }
         
         // Update the tracker with the current line
         g_autoPairTracker.checkLine(currentLine);
@@ -35,7 +44,14 @@ void HandleAutoPairing(HWND hwndScintilla, SCNotification* notification) {
         // Handle commas and semicolons - move them outside of auto-paired quotes
         if (notification->ch == ',' || notification->ch == ';') {
             // Get the character at the current position
-            char nextChar = (char)SendMessage(hwndScintilla, SCI_GETCHARAT, currentPos, 0);
+            int nextCharValue = SendMessage(hwndScintilla, SCI_GETCHARAT, currentPos, 0);
+            if (nextCharValue < 0) {
+                // Invalid position
+                isProcessing = false;
+                return;
+            }
+            
+            char nextChar = (char)nextCharValue;
             
             // If the next character is a quote and we have an auto-paired quote to consume
             if (nextChar == '"' && g_autoPairTracker.quoteCount > 0) {
@@ -63,7 +79,14 @@ void HandleAutoPairing(HWND hwndScintilla, SCNotification* notification) {
         // Special handling for quotes since opening and closing are the same character
         if (notification->ch == '"') {
             // Get the character at the current position
-            char nextChar = (char)SendMessage(hwndScintilla, SCI_GETCHARAT, currentPos, 0);
+            int nextCharValue = SendMessage(hwndScintilla, SCI_GETCHARAT, currentPos, 0);
+            if (nextCharValue < 0) {
+                // Invalid position
+                isProcessing = false;
+                return;
+            }
+            
+            char nextChar = (char)nextCharValue;
             
             // If the next character is a quote, we might want to skip over it instead of inserting a new one
             if (nextChar == '"') {
@@ -96,7 +119,14 @@ void HandleAutoPairing(HWND hwndScintilla, SCNotification* notification) {
             // Check if we have auto-inserted characters to consume
             if (g_autoPairTracker.decrementCount(notification->ch)) {
                 // Get the character at the current position
-                char nextChar = (char)SendMessage(hwndScintilla, SCI_GETCHARAT, currentPos, 0);
+                int nextCharValue = SendMessage(hwndScintilla, SCI_GETCHARAT, currentPos, 0);
+                if (nextCharValue < 0) {
+                    // Invalid position
+                    isProcessing = false;
+                    return;
+                }
+                
+                char nextChar = (char)nextCharValue;
                 
                 // If the next character matches what we just typed, consume it
                 if (nextChar == notification->ch) {

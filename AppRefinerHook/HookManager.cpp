@@ -25,7 +25,12 @@ LRESULT CALLBACK WndProcHook(int nCode, WPARAM wParam, LPARAM lParam) {
         if (cwp->message == WM_NOTIFY) {
             // Get the NMHDR structure
             NMHDR* nmhdr = (NMHDR*)cwp->lParam;
-            if (!nmhdr || !IsWindow(nmhdr->hwndFrom)) {
+            if (!nmhdr) {
+                return CallNextHookEx(g_wndProcHook, nCode, wParam, lParam);
+            }
+            
+            // Validate hwndFrom
+            if (!nmhdr->hwndFrom || !IsWindow(nmhdr->hwndFrom)) {
                 return CallNextHookEx(g_wndProcHook, nCode, wParam, lParam);
             }
 
@@ -36,6 +41,16 @@ LRESULT CALLBACK WndProcHook(int nCode, WPARAM wParam, LPARAM lParam) {
                 if (strncmp(className, "Scintilla", 9) == 0) {
                     // It's a Scintilla control, so we can treat lParam as SCNotification
                     SCNotification* scn = (SCNotification*)cwp->lParam;
+                    
+                    // Make sure the notification structure is valid
+                    if (!scn) {
+                        return CallNextHookEx(g_wndProcHook, nCode, wParam, lParam);
+                    }
+
+                    // Add a check to ensure the hwndFrom is still valid before proceeding
+                    if (!IsWindow(nmhdr->hwndFrom)) {
+                        return CallNextHookEx(g_wndProcHook, nCode, wParam, lParam);
+                    }
 
                     if (scn->nmhdr.code == SCN_CHARADDED) {
                         // Check if this is a different editor HWND
@@ -46,10 +61,17 @@ LRESULT CALLBACK WndProcHook(int nCode, WPARAM wParam, LPARAM lParam) {
                             g_lastEditorHwnd = (HWND)nmhdr->hwndFrom;
                         }
                         
-                        // Handle auto-pairing first
-                        HandleAutoPairing((HWND)nmhdr->hwndFrom, scn);
-                        // Then handle auto-indentation
-                        HandlePeopleCodeAutoIndentation((HWND)nmhdr->hwndFrom, scn);
+                        // Verify the window is still valid before proceeding
+                        if (IsWindow(nmhdr->hwndFrom)) {
+                            // Handle auto-pairing first
+                            HandleAutoPairing((HWND)nmhdr->hwndFrom, scn);
+                            
+                            // Verify window is still valid
+                            if (IsWindow(nmhdr->hwndFrom)) {
+                                // Then handle auto-indentation
+                                HandlePeopleCodeAutoIndentation((HWND)nmhdr->hwndFrom, scn);
+                            }
+                        }
                         return CallNextHookEx(g_wndProcHook, nCode, wParam, lParam);
                     }
 

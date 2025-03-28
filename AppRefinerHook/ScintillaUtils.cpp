@@ -21,8 +21,16 @@ std::string GetTrimmedLineText(HWND hwndScintilla, int line) {
     }
 
     try {
+        // Ensure we don't allocate an excessive buffer
+        if (lineLength > 10000) {
+            OutputDebugStringA("Warning: Excessive line length in GetTrimmedLineText");
+            lineLength = 10000;
+        }
+        
         std::vector<char> lineText(lineLength + 1);
         SendMessage(hwndScintilla, SCI_GETLINE, line, (LPARAM)lineText.data());
+        
+        // Ensure NULL termination
         lineText[lineLength] = '\0';
 
         std::string lineStr(lineText.data());
@@ -44,8 +52,14 @@ std::string GetTrimmedLineText(HWND hwndScintilla, int line) {
 
         return lineStr;
     }
-    catch (const std::exception&) {
-        OutputDebugStringA("Exception in GetTrimmedLineText");
+    catch (const std::exception& e) {
+        char errorMsg[256];
+        sprintf_s(errorMsg, "Exception in GetTrimmedLineText: %s", e.what());
+        OutputDebugStringA(errorMsg);
+        return "";
+    }
+    catch (...) {
+        OutputDebugStringA("Unknown exception in GetTrimmedLineText");
         return "";
     }
 }
