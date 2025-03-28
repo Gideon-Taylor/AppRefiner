@@ -24,11 +24,22 @@ jobs:
         with:
           dotnet-version: '8.0.x'
 
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v1.1
+
       - name: Restore dependencies
         run: dotnet restore
 
+      - name: Build AppRefinerHook (C++)
+        run: msbuild AppRefinerHook/AppRefinerHook.vcxproj /p:Configuration=Release /p:Platform=x64
+        shell: pwsh
+
       - name: Publish framework-dependent build
         run: dotnet publish --self-contained false -r win-x64 -c Release -o publish/framework
+        shell: pwsh
+
+      - name: Copy AppRefinerHook.dll to release folder
+        run: Copy-Item -Path "AppRefinerHook\x64\Release\AppRefinerHook.dll" -Destination "publish\framework\"
         shell: pwsh
 
       - name: Get current date
