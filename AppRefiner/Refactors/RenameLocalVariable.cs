@@ -644,43 +644,72 @@ namespace AppRefiner.Refactors
             var expr = context.expression();
             if (expr != null && expr.GetText().Equals("%THIS", StringComparison.OrdinalIgnoreCase))
             {
-                // Get the method name from the dot access
+                // Get the member name from the dot access
                 var dotAccesses = context.dotAccess();
                 if (dotAccesses != null && dotAccesses.Length > 0)
                 {
                     var firstDotAccess = dotAccesses[0];
-                    var methodName = firstDotAccess.genericID()?.GetText();
+                    var memberName = firstDotAccess.genericID()?.GetText();
                     
-                    if (methodName != null && privateMethods.ContainsKey(methodName))
+                    if (memberName != null)
                     {
-                        // This is a call to a private method
-                        // Get just the span of the method name, not the entire expression
+                        // Get the span of just the member name, not the entire expression
                         var genericIdNode = firstDotAccess.genericID();
                         if (genericIdNode != null)
                         {
                             var span = (genericIdNode.Start.StartIndex, genericIdNode.Stop.StopIndex);
-                            
-                            // Track this method call
-                            if (!methodCalls.ContainsKey(methodName))
-                            {
-                                methodCalls[methodName] = new List<(int, int)>();
-                            }
-                            methodCalls[methodName].Add(span);
-                            
-                            // Add to global scope for renaming
                             var globalScope = scopeStack.Last();
-                            if (!globalScope.ContainsKey(methodName))
-                            {
-                                globalScope[methodName] = new List<(int, int)>();
-                            }
-                            globalScope[methodName].Add(span);
                             
-                            // Check if cursor is within this method call
-                            if (span.Item1 <= CurrentPosition && CurrentPosition <= span.Item2 + 1)
+                            // Handle method calls
+                            if (privateMethods.ContainsKey(memberName))
                             {
-                                variableToRename = methodName;
-                                isPrivateMethod = true;
-                                targetScope = globalScope;
+                                // This is a call to a private method
+                                
+                                // Track this method call
+                                if (!methodCalls.ContainsKey(memberName))
+                                {
+                                    methodCalls[memberName] = new List<(int, int)>();
+                                }
+                                methodCalls[memberName].Add(span);
+                                
+                                // Add to global scope for renaming
+                                if (!globalScope.ContainsKey(memberName))
+                                {
+                                    globalScope[memberName] = new List<(int, int)>();
+                                }
+                                globalScope[memberName].Add(span);
+                                
+                                // Check if cursor is within this method call
+                                if (span.Item1 <= CurrentPosition && CurrentPosition <= span.Item2 + 1)
+                                {
+                                    variableToRename = memberName;
+                                    isPrivateMethod = true;
+                                    targetScope = globalScope;
+                                }
+                            }
+                            // Handle instance variables
+                            else
+                            {
+                                // In dot access after %This, the variable name will be without & prefix
+                                // We need to find the matching instance variable with &
+                                string varNameWithPrefix = $"&{memberName}";
+                                
+                                // Check if this variable exists as an instance variable in the global scope
+                                if (globalScope.ContainsKey(varNameWithPrefix))
+                                {
+                                    // This is a reference to a private instance variable via %This
+                                    
+                                    // Add the span to the instance variable's references
+                                    globalScope[varNameWithPrefix].Add(span);
+                                    
+                                    // Check if cursor is within this instance variable reference
+                                    if (span.Item1 <= CurrentPosition && CurrentPosition <= span.Item2 + 1)
+                                    {
+                                        variableToRename = varNameWithPrefix;
+                                        isInstanceVariable = true;
+                                        targetScope = globalScope;
+                                    }
+                                }
                             }
                         }
                     }
@@ -826,13 +855,47 @@ namespace AppRefiner.Refactors
             // Generate replacement changes for each occurrence
             foreach (var (start, end) in allOccurrences)
             {
+                string replacement = newVariableName;
+                
+                // Special handling for instance variables referenced via %This
+                if (isInstanceVariable)
+                {
+                    // Get the text at this position to check if we're handling a %This reference
+                    string currentText = GetTextAtPosition(start, end);
+                    
+                    // If the text doesn't start with '&', this is likely a %This.property reference
+                    // In this case, we should use the variable name without the '&' prefix
+                    if (!currentText.StartsWith("&"))
+                    {
+                        replacement = newVariableName.TrimStart('&');
+                    }
+                }
+                
                 ReplaceText(
                     start,
                     end,
-                    newVariableName,
+                    replacement,
                     $"Rename {varTypeDescription} '{variableToRename}' to '{newVariableName}'"
                 );
             }
+        }
+        
+        // Helper method to get the text at a specific position range
+        private string GetTextAtPosition(int start, int end)
+        {
+            if (start < 0 || end < start)
+            {
+                return string.Empty;
+            }
+            
+            // Get the text from the editor's content
+            string? editorContent = Editor?.ContentString;
+            if (string.IsNullOrEmpty(editorContent) || start >= editorContent.Length || end >= editorContent.Length)
+            {
+                return string.Empty;
+            }
+            
+            return editorContent.Substring(start, end - start + 1);
         }
     }
 }
