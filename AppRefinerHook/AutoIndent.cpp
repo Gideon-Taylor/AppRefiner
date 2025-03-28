@@ -116,8 +116,8 @@ void HandlePeopleCodeAutoIndentation(HWND hwndScintilla, SCNotification* notific
                 
                 if (matches) {
                     // Special case for method declarations in class headers
-                    // If the line starts with "method" and ends with semicolon, don't increase indentation
-                    if (pattern.startPattern == "method " && lowerLine.length() > 0 && lowerLine[lowerLine.length() - 1] == ';') {
+                    // If the line starts with "method" and contains a semicolon, don't increase indentation
+                    if (pattern.startPattern == "method " && lowerLine.length() > 0 && lowerLine.find(';') != std::string::npos) {
                         continue;
                     }
                     
