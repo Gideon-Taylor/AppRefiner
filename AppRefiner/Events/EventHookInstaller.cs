@@ -12,8 +12,11 @@ namespace AppRefiner.Events
     internal static class EventHookInstaller
     {
         private const uint WM_USER = 0x400;
-        private const uint WM_SET_CALLBACK_WINDOW = WM_USER + 1001;
         private const uint WM_TOGGLE_AUTO_PAIRING = WM_USER + 1002;
+        private const uint WM_SUBCLASS_WINDOW = WM_USER + 1003;
+        private const uint WM_REMOVE_HOOK = WM_USER + 1004;
+
+        private static Dictionary<uint, IntPtr> _activeHooks = new Dictionary<uint, IntPtr>();
 
         // Win32 API imports
         [DllImport("user32.dll")]
@@ -25,15 +28,73 @@ namespace AppRefiner.Events
 
         [DllImport("AppRefinerHook.dll", CallingConvention = CallingConvention.Cdecl)]
         public static extern bool Unhook();
-        // Method to send pipe name to the hooked thread
-        public static bool SendWindowHandleToHookedThread(uint threadId, IntPtr windowHandle)
-        {
-            // Send the thread message with the pipe ID
-            bool result = PostThreadMessage(threadId, WM_SET_CALLBACK_WINDOW, new IntPtr(windowHandle), IntPtr.Zero);
 
-            result = PostThreadMessage(threadId, WM_TOGGLE_AUTO_PAIRING, 1, IntPtr.Zero);
+        [DllImport("AppRefinerHook.dll", CallingConvention = CallingConvention.Cdecl)]
+        public static extern bool UnsubclassWindow(IntPtr hWnd);
+
+        // Method to subclass a window
+        public static bool SubclassWindow(uint threadId, IntPtr windowToSubclass, IntPtr callbackWindow)
+        {
+            // If we already have a hook for this thread, use it
+            if (!_activeHooks.TryGetValue(threadId, out IntPtr existingHookId))
+            {
+                // Set a new hook
+                IntPtr hookId = SetHook(threadId);
+                if (hookId == IntPtr.Zero)
+                {
+                    return false;
+                }
+                
+                // Store the hook ID
+                _activeHooks[threadId] = hookId;
+            }
+
+            // Send the thread message to subclass the window
+            bool result = PostThreadMessage(threadId, WM_SUBCLASS_WINDOW, windowToSubclass, callbackWindow);
+
+            // Toggle auto-pairing if subclassing was successful
+            if (result)
+            {
+                result = PostThreadMessage(threadId, WM_TOGGLE_AUTO_PAIRING, 1, IntPtr.Zero);
+            }
+
+            // Do not unhook here, as unhooking might cause the DLL to unload
+            // Unhook();
 
             return result;
+        }
+
+        // Method to remove the hook
+        public static bool RemoveHook(uint threadId)
+        {
+            return PostThreadMessage(threadId, WM_REMOVE_HOOK, IntPtr.Zero, IntPtr.Zero);
+        }
+
+        // Method to unhook all active hooks (call this when closing the application)
+        public static void CleanupAllHooks()
+        {
+            foreach (var hookPair in _activeHooks.ToList())
+            {
+                UnhookThread(hookPair.Key);
+            }
+            
+            _activeHooks.Clear();
+        }
+        
+        // Method to unhook a specific thread
+        public static bool UnhookThread(uint threadId)
+        {
+            if (_activeHooks.TryGetValue(threadId, out IntPtr hookId))
+            {
+                bool result = Unhook();
+                if (result)
+                {
+                    _activeHooks.Remove(threadId);
+                }
+                return result;
+            }
+            
+            return false;
         }
     }
 }

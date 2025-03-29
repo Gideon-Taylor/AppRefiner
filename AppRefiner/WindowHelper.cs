@@ -159,6 +159,11 @@ namespace AppRefiner
                 form.Location = new Point(formX, formY);
             }
         }
+
+        internal static nint GetParentWindow(nint hWnd)
+        {
+            return GetParent(hWnd);
+        }
     }
 
     public class WindowWrapper : IWin32Window

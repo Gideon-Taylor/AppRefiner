@@ -82,4 +82,14 @@
     </EmbeddedResource>
   </ItemGroup>
 
+	<!-- Copy AppRefinerSubclass.dll to output directory -->
+    <Target Name="CopySubclassDll" AfterTargets="Build">
+	    <Copy SourceFiles="$(SolutionDir)x64\$(Configuration)\AppRefinerHook.dll"
+			    DestinationFolder="$(OutputPath)"
+			    SkipUnchangedFiles="true" />
+		<Copy SourceFiles="$(SolutionDir)x64\$(Configuration)\AppRefinerHook.pdb"
+		DestinationFolder="$(OutputPath)"
+		SkipUnchangedFiles="true" />
+    </Target>
+
 </Project>

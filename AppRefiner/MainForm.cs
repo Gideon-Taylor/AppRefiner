@@ -74,7 +74,6 @@ namespace AppRefiner
         private Dictionary<string, Control> templateInputLabels = new();
         private Dictionary<string, DisplayCondition> templateInputsDisplayConditions = new();
 
-        private static HashSet<uint> ThreadsWithEventHook = new();
         // Static list of available commands
         public static List<Command> AvailableCommands = new();
 
@@ -318,6 +317,9 @@ namespace AppRefiner
 
         protected override void OnFormClosing(FormClosingEventArgs e)
         {
+            // Clean up all hooks to ensure they're properly removed
+            AppRefiner.Events.EventHookInstaller.CleanupAllHooks();
+            
             SaveSettings();
         }
 
@@ -2487,18 +2489,12 @@ namespace AppRefiner
 
                 if (chkAutoIndentation.Checked && File.Exists("AppRefinerHook.dll"))
                 {
-                    if (!ThreadsWithEventHook.Contains(activeEditor.ThreadID))
+                    Debug.Log($"Editor isn't subclassed: {activeEditor.hWnd}");
+                    this.Invoke(() =>
                     {
-                        Debug.Log($"Editor doesn't have hook set for thread: {activeEditor.ThreadID}");
-                        var hookID = EventHookInstaller.SetHook(activeEditor.ThreadID);
-                        Debug.Log($"Hook ID: {hookID}");
-                        this.Invoke(() =>
-                        {
-                            EventHookInstaller.SendWindowHandleToHookedThread(activeEditor.ThreadID, this.Handle);
-                        });
-                        ThreadsWithEventHook.Add(activeEditor.ThreadID);
-                        Debug.Log($"Hook set for thread: {activeEditor.ThreadID:X}");
-                    }
+                        bool success = EventHookInstaller.SubclassWindow(activeEditor.ThreadID, WindowHelper.GetParentWindow(activeEditor.hWnd), this.Handle);
+                        Debug.Log($"Window subclassing result: {success}");
+                    });
                     ScintillaManager.SetMouseDwellTime(activeEditor, 1000);
                 }
 
@@ -2523,16 +2519,6 @@ namespace AppRefiner
             /* We only want to operate on "clean" editor states */
             if (ScintillaManager.IsEditorClean(activeEditor))
             {
-                /* If there is a text selection, maybe the save failed and the error was highlighted... */
-                if (ThreadsWithEventHook.Contains(activeEditor.ThreadID) == false &&
-                    activeEditor.Type == EditorType.PeopleCode && ScintillaManager.GetSelectionLength(activeEditor) > 0)
-                {
-                    /* We want to update our content hash to match so we don't process it next tick. */
-                    //activeEditor.LastContentHash = 0;
-                    return;
-                }
-
-
                 /* compare content hash to see if things have changed */
                 var contentHash = ScintillaManager.GetContentHash(activeEditor);
                 if (contentHash == activeEditor.LastContentHash)
