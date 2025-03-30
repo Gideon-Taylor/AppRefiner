@@ -80,14 +80,14 @@ namespace AppRefiner.Stylers
             {
                 if (!import.Value.Used)
                 {
-                    CodeHighlight highlight = new()
+                    Indicators?.Add(new Indicator
                     {
                         Start = import.Value.StartIndex,
                         Length = import.Value.StopIndex - import.Value.StartIndex + 1,
                         Color = HIGHLIGHT_COLOR,
-                        Tooltip = "Unused import"
-                    };
-                    Highlights?.Add(highlight);
+                        Tooltip = "Unused import",
+                        Type = IndicatorType.HIGHLIGHTER
+                    });
                 }
             }
         }

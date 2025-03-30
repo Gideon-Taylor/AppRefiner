@@ -83,15 +83,15 @@ namespace AppRefiner.Stylers
             {
                 if (!variable.Used)
                 {
-                    // Add both highlight and color for unused variables
-                    Highlights?.Add(new CodeHighlight()
+                    // Add indicator for unused variables
+                    Indicators?.Add(new Indicator
                     {
                         Color = HIGHLIGHT_COLOR,
                         Start = variable.Span.Start,
                         Length = variable.Span.Stop - variable.Span.Start + 1,
-                        Tooltip = "Unused variable"
+                        Tooltip = "Unused variable",
+                        Type = IndicatorType.HIGHLIGHTER
                     });
-
                 }
             }
         }
@@ -103,12 +103,13 @@ namespace AppRefiner.Stylers
             {
                 if (!variable.Used)
                 {
-                    Highlights?.Add(new CodeHighlight()
+                    Indicators?.Add(new Indicator
                     {
                         Color = HIGHLIGHT_COLOR,
                         Start = variable.Span.Start,
                         Length = variable.Span.Stop - variable.Span.Start + 1,
-                        Tooltip = "Unused variable"
+                        Tooltip = "Unused variable",
+                        Type = IndicatorType.HIGHLIGHTER
                     });
                 }
             }
@@ -118,12 +119,13 @@ namespace AppRefiner.Stylers
             {
                 if (!variable.Used)
                 {
-                    Highlights?.Add(new CodeHighlight()
+                    Indicators?.Add(new Indicator
                     {
                         Color = HIGHLIGHT_COLOR,
                         Start = variable.Span.Start,
                         Length = variable.Span.Stop - variable.Span.Start + 1,
-                        Tooltip = "Unused instance variable"
+                        Tooltip = "Unused instance variable",
+                        Type = IndicatorType.HIGHLIGHTER
                     });
                 }
             }

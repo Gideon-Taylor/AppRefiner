@@ -12,6 +12,7 @@ namespace AppRefiner.Database
     {
         private IDbConnection _connection;
         private readonly string _connectionString;
+        private readonly string? _namespace;
 
         /// <summary>
         /// Gets the underlying database connection
@@ -27,9 +28,11 @@ namespace AppRefiner.Database
         /// Creates a new PeopleSoft data manager with the specified connection string
         /// </summary>
         /// <param name="connectionString">Database connection string</param>
-        public OraclePeopleSoftDataManager(string connectionString)
+        /// <param name="namespace">Optional PeopleSoft namespace to set as current schema</param>
+        public OraclePeopleSoftDataManager(string connectionString, string? @namespace = null)
         {
             _connectionString = connectionString;
+            _namespace = @namespace;
             _connection = new OracleDbConnection(connectionString);
         }
 
@@ -44,6 +47,13 @@ namespace AppRefiner.Database
                 if (_connection.State != ConnectionState.Open)
                 {
                     _connection.Open();
+                    
+                    // Set namespace if provided
+                    if (!string.IsNullOrEmpty(_namespace))
+                    {
+                        string sql = $"ALTER SESSION SET CURRENT_SCHEMA={_namespace}";
+                        _connection.ExecuteNonQuery(sql);
+                    }
                 }
                 return true;
             }
@@ -490,6 +500,80 @@ namespace AppRefiner.Database
             }
 
             return nameReferences;
+        }
+
+        public bool CheckAppClassExists(string appClassPath)
+        {
+           if (!IsConnected)
+            {
+                throw new InvalidOperationException("Database connection is not open");
+            }
+            
+            // Split the appClassPath by colons
+            string[] parts = appClassPath.Split(':');
+            
+            // Need at least one package and a class name
+            if (parts.Length < 2)
+            {
+                return false;
+            }
+            
+            // Prepare the query parameters
+            Dictionary<string, object> parameters = new();
+            
+            // Set all object IDs and values based on the parts of the appClassPath
+            for (int i = 0; i < 7; i++)
+            {
+                int objId = 0;
+                string objVal = " ";
+                
+                if (i < parts.Length)
+                {
+                    if (i == parts.Length - 1)
+                    {
+                        // Last part is the class (OBJECTID = 107)
+                        objId = 107;
+                        objVal = parts[i].ToUpper();
+                    }
+                    else
+                    {
+                        // Package parts start at 104 and increment
+                        objId = 104 + i;
+                        objVal = parts[i].ToUpper();
+                    }
+                }
+                else if (i == parts.Length)
+                {
+                    // After the class comes OnExecute (OBJECTID = 12)
+                    objId = 12;
+                    objVal = "ONEXECUTE";
+                }
+                
+                // Parameter indices are 1-based
+                parameters[$":objId{i + 1}"] = objId;
+                parameters[$":objVal{i + 1}"] = objVal;
+            }
+
+            // Construct the SQL query to check for existence
+            string query = @"SELECT 'Y' FROM PSPCMPROG 
+                WHERE OBJECTID1 = :objId1 AND UPPER(OBJECTVALUE1) = :objVal1
+                AND OBJECTID2 = :objId2 AND UPPER(OBJECTVALUE2) = :objVal2
+                AND OBJECTID3 = :objId3 AND UPPER(OBJECTVALUE3) = :objVal3
+                AND OBJECTID4 = :objId4 AND UPPER(OBJECTVALUE4) = :objVal4
+                AND OBJECTID5 = :objId5 AND UPPER(OBJECTVALUE5) = :objVal5
+                AND OBJECTID6 = :objId6 AND UPPER(OBJECTVALUE6) = :objVal6
+                AND OBJECTID7 = :objId7 AND UPPER(OBJECTVALUE7) = :objVal7";
+            
+            // Execute the query
+            DataTable result = _connection.ExecuteQuery(query, parameters);
+            
+            // If any row exists, the app class exists
+            if (result.Rows.Count > 0 && result.Rows[0][0] is string exists)
+            {
+                return exists == "Y";
+            }
+            
+            return false;
         }
 
     }

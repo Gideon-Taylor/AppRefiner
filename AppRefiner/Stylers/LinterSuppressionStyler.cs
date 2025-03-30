@@ -28,7 +28,7 @@ namespace AppRefiner.Stylers
 
         public void ProcessComments()
         {
-            if (Comments == null || Highlights == null)
+            if (Comments == null || Indicators == null)
                 return;
 
             foreach (var comment in Comments)
@@ -41,12 +41,15 @@ namespace AppRefiner.Stylers
                     var match = suppressionPattern.Match(text);
                     if (match.Success)
                     {
+                        string suppressedRules = match.Groups[1].Value;
                         // This is a suppression comment, highlight it
-                        Highlights.Add(new CodeHighlight
+                        Indicators.Add(new Indicator
                         {
                             Start = comment.StartIndex,
                             Length = comment.Text.Length,
-                            Color = HILIGHT_COLOR
+                            Color = HILIGHT_COLOR,
+                            Type = IndicatorType.HIGHLIGHTER,
+                            Tooltip = $"Suppressed rules: {suppressedRules}"
                         });
                     }
                 }

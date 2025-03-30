@@ -74,5 +74,12 @@ namespace AppRefiner.Database
         /// <param name="item">The PeopleCode item to load content for</param>
         /// <returns>True if loading was successful</returns>
         bool LoadPeopleCodeItemContent(PeopleCodeItem item);
+
+        /// <summary>
+        /// Checks if an Application Class exists in the database
+        /// </summary>
+        /// <param name="appClassPath">The application class path to check</param>
+        /// <returns>True if the application class exists, false otherwise</returns>
+        bool CheckAppClassExists(string appClassPath);
     }
 }

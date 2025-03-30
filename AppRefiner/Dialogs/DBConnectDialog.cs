@@ -20,6 +20,10 @@ namespace AppRefiner.Dialogs
         private readonly ComboBox dbTypeComboBox;
         private readonly Label dbNameLabel;
         private readonly ComboBox dbNameComboBox;
+        private readonly RadioButton bootstrapRadioButton;
+        private readonly RadioButton readOnlyRadioButton;
+        private readonly Label namespaceLabel;
+        private readonly TextBox namespaceTextBox;
         private readonly Label usernameLabel;
         private readonly TextBox usernameTextBox;
         private readonly Label passwordLabel;
@@ -41,6 +45,10 @@ namespace AppRefiner.Dialogs
             this.dbTypeComboBox = new ComboBox();
             this.dbNameLabel = new Label();
             this.dbNameComboBox = new ComboBox();
+            this.bootstrapRadioButton = new RadioButton();
+            this.readOnlyRadioButton = new RadioButton();
+            this.namespaceLabel = new Label();
+            this.namespaceTextBox = new TextBox();
             this.usernameLabel = new Label();
             this.usernameTextBox = new TextBox();
             this.passwordLabel = new Label();
@@ -100,36 +108,64 @@ namespace AppRefiner.Dialogs
             this.dbNameComboBox.Size = new Size(250, 23);
             this.dbNameComboBox.TabIndex = 4;
 
+            // Radio buttons for connection type
+            this.bootstrapRadioButton.Text = "Bootstrap";
+            this.bootstrapRadioButton.Location = new Point(130, 110);
+            this.bootstrapRadioButton.Size = new Size(110, 23);
+            this.bootstrapRadioButton.TabIndex = 5;
+            this.bootstrapRadioButton.Checked = true;
+            this.bootstrapRadioButton.CheckedChanged += ConnectionTypeRadioButton_CheckedChanged;
+
+            this.readOnlyRadioButton.Text = "Read Only User";
+            this.readOnlyRadioButton.Location = new Point(250, 110);
+            this.readOnlyRadioButton.Size = new Size(130, 23);
+            this.readOnlyRadioButton.TabIndex = 6;
+            this.readOnlyRadioButton.CheckedChanged += ConnectionTypeRadioButton_CheckedChanged;
+
+            // namespaceLabel
+            this.namespaceLabel.Text = "Namespace:";
+            this.namespaceLabel.Location = new Point(20, 140);
+            this.namespaceLabel.Size = new Size(100, 23);
+            this.namespaceLabel.TabIndex = 7;
+            this.namespaceLabel.TextAlign = ContentAlignment.MiddleLeft;
+            this.namespaceLabel.Visible = false;
+
+            // namespaceTextBox
+            this.namespaceTextBox.Location = new Point(130, 140);
+            this.namespaceTextBox.Size = new Size(250, 23);
+            this.namespaceTextBox.TabIndex = 8;
+            this.namespaceTextBox.Visible = false;
+
             // usernameLabel
             this.usernameLabel.Text = "Username:";
-            this.usernameLabel.Location = new Point(20, 110);
+            this.usernameLabel.Location = new Point(20, 140);
             this.usernameLabel.Size = new Size(100, 23);
-            this.usernameLabel.TabIndex = 5;
+            this.usernameLabel.TabIndex = 9;
             this.usernameLabel.TextAlign = ContentAlignment.MiddleLeft;
 
             // usernameTextBox
-            this.usernameTextBox.Location = new Point(130, 110);
+            this.usernameTextBox.Location = new Point(130, 140);
             this.usernameTextBox.Size = new Size(250, 23);
-            this.usernameTextBox.TabIndex = 6;
+            this.usernameTextBox.TabIndex = 10;
 
             // passwordLabel
             this.passwordLabel.Text = "Password:";
-            this.passwordLabel.Location = new Point(20, 140);
+            this.passwordLabel.Location = new Point(20, 170);
             this.passwordLabel.Size = new Size(100, 23);
-            this.passwordLabel.TabIndex = 7;
+            this.passwordLabel.TabIndex = 11;
             this.passwordLabel.TextAlign = ContentAlignment.MiddleLeft;
 
             // passwordTextBox
-            this.passwordTextBox.Location = new Point(130, 140);
+            this.passwordTextBox.Location = new Point(130, 170);
             this.passwordTextBox.Size = new Size(250, 23);
-            this.passwordTextBox.TabIndex = 8;
+            this.passwordTextBox.TabIndex = 12;
             this.passwordTextBox.PasswordChar = '*';
 
             // connectButton
             this.connectButton.Text = "Connect";
             this.connectButton.Size = new Size(100, 30);
-            this.connectButton.Location = new Point(130, 180);
-            this.connectButton.TabIndex = 9;
+            this.connectButton.Location = new Point(130, 210);
+            this.connectButton.TabIndex = 13;
             this.connectButton.BackColor = Color.FromArgb(0, 122, 204);
             this.connectButton.ForeColor = Color.White;
             this.connectButton.FlatStyle = FlatStyle.Flat;
@@ -139,8 +175,8 @@ namespace AppRefiner.Dialogs
             // cancelButton
             this.cancelButton.Text = "Cancel";
             this.cancelButton.Size = new Size(100, 30);
-            this.cancelButton.Location = new Point(280, 180);
-            this.cancelButton.TabIndex = 10;
+            this.cancelButton.Location = new Point(280, 210);
+            this.cancelButton.TabIndex = 14;
             this.cancelButton.BackColor = Color.FromArgb(100, 100, 100);
             this.cancelButton.ForeColor = Color.White;
             this.cancelButton.FlatStyle = FlatStyle.Flat;
@@ -153,12 +189,16 @@ namespace AppRefiner.Dialogs
 
             // DBConnectDialog
             this.Text = "Connect to Database";
-            this.ClientSize = new Size(400, 230);
+            this.ClientSize = new Size(400, 260);
             this.Controls.Add(this.headerPanel);
             this.Controls.Add(this.dbTypeLabel);
             this.Controls.Add(this.dbTypeComboBox);
             this.Controls.Add(this.dbNameLabel);
             this.Controls.Add(this.dbNameComboBox);
+            this.Controls.Add(this.bootstrapRadioButton);
+            this.Controls.Add(this.readOnlyRadioButton);
+            this.Controls.Add(this.namespaceLabel);
+            this.Controls.Add(this.namespaceTextBox);
             this.Controls.Add(this.usernameLabel);
             this.Controls.Add(this.usernameTextBox);
             this.Controls.Add(this.passwordLabel);
@@ -183,6 +223,56 @@ namespace AppRefiner.Dialogs
             if (this.dbTypeComboBox.SelectedItem?.ToString() == "Oracle")
             {
                 LoadOracleTnsNames();
+            }
+            
+            // Update UI based on initial radio button selection
+            UpdateUIForConnectionType();
+        }
+
+        private void ConnectionTypeRadioButton_CheckedChanged(object? sender, EventArgs e)
+        {
+            UpdateUIForConnectionType();
+        }
+
+        private void UpdateUIForConnectionType()
+        {
+            if (readOnlyRadioButton.Checked)
+            {
+                // Show namespace controls
+                namespaceLabel.Visible = true;
+                namespaceTextBox.Visible = true;
+                
+                // Adjust positions of username and password controls
+                usernameLabel.Location = new Point(20, 170);
+                usernameTextBox.Location = new Point(130, 170);
+                passwordLabel.Location = new Point(20, 200);
+                passwordTextBox.Location = new Point(130, 200);
+                
+                // Adjust positions of action buttons
+                connectButton.Location = new Point(130, 240);
+                cancelButton.Location = new Point(280, 240);
+                
+                // Adjust form height
+                this.ClientSize = new Size(400, 290);
+            }
+            else
+            {
+                // Hide namespace controls
+                namespaceLabel.Visible = false;
+                namespaceTextBox.Visible = false;
+                
+                // Reset positions of username and password controls
+                usernameLabel.Location = new Point(20, 140);
+                usernameTextBox.Location = new Point(130, 140);
+                passwordLabel.Location = new Point(20, 170);
+                passwordTextBox.Location = new Point(130, 170);
+                
+                // Reset positions of action buttons
+                connectButton.Location = new Point(130, 210);
+                cancelButton.Location = new Point(280, 210);
+                
+                // Reset form height
+                this.ClientSize = new Size(400, 260);
             }
         }
 
@@ -246,10 +336,17 @@ namespace AppRefiner.Dialogs
                 string dbName = dbNameComboBox.Text;
                 string username = usernameTextBox.Text;
                 string password = passwordTextBox.Text;
+                string? @namespace = readOnlyRadioButton.Checked ? namespaceTextBox.Text : null;
                 
                 if (string.IsNullOrEmpty(username) || string.IsNullOrEmpty(password))
                 {
                     MessageBox.Show("Please enter username and password", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    return;
+                }
+
+                if (readOnlyRadioButton.Checked && string.IsNullOrEmpty(@namespace))
+                {
+                    MessageBox.Show("Please enter a namespace for Read Only User", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
                     return;
                 }
 
@@ -260,7 +357,7 @@ namespace AppRefiner.Dialogs
                     switch (dbType)
                     {
                         case "Oracle":
-                            DataManager = new OraclePeopleSoftDataManager(connectionString);
+                            DataManager = new OraclePeopleSoftDataManager(connectionString, @namespace);
                             break;
                     }
 

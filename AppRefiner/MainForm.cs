@@ -1036,6 +1036,16 @@ namespace AppRefiner
                     stylers.Add(styler);
                 }
             }
+            
+            // Ensure our new InvalidAppClass styler is added
+            var invalidAppClassStyler = new Stylers.InvalidAppClass();
+            bool alreadyAdded = stylers.Any(s => s is Stylers.InvalidAppClass);
+            if (!alreadyAdded)
+            {
+                int rowIndex = dataGridView3.Rows.Add(invalidAppClassStyler.Active, invalidAppClassStyler.Description);
+                dataGridView3.Rows[rowIndex].Tag = invalidAppClassStyler;
+                stylers.Add(invalidAppClassStyler);
+            }
         }
         private void ProcessStylers(ScintillaEditor editor)
         {
@@ -1057,12 +1067,25 @@ namespace AppRefiner
             var program = parser.program();
             parser.Interpreter.ClearDFA();
             GC.Collect();
-            var activeStylers = stylers.Where(a => a.Active);
+            
+            // Check if there's recently a new datamanager for this editor
+            if (processDataManagers.TryGetValue(editor.ProcessId, out IDataManager? dataManager))
+            {
+                editor.DataManager = dataManager;
+            }
+            
+            // Get active stylers filtering out those that require a database when one isn't available
+            var activeStylers = stylers.Where(a => a.Active && (a.DatabaseRequirement != DataManagerRequirement.Required || editor.DataManager != null));
+            
+            // Assign data manager to each styler
+            foreach (var styler in activeStylers)
+            {
+                styler.DataManager = editor.DataManager;
+            }
+            
             MultiParseTreeWalker walker = new();
 
-            List<CodeAnnotation> annotations = new();
-            List<CodeHighlight> highlights = new();
-            List<CodeColor> colors = new();
+            List<Indicator> newIndicators = new();
 
             // Collect all comments from both comment channels
             var comments = stream.GetTokens()
@@ -1071,9 +1094,7 @@ namespace AppRefiner
 
             foreach (var styler in activeStylers)
             {
-                styler.Annotations = annotations;
-                styler.Highlights = highlights;
-                styler.Colors = colors;
+                styler.Indicators = newIndicators;
                 styler.Comments = comments;
                 walker.AddListener(styler);
             }
@@ -1086,29 +1107,64 @@ namespace AppRefiner
                 styler.Reset();
             }
 
-            ScintillaManager.ResetStyles(editor);
-
-            // Store the annotations for later use after linter processing
-            editor.StylerAnnotations = new List<CodeAnnotation>(annotations);
-
-            // Clear previous highlight tooltips
-            editor.HighlightTooltips.Clear();
-
-            foreach (var annotation in annotations)
+            // Get sets of current and new indicators for comparison
+            var currentIndicators = editor.ActiveIndicators;
+            
+            // Build a set to track indicators to remove
+            var indicatorsToRemove = new List<Indicator>();
+            
+            // Find all indicators that are no longer needed
+            foreach (var currentIndicator in currentIndicators)
             {
-                ScintillaManager.SetAnnotation(editor, annotation.LineNumber, annotation.Message);
+                bool stillNeeded = newIndicators.Any(ni => 
+                    ni.Start == currentIndicator.Start && 
+                    ni.Length == currentIndicator.Length && 
+                    ni.Color == currentIndicator.Color &&
+                    ni.Type == currentIndicator.Type);
+                
+                if (!stillNeeded)
+                {
+                    indicatorsToRemove.Add(currentIndicator);
+                }
             }
-
-            foreach (var highlight in highlights)
+            
+            // Find all indicators that need to be added
+            var indicatorsToAdd = newIndicators.Where(ni => 
+                !currentIndicators.Any(ci => 
+                    ci.Start == ni.Start && 
+                    ci.Length == ni.Length && 
+                    ci.Color == ni.Color &&
+                    ci.Type == ni.Type)).ToList();
+            
+            // Remove indicators that are no longer needed
+            foreach (var indicator in indicatorsToRemove)
             {
-                ScintillaManager.HighlightTextWithColor(editor, highlight.Color, highlight.Start, highlight.Length, highlight.Tooltip);
+                if (indicator.Type == IndicatorType.HIGHLIGHTER)
+                {
+                    ScintillaManager.RemoveHighlightWithColor(editor, indicator.Color, indicator.Start, indicator.Length);
+                }
+                else if (indicator.Type == IndicatorType.SQUIGGLE)
+                {
+                    ScintillaManager.RemoveSquiggleWithColor(editor, indicator.Color, indicator.Start, indicator.Length);
+                }
             }
-
-            foreach (var color in colors)
+            
+            // Add new indicators
+            foreach (var indicator in indicatorsToAdd)
             {
-                ScintillaManager.ColorText(editor, color.Color, color.Start, color.Length);
+                if (indicator.Type == IndicatorType.HIGHLIGHTER)
+                {
+                    ScintillaManager.HighlightTextWithColor(editor, indicator.Color, indicator.Start, indicator.Length, indicator.Tooltip);
+                }
+                else if (indicator.Type == IndicatorType.SQUIGGLE)
+                {
+                    ScintillaManager.SquiggleTextWithColor(editor, indicator.Color, indicator.Start, indicator.Length, indicator.Tooltip);
+                }
             }
-
+            
+            // Update the editor's active indicator list with the new set
+            editor.ActiveIndicators = newIndicators;
+            
             // Clean up
             program = null;
             lexer = null;
@@ -1228,14 +1284,7 @@ namespace AppRefiner
                 }
             }
 
-            // Re-apply styler annotations after linter processing
-            if (activeEditor.StylerAnnotations != null && activeEditor.StylerAnnotations.Count > 0)
-            {
-                foreach (var annotation in activeEditor.StylerAnnotations)
-                {
-                    ScintillaManager.SetAnnotation(activeEditor, annotation.LineNumber, annotation.Message);
-                }
-            }
+            // Since we're not using styler annotations anymore, we don't need to re-apply them
         }
 
         private void dataGridView3_CellContentClick(object sender, DataGridViewCellEventArgs e)
@@ -2745,6 +2794,7 @@ namespace AppRefiner
                         timerRunning = false;
                     }
                     activeEditor = null;
+                    Stylers.InvalidAppClass.ClearValidAppClassPathsCache();
                 }
 
                 // A window has gained focus - check if it's a Scintilla window

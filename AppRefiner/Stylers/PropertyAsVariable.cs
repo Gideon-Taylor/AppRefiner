@@ -77,14 +77,15 @@ namespace AppRefiner.Stylers
             string varName = userVariable.GetText().TrimStart('&');
             if (!inConstructor && publicProperties.Contains(varName))
             {
-                if (Highlights != null)
+                if (Indicators != null)
                 {
-                    Highlights.Add(new CodeHighlight
+                    Indicators.Add(new Indicator
                     {
                         Start = userVariable.Symbol.StartIndex,
                         Length = userVariable.Symbol.Text.Length,
                         Color = HIGHLIGHT_COLOR,
-                        Tooltip = "Property used as variable outside constructor"
+                        Tooltip = "Property used as variable outside constructor",
+                        Type = IndicatorType.HIGHLIGHTER
                     });
                 }
             }
