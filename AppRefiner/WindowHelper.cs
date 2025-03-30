@@ -164,6 +164,7 @@ namespace AppRefiner
         {
             return GetParent(hWnd);
         }
+
     }
 
     public class WindowWrapper : IWin32Window

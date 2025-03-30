@@ -31,6 +31,20 @@ namespace AppRefiner
         // Delegate used for both EnumWindows and EnumChildWindows.
         private delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
 
+        // WinEvent constants
+        private const uint EVENT_OBJECT_FOCUS = 0x8005;
+        private const uint WINEVENT_OUTOFCONTEXT = 0x0000;
+        private const uint WINEVENT_SKIPOWNPROCESS = 0x0002;
+
+        // WinEvent function delegate
+        private delegate void WinEventDelegate(IntPtr hWinEventHook, uint eventType, IntPtr hwnd, int idObject, int idChild, uint dwEventThread, uint dwmsEventTime);
+
+        [DllImport("user32.dll")]
+        private static extern IntPtr SetWinEventHook(uint eventMin, uint eventMax, IntPtr hmodWinEventProc, WinEventDelegate lpfnWinEventProc, uint idProcess, uint idThread, uint dwFlags);
+
+        [DllImport("user32.dll")]
+        private static extern bool UnhookWinEvent(IntPtr hWinEventHook);
+
         [DllImport("user32.dll")]
         private static extern bool EnumWindows(EnumWindowsProc lpEnumFunc, IntPtr lParam);
 
@@ -55,9 +69,16 @@ namespace AppRefiner
             public int Bottom;
         }
 
+        // WinEvent hook handle
+        private IntPtr winEventHook = IntPtr.Zero;
+        
+        // Keep reference to delegate to prevent garbage collection
+        private WinEventDelegate winEventDelegate;
+
         System.Threading.Timer? scanTimer;
         private bool timerRunning = false;
-        private object scanningLock = new();
+        private bool timerProcessing = false;
+        private readonly object timerLock = new object();
         private ScintillaEditor? activeEditor = null;
 
         /// <summary>
@@ -209,9 +230,10 @@ namespace AppRefiner
             // Register keyboard shortcuts for refactors
             this.RegisterRefactorShortcuts();
 
-            // Automatically start the scanning timer
-            timerRunning = true;
-            scanTimer = new System.Threading.Timer(ScanTick, null, 1000, Timeout.Infinite);
+            // Setup WinEvent hook for detecting Scintilla editor creation
+            SetupWinEventHook();
+            
+            // If WinEvent hook failed, scanTimer will be initialized in SetupWinEventHook
             lblStatus.Text = "Monitoring...";
         }
 
@@ -319,6 +341,13 @@ namespace AppRefiner
         {
             // Clean up all hooks to ensure they're properly removed
             AppRefiner.Events.EventHookInstaller.CleanupAllHooks();
+            
+            // Clean up the WinEvent hook if active
+            if (winEventHook != IntPtr.Zero)
+            {
+                UnhookWinEvent(winEventHook);
+                winEventHook = IntPtr.Zero;
+            }
             
             SaveSettings();
         }
@@ -2368,33 +2397,35 @@ namespace AppRefiner
             return string.Empty;
         }
 
-        private ScintillaEditor? GetActiveEditor()
+        private ScintillaEditor? SetActiveEditor(IntPtr hwnd)
         {
             try
             {
-                var activeWindow = ActiveWindowChecker.GetActiveScintillaWindow();
-
-                /* If currently focused window is *not* owned by PSIDE, return the last active editor */
-                if (activeWindow == new IntPtr(-1)) 
+                // Check if this is the same editor we already have
+                if (activeEditor != null && activeEditor.hWnd == hwnd)
                 {
-                    // Validate the last active editor if it exists
-                    if (activeEditor != null && !activeEditor.IsValid())
-                    {
-                        // Editor is no longer valid, clean it up
-                        ScintillaManager.CleanupEditor(activeEditor);
-                        activeEditor = null;
-                    }
+                    // Check if content has changed
+                    CheckForContentChanges(activeEditor);
+                    // Same editor as before - just return it
                     return activeEditor;
                 }
-
-                /* If the active window is not a Scintilla editor, return null */
-                if (activeWindow == IntPtr.Zero) 
-                    return null;
                 
-                // Try to get the editor, this can throw exceptions if window is invalid
+                // This is a different editor or we didn't have one before
                 try
                 {
-                    return ScintillaManager.GetEditor(activeWindow);
+                    var editor = ScintillaManager.GetEditor(hwnd);
+                    activeEditor = editor;
+
+                    if (!editor.FoldEnabled)
+                    {
+                        ProcessNewEditor(editor);
+                    }else
+                    {
+                        // Check if content has changed
+                        CheckForContentChanges(editor);
+                    }
+                    
+                    return editor;
                 }
                 catch (Exception ex)
                 {
@@ -2406,6 +2437,51 @@ namespace AppRefiner
             {
                 Debug.Log($"Exception in GetActiveEditor: {ex.Message}");
                 return null;
+            }
+        }
+        
+        // Check if content has changed and process if necessary
+        private void CheckForContentChanges(ScintillaEditor editor)
+        {
+            if (editor == null) return;
+            
+            // Check if editor is in a clean state before processing
+            if (ScintillaManager.IsEditorClean(editor) || true)
+            {
+                // compare content hash to see if things have changed
+                var contentHash = ScintillaManager.GetContentHash(editor);
+                if (contentHash == editor.LastContentHash)
+                {
+                    return;
+                }
+                
+                if (chkBetterSQL.Checked && editor.Type == EditorType.SQL)
+                {
+                    ScintillaManager.ApplyBetterSQL(editor);
+                }
+                
+                // Apply dark mode whenever content changes if auto dark mode is enabled
+                if (chkAutoDark.Checked)
+                {
+                    ScintillaManager.SetDarkMode(editor);
+                }
+                
+                // Process stylers for PeopleCode
+                if (editor.Type == EditorType.PeopleCode)
+                {
+                    ProcessStylers(editor);
+                }
+                
+                if (!editor.HasLexilla || editor.Type == EditorType.SQL || editor.Type == EditorType.Other)
+                {
+                    // Perform folding ourselves 
+                    // 1. if they are missing Lexilla
+                    // 2. if it is a SQL object 
+                    // 3. if its an editor type we don't know
+                    DoExplicitFolding();
+                }
+                
+                editor.LastContentHash = contentHash;
             }
         }
 
@@ -2443,125 +2519,58 @@ namespace AppRefiner
                         break;
                 }
             }
-
-
         }
-        private void PerformScan()
-        {
-            var currentEditor = GetActiveEditor();
-            if (currentEditor == null)
-            {
-                return;
-            }
-
-            /* Make sure the hwnd is still valid */
-            if (!currentEditor.IsValid())
-            {
-                /* Releases any annotation buffers */
-                ScintillaManager.CleanupEditor(currentEditor);
-
-                currentEditor = null;
-                activeEditor = null;
-                DisableUIActions();
-                return;
-            }
-
-            EnableUIActions();
-
-            activeEditor = currentEditor;
-
-
-            /* If "only PPC" is checked and the editor is not PPC, skip */
-            if (chkOnlyPPC.Checked && activeEditor.Type != EditorType.PeopleCode)
-            {
-                return;
-            }
-
-
-            if (!activeEditor.FoldEnabled)
-            {
-                // print out the editor HWND, Process, Thread ID
-                Debug.Log($"Found new editor, enabling folding. HWND: {activeEditor.hWnd:X}, PID: {activeEditor.ProcessId:X} Thread: {activeEditor.ThreadID:X}");
-                if (chkAutoDark.Checked)
-                {
-                    ScintillaManager.SetDarkMode(activeEditor);
-                }
-
-                if (chkAutoIndentation.Checked && File.Exists("AppRefinerHook.dll"))
-                {
-                    Debug.Log($"Editor isn't subclassed: {activeEditor.hWnd}");
-                    this.Invoke(() =>
-                    {
-                        bool success = EventHookInstaller.SubclassWindow(activeEditor.ThreadID, WindowHelper.GetParentWindow(activeEditor.hWnd), this.Handle);
-                        Debug.Log($"Window subclassing result: {success}");
-                    });
-                    ScintillaManager.SetMouseDwellTime(activeEditor, 1000);
-                }
-
-                ScintillaManager.EnableFolding(activeEditor);
-                ScintillaManager.FixEditorTabs(activeEditor, !chkBetterSQL.Checked);
-                activeEditor.FoldEnabled = true;
-
-                if (chkBetterSQL.Checked && activeEditor.Type == EditorType.SQL)
-                {
-                    ScintillaManager.ApplyBetterSQL(activeEditor);
-                }
-
-                if (chkInitCollapsed.Checked)
-                {
-                    ScintillaManager.CollapseTopLevel(activeEditor);
-                }
-
-                return;
-            }
-
-            /* This will trigger for editors that have already had fold enabled */
-            /* We only want to operate on "clean" editor states */
-            if (ScintillaManager.IsEditorClean(activeEditor))
-            {
-                /* compare content hash to see if things have changed */
-                var contentHash = ScintillaManager.GetContentHash(activeEditor);
-                if (contentHash == activeEditor.LastContentHash)
-                {
-                    return;
-                }
-
-                if (chkBetterSQL.Checked && activeEditor.Type == EditorType.SQL)
-                {
-                    ScintillaManager.ApplyBetterSQL(activeEditor);
-                }
-
-                // Apply dark mode whenever content changes if auto dark mode is enabled
-                if (chkAutoDark.Checked)
-                {
-                    ScintillaManager.SetDarkMode(activeEditor);
-                }
-
-                /* Process stylers for PeopleCode */
-                if (activeEditor.Type == EditorType.PeopleCode)
-                {
-                    ProcessStylers(activeEditor);
-                }
-
-                if (!activeEditor.HasLexilla || activeEditor.Type == EditorType.SQL || activeEditor.Type == EditorType.Other)
-                {
-                    /* Perform folding ourselves 
-                        1. if they are missing Lexilla
-                        2. if it is a SQL object 
-                        3. if its an editor type we don't know
-                    */
-                    DoExplicitFolding();
-                }
-
-                activeEditor.LastContentHash = contentHash;
-            }
-        }
+       
         private void ScanTick(object? state)
         {
-            PerformScan();
-            if (timerRunning)
+            lock (timerLock)
             {
-                scanTimer?.Change(1000, Timeout.Infinite);
+                // If we're already processing a timer callback, don't process another one
+                if (timerProcessing) return;
+                
+                // Set the processing flag to prevent reentrance
+                timerProcessing = true;
+            }
+            
+            try
+            {
+                // Even with WinEvents, we still need to periodically check for content changes
+                // in the active editor (like when a user makes changes)
+                // This is now a lightweight operation that only checks the current editor's content
+                if (activeEditor != null)
+                {
+                    // Validate the editor is still valid
+                    if (activeEditor.IsValid())
+                    {
+                        // Check for content changes in the current editor
+                        CheckForContentChanges(activeEditor);
+                    }
+                    else
+                    {
+                        // Editor is no longer valid, clean it up
+                        ScintillaManager.CleanupEditor(activeEditor);
+                        activeEditor = null;
+                        DisableUIActions();
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.Log($"Exception in ScanTick: {ex.Message}");
+            }
+            finally
+            {
+                lock (timerLock)
+                {
+                    // Clear the processing flag
+                    timerProcessing = false;
+                    
+                    // Only reschedule the timer if we're still supposed to be running
+                    if (timerRunning)
+                    {
+                        scanTimer?.Change(1000, Timeout.Infinite);
+                    }
+                }
             }
         }
 
@@ -2692,6 +2701,138 @@ namespace AppRefiner
         {
             Debug.Log("Displaying debug dialog...");
             Debug.ShowDebugDialog(Handle);
+        }
+
+        // Adds the WinEventHook methods to listen for Scintilla editor creation
+        private void SetupWinEventHook()
+        {
+            // Create the delegate and save a reference so it won't be garbage collected
+            winEventDelegate = new WinEventDelegate(WinEventProc);
+            
+            // Hook to listen for window creation events in all processes/threads
+            winEventHook = SetWinEventHook(
+                EVENT_OBJECT_FOCUS,       // Event to listen for (window creation)
+                EVENT_OBJECT_FOCUS,   // Also listen for foreground changes
+                IntPtr.Zero,               // No DLL injection
+                winEventDelegate,          // Callback
+                0,                         // All processes
+                0,                         // All threads
+                WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS // Options
+            );
+            
+            if (winEventHook == IntPtr.Zero)
+            {
+                Debug.Log("Failed to set up WinEvent hook");
+            }
+            else
+            {
+                Debug.Log("Successfully set up WinEvent hook for window creation and focus events");
+            }
+        }
+        
+        // WinEvent callback - called when windows are created in other processes
+        private void WinEventProc(IntPtr hWinEventHook, uint eventType, IntPtr hwnd, int idObject, 
+            int idChild, uint dwEventThread, uint dwmsEventTime)
+        {
+            if (eventType == EVENT_OBJECT_FOCUS)
+            {
+                /* If we've focused something other than the active editor, set active editor to null */
+                if (activeEditor != null && hwnd != activeEditor.hWnd && !activeEditor.IsValid())
+                {
+                    Debug.Log("Active editor has lost focus and isn't valid anymore.");
+                    lock (timerLock)
+                    {
+                        timerRunning = false;
+                    }
+                    activeEditor = null;
+                }
+
+                // A window has gained focus - check if it's a Scintilla window
+                StringBuilder className = new StringBuilder(256);
+                GetClassName(hwnd, className, className.Capacity);
+                
+                if (className.ToString().Contains("Scintilla"))
+                {
+                    /* Ensure hwnd is owned by "pside.exe" */
+
+                    GetWindowThreadProcessId(hwnd, out var processId);
+                    if ("pside".Equals(Process.GetProcessById((int)processId).ProcessName))
+                    {
+                        Debug.Log($"WinEvent detected Scintilla window focus: 0x{hwnd.ToInt64():X}");
+                        Debug.Log($"idObject: {idObject}, idChild: {idChild}, dwEventThread: {dwEventThread}, dwmsEventTime: {dwmsEventTime}");
+                        // Use BeginInvoke to process on UI thread
+                        this.BeginInvoke(new Action(() =>
+                        {
+                            // Use SetActiveEditor to properly handle the window
+                            SetActiveEditor(hwnd);
+
+                            /* Start the content update timer */
+                            lock (timerLock)
+                            {
+                                if (!timerRunning)
+                                {
+                                    timerRunning = true;
+                                    scanTimer = new System.Threading.Timer(ScanTick, null, 1000, Timeout.Infinite);
+                                }
+                            }
+                        }));
+                    }
+                }
+            }
+        }
+        
+        // Handle a newly detected editor
+        private void ProcessNewEditor(ScintillaEditor editor)
+        {
+            if (editor == null) return;
+            
+            if (!editor.IsValid())
+            {
+                ScintillaManager.CleanupEditor(editor);
+                return;
+            }
+            
+            // Update the active editor reference
+            activeEditor = editor;
+            EnableUIActions();
+            
+            // If "only PPC" is checked and the editor is not PPC, skip
+            if (chkOnlyPPC.Checked && editor.Type != EditorType.PeopleCode)
+            {
+                return;
+            }
+            
+            if (!editor.FoldEnabled)
+            {
+                Debug.Log($"Found new editor via WinEvent, enabling folding. HWND: {editor.hWnd:X}, PID: {editor.ProcessId:X} Thread: {editor.ThreadID:X}");
+                
+                if (chkAutoDark.Checked)
+                {
+                    ScintillaManager.SetDarkMode(editor);
+                }
+                
+                if (chkAutoIndentation.Checked && File.Exists("AppRefinerHook.dll"))
+                {
+                    Debug.Log($"Editor isn't subclassed: {editor.hWnd}");
+                    bool success = EventHookInstaller.SubclassWindow(editor.ThreadID, WindowHelper.GetParentWindow(editor.hWnd), this.Handle);
+                    Debug.Log($"Window subclassing result: {success}");
+                    ScintillaManager.SetMouseDwellTime(editor, 1000);
+                }
+                
+                ScintillaManager.EnableFolding(editor);
+                ScintillaManager.FixEditorTabs(editor, !chkBetterSQL.Checked);
+                editor.FoldEnabled = true;
+                
+                if (chkBetterSQL.Checked && editor.Type == EditorType.SQL)
+                {
+                    ScintillaManager.ApplyBetterSQL(editor);
+                }
+                
+                if (chkInitCollapsed.Checked)
+                {
+                    ScintillaManager.CollapseTopLevel(editor);
+                }
+            }
         }
     }
 }
