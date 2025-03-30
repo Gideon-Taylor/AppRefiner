@@ -135,46 +135,6 @@ namespace AppRefiner
             RegisterCommands(); // Register the default commands
         }
 
-        private void ChkAutoIndentation_CheckedChanged(object? sender, EventArgs e)
-        {
-            if (chkAutoIndentation.Checked == false) return;
-
-            // Skip if we're loading settings or if the feature is already enabled
-            if (isLoadingSettings)
-            {
-                return;
-            }
-
-            var result = MessageBox.Show(
-                "Auto Indentation is currently an experimental feature that could lead to Application Designer instability. Would you like to proceed to enable this feature?",
-                "Experimental Feature Warning",
-                MessageBoxButtons.YesNo,
-                MessageBoxIcon.Warning);
-
-            if (result == DialogResult.No)
-            {
-                chkAutoIndentation.Checked = false;
-                chkAutoPairing.Checked = false;
-                return;
-            }
-        }
-
-        private void ChkAutoPairing_CheckedChanged(object? sender, EventArgs e)
-        {
-            if (chkAutoPairing.Checked == false) return;
-
-            // First check if auto indentation is enabled
-            if (!chkAutoIndentation.Checked)
-            {
-                MessageBox.Show(
-                    "Auto Pairing requires Auto Indentation to be enabled. Auto Indentation will be enabled automatically.",
-                    "Dependency Notice",
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Information);
-                chkAutoIndentation.Checked = true;
-            }
-        }
-
         protected override void OnLoad(EventArgs e)
         {
             // Initialize the linting report path
@@ -587,7 +547,6 @@ namespace AppRefiner
                 chkBetterSQL.Checked = Properties.Settings.Default.betterSQL;
                 chkAutoDark.Checked = Properties.Settings.Default.autoDark;
                 chkLintAnnotate.Checked = Properties.Settings.Default.lintAnnotate;
-                chkAutoIndentation.Checked = Properties.Settings.Default.autoIndent;
                 chkAutoPairing.Checked = Properties.Settings.Default.autoPair;
                 LoadStylerStates();
                 LoadLinterStates();
@@ -809,7 +768,6 @@ namespace AppRefiner
             Properties.Settings.Default.autoDark = chkAutoDark.Checked;
             Properties.Settings.Default.lintAnnotate = chkLintAnnotate.Checked;
             Properties.Settings.Default.LintReportPath = lintReportPath;
-            Properties.Settings.Default.autoIndent = chkAutoIndentation.Checked;
             Properties.Settings.Default.autoPair = chkAutoPairing.Checked;
 
             SaveStylerStates();
@@ -2861,13 +2819,11 @@ namespace AppRefiner
                     ScintillaManager.SetDarkMode(editor);
                 }
                 
-                if (chkAutoIndentation.Checked && File.Exists("AppRefinerHook.dll"))
-                {
-                    Debug.Log($"Editor isn't subclassed: {editor.hWnd}");
-                    bool success = EventHookInstaller.SubclassWindow(editor.ThreadID, WindowHelper.GetParentWindow(editor.hWnd), this.Handle);
-                    Debug.Log($"Window subclassing result: {success}");
-                    ScintillaManager.SetMouseDwellTime(editor, 1000);
-                }
+                Debug.Log($"Editor isn't subclassed: {editor.hWnd}");
+                bool success = EventHookInstaller.SubclassWindow(editor.ThreadID, WindowHelper.GetParentWindow(editor.hWnd), this.Handle);
+                Debug.Log($"Window subclassing result: {success}");
+                ScintillaManager.SetMouseDwellTime(editor, 1000);
+                
                 
                 ScintillaManager.EnableFolding(editor);
                 ScintillaManager.FixEditorTabs(editor, !chkBetterSQL.Checked);

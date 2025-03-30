@@ -31,9 +31,9 @@ namespace AppRefiner
             splitContainer1 = new SplitContainer();
             tabControl1 = new TabControl();
             tabPage1 = new TabPage();
+            btnDebugLog = new Button();
             grpEditorSettings = new GroupBox();
             chkAutoPairing = new CheckBox();
-            chkAutoIndentation = new CheckBox();
             btnPlugins = new Button();
             chkBetterSQL = new CheckBox();
             chkOnlyPPC = new CheckBox();
@@ -66,7 +66,6 @@ namespace AppRefiner
             cmbTemplates = new ComboBox();
             progressBar1 = new ProgressBar();
             lblStatus = new Label();
-            btnDebugLog = new Button();
             ((System.ComponentModel.ISupportInitialize)splitContainer1).BeginInit();
             splitContainer1.Panel1.SuspendLayout();
             splitContainer1.Panel2.SuspendLayout();
@@ -138,10 +137,19 @@ namespace AppRefiner
             tabPage1.Text = "Editor Tweaks";
             tabPage1.UseVisualStyleBackColor = true;
             // 
+            // btnDebugLog
+            // 
+            btnDebugLog.Location = new Point(469, 436);
+            btnDebugLog.Name = "btnDebugLog";
+            btnDebugLog.Size = new Size(85, 23);
+            btnDebugLog.TabIndex = 27;
+            btnDebugLog.Text = "Debug Log...";
+            btnDebugLog.UseVisualStyleBackColor = true;
+            btnDebugLog.Click += btnDebugLog_Click;
+            // 
             // grpEditorSettings
             // 
             grpEditorSettings.Controls.Add(chkAutoPairing);
-            grpEditorSettings.Controls.Add(chkAutoIndentation);
             grpEditorSettings.Controls.Add(btnPlugins);
             grpEditorSettings.Controls.Add(chkBetterSQL);
             grpEditorSettings.Controls.Add(chkOnlyPPC);
@@ -158,25 +166,12 @@ namespace AppRefiner
             // 
             chkAutoPairing.AutoSize = true;
             chkAutoPairing.ForeColor = Color.Red;
-            chkAutoPairing.Location = new Point(235, 47);
+            chkAutoPairing.Location = new Point(245, 22);
             chkAutoPairing.Name = "chkAutoPairing";
             chkAutoPairing.Size = new Size(146, 19);
             chkAutoPairing.TabIndex = 26;
             chkAutoPairing.Text = "Pair quotes and parens";
             chkAutoPairing.UseVisualStyleBackColor = true;
-            chkAutoPairing.CheckedChanged += ChkAutoPairing_CheckedChanged;
-            // 
-            // chkAutoIndentation
-            // 
-            chkAutoIndentation.AutoSize = true;
-            chkAutoIndentation.ForeColor = Color.Red;
-            chkAutoIndentation.Location = new Point(235, 22);
-            chkAutoIndentation.Name = "chkAutoIndentation";
-            chkAutoIndentation.Size = new Size(116, 19);
-            chkAutoIndentation.TabIndex = 25;
-            chkAutoIndentation.Text = "Auto Indentation";
-            chkAutoIndentation.UseVisualStyleBackColor = true;
-            chkAutoIndentation.CheckedChanged += ChkAutoIndentation_CheckedChanged;
             // 
             // btnPlugins
             // 
@@ -530,16 +525,6 @@ namespace AppRefiner
             lblStatus.Text = "Stopped";
             lblStatus.TextAlign = ContentAlignment.MiddleCenter;
             // 
-            // btnDebugLog
-            // 
-            btnDebugLog.Location = new Point(469, 436);
-            btnDebugLog.Name = "btnDebugLog";
-            btnDebugLog.Size = new Size(85, 23);
-            btnDebugLog.TabIndex = 27;
-            btnDebugLog.Text = "Debug Log...";
-            btnDebugLog.UseVisualStyleBackColor = true;
-            btnDebugLog.Click += btnDebugLog_Click;
-            // 
             // MainForm
             // 
             AutoScaleDimensions = new SizeF(7F, 15F);
@@ -616,7 +601,6 @@ namespace AppRefiner
         private Panel pnlTemplateParams;
         private Button btnApplyTemplate;
         private ComboBox cmbTemplates;
-        private CheckBox chkAutoIndentation;
         private CheckBox chkAutoPairing;
         private Button btnDebugLog;
     }
