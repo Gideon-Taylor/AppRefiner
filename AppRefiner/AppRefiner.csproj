@@ -83,11 +83,11 @@
   </ItemGroup>
 
 	<!-- Copy AppRefinerSubclass.dll to output directory -->
-    <Target Name="CopySubclassDll" AfterTargets="Build">
-	    <Copy SourceFiles="$(ProjectDir)..\x64\$(Configuration)\AppRefinerHook.dll"
+    <Target Name="CopySubclassDll" AfterTargets="Build" Condition="'$(GITHUB_ACTIONS)' != 'true'">
+	    <Copy SourceFiles="$(SolutionDir)x64\$(Configuration)\AppRefinerHook.dll"
 			    DestinationFolder="$(OutputPath)"
 			    SkipUnchangedFiles="true" />
-		<Copy SourceFiles="$(ProjectDir)..\x64\$(Configuration)\AppRefinerHook.pdb"
+		<Copy SourceFiles="$(SolutionDir)x64\$(Configuration)\AppRefinerHook.pdb"
 		DestinationFolder="$(OutputPath)"
 		SkipUnchangedFiles="true" />
     </Target>
