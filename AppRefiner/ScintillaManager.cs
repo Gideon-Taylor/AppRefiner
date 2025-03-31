@@ -913,13 +913,6 @@ namespace AppRefiner
             // Also update annotation styles for dark mode
             InitAnnotationStyles(editor);
 
-
-            if (!ProcessesWithDarkMode.Contains(editor.ProcessId))
-            {
-                DarkModeHelper.ApplyDarkModeToControls((int)editor.ProcessId);
-                ProcessesWithDarkMode.Add(editor.ProcessId);
-            }
-
         }
 
         internal static bool IsEditorClean(ScintillaEditor editor)
