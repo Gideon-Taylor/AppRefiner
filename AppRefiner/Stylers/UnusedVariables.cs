@@ -1,4 +1,5 @@
 using AppRefiner.Linters.Models;
+using System;
 using static AppRefiner.PeopleCode.PeopleCodeParser;
 
 namespace AppRefiner.Stylers
@@ -52,6 +53,39 @@ namespace AppRefiner.Stylers
             if (instanceVariables.TryGetValue(varName, out var instanceVar))
             {
                 instanceVar.Used = true;
+            }
+        }
+
+        // Track %This dot access to instance variables (without the & prefix)
+        public override void EnterDotAccessExpr(DotAccessExprContext context)
+        {
+            base.EnterDotAccessExpr(context);
+            
+            // Check if the expression is %THIS
+            var expr = context.expression();
+            if (expr != null && expr.GetText().Equals("%THIS", StringComparison.OrdinalIgnoreCase))
+            {
+                // Get the member name from the dot access
+                var dotAccesses = context.dotAccess();
+                if (dotAccesses != null && dotAccesses.Length > 0)
+                {
+                    var firstDotAccess = dotAccesses[0];
+                    var memberName = firstDotAccess.genericID()?.GetText();
+                    
+                    if (memberName != null)
+                    {
+                        // In dot access after %This, the variable name will be without & prefix
+                        // We need to find the matching instance variable with &
+                        string varNameWithPrefix = $"&{memberName}";
+                        
+                        // Check if this variable exists as an instance variable
+                        if (instanceVariables.TryGetValue(varNameWithPrefix, out var instanceVar))
+                        {
+                            // Mark as used
+                            instanceVar.Used = true;
+                        }
+                    }
+                }
             }
         }
 
