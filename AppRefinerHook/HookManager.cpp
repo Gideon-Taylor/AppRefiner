@@ -38,7 +38,20 @@ void HandleScintillaNotification(HWND hwnd, SCNotification* scn, HWND callbackWi
         }
         else if (scn->nmhdr.code == SCN_DWELLSTART) {
             if (callbackWindow && IsWindow(callbackWindow)) {
-                SendMessage(callbackWindow, WM_SCN_DWELL_START, (WPARAM)scn->position, (LPARAM)0);
+                // Get the Scintilla editor handle
+                HWND scintillaHwnd = scn->nmhdr.hwndFrom;
+                
+                // Get the line number from the position
+                int line = -1;
+                if (scintillaHwnd && IsWindow(scintillaHwnd)) {
+                    // Use Scintilla message to get line from position
+                    line = SendMessage(scintillaHwnd, SCI_LINEFROMPOSITION, scn->position, 0);
+                    // Line is 0-based from Scintilla, convert to 1-based for our API
+                    line++;
+                }
+                
+                // Send message with position as wParam and line number as lParam
+                SendMessage(callbackWindow, WM_SCN_DWELL_START, (WPARAM)scn->position, (LPARAM)line);
             }
         } 
         else if (scn->nmhdr.code == SCN_DWELLEND) {

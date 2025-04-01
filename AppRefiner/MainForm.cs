@@ -23,6 +23,7 @@ using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using System.Drawing.Text;
+using AppRefiner.TooltipProviders;
 
 namespace AppRefiner
 {
@@ -155,6 +156,9 @@ namespace AppRefiner
                         "Warning", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 }
             }
+
+            // Initialize the tooltip providers
+            TooltipProviders.TooltipManager.Initialize();
 
             LoadSettings();
             collapseLevel.KeyPressed += collapseLevelHandler;
@@ -2507,10 +2511,11 @@ namespace AppRefiner
                 switch(eventCode)
                 {
                     case SCN_DWELLSTART:
-                        ScintillaManager.ShowCallTip(activeEditor, m.WParam.ToInt32());
+                        Debug.Log($"SCN_DWELLSTART: {m.WParam} -- {m.LParam}");
+                        TooltipProviders.TooltipManager.ShowTooltip(activeEditor, m.WParam.ToInt32(), m.LParam.ToInt32());
                         break;
                     case SCN_DWELLEND:
-                        ScintillaManager.HideCallTip(activeEditor);
+                        TooltipProviders.TooltipManager.HideTooltip(activeEditor);
                         break;
                     case SCN_SAVEPOINTREACHED:
                         if (activeEditor != null)

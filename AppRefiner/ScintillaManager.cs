@@ -8,6 +8,12 @@ using System.Diagnostics;
 using System.IO.Hashing;
 using System.Runtime.InteropServices;
 using System.Text;
+using System.Collections.Generic;
+using System.Drawing;
+using System.Linq;
+using System.Reflection.Metadata;
+using System.Text.RegularExpressions;
+using AppRefiner.TooltipProviders;
 
 namespace AppRefiner
 {
@@ -1073,63 +1079,68 @@ namespace AppRefiner
                     return;
                 }
             
-                var text = string.Empty;
-                if (editor.HighlightTooltips == null)
+                // Use the tooltip provider system to show tooltips
+                TooltipProviders.TooltipManager.ShowTooltip(editor, position.ToInt32());
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError($"Error showing call tip: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Shows a call tip with the specified text at the given position
+        /// </summary>
+        /// <param name="editor">The editor to show the call tip in</param>
+        /// <param name="position">The position to show the call tip at</param>
+        /// <param name="text">The text to display in the call tip</param>
+        internal static void ShowCallTipWithText(ScintillaEditor editor, int position, string text)
+        {
+            try 
+            {
+                // Validate editor
+                if (editor == null || !editor.IsValid())
                 {
-                    editor.HighlightTooltips = new Dictionary<(int Start, int Length), string>();
+                    Debug.LogError("Cannot show call tip - editor is null or invalid");
                     return;
                 }
-            
-                // Check the editor's highlight tooltips
-                if (editor.HighlightTooltips.Count > 0)
+                
+                if (string.IsNullOrEmpty(text))
                 {
-                    int pos = position.ToInt32();
-                    var tooltip = editor.HighlightTooltips.FirstOrDefault(t => 
-                        t.Key.Start <= pos && t.Key.Start + t.Key.Length >= pos);
-                    
-                    if (!tooltip.Equals(default(KeyValuePair<(int Start, int Length), string>)))
-                    {
-                        text = tooltip.Value;
-                    }
+                    return;
                 }
-            
+                
                 // Clean up existing call tip if any
                 if (editor.CallTipPointer != IntPtr.Zero)
                 {
                     VirtualFreeEx(editor.hProc, editor.CallTipPointer, 0, MEM_RELEASE);
                     editor.CallTipPointer = IntPtr.Zero;
                 }
-            
-                // Don't proceed if text is empty
-                if (string.IsNullOrEmpty(text))
-                {
-                    return;
-                }
-            
+                
                 // Allocate memory for new call tip text
                 var textBytes = Encoding.Default.GetBytes(text);
                 var neededSize = textBytes.Length + 1;
                 var remoteBuffer = VirtualAllocEx(editor.hProc, IntPtr.Zero, (uint)neededSize, MEM_COMMIT, PAGE_READWRITE);
-            
+                
                 if (remoteBuffer == IntPtr.Zero)
                 {
                     Debug.LogError($"Failed to allocate memory for call tip: {Marshal.GetLastWin32Error()}");
                     return;
                 }
-            
+                
                 if (!WriteProcessMemory(editor.hProc, remoteBuffer, textBytes, neededSize, out int bytesWritten) || bytesWritten != neededSize)
                 {
                     VirtualFreeEx(editor.hProc, remoteBuffer, 0, MEM_RELEASE);
                     Debug.LogError($"Failed to write call tip text to memory: {Marshal.GetLastWin32Error()}");
                     return;
                 }
-            
+                
                 editor.CallTipPointer = remoteBuffer;
-                editor.SendMessage(SCI_CALLTIPSHOW, position, remoteBuffer);
+                editor.SendMessage(SCI_CALLTIPSHOW, new IntPtr(position), remoteBuffer);
             }
             catch (Exception ex)
             {
-                Debug.LogError($"Error showing call tip: {ex.Message}");
+                Debug.LogError($"Error showing call tip with text: {ex.Message}");
             }
         }
 

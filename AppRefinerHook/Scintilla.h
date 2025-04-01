@@ -1225,7 +1225,7 @@ struct Sci_NotifyHeader {
 	/* Compatible with Windows NMHDR.
 	 * hwndFrom is really an environment specific window handle or pointer
 	 * but most clients of Scintilla.h do not have this type visible. */
-	void* hwndFrom;
+	HWND hwndFrom;
 	uptr_t idFrom;
 	unsigned int code;
 };

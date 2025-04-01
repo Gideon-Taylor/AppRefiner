@@ -612,7 +612,7 @@ namespace AppRefiner.Refactors
         {
             base.EnterMethodParameterAnnotation(context);
             
-            var methodArgCtx = context.methodArgument();
+            var methodArgCtx = context.methodAnnotationArgument();
             if (methodArgCtx != null)
             {
                 var varNode = methodArgCtx.USER_VARIABLE();

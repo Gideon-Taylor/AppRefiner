@@ -137,6 +137,20 @@ typeT
 	|	simpleType						#SimpleTypeType
 	;
 
+// Special type rule specifically for method annotations, which require Array2/Array3 notation
+annotationType
+	:	ARRAY2 OF typeT				#AnnotationArray2Type
+	|	ARRAY3 OF typeT				#AnnotationArray3Type
+	|	ARRAY4 OF typeT				#AnnotationArray4Type
+	|	ARRAY5 OF typeT				#AnnotationArray5Type
+	|	ARRAY6 OF typeT				#AnnotationArray6Type
+	|	ARRAY7 OF typeT				#AnnotationArray7Type
+	|	ARRAY8 OF typeT				#AnnotationArray8Type
+	|	ARRAY9 OF typeT				#AnnotationArray9Type
+	|	ARRAY OF typeT				#AnnotationArray1Type  // For single-dimension arrays
+	|	typeT						#AnnotationBaseType
+	;
+
 propertyDeclaration
 	:	PROPERTY typeT genericID GET SET?				#PropertyGetSet
 	|	PROPERTY typeT genericID ABSTRACT? READONLY?	#PropertyDirect	// abstract is sometimes featured before readonly in some delivered classes
@@ -363,6 +377,14 @@ dotAccess
 allowableFunctionName
 	:	ANY
 	|	ARRAY
+	|	ARRAY2
+	|	ARRAY3
+	|	ARRAY4
+	|	ARRAY5
+	|	ARRAY6
+	|	ARRAY7
+	|	ARRAY8
+	|	ARRAY9
 	|	BOOLEAN
 	|	COMPONENT
 	|	CONSTANT
@@ -445,11 +467,16 @@ methodAnnotations
 	;
 
 methodParameterAnnotation
-	:	SLASH_PLUS methodArgument COMMA? PLUS_SLASH
+	:	SLASH_PLUS methodAnnotationArgument COMMA? PLUS_SLASH
+	;
+
+// Updated methodArgument for annotation context
+methodAnnotationArgument
+	:	USER_VARIABLE AS annotationType OUT?
 	;
 
 methodReturnAnnotation
-	:	SLASH_PLUS RETURNS typeT PLUS_SLASH
+	:	SLASH_PLUS RETURNS annotationType PLUS_SLASH
 	;
 
 methodExtendsAnnotation

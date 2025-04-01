@@ -5,6 +5,7 @@ using System.Linq;
 using System.Reflection;
 using AppRefiner.Linters;
 using AppRefiner.Stylers;
+using AppRefiner.TooltipProviders;
 
 namespace AppRefiner.Plugins
 {
@@ -138,6 +139,34 @@ namespace AppRefiner.Plugins
         }
 
         /// <summary>
+        /// Discovers all tooltip provider types from loaded plugin assemblies
+        /// </summary>
+        /// <returns>Collection of tooltip provider types from plugins</returns>
+        public static IEnumerable<Type> DiscoverTooltipProviderTypes()
+        {
+            var tooltipProviderTypes = new List<Type>();
+
+            foreach (var assembly in LoadedPluginAssemblies)
+            {
+                try
+                {
+                    // Find all non-abstract types that implement ITooltipProvider
+                    var types = assembly.GetTypes()
+                        .Where(t => typeof(ITooltipProvider).IsAssignableFrom(t) && !t.IsAbstract && !t.IsInterface);
+                    
+                    tooltipProviderTypes.AddRange(types);
+                }
+                catch (Exception ex)
+                {
+                    // Log the error but continue with other assemblies
+                    System.Diagnostics.Debug.WriteLine($"Error discovering tooltip provider types in assembly {assembly.FullName}: {ex.Message}");
+                }
+            }
+
+            return tooltipProviderTypes;
+        }
+
+        /// <summary>
         /// Gets metadata about all loaded plugin assemblies
         /// </summary>
         /// <returns>List of plugin metadata</returns>
@@ -159,6 +188,9 @@ namespace AppRefiner.Plugins
                         .Count(t => typeof(Refactors.BaseRefactor).IsAssignableFrom(t) && 
                                !t.IsAbstract && 
                                t != typeof(Refactors.ScopedRefactor<>));
+                               
+                    var tooltipProviderCount = assembly.GetTypes()
+                        .Count(t => typeof(ITooltipProvider).IsAssignableFrom(t) && !t.IsAbstract && !t.IsInterface);
 
                     var plugin = new PluginMetadata
                     {
@@ -167,7 +199,8 @@ namespace AppRefiner.Plugins
                         FilePath = assembly.Location,
                         LinterCount = linterCount,
                         StylerCount = stylerCount,
-                        RefactorCount = refactorCount
+                        RefactorCount = refactorCount,
+                        TooltipProviderCount = tooltipProviderCount
                     };
 
                     metadata.Add(plugin);
@@ -194,10 +227,11 @@ namespace AppRefiner.Plugins
         public int LinterCount { get; set; }
         public int StylerCount { get; set; }
         public int RefactorCount { get; set; }
+        public int TooltipProviderCount { get; set; }
 
         public override string ToString()
         {
-            return $"{AssemblyName} v{Version} ({LinterCount} linters, {StylerCount} stylers, {RefactorCount} refactors)";
+            return $"{AssemblyName} v{Version} ({LinterCount} linters, {StylerCount} stylers, {RefactorCount} refactors, {TooltipProviderCount} tooltip providers)";
         }
     }
 }
