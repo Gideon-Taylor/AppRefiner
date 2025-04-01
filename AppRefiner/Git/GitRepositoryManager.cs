@@ -504,15 +504,8 @@ namespace AppRefiner.Git
                     return false;
                 }
                 
-                // Save the snapshot of the current position and view state
-                editor.SnapshotCursorPosition = ScintillaManager.GetCursorPosition(editor);
-                editor.SnapshotFirstVisibleLine = ScintillaManager.GetFirstVisibleLine(editor);
-                
                 // Set the content in the editor
                 ScintillaManager.SetScintillaText(editor, content);
-                
-                // Store the snapshot text for reference
-                editor.SnapshotText = content;
                 
                 return true;
             }

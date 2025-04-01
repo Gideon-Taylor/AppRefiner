@@ -1691,9 +1691,6 @@ namespace AppRefiner
         [DllImport("user32.dll", CharSet = CharSet.Auto)]
         private static extern IntPtr SendMessage(IntPtr hWnd, int Msg, IntPtr wParam, IntPtr lParam);
 
-        public int? SnapshotCursorPosition { get; set; }
-        public int? SnapshotFirstVisibleLine { get; set; }
-
         [DllImport("user32.dll")]
         [return: MarshalAs(UnmanagedType.Bool)]
         static extern bool IsWindow(IntPtr hWnd);
@@ -1715,7 +1712,6 @@ namespace AppRefiner
 
         public int LastContentHash { get; set; }
         public string? ContentString = null;
-        public string? SnapshotText = null;
         public bool AnnotationsInitialized { get; set; } = false;
         public bool IsDarkMode { get; set; } = false;
         public IntPtr AnnotationStyleOffset = IntPtr.Zero;

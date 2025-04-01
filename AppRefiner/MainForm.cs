@@ -1345,36 +1345,6 @@ namespace AppRefiner
             ScintillaManager.ExpandTopLevel(activeEditor);
         }
 
-        private void btnTakeSnapshot_Click(object sender, EventArgs e)
-        {
-            if (activeEditor == null) return;
-            activeEditor.SnapshotText = ScintillaManager.GetScintillaText(activeEditor);
-            activeEditor.SnapshotCursorPosition = ScintillaManager.GetCursorPosition(activeEditor);
-        }
-
-        private void btnRestoreSnapshot_Click(object sender, EventArgs e)
-        {
-            if (activeEditor == null) return;
-            if (activeEditor.SnapshotText == null) return;
-
-            ScintillaManager.ClearAnnotations(activeEditor);
-            ScintillaManager.SetScintillaText(activeEditor, activeEditor.SnapshotText);
-
-            // Restore cursor position if it was saved
-            if (activeEditor.SnapshotCursorPosition.HasValue)
-            {
-                ScintillaManager.SetCursorPosition(activeEditor, activeEditor.SnapshotCursorPosition.Value);
-            }
-
-            activeEditor.SnapshotText = null;
-            activeEditor.SnapshotCursorPosition = null;
-        }
-
-        private void btnAddFlowerBox_Click(object sender, EventArgs e)
-        {
-            if (activeEditor == null) return;
-            ProcessRefactor(new AddFlowerBox(activeEditor));
-        }
 
         private void ProcessRefactor(BaseRefactor refactorClass)
         {
@@ -1389,11 +1359,6 @@ namespace AppRefiner
 
             // Capture current first visible line
             int currentFirstVisibleLine = ScintillaManager.GetFirstVisibleLine(activeEditor);
-
-            // Take a snapshot before refactoring
-            activeEditor.SnapshotText = freshText;
-            activeEditor.SnapshotCursorPosition = currentCursorPosition;
-            activeEditor.SnapshotFirstVisibleLine = currentFirstVisibleLine;
 
             // Check if this refactor requires user input dialog and is not deferred
             if (refactorClass.RequiresUserInputDialog && !refactorClass.DeferDialogUntilAfterVisitor)
@@ -1451,6 +1416,7 @@ namespace AppRefiner
                     return;
                 }
             }
+            // TODO start undo transaction?
 
             // Apply the refactored code
             var newText = refactorClass.GetRefactoredCode();
@@ -1464,25 +1430,10 @@ namespace AppRefiner
             {
                 // Set the cursor position without scrolling to it
                 ScintillaManager.SetCursorPositionWithoutScroll(activeEditor, updatedCursorPosition);
-
+                
                 // Restore the first visible line
-                if (activeEditor.SnapshotFirstVisibleLine.HasValue)
-                {
-                    ScintillaManager.SetFirstVisibleLine(activeEditor, activeEditor.SnapshotFirstVisibleLine.Value);
-                }
+                    ScintillaManager.SetFirstVisibleLine(activeEditor, currentFirstVisibleLine);
             }
-        }
-
-        private void btnOptimizeImports_Click(object sender, EventArgs e)
-        {
-            if (activeEditor == null) return;
-            ProcessRefactor(new OptimizeImports(activeEditor));
-        }
-
-        private void btnResolveImports_Click(object sender, EventArgs e)
-        {
-            if (activeEditor == null) return;
-            ProcessRefactor(new ResolveImports(activeEditor));
         }
 
         private void btnConnectDB_Click(object sender, EventArgs e)
@@ -1535,14 +1486,6 @@ namespace AppRefiner
                 progressBar1.Style = ProgressBarStyle.Blocks;
             });
             Application.DoEvents();
-        }
-
-        private void btnRenameLocalVar_Click(object sender, EventArgs e)
-        {
-            if (activeEditor == null) return;
-
-            RenameLocalVariable refactor = new(activeEditor);
-            ProcessRefactor(refactor);
         }
 
         private void ProcessSingleLinter(BaseLintRule linter)
@@ -1812,46 +1755,6 @@ namespace AppRefiner
             dialog.ShowDialog();
         }
 
-        private static DialogResult ShowInputDialog(string title, string text, ref string result, IntPtr owner = 0)
-        {
-            Size size = new(300, 70);
-            Form inputBox = new();
-
-            inputBox.FormBorderStyle = FormBorderStyle.FixedDialog;
-            inputBox.ClientSize = size;
-            inputBox.Text = title;
-            inputBox.StartPosition = FormStartPosition.CenterParent;
-
-            TextBox textBox = new();
-            textBox.Size = new Size(size.Width - 10, 23);
-            textBox.Location = new Point(5, 5);
-            textBox.Text = text;
-            inputBox.Controls.Add(textBox);
-
-            Button okButton = new();
-            okButton.DialogResult = DialogResult.OK;
-            okButton.Name = "okButton";
-            okButton.Size = new Size(75, 23);
-            okButton.Text = "&OK";
-            okButton.Location = new Point(size.Width - 80 - 80, 39);
-            inputBox.Controls.Add(okButton);
-
-            Button cancelButton = new();
-            cancelButton.DialogResult = DialogResult.Cancel;
-            cancelButton.Name = "cancelButton";
-            cancelButton.Size = new Size(75, 23);
-            cancelButton.Text = "&Cancel";
-            cancelButton.Location = new Point(size.Width - 80, 39);
-            inputBox.Controls.Add(cancelButton);
-
-            inputBox.AcceptButton = okButton;
-            inputBox.CancelButton = cancelButton;
-
-            DialogResult dlgResult = inputBox.ShowDialog(owner != IntPtr.Zero ? new WindowWrapper(owner) : null);
-            result = textBox.Text;
-            return dlgResult;
-        }
-
         private void RegisterCommands()
         {
             // Clear any existing commands
@@ -1901,41 +1804,6 @@ namespace AppRefiner
                 {
                     if (activeEditor != null)
                         ScintillaManager.ExpandTopLevel(activeEditor);
-                }
-            ));
-
-            AvailableCommands.Add(new Command(
-                "Editor: Take Snapshot",
-                "Take a snapshot of the current editor content",
-                () =>
-                {
-                    if (activeEditor != null)
-                    {
-                        activeEditor.SnapshotText = ScintillaManager.GetScintillaText(activeEditor);
-                        activeEditor.SnapshotCursorPosition = ScintillaManager.GetCursorPosition(activeEditor);
-                    }
-                }
-            ));
-
-            AvailableCommands.Add(new Command(
-                "Editor: Restore Snapshot",
-                "Restore editor content from the last snapshot",
-                () =>
-                {
-                    if (activeEditor != null && activeEditor.SnapshotText != null)
-                    {
-                        ScintillaManager.ClearAnnotations(activeEditor);
-                        ScintillaManager.SetScintillaText(activeEditor, activeEditor.SnapshotText);
-
-                        // Restore cursor position if it was saved
-                        if (activeEditor.SnapshotCursorPosition.HasValue)
-                        {
-                            ScintillaManager.SetCursorPosition(activeEditor, activeEditor.SnapshotCursorPosition.Value);
-                        }
-
-                        activeEditor.SnapshotText = null;
-                        activeEditor.SnapshotCursorPosition = null;
-                    }
                 }
             ));
 
@@ -2779,10 +2647,6 @@ namespace AppRefiner
         {
             if (activeEditor != null)
             {
-                // Take a snapshot of the current content and cursor position
-                activeEditor.SnapshotText = ScintillaManager.GetScintillaText(activeEditor);
-                activeEditor.SnapshotCursorPosition = ScintillaManager.GetCursorPosition(activeEditor);
-
                 // Set the generated content in the editor
                 ScintillaManager.SetScintillaText(activeEditor, generatedContent);
 
