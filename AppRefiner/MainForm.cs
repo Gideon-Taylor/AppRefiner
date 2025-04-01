@@ -61,6 +61,12 @@ namespace AppRefiner
         [DllImport("user32.dll", SetLastError = true)]
         private static extern bool GetWindowRect(IntPtr hWnd, out RECT lpRect);
 
+        [DllImport("user32.dll", SetLastError = true)]
+        private static extern bool GetWindowText(IntPtr hWnd, StringBuilder lpString, int nMaxCount);
+
+        [DllImport("user32.dll")]
+        private static extern IntPtr GetParent(IntPtr hWnd);
+
         [StructLayout(LayoutKind.Sequential)]
         public struct RECT
         {
@@ -128,77 +134,80 @@ namespace AppRefiner
 
         private bool isLoadingSettings = false;
 
+        // Add a private field for the GitRepositoryManager
+        private Git.GitRepositoryManager? gitRepositoryManager;
+
         public MainForm()
         {
             InitializeComponent();
             InitLinterOptions();
-            InitStylerOptions(); // Changed from InitAnalyzerOptions
-            RegisterCommands(); // Register the default commands
+            InitStylerOptions();
+            
+            // Initialize the GitRepositoryManager if a repository path exists in settings
+            if (!string.IsNullOrEmpty(Properties.Settings.Default.GitRepositoryPath) && 
+                Git.GitRepositoryManager.IsValidRepository(Properties.Settings.Default.GitRepositoryPath))
+            {
+                gitRepositoryManager = new Git.GitRepositoryManager(Properties.Settings.Default.GitRepositoryPath);
+                Debug.Log($"Initialized Git repository manager with path: {Properties.Settings.Default.GitRepositoryPath}");
+            }
         }
 
         protected override void OnLoad(EventArgs e)
         {
-            // Initialize the linting report path
-            lintReportPath = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
-                Properties.Settings.Default.LintReportPath);
-
-            // Ensure the directory exists
-            if (!Directory.Exists(lintReportPath))
-            {
-                try
-                {
-                    Directory.CreateDirectory(lintReportPath);
-                }
-                catch (Exception ex)
-                {
-                    MessageBox.Show("Failed to create lint report directory: " + ex.Message,
-                        "Warning", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                }
-            }
-
-            // Initialize the tooltip providers
-            TooltipProviders.TooltipManager.Initialize();
-
+            base.OnLoad(e);
             LoadSettings();
+            LoadLinterStates();
+            LoadStylerStates();
+            LoadTemplates();
+            scanTimer = new System.Threading.Timer(ScanTick, null, 0, 1000);
+            timerRunning = true;
+            RegisterCommands();
+            // Initialize the tooltip providers
+            TooltipManager.Initialize();
+
+            // Register keyboard hooks for code folding
             collapseLevel.KeyPressed += collapseLevelHandler;
-            collapseLevel.RegisterHotKey(AppRefiner.ModifierKeys.Alt, System.Windows.Forms.Keys.Left);
+            collapseLevel.RegisterHotKey(AppRefiner.ModifierKeys.Alt, Keys.Left);
 
             expandLevel.KeyPressed += expandLevelHandler;
-            expandLevel.RegisterHotKey(AppRefiner.ModifierKeys.Alt, System.Windows.Forms.Keys.Right);
+            expandLevel.RegisterHotKey(AppRefiner.ModifierKeys.Alt, Keys.Right);
 
             collapseAll.KeyPressed += collapseAllHandler;
-            collapseAll.RegisterHotKey(AppRefiner.ModifierKeys.Control | AppRefiner.ModifierKeys.Alt, System.Windows.Forms.Keys.Left);
+            collapseAll.RegisterHotKey(AppRefiner.ModifierKeys.Control | AppRefiner.ModifierKeys.Alt, Keys.Left);
 
             expandAll.KeyPressed += expandAllHandler;
-            expandAll.RegisterHotKey(AppRefiner.ModifierKeys.Control | AppRefiner.ModifierKeys.Alt, System.Windows.Forms.Keys.Right);
+            expandAll.RegisterHotKey(AppRefiner.ModifierKeys.Control | AppRefiner.ModifierKeys.Alt, Keys.Right);
 
             lintCodeHook.KeyPressed += lintCodeHandler;
-            lintCodeHook.RegisterHotKey(AppRefiner.ModifierKeys.Control | AppRefiner.ModifierKeys.Alt, System.Windows.Forms.Keys.L);
+            lintCodeHook.RegisterHotKey(AppRefiner.ModifierKeys.Control | AppRefiner.ModifierKeys.Alt, Keys.L);
 
             commandPaletteHook.KeyPressed += ShowCommandPalette;
-            commandPaletteHook.RegisterHotKey(AppRefiner.ModifierKeys.Control | AppRefiner.ModifierKeys.Shift, System.Windows.Forms.Keys.P);
+            commandPaletteHook.RegisterHotKey(AppRefiner.ModifierKeys.Control | AppRefiner.ModifierKeys.Shift, Keys.P);
 
             applyTemplateHook.KeyPressed += (s, e) => ApplyTemplateCommand();
-            applyTemplateHook.RegisterHotKey(AppRefiner.ModifierKeys.Control | AppRefiner.ModifierKeys.Alt, System.Windows.Forms.Keys.T);
+            applyTemplateHook.RegisterHotKey(AppRefiner.ModifierKeys.Control | AppRefiner.ModifierKeys.Alt, Keys.T);
 
             // Register standard shortcuts in the tracking dictionary
-            registeredShortcuts["CollapseLevel"] = (AppRefiner.ModifierKeys.Alt, System.Windows.Forms.Keys.Left);
-            registeredShortcuts["ExpandLevel"] = (AppRefiner.ModifierKeys.Alt, System.Windows.Forms.Keys.Right);
-            registeredShortcuts["CollapseAll"] = (AppRefiner.ModifierKeys.Control | AppRefiner.ModifierKeys.Alt, System.Windows.Forms.Keys.Left);
-            registeredShortcuts["ExpandAll"] = (AppRefiner.ModifierKeys.Control | AppRefiner.ModifierKeys.Alt, System.Windows.Forms.Keys.Right);
-            registeredShortcuts["LintCode"] = (AppRefiner.ModifierKeys.Control | AppRefiner.ModifierKeys.Alt, System.Windows.Forms.Keys.L);
-            registeredShortcuts["CommandPalette"] = (AppRefiner.ModifierKeys.Control | AppRefiner.ModifierKeys.Shift, System.Windows.Forms.Keys.P);
-            registeredShortcuts["ApplyTemplate"] = (AppRefiner.ModifierKeys.Control | AppRefiner.ModifierKeys.Alt, System.Windows.Forms.Keys.T);
+            registeredShortcuts["CollapseLevel"] = (AppRefiner.ModifierKeys.Alt, Keys.Left);
+            registeredShortcuts["ExpandLevel"] = (AppRefiner.ModifierKeys.Alt, Keys.Right);
+            registeredShortcuts["CollapseAll"] = (AppRefiner.ModifierKeys.Control | AppRefiner.ModifierKeys.Alt, Keys.Left);
+            registeredShortcuts["ExpandAll"] = (AppRefiner.ModifierKeys.Control | AppRefiner.ModifierKeys.Alt, Keys.Right);
+            registeredShortcuts["LintCode"] = (AppRefiner.ModifierKeys.Control | AppRefiner.ModifierKeys.Alt, Keys.L);
+            registeredShortcuts["CommandPalette"] = (AppRefiner.ModifierKeys.Control | AppRefiner.ModifierKeys.Shift, Keys.P);
+            registeredShortcuts["ApplyTemplate"] = (AppRefiner.ModifierKeys.Control | AppRefiner.ModifierKeys.Alt, Keys.T);
 
-            // Register keyboard shortcuts for refactors
-            this.RegisterRefactorShortcuts();
-
-            // Setup WinEvent hook for detecting Scintilla editor creation
-            SetupWinEventHook();
+            RegisterRefactorShortcuts();
             
-            // If WinEvent hook failed, scanTimer will be initialized in SetupWinEventHook
-            lblStatus.Text = "Monitoring...";
+            // Setup the WinEvent hook to monitor focus changes
+            SetupWinEventHook();
+
+            // Initialize the GitRepositoryManager if a repository path exists in settings
+            if (!string.IsNullOrEmpty(Properties.Settings.Default.GitRepositoryPath) && 
+                Git.GitRepositoryManager.IsValidRepository(Properties.Settings.Default.GitRepositoryPath))
+            {
+                gitRepositoryManager = new Git.GitRepositoryManager(Properties.Settings.Default.GitRepositoryPath);
+                Debug.Log($"Initialized Git repository manager with path: {Properties.Settings.Default.GitRepositoryPath}");
+            }
         }
 
         private void lintCodeHandler(object? sender, KeyPressedEventArgs e)
@@ -2016,7 +2025,7 @@ namespace AppRefiner
                 }
                 catch (Exception ex)
                 {
-                    System.Diagnostics.Debug.WriteLine($"Error getting refactor properties for {type.Name}: {ex.Message}");
+                    Debug.Log($"Error getting refactor properties for {type.Name}: {ex.Message}");
                 }
 
                 // Create a command for this refactor
@@ -2206,6 +2215,88 @@ namespace AppRefiner
                 },
                 () => activeEditor != null
             ));
+
+            // Git
+            AvailableCommands.Add(new Command(
+                "Git: Initialize Repository",
+                "Create a new Git repository for version control",
+                (progressDialog) =>
+                {
+                    try
+                    {
+                        progressDialog?.UpdateHeader("Initializing Git repository...");
+                        progressDialog?.UpdateProgress("Waiting for repository location...");
+                        
+                        // Run on UI thread to avoid deadlocks with progress dialog
+                        this.Invoke(() => InitializeGitRepository());
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.Log($"Error in Git init command: {ex.Message}");
+                        progressDialog?.UpdateProgress($"Error: {ex.Message}");
+                    }
+                }
+            ));
+
+            // Add Git Revert to Previous Version command
+            AvailableCommands.Add(new Command(
+                "Git: Revert to Previous Version",
+                "View file history and revert to a previous commit",
+                (progressDialog) =>
+                {
+                    try
+                    {
+                        if (activeEditor == null)
+                        {
+                            MessageBox.Show("No active editor found.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                            return;
+                        }
+
+                        if (string.IsNullOrEmpty(activeEditor.RelativePath))
+                        {
+                            MessageBox.Show("This editor is not associated with a file in the Git repository.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                            return;
+                        }
+
+                        // Initialize Git repository manager if needed
+                        if (gitRepositoryManager == null)
+                        {
+                            gitRepositoryManager = Git.GitRepositoryManager.CreateFromSettings();
+                            if (gitRepositoryManager == null)
+                            {
+                                MessageBox.Show("Git repository is not configured. Please initialize a Git repository first.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                                return;
+                            }
+                        }
+
+                        // Get process handle for dialog ownership
+                        var mainHandle = Process.GetProcessById((int)activeEditor.ProcessId).MainWindowHandle;
+                        
+                        // Show the Git history dialog
+                        progressDialog?.UpdateHeader("Loading commit history...");
+                        
+                        // Run on UI thread to show dialog
+                        this.Invoke(() =>
+                        {
+                            using var historyDialog = new Dialogs.GitHistoryDialog(gitRepositoryManager, activeEditor, mainHandle);
+                            
+                            if (historyDialog.ShowDialog(new WindowWrapper(mainHandle)) == DialogResult.OK)
+                            {
+                                progressDialog?.UpdateHeader("Reverted to previous version");
+                                progressDialog?.UpdateProgress($"File reverted to version from {historyDialog.SelectedCommit?.Date.ToString("yyyy-MM-dd HH:mm:ss") ?? "unknown"}");
+                            }
+                        });
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.Log($"Error in Git revert command: {ex.Message}");
+                        progressDialog?.UpdateProgress($"Error: {ex.Message}");
+                        MessageBox.Show($"Error: {ex.Message}", "Git Revert Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    }
+                },
+                () => activeEditor != null && !string.IsNullOrEmpty(activeEditor.RelativePath) && 
+                      Git.GitRepositoryManager.IsValidRepository(Properties.Settings.Default.GitRepositoryPath)
+            ));
         }
 
         private void btnPlugins_Click(object sender, EventArgs e)
@@ -2299,7 +2390,7 @@ namespace AppRefiner
                 }
                 catch (Exception ex)
                 {
-                    System.Diagnostics.Debug.WriteLine($"Error getting refactor properties for {type.Name}: {ex.Message}");
+                    Debug.Log($"Error getting refactor properties for {type.Name}: {ex.Message}");
                 }
                 // Check if this refactor wants a keyboard shortcut
                 if (registerShortcut && key != Keys.None)
@@ -2402,7 +2493,7 @@ namespace AppRefiner
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Error getting shortcut text for {refactorType.Name}: {ex.Message}");
+                Debug.Log($"Error getting shortcut text for {refactorType.Name}: {ex.Message}");
             }
 
             return string.Empty;
@@ -2527,6 +2618,12 @@ namespace AppRefiner
                             ScintillaManager.ClearAnnotations(activeEditor);
                             // Reset styles
                             ScintillaManager.ResetStyles(activeEditor);
+                            
+                            // Save content to Git repository when save point is reached
+                            if (!string.IsNullOrEmpty(activeEditor.RelativePath))
+                            {
+                                SaveToGitRepository(activeEditor);
+                            }
                         }
                         break;
                 }
@@ -2809,6 +2906,9 @@ namespace AppRefiner
             activeEditor = editor;
             EnableUIActions();
             
+            // Populate the DBName property
+            PopulateEditorDBName(editor);
+            
             // If "only PPC" is checked and the editor is not PPC, skip
             if (chkOnlyPPC.Checked && editor.Type != EditorType.PeopleCode)
             {
@@ -2843,7 +2943,448 @@ namespace AppRefiner
                 {
                     ScintillaManager.CollapseTopLevel(editor);
                 }
+                
+                // Save initial content to Git repository
+                if (!string.IsNullOrEmpty(editor.RelativePath))
+                {
+                    SaveToGitRepository(editor);
+                }
+            }
+        }
+
+        private void InitializeGitRepository()
+        {
+            if (activeEditor == null) return;
+            try
+            {
+                // Get the main handle to set as parent for the dialog
+                var mainHandle = Process.GetProcessById((int)activeEditor.ProcessId).MainWindowHandle;
+                var handleWrapper = new WindowWrapper(mainHandle);
+
+                // Create the dialog
+                var dialog = new InitGitRepositoryDialog();
+
+                // Make sure we show the dialog on the UI thread
+                if (InvokeRequired)
+                {
+                    Invoke(() => ShowInitGitDialog(dialog, handleWrapper));
+                }
+                else
+                {
+                    ShowInitGitDialog(dialog, handleWrapper);
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(
+                    $"Error initializing Git repository: {ex.Message}",
+                    "Error",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Error
+                );
+            }
+        }
+
+        private void ShowInitGitDialog(InitGitRepositoryDialog dialog, WindowWrapper handleWrapper)
+        {
+            // Show the dialog and wait for result
+            if (dialog.ShowDialog(handleWrapper) == DialogResult.OK)
+            {
+                string repositoryPath = dialog.RepositoryPath;
+
+                // Try to initialize the repository
+                bool success = Git.GitRepositoryManager.InitializeRepository(repositoryPath);
+                if (success)
+                {
+                    // Save the path to settings
+                    Properties.Settings.Default.GitRepositoryPath = repositoryPath;
+                    Properties.Settings.Default.Save();
+                    
+                    // Initialize the GitRepositoryManager
+                    gitRepositoryManager = new Git.GitRepositoryManager(repositoryPath);
+
+                    MessageBox.Show(
+                        $"Git repository successfully initialized at {repositoryPath}",
+                        "Repository Initialized",
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Information
+                    );
+                }
+                else
+                {
+                    MessageBox.Show(
+                        $"Failed to initialize Git repository at {repositoryPath}",
+                        "Repository Initialization Failed",
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Error
+                    );
+                }
+            }
+        }
+
+        private void ConnectToDB()
+        {
+            if (activeEditor == null) return;
+
+            var mainHandle = Process.GetProcessById((int)activeEditor.ProcessId).MainWindowHandle;
+            var handleWrapper = new WindowWrapper(mainHandle);
+            
+            // Pass the editor's DBName to the dialog constructor
+            DBConnectDialog dialog = new(mainHandle, activeEditor.DBName);
+            dialog.StartPosition = FormStartPosition.CenterParent;
+
+            if (dialog.ShowDialog(handleWrapper) == DialogResult.OK)
+            {
+                IDataManager? manager = dialog.DataManager;
+                if (manager != null)
+                {
+                    processDataManagers[activeEditor.ProcessId] = manager;
+                    activeEditor.DataManager = manager;
+                }
+            }
+        }
+
+        private void DisconnectFromDB()
+        {
+            if (activeEditor != null && activeEditor.DataManager != null)
+            {
+                activeEditor.DataManager.Disconnect();
+                processDataManagers.Remove(activeEditor.ProcessId);
+                activeEditor.DataManager = null;
+            }
+        }
+
+        /// <summary>
+        /// Populates the DBName property of a ScintillaEditor based on its context
+        /// </summary>
+        /// <param name="editor">The editor to populate the DBName for</param>
+        private void PopulateEditorDBName(ScintillaEditor editor)
+        {
+            // Start with the editor's handle
+            IntPtr hwnd = editor.hWnd;
+            
+            // Walk up the parent chain until we find the Application Designer window
+            while (hwnd != IntPtr.Zero)
+            {
+                StringBuilder caption = new StringBuilder(256);
+                GetWindowText(hwnd, caption, caption.Capacity);
+                string windowTitle = caption.ToString();
+                
+                // Check if this is the Application Designer window
+                if (windowTitle.StartsWith("Application Designer"))
+                {
+                    // Split the title by " - " and get the second part (DB name)
+                    string[] parts = windowTitle.Split(new[] { " - " }, StringSplitOptions.None);
+                    if (parts.Length >= 2)
+                    {
+                        editor.DBName = parts[1].Trim();
+                        System.Diagnostics.Debug.WriteLine($"Set editor DBName to: {editor.DBName}");
+                        
+                        // Now determine the relative file path based on the database name
+                        DetermineRelativeFilePath(editor);
+                        
+                        break;
+                    }
+                }
+                
+                // Get the parent window
+                hwnd = GetParent(hwnd);
+            }
+        }
+
+        /// <summary>
+        /// Determines the relative file path for an editor based on its window hierarchy and caption
+        /// </summary>
+        /// <param name="editor">The editor to determine the relative path for</param>
+        private void DetermineRelativeFilePath(ScintillaEditor editor)
+        {
+            try
+            {
+                // Start with the editor's handle
+                IntPtr hwnd = editor.hWnd;
+                
+                // Get the grandparent window to examine its caption
+                IntPtr parentHwnd = GetParent(hwnd);
+                if (parentHwnd != IntPtr.Zero)
+                {
+                    IntPtr grandparentHwnd = GetParent(parentHwnd);
+                    if (grandparentHwnd != IntPtr.Zero)
+                    {
+                        StringBuilder caption = new StringBuilder(512);
+                        GetWindowText(grandparentHwnd, caption, caption.Capacity);
+                        string windowTitle = caption.ToString().Trim();
+                        
+                        System.Diagnostics.Debug.WriteLine($"Editor grandparent window title: {windowTitle}");
+                        
+                        // Determine editor type and generate appropriate relative path
+                        string? relativePath = DetermineRelativePathFromCaption(windowTitle, editor.DBName);
+                        
+                        if (!string.IsNullOrEmpty(relativePath))
+                        {
+                            editor.RelativePath = relativePath;
+                            System.Diagnostics.Debug.WriteLine($"Set editor RelativePath to: {relativePath}");
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error determining relative path: {ex.Message}");
+            }
+        }
+        
+        /// <summary>
+        /// Determines the relative file path based on the window caption and database name
+        /// </summary>
+        /// <param name="caption">The window caption</param>
+        /// <param name="dbName">The database name</param>
+        /// <returns>The relative file path or null if can't be determined</returns>
+        private string? DetermineRelativePathFromCaption(string caption, string? dbName)
+        {
+            // This handles specific parsing logic for different PeopleCode editor types
+            // as indicated by the (type) suffix in the caption
+            
+            if (string.IsNullOrEmpty(caption))
+                return null;
+                
+            System.Diagnostics.Debug.WriteLine($"Determining path from caption: {caption}");
+            
+            // Check for PeopleCode type in caption - usually appears as (PeopleCode) or some other type suffix
+            int typeStartIndex = caption.LastIndexOf('(');
+            int typeEndIndex = caption.LastIndexOf(')');
+            
+            if (typeStartIndex >= 0 && typeEndIndex > typeStartIndex)
+            {
+                string editorType = caption.Substring(typeStartIndex + 1, typeEndIndex - typeStartIndex - 1);
+                string captionWithoutType = caption.Substring(0, typeStartIndex).Trim();
+                
+                System.Diagnostics.Debug.WriteLine($"Editor type: {editorType}, Caption without type: {captionWithoutType}");
+                
+                // Different logic based on editor type
+                switch (editorType)
+                {
+                    case "PeopleCode":
+                        return DeterminePeopleCodePath(captionWithoutType, dbName);
+                        
+                    case "App Engine Program PeopleCode":
+                    case "Application Package PeopleCode":
+                    case "Component Interface PeopleCode":
+                    case "Menu PeopleCode":
+                    case "Message PeopleCode":
+                    case "Page PeopleCode":
+                    case "Record PeopleCode":
+                    case "Component PeopleCode":
+                        // For all PeopleCode types, pass the full original type to the specialized handler
+                        return DeterminePeopleCodePath(captionWithoutType + " (" + editorType + ")", dbName);
+                        
+                    case "SQL Definition":
+                        return DetermineSqlDefinitionPath(captionWithoutType, dbName);
+                        
+                    case "HTML":
+                        return DetermineHtmlPath(captionWithoutType, dbName);
+                        
+                    case "StyleSheet":
+                    case "Style Sheet":
+                        return DetermineStyleSheetPath(captionWithoutType, dbName);
+                        
+                    default:
+                        // If it contains "PeopleCode" anywhere, treat it as PeopleCode
+                        if (editorType.Contains("PeopleCode"))
+                        {
+                            return DeterminePeopleCodePath(captionWithoutType + " (" + editorType + ")", dbName);
+                        }
+                        
+                        // Generic handling for unknown types
+                        return $"unknown/{editorType.ToLower().Replace(" ", "_")}/{captionWithoutType.Replace(" ", "_").ToLower()}.txt";
+                }
+            }
+            
+            // No recognized type in caption
+            return null;
+        }
+        
+        /// <summary>
+        /// Determines the relative file path for PeopleCode based on editor caption
+        /// </summary>
+        private string? DeterminePeopleCodePath(string captionWithoutType, string? dbName)
+        {
+            // DB name should always be present at this point, but default if not
+            string db = dbName ?? "unknown_db";
+            
+            // Clean up the caption
+            captionWithoutType = captionWithoutType.Trim();
+            
+            // PeopleCode paths follow a specific format
+            string pcPath = $"{db.ToLower()}/peoplecode/{captionWithoutType.Replace(".", "/")}.pc";
+            
+            System.Diagnostics.Debug.WriteLine($"PeopleCode path: {pcPath}");
+            
+            return pcPath;
+        }
+
+        /// <summary>
+        /// Determines the relative file path for SQL definitions
+        /// </summary>
+        private string? DetermineSqlDefinitionPath(string captionWithoutType, string? dbName)
+        {
+            // DB name should always be present at this point, but default if not
+            string db = dbName ?? "unknown_db";
+            
+            // Clean up the caption
+            captionWithoutType = captionWithoutType.Trim();
+            
+            // SQL objects use a specific suffix format like .0 or .2
+            string sqlType = "sql_object";
+            
+            // Check for SQL type indicators at the end (.0, .1, .2, etc.)
+            // Format is typically NAME.NUMBER
+            int lastDotPos = captionWithoutType.LastIndexOf('.');
+            if (lastDotPos >= 0 && lastDotPos < captionWithoutType.Length - 1)
+            {
+                // Try to parse the suffix after the last dot
+                string suffix = captionWithoutType.Substring(lastDotPos + 1);
+                
+                // If the suffix is a number, determine the SQL type
+                if (int.TryParse(suffix, out int sqlTypeNumber))
+                {
+                    switch (sqlTypeNumber)
+                    {
+                        case 0:
+                            sqlType = "sql_object";
+                            break;
+                        case 2:
+                            sqlType = "sql_view";
+                            break;
+                        default:
+                            sqlType = $"sql_type_{sqlTypeNumber}";
+                            break;
+                    }
+                    
+                    // Remove the suffix for the path
+                    captionWithoutType = captionWithoutType.Substring(0, lastDotPos);
+                }
+            }
+            
+            // Build the full path
+            string fullPath = $"{db.ToLower()}/sql/{sqlType}/{captionWithoutType}.sql";
+            
+            System.Diagnostics.Debug.WriteLine($"SQL path: {fullPath}");
+            
+            return fullPath;
+        }
+        
+        /// <summary>
+        /// Determines the relative file path for an HTML editor
+        /// </summary>
+        private string? DetermineHtmlPath(string captionWithoutType, string? dbName)
+        {
+            // DB name should always be present at this point, but default if not
+            string db = dbName ?? "unknown_db";
+            
+            // HTML paths follow a specific format
+            string htmlPath = $"{db.ToLower()}/html/{captionWithoutType.Replace(".", "/")}.html";
+            
+            System.Diagnostics.Debug.WriteLine($"HTML path: {htmlPath}");
+            
+            return htmlPath;
+        }
+        
+        /// <summary>
+        /// Determines the relative file path for a stylesheet editor
+        /// </summary>
+        private string? DetermineStyleSheetPath(string captionWithoutType, string? dbName)
+        {
+            // DB name should always be present at this point, but default if not
+            string db = dbName ?? "unknown_db";
+            
+            // Stylesheet paths follow a specific format
+            string cssPath = $"{db.ToLower()}/stylesheet/{captionWithoutType.Replace(".", "/")}.css";
+            
+            System.Diagnostics.Debug.WriteLine($"Stylesheet path: {cssPath}");
+            
+            return cssPath;
+        }
+
+        /// <summary>
+        /// Saves the editor content to the Git repository and creates a commit if the file has changed
+        /// </summary>
+        /// <param name="editor">The editor to save content from</param>
+        private void SaveEditorContentToGit(ScintillaEditor editor)
+        {
+            // Check if we have a valid Git repository manager and the editor has a relative path
+            if (string.IsNullOrEmpty(editor.RelativePath))
+            {
+                return;
+            }
+            
+            try
+            {
+                // Initialize Git repository manager if needed
+                if (gitRepositoryManager == null)
+                {
+                    gitRepositoryManager = Git.GitRepositoryManager.CreateFromSettings();
+                    if (gitRepositoryManager == null)
+                    {
+                        return;
+                    }
+                }
+                
+                // Get the content from the editor
+                string? content = ScintillaManager.GetScintillaText(editor);
+                if (string.IsNullOrEmpty(content))
+                {
+                    Debug.Log($"No content to save for editor: {editor.hWnd:X}");
+                    return;
+                }
+                
+                // Save and commit the content
+                gitRepositoryManager.SaveAndCommitEditorContent(editor, content);
+            }
+            catch (Exception ex)
+            {
+                Debug.Log($"Error saving editor content to Git: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Saves the content of the editor to the Git repository
+        /// </summary>
+        /// <param name="editor">The editor to save content from</param>
+        private void SaveToGitRepository(ScintillaEditor editor)
+        {
+            if (editor == null || string.IsNullOrEmpty(editor.RelativePath))
+            {
+                return;
+            }
+            
+            try
+            {
+                // Initialize Git repository manager if needed
+                if (gitRepositoryManager == null)
+                {
+                    gitRepositoryManager = Git.GitRepositoryManager.CreateFromSettings();
+                    if (gitRepositoryManager == null)
+                    {
+                        return;
+                    }
+                }
+                
+                // Get content from editor
+                string? content = ScintillaManager.GetScintillaText(editor);
+                if (string.IsNullOrEmpty(content))
+                {
+                    Debug.Log($"No content to save for editor: {editor.hWnd:X}");
+                    return;
+                }
+                
+                // Save and commit the content
+                gitRepositoryManager.SaveAndCommitEditorContent(editor, content);
+            }
+            catch (Exception ex)
+            {
+                Debug.Log($"Error saving to Git repository: {ex.Message}");
             }
         }
     }
 }
+

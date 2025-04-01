@@ -37,7 +37,8 @@ namespace AppRefiner.Dialogs
         /// Initializes a new instance of the DBConnectDialog class
         /// </summary>
         /// <param name="owner">The owner window handle</param>
-        public DBConnectDialog(IntPtr owner = default)
+        /// <param name="defaultDbName">Optional default database name to select</param>
+        public DBConnectDialog(IntPtr owner = default, string? defaultDbName = null)
         {
             this.headerPanel = new Panel();
             this.headerLabel = new Label();
@@ -58,6 +59,12 @@ namespace AppRefiner.Dialogs
             this.owner = owner;
 
             InitializeComponent();
+            
+            // Set default DB name if provided
+            if (!string.IsNullOrEmpty(defaultDbName))
+            {
+                SelectDatabaseByName(defaultDbName);
+            }
         }
 
         private void InitializeComponent()
@@ -386,6 +393,30 @@ namespace AppRefiner.Dialogs
             else
             {
                 MessageBox.Show("Please select a database type and name", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        /// <summary>
+        /// Selects a database in the combo box by name
+        /// </summary>
+        /// <param name="dbName">The database name to select</param>
+        private void SelectDatabaseByName(string dbName)
+        {
+            // Find the database in the combo box
+            for (int i = 0; i < dbNameComboBox.Items.Count; i++)
+            {
+                if (dbNameComboBox.Items[i].ToString()?.Contains(dbName) == true)
+                {
+                    dbNameComboBox.SelectedIndex = i;
+                    return;
+                }
+            }
+            
+            // If not found, add it to the combo box
+            if (!string.IsNullOrEmpty(dbName) && !dbNameComboBox.Items.Contains(dbName))
+            {
+                dbNameComboBox.Items.Add(dbName);
+                dbNameComboBox.SelectedItem = dbName;
             }
         }
     }

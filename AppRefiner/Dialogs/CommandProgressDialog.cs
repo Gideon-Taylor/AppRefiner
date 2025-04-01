@@ -7,6 +7,7 @@ namespace AppRefiner.Dialogs
         private readonly Panel headerPanel;
         private readonly Label headerLabel;
         private readonly ProgressBar progressBar;
+        private readonly Label statusLabel;
         private readonly IntPtr parentHandle;
         private DialogHelper.ModalDialogMouseHandler? mouseHandler;
 
@@ -28,6 +29,7 @@ namespace AppRefiner.Dialogs
             this.headerPanel = new Panel();
             this.headerLabel = new Label();
             this.progressBar = new ProgressBar();
+            this.statusLabel = new Label();
             InitializeComponent();
             PositionInParent();
         }
@@ -37,6 +39,14 @@ namespace AppRefiner.Dialogs
             this.Invoke(() =>
             {
                 headerLabel.Text = text;
+            });
+        }
+
+        public void UpdateProgress(string text)
+        {
+            this.Invoke(() =>
+            {
+                statusLabel.Text = text;
             });
         }
 
@@ -106,10 +116,18 @@ namespace AppRefiner.Dialogs
             this.progressBar.Name = "progressBar";
             this.progressBar.Size = new Size(300, 20);
 
+            // statusLabel
+            this.statusLabel.Text = "0%";
+            this.statusLabel.ForeColor = Color.White;
+            this.statusLabel.Font = new Font("Segoe UI", 9F, FontStyle.Regular, GraphicsUnit.Point);
+            this.statusLabel.Dock = DockStyle.Fill;
+            this.statusLabel.TextAlign = ContentAlignment.MiddleCenter;
+
             // CommandProgressDialog
             this.ClientSize = new Size(300, 70);
             this.Controls.Add(this.progressBar);
             this.Controls.Add(this.headerPanel);
+            this.Controls.Add(this.statusLabel);
             this.FormBorderStyle = FormBorderStyle.None;
             this.StartPosition = FormStartPosition.CenterParent;
             this.Name = "CommandProgressDialog";

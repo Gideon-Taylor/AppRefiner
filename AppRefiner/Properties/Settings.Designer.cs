@@ -154,5 +154,20 @@ namespace AppRefiner.Properties {
                 this["autoPair"] = value;
             }
         }
+        
+        /// <summary>
+        /// Gets or sets the path to the Git repository
+        /// </summary>
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("")]
+        public string GitRepositoryPath {
+            get {
+                return ((string)(this["GitRepositoryPath"]));
+            }
+            set {
+                this["GitRepositoryPath"] = value;
+            }
+        }
     }
 }

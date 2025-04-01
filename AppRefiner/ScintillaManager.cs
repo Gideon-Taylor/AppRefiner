@@ -1720,6 +1720,12 @@ namespace AppRefiner
         public bool IsDarkMode { get; set; } = false;
         public IntPtr AnnotationStyleOffset = IntPtr.Zero;
         public IDataManager? DataManager = null;
+        
+        // Database name associated with this editor
+        public string? DBName { get; set; }
+        
+        // Relative path to the file in the Git repository
+        public string? RelativePath { get; set; }
 
         public Dictionary<int, List<Report>> LineToReports = new();
 
