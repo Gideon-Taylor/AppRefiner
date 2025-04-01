@@ -2085,27 +2085,6 @@ namespace AppRefiner
             ));
 
             // Git
-            AvailableCommands.Add(new Command(
-                "Git: Initialize Repository",
-                "Create a new Git repository for version control",
-                (progressDialog) =>
-                {
-                    try
-                    {
-                        progressDialog?.UpdateHeader("Initializing Git repository...");
-                        progressDialog?.UpdateProgress("Waiting for repository location...");
-                        
-                        // Run on UI thread to avoid deadlocks with progress dialog
-                        this.Invoke(() => InitializeGitRepository());
-                    }
-                    catch (Exception ex)
-                    {
-                        Debug.Log($"Error in Git init command: {ex.Message}");
-                        progressDialog?.UpdateProgress($"Error: {ex.Message}");
-                    }
-                }
-            ));
-
             // Add Git Revert to Previous Version command
             AvailableCommands.Add(new Command(
                 "Git: Revert to Previous Version",
@@ -2169,7 +2148,6 @@ namespace AppRefiner
 
         private void btnPlugins_Click(object sender, EventArgs e)
         {
-
             // Load plugins from the plugin directory
             string pluginDirectory = Path.Combine(
                 Path.GetDirectoryName(Application.ExecutablePath) ?? string.Empty,
@@ -2181,6 +2159,58 @@ namespace AppRefiner
                 // Update the PluginDirectory setting and save it
                 Properties.Settings.Default.PluginDirectory = dialog.PluginDirectory;
                 Properties.Settings.Default.Save();
+            }
+        }
+
+        private void btnGitInit_Click(object sender, EventArgs e)
+        {
+            try
+            {
+                // Create the Init Git Repository dialog
+                var dialog = new Dialogs.InitGitRepositoryDialog();
+                
+                // Show the dialog and wait for result
+                if (dialog.ShowDialog(this) == DialogResult.OK)
+                {
+                    string repositoryPath = dialog.RepositoryPath;
+
+                    // Try to initialize the repository
+                    bool success = Git.GitRepositoryManager.InitializeRepository(repositoryPath);
+                    if (success)
+                    {
+                        // Save the path to settings
+                        Properties.Settings.Default.GitRepositoryPath = repositoryPath;
+                        Properties.Settings.Default.Save();
+                        
+                        // Initialize the GitRepositoryManager
+                        gitRepositoryManager = new Git.GitRepositoryManager(repositoryPath);
+                        
+                        MessageBox.Show(
+                            $"Git repository successfully initialized at {repositoryPath}",
+                            "Repository Initialized",
+                            MessageBoxButtons.OK,
+                            MessageBoxIcon.Information
+                        );
+                    }
+                    else
+                    {
+                        MessageBox.Show(
+                            "Failed to initialize Git repository. Please check the path and try again.",
+                            "Error",
+                            MessageBoxButtons.OK,
+                            MessageBoxIcon.Error
+                        );
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(
+                    $"Error initializing Git repository: {ex.Message}",
+                    "Error",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Error
+                );
             }
         }
 
