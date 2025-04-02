@@ -576,5 +576,87 @@ namespace AppRefiner.Database
             return false;
         }
 
+        /// <summary>
+        /// Retrieves the source code for an Application Class by its path
+        /// </summary>
+        /// <param name="appClassPath">The fully qualified application class path</param>
+        /// <returns>The source code of the application class if found, otherwise null</returns>
+        public string? GetAppClassSourceByPath(string appClassPath)
+        {
+            if (!IsConnected)
+            {
+                throw new InvalidOperationException("Database connection is not open");
+            }
+            
+            // First check if the class exists
+            if (!CheckAppClassExists(appClassPath))
+            {
+                return null;
+            }
+            
+            // Split the appClassPath by colons
+            string[] parts = appClassPath.Split(':');
+            
+            // Create a PeopleCodeItem for the class
+            List<Tuple<int, string>> programFields = new();
+            
+            // Map parts to object IDs and values
+            for (int i = 0; i < parts.Length; i++)
+            {
+                int objId;
+                string objVal = parts[i];
+                
+                if (i == parts.Length - 1)
+                {
+                    // Last part is the class (OBJECTID = 107)
+                    objId = 107;
+                }
+                else
+                {
+                    // Package parts start at 104 and increment
+                    objId = 104 + i;
+                }
+                
+                programFields.Add(new Tuple<int, string>(objId, objVal));
+            }
+            
+            // Add the ONEXECUTE part
+            programFields.Add(new Tuple<int, string>(12, "OnExecute"));
+            
+            // Build the PeopleCodeItem with the proper object IDs and values
+            int[] objectIDs = new int[7];
+            string[] objectValues = new string[7];
+            
+            for (int i = 0; i < 7; i++)
+            {
+                if (i < programFields.Count)
+                {
+                    objectIDs[i] = programFields[i].Item1;
+                    objectValues[i] = programFields[i].Item2;
+                }
+                else
+                {
+                    objectIDs[i] = 0;
+                    objectValues[i] = " ";
+                }
+            }
+            
+            // Create a PeopleCodeItem with empty program text
+            PeopleCodeItem item = new(
+                objectIDs,
+                objectValues,
+                Array.Empty<byte>(), 
+                new List<NameReference>()
+            );
+            
+            // Load the program text
+            if (LoadPeopleCodeItemContent(item))
+            {
+                // Convert the binary program text to a string
+                return item.GetProgramTextAsString();
+            }
+            
+            return null;
+        }
     }
 }

@@ -5,6 +5,8 @@ using System.Text;
 using System.Text.RegularExpressions;
 using Antlr4.Runtime;
 using Antlr4.Runtime.Misc;
+using Antlr4.Runtime.Tree;
+using AppRefiner.Database;
 using AppRefiner.PeopleCode;
 
 namespace AppRefiner.TooltipProviders
@@ -12,11 +14,15 @@ namespace AppRefiner.TooltipProviders
     /// <summary>
     /// Provides tooltips showing method parameter information when hovering over method calls.
     /// Specifically focuses on %This.Method() calls and attempts to find the method definition
-    /// within the current class.
+    /// within the current class or its inheritance chain.
     /// </summary>
     public class MethodParametersTooltipProvider : ParseTreeTooltipProvider
     {
         private Dictionary<string, MethodInfo> methodData = new Dictionary<string, MethodInfo>(StringComparer.OrdinalIgnoreCase);
+        private string? superClassName;
+        private Dictionary<string, Dictionary<string, MethodInfo>> inheritanceChainMethods = 
+            new Dictionary<string, Dictionary<string, MethodInfo>>(StringComparer.OrdinalIgnoreCase);
+        private bool hasProcessedInheritanceChain = false;
 
         /// <summary>
         /// Name of the tooltip provider.
@@ -32,6 +38,11 @@ namespace AppRefiner.TooltipProviders
         /// Medium priority
         /// </summary>
         public override int Priority => 50;
+
+        /// <summary>
+        /// Database connection is required to look up parent classes
+        /// </summary>
+        public override DataManagerRequirement DatabaseRequirement => DataManagerRequirement.Optional;
 
         /// <summary>
         /// Specifies which token types this provider is interested in.
@@ -190,6 +201,9 @@ namespace AppRefiner.TooltipProviders
         {
             base.Reset();
             methodData.Clear();
+            inheritanceChainMethods.Clear();
+            hasProcessedInheritanceChain = false;
+            superClassName = null;
         }
 
         // Track current access modifier context (for class members)
@@ -217,6 +231,17 @@ namespace AppRefiner.TooltipProviders
         public override void EnterPrivateHeader([NotNull] PeopleCodeParser.PrivateHeaderContext context)
         {
             currentAccessModifier = "Private";
+        }
+        
+        /// <summary>
+        /// Captures the superclass name if present
+        /// </summary>
+        public override void EnterClassDeclarationExtension([NotNull] PeopleCodeParser.ClassDeclarationExtensionContext context)
+        {
+            if (context.superclass() is PeopleCodeParser.AppClassSuperClassContext appClassContext)
+            {
+                superClassName = appClassContext.appClassPath().GetText();
+            }
         }
         
         /// <summary>
@@ -265,6 +290,166 @@ namespace AppRefiner.TooltipProviders
         }
         
         /// <summary>
+        /// Process the inheritance chain to extract methods from all parent classes
+        /// </summary>
+        private void ProcessInheritanceChain()
+        {
+            if (hasProcessedInheritanceChain || string.IsNullOrEmpty(superClassName) || DataManager == null)
+                return;
+            
+            // Track the inheritance chain to avoid circular references
+            HashSet<string> processedClasses = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            string? currentParent = superClassName;
+            
+            while (!string.IsNullOrEmpty(currentParent) && !processedClasses.Contains(currentParent))
+            {
+                processedClasses.Add(currentParent);
+                
+                // Get the parent class methods
+                Dictionary<string, MethodInfo> parentMethods = GetParentClassMethods(currentParent, out string? nextParent);
+                
+                // Store methods with their parent class
+                inheritanceChainMethods[currentParent] = parentMethods;
+                
+                // Move up the chain
+                currentParent = nextParent;
+            }
+            
+            hasProcessedInheritanceChain = true;
+        }
+        
+        /// <summary>
+        /// Extract methods from a parent class and identify its parent
+        /// </summary>
+        private Dictionary<string, MethodInfo> GetParentClassMethods(string parentClassPath, out string? parentSuperClassName)
+        {
+            var methods = new Dictionary<string, MethodInfo>(StringComparer.OrdinalIgnoreCase);
+            parentSuperClassName = null;
+            
+            // Use the DataManager to get the parent class source
+            string? parentClassSource = DataManager?.GetAppClassSourceByPath(parentClassPath);
+            
+            if (string.IsNullOrEmpty(parentClassSource))
+                return methods;
+            
+            try
+            {
+                // Create a lexer, token stream, and parser for the parent class
+                var lexer = new PeopleCodeLexer(new AntlrInputStream(parentClassSource));
+                var tokenStream = new CommonTokenStream(lexer);
+                var parser = new PeopleCodeParser(tokenStream);
+                
+                // Parse the program
+                var program = parser.program();
+                
+                // Create a specialized listener to extract just the methods and inheritance
+                var methodExtractor = new MethodExtractorListener();
+                
+                // Walk the parse tree to extract methods
+                var walker = new ParseTreeWalker();
+                walker.Walk(methodExtractor, program);
+                
+                // Get the super class name if it exists
+                parentSuperClassName = methodExtractor.SuperClassName;
+                
+                // Get the methods
+                methods = methodExtractor.MethodData;
+                
+                // Clean up
+                parser.Interpreter.ClearDFA();
+                GC.Collect();
+            }
+            catch (Exception ex)
+            {
+                // Log the error
+                Debug.LogError($"Error parsing parent class {parentClassPath}: {ex.Message}");
+            }
+            
+            return methods;
+        }
+        
+        /// <summary>
+        /// Helper listener class to extract method info and superclass from a parsed class
+        /// </summary>
+        private class MethodExtractorListener : PeopleCodeParserBaseListener
+        {
+            public Dictionary<string, MethodInfo> MethodData { get; } = 
+                new Dictionary<string, MethodInfo>(StringComparer.OrdinalIgnoreCase);
+            
+            public string? SuperClassName { get; private set; }
+            
+            private string currentAccessModifier = string.Empty;
+            
+            // Track inheritance
+            public override void EnterClassDeclarationExtension([NotNull] PeopleCodeParser.ClassDeclarationExtensionContext context)
+            {
+                if (context.superclass() is PeopleCodeParser.AppClassSuperClassContext appClassContext)
+                {
+                    SuperClassName = appClassContext.appClassPath().GetText();
+                }
+            }
+            
+            // Track access modifiers
+            public override void EnterPublicHeader([NotNull] PeopleCodeParser.PublicHeaderContext context)
+            {
+                currentAccessModifier = "Public";
+            }
+            
+            public override void EnterProtectedHeader([NotNull] PeopleCodeParser.ProtectedHeaderContext context)
+            {
+                currentAccessModifier = "Protected";
+            }
+            
+            public override void EnterPrivateHeader([NotNull] PeopleCodeParser.PrivateHeaderContext context)
+            {
+                currentAccessModifier = "Private";
+            }
+            
+            // Extract method definitions
+            public override void EnterMethodHeader([NotNull] PeopleCodeParser.MethodHeaderContext context)
+            {
+                if (context.genericID() != null)
+                {
+                    var methodName = context.genericID().GetText();
+                    var returnType = context.typeT() != null ? context.typeT().GetText() : string.Empty;
+                    bool isAbstract = context.ABSTRACT() != null;
+                    
+                    var methodInfo = new MethodInfo
+                    {
+                        Name = methodName,
+                        ReturnType = returnType,
+                        IsAbstract = isAbstract,
+                        AccessModifier = currentAccessModifier
+                    };
+                    
+                    // Process method parameters if any
+                    if (context.methodArguments() != null)
+                    {
+                        foreach (var argContext in context.methodArguments().methodArgument())
+                        {
+                            if (argContext.USER_VARIABLE() != null && argContext.typeT() != null)
+                            {
+                                var paramName = argContext.USER_VARIABLE().GetText();
+                                var paramType = argContext.typeT().GetText();
+                                var isOut = argContext.OUT() != null;
+                                
+                                methodInfo.Parameters.Add(new ParameterInfo
+                                {
+                                    Name = paramName,
+                                    Type = paramType,
+                                    IsOut = isOut
+                                });
+                            }
+                        }
+                    }
+                    
+                    // Store the method info
+                    MethodData[methodName.ToLowerInvariant()] = methodInfo;
+                }
+            }
+        }
+        
+        /// <summary>
         /// Handles dot access expressions like %This.MethodName() to display parameter information
         /// </summary>
         public override void EnterDotAccessExpr([NotNull] PeopleCodeParser.DotAccessExprContext context)
@@ -286,20 +471,76 @@ namespace AppRefiner.TooltipProviders
                             
                             if (isMethodCall)
                             {
-                                // Check if we know this method
+                                // Get tooltip position information
+                                int start = dotAccess.genericID().Start.StartIndex;
+                                int length = dotAccess.genericID().Stop.StopIndex - start + 1;
+                                
+                                // Check if we know this method in the current class
                                 if (methodData.TryGetValue(methodName.ToLowerInvariant(), out var methodInfo))
                                 {
-                                    // Register tooltip for the method name in the call
-                                    int start = dotAccess.genericID().Start.StartIndex;
-                                    int length = dotAccess.genericID().Stop.StopIndex - start + 1;
+                                    // Found in current class
                                     RegisterTooltip(start, length, $"{methodInfo}");
+                                }
+                                else if (!string.IsNullOrEmpty(superClassName) && DataManager != null)
+                                {
+                                    // Not found in current class, process the full inheritance chain
+                                    if (!hasProcessedInheritanceChain)
+                                    {
+                                        ProcessInheritanceChain();
+                                    }
+                                    
+                                    bool foundInParent = false;
+                                    
+                                    // Try to find the method in the inheritance chain
+                                    foreach (var entry in inheritanceChainMethods)
+                                    {
+                                        string parentClassName = entry.Key;
+                                        Dictionary<string, MethodInfo> parentMethods = entry.Value;
+                                        
+                                        if (parentMethods.TryGetValue(methodName.ToLowerInvariant(), out var parentMethodInfo))
+                                        {
+                                            // Found in a parent class - add the class name to the tooltip
+                                            string tooltipWithInheritance = $"Method: {parentMethodInfo.Name} (inherited from {parentClassName})\n" +
+                                                                            $"Access: {parentMethodInfo.AccessModifier}\n";
+                                                                          
+                                            // Add the rest of the method info
+                                            if (parentMethodInfo.IsAbstract)
+                                                tooltipWithInheritance += "Abstract Method\n";
+                                                
+                                            if (!string.IsNullOrEmpty(parentMethodInfo.ReturnType))
+                                                tooltipWithInheritance += $"Returns: {FormatArrayType(parentMethodInfo.ReturnType)}\n";
+                                                
+                                            // Parameters
+                                            if (parentMethodInfo.Parameters.Count > 0)
+                                            {
+                                                tooltipWithInheritance += "Parameters:\n";
+                                                foreach (var param in parentMethodInfo.Parameters)
+                                                {
+                                                    tooltipWithInheritance += $"   {param}\n";
+                                                }
+                                            }
+                                            else
+                                            {
+                                                tooltipWithInheritance += "Parameters: None\n";
+                                            }
+                                            
+                                            RegisterTooltip(start, length, tooltipWithInheritance.TrimEnd());
+                                            foundInParent = true;
+                                            break; // Exit after finding in the inheritance chain
+                                        }
+                                    }
+                                    
+                                    if (!foundInParent)
+                                    {
+                                        // Not found in any parent class
+                                        string stubMessage = $"Method: {methodName}\n(Method definition not found in class hierarchy)";
+                                        RegisterTooltip(start, length, stubMessage);
+                                    }
                                 }
                                 else
                                 {
-                                    // Method not found in current class - provide stub message
+                                    // No parent class or not found
                                     string stubMessage = $"Method: {methodName}\n(Method definition not found in current class)";
-                                    int start = dotAccess.genericID().Start.StartIndex;
-                                    int length = dotAccess.genericID().Stop.StopIndex - start + 1;
                                     RegisterTooltip(start, length, stubMessage);
                                 }
                             }

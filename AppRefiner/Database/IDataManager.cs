@@ -81,5 +81,12 @@ namespace AppRefiner.Database
         /// <param name="appClassPath">The application class path to check</param>
         /// <returns>True if the application class exists, false otherwise</returns>
         bool CheckAppClassExists(string appClassPath);
+        
+        /// <summary>
+        /// Retrieves the source code for an Application Class by its path
+        /// </summary>
+        /// <param name="appClassPath">The fully qualified application class path (e.g., "Package:Subpackage:ClassName")</param>
+        /// <returns>The source code of the application class if found, otherwise null</returns>
+        string? GetAppClassSourceByPath(string appClassPath);
     }
 }
