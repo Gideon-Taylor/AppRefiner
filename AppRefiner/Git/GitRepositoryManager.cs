@@ -58,7 +58,7 @@ namespace AppRefiner.Git
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Error initializing Git repository: {ex.Message}");
+                Debug.Log($"Error initializing Git repository: {ex.Message}");
                 return false;
             }
         }
@@ -106,7 +106,7 @@ namespace AppRefiner.Git
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Error getting repository status: {ex.Message}");
+                Debug.Log($"Error getting repository status: {ex.Message}");
             }
             
             return result;
@@ -139,7 +139,7 @@ namespace AppRefiner.Git
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Error staging changes: {ex.Message}");
+                Debug.Log($"Error staging changes: {ex.Message}");
                 return false;
             }
         }
@@ -163,7 +163,7 @@ namespace AppRefiner.Git
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Error committing changes: {ex.Message}");
+                Debug.Log($"Error committing changes: {ex.Message}");
                 return false;
             }
         }
@@ -178,7 +178,7 @@ namespace AppRefiner.Git
         {
             if (string.IsNullOrEmpty(editor.RelativePath))
             {
-                System.Diagnostics.Debug.WriteLine("Cannot save editor content: RelativePath is not set");
+                Debug.Log("Cannot save editor content: RelativePath is not set");
                 return false;
             }
             
@@ -212,7 +212,7 @@ namespace AppRefiner.Git
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Error saving file content: {ex.Message}");
+                Debug.Log($"Error saving file content: {ex.Message}");
                 return false;
             }
         }
@@ -261,7 +261,7 @@ namespace AppRefiner.Git
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Error reading file content: {ex.Message}");
+                Debug.Log($"Error reading file content: {ex.Message}");
             }
             
             return null;
@@ -279,7 +279,7 @@ namespace AppRefiner.Git
                 string? repoPath = Properties.Settings.Default.GitRepositoryPath;
                 if (string.IsNullOrEmpty(repoPath) || !IsValidRepository(repoPath))
                 {
-                    System.Diagnostics.Debug.WriteLine("Cannot create GitRepositoryManager: Repository path is not set or not valid");
+                    Debug.Log("Cannot create GitRepositoryManager: Repository path is not set or not valid");
                     return null;
                 }
                 
@@ -288,7 +288,7 @@ namespace AppRefiner.Git
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Error creating GitRepositoryManager from settings: {ex.Message}");
+                Debug.Log($"Error creating GitRepositoryManager from settings: {ex.Message}");
                 return null;
             }
         }
@@ -306,7 +306,7 @@ namespace AppRefiner.Git
                 // Check if the editor has a valid relative path
                 if (string.IsNullOrEmpty(editor.RelativePath))
                 {
-                    System.Diagnostics.Debug.WriteLine("Cannot save editor content: RelativePath is not set");
+                    Debug.Log("Cannot save editor content: RelativePath is not set");
                     return false;
                 }
                 
@@ -314,7 +314,7 @@ namespace AppRefiner.Git
                 bool saveSuccess = SaveEditorContent(editor, content);
                 if (!saveSuccess)
                 {
-                    System.Diagnostics.Debug.WriteLine($"Failed to save editor content to: {editor.RelativePath}");
+                    Debug.Log($"Failed to save editor content to: {editor.RelativePath}");
                     return false;
                 }
                 
@@ -323,8 +323,8 @@ namespace AppRefiner.Git
                 
                 // Check if file is modified
                 bool isModified = repoStatus.ContainsKey(editor.RelativePath) && 
-                                 (repoStatus[editor.RelativePath].Contains("Modified") || 
-                                  repoStatus[editor.RelativePath].Contains("Added"));
+                                 (repoStatus[editor.RelativePath].Contains("ModifiedInWorkdir") || 
+                                  repoStatus[editor.RelativePath].Contains("NewInWorkdir"));
                 
                 // If file has changed, create a commit
                 if (isModified)
@@ -347,23 +347,23 @@ namespace AppRefiner.Git
                     
                     if (commitSuccess)
                     {
-                        System.Diagnostics.Debug.WriteLine($"Successfully committed changes for: {editor.RelativePath}");
+                        Debug.Log($"Successfully committed changes for: {editor.RelativePath}");
                         return true;
                     }
                     else
                     {
-                        System.Diagnostics.Debug.WriteLine($"Failed to commit changes for: {editor.RelativePath}");
+                        Debug.Log($"Failed to commit changes for: {editor.RelativePath}");
                         return false;
                     }
                 }
                 
                 // Even if no changes were detected, the save operation was successful
-                System.Diagnostics.Debug.WriteLine($"No changes detected for: {editor.RelativePath}");
+                Debug.Log($"No changes detected for: {editor.RelativePath}");
                 return true;
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Error in SaveAndCommitEditorContent: {ex.Message}");
+                Debug.Log($"Error in SaveAndCommitEditorContent: {ex.Message}");
                 return false;
             }
         }
@@ -380,6 +380,12 @@ namespace AppRefiner.Git
             try
             {
                 using var repo = new Repository(_repositoryPath);
+                
+                // If repository has no commits yet or has a detached HEAD, return empty list
+                if (repo.Head == null || repo.Head.Tip == null)
+                {
+                    return result;
+                }
                 
                 // Create a filter to only include commits that modified the specified file
                 var options = new CommitFilter
@@ -434,7 +440,7 @@ namespace AppRefiner.Git
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Error getting file history: {ex.Message}");
+                Debug.Log($"Error getting file history: {ex.Message}");
             }
             
             return result;
@@ -475,7 +481,7 @@ namespace AppRefiner.Git
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Error getting file content from commit: {ex.Message}");
+                Debug.Log($"Error getting file content from commit: {ex.Message}");
                 return null;
             }
         }
@@ -492,7 +498,7 @@ namespace AppRefiner.Git
             {
                 if (string.IsNullOrEmpty(editor.RelativePath))
                 {
-                    System.Diagnostics.Debug.WriteLine("Cannot revert editor content: RelativePath is not set");
+                    Debug.Log("Cannot revert editor content: RelativePath is not set");
                     return false;
                 }
                 
@@ -500,7 +506,7 @@ namespace AppRefiner.Git
                 var content = GetFileContentFromCommit(editor.RelativePath, commitId);
                 if (content == null)
                 {
-                    System.Diagnostics.Debug.WriteLine($"Failed to get file content from commit: {commitId}");
+                    Debug.Log($"Failed to get file content from commit: {commitId}");
                     return false;
                 }
                 
@@ -511,7 +517,7 @@ namespace AppRefiner.Git
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Error reverting editor to commit: {ex.Message}");
+                Debug.Log($"Error reverting editor to commit: {ex.Message}");
                 return false;
             }
         }
@@ -552,14 +558,14 @@ namespace AppRefiner.Git
                 // Generate patch (diff) between the two commits for this specific file
                 var options = new CompareOptions
                 {
-                    ContextLines = 3,
+                    ContextLines = 5,
                     InterhunkLines = 1,
                     Similarity = SimilarityOptions.None
                 };
 
                 var patch = repo.Diff.Compare<Patch>(
-                    previousCommit.Tree, 
-                    currentCommit.Tree, 
+                    previousCommit.Tree,
+                    currentCommit.Tree,
                     new[] { relativePath }, 
                     options);
                 
@@ -567,7 +573,7 @@ namespace AppRefiner.Git
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Error getting file diff: {ex.Message}");
+                Debug.Log($"Error getting file diff: {ex.Message}");
                 return null;
             }
         }

@@ -4,6 +4,7 @@ using System.Windows.Forms;
 using AppRefiner.Git;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text;
 
 namespace AppRefiner.Dialogs
 {
@@ -206,11 +207,7 @@ namespace AppRefiner.Dialogs
                 selectedCommit = (CommitInfo)historyListView.SelectedItems[0].Tag;
                 revertButton.Enabled = true;
                 viewButton.Enabled = true;
-                
-                // Enable diff button only if this is not the last commit in the history
-                // (which means it's not the initial commit for this file)
-                int selectedIndex = historyListView.SelectedItems[0].Index;
-                diffButton.Enabled = selectedIndex < commitHistory.Count - 1;
+                diffButton.Enabled = true;
             }
             else
             {
@@ -281,23 +278,24 @@ namespace AppRefiner.Dialogs
         {
             if (selectedCommit != null && !string.IsNullOrEmpty(editor.RelativePath))
             {
-                // Get the selected index
-                int selectedIndex = historyListView.SelectedItems[0].Index;
+                // Get the content from the selected commit
+                var historicalContent = gitManager.GetFileContentFromCommit(editor.RelativePath, selectedCommit.CommitId);
                 
-                // Check if this is not the last commit (which would be the initial commit)
-                if (selectedIndex < commitHistory.Count - 1)
+                if (historicalContent != null)
                 {
-                    // Get the previous commit to compare with
-                    string? previousCommitId = commitHistory[selectedIndex + 1].CommitId;
+                    // Get the current editor content
+                    var currentContent = ScintillaManager.GetScintillaText(editor);
                     
-                    // Get the diff
-                    var diff = gitManager.GetFileDiff(editor.RelativePath, selectedCommit.CommitId, previousCommitId);
-                    
-                    if (diff != null)
+                    if (currentContent != null)
                     {
+                        // Generate a unified diff format manually
+                        // Pass current content as old text and historical content as new text
+                        // This shows what changes would be made if reverting to the selected version
+                        var diff = GenerateUnifiedDiff(currentContent, historicalContent, editor.RelativePath);
+                        
                         using var diffDialog = new DiffViewDialog(
                             diff,
-                            $"Diff: {editor.Caption} - {selectedCommit.Date.ToString("yyyy-MM-dd HH:mm:ss")}",
+                            $"Diff: {editor.Caption} @ {selectedCommit.Date.ToString("yyyy-MM-dd HH:mm:ss")} vs Current Editor",
                             owner);
                         
                         diffDialog.ShowDialog();
@@ -305,7 +303,7 @@ namespace AppRefiner.Dialogs
                     else
                     {
                         MessageBox.Show(
-                            "Failed to generate diff for the selected commit.",
+                            "Failed to get current editor content.",
                             "Error",
                             MessageBoxButtons.OK,
                             MessageBoxIcon.Error);
@@ -314,12 +312,63 @@ namespace AppRefiner.Dialogs
                 else
                 {
                     MessageBox.Show(
-                        "No previous version available to compare with. This appears to be the initial commit of the file.",
-                        "Information",
+                        "Failed to get historical file content from the selected commit.",
+                        "Error",
                         MessageBoxButtons.OK,
-                        MessageBoxIcon.Information);
+                        MessageBoxIcon.Error);
                 }
             }
+        }
+        
+        /// <summary>
+        /// Generates a unified diff between two versions of text
+        /// </summary>
+        /// <param name="oldText">The version of the text being changed from (current editor content)</param>
+        /// <param name="newText">The version of the text being changed to (historical content)</param>
+        /// <param name="filePath">The file path for the diff header</param>
+        /// <returns>A unified diff format string</returns>
+        private string GenerateUnifiedDiff(string oldText, string newText, string filePath)
+        {
+            // Use LibGit2Sharp's diff functionality via the GitRepositoryManager if available
+            var commitId = selectedCommit?.CommitId;
+            if (commitId != null)
+            {
+                // Try to use the diff from HEAD to the selected commit
+                // This shows what would happen if we reverted to the selected commit
+                var headDiff = gitManager.GetFileDiff(editor.RelativePath,commitId, "HEAD");
+                if (headDiff != null)
+                {
+                    return headDiff;
+                }
+            }
+            
+            // Fallback to a simple diff display if LibGit2Sharp's diff isn't available
+            var oldLines = oldText.Split('\n');
+            var newLines = newText.Split('\n');
+            
+            var sb = new System.Text.StringBuilder();
+            
+            // Add a diff header
+            sb.AppendLine($"diff --git a/{filePath} b/{filePath}");
+            sb.AppendLine($"--- a/{filePath}");
+            sb.AppendLine($"+++ b/{filePath}");
+            
+            // Simple diff implementation - just showing all removed lines followed by all added lines
+            sb.AppendLine($"@@ -1,{oldLines.Length} +1,{newLines.Length} @@");
+            
+            // Show removed lines
+            foreach (var line in oldLines)
+            {
+                sb.AppendLine($"-{line}");
+            }
+            
+            // Show added lines
+            foreach (var line in newLines)
+            {
+                sb.AppendLine($"+{line}");
+            }
+            
+            return sb.ToString();
         }
 
         protected override void OnShown(EventArgs e)

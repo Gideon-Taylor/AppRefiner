@@ -41,7 +41,10 @@ namespace AppRefiner.Stylers
             string packageName = appPackageAll != null ? appPackageAll.GetText().TrimEnd('*') : context.appClassPath().GetText();
 
             var importInfo = new ImportInfo(packageName, context.Start.Line, context.Start.StartIndex, context.Stop.StopIndex);
-
+            if (packageName == null)
+            {
+                int i = 3;
+            }
             importsUsed[packageName] = importInfo;
         }
 

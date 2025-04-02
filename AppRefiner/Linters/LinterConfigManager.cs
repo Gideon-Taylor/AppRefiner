@@ -46,7 +46,7 @@ namespace AppRefiner.Linters
             catch (Exception ex)
             {
                 // Log or handle the exception as needed
-                System.Diagnostics.Debug.WriteLine($"Error loading linter configs: {ex.Message}");
+                Debug.Log($"Error loading linter configs: {ex.Message}");
             }
         }
 
@@ -66,7 +66,7 @@ namespace AppRefiner.Linters
             catch (Exception ex)
             {
                 // Log or handle the exception as needed
-                System.Diagnostics.Debug.WriteLine($"Error saving linter configs: {ex.Message}");
+                Debug.Log($"Error saving linter configs: {ex.Message}");
             }
         }
 

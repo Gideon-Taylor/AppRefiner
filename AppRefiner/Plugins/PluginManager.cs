@@ -45,7 +45,7 @@ namespace AppRefiner.Plugins
                 catch (Exception ex)
                 {
                     // Log the error but continue with other plugins
-                    System.Diagnostics.Debug.WriteLine($"Failed to load plugin: {dllFile}. Error: {ex.Message}");
+                    Debug.Log($"Failed to load plugin: {dllFile}. Error: {ex.Message}");
                 }
             }
 
@@ -73,7 +73,7 @@ namespace AppRefiner.Plugins
                 catch (Exception ex)
                 {
                     // Log the error but continue with other assemblies
-                    System.Diagnostics.Debug.WriteLine($"Error discovering linter types in assembly {assembly.FullName}: {ex.Message}");
+                    Debug.Log($"Error discovering linter types in assembly {assembly.FullName}: {ex.Message}");
                 }
             }
 
@@ -101,7 +101,7 @@ namespace AppRefiner.Plugins
                 catch (Exception ex)
                 {
                     // Log the error but continue with other assemblies
-                    System.Diagnostics.Debug.WriteLine($"Error discovering styler types in assembly {assembly.FullName}: {ex.Message}");
+                    Debug.Log($"Error discovering styler types in assembly {assembly.FullName}: {ex.Message}");
                 }
             }
 
@@ -131,7 +131,7 @@ namespace AppRefiner.Plugins
                 catch (Exception ex)
                 {
                     // Log the error but continue with other assemblies
-                    System.Diagnostics.Debug.WriteLine($"Error discovering refactor types in assembly {assembly.FullName}: {ex.Message}");
+                    Debug.Log($"Error discovering refactor types in assembly {assembly.FullName}: {ex.Message}");
                 }
             }
 
@@ -159,7 +159,7 @@ namespace AppRefiner.Plugins
                 catch (Exception ex)
                 {
                     // Log the error but continue with other assemblies
-                    System.Diagnostics.Debug.WriteLine($"Error discovering tooltip provider types in assembly {assembly.FullName}: {ex.Message}");
+                    Debug.Log($"Error discovering tooltip provider types in assembly {assembly.FullName}: {ex.Message}");
                 }
             }
 
@@ -208,7 +208,7 @@ namespace AppRefiner.Plugins
                 catch (Exception ex)
                 {
                     // Log the error but continue with other assemblies
-                    System.Diagnostics.Debug.WriteLine($"Error getting metadata for assembly {assembly.FullName}: {ex.Message}");
+                    Debug.Log($"Error getting metadata for assembly {assembly.FullName}: {ex.Message}");
                 }
             }
 

@@ -137,6 +137,16 @@ namespace AppRefiner
         // Add a private field for the GitRepositoryManager
         private Git.GitRepositoryManager? gitRepositoryManager;
 
+        // Fields for editor management
+        private HashSet<ScintillaEditor> knownEditors = new HashSet<ScintillaEditor>();
+        
+        // Fields for debouncing SAVEPOINTREACHED events
+        private readonly object savepointLock = new object();
+        private DateTime lastSavepointTime = DateTime.MinValue;
+        private System.Threading.Timer? savepointDebounceTimer = null;
+        private ScintillaEditor? pendingSaveEditor = null;
+        private const int SAVEPOINT_DEBOUNCE_MS = 300;
+
         public MainForm()
         {
             InitializeComponent();
@@ -2507,20 +2517,23 @@ namespace AppRefiner
                         TooltipProviders.TooltipManager.HideTooltip(activeEditor);
                         break;
                     case SCN_SAVEPOINTREACHED:
+                        Debug.Log("SAVEPOINTREACHED...");
                         if (activeEditor != null)
                         {
-                            activeEditor.LastContentHash = 0;
-                            // Clear content string to force re-reading
-                            activeEditor.ContentString = null;
-                            // Clear annotations
-                            ScintillaManager.ClearAnnotations(activeEditor);
-                            // Reset styles
-                            ScintillaManager.ResetStyles(activeEditor);
-                            
-                            // Save content to Git repository when save point is reached
-                            if (!string.IsNullOrEmpty(activeEditor.RelativePath))
+                            lock (savepointLock)
                             {
-                                SaveToGitRepository(activeEditor);
+                                // Cancel any pending savepoint timer
+                                savepointDebounceTimer?.Change(Timeout.Infinite, Timeout.Infinite);
+                                
+                                // Store the editor for later processing
+                                pendingSaveEditor = activeEditor;
+                                
+                                // Record the time of this savepoint
+                                lastSavepointTime = DateTime.Now;
+                                
+                                // Start a new timer to process this savepoint after the debounce period
+                                savepointDebounceTimer = new System.Threading.Timer(
+                                    ProcessSavepoint, null, SAVEPOINT_DEBOUNCE_MS, Timeout.Infinite);
                             }
                         }
                         break;
@@ -2972,7 +2985,7 @@ namespace AppRefiner
                     if (parts.Length >= 2)
                     {
                         editor.DBName = parts[1].Trim();
-                        System.Diagnostics.Debug.WriteLine($"Set editor DBName to: {editor.DBName}");
+                        Debug.Log($"Set editor DBName to: {editor.DBName}");
                         
                         // Now determine the relative file path based on the database name
                         DetermineRelativeFilePath(editor);
@@ -3008,7 +3021,7 @@ namespace AppRefiner
                         GetWindowText(grandparentHwnd, caption, caption.Capacity);
                         string windowTitle = caption.ToString().Trim();
                         
-                        System.Diagnostics.Debug.WriteLine($"Editor grandparent window title: {windowTitle}");
+                        Debug.Log($"Editor grandparent window title: {windowTitle}");
                         
                         // Determine editor type and generate appropriate relative path
                         string? relativePath = DetermineRelativePathFromCaption(windowTitle, editor.DBName);
@@ -3016,14 +3029,14 @@ namespace AppRefiner
                         if (!string.IsNullOrEmpty(relativePath))
                         {
                             editor.RelativePath = relativePath;
-                            System.Diagnostics.Debug.WriteLine($"Set editor RelativePath to: {relativePath}");
+                            Debug.Log($"Set editor RelativePath to: {relativePath}");
                         }
                     }
                 }
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Error determining relative path: {ex.Message}");
+                Debug.Log($"Error determining relative path: {ex.Message}");
             }
         }
         
@@ -3041,7 +3054,7 @@ namespace AppRefiner
             if (string.IsNullOrEmpty(caption))
                 return null;
                 
-            System.Diagnostics.Debug.WriteLine($"Determining path from caption: {caption}");
+            Debug.Log($"Determining path from caption: {caption}");
             
             // Check for PeopleCode type in caption - usually appears as (PeopleCode) or some other type suffix
             int typeStartIndex = caption.LastIndexOf('(');
@@ -3052,24 +3065,27 @@ namespace AppRefiner
                 string editorType = caption.Substring(typeStartIndex + 1, typeEndIndex - typeStartIndex - 1);
                 string captionWithoutType = caption.Substring(0, typeStartIndex).Trim();
                 
-                System.Diagnostics.Debug.WriteLine($"Editor type: {editorType}, Caption without type: {captionWithoutType}");
+                Debug.Log($"Editor type: {editorType}, Caption without type: {captionWithoutType}");
                 
                 // Different logic based on editor type
                 switch (editorType)
                 {
-                    case "PeopleCode":
-                        return DeterminePeopleCodePath(captionWithoutType, dbName);
-                        
                     case "App Engine Program PeopleCode":
+                        return DeterminePeopleCodePath(captionWithoutType, dbName, "app_engine");
                     case "Application Package PeopleCode":
+                        return DeterminePeopleCodePath(captionWithoutType, dbName, "app_package");
                     case "Component Interface PeopleCode":
+                        return DeterminePeopleCodePath(captionWithoutType, dbName, "comp_intfc");
                     case "Menu PeopleCode":
+                        return DeterminePeopleCodePath(captionWithoutType, dbName, "menu");
                     case "Message PeopleCode":
+                        return DeterminePeopleCodePath(captionWithoutType, dbName, "message");
                     case "Page PeopleCode":
+                        return DeterminePeopleCodePath(captionWithoutType, dbName, "page");
                     case "Record PeopleCode":
+                        return DeterminePeopleCodePath(captionWithoutType, dbName, "record");
                     case "Component PeopleCode":
-                        // For all PeopleCode types, pass the full original type to the specialized handler
-                        return DeterminePeopleCodePath(captionWithoutType + " (" + editorType + ")", dbName);
+                        return DeterminePeopleCodePath(captionWithoutType, dbName, "component");
                         
                     case "SQL Definition":
                         return DetermineSqlDefinitionPath(captionWithoutType, dbName);
@@ -3085,7 +3101,7 @@ namespace AppRefiner
                         // If it contains "PeopleCode" anywhere, treat it as PeopleCode
                         if (editorType.Contains("PeopleCode"))
                         {
-                            return DeterminePeopleCodePath(captionWithoutType + " (" + editorType + ")", dbName);
+                            return DeterminePeopleCodePath(captionWithoutType, dbName, "peoplecode");
                         }
                         
                         // Generic handling for unknown types
@@ -3100,7 +3116,7 @@ namespace AppRefiner
         /// <summary>
         /// Determines the relative file path for PeopleCode based on editor caption
         /// </summary>
-        private string? DeterminePeopleCodePath(string captionWithoutType, string? dbName)
+        private string? DeterminePeopleCodePath(string captionWithoutType, string? dbName, string relativeRoot)
         {
             // DB name should always be present at this point, but default if not
             string db = dbName ?? "unknown_db";
@@ -3109,9 +3125,9 @@ namespace AppRefiner
             captionWithoutType = captionWithoutType.Trim();
             
             // PeopleCode paths follow a specific format
-            string pcPath = $"{db.ToLower()}/peoplecode/{captionWithoutType.Replace(".", "/")}.pc";
+            string pcPath = $"{db.ToLower()}/peoplecode/{relativeRoot}/{captionWithoutType.Replace(".", "/")}.pcode";
             
-            System.Diagnostics.Debug.WriteLine($"PeopleCode path: {pcPath}");
+            Debug.Log($"PeopleCode path: {pcPath}");
             
             return pcPath;
         }
@@ -3162,7 +3178,7 @@ namespace AppRefiner
             // Build the full path
             string fullPath = $"{db.ToLower()}/sql/{sqlType}/{captionWithoutType}.sql";
             
-            System.Diagnostics.Debug.WriteLine($"SQL path: {fullPath}");
+            Debug.Log($"SQL path: {fullPath}");
             
             return fullPath;
         }
@@ -3178,7 +3194,7 @@ namespace AppRefiner
             // HTML paths follow a specific format
             string htmlPath = $"{db.ToLower()}/html/{captionWithoutType.Replace(".", "/")}.html";
             
-            System.Diagnostics.Debug.WriteLine($"HTML path: {htmlPath}");
+            Debug.Log($"HTML path: {htmlPath}");
             
             return htmlPath;
         }
@@ -3194,7 +3210,7 @@ namespace AppRefiner
             // Stylesheet paths follow a specific format
             string cssPath = $"{db.ToLower()}/stylesheet/{captionWithoutType.Replace(".", "/")}.css";
             
-            System.Diagnostics.Debug.WriteLine($"Stylesheet path: {cssPath}");
+            Debug.Log($"Stylesheet path: {cssPath}");
             
             return cssPath;
         }
@@ -3277,6 +3293,56 @@ namespace AppRefiner
             catch (Exception ex)
             {
                 Debug.Log($"Error saving to Git repository: {ex.Message}");
+            }
+        }
+
+        // Add this new method to process the savepoint after debouncing
+        private void ProcessSavepoint(object? state)
+        {
+            ScintillaEditor? editorToSave = null;
+            
+            lock (savepointLock)
+            {
+                // If there's no pending editor, just return
+                if (pendingSaveEditor == null)
+                    return;
+                
+                // Get the editor to save
+                editorToSave = pendingSaveEditor;
+                
+                // Clear the pending editor
+                pendingSaveEditor = null;
+            }
+            
+            try
+            {
+                // Make sure we're on the UI thread
+                this.Invoke(() =>
+                {
+                    // Check if the editor is still valid
+                    if (editorToSave != null && editorToSave.IsValid())
+                    {
+                        Debug.Log($"Processing debounced SAVEPOINTREACHED for {editorToSave.RelativePath}");
+                        
+                        // Reset editor state
+                        editorToSave.LastContentHash = 0;
+                        editorToSave.ContentString = null;
+                        
+                        // Clear annotations and reset styles
+                        ScintillaManager.ClearAnnotations(editorToSave);
+                        ScintillaManager.ResetStyles(editorToSave);
+                        
+                        // Save content to Git repository
+                        if (!string.IsNullOrEmpty(editorToSave.RelativePath))
+                        {
+                            SaveToGitRepository(editorToSave);
+                        }
+                    }
+                });
+            }
+            catch (Exception ex)
+            {
+                Debug.Log($"Error processing debounced savepoint: {ex.Message}");
             }
         }
     }
