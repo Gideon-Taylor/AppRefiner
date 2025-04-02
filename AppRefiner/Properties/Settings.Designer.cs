@@ -155,9 +155,6 @@ namespace AppRefiner.Properties {
             }
         }
         
-        /// <summary>
-        /// Gets or sets the path to the Git repository
-        /// </summary>
         [global::System.Configuration.UserScopedSettingAttribute()]
         [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
         [global::System.Configuration.DefaultSettingValueAttribute("")]
@@ -179,6 +176,30 @@ namespace AppRefiner.Properties {
             }
             set {
                 this["TooltipStates"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("False")]
+        public bool promptForDB {
+            get {
+                return ((bool)(this["promptForDB"]));
+            }
+            set {
+                this["promptForDB"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("")]
+        public string DbConnectionSettings {
+            get {
+                return ((string)(this["DbConnectionSettings"]));
+            }
+            set {
+                this["DbConnectionSettings"] = value;
             }
         }
     }

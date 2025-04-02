@@ -71,6 +71,7 @@ namespace AppRefiner
             cmbTemplates = new ComboBox();
             progressBar1 = new ProgressBar();
             lblStatus = new Label();
+            chkPromptForDB = new CheckBox();
             ((System.ComponentModel.ISupportInitialize)splitContainer1).BeginInit();
             splitContainer1.Panel1.SuspendLayout();
             splitContainer1.Panel2.SuspendLayout();
@@ -157,6 +158,7 @@ namespace AppRefiner
             // 
             // grpEditorSettings
             // 
+            grpEditorSettings.Controls.Add(chkPromptForDB);
             grpEditorSettings.Controls.Add(chkAutoPairing);
             grpEditorSettings.Controls.Add(btnPlugins);
             grpEditorSettings.Controls.Add(btnGitInit);
@@ -586,6 +588,16 @@ namespace AppRefiner
             lblStatus.Text = "Stopped";
             lblStatus.TextAlign = ContentAlignment.MiddleCenter;
             // 
+            // chkDBPrompt
+            // 
+            chkPromptForDB.AutoSize = true;
+            chkPromptForDB.Location = new Point(245, 47);
+            chkPromptForDB.Name = "chkDBPrompt";
+            chkPromptForDB.Size = new Size(167, 19);
+            chkPromptForDB.TabIndex = 28;
+            chkPromptForDB.Text = "Prompt for DB Connection";
+            chkPromptForDB.UseVisualStyleBackColor = true;
+            // 
             // MainForm
             // 
             AutoScaleDimensions = new SizeF(7F, 15F);
@@ -671,5 +683,6 @@ namespace AppRefiner
         private ComboBox cmbTemplates;
         private Button btnDebugLog;
         private CheckBox chkAutoPairing;
+        private CheckBox chkPromptForDB;
     }
 }

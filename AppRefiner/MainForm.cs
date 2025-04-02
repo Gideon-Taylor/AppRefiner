@@ -574,6 +574,7 @@ namespace AppRefiner
                 chkAutoDark.Checked = Properties.Settings.Default.autoDark;
                 chkLintAnnotate.Checked = Properties.Settings.Default.lintAnnotate;
                 chkAutoPairing.Checked = Properties.Settings.Default.autoPair;
+                chkPromptForDB.Checked = Properties.Settings.Default.promptForDB;
                 LoadStylerStates();
                 LoadLinterStates();
                 LoadTooltipStates();
@@ -755,7 +756,6 @@ namespace AppRefiner
                         // Reposition the control and its label
                         label.Location = new Point(label.Location.X, currentY + 3);
                         control.Location = new Point(control.Location.X, currentY);
-
                         currentY += verticalSpacing;
                     }
                 }
@@ -796,6 +796,7 @@ namespace AppRefiner
             Properties.Settings.Default.lintAnnotate = chkLintAnnotate.Checked;
             Properties.Settings.Default.LintReportPath = lintReportPath;
             Properties.Settings.Default.autoPair = chkAutoPairing.Checked;
+            Properties.Settings.Default.promptForDB = chkPromptForDB.Checked;
 
             SaveStylerStates();
             SaveLinterStates();
@@ -1132,12 +1133,6 @@ namespace AppRefiner
             var program = parser.program();
             parser.Interpreter.ClearDFA();
             GC.Collect();
-            
-            // Check if there's recently a new datamanager for this editor
-            if (processDataManagers.TryGetValue(editor.ProcessId, out IDataManager? dataManager))
-            {
-                editor.DataManager = dataManager;
-            }
             
             // Get active stylers filtering out those that require a database when one isn't available
             var activeStylers = stylers.Where(a => a.Active && (a.DatabaseRequirement != DataManagerRequirement.Required || editor.DataManager != null));
@@ -2892,7 +2887,13 @@ namespace AppRefiner
                 ScintillaManager.CleanupEditor(editor);
                 return;
             }
-            
+
+            // Check if there's recently a new datamanager for this editor
+            if (processDataManagers.TryGetValue(editor.ProcessId, out IDataManager? dataManager))
+            {
+                editor.DataManager = dataManager;
+            }
+
             // Update the active editor reference
             activeEditor = editor;
             EnableUIActions();
@@ -2941,6 +2942,13 @@ namespace AppRefiner
                     SaveToGitRepository(editor);
                 }
             }
+
+            /* If promptForDB is set, lets check if we have a datamanger already? if not, prompt for a db connection */
+            if (chkPromptForDB.Checked && editor.DataManager == null)
+            {
+                ConnectToDB();
+            }
+
         }
 
         private void InitializeGitRepository()
@@ -3431,4 +3439,5 @@ namespace AppRefiner
         }
     }
 }
+
 

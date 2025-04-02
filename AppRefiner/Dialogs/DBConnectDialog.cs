@@ -2,6 +2,9 @@ using System;
 using System.Drawing;
 using System.Windows.Forms;
 using AppRefiner.Database;
+using System.Collections.Generic;
+using System.Text.Json;
+using AppRefiner.Properties;
 
 namespace AppRefiner.Dialogs
 {
@@ -12,6 +15,29 @@ namespace AppRefiner.Dialogs
     {
         // Data manager that will be created when connection is successful
         public IDataManager? DataManager { get; private set; }
+
+        // Class to store database connection settings
+        private class DbConnectionSettings
+        {
+            public bool IsReadOnly { get; set; }
+            public string Username { get; set; } = string.Empty;
+            public string Namespace { get; set; } = string.Empty;
+
+            public DbConnectionSettings() { }
+
+            public DbConnectionSettings(bool isReadOnly, string username, string @namespace)
+            {
+                IsReadOnly = isReadOnly;
+                Username = username;
+                Namespace = @namespace;
+            }
+        }
+
+        // Dictionary to store connection settings for each database
+        private static Dictionary<string, DbConnectionSettings>? savedSettings;
+        
+        // Track if settings were loaded successfully
+        private bool settingsLoaded = false;
 
         // UI Controls
         private readonly Panel headerPanel;
@@ -57,6 +83,9 @@ namespace AppRefiner.Dialogs
             this.connectButton = new Button();
             this.cancelButton = new Button();
             this.owner = owner;
+
+            // Load saved settings
+            LoadAllSettings();
 
             InitializeComponent();
             
@@ -114,6 +143,7 @@ namespace AppRefiner.Dialogs
             this.dbNameComboBox.Location = new Point(130, 80);
             this.dbNameComboBox.Size = new Size(250, 23);
             this.dbNameComboBox.TabIndex = 4;
+            this.dbNameComboBox.SelectedIndexChanged += DbNameComboBox_SelectedIndexChanged;
 
             // Radio buttons for connection type
             this.bootstrapRadioButton.Text = "Bootstrap";
@@ -298,6 +328,12 @@ namespace AppRefiner.Dialogs
             {
                 mouseHandler = new DialogHelper.ModalDialogMouseHandler(this, headerPanel, owner);
             }
+            
+            // Set focus to password field if settings were loaded
+            if (settingsLoaded && !string.IsNullOrEmpty(usernameTextBox.Text))
+            {
+                this.BeginInvoke(new Action(() => passwordTextBox.Focus()));
+            }
         }
 
         protected override void OnPaint(PaintEventArgs e)
@@ -336,6 +372,16 @@ namespace AppRefiner.Dialogs
             }
         }
 
+        private void DbNameComboBox_SelectedIndexChanged(object? sender, EventArgs e)
+        {
+            // Apply saved settings for the selected database
+            string dbName = dbNameComboBox.Text;
+            if (!string.IsNullOrEmpty(dbName))
+            {
+                settingsLoaded = ApplySettingsForDatabase(dbName);
+            }
+        }
+
         private void ConnectButton_Click(object? sender, EventArgs e)
         {
             if (dbTypeComboBox.SelectedItem is string dbType && !string.IsNullOrEmpty(dbNameComboBox.Text))
@@ -343,7 +389,7 @@ namespace AppRefiner.Dialogs
                 string dbName = dbNameComboBox.Text;
                 string username = usernameTextBox.Text;
                 string password = passwordTextBox.Text;
-                string? @namespace = readOnlyRadioButton.Checked ? namespaceTextBox.Text : null;
+                string @namespace = readOnlyRadioButton.Checked ? namespaceTextBox.Text : string.Empty;
                 
                 if (string.IsNullOrEmpty(username) || string.IsNullOrEmpty(password))
                 {
@@ -358,13 +404,14 @@ namespace AppRefiner.Dialogs
                 }
 
                 var connectionString = $"Data Source={dbName};User Id={username};Password={password};";
+                string? namespaceForConnection = readOnlyRadioButton.Checked ? @namespace : null;
                 
                 try
                 {
                     switch (dbType)
                     {
                         case "Oracle":
-                            DataManager = new OraclePeopleSoftDataManager(connectionString, @namespace);
+                            DataManager = new OraclePeopleSoftDataManager(connectionString, namespaceForConnection);
                             break;
                     }
 
@@ -376,7 +423,10 @@ namespace AppRefiner.Dialogs
 
                     if (DataManager.Connect())
                     {
-                        MessageBox.Show("Connected to database", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                        // Save the connection settings - always save namespace regardless of mode
+                        SaveSettingsForDatabase(dbName, readOnlyRadioButton.Checked, username, @namespace);
+                        
+                        // Close the dialog without showing a success message
                         DialogResult = DialogResult.OK;
                         Close();
                     }
@@ -419,5 +469,84 @@ namespace AppRefiner.Dialogs
                 dbNameComboBox.SelectedItem = dbName;
             }
         }
+
+        #region Settings Management
+
+        /// <summary>
+        /// Loads all saved database connection settings
+        /// </summary>
+        private void LoadAllSettings()
+        {
+            if (savedSettings != null)
+                return;
+
+            savedSettings = new Dictionary<string, DbConnectionSettings>();
+            
+            string settingsJson = Settings.Default.DbConnectionSettings;
+            if (!string.IsNullOrEmpty(settingsJson))
+            {
+                try
+                {
+                    savedSettings = JsonSerializer.Deserialize<Dictionary<string, DbConnectionSettings>>(settingsJson);
+                }
+                catch
+                {
+                    // If settings are corrupt, use empty dictionary
+                    savedSettings = new Dictionary<string, DbConnectionSettings>();
+                }
+            }
+        }
+
+        /// <summary>
+        /// Saves all database connection settings
+        /// </summary>
+        private void SaveAllSettings()
+        {
+            if (savedSettings == null)
+                return;
+
+            string settingsJson = JsonSerializer.Serialize(savedSettings);
+            Settings.Default.DbConnectionSettings = settingsJson;
+            Settings.Default.Save();
+        }
+
+        /// <summary>
+        /// Saves connection settings for a specific database
+        /// </summary>
+        private void SaveSettingsForDatabase(string dbName, bool isReadOnly, string username, string @namespace)
+        {
+            if (savedSettings == null)
+                savedSettings = new Dictionary<string, DbConnectionSettings>();
+
+            savedSettings[dbName] = new DbConnectionSettings(isReadOnly, username, @namespace);
+            SaveAllSettings();
+        }
+
+        /// <summary>
+        /// Applies saved settings for a specific database
+        /// </summary>
+        /// <returns>True if settings were successfully applied, false otherwise</returns>
+        private bool ApplySettingsForDatabase(string dbName)
+        {
+            if (savedSettings == null || !savedSettings.TryGetValue(dbName, out var settings))
+                return false;
+
+            // Apply connection type
+            readOnlyRadioButton.Checked = settings.IsReadOnly;
+            bootstrapRadioButton.Checked = !settings.IsReadOnly;
+            
+            // Set username
+            usernameTextBox.Text = settings.Username;
+            
+            // Set namespace
+            namespaceTextBox.Text = settings.Namespace;
+            
+            // Update UI based on connection type
+            UpdateUIForConnectionType();
+            
+            return true;
+        }
+
+        #endregion
     }
 }
