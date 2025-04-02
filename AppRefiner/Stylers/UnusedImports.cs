@@ -37,25 +37,30 @@ namespace AppRefiner.Stylers
 
         public override void EnterImportDeclaration(ImportDeclarationContext context)
         {
+            if (context == null) return;
+            
             var appPackageAll = context.appPackageAll();
-            string packageName = appPackageAll != null ? appPackageAll.GetText().TrimEnd('*') : context.appClassPath().GetText();
+            var appClassPath = context.appClassPath();
+            
+            // Ensure that at least one of the paths is valid
+            if (appPackageAll == null && appClassPath == null) return;
+            
+            string packageName = appPackageAll != null ? appPackageAll.GetText()?.TrimEnd('*') : appClassPath?.GetText();
+            
+            // Skip if we couldn't get a valid package name
+            if (string.IsNullOrEmpty(packageName)) return;
 
             var importInfo = new ImportInfo(packageName, context.Start.Line, context.Start.StartIndex, context.Stop.StopIndex);
-            if (packageName == null)
-            {
-                int i = 3;
-            }
             importsUsed[packageName] = importInfo;
         }
 
         public override void EnterAppClassPath(AppClassPathContext context)
         {
-            if (!trackUsage)
-            {
-                return;
-            }
+            if (!trackUsage || context == null) return;
 
             string packageName = context.GetText();
+            if (string.IsNullOrEmpty(packageName)) return;
+            
             if (importsUsed.ContainsKey(packageName))
             {
                 /* Explicit import found */
@@ -64,7 +69,12 @@ namespace AppRefiner.Stylers
             else
             {
                 /* Class wasn't covered by an explicit import, check if it's covered by a wildcard import */
-                string subPackage = packageName.Substring(0, packageName.LastIndexOf(':') + 1);
+                int lastColonIndex = packageName.LastIndexOf(':');
+                if (lastColonIndex < 0) return;
+                
+                string subPackage = packageName.Substring(0, lastColonIndex + 1);
+                if (string.IsNullOrEmpty(subPackage)) return;
+                
                 if (importsUsed.ContainsKey(subPackage))
                 {
                     importsUsed[subPackage].Used = true;
@@ -81,6 +91,8 @@ namespace AppRefiner.Stylers
         {
             foreach (var import in importsUsed)
             {
+                if (import.Key == null || import.Value == null) continue;
+                
                 if (!import.Value.Used)
                 {
                     Indicators?.Add(new Indicator
