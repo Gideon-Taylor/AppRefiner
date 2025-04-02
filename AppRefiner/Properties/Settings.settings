@@ -38,5 +38,8 @@
     <Setting Name="GitRepositoryPath" Type="System.String" Scope="User">
       <Value Profile="(Default)"></Value>
     </Setting>
+    <Setting Name="TooltipStates" Type="System.String" Scope="User">
+      <Value Profile="(Default)">[]</Value>
+    </Setting>
   </Settings>
 </SettingsFile>

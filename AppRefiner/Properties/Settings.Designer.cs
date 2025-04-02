@@ -169,5 +169,17 @@ namespace AppRefiner.Properties {
                 this["GitRepositoryPath"] = value;
             }
         }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("[]")]
+        public string TooltipStates {
+            get {
+                return ((string)(this["TooltipStates"]));
+            }
+            set {
+                this["TooltipStates"] = value;
+            }
+        }
     }
 }

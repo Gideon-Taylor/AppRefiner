@@ -95,6 +95,7 @@ namespace AppRefiner
 
         private List<BaseLintRule> linterRules = new();
         private List<BaseStyler> stylers = new(); // Changed from List<BaseStyler> analyzers
+        private List<ITooltipProvider> tooltipProviders = new();
 
         // Map of process IDs to their corresponding data managers
         private Dictionary<uint, IDataManager> processDataManagers = new();
@@ -168,12 +169,14 @@ namespace AppRefiner
             LoadSettings();
             LoadLinterStates();
             LoadStylerStates();
+            LoadTooltipStates();
             LoadTemplates();
             scanTimer = new System.Threading.Timer(ScanTick, null, 0, 1000);
             timerRunning = true;
             RegisterCommands();
             // Initialize the tooltip providers
             TooltipManager.Initialize();
+            InitTooltipOptions();
 
             // Register keyboard hooks for code folding
             collapseLevel.KeyPressed += collapseLevelHandler;
@@ -573,6 +576,7 @@ namespace AppRefiner
                 chkAutoPairing.Checked = Properties.Settings.Default.autoPair;
                 LoadStylerStates();
                 LoadLinterStates();
+                LoadTooltipStates();
                 LoadTemplates();
             }
             finally
@@ -795,6 +799,7 @@ namespace AppRefiner
 
             SaveStylerStates();
             SaveLinterStates();
+            SaveTooltipStates();
 
             Properties.Settings.Default.Save();
         }
@@ -881,6 +886,85 @@ namespace AppRefiner
                 System.Text.Json.JsonSerializer.Serialize(states);
         }
 
+        private void LoadTooltipStates()
+        {
+            try
+            {
+                var states = System.Text.Json.JsonSerializer.Deserialize<List<RuleState>>(
+                    Properties.Settings.Default.TooltipStates);
+
+                if (states == null) return;
+
+                foreach (var state in states)
+                {
+                    var provider = tooltipProviders.FirstOrDefault(p => p.GetType().FullName == state.TypeName);
+                    if (provider != null)
+                    {
+                        provider.Active = state.Active;
+                        // Update corresponding grid row
+                        var row = dataGridViewTooltips.Rows.Cast<DataGridViewRow>()
+                            .FirstOrDefault(r => r.Tag is ITooltipProvider p && p == provider);
+                        if (row != null)
+                        {
+                            row.Cells[0].Value = state.Active;
+                        }
+                    }
+                }
+            }
+            catch
+            { /* Use defaults if settings are corrupt */
+            }
+        }
+
+        private void SaveTooltipStates()
+        {
+            var states = tooltipProviders.Select(p => new RuleState
+            {
+                TypeName = p.GetType().FullName ?? "",
+                Active = p.Active
+            }).ToList();
+
+            Properties.Settings.Default.TooltipStates =
+                System.Text.Json.JsonSerializer.Serialize(states);
+        }
+
+        private void InitTooltipOptions()
+        {
+            // Get all tooltip providers from the TooltipManager
+            tooltipProviders = TooltipManager.Providers.ToList();
+
+            // Update the DataGridView with the tooltip providers
+            foreach (var provider in tooltipProviders)
+            {
+                int rowIndex = dataGridViewTooltips.Rows.Add(provider.Active, provider.Description);
+                dataGridViewTooltips.Rows[rowIndex].Tag = provider;
+            }
+        }
+
+        private void dataGridViewTooltips_CellContentClick(object sender, DataGridViewCellEventArgs e)
+        {
+            dataGridViewTooltips.CommitEdit(DataGridViewDataErrorContexts.Commit);
+        }
+
+        private void dataGridViewTooltips_CellValueChanged(object sender, DataGridViewCellEventArgs e)
+        {
+            if (e.RowIndex < 0)
+            {
+                return;
+            }
+            if (e.ColumnIndex != 0)
+            {
+                return;
+            }
+            if (dataGridViewTooltips.Rows[e.RowIndex].Tag == null)
+            {
+                return;
+            }
+            if (dataGridViewTooltips.Rows[e.RowIndex].Tag is ITooltipProvider provider)
+            {
+                provider.Active = (bool)dataGridViewTooltips.Rows[e.RowIndex].Cells[0].Value;
+            }
+        }
 
         private void EnableUIActions()
         {

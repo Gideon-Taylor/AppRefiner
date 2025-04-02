@@ -44,6 +44,10 @@ namespace AppRefiner
             dataGridView3 = new DataGridView();
             dataGridViewCheckBoxColumn1 = new DataGridViewCheckBoxColumn();
             dataGridViewTextBoxColumn1 = new DataGridViewTextBoxColumn();
+            tabPageTooltips = new TabPage();
+            dataGridViewTooltips = new DataGridView();
+            dataGridViewCheckBoxColumnTooltips = new DataGridViewCheckBoxColumn();
+            dataGridViewTextBoxColumnTooltips = new DataGridViewTextBoxColumn();
             tabPage2 = new TabPage();
             splitContainerLint = new SplitContainer();
             dataGridView1 = new DataGridView();
@@ -76,6 +80,8 @@ namespace AppRefiner
             grpEditorSettings.SuspendLayout();
             tabPage4.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)dataGridView3).BeginInit();
+            tabPageTooltips.SuspendLayout();
+            ((System.ComponentModel.ISupportInitialize)dataGridViewTooltips).BeginInit();
             tabPage2.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)splitContainerLint).BeginInit();
             splitContainerLint.Panel1.SuspendLayout();
@@ -117,6 +123,7 @@ namespace AppRefiner
             // 
             tabControl1.Controls.Add(tabPage1);
             tabControl1.Controls.Add(tabPage4);
+            tabControl1.Controls.Add(tabPageTooltips);
             tabControl1.Controls.Add(tabPage2);
             tabControl1.Controls.Add(tabPage5);
             tabControl1.Dock = DockStyle.Fill;
@@ -276,6 +283,48 @@ namespace AppRefiner
             dataGridViewTextBoxColumn1.Name = "dataGridViewTextBoxColumn1";
             dataGridViewTextBoxColumn1.ReadOnly = true;
             dataGridViewTextBoxColumn1.Width = 500;
+            // 
+            // tabPageTooltips
+            // 
+            tabPageTooltips.Controls.Add(dataGridViewTooltips);
+            tabPageTooltips.Location = new Point(4, 24);
+            tabPageTooltips.Name = "tabPageTooltips";
+            tabPageTooltips.Padding = new Padding(3);
+            tabPageTooltips.Size = new Size(562, 465);
+            tabPageTooltips.TabIndex = 6;
+            tabPageTooltips.Text = "Tooltips";
+            tabPageTooltips.UseVisualStyleBackColor = true;
+            // 
+            // dataGridViewTooltips
+            // 
+            dataGridViewTooltips.AllowUserToAddRows = false;
+            dataGridViewTooltips.AllowUserToDeleteRows = false;
+            dataGridViewTooltips.AllowUserToResizeColumns = false;
+            dataGridViewTooltips.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.AutoSize;
+            dataGridViewTooltips.Columns.AddRange(new DataGridViewColumn[] { dataGridViewCheckBoxColumnTooltips, dataGridViewTextBoxColumnTooltips });
+            dataGridViewTooltips.Dock = DockStyle.Fill;
+            dataGridViewTooltips.Location = new Point(3, 3);
+            dataGridViewTooltips.Name = "dataGridViewTooltips";
+            dataGridViewTooltips.RowHeadersVisible = false;
+            dataGridViewTooltips.Size = new Size(556, 459);
+            dataGridViewTooltips.TabIndex = 3;
+            dataGridViewTooltips.CellContentClick += dataGridViewTooltips_CellContentClick;
+            dataGridViewTooltips.CellValueChanged += dataGridViewTooltips_CellValueChanged;
+            // 
+            // dataGridViewCheckBoxColumnTooltips
+            // 
+            dataGridViewCheckBoxColumnTooltips.FillWeight = 75.21733F;
+            dataGridViewCheckBoxColumnTooltips.HeaderText = "Active";
+            dataGridViewCheckBoxColumnTooltips.Name = "dataGridViewCheckBoxColumnTooltips";
+            dataGridViewCheckBoxColumnTooltips.Width = 50;
+            // 
+            // dataGridViewTextBoxColumnTooltips
+            // 
+            dataGridViewTextBoxColumnTooltips.FillWeight = 110.569466F;
+            dataGridViewTextBoxColumnTooltips.HeaderText = "Description";
+            dataGridViewTextBoxColumnTooltips.Name = "dataGridViewTextBoxColumnTooltips";
+            dataGridViewTextBoxColumnTooltips.ReadOnly = true;
+            dataGridViewTextBoxColumnTooltips.Width = 500;
             // 
             // tabPage2
             // 
@@ -555,6 +604,8 @@ namespace AppRefiner
             grpEditorSettings.PerformLayout();
             tabPage4.ResumeLayout(false);
             ((System.ComponentModel.ISupportInitialize)dataGridView3).EndInit();
+            tabPageTooltips.ResumeLayout(false);
+            ((System.ComponentModel.ISupportInitialize)dataGridViewTooltips).EndInit();
             tabPage2.ResumeLayout(false);
             splitContainerLint.Panel1.ResumeLayout(false);
             splitContainerLint.Panel2.ResumeLayout(false);
@@ -593,6 +644,10 @@ namespace AppRefiner
         private DataGridView dataGridView3;
         private DataGridViewCheckBoxColumn dataGridViewCheckBoxColumn1;
         private DataGridViewTextBoxColumn dataGridViewTextBoxColumn1;
+        private TabPage tabPageTooltips;
+        private DataGridView dataGridViewTooltips;
+        private DataGridViewCheckBoxColumn dataGridViewCheckBoxColumnTooltips;
+        private DataGridViewTextBoxColumn dataGridViewTextBoxColumnTooltips;
         private TabPage tabPage2;
         private SplitContainer splitContainerLint;
         private DataGridView dataGridView1;
@@ -614,7 +669,7 @@ namespace AppRefiner
         private Panel pnlTemplateParams;
         private Button btnApplyTemplate;
         private ComboBox cmbTemplates;
-        private CheckBox chkAutoPairing;
         private Button btnDebugLog;
+        private CheckBox chkAutoPairing;
     }
 }
