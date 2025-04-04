@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Reflection;
 using System.Text;
@@ -296,27 +297,9 @@ namespace AppRefiner.TooltipProviders
                 {
                     editor.ContentString = ScintillaManager.GetScintillaText(editor);
                 }
-                
-                // Get the content string for preprocessing
-                string content = editor.ContentString;
-                if (string.IsNullOrEmpty(content))
-                    return;
-                    
-                // Create lexer, token stream, and parser
-                var lexer = new PeopleCodeLexer(new Antlr4.Runtime.AntlrInputStream(content));
-                var tokenStream = new Antlr4.Runtime.CommonTokenStream(lexer);
-                
-                // Get all tokens including those on hidden channels
-                tokenStream.Fill();
-                
-                // Collect comments from both comment channels
-                var comments = tokenStream.GetTokens()
-                    .Where(token => token.Channel == PeopleCodeLexer.COMMENTS || token.Channel == PeopleCodeLexer.API_COMMENTS)
-                    .ToList();
-                
-                var parser = new PeopleCodeParser(tokenStream);
-                var program = parser.program();
-                
+
+                var (program, tokenStream, comments) = editor.GetParsedProgram();
+
                 // Create and configure the parse tree walker
                 var walker = new MultiParseTreeWalker();
                 
@@ -330,8 +313,6 @@ namespace AppRefiner.TooltipProviders
                     // Initialize content for ScopeTooltipProvider before walking the parse tree
                     if (provider is ScopeTooltipProvider scopeProvider)
                     {
-                        scopeProvider.InitializeWithContent(content);
-                        
                         // Set the line number if available
                         if (lineNumber > 0)
                         {
@@ -357,9 +338,6 @@ namespace AppRefiner.TooltipProviders
                         tooltips.Add(tooltip);
                     }
                 }
-                
-                // Clean up resources
-                parser.Interpreter.ClearDFA();
                 GC.Collect();
             }
             catch (Exception ex)

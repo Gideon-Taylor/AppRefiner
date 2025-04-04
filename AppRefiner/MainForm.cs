@@ -153,14 +153,6 @@ namespace AppRefiner
             InitializeComponent();
             InitLinterOptions();
             InitStylerOptions();
-            
-            // Initialize the GitRepositoryManager if a repository path exists in settings
-            if (!string.IsNullOrEmpty(Properties.Settings.Default.GitRepositoryPath) && 
-                Git.GitRepositoryManager.IsValidRepository(Properties.Settings.Default.GitRepositoryPath))
-            {
-                gitRepositoryManager = new Git.GitRepositoryManager(Properties.Settings.Default.GitRepositoryPath);
-                Debug.Log($"Initialized Git repository manager with path: {Properties.Settings.Default.GitRepositoryPath}");
-            }
         }
 
         protected override void OnLoad(EventArgs e)
@@ -1126,13 +1118,8 @@ namespace AppRefiner
                 editor.ContentString = ScintillaManager.GetScintillaText(editor);
             }
 
-            // Create parse tree
-            PeopleCodeLexer? lexer = new(new Antlr4.Runtime.AntlrInputStream(editor.ContentString));
-            var stream = new Antlr4.Runtime.CommonTokenStream(lexer);
-            PeopleCodeParser? parser = new(stream);
-            var program = parser.program();
-            parser.Interpreter.ClearDFA();
-            GC.Collect();
+            // Get the parsed program, token stream and comments using the caching mechanism
+            var (program, stream, comments) = editor.GetParsedProgram();
             
             // Get active stylers filtering out those that require a database when one isn't available
             var activeStylers = stylers.Where(a => a.Active && (a.DatabaseRequirement != DataManagerRequirement.Required || editor.DataManager != null));
@@ -1146,11 +1133,6 @@ namespace AppRefiner
             MultiParseTreeWalker walker = new();
 
             List<Indicator> newIndicators = new();
-
-            // Collect all comments from both comment channels
-            var comments = stream.GetTokens()
-                .Where(token => token.Channel == PeopleCodeLexer.COMMENTS || token.Channel == PeopleCodeLexer.API_COMMENTS)
-                .ToList();
 
             foreach (var styler in activeStylers)
             {
@@ -1224,11 +1206,6 @@ namespace AppRefiner
             
             // Update the editor's active indicator list with the new set
             editor.ActiveIndicators = newIndicators;
-            
-            // Clean up
-            program = null;
-            lexer = null;
-            parser = null;
         }
 
         private void ProcessLinters()
@@ -1248,21 +1225,8 @@ namespace AppRefiner
                 activeEditor.ContentString = ScintillaManager.GetScintillaText(activeEditor);
             }
 
-            PeopleCodeLexer? lexer = new(new Antlr4.Runtime.AntlrInputStream(activeEditor.ContentString));
-            var stream = new Antlr4.Runtime.CommonTokenStream(lexer);
-
-            // Get all tokens including those on hidden channels
-            stream.Fill();
-
-            // Collect all comments from both comment channels
-            var comments = stream.GetTokens()
-                .Where(token => token.Channel == PeopleCodeLexer.COMMENTS || token.Channel == PeopleCodeLexer.API_COMMENTS)
-                .ToList();
-
-            PeopleCodeParser? parser = new(stream);
-            var program = parser.program();
-            parser.Interpreter.ClearDFA();
-            GC.Collect();
+            // Get the parsed program, token stream and comments using the caching mechanism
+            var (program, stream, comments) = activeEditor.GetParsedProgram();
 
             var activeLinters = linterRules.Where(a => a.Active);
 
@@ -1304,14 +1268,10 @@ namespace AppRefiner
                 linter.Reset();
             }
 
-            /* Free up ANTLR resources */
-            program = null;
-            lexer = null;
-            parser = null;
-            stream = null;
-
+            /* Process the reports */
             activeEditor.SetLinterReports(reports);
-            // Process and display reports
+            dataGridView2.Rows.Clear();
+            
             foreach (var g in reports.GroupBy(r => r.Line).OrderBy(b => b.First().Line))
             {
                 List<string> messages = new();
@@ -1319,11 +1279,8 @@ namespace AppRefiner
 
                 foreach (var report in g)
                 {
-                    this.Invoke(() =>
-                    {
-                        int rowIndex = dataGridView2.Rows.Add(report.Type, report.Message, report.Line);
-                        dataGridView2.Rows[rowIndex].Tag = report;
-                    });
+                    int rowIndex = dataGridView2.Rows.Add(report.Type, report.Message, report.Line);
+                    dataGridView2.Rows[rowIndex].Tag = report;
 
                     if (chkLintAnnotate.Checked)
                     {
@@ -1343,8 +1300,6 @@ namespace AppRefiner
                     ScintillaManager.SetAnnotations(activeEditor, messages, g.First().Line, styles);
                 }
             }
-
-            // Since we're not using styler annotations anymore, we don't need to re-apply them
         }
 
         private void dataGridView3_CellContentClick(object sender, DataGridViewCellEventArgs e)
@@ -1462,13 +1417,12 @@ namespace AppRefiner
                 }
             }
 
-            // Parse the code
-            PeopleCodeLexer lexer = new(new Antlr4.Runtime.AntlrInputStream(freshText));
-            var stream = new Antlr4.Runtime.CommonTokenStream(lexer);
-            PeopleCodeParser parser = new(stream);
-            var program = parser.program();
-            parser.Interpreter.ClearDFA();
-            GC.Collect();
+            // Ensure we have the latest content
+            activeEditor.ContentString = freshText;
+            
+            // Get the parsed program, token stream and comments using the caching mechanism
+            var (program, stream, _) = activeEditor.GetParsedProgram(true); // Force refresh to ensure we're using the freshest content
+
             // Initialize the refactor with cursor position
             refactorClass.Initialize(freshText, stream, currentCursorPosition);
 
@@ -1600,21 +1554,8 @@ namespace AppRefiner
                 activeEditor.ContentString = ScintillaManager.GetScintillaText(activeEditor);
             }
 
-            PeopleCodeLexer? lexer = new(new Antlr4.Runtime.AntlrInputStream(activeEditor.ContentString));
-            var stream = new Antlr4.Runtime.CommonTokenStream(lexer);
-
-            // Get all tokens including those on hidden channels
-            stream.Fill();
-
-            // Collect all comments from both comment channels
-            var comments = stream.GetTokens()
-                .Where(token => token.Channel == PeopleCodeLexer.COMMENTS || token.Channel == PeopleCodeLexer.API_COMMENTS)
-                .ToList();
-
-            PeopleCodeParser? parser = new(stream);
-            var program = parser.program();
-            parser.Interpreter.ClearDFA();
-            GC.Collect();
+            // Get the parsed program, token stream and comments using the caching mechanism
+            var (program, stream, comments) = activeEditor.GetParsedProgram();
 
             // Check if the linter requires database connection
             if (linter.DatabaseRequirement == DataManagerRequirement.Required && activeEditor.DataManager == null)
@@ -1649,12 +1590,6 @@ namespace AppRefiner
 
             // Reset the linter state
             linter.Reset();
-
-            /* Free up ANTLR resources */
-            program = null;
-            lexer = null;
-            parser = null;
-            stream = null;
 
             activeEditor.SetLinterReports(reports);
             // Process and display reports
