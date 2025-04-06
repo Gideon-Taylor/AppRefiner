@@ -13,6 +13,8 @@ namespace AppRefiner.Database
         private IDbConnection _connection;
         private readonly string _connectionString;
         private readonly string? _namespace;
+        // Cache for record field information
+        private Dictionary<string, RecordFieldCache> _recordFieldCache = new();
 
         /// <summary>
         /// Gets the underlying database connection
@@ -54,6 +56,9 @@ namespace AppRefiner.Database
                         string sql = $"ALTER SESSION SET CURRENT_SCHEMA={_namespace}";
                         _connection.ExecuteNonQuery(sql);
                     }
+                    
+                    // Clear the record field cache when connecting
+                    ClearRecordFieldCache();
                 }
                 return true;
             }
@@ -73,6 +78,9 @@ namespace AppRefiner.Database
             {
                 _connection.Close();
             }
+            
+            // Clear the record field cache when disconnecting
+            ClearRecordFieldCache();
         }
 
         /// <summary>
@@ -657,6 +665,146 @@ namespace AppRefiner.Database
             }
             
             return null;
+        }
+
+        /// <summary>
+        /// Retrieves field information for a specified PeopleSoft record.
+        /// </summary>
+        /// <param name="recordName">The name of the record (uppercase).</param>
+        /// <returns>A list of RecordFieldInfo objects, or null if the record doesn't exist or an error occurs.</returns>
+        public List<RecordFieldInfo>? GetRecordFields(string recordName)
+        {
+            if (!IsConnected)
+            {
+                throw new InvalidOperationException("Database connection is not open");
+            }
+
+            // Ensure record name is uppercase
+            recordName = recordName.ToUpper();
+            
+            // Check if we have this record's version in the database
+            int recordVersion = GetRecordVersion(recordName);
+            
+            // If record doesn't exist, return null
+            if (recordVersion < 0)
+            {
+                return null;
+            }
+            
+            // Check if we have a valid cached version
+            if (_recordFieldCache.TryGetValue(recordName, out RecordFieldCache? cache))
+            {
+                // If version matches, return cached fields
+                if (cache.Version == recordVersion)
+                {
+                    return cache.Fields;
+                }
+                // Otherwise, version is different, so remove the outdated cache entry
+                _recordFieldCache.Remove(recordName);
+            }
+            
+            // Cache miss or version mismatch, fetch the fields from the database
+            List<RecordFieldInfo>? fields = FetchRecordFieldsFromDb(recordName);
+            
+            // If fields were retrieved successfully, cache them with the current version
+            if (fields != null && fields.Count > 0)
+            {
+                _recordFieldCache[recordName] = new RecordFieldCache(recordName, recordVersion, fields);
+            }
+            
+            return fields;
+        }
+        
+        /// <summary>
+        /// Gets the VERSION field value from PSRECDEFN for a specific record.
+        /// </summary>
+        /// <param name="recordName">Name of the record (uppercase)</param>
+        /// <returns>Version number or -1 if record doesn't exist</returns>
+        private int GetRecordVersion(string recordName)
+        {
+            string sql = @"
+                SELECT VERSION 
+                FROM PSRECDEFN 
+                WHERE RECNAME = :recordName";
+
+            Dictionary<string, object> parameters = new()
+            {
+                { ":recordName", recordName }
+            };
+            
+            try
+            {
+                DataTable result = _connection.ExecuteQuery(sql, parameters);
+                
+                if (result.Rows.Count == 0)
+                {
+                    return -1; // Record doesn't exist
+                }
+                
+                return Convert.ToInt32(result.Rows[0]["VERSION"]);
+            }
+            catch (Exception)
+            {
+                // Handle database errors
+                return -1;
+            }
+        }
+        
+        /// <summary>
+        /// Fetches record field information directly from the database.
+        /// </summary>
+        /// <param name="recordName">Name of the record (uppercase)</param>
+        /// <returns>List of field information or null if an error occurs</returns>
+        private List<RecordFieldInfo>? FetchRecordFieldsFromDb(string recordName)
+        {
+            string sql = @"
+                SELECT r.FIELDNAME, r.FIELDNUM, f.FIELDTYPE, f.LENGTH, f.DECIMALPOS, r.USEEDIT
+                FROM PSRECFIELDDB r
+                JOIN PSDBFIELD f ON r.FIELDNAME = f.FIELDNAME
+                WHERE r.RECNAME = :recordName
+                ORDER BY r.FIELDNUM";
+
+            Dictionary<string, object> parameters = new()
+            {
+                { ":recordName", recordName }
+            };
+
+            try
+            {
+                DataTable result = _connection.ExecuteQuery(sql, parameters);
+
+                if (result.Rows.Count == 0)
+                {
+                    return null; // Record not found or has no fields
+                }
+
+                List<RecordFieldInfo> fields = new();
+                foreach (DataRow row in result.Rows)
+                {
+                    fields.Add(new RecordFieldInfo(
+                        row["FIELDNAME"].ToString() ?? string.Empty,
+                        Convert.ToInt32(row["FIELDNUM"]),
+                        Convert.ToInt32(row["FIELDTYPE"]),
+                        Convert.ToInt32(row["LENGTH"]),
+                        Convert.ToInt32(row["DECIMALPOS"]),
+                        Convert.ToInt32(row["USEEDIT"])
+                    ));
+                }
+                return fields;
+            }
+            catch (Exception) // Catch potential DB execution errors
+            {
+                // Log the exception (optional)
+                return null;
+            }
+        }
+        
+        /// <summary>
+        /// Clears the record field cache
+        /// </summary>
+        public void ClearRecordFieldCache()
+        {
+            _recordFieldCache.Clear();
         }
     }
 }

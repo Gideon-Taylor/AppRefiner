@@ -88,5 +88,12 @@ namespace AppRefiner.Database
         /// <param name="appClassPath">The fully qualified application class path (e.g., "Package:Subpackage:ClassName")</param>
         /// <returns>The source code of the application class if found, otherwise null</returns>
         string? GetAppClassSourceByPath(string appClassPath);
+
+        /// <summary>
+        /// Retrieves field information for a specified PeopleSoft record.
+        /// </summary>
+        /// <param name="recordName">The name of the record (uppercase).</param>
+        /// <returns>A list of RecordFieldInfo objects, or null if the record doesn't exist or an error occurs.</returns>
+        List<RecordFieldInfo>? GetRecordFields(string recordName);
     }
 }

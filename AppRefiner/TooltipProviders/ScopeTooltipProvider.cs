@@ -350,15 +350,6 @@ namespace AppRefiner.TooltipProviders
             containingScopes.Add(scopeInfo);
         }
 
-        private string GetTextUntilToken(ParserRuleContext context, IToken token)
-        {
-            if (context == null || token == null)
-                return string.Empty;
-            // Get the text from the start of the context to the token
-            var text = context.Start.InputStream.GetText(new Interval(context.Start.StartIndex, token.StopIndex));
-            return text.Trim();
-        }
-
         /// <summary>
         /// Gets the header line text for a context
         /// </summary>

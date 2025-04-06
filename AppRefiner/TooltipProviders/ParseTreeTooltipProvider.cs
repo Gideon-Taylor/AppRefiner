@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using Antlr4.Runtime;
+using Antlr4.Runtime.Tree;
 using AppRefiner.Database;
 using AppRefiner.PeopleCode;
 
@@ -123,6 +124,37 @@ namespace AppRefiner.TooltipProviders
         {
             RegisterTooltip(token.StartIndex, token.StopIndex - token.StartIndex + 1, tooltipText);
         }
+
+        /// <summary>
+        /// Helper method to register a tooltip for an ANTLR parser rule context.
+        /// </summary>
+        /// <param name="context">The parser rule context to register the tooltip for</param>
+        /// <param name="tooltipText">Tooltip text to display</param>
+        protected void RegisterTooltip(ParserRuleContext context, string tooltipText)
+        {
+            if (context == null || context.Start == null || string.IsNullOrEmpty(tooltipText))
+                return;
+                
+            int start = context.Start.StartIndex;
+            int stop = context.Stop?.StopIndex ?? context.Start.StopIndex;
+            int length = stop - start + 1;
+            
+            RegisterTooltip(start, length, tooltipText);
+        }
+
+        /// <summary>
+        /// Helper method to register a tooltip for an ANTLR terminal node.
+        /// </summary>
+        /// <param name="node">The terminal node to register the tooltip for</param>
+        /// <param name="tooltipText">Tooltip text to display</param>
+        protected void RegisterTooltip(ITerminalNode node, string tooltipText)
+        {
+            if (node == null || string.IsNullOrEmpty(tooltipText))
+                return;
+                
+            RegisterTooltip(node.Symbol, tooltipText);
+        }
+
 
         /// <summary>
         /// Attempts to get a tooltip for the current position in the editor.
