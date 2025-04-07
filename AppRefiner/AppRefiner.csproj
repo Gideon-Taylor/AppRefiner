@@ -7,11 +7,12 @@
     <UseWindowsForms>true</UseWindowsForms>
     <ImplicitUsings>enable</ImplicitUsings>
     <PlatformTarget>x64</PlatformTarget>
-    <ApplicationIcon>fold-icon.ico</ApplicationIcon>
+    <ApplicationIcon>AppRefiner.ico</ApplicationIcon>
   </PropertyGroup>
 
   <ItemGroup>
     <Content Include="fold-icon.ico" />
+    <Content Include="AppRefiner.ico" />
   </ItemGroup>
 
   <ItemGroup>

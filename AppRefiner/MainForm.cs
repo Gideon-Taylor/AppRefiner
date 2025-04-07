@@ -158,6 +158,7 @@ namespace AppRefiner
         protected override void OnLoad(EventArgs e)
         {
             base.OnLoad(e);
+            // Set the application icon explicitly
             LoadSettings();
             LoadLinterStates();
             LoadStylerStates();

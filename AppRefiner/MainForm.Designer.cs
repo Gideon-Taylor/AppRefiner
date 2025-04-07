@@ -28,11 +28,13 @@ namespace AppRefiner
         /// </summary>
         private void InitializeComponent()
         {
+            System.ComponentModel.ComponentResourceManager resources = new System.ComponentModel.ComponentResourceManager(typeof(MainForm));
             splitContainer1 = new SplitContainer();
             tabControl1 = new TabControl();
             tabPage1 = new TabPage();
             btnDebugLog = new Button();
             grpEditorSettings = new GroupBox();
+            chkPromptForDB = new CheckBox();
             chkAutoPairing = new CheckBox();
             btnPlugins = new Button();
             btnGitInit = new Button();
@@ -71,7 +73,6 @@ namespace AppRefiner
             cmbTemplates = new ComboBox();
             progressBar1 = new ProgressBar();
             lblStatus = new Label();
-            chkPromptForDB = new CheckBox();
             ((System.ComponentModel.ISupportInitialize)splitContainer1).BeginInit();
             splitContainer1.Panel1.SuspendLayout();
             splitContainer1.Panel2.SuspendLayout();
@@ -172,6 +173,16 @@ namespace AppRefiner
             grpEditorSettings.TabIndex = 20;
             grpEditorSettings.TabStop = false;
             grpEditorSettings.Text = "Settings";
+            // 
+            // chkPromptForDB
+            // 
+            chkPromptForDB.AutoSize = true;
+            chkPromptForDB.Location = new Point(245, 47);
+            chkPromptForDB.Name = "chkPromptForDB";
+            chkPromptForDB.Size = new Size(167, 19);
+            chkPromptForDB.TabIndex = 28;
+            chkPromptForDB.Text = "Prompt for DB Connection";
+            chkPromptForDB.UseVisualStyleBackColor = true;
             // 
             // chkAutoPairing
             // 
@@ -588,22 +599,13 @@ namespace AppRefiner
             lblStatus.Text = "Stopped";
             lblStatus.TextAlign = ContentAlignment.MiddleCenter;
             // 
-            // chkDBPrompt
-            // 
-            chkPromptForDB.AutoSize = true;
-            chkPromptForDB.Location = new Point(245, 47);
-            chkPromptForDB.Name = "chkDBPrompt";
-            chkPromptForDB.Size = new Size(167, 19);
-            chkPromptForDB.TabIndex = 28;
-            chkPromptForDB.Text = "Prompt for DB Connection";
-            chkPromptForDB.UseVisualStyleBackColor = true;
-            // 
             // MainForm
             // 
             AutoScaleDimensions = new SizeF(7F, 15F);
             AutoScaleMode = AutoScaleMode.Font;
             ClientSize = new Size(570, 561);
             Controls.Add(splitContainer1);
+            Icon = (Icon)resources.GetObject("$this.Icon");
             Name = "MainForm";
             Text = "App Refiner";
             splitContainer1.Panel1.ResumeLayout(false);
