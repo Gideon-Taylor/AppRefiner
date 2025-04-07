@@ -7,22 +7,26 @@ using Antlr4.Runtime;
 using Antlr4.Runtime.Misc;
 using Antlr4.Runtime.Tree;
 using AppRefiner.Database;
+using AppRefiner.Linters.Models;
 using AppRefiner.PeopleCode;
 
 namespace AppRefiner.TooltipProviders
 {
     /// <summary>
     /// Provides tooltips showing method parameter information when hovering over method calls.
-    /// Specifically focuses on %This.Method() calls and attempts to find the method definition
-    /// within the current class or its inheritance chain.
+    /// Specifically focuses on %This.Method() calls and &variable.Method() calls with application class types,
+    /// and attempts to find the method definition within the class or its inheritance chain.
     /// </summary>
-    public class MethodParametersTooltipProvider : ParseTreeTooltipProvider
+    public class MethodParametersTooltipProvider : ScopedTooltipProvider
     {
         private Dictionary<string, MethodInfo> methodData = new Dictionary<string, MethodInfo>(StringComparer.OrdinalIgnoreCase);
         private string? superClassName;
         private Dictionary<string, Dictionary<string, MethodInfo>> inheritanceChainMethods = 
             new Dictionary<string, Dictionary<string, MethodInfo>>(StringComparer.OrdinalIgnoreCase);
         private bool hasProcessedInheritanceChain = false;
+        
+        // Track current access modifier context (for class members)
+        private string currentAccessModifier = string.Empty;
 
         /// <summary>
         /// Name of the tooltip provider.
@@ -50,7 +54,8 @@ namespace AppRefiner.TooltipProviders
         public override int[]? TokenTypes => new int[] 
         { 
             PeopleCodeLexer.GENERIC_ID_LIMITED, // For method names in %This.Method() calls
-            PeopleCodeLexer.SYSTEM_VARIABLE     // For %This
+            PeopleCodeLexer.SYSTEM_VARIABLE,    // For %This
+            PeopleCodeLexer.USER_VARIABLE       // For &variable in &variable.Method() calls
         };
 
         /// <summary>
@@ -204,10 +209,8 @@ namespace AppRefiner.TooltipProviders
             inheritanceChainMethods.Clear();
             hasProcessedInheritanceChain = false;
             superClassName = null;
+            currentAccessModifier = string.Empty;
         }
-
-        // Track current access modifier context (for class members)
-        private string currentAccessModifier = string.Empty;
         
         /// <summary>
         /// Captures access modifier for public section
@@ -369,6 +372,16 @@ namespace AppRefiner.TooltipProviders
         }
         
         /// <summary>
+        /// Provides parameters for built-in types
+        /// </summary>
+        private MethodInfo? GetParametersForBuiltinType(string typeName, string methodName)
+        {
+            // This method would be implemented to provide parameter information for built-in types
+            // For now, it's a stub that returns null
+            return null;
+        }
+        
+        /// <summary>
         /// Helper listener class to extract method info and superclass from a parsed class
         /// </summary>
         private class MethodExtractorListener : PeopleCodeParserBaseListener
@@ -450,102 +463,262 @@ namespace AppRefiner.TooltipProviders
         }
         
         /// <summary>
-        /// Handles dot access expressions like %This.MethodName() to display parameter information
+        /// Handles dot access expressions like %This.MethodName() or &variable.MethodName() to display parameter information
         /// </summary>
         public override void EnterDotAccessExpr([NotNull] PeopleCodeParser.DotAccessExprContext context)
         {
             var expr = context.expression();
-            if (expr != null && expr.GetText().Equals("%This", StringComparison.OrdinalIgnoreCase))
+            if (expr == null)
+                return;
+                
+            string objectText = expr.GetText();
+            bool isThis = objectText.Equals("%This", StringComparison.OrdinalIgnoreCase);
+            bool isVariable = objectText.StartsWith("&");
+            
+            // Handle both %This and &variable cases
+            if (isThis || isVariable)
             {
                 var dotAccessList = context.dotAccess();
-                if (dotAccessList != null && dotAccessList.Length > 0)
+                if (dotAccessList == null || dotAccessList.Length == 0)
+                    return;
+                    
+                foreach (var dotAccess in dotAccessList)
                 {
-                    foreach (var dotAccess in dotAccessList)
+                    if (dotAccess.genericID() == null)
+                        continue;
+                        
+                    string methodName = dotAccess.genericID().GetText();
+                    
+                    // Check if this is a method call (has parentheses)
+                    bool isMethodCall = dotAccess.LPAREN() != null;
+                    
+                    if (!isMethodCall)
+                        continue;
+                    
+                    // Get tooltip position information
+                    int start = dotAccess.genericID().Start.StartIndex;
+                    int length = dotAccess.genericID().Stop.StopIndex - start + 1;
+                    
+                    if (isThis)
                     {
-                        if (dotAccess.genericID() != null)
+                        // Handle %This.Method() - existing code
+                        HandleThisMethodCall(methodName, start, length);
+                    }
+                    else if (isVariable)
+                    {
+                        // Handle &variable.Method() - new code with scoped variable tracking
+                        string variableName = objectText;
+                        HandleVariableMethodCall(variableName, methodName, start, length);
+                    }
+                }
+            }
+        }
+        
+        /// <summary>
+        /// Handle %This.MethodName() calls to find method parameters
+        /// </summary>
+        private void HandleThisMethodCall(string methodName, int start, int length)
+        {
+            // Check if we know this method in the current class
+            if (methodData.TryGetValue(methodName.ToLowerInvariant(), out var methodInfo))
+            {
+                // Found in current class
+                RegisterTooltip(start, length, $"{methodInfo}");
+            }
+            else if (!string.IsNullOrEmpty(superClassName) && DataManager != null)
+            {
+                // Not found in current class, process the full inheritance chain
+                if (!hasProcessedInheritanceChain)
+                {
+                    ProcessInheritanceChain();
+                }
+                
+                bool foundInParent = false;
+                
+                // Try to find the method in the inheritance chain
+                foreach (var entry in inheritanceChainMethods)
+                {
+                    string parentClassName = entry.Key;
+                    Dictionary<string, MethodInfo> parentMethods = entry.Value;
+                    
+                    if (parentMethods.TryGetValue(methodName.ToLowerInvariant(), out var parentMethodInfo))
+                    {
+                        // Found in a parent class - add the class name to the tooltip
+                        string tooltipWithInheritance = $"Method: {parentMethodInfo.Name} (inherited from {parentClassName})\n" +
+                                                        $"Access: {parentMethodInfo.AccessModifier}\n";
+                                                      
+                        // Add the rest of the method info
+                        if (parentMethodInfo.IsAbstract)
+                            tooltipWithInheritance += "Abstract Method\n";
+                            
+                        if (!string.IsNullOrEmpty(parentMethodInfo.ReturnType))
+                            tooltipWithInheritance += $"Returns: {FormatArrayType(parentMethodInfo.ReturnType)}\n";
+                            
+                        // Parameters
+                        if (parentMethodInfo.Parameters.Count > 0)
                         {
-                            string methodName = dotAccess.genericID().GetText();
-                            
-                            // Check if this is a method call (has parentheses)
-                            bool isMethodCall = dotAccess.LPAREN() != null;
-                            
-                            if (isMethodCall)
+                            tooltipWithInheritance += "Parameters:\n";
+                            foreach (var param in parentMethodInfo.Parameters)
                             {
-                                // Get tooltip position information
-                                int start = dotAccess.genericID().Start.StartIndex;
-                                int length = dotAccess.genericID().Stop.StopIndex - start + 1;
+                                tooltipWithInheritance += $"   {param}\n";
+                            }
+                        }
+                        else
+                        {
+                            tooltipWithInheritance += "Parameters: None\n";
+                        }
+                        
+                        RegisterTooltip(start, length, tooltipWithInheritance.TrimEnd());
+                        foundInParent = true;
+                        break; // Exit after finding in the inheritance chain
+                    }
+                }
+                
+                if (!foundInParent)
+                {
+                    // Not found in any parent class
+                    string stubMessage = $"Method: {methodName}\n(Method definition not found in class hierarchy)";
+                    RegisterTooltip(start, length, stubMessage);
+                }
+            }
+            else
+            {
+                // No parent class or not found
+                string stubMessage = $"Method: {methodName}\n(Method definition not found in current class)";
+                RegisterTooltip(start, length, stubMessage);
+            }
+        }
+        
+        /// <summary>
+        /// Handle &variable.MethodName() calls to find method parameters
+        /// </summary>
+        private void HandleVariableMethodCall(string variableName, string methodName, int start, int length)
+        {
+            // First, check if we know this variable's type using the ScopedTooltipProvider functionality
+            if (!TryGetVariableInfo(variableName, out var varInfo) || varInfo == null)
+            {
+                // Unknown variable
+                string stubMessage = $"Method: {methodName}\n(Variable type unknown)";
+                RegisterTooltip(start, length, stubMessage);
+                return;
+            }
+            
+            // Determine if we're dealing with an application class type
+            if (IsAppClassType(varInfo.Type))
+            {
+                // For app class types, we need to look up the method in that class
+                string classType = varInfo.Type;
+                
+                // Use DataManager to process the class and find method
+                if (DataManager != null)
+                {
+                    // Create a dictionary for the class if we haven't processed it yet
+                    if (!inheritanceChainMethods.ContainsKey(classType))
+                    {
+                        Dictionary<string, MethodInfo> classMethods = GetParentClassMethods(classType, out string? nextParent);
+                        inheritanceChainMethods[classType] = classMethods;
+                        
+                        // If this class also has a parent, process that hierarchy if needed
+                        if (!string.IsNullOrEmpty(nextParent) && !inheritanceChainMethods.ContainsKey(nextParent))
+                        {
+                            HashSet<string> processedParents = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                            processedParents.Add(classType);
+                            
+                            string? currentParent = nextParent;
+                            while (!string.IsNullOrEmpty(currentParent) && !processedParents.Contains(currentParent))
+                            {
+                                processedParents.Add(currentParent);
                                 
-                                // Check if we know this method in the current class
-                                if (methodData.TryGetValue(methodName.ToLowerInvariant(), out var methodInfo))
-                                {
-                                    // Found in current class
-                                    RegisterTooltip(start, length, $"{methodInfo}");
-                                }
-                                else if (!string.IsNullOrEmpty(superClassName) && DataManager != null)
-                                {
-                                    // Not found in current class, process the full inheritance chain
-                                    if (!hasProcessedInheritanceChain)
-                                    {
-                                        ProcessInheritanceChain();
-                                    }
-                                    
-                                    bool foundInParent = false;
-                                    
-                                    // Try to find the method in the inheritance chain
-                                    foreach (var entry in inheritanceChainMethods)
-                                    {
-                                        string parentClassName = entry.Key;
-                                        Dictionary<string, MethodInfo> parentMethods = entry.Value;
-                                        
-                                        if (parentMethods.TryGetValue(methodName.ToLowerInvariant(), out var parentMethodInfo))
-                                        {
-                                            // Found in a parent class - add the class name to the tooltip
-                                            string tooltipWithInheritance = $"Method: {parentMethodInfo.Name} (inherited from {parentClassName})\n" +
-                                                                            $"Access: {parentMethodInfo.AccessModifier}\n";
-                                                                          
-                                            // Add the rest of the method info
-                                            if (parentMethodInfo.IsAbstract)
-                                                tooltipWithInheritance += "Abstract Method\n";
-                                                
-                                            if (!string.IsNullOrEmpty(parentMethodInfo.ReturnType))
-                                                tooltipWithInheritance += $"Returns: {FormatArrayType(parentMethodInfo.ReturnType)}\n";
-                                                
-                                            // Parameters
-                                            if (parentMethodInfo.Parameters.Count > 0)
-                                            {
-                                                tooltipWithInheritance += "Parameters:\n";
-                                                foreach (var param in parentMethodInfo.Parameters)
-                                                {
-                                                    tooltipWithInheritance += $"   {param}\n";
-                                                }
-                                            }
-                                            else
-                                            {
-                                                tooltipWithInheritance += "Parameters: None\n";
-                                            }
-                                            
-                                            RegisterTooltip(start, length, tooltipWithInheritance.TrimEnd());
-                                            foundInParent = true;
-                                            break; // Exit after finding in the inheritance chain
-                                        }
-                                    }
-                                    
-                                    if (!foundInParent)
-                                    {
-                                        // Not found in any parent class
-                                        string stubMessage = $"Method: {methodName}\n(Method definition not found in class hierarchy)";
-                                        RegisterTooltip(start, length, stubMessage);
-                                    }
-                                }
-                                else
-                                {
-                                    // No parent class or not found
-                                    string stubMessage = $"Method: {methodName}\n(Method definition not found in current class)";
-                                    RegisterTooltip(start, length, stubMessage);
-                                }
+                                Dictionary<string, MethodInfo> parentMethods = GetParentClassMethods(currentParent, out string? nextNextParent);
+                                inheritanceChainMethods[currentParent] = parentMethods;
+                                
+                                currentParent = nextNextParent;
                             }
                         }
                     }
+                    
+                    // Check if method exists in the variable's class
+                    if (inheritanceChainMethods.TryGetValue(classType, out var variableClassMethods) && 
+                        variableClassMethods.TryGetValue(methodName.ToLowerInvariant(), out var methodInfo))
+                    {
+                        // Found in the variable's class
+                        RegisterTooltip(start, length, $"{methodInfo}");
+                        return;
+                    }
+                    
+                    // If not found in the class, check its parent classes
+                    bool foundInParent = false;
+                    foreach (var entry in inheritanceChainMethods)
+                    {
+                        string parentClassName = entry.Key;
+                        Dictionary<string, MethodInfo> parentMethods = entry.Value;
+                        
+                        // Skip the current class, we already checked it
+                        if (string.Equals(parentClassName, classType, StringComparison.OrdinalIgnoreCase))
+                            continue;
+                            
+                        if (parentMethods.TryGetValue(methodName.ToLowerInvariant(), out var parentMethodInfo))
+                        {
+                            // Found in a parent class - add the class name to the tooltip
+                            string tooltipWithInheritance = $"Method: {parentMethodInfo.Name} (inherited from {parentClassName})\n" +
+                                                            $"Access: {parentMethodInfo.AccessModifier}\n";
+                                                          
+                            // Add the rest of the method info
+                            if (parentMethodInfo.IsAbstract)
+                                tooltipWithInheritance += "Abstract Method\n";
+                                
+                            if (!string.IsNullOrEmpty(parentMethodInfo.ReturnType))
+                                tooltipWithInheritance += $"Returns: {FormatArrayType(parentMethodInfo.ReturnType)}\n";
+                                
+                            // Parameters
+                            if (parentMethodInfo.Parameters.Count > 0)
+                            {
+                                tooltipWithInheritance += "Parameters:\n";
+                                foreach (var param in parentMethodInfo.Parameters)
+                                {
+                                    tooltipWithInheritance += $"   {param}\n";
+                                }
+                            }
+                            else
+                            {
+                                tooltipWithInheritance += "Parameters: None\n";
+                            }
+                            
+                            RegisterTooltip(start, length, tooltipWithInheritance.TrimEnd());
+                            foundInParent = true;
+                            break; // Exit after finding in the inheritance chain
+                        }
+                    }
+                    
+                    if (!foundInParent)
+                    {
+                        // Method not found in class or its hierarchy
+                        string stubMessage = $"Method: {methodName}\n(Method definition not found in {classType} or its parent classes)";
+                        RegisterTooltip(start, length, stubMessage);
+                    }
+                }
+                else
+                {
+                    // No DataManager available
+                    string stubMessage = $"Method: {methodName}\n(Cannot access class definition for {varInfo.Type})";
+                    RegisterTooltip(start, length, stubMessage);
+                }
+            }
+            else
+            {
+                // For built-in types, use the stub method
+                MethodInfo? builtinMethod = GetParametersForBuiltinType(varInfo.Type, methodName);
+                
+                if (builtinMethod != null)
+                {
+                    // Found information for the built-in type
+                    RegisterTooltip(start, length, $"{builtinMethod}");
+                }
+                else
+                {
+                    // No information found for built-in type method
+                    string stubMessage = $"Method: {methodName}\nType: {varInfo.Type}\n(Built-in method information not available)";
+                    RegisterTooltip(start, length, stubMessage);
                 }
             }
         }

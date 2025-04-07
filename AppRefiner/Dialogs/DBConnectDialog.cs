@@ -5,6 +5,8 @@ using AppRefiner.Database;
 using System.Collections.Generic;
 using System.Text.Json;
 using AppRefiner.Properties;
+using System.Security.Cryptography;
+using System.Text;
 
 namespace AppRefiner.Dialogs
 {
@@ -22,14 +24,16 @@ namespace AppRefiner.Dialogs
             public bool IsReadOnly { get; set; }
             public string Username { get; set; } = string.Empty;
             public string Namespace { get; set; } = string.Empty;
+            public string? EncryptedPassword { get; set; }
 
             public DbConnectionSettings() { }
 
-            public DbConnectionSettings(bool isReadOnly, string username, string @namespace)
+            public DbConnectionSettings(bool isReadOnly, string username, string @namespace, string? encryptedPassword = null)
             {
                 IsReadOnly = isReadOnly;
                 Username = username;
                 Namespace = @namespace;
+                EncryptedPassword = encryptedPassword;
             }
         }
 
@@ -54,6 +58,7 @@ namespace AppRefiner.Dialogs
         private readonly TextBox usernameTextBox;
         private readonly Label passwordLabel;
         private readonly TextBox passwordTextBox;
+        private readonly CheckBox savePasswordCheckBox;
         private readonly Button connectButton;
         private readonly Button cancelButton;
         private readonly IntPtr owner;
@@ -80,6 +85,7 @@ namespace AppRefiner.Dialogs
             this.usernameTextBox = new TextBox();
             this.passwordLabel = new Label();
             this.passwordTextBox = new TextBox();
+            this.savePasswordCheckBox = new CheckBox();
             this.connectButton = new Button();
             this.cancelButton = new Button();
             this.owner = owner;
@@ -198,11 +204,18 @@ namespace AppRefiner.Dialogs
             this.passwordTextBox.TabIndex = 12;
             this.passwordTextBox.PasswordChar = '*';
 
+            // savePasswordCheckBox
+            this.savePasswordCheckBox.Text = "Save Password";
+            this.savePasswordCheckBox.Location = new Point(130, 200);
+            this.savePasswordCheckBox.Size = new Size(250, 23);
+            this.savePasswordCheckBox.TabIndex = 13;
+            this.savePasswordCheckBox.CheckAlign = ContentAlignment.MiddleLeft;
+
             // connectButton
             this.connectButton.Text = "Connect";
             this.connectButton.Size = new Size(100, 30);
-            this.connectButton.Location = new Point(130, 210);
-            this.connectButton.TabIndex = 13;
+            this.connectButton.Location = new Point(130, 230);
+            this.connectButton.TabIndex = 14;
             this.connectButton.BackColor = Color.FromArgb(0, 122, 204);
             this.connectButton.ForeColor = Color.White;
             this.connectButton.FlatStyle = FlatStyle.Flat;
@@ -212,8 +225,8 @@ namespace AppRefiner.Dialogs
             // cancelButton
             this.cancelButton.Text = "Cancel";
             this.cancelButton.Size = new Size(100, 30);
-            this.cancelButton.Location = new Point(280, 210);
-            this.cancelButton.TabIndex = 14;
+            this.cancelButton.Location = new Point(280, 230);
+            this.cancelButton.TabIndex = 15;
             this.cancelButton.BackColor = Color.FromArgb(100, 100, 100);
             this.cancelButton.ForeColor = Color.White;
             this.cancelButton.FlatStyle = FlatStyle.Flat;
@@ -226,7 +239,7 @@ namespace AppRefiner.Dialogs
 
             // DBConnectDialog
             this.Text = "Connect to Database";
-            this.ClientSize = new Size(400, 260);
+            this.ClientSize = new Size(400, 280);
             this.Controls.Add(this.headerPanel);
             this.Controls.Add(this.dbTypeLabel);
             this.Controls.Add(this.dbTypeComboBox);
@@ -240,6 +253,7 @@ namespace AppRefiner.Dialogs
             this.Controls.Add(this.usernameTextBox);
             this.Controls.Add(this.passwordLabel);
             this.Controls.Add(this.passwordTextBox);
+            this.Controls.Add(this.savePasswordCheckBox);
             this.Controls.Add(this.connectButton);
             this.Controls.Add(this.cancelButton);
             this.FormBorderStyle = FormBorderStyle.None;
@@ -284,13 +298,14 @@ namespace AppRefiner.Dialogs
                 usernameTextBox.Location = new Point(130, 170);
                 passwordLabel.Location = new Point(20, 200);
                 passwordTextBox.Location = new Point(130, 200);
+                savePasswordCheckBox.Location = new Point(130, 230);
                 
                 // Adjust positions of action buttons
-                connectButton.Location = new Point(130, 240);
-                cancelButton.Location = new Point(280, 240);
+                connectButton.Location = new Point(130, 260);
+                cancelButton.Location = new Point(280, 260);
                 
                 // Adjust form height
-                this.ClientSize = new Size(400, 290);
+                this.ClientSize = new Size(400, 310);
             }
             else
             {
@@ -303,13 +318,14 @@ namespace AppRefiner.Dialogs
                 usernameTextBox.Location = new Point(130, 140);
                 passwordLabel.Location = new Point(20, 170);
                 passwordTextBox.Location = new Point(130, 170);
+                savePasswordCheckBox.Location = new Point(130, 200);
                 
                 // Reset positions of action buttons
-                connectButton.Location = new Point(130, 210);
-                cancelButton.Location = new Point(280, 210);
+                connectButton.Location = new Point(130, 230);
+                cancelButton.Location = new Point(280, 230);
                 
                 // Reset form height
-                this.ClientSize = new Size(400, 260);
+                this.ClientSize = new Size(400, 280);
             }
         }
 
@@ -423,8 +439,9 @@ namespace AppRefiner.Dialogs
 
                     if (DataManager.Connect())
                     {
-                        // Save the connection settings - always save namespace regardless of mode
-                        SaveSettingsForDatabase(dbName, readOnlyRadioButton.Checked, username, @namespace);
+                        // Save the connection settings
+                        string? encryptedPassword = savePasswordCheckBox.Checked ? EncryptPassword(password, dbName) : null;
+                        SaveSettingsForDatabase(dbName, readOnlyRadioButton.Checked, username, @namespace, encryptedPassword);
                         
                         // Close the dialog without showing a success message
                         DialogResult = DialogResult.OK;
@@ -513,12 +530,12 @@ namespace AppRefiner.Dialogs
         /// <summary>
         /// Saves connection settings for a specific database
         /// </summary>
-        private void SaveSettingsForDatabase(string dbName, bool isReadOnly, string username, string @namespace)
+        private void SaveSettingsForDatabase(string dbName, bool isReadOnly, string username, string @namespace, string? encryptedPassword = null)
         {
             if (savedSettings == null)
                 savedSettings = new Dictionary<string, DbConnectionSettings>();
 
-            savedSettings[dbName] = new DbConnectionSettings(isReadOnly, username, @namespace);
+            savedSettings[dbName] = new DbConnectionSettings(isReadOnly, username, @namespace, encryptedPassword);
             SaveAllSettings();
         }
 
@@ -541,10 +558,103 @@ namespace AppRefiner.Dialogs
             // Set namespace
             namespaceTextBox.Text = settings.Namespace;
             
+            // Set password if it was saved
+            if (!string.IsNullOrEmpty(settings.EncryptedPassword))
+            {
+                try
+                {
+                    passwordTextBox.Text = DecryptPassword(settings.EncryptedPassword, dbName);
+                    savePasswordCheckBox.Checked = true;
+                }
+                catch
+                {
+                    // If decryption fails, clear the password field
+                    passwordTextBox.Text = string.Empty;
+                    savePasswordCheckBox.Checked = false;
+                }
+            }
+            else
+            {
+                passwordTextBox.Text = string.Empty;
+                savePasswordCheckBox.Checked = false;
+            }
+            
             // Update UI based on connection type
             UpdateUIForConnectionType();
             
             return true;
+        }
+
+        #endregion
+
+        #region Password Encryption
+
+        /// <summary>
+        /// Encrypts a password using Windows Data Protection API with database name as entropy
+        /// </summary>
+        /// <param name="password">The password to encrypt</param>
+        /// <param name="dbName">Database name to use as entropy</param>
+        /// <returns>Base64 encoded encrypted password</returns>
+        private string EncryptPassword(string password, string dbName)
+        {
+            if (string.IsNullOrEmpty(password))
+                return string.Empty;
+
+            try
+            {
+                // Convert the password to bytes
+                byte[] passwordBytes = Encoding.UTF8.GetBytes(password);
+                
+                // Use database name as entropy
+                byte[] entropyBytes = Encoding.UTF8.GetBytes(dbName);
+                
+                // Encrypt the password using DPAPI (Windows Data Protection API)
+                byte[] encryptedBytes = ProtectedData.Protect(
+                    passwordBytes, 
+                    entropyBytes, // Use DB name as entropy
+                    DataProtectionScope.CurrentUser); // Scope: only current Windows user can decrypt
+                
+                // Convert to Base64 for storage
+                return Convert.ToBase64String(encryptedBytes);
+            }
+            catch (Exception ex)
+            {
+                throw new Exception("Failed to encrypt password", ex);
+            }
+        }
+
+        /// <summary>
+        /// Decrypts a password using Windows Data Protection API with database name as entropy
+        /// </summary>
+        /// <param name="encryptedPassword">Base64 encoded encrypted password</param>
+        /// <param name="dbName">Database name used as entropy during encryption</param>
+        /// <returns>The decrypted password</returns>
+        private string DecryptPassword(string encryptedPassword, string dbName)
+        {
+            if (string.IsNullOrEmpty(encryptedPassword))
+                return string.Empty;
+
+            try
+            {
+                // Convert from Base64
+                byte[] encryptedBytes = Convert.FromBase64String(encryptedPassword);
+                
+                // Use same database name as entropy
+                byte[] entropyBytes = Encoding.UTF8.GetBytes(dbName);
+                
+                // Decrypt the password using DPAPI
+                byte[] decryptedBytes = ProtectedData.Unprotect(
+                    encryptedBytes,
+                    entropyBytes, // Use same DB name as entropy
+                    DataProtectionScope.CurrentUser); // Same scope used for encryption
+                
+                // Convert back to string
+                return Encoding.UTF8.GetString(decryptedBytes);
+            }
+            catch (Exception ex)
+            {
+                throw new Exception("Failed to decrypt password", ex);
+            }
         }
 
         #endregion
