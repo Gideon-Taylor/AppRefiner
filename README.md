@@ -78,6 +78,52 @@ For more detailed information about the APIs available for plugin development, r
 
 If you have ideas for new Linters, Stylers, or Refactors but don't want to implement them yourself, you can open an issue on our GitHub repository. While we can't guarantee implementation of all requests, we welcome community input to help guide AppRefiner's development priorities.
 
+## Building from Source
+
+If you want to build AppRefiner from source, follow these instructions:
+
+### Build Requirements
+- Windows operating system
+- Visual Studio 2022 with C++ development tools installed
+- .NET 8 SDK
+- Java 17 or later (required for ANTLR parser generation)
+- PowerShell 5.1 or higher
+
+### Build Steps
+
+1. Clone the repository:
+   ```
+   git clone https://github.com/yourusername/AppRefiner.git
+   cd AppRefiner
+   ```
+
+2. Run the build script:
+   ```powershell
+   # For framework-dependent build (default)
+   .\build.ps1
+   
+   # For self-contained build (includes .NET runtime)
+   .\build.ps1 -SelfContained
+   ```
+
+3. The build script will:
+   - Check for required build tools
+   - Restore NuGet dependencies
+   - Build the AppRefinerHook C++ project
+   - Build the AppRefiner .NET project
+   - Copy necessary files to the output directory
+   - Create a ZIP file with the date in the filename
+
+4. The output will be available in:
+   - `publish/framework/` for framework-dependent builds
+   - `publish/self-contained/` for self-contained builds
+   - A ZIP file in the root directory with format `AppRefiner-yyyy-MM-dd-[type].zip`
+
+### Troubleshooting
+
+- If you encounter issues related to MSBuild not finding the C++ toolset, ensure Visual Studio 2022 with C++ development tools is properly installed.
+- For .NET related errors, ensure you have the .NET 8 SDK installed by running `dotnet --version`.
+
 ## License
 See the [LICENSE](LICENSE) file for details.
 
