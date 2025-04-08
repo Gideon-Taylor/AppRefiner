@@ -7,7 +7,7 @@ namespace AppRefiner.Stylers
 {
     public class UndefinedVariableStyler : ScopedStyler<object>
     {
-        private const uint HIGHLIGHT_COLOR = 0xFF0000A0; // Harsh red color with high alpha
+        private const uint HIGHLIGHT_COLOR = 0x0000FFA0; // Harsh red color with high alpha
         private readonly HashSet<string> instanceVariables = new();
         private readonly HashSet<string> markedVariables = new(); // Track already marked variables to avoid duplicates
 
@@ -36,6 +36,106 @@ namespace AppRefiner.Stylers
                     // Add to instance variables set
                     instanceVariables.Add(varName);
                 }
+            }
+        }
+
+        // Handle method parameters to register them as defined variables
+        public override void EnterMethod(MethodContext context)
+        {
+            // Call base implementation first to create a new scope
+            base.EnterMethod(context);
+            
+            // Get method name
+            if (context.genericID() == null) return;
+            
+            // Process method parameters if available in method annotations
+            var methodAnnotations = context.methodAnnotations();
+            if (methodAnnotations == null) return;
+            
+            // Process parameter annotations
+            foreach (var paramAnnotation in methodAnnotations.methodParameterAnnotation())
+            {
+                if (paramAnnotation.methodAnnotationArgument() == null) continue;
+                
+                var arg = paramAnnotation.methodAnnotationArgument();
+                if (arg.USER_VARIABLE() == null) continue;
+                
+                string paramName = arg.USER_VARIABLE().GetText();
+                if (string.IsNullOrEmpty(paramName)) continue;
+                
+                string paramType = arg.annotationType() != null ? arg.annotationType().GetText() : "Any";
+                
+                // Register method parameter as a defined variable in the current scope
+                AddLocalVariable(
+                    paramName,
+                    paramType,
+                    arg.USER_VARIABLE().Symbol.Line,
+                    arg.USER_VARIABLE().Symbol.StartIndex,
+                    arg.USER_VARIABLE().Symbol.StopIndex
+                );
+            }
+        }
+        
+        // Handle setter parameters (properties can have a single parameter in their setter)
+        public override void EnterSetter(SetterContext context)
+        {
+            // Call base implementation first to create a new scope
+            base.EnterSetter(context);
+            
+            // Get method name
+            if (context.genericID() == null) return;
+            
+            // Process setter parameter if available in method annotations
+            var paramAnnotation = context.methodParameterAnnotation();
+            if (paramAnnotation == null) return;
+            
+            // Get the argument
+            var arg = paramAnnotation.methodAnnotationArgument();
+            if (arg == null || arg.USER_VARIABLE() == null) return;
+            
+            string paramName = arg.USER_VARIABLE().GetText();
+            if (string.IsNullOrEmpty(paramName)) return;
+            
+            string paramType = arg.annotationType() != null ? arg.annotationType().GetText() : "Any";
+            
+            // Register setter parameter as a defined variable in the current scope
+            AddLocalVariable(
+                paramName,
+                paramType,
+                arg.USER_VARIABLE().Symbol.Line,
+                arg.USER_VARIABLE().Symbol.StartIndex,
+                arg.USER_VARIABLE().Symbol.StopIndex
+            );
+        }
+        
+        // Handle function parameters to register them as defined variables
+        public override void EnterFunctionDefinition(FunctionDefinitionContext context)
+        {
+            // Call base implementation first to create a new scope
+            base.EnterFunctionDefinition(context);
+            
+            // Process function parameters if available
+            var funcArgs = context.functionArguments();
+            if (funcArgs == null) return;
+            
+            // Process each parameter and add it to the current scope
+            foreach (var arg in funcArgs.functionArgument())
+            {
+                if (arg.USER_VARIABLE() == null) continue;
+                
+                string paramName = arg.USER_VARIABLE().GetText();
+                if (string.IsNullOrEmpty(paramName)) continue;
+                
+                string paramType = arg.typeT() != null ? arg.typeT().GetText() : "Any";
+                
+                // Register function parameter as a defined variable in the current scope
+                AddLocalVariable(
+                    paramName,
+                    paramType,
+                    arg.USER_VARIABLE().Symbol.Line,
+                    arg.USER_VARIABLE().Symbol.StartIndex,
+                    arg.USER_VARIABLE().Symbol.StopIndex
+                );
             }
         }
 
@@ -69,14 +169,6 @@ namespace AppRefiner.Stylers
                 // Remember that we've marked this variable to avoid duplicate highlights
                 markedVariables.Add(varName);
             }
-        }
-
-        // Handle dot access checking for member access
-        public override void EnterDotAccessExpr(DotAccessExprContext context)
-        {
-            base.EnterDotAccessExpr(context);
-            
-            // We don't need to validate dot access members here since we're only checking for undefined variables
         }
 
         // Handle top-level constants in non-class programs
