@@ -187,7 +187,7 @@ namespace AppRefiner
             // chkAutoPairing
             // 
             chkAutoPairing.AutoSize = true;
-            chkAutoPairing.ForeColor = Color.Red;
+            chkAutoPairing.ForeColor = SystemColors.ControlText;
             chkAutoPairing.Location = new Point(245, 22);
             chkAutoPairing.Name = "chkAutoPairing";
             chkAutoPairing.Size = new Size(146, 19);
