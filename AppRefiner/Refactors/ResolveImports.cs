@@ -92,7 +92,8 @@ namespace AppRefiner.Refactors
                 newImports.AppendLine($"import {classPath};");
             }
 
-            string imports = newImports.ToString();
+            // Trim trailing newlines to prevent accumulation of blank lines
+            string imports = newImports.ToString().TrimEnd();
 
             if (importsBlockContext != null)
             {
@@ -105,12 +106,21 @@ namespace AppRefiner.Refactors
                 var firstChild = context.GetChild(0);
                 if (firstChild != null)
                 {
-                    // Add the imports block before the first node
-                    if (context.GetChild(0) is ParserRuleContext firstChildContext)
+                    // Check if firstChild is a parser rule context
+                    if (firstChild is ParserRuleContext firstChildContext)
                     {
-                        InsertBefore(firstChildContext,
-                            imports + Environment.NewLine + Environment.NewLine,
-                            "Add missing imports");
+                        // Add exactly two newlines after imports (consistent spacing)
+                        string insertText = imports + Environment.NewLine + Environment.NewLine;
+                        
+                        // Check if the first node already contains imports to avoid adding excessive spacing
+                        string? firstNodeText = GetOriginalText(firstChildContext);
+                        if (firstNodeText != null && firstNodeText.TrimStart().StartsWith("import "))
+                        {
+                            // If first node already has imports, don't add extra newlines
+                            insertText = imports + Environment.NewLine;
+                        }
+                        
+                        InsertBefore(firstChildContext, insertText, "Add missing imports");
                     }
                     else
                     {
