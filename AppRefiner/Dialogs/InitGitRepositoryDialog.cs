@@ -13,6 +13,7 @@ namespace AppRefiner.Dialogs
     public partial class InitGitRepositoryDialog : Form
     {
         public string RepositoryPath { get; private set; }
+        public int MaxFileSnapshots { get; private set; } = 10; // Default to 10 snapshots
 
         public InitGitRepositoryDialog()
         {
@@ -23,6 +24,16 @@ namespace AppRefiner.Dialogs
             {
                 txtRepositoryPath.Text = Properties.Settings.Default.GitRepositoryPath;
             }
+            
+            // Set max snapshots from settings if available
+            if (Properties.Settings.Default.MaxFileSnapshots > 0)
+            {
+                numMaxSnapshots.Value = Properties.Settings.Default.MaxFileSnapshots;
+            }
+            else
+            {
+                numMaxSnapshots.Value = MaxFileSnapshots;
+            }
         }
 
         private void InitializeComponent()
@@ -32,6 +43,9 @@ namespace AppRefiner.Dialogs
             this.label1 = new Label();
             this.btnOK = new Button();
             this.btnCancel = new Button();
+            this.label2 = new Label();
+            this.numMaxSnapshots = new NumericUpDown();
+            ((System.ComponentModel.ISupportInitialize)(this.numMaxSnapshots)).BeginInit();
             this.SuspendLayout();
             
             // 
@@ -66,11 +80,32 @@ namespace AppRefiner.Dialogs
             this.label1.Text = "Select folder to initialize Git repository:";
             
             // 
+            // label2
+            // 
+            this.label2.AutoSize = true;
+            this.label2.Location = new Point(12, 70);
+            this.label2.Name = "label2";
+            this.label2.Size = new Size(228, 15);
+            this.label2.TabIndex = 5;
+            this.label2.Text = "Maximum number of snapshots per file:";
+            
+            // 
+            // numMaxSnapshots
+            // 
+            this.numMaxSnapshots.Location = new Point(246, 68);
+            this.numMaxSnapshots.Minimum = 1;
+            this.numMaxSnapshots.Maximum = 100;
+            this.numMaxSnapshots.Name = "numMaxSnapshots";
+            this.numMaxSnapshots.Size = new Size(60, 23);
+            this.numMaxSnapshots.TabIndex = 6;
+            this.numMaxSnapshots.Value = 10;
+            
+            // 
             // btnOK
             // 
             this.btnOK.Anchor = ((AnchorStyles)((AnchorStyles.Bottom | AnchorStyles.Right)));
             this.btnOK.DialogResult = DialogResult.OK;
-            this.btnOK.Location = new Point(288, 76);
+            this.btnOK.Location = new Point(288, 110);
             this.btnOK.Name = "btnOK";
             this.btnOK.Size = new Size(75, 23);
             this.btnOK.TabIndex = 3;
@@ -83,7 +118,7 @@ namespace AppRefiner.Dialogs
             // 
             this.btnCancel.Anchor = ((AnchorStyles)((AnchorStyles.Bottom | AnchorStyles.Right)));
             this.btnCancel.DialogResult = DialogResult.Cancel;
-            this.btnCancel.Location = new Point(369, 76);
+            this.btnCancel.Location = new Point(369, 110);
             this.btnCancel.Name = "btnCancel";
             this.btnCancel.Size = new Size(75, 23);
             this.btnCancel.TabIndex = 4;
@@ -95,7 +130,9 @@ namespace AppRefiner.Dialogs
             // 
             this.AcceptButton = this.btnOK;
             this.CancelButton = this.btnCancel;
-            this.ClientSize = new Size(456, 111);
+            this.ClientSize = new Size(456, 145);
+            this.Controls.Add(this.numMaxSnapshots);
+            this.Controls.Add(this.label2);
             this.Controls.Add(this.btnCancel);
             this.Controls.Add(this.btnOK);
             this.Controls.Add(this.label1);
@@ -107,6 +144,7 @@ namespace AppRefiner.Dialogs
             this.Name = "InitGitRepositoryDialog";
             this.StartPosition = FormStartPosition.CenterParent;
             this.Text = "Initialize Git Repository";
+            ((System.ComponentModel.ISupportInitialize)(this.numMaxSnapshots)).EndInit();
             this.ResumeLayout(false);
             this.PerformLayout();
         }
@@ -208,15 +246,19 @@ namespace AppRefiner.Dialogs
             }
 
             RepositoryPath = txtRepositoryPath.Text;
+            MaxFileSnapshots = (int)numMaxSnapshots.Value;
             
-            // Save path to settings
-            // Properties.Settings.Default.GitRepositoryPath = RepositoryPath;
-            // Properties.Settings.Default.Save();
+            // Save path and max snapshots to settings
+            Properties.Settings.Default.GitRepositoryPath = RepositoryPath;
+            Properties.Settings.Default.MaxFileSnapshots = MaxFileSnapshots;
+            Properties.Settings.Default.Save();
         }
 
         private TextBox txtRepositoryPath;
         private Button btnBrowse;
         private Label label1;
+        private Label label2;
+        private NumericUpDown numMaxSnapshots;
         private Button btnOK;
         private Button btnCancel;
     }

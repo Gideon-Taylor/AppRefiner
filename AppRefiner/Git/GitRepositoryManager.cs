@@ -5,6 +5,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using LibGit2Sharp;
+using System.Diagnostics;
 
 namespace AppRefiner.Git
 {
@@ -436,6 +437,21 @@ namespace AppRefiner.Git
                             });
                         }
                     }
+                }
+                
+                // Get the max snapshots setting
+                int maxSnapshots = Properties.Settings.Default.MaxFileSnapshots;
+                
+                // Only limit the history if the setting is valid and we have more commits than allowed
+                if (maxSnapshots > 0 && result.Count > maxSnapshots)
+                {
+                    // Sort by date descending (newest first)
+                    //result.Sort((a, b) => b.Date.CompareTo(a.Date));
+                    
+                    // Take only the most recent N commits
+                    result = result.Take(maxSnapshots).ToList();
+                    
+                    Debug.Log($"Limited history for {relativePath} to {maxSnapshots} most recent commits.");
                 }
             }
             catch (Exception ex)

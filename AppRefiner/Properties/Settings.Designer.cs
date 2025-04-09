@@ -202,5 +202,17 @@ namespace AppRefiner.Properties {
                 this["DbConnectionSettings"] = value;
             }
         }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("10")]
+        public int MaxFileSnapshots {
+            get {
+                return ((int)(this["MaxFileSnapshots"]));
+            }
+            set {
+                this["MaxFileSnapshots"] = value;
+            }
+        }
     }
 }
