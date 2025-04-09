@@ -36,6 +36,7 @@ namespace AppRefiner
         private const int SCI_GETLENGTH = 2006;
         private const int SCI_SETPROPERTY = 4004;
         private const int SCI_SETFOLDLEVEL = 2222;
+        private const int SCI_REPLACESEL = 2170;
         private const int SC_FOLDLEVELBASE = 0x400;
         private const int SC_FOLDLEVELWHITEFLAG = 0x1000;
         private const int SC_FOLDLEVELHEADERFLAG = 0x2000;
@@ -89,6 +90,23 @@ namespace AppRefiner
         private const int SCI_SETFOLDMARGINHICOLOUR = 2291;
         private const int SCI_GETFIRSTVISIBLELINE = 2152;
         private const int SCI_SETFIRSTVISIBLELINE = 2613;
+
+        // Autocompletion constants
+        private const int SCI_AUTOCSHOW = 2100;
+        private const int SCI_AUTOCCANCEL = 2101;
+        private const int SCI_AUTOCACTIVE = 2102;
+        private const int SCI_AUTOCGETSEPARATOR = 2107;
+        private const int SCI_AUTOCSETFILLUPS = 2112;
+        private const int SCI_AUTOCSETSEPARATOR = 2106;
+        private const int SCI_AUTOCSETORDER = 2660;
+        private const int SCI_AUTOCGETORDER = 2661;
+        private const int SCI_AUTOCSETIGNORECASE = 2115;
+        private const int SC_ORDER_PERFORMSORT = 1;
+        /* ignore case */
+        
+        // User list constants
+        private const int SCI_USERLISTSHOW = 2117;
+        private const int SCN_USERLISTSELECTION = 2014;
 
         private const int SCI_INDICSETSTYLE = 2080;
         private const int SCI_INDICGETSTYLE = 2081;
@@ -398,6 +416,40 @@ namespace AppRefiner
             // Use SCI_SETTEXT to replace the document text.
             // SCI_SETTEXT(wParam unused, lParam = pointer to null-terminated string in remote process)
             editor.SendMessage(SCI_SETTEXT, IntPtr.Zero, remoteBuffer);
+
+            return true;
+        }
+
+        /// <summary>
+        /// Inserts text at the current cursor position in the Scintilla editor.
+        /// </summary>
+        /// <param name="editor">The editor to insert text into</param>
+        /// <param name="text">The text to insert at the cursor position</param>
+        /// <returns>True if the text was successfully inserted, false otherwise</returns>
+        public static bool InsertTextAtCursor(ScintillaEditor editor, string text)
+        {
+            if (editor == null || string.IsNullOrEmpty(text))
+                return false;
+
+            // Convert the text into a byte array using the default encoding.
+            // We need to include an extra byte for the terminating null.
+            byte[] textBytes = Encoding.Default.GetBytes(text);
+            int neededSize = textBytes.Length + 1; // +1 for the null terminator
+
+            var remoteBuffer = GetProcessBuffer(editor, (uint)neededSize);
+
+            // Create a buffer that includes a terminating null.
+            byte[] buffer = new byte[neededSize];
+            Buffer.BlockCopy(textBytes, 0, buffer, 0, textBytes.Length);
+            buffer[neededSize - 1] = 0;  // Ensure null termination.
+
+            // Write the text into the remote process's memory.
+            if (!WriteProcessMemory(editor.hProc, remoteBuffer, buffer, neededSize, out int bytesWritten) || bytesWritten != neededSize)
+                return false;
+
+            // Use SCI_REPLACESEL to insert text at the current cursor position
+            // SCI_REPLACESEL(0, pointer to null-terminated string)
+            editor.SendMessage(SCI_REPLACESEL, IntPtr.Zero, remoteBuffer);
 
             return true;
         }
@@ -758,6 +810,21 @@ namespace AppRefiner
                     VirtualFreeEx(editor.hProc, v, 0, MEM_RELEASE);
                 }
             }
+            
+            // Free autocompletion pointer if exists
+            if (editor.AutoCompletionPointer != IntPtr.Zero)
+            {
+                VirtualFreeEx(editor.hProc, editor.AutoCompletionPointer, 0, MEM_RELEASE);
+                editor.AutoCompletionPointer = IntPtr.Zero;
+            }
+            
+            // Free user list pointer if exists
+            if (editor.UserListPointer != IntPtr.Zero)
+            {
+                VirtualFreeEx(editor.hProc, editor.UserListPointer, 0, MEM_RELEASE);
+                editor.UserListPointer = IntPtr.Zero;
+            }
+            
             editor.AnnotationPointers.Clear();
             editor.PropertyBuffers.Clear();
             editor.Caption = null;
@@ -1506,9 +1573,23 @@ namespace AppRefiner
         }
 
 
-        public static int GetCurrentLine(ScintillaEditor editor)
+        public static int GetCurrentLineNumber(ScintillaEditor editor)
         {
             return editor == null ? -1 : (int)editor.SendMessage(SCI_LINEFROMPOSITION, editor.SendMessage(SCI_GETCURRENTPOS, 0, 0), 0);
+        }
+
+        public static string GetCurrentLineText(ScintillaEditor editor)
+        {
+            if (editor == null) return string.Empty;
+            int lineNumber = GetCurrentLineNumber(editor);
+            int start = (int)editor.SendMessage(SCI_POSITIONFROMLINE, lineNumber, IntPtr.Zero);
+            int end = (int)editor.SendMessage(SCI_GETLINEENDPOSITION, lineNumber, IntPtr.Zero);
+
+            /* Get fresh copy of content */
+            editor.ContentString = GetScintillaText(editor);
+
+
+            return editor.ContentString?.Substring(start, end - start) ?? string.Empty;
         }
 
         /// <summary>
@@ -1683,6 +1764,193 @@ namespace AppRefiner
                 editor.ActiveIndicators.RemoveAll(indicator => indicator.Color == color && indicator.Type == Stylers.IndicatorType.SQUIGGLE);
             }
         }
+
+
+        /// <summary>
+        /// Sets the separator character used for autocompletion lists
+        /// </summary>
+        /// <param name="editor">The editor to set the separator for</param>
+        /// <param name="separator">The separator character</param>
+        public static void SetAutoCompletionSeparator(ScintillaEditor editor, char separator)
+        {
+            if (editor == null || !editor.IsValid())
+            {
+                return;
+            }
+
+            editor.SendMessage(SCI_AUTOCSETSEPARATOR, new IntPtr(separator), IntPtr.Zero);
+        }
+
+        /// <summary>
+        /// Shows a user list with the provided options
+        /// </summary>
+        /// <param name="editor">The editor to show the user list in</param>
+        /// <param name="listType">The list type (1-9)</param>
+        /// <param name="position">The position to show the list at</param>
+        /// <param name="options">List of strings to show as user list options</param>
+        /// <returns>True if the user list was shown successfully</returns>
+        public static bool ShowUserList(ScintillaEditor editor, int listType, int position, List<string> options, bool acceptSingle = true)
+        {
+            if (editor == null || editor.hProc == IntPtr.Zero || options == null || options.Count == 0)
+            {
+                Debug.Log("ShowUserList: Invalid parameters");
+                return false;
+            }
+            SetAutoCompletionSeparator(editor, '/');
+            var sortOrder = editor.SendMessage(SCI_AUTOCGETORDER, 0, 0);
+            editor.SendMessage(SCI_AUTOCSETORDER, SC_ORDER_PERFORMSORT, 0);
+            editor.SendMessage(SCI_AUTOCSETIGNORECASE, 1, 0);
+            try
+            {
+                // Create a string with all options separated by spaces
+                string optionsString = string.Join("/", options);
+                
+                // Get the required buffer size - including null terminator
+                int bufferSize = Encoding.UTF8.GetByteCount(optionsString) + 1; // +1 for null terminator
+                
+                // Allocate memory in the target process for storing the options
+                IntPtr remoteBuffer = VirtualAllocEx(
+                    editor.hProc,
+                    IntPtr.Zero, 
+                    (uint)bufferSize,
+                    MEM_COMMIT, 
+                    PAGE_READWRITE);
+                
+                if (remoteBuffer == IntPtr.Zero)
+                {
+                    Debug.Log("ShowUserList: Failed to allocate memory in remote process");
+                    return false;
+                }
+                
+                // Store the pointer for later cleanup
+                editor.UserListPointer = remoteBuffer;
+                
+                // Convert the string to a byte array with a null terminator
+                byte[] buffer = new byte[bufferSize];
+                Encoding.UTF8.GetBytes(optionsString, 0, optionsString.Length, buffer, 0);
+                buffer[bufferSize - 1] = 0; // Ensure null termination
+                
+                // Write the options to the remote process memory
+                int bytesWritten;
+                bool result = WriteProcessMemory(
+                    editor.hProc,
+                    remoteBuffer,
+                    buffer,
+                    bufferSize,
+                    out bytesWritten);
+                    
+                if (!result || bytesWritten != bufferSize)
+                {
+                    Debug.Log($"ShowUserList: Failed to write to remote process memory. Written {bytesWritten} of {bufferSize} bytes");
+                    VirtualFreeEx(editor.hProc, remoteBuffer, 0, MEM_RELEASE);
+                    editor.UserListPointer = IntPtr.Zero;
+                    return false;
+                }
+                
+                // Send the Scintilla message to show the user list
+                IntPtr ret = editor.SendMessage(SCI_USERLISTSHOW, (IntPtr)listType, remoteBuffer);
+                SetAutoCompletionSeparator(editor, ' '); // Reset separator to default
+                return ret != IntPtr.Zero;
+            }
+            catch (Exception ex)
+            {
+                Debug.Log($"ShowUserList: Exception: {ex.Message}");
+                
+                // Clean up on exception
+                if (editor.UserListPointer != IntPtr.Zero)
+                {
+                    VirtualFreeEx(editor.hProc, editor.UserListPointer, 0, MEM_RELEASE);
+                    editor.UserListPointer = IntPtr.Zero;
+                }
+                
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Cancels any active user list in the editor
+        /// </summary>
+        /// <param name="editor">The editor to cancel the user list in</param>
+        public static void CancelUserList(ScintillaEditor editor)
+        {
+            try
+            {
+                if (editor == null || !editor.IsValid())
+                {
+                    return;
+                }
+
+                // Cancel the autocompletion, which also cancels user lists
+                editor.SendMessage(SCI_AUTOCCANCEL, IntPtr.Zero, IntPtr.Zero);
+
+                // Free the memory used for user list options
+                if (editor.UserListPointer != IntPtr.Zero)
+                {
+                    VirtualFreeEx(editor.hProc, editor.UserListPointer, 0, MEM_RELEASE);
+                    editor.UserListPointer = IntPtr.Zero;
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError($"Error canceling user list: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Reads a UTF-8 string from memory in the editor's process
+        /// </summary>
+        /// <param name="editor">The ScintillaEditor instance</param>
+        /// <param name="address">Memory address to read from</param>
+        /// <param name="maxLength">Maximum number of bytes to read</param>
+        /// <returns>The UTF-8 decoded string, or null if reading failed</returns>
+        public static string? ReadUtf8FromMemory(ScintillaEditor editor, IntPtr address, int maxLength)
+        {
+            if (editor == null || address == IntPtr.Zero || maxLength <= 0)
+                return null;
+
+            try
+            {
+                // Get process handle for the editor
+                if (editor.hProc == IntPtr.Zero)
+                {
+                    Debug.Log($"Cannot read memory: Process handle is null");
+                    return null;
+                }
+
+                // Allocate buffer for the string
+                byte[] buffer = new byte[maxLength];
+                int bytesRead = 0;
+
+                // Read memory from the process
+                if (!ReadProcessMemory(editor.hProc, address, buffer, maxLength, out bytesRead))
+                {
+                    int error = Marshal.GetLastWin32Error();
+                    Debug.Log($"ReadProcessMemory failed with error code: {error}");
+                    return null;
+                }
+
+                if (bytesRead <= 0)
+                {
+                    Debug.Log("No bytes read from process memory");
+                    return null;
+                }
+
+                // Find the actual string length (until null terminator)
+                int stringLength = 0;
+                while (stringLength < bytesRead && buffer[stringLength] != 0)
+                {
+                    stringLength++;
+                }
+
+                // Decode the UTF-8 bytes
+                return Encoding.UTF8.GetString(buffer, 0, stringLength);
+            }
+            catch (Exception ex)
+            {
+                Debug.Log($"Error reading UTF-8 from memory: {ex.Message}");
+                return null;
+            }
+        }
     }
 
     public enum EditorType
@@ -1710,6 +1978,8 @@ namespace AppRefiner
         public EditorType Type;
 
         public IntPtr CallTipPointer = IntPtr.Zero;
+        public IntPtr AutoCompletionPointer = IntPtr.Zero;
+        public IntPtr UserListPointer = IntPtr.Zero;
 
         public Dictionary<string, IntPtr> AnnotationPointers = new();
         public List<IntPtr> PropertyBuffers = new();

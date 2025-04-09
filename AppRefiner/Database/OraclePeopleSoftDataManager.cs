@@ -1,5 +1,6 @@
 using AppRefiner.Database.Models;
 using System.Data;
+using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
 
@@ -418,6 +419,123 @@ namespace AppRefiner.Database
             }
 
             return results;
+        }
+
+        /// <summary>
+        /// Gets all subpackages and classes in the specified application package path
+        /// </summary>
+        /// <param name="packagePath">The package path (root package or path like ROOT:SubPackage:SubPackage2)</param>
+        /// <returns>Dictionary containing lists of subpackages and classes in the current package path</returns>
+        public PackageItems GetAppPackageItems(string packagePath)
+        {
+            if (!IsConnected)
+            {
+                throw new InvalidOperationException("Database connection is not open");
+            }
+
+            // Initialize result lists
+            List<string> subpackages = new();
+            List<string> classes = new();
+
+            // Parse the package path
+            string[] parts = packagePath.Split(':');
+            string rootPackage = parts.Length > 0 ? parts[0] : string.Empty;
+            
+            // Determine package level (0=root, 1=subpackage, 2=subsubpackage)
+            int packageLevel = parts.Length - 1;
+            if (packageLevel < 0) packageLevel = 0;
+            
+            // Build qualify path for queries (e.g., ":" or "SUB:" or "SUB:SUBSUB:")
+            string qualifyPath = ":";
+            if (packageLevel > 0)
+            {
+                qualifyPath = string.Join(":", parts.Skip(1));
+            }
+            
+            // Get subpackages based on current level
+            string subpackageSql = string.Empty;
+            Dictionary<string, object> subpackageParams = new();
+            
+            // Only root and first subpackage level can have subpackages in PeopleSoft
+            // (max 3 levels: ROOT:SUB:SUBSUB)
+            if (packageLevel < 2)
+            {
+                // If root package, get direct subpackages
+                if (packageLevel == 0)
+                {
+                    subpackageSql = @"
+                        SELECT PACKAGEID FROM PSPACKAGEDEFN 
+                        WHERE PACKAGEROOT = :rootPackage 
+                        AND QUALIFYPATH = ':' 
+                        AND PACKAGELEVEL = 1
+                        ORDER BY PACKAGEID";
+
+                    subpackageParams = new Dictionary<string, object>
+                    {
+                        { ":rootPackage", rootPackage }
+                    };
+
+                }
+                // If subpackage, get subsubpackages
+                else if (packageLevel == 1)
+                {
+                    subpackageSql = @"
+                        SELECT PACKAGEID FROM PSPACKAGEDEFN 
+                        WHERE PACKAGEROOT = :rootPackage 
+                        AND QUALIFYPATH = :qualifyPath 
+                        AND PACKAGELEVEL = 2
+                        ORDER BY PACKAGEID";
+
+                    subpackageParams = new Dictionary<string, object>
+                    {
+                        { ":rootPackage", rootPackage },
+                        { ":qualifyPath", qualifyPath }
+                    };
+
+                }
+
+
+                // Execute query for subpackages if SQL is defined
+                if (!string.IsNullOrEmpty(subpackageSql))
+                {
+                    DataTable subpackageResults = _connection.ExecuteQuery(subpackageSql, subpackageParams);
+                    
+                    foreach (DataRow row in subpackageResults.Rows)
+                    {
+                        string? subpackageName = row["PACKAGEID"].ToString();
+                        if (!string.IsNullOrEmpty(subpackageName))
+                        {
+                            subpackages.Add(subpackageName);
+                        }
+                    }
+                }
+            }
+            
+            // Get classes in the current package path
+            string classSql = @"
+                SELECT APPCLASSID FROM PSAPPCLASSDEFN 
+                WHERE PACKAGEROOT = :rootPackage 
+                AND QUALIFYPATH = :qualifyPath
+                ORDER BY APPCLASSID";
+                
+            Dictionary<string, object> classParams = new()
+            {
+                { ":rootPackage", rootPackage },
+                { ":qualifyPath", qualifyPath }
+            };
+            
+            DataTable classResults = _connection.ExecuteQuery(classSql, classParams);
+            
+            foreach (DataRow row in classResults.Rows)
+            {
+                string? className = row["APPCLASSID"].ToString();
+                if (!string.IsNullOrEmpty(className))
+                {
+                    classes.Add(className);
+                }
+            }
+            
+            return new PackageItems(packagePath, subpackages, classes);
         }
 
         /// <summary>

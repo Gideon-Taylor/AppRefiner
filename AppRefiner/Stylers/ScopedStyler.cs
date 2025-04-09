@@ -40,6 +40,7 @@ namespace AppRefiner.Stylers
 
         protected IEnumerable<VariableInfo> GetVariablesInCurrentScope()
         {
+            if (variableScopeStack.Count == 0) return [];
             return variableScopeStack.Peek().Values;
         }
 

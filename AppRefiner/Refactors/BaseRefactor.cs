@@ -318,7 +318,7 @@ namespace AppRefiner.Refactors
 
         protected ScintillaEditor Editor { get; } = editor ?? throw new ArgumentNullException(nameof(editor));
         protected int CurrentPosition { get; } = ScintillaManager.GetCursorPosition(editor);
-        protected int LineNumber { get; } = ScintillaManager.GetCurrentLine(editor);
+        protected int LineNumber { get; } = ScintillaManager.GetCurrentLineNumber(editor);
 
         private string? source;
         private CommonTokenStream? tokenStream;

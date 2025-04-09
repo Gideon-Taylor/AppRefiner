@@ -24,6 +24,23 @@ void HandleScintillaNotification(HWND hwnd, SCNotification* scn, HWND callbackWi
                 g_lastEditorHwnd = hwnd;
             }
             
+            // Check for colon character to trigger app package auto-suggest
+            if (scn->ch == ':' && callbackWindow && IsWindow(callbackWindow)) {
+                // Get the current position
+                int currentPos = SendMessage(hwnd, SCI_GETCURRENTPOS, 0, 0);
+                
+                // Debug: Get autocompletion settings
+                bool autoHide = SendMessage(hwnd, SCI_AUTOCGETAUTOHIDE, 0, 0) != 0;
+                int separator = SendMessage(hwnd, SCI_AUTOCGETSEPARATOR, 0, 0);
+                char debugMsg[256];
+                sprintf_s(debugMsg, "Autocompletion settings - AutoHide: %s, Separator: '%c' (%d)\n", 
+                          autoHide ? "true" : "false", (char)separator, separator);
+                OutputDebugStringA(debugMsg);
+                
+                // Send the app package suggest message with current position as wParam
+                SendMessage(callbackWindow, WM_AR_APP_PACKAGE_SUGGEST, (WPARAM)currentPos, 0);
+            }
+            
             // Verify the window is still valid before proceeding
             if (IsWindow(hwnd)) {
                 // Handle auto-pairing first
@@ -62,6 +79,36 @@ void HandleScintillaNotification(HWND hwnd, SCNotification* scn, HWND callbackWi
         else if (scn->nmhdr.code == SCN_SAVEPOINTREACHED) {
             if (callbackWindow && IsWindow(callbackWindow)) {
                 SendMessage(callbackWindow, WM_SCN_SAVEPOINT_REACHED, (WPARAM)0, (LPARAM)0);
+            }
+        }
+        else if (scn->nmhdr.code == SCN_USERLISTSELECTION) {
+            if (callbackWindow && IsWindow(callbackWindow)) {
+                // Output debug info
+                char debugMsg[256];
+				sprintf_s(debugMsg, "User list selection: %s\n", scn->text ? scn->text : "NULL");
+				OutputDebugStringA(debugMsg);
+				
+                // Check if this is an app package completion (listType == 1)
+                if (scn->listType == 1 && hwnd && IsWindow(hwnd)) {
+                    // Get the current position
+                    int currentPos = SendMessage(hwnd, SCI_GETCURRENTPOS, 0, 0);
+                    
+                    // Get the position where the autocompletion list was opened
+                    int startPos = SendMessage(hwnd, SCI_AUTOCPOSSTART, 0, 0);
+                    
+                    // If we found position to select (should be valid if we're handling a selection)
+                    if (startPos >= 0 && startPos < currentPos) {
+                        // Select the text that will be replaced
+                        SendMessage(hwnd, SCI_SETSEL, startPos, currentPos);
+                        
+                        char debugMsg[100];
+                        sprintf_s(debugMsg, "App package completion: selecting from pos %d to %d\n", startPos, currentPos);
+                        OutputDebugStringA(debugMsg);
+                    }
+                }
+                
+                // Forward the user list selection to the callback window
+                SendMessage(callbackWindow, WM_SCN_USERLIST_SELECTION, (WPARAM)scn->listType, (LPARAM)scn->text);
             }
         }
     }

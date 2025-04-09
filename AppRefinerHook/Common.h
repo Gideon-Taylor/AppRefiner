@@ -28,6 +28,8 @@
 #define WM_SCN_DWELL_START WM_SCN(SCN_DWELLSTART)
 #define WM_SCN_DWELL_END WM_SCN(SCN_DWELLEND)
 #define WM_SCN_SAVEPOINT_REACHED WM_SCN(SCN_SAVEPOINTREACHED)
+#define WM_AR_APP_PACKAGE_SUGGEST 2500 // New message for app package auto-suggest when colon is typed
+#define WM_SCN_USERLIST_SELECTION WM_SCN(SCN_USERLISTSELECTION) // User list selection notification
 
 // Global variables (defined in HookManager.cpp)
 extern HHOOK g_getMsgHook;

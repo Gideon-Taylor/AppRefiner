@@ -132,6 +132,9 @@ namespace AppRefiner
         private const int SCN_DWELLSTART = 2016;
         private const int SCN_DWELLEND = 2017;
         private const int SCN_SAVEPOINTREACHED = 2002;
+        private const int AR_APP_PACKAGE_SUGGEST = 2500; // New constant for app package suggest
+        private const int SCN_USERLISTSELECTION = 2014; // User list selection notification
+        private const int SCI_REPLACESEL = 0x2170; // Constant for SCI_REPLACESEL
 
         private bool isLoadingSettings = false;
 
@@ -1952,7 +1955,7 @@ namespace AppRefiner
                 {
                     if (activeEditor != null)
                     {
-                        var line = ScintillaManager.GetCurrentLine(activeEditor);
+                        var line = ScintillaManager.GetCurrentLineNumber(activeEditor);
                         int currentPosition = ScintillaManager.GetCursorPosition(activeEditor);
                         if (line != -1)
                         {
@@ -2522,7 +2525,7 @@ namespace AppRefiner
                 /* remove mask */
                 var eventCode = m.Msg & ~WM_SCN_EVENT_MASK;
 
-                switch(eventCode)
+                switch (eventCode)
                 {
                     case SCN_DWELLSTART:
                         Debug.Log($"SCN_DWELLSTART: {m.WParam} -- {m.LParam}");
@@ -2539,23 +2542,52 @@ namespace AppRefiner
                             {
                                 // Cancel any pending savepoint timer
                                 savepointDebounceTimer?.Change(Timeout.Infinite, Timeout.Infinite);
-                                
+
                                 // Store the editor for later processing
                                 pendingSaveEditor = activeEditor;
-                                
+
                                 // Record the time of this savepoint
                                 lastSavepointTime = DateTime.Now;
-                                
+
                                 // Start a new timer to process this savepoint after the debounce period
                                 savepointDebounceTimer = new System.Threading.Timer(
                                     ProcessSavepoint, null, SAVEPOINT_DEBOUNCE_MS, Timeout.Infinite);
                             }
                         }
                         break;
+                    case SCN_USERLISTSELECTION:
+                        Debug.Log("User list selection received");
+                        // wParam is the list type
+                        int listType = m.WParam.ToInt32();
+                        // lParam is a pointer to a UTF8 string in the editor's process memory
+                        if (m.LParam != IntPtr.Zero && activeEditor != null)
+                        {
+                            // Read the UTF8 string from the editor's process memory
+                            // Use a reasonable buffer size (256 bytes should be enough for most strings)
+                            string? selectedText = ScintillaManager.ReadUtf8FromMemory(activeEditor, m.LParam, 256);
+                            
+                            if (!string.IsNullOrEmpty(selectedText))
+                            {
+                                Debug.Log($"User selected: {selectedText} (list type: {listType})");
+                                HandleUserListSelection(activeEditor, selectedText, listType);
+                            }
+                        }
+                        break;
                 }
             }
+            else if (m.Msg == AR_APP_PACKAGE_SUGGEST)
+            {
+                /* Handle app package suggestion request */
+                Debug.Log($"Received app package suggest message. WParam: {m.WParam}, LParam: {m.LParam}");
+                
+                // WParam contains the current cursor position
+                int position = m.WParam.ToInt32();
+                
+                // Show app package suggestions at the current position
+                ShowAppPackageSuggestions(activeEditor, position);
+            }
         }
-       
+
         private void ScanTick(object? state)
         {
             lock (timerLock)
@@ -3373,6 +3405,186 @@ namespace AppRefiner
                 Debug.Log($"Error processing debounced savepoint: {ex.Message}");
             }
         }
+
+        /// <summary>
+        /// Shows app package suggestions when a colon is typed
+        /// </summary>
+        /// <param name="editor">The current Scintilla editor</param>
+        /// <param name="position">Current cursor position</param>
+        private void ShowAppPackageSuggestions(ScintillaEditor editor, int position)
+        {
+            try
+            {
+                if (editor == null || editor.DataManager == null) return;
+
+                // Get the current line and content up to the cursor position
+                int currentLine = (int)editor.SendMessage(0x2166, position, 0); // SCI_LINEFROMPOSITION
+                int lineStartPos = (int)editor.SendMessage(0x2167, currentLine, 0); // SCI_POSITIONFROMLINE
+                
+                string content = ScintillaManager.GetScintillaText(editor) ?? "";
+                string lineContent = content.Substring(lineStartPos, position - lineStartPos);
+
+                // Check if there's a colon in the line content
+                if (!lineContent.Contains(':'))
+                {
+                    Debug.Log("No colon found in line content");
+                    return;
+                }
+
+                // Extract the potential package path - we need to look for identifiers before the colon
+                string packagePath = ExtractPackagePathFromLine(lineContent);
+                if (string.IsNullOrEmpty(packagePath))
+                {
+                    Debug.Log("No valid package path found");
+                    return;
+                }
+
+                Debug.Log($"Extracted package path: {packagePath}");
+
+                // Get package items from database
+                var packageItems = editor.DataManager.GetAppPackageItems(packagePath);
+
+                // Convert to list of strings for autocomplete
+                List<string> suggestions = new List<string>();
+                suggestions.AddRange(packageItems.Subpackages.Select(p => $"{p} (Package)"));
+                suggestions.AddRange(packageItems.Classes.Select(c => $"{c} (Class)"));
+
+                if (suggestions.Count > 0)
+                {
+                    // Show the user list popup with app package suggestions
+                    Debug.Log($"Showing {suggestions.Count} app package suggestions for '{packagePath}'");
+                    bool result = ScintillaManager.ShowUserList(editor, 1, position, suggestions);
+                    
+                    if (!result)
+                    {
+                        Debug.Log("Failed to show user list popup");
+                    }
+                }
+                else
+                {
+                    Debug.Log($"No suggestions found for '{packagePath}'");
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.Log($"Error getting app package suggestions: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Extracts a valid package path from a line of text
+        /// </summary>
+        /// <param name="lineContent">The line content to analyze</param>
+        /// <returns>The extracted package path or empty string if not found</returns>
+        private string ExtractPackagePathFromLine(string lineContent)
+        {
+            // If the line ends with a colon, we need to extract everything up to that colon
+            if (lineContent.EndsWith(':'))
+            {
+                // Find the last colon before the end
+                int colonIndex = lineContent.Length - 1;
+                
+                // Extract everything before the colon
+                string beforeColon = lineContent.Substring(0, colonIndex);
+                
+                // Find the last valid package identifier
+                // This could be after a space, another colon, or other delimiters
+                int lastDelimiterIndex = Math.Max(
+                    Math.Max(
+                        beforeColon.LastIndexOf(' '), 
+                        beforeColon.LastIndexOf('\t')
+                    ),
+                    Math.Max(
+                        beforeColon.LastIndexOf('.'),
+                        beforeColon.LastIndexOf('=')
+                    )
+                );
+                
+                // If we found a delimiter, extract the text after it
+                if (lastDelimiterIndex >= 0 && lastDelimiterIndex < beforeColon.Length - 1)
+                {
+                    return beforeColon.Substring(lastDelimiterIndex + 1).Trim();
+                }
+                
+                // If no delimiter, return the whole thing (rare case)
+                return beforeColon.Trim();
+            }
+            else if (lineContent.Contains(':'))
+            {
+                // We might be in the middle of a package path like "Package:SubPackage:"
+                int lastColonIndex = lineContent.LastIndexOf(':');
+                
+                // Start from the last colon and work backward to find the beginning of the path
+                string beforeLastColon = lineContent.Substring(0, lastColonIndex);
+                
+                // Find the last non-package-path character
+                int lastNonPathCharIndex = -1;
+                for (int i = beforeLastColon.Length - 1; i >= 0; i--)
+                {
+                    if (!char.IsLetterOrDigit(beforeLastColon[i]) && 
+                        beforeLastColon[i] != '_' && 
+                        beforeLastColon[i] != ':')
+                    {
+                        lastNonPathCharIndex = i;
+                        break;
+                    }
+                }
+                
+                // Extract the package path
+                if (lastNonPathCharIndex >= 0)
+                {
+                    return beforeLastColon.Substring(lastNonPathCharIndex + 1);
+                }
+                
+                return beforeLastColon;
+            }
+            
+            return string.Empty;
+        }
+
+        private void HandleUserListSelection(ScintillaEditor? editor, string selection, int listType = 0)
+        {
+            [DllImport("user32.dll", CharSet = CharSet.Auto)]
+            static extern IntPtr SendMessage(IntPtr hWnd, int Msg, IntPtr wParam, IntPtr lParam);
+
+            if (editor == null) return;
+            bool isClassSelection = false;
+            if (listType == 1)
+            {
+                var parts = selection.Split(" "); // Remove the type suffix
+                selection = parts[0];
+                isClassSelection = parts[1].Equals("(Class)", StringComparison.OrdinalIgnoreCase);
+            }
+
+
+            /* execute the resolve imports command */
+            if (isClassSelection)
+            {
+                ScintillaManager.InsertTextAtCursor(editor, selection);
+                var lineText = ScintillaManager.GetCurrentLineText(editor);
+                if (lineText != String.Empty)
+                {
+                    AddImport resolveImports = new AddImport(editor, lineText.Split(" ").Last());
+                    ProcessRefactor(resolveImports);
+                }
+            } else
+            {
+                ScintillaManager.InsertTextAtCursor(editor, $"{selection}:");
+
+                /* Send ourselves a AR_APP_PACKAGE_SUGGEST message */
+                //SendMessage(this.Handle, AR_APP_PACKAGE_SUGGEST, ScintillaManager.GetCursorPosition(editor), 0);
+
+                /* after 100ms send the message to ourselves, but let this function return */
+                Task.Delay(100).ContinueWith(_ =>
+                {
+                    //SendMessage(this.Handle, AR_APP_PACKAGE_SUGGEST, ScintillaManager.GetCursorPosition(editor), 0);
+                    ShowAppPackageSuggestions(editor, ScintillaManager.GetCursorPosition(editor));
+                });
+
+            }
+
+        }
+
     }
 }
 

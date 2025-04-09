@@ -95,5 +95,12 @@ namespace AppRefiner.Database
         /// <param name="recordName">The name of the record (uppercase).</param>
         /// <returns>A list of RecordFieldInfo objects, or null if the record doesn't exist or an error occurs.</returns>
         List<RecordFieldInfo>? GetRecordFields(string recordName);
+        
+        /// <summary>
+        /// Gets all subpackages and classes in the specified application package path
+        /// </summary>
+        /// <param name="packagePath">The package path (root package or path like ROOT:SubPackage:SubPackage2)</param>
+        /// <returns>Dictionary containing lists of subpackages and classes in the current package path</returns>
+        PackageItems GetAppPackageItems(string packagePath);
     }
 }
