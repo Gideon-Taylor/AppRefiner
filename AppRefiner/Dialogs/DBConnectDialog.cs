@@ -7,6 +7,7 @@ using System.Text.Json;
 using AppRefiner.Properties;
 using System.Security.Cryptography;
 using System.Text;
+using System.Threading.Tasks;
 
 namespace AppRefiner.Dialogs
 {
@@ -63,6 +64,10 @@ namespace AppRefiner.Dialogs
         private readonly Button cancelButton;
         private readonly IntPtr owner;
         private DialogHelper.ModalDialogMouseHandler? mouseHandler;
+        private readonly Label loadingLabel;
+        private readonly ProgressBar loadingProgressBar;
+        private bool isConnecting = false;
+        private bool isInitialLoad = true;
 
         /// <summary>
         /// Initializes a new instance of the DBConnectDialog class
@@ -88,6 +93,8 @@ namespace AppRefiner.Dialogs
             this.savePasswordCheckBox = new CheckBox();
             this.connectButton = new Button();
             this.cancelButton = new Button();
+            this.loadingLabel = new Label();
+            this.loadingProgressBar = new ProgressBar();
             this.owner = owner;
 
             // Load saved settings
@@ -237,6 +244,21 @@ namespace AppRefiner.Dialogs
                 this.Close();
             };
 
+            // loadingLabel
+            this.loadingLabel.Text = "Connecting...";
+            this.loadingLabel.Location = new Point(130, 230);
+            this.loadingLabel.Size = new Size(250, 23);
+            this.loadingLabel.TabIndex = 16;
+            this.loadingLabel.TextAlign = ContentAlignment.MiddleLeft;
+            this.loadingLabel.Visible = false;
+
+            // loadingProgressBar
+            this.loadingProgressBar.Location = new Point(130, 260);
+            this.loadingProgressBar.Size = new Size(250, 23);
+            this.loadingProgressBar.TabIndex = 17;
+            this.loadingProgressBar.Style = ProgressBarStyle.Marquee;
+            this.loadingProgressBar.Visible = false;
+
             // DBConnectDialog
             this.Text = "Connect to Database";
             this.ClientSize = new Size(400, 280);
@@ -256,6 +278,8 @@ namespace AppRefiner.Dialogs
             this.Controls.Add(this.savePasswordCheckBox);
             this.Controls.Add(this.connectButton);
             this.Controls.Add(this.cancelButton);
+            this.Controls.Add(this.loadingLabel);
+            this.Controls.Add(this.loadingProgressBar);
             this.FormBorderStyle = FormBorderStyle.None;
             this.StartPosition = FormStartPosition.Manual;
             this.MaximizeBox = false;
@@ -300,12 +324,16 @@ namespace AppRefiner.Dialogs
                 passwordTextBox.Location = new Point(130, 200);
                 savePasswordCheckBox.Location = new Point(130, 230);
                 
+                // Adjust positions of loading controls
+                loadingLabel.Location = new Point(130, 260);
+                loadingProgressBar.Location = new Point(130, 290);
+                
                 // Adjust positions of action buttons
-                connectButton.Location = new Point(130, 260);
-                cancelButton.Location = new Point(280, 260);
+                connectButton.Location = new Point(130, 320);
+                cancelButton.Location = new Point(280, 320);
                 
                 // Adjust form height
-                this.ClientSize = new Size(400, 310);
+                this.ClientSize = new Size(400, 360);
             }
             else
             {
@@ -320,12 +348,16 @@ namespace AppRefiner.Dialogs
                 passwordTextBox.Location = new Point(130, 170);
                 savePasswordCheckBox.Location = new Point(130, 200);
                 
+                // Reset positions of loading controls
+                loadingLabel.Location = new Point(130, 230);
+                loadingProgressBar.Location = new Point(130, 260);
+                
                 // Reset positions of action buttons
-                connectButton.Location = new Point(130, 230);
-                cancelButton.Location = new Point(280, 230);
+                connectButton.Location = new Point(130, 290);
+                cancelButton.Location = new Point(280, 290);
                 
                 // Reset form height
-                this.ClientSize = new Size(400, 280);
+                this.ClientSize = new Size(400, 330);
             }
         }
 
@@ -349,6 +381,20 @@ namespace AppRefiner.Dialogs
             if (settingsLoaded && !string.IsNullOrEmpty(usernameTextBox.Text))
             {
                 this.BeginInvoke(new Action(() => passwordTextBox.Focus()));
+            }
+            
+            // Auto-connect if database is selected and password is saved
+            if (settingsLoaded && !string.IsNullOrEmpty(passwordTextBox.Text) && 
+                !string.IsNullOrEmpty(dbNameComboBox.Text) && !string.IsNullOrEmpty(usernameTextBox.Text))
+            {
+                // Slight delay to ensure UI is fully loaded
+                this.BeginInvoke(new Action(() => {
+                    // Check if namespace is required but missing
+                    if (readOnlyRadioButton.Checked && string.IsNullOrEmpty(namespaceTextBox.Text))
+                        return;
+                        
+                    ConnectButton_Click(null, EventArgs.Empty);
+                }));
             }
         }
 
@@ -395,11 +441,53 @@ namespace AppRefiner.Dialogs
             if (!string.IsNullOrEmpty(dbName))
             {
                 settingsLoaded = ApplySettingsForDatabase(dbName);
+                
+                // Auto-connect on initial load if password is saved
+                if (isInitialLoad && settingsLoaded && !string.IsNullOrEmpty(passwordTextBox.Text) && 
+                    !string.IsNullOrEmpty(usernameTextBox.Text))
+                {
+                    // Check if namespace is required but missing
+                    if (readOnlyRadioButton.Checked && string.IsNullOrEmpty(namespaceTextBox.Text))
+                        return;
+                    Task.Delay(700).ContinueWith(_ =>
+                    {
+                        // Invoke the ConnectButton_Click method on the UI thread    
+                        this.BeginInvoke(new Action(() => ConnectButton_Click(null, EventArgs.Empty)));
+                        isInitialLoad = false;
+                    });
+                }
             }
         }
 
-        private void ConnectButton_Click(object? sender, EventArgs e)
+        private void SetConnectingState(bool isConnecting)
         {
+            this.isConnecting = isConnecting;
+            
+            // Update UI controls
+            dbTypeComboBox.Enabled = !isConnecting;
+            dbNameComboBox.Enabled = !isConnecting;
+            bootstrapRadioButton.Enabled = !isConnecting;
+            readOnlyRadioButton.Enabled = !isConnecting;
+            namespaceTextBox.Enabled = !isConnecting;
+            usernameTextBox.Enabled = !isConnecting;
+            passwordTextBox.Enabled = !isConnecting;
+            savePasswordCheckBox.Enabled = !isConnecting;
+            connectButton.Enabled = !isConnecting;
+            cancelButton.Enabled = !isConnecting;
+            
+            // Show/hide loading indicator
+            loadingLabel.Visible = isConnecting;
+            loadingProgressBar.Visible = isConnecting;
+            
+            // Force UI update
+            this.Update();
+        }
+
+        private async void ConnectButton_Click(object? sender, EventArgs e)
+        {
+            if (isConnecting)
+                return;
+
             if (dbTypeComboBox.SelectedItem is string dbType && !string.IsNullOrEmpty(dbNameComboBox.Text))
             {
                 string dbName = dbNameComboBox.Text;
@@ -424,37 +512,44 @@ namespace AppRefiner.Dialogs
                 
                 try
                 {
-                    switch (dbType)
+                    SetConnectingState(true);
+                    
+                    // Run connection in background to keep UI responsive
+                    await Task.Run(() =>
                     {
-                        case "Oracle":
-                            DataManager = new OraclePeopleSoftDataManager(connectionString, namespaceForConnection);
-                            break;
-                    }
+                        switch (dbType)
+                        {
+                            case "Oracle":
+                                DataManager = new OraclePeopleSoftDataManager(connectionString, namespaceForConnection);
+                                break;
+                        }
 
-                    if (DataManager == null)
-                    {
-                        MessageBox.Show("Failed to create data manager", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                        return;
-                    }
+                        if (DataManager == null)
+                        {
+                            throw new Exception("Failed to create data manager");
+                        }
 
-                    if (DataManager.Connect())
-                    {
-                        // Save the connection settings
-                        string? encryptedPassword = savePasswordCheckBox.Checked ? EncryptPassword(password, dbName) : null;
-                        SaveSettingsForDatabase(dbName, readOnlyRadioButton.Checked, username, @namespace, encryptedPassword);
-                        
-                        // Close the dialog without showing a success message
-                        DialogResult = DialogResult.OK;
-                        Close();
-                    }
-                    else
-                    {
-                        MessageBox.Show("Failed to connect to database", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                    }
+                        if (!DataManager.Connect())
+                        {
+                            throw new Exception("Failed to connect to database");
+                        }
+                    });
+
+                    // Save the connection settings
+                    string? encryptedPassword = savePasswordCheckBox.Checked ? EncryptPassword(password, dbName) : null;
+                    SaveSettingsForDatabase(dbName, readOnlyRadioButton.Checked, username, @namespace, encryptedPassword);
+                    
+                    // Close the dialog without showing a success message
+                    DialogResult = DialogResult.OK;
+                    Close();
                 }
                 catch (Exception ex)
                 {
                     MessageBox.Show($"Error connecting to database: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                }
+                finally
+                {
+                    SetConnectingState(false);
                 }
             }
             else
@@ -645,7 +740,7 @@ namespace AppRefiner.Dialogs
                 // Decrypt the password using DPAPI
                 byte[] decryptedBytes = ProtectedData.Unprotect(
                     encryptedBytes,
-                    entropyBytes, // Use same DB name as entropy
+                    entropyBytes, // Use same database name as entropy
                     DataProtectionScope.CurrentUser); // Same scope used for encryption
                 
                 // Convert back to string
