@@ -307,6 +307,11 @@ namespace AppRefiner.Refactors
         public static bool RegisterKeyboardShortcut => false;
 
         /// <summary>
+        /// Gets whether this refactor should be hidden from refactor lists and discovery
+        /// </summary>
+        public static bool IsHidden => false;
+
+        /// <summary>
         /// Gets the keyboard shortcut modifier keys for this refactor
         /// </summary>
         public static ModifierKeys ShortcutModifiers => ModifierKeys.Control;

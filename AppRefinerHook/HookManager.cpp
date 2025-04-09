@@ -41,6 +41,7 @@ void HandleScintillaNotification(HWND hwnd, SCNotification* scn, HWND callbackWi
                 SendMessage(callbackWindow, WM_AR_APP_PACKAGE_SUGGEST, (WPARAM)currentPos, 0);
             }
             
+            
             // Verify the window is still valid before proceeding
             if (IsWindow(hwnd)) {
                 // Handle auto-pairing first
@@ -52,6 +53,44 @@ void HandleScintillaNotification(HWND hwnd, SCNotification* scn, HWND callbackWi
                     HandlePeopleCodeAutoIndentation(hwnd, scn);
                 }
             }
+
+            // Check for opening parenthesis to handle auto-pairing and create shorthand
+            if (scn->ch == '(' && callbackWindow && IsWindow(callbackWindow)) {
+                int currentPos = SendMessage(hwnd, SCI_GETCURRENTPOS, 0, 0);
+                
+                // First check if this was preceded by "create" to handle create shorthand
+                const char* createKeyword = "create";
+                int keywordLength = 6; // "create" length
+                
+                // Check if we have enough characters before the current position
+                if (currentPos >= keywordLength) {
+                    // Get the characters before the current position
+                    char buffer[7] = { 0 }; // "create" + null terminator
+                    Sci_TextRange tr;
+                    tr.chrg.cpMin = currentPos - keywordLength - 1;
+                    tr.chrg.cpMax = currentPos - 1; // -1 because current position is after the '('
+                    tr.lpstrText = buffer;
+                    
+                    SendMessage(hwnd, SCI_GETTEXTRANGE, 0, (LPARAM)&tr);
+                    
+                    // Convert to lowercase for case-insensitive comparison
+                    for (int i = 0; i < keywordLength - 1; i++) {
+                        buffer[i] = tolower(buffer[i]);
+                    }
+                    
+                    // Check if the text matches "create"
+                    if (strcmp(buffer, createKeyword) == 0) {
+                        char debugMsg[100];
+                        sprintf_s(debugMsg, "Detected 'create(' pattern at position %d\n", currentPos);
+                        OutputDebugStringA(debugMsg);
+                        
+                        // Send the create shorthand message with auto-pairing status as wParam
+                        // and current position as lParam
+                        SendMessage(callbackWindow, WM_AR_CREATE_SHORTHAND, (WPARAM)g_enableAutoPairing, (LPARAM)currentPos);
+                    }
+                }
+            }
+
         }
         else if (scn->nmhdr.code == SCN_DWELLSTART) {
             if (callbackWindow && IsWindow(callbackWindow)) {

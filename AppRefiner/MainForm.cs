@@ -133,6 +133,7 @@ namespace AppRefiner
         private const int SCN_DWELLEND = 2017;
         private const int SCN_SAVEPOINTREACHED = 2002;
         private const int AR_APP_PACKAGE_SUGGEST = 2500; // New constant for app package suggest
+        private const int AR_CREATE_SHORTHAND = 2501; // New constant for create shorthand detection
         private const int SCN_USERLISTSELECTION = 2014; // User list selection notification
         private const int SCI_REPLACESEL = 0x2170; // Constant for SCI_REPLACESEL
 
@@ -2253,6 +2254,18 @@ namespace AppRefiner
                 .SelectMany(s => s.GetTypes())
                 .Where(p => typeof(BaseRefactor).IsAssignableFrom(p) && !p.IsAbstract && p != typeof(ScopedRefactor<>) && p != typeof(BaseRefactor));
 
+            // Filter out hidden refactors
+            refactorTypes = refactorTypes.Where(type => {
+                try {
+                    var isHiddenProperty = type.GetProperty("IsHidden", 
+                        BindingFlags.Public | BindingFlags.Static | BindingFlags.NonPublic);
+                    return isHiddenProperty == null || !(bool)isHiddenProperty.GetValue(null)!;
+                }
+                catch {
+                    return true; // If we can't determine IsHidden, include the refactor
+                }
+            });
+
             // Get refactor types from plugins
             var pluginRefactors = PluginManager.DiscoverRefactorTypes();
             if (pluginRefactors != null)
@@ -2585,6 +2598,20 @@ namespace AppRefiner
                 
                 // Show app package suggestions at the current position
                 ShowAppPackageSuggestions(activeEditor, position);
+            }
+            else if (m.Msg == AR_CREATE_SHORTHAND)
+            {
+                /* Handle create shorthand detection */
+                Debug.Log($"Received create shorthand message. WParam: {m.WParam}, LParam: {m.LParam}");
+                
+                // WParam contains auto-pairing status (bool)
+                bool autoPairingEnabled = m.WParam.ToInt32() != 0;
+                
+                // LParam contains the current cursor position
+                int position = m.LParam.ToInt32();
+                
+                // Process create shorthand at the current position
+                HandleCreateShorthand(activeEditor, position, autoPairingEnabled);
             }
         }
 
@@ -3583,6 +3610,20 @@ namespace AppRefiner
 
             }
 
+        }
+
+        /// <summary>
+        /// Handle the "create(" shorthand pattern detection
+        /// </summary>
+        /// <param name="editor">The active Scintilla editor</param>
+        /// <param name="position">The current cursor position</param>
+        private void HandleCreateShorthand(ScintillaEditor? editor, int position, bool autoPairingEnabled)
+        {
+            if (editor == null || !editor.IsValid()) return;
+            
+            // Execute the CreateAutoComplete refactor
+            Debug.Log($"Create shorthand detected at position {position}");
+            ProcessRefactor(new CreateAutoComplete(editor, autoPairingEnabled));
         }
 
     }

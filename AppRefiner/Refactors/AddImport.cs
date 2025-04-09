@@ -5,10 +5,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using static AppRefiner.PeopleCode.PeopleCodeParser;
-using System.Windows.Forms; // Required for Form, Button, TextBox, etc.
-using System.Drawing; // Required for Color, Font, Point, Size, etc.
 using Antlr4.Runtime.Tree; // Required for ITerminalNode
-
 
 namespace AppRefiner.Refactors
 {
@@ -25,8 +22,12 @@ namespace AppRefiner.Refactors
         /// </summary>
         public new static bool RegisterKeyboardShortcut => false;
 
-        private string? _appClassPathToAdd;
-        private readonly bool _requiresInput;
+        /// <summary>
+        /// This refactor should be hidden from discovery.
+        /// </summary>
+        public new static bool IsHidden => true;
+
+        private readonly string _appClassPathToAdd;
         private ImportsBlockContext? _importsBlockContext;
         // Stores the full text of each existing import statement (e.g., "import PKG:CLASS;")
         private readonly List<string> _existingImportStatements = [];
@@ -40,221 +41,13 @@ namespace AppRefiner.Refactors
         /// <param name="appClassPathToAdd">The application class path to add.</param>
         public AddImport(ScintillaEditor editor, string appClassPathToAdd) : base(editor)
         {
-            _appClassPathToAdd = appClassPathToAdd?.Trim();
-            _requiresInput = string.IsNullOrWhiteSpace(_appClassPathToAdd);
-            if (!_requiresInput && !IsValidAppClassPath(_appClassPathToAdd!))
-            {
-                 // If an invalid path is provided directly, treat it as needing input
-                 _requiresInput = true;
-                 _appClassPathToAdd = null;
-                 // We won't set failure here, let ShowRefactorDialog handle it or ExitProgram if dialog not shown.
-            }
-        }
+            if (string.IsNullOrWhiteSpace(appClassPathToAdd))
+                throw new ArgumentException("Application class path cannot be null or empty", nameof(appClassPathToAdd));
 
-        /// <summary>
-        /// Initializes a new instance of the <see cref="AddImport"/> class, requiring user input for the path.
-        /// </summary>
-        /// <param name="editor">The Scintilla editor instance.</param>
-        public AddImport(ScintillaEditor editor) : base(editor)
-        {
-            _appClassPathToAdd = null;
-            _requiresInput = true;
-        }
-
-        /// <summary>
-        /// Gets a value indicating whether this refactor requires user input via a dialog.
-        /// </summary>
-        public override bool RequiresUserInputDialog => _requiresInput;
-
-        /// <summary>
-        /// Dialog form for adding an import
-        /// </summary>
-        private class AddImportDialog : Form
-        {
-            private TextBox txtAppClassPath = new();
-            private Button btnOk = new();
-            private Button btnCancel = new();
-            private Label lblPrompt = new();
-            private Panel headerPanel = new();
-            private Label headerLabel = new();
-
-            public string AppClassPath { get; private set; } = "";
-
-            public AddImportDialog()
-            {
-                InitializeComponent();
-                // Set focus to the text box
-                this.ActiveControl = txtAppClassPath;
-            }
-
-            private void InitializeComponent()
-            {
-                this.SuspendLayout();
-
-                // headerPanel
-                this.headerPanel.BackColor = Color.FromArgb(50, 50, 60);
-                this.headerPanel.Dock = DockStyle.Top;
-                this.headerPanel.Height = 30;
-                this.headerPanel.Controls.Add(this.headerLabel);
-
-                // headerLabel
-                this.headerLabel.Text = "Add Import";
-                this.headerLabel.ForeColor = Color.White;
-                this.headerLabel.Font = new Font("Segoe UI", 9F, FontStyle.Regular, GraphicsUnit.Point);
-                this.headerLabel.Dock = DockStyle.Fill;
-                this.headerLabel.TextAlign = ContentAlignment.MiddleCenter;
-
-                // lblPrompt
-                this.lblPrompt.AutoSize = true;
-                this.lblPrompt.Location = new System.Drawing.Point(12, 40);
-                this.lblPrompt.Name = "lblPrompt";
-                this.lblPrompt.Size = new System.Drawing.Size(240, 15);
-                this.lblPrompt.TabIndex = 0;
-                this.lblPrompt.Text = "Enter Application Class Path (e.g., PKG:SUB:Class):";
-
-                // txtAppClassPath
-                this.txtAppClassPath.BorderStyle = BorderStyle.FixedSingle;
-                this.txtAppClassPath.Location = new System.Drawing.Point(12, 60);
-                this.txtAppClassPath.Name = "txtAppClassPath";
-                this.txtAppClassPath.Size = new System.Drawing.Size(360, 23); // Wider for class paths
-                this.txtAppClassPath.TabIndex = 1;
-                this.txtAppClassPath.Font = new Font("Consolas", 10F, FontStyle.Regular, GraphicsUnit.Point); // Monospaced font
-                this.txtAppClassPath.KeyDown += TxtAppClassPath_KeyDown;
-
-                // btnOk
-                this.btnOk.DialogResult = DialogResult.OK;
-                this.btnOk.Location = new System.Drawing.Point(216, 95);
-                this.btnOk.Name = "btnOk";
-                this.btnOk.Size = new System.Drawing.Size(75, 28);
-                this.btnOk.TabIndex = 2;
-                this.btnOk.Text = "&OK";
-                this.btnOk.UseVisualStyleBackColor = true;
-                this.btnOk.Click += BtnOk_Click;
-
-                // btnCancel
-                this.btnCancel.DialogResult = DialogResult.Cancel;
-                this.btnCancel.Location = new System.Drawing.Point(297, 95);
-                this.btnCancel.Name = "btnCancel";
-                this.btnCancel.Size = new System.Drawing.Size(75, 28);
-                this.btnCancel.TabIndex = 3;
-                this.btnCancel.Text = "&Cancel";
-                this.btnCancel.UseVisualStyleBackColor = true;
-
-                // AddImportDialog
-                this.AcceptButton = this.btnOk;
-                this.CancelButton = this.btnCancel;
-                this.ClientSize = new System.Drawing.Size(384, 135); // Wider client size
-                this.Controls.Add(this.btnCancel);
-                this.Controls.Add(this.btnOk);
-                this.Controls.Add(this.txtAppClassPath);
-                this.Controls.Add(this.lblPrompt);
-                this.Controls.Add(this.headerPanel);
-                this.FormBorderStyle = FormBorderStyle.None; // Use None for custom border/header
-                this.MaximizeBox = false;
-                this.MinimizeBox = false;
-                this.Name = "AddImportDialog";
-                this.StartPosition = FormStartPosition.CenterParent; // Center relative to parent
-                this.Text = "Add Import"; // Title bar text (though not visible with None border)
-                this.ShowInTaskbar = false; // Don't show in taskbar
-                this.ResumeLayout(false);
-                this.PerformLayout();
-            }
-
-            private void TxtAppClassPath_KeyDown(object? sender, KeyEventArgs e)
-            {
-                if (e.KeyCode == Keys.Escape)
-                {
-                    this.DialogResult = DialogResult.Cancel;
-                    this.Close();
-                    e.Handled = true;
-                }
-                else if (e.KeyCode == Keys.Enter)
-                {
-                    BtnOk_Click(sender, e); // Trigger OK button logic
-                    e.Handled = true;
-                }
-            }
-
-            private void BtnOk_Click(object? sender, EventArgs e)
-            {
-                // Basic check for non-empty input - more specific validation happens after dialog closes
-                if (!string.IsNullOrWhiteSpace(txtAppClassPath.Text))
-                {
-                    AppClassPath = txtAppClassPath.Text.Trim();
-                    this.DialogResult = DialogResult.OK;
-                }
-                else
-                {
-                    // Prevent closing if empty
-                    MessageBox.Show("Please enter an Application Class Path.", "Input Required", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                    this.DialogResult = DialogResult.None; // Keeps the dialog open
-                }
-            }
-
-            // Optional: Handle Escape key at the form level too
-            protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
-            {
-                if (keyData == Keys.Escape)
-                {
-                    this.DialogResult = DialogResult.Cancel;
-                    this.Close();
-                    return true; // Handled
-                }
-                return base.ProcessCmdKey(ref msg, keyData);
-            }
-        }
-
-        /// <summary>
-        /// Shows a dialog to get the application class path from the user if it wasn't provided initially.
-        /// </summary>
-        /// <returns><c>true</c> if valid input was received or no input was required; <c>false</c> otherwise.</returns>
-        public override bool ShowRefactorDialog()
-        {
-            if (!RequiresUserInputDialog) return true; // No input needed
-
-            string input = string.Empty;
-            // Create wrapper once for both dialog and potential message box
-            var wrapper = new WindowWrapper(GetEditorMainWindowHandle());
-
-            using (var dialog = new AddImportDialog())
-            {
-                DialogResult result = dialog.ShowDialog(wrapper);
-
-                if (result == DialogResult.OK)
-                {
-                    input = dialog.AppClassPath; // Get path from dialog property
-                }
-                else
-                {
-                     SetFailure("Operation cancelled by user.");
-                     return false; // User cancelled
-                }
-            }
-
-            // Now validate the input obtained from the dialog
-            if (string.IsNullOrWhiteSpace(input)) // Should be caught by dialog, but double-check
-            {
-                SetFailure("No application class path provided.");
-                return false;
-            }
-
-            input = input.Trim(); // Ensure no leading/trailing whitespace
-            if (!IsValidAppClassPath(input))
-            {
-                // Provide feedback about the invalid format using the correct MessageBox overload
-                 MessageBox.Show(
-                    wrapper, // owner (IWin32Window)
-                    $"The entered path '{input}' is not a valid Application Class Path format (must contain ':', cannot contain '*').", // text
-                    "Invalid Input", // caption
-                    MessageBoxButtons.OK, // buttons
-                    MessageBoxIcon.Warning); // icon
-
-                SetFailure($"Invalid Application Class Path format: {input}");
-                return false;
-            }
-
-            _appClassPathToAdd = input;
-            return true; // User provided valid input
+            _appClassPathToAdd = appClassPathToAdd.Trim();
+            
+            if (!IsValidAppClassPath(_appClassPathToAdd))
+                throw new ArgumentException($"Invalid Application Class Path format: {_appClassPathToAdd}", nameof(appClassPathToAdd));
         }
 
         /// <summary>
@@ -308,24 +101,10 @@ namespace AppRefiner.Refactors
         /// </summary>
         public override void ExitProgram(ProgramContext context)
         {
-            // If input was required but the dialog failed/was cancelled, GetResult() will be Failed.
-            // If input wasn't required but was invalid in constructor, _appClassPathToAdd is null.
-            if (string.IsNullOrWhiteSpace(_appClassPathToAdd))
-            {
-                 // If failure wasn't already set by ShowRefactorDialog, set it now.
-                 if (!GetResult().Success) return; // Already failed
-                 SetFailure("No valid application class path specified for import.");
-                 return;
-            }
-
             // Check if the class path is already covered by existing imports
             if (IsCovered(_appClassPathToAdd, _existingImportPaths))
             {
-                // No changes needed. Set success message to inform user.
-                if (_requiresInput)
-                {
-                    SetFailure($"Import '{_appClassPathToAdd}' is already covered by existing imports."); // Using SetFailure to show message without making changes. Consider a dedicated Info status later.
-                }
+                // No changes needed
                 return;
             }
 
