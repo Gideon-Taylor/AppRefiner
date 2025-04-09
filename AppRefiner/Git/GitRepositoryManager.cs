@@ -126,13 +126,13 @@ namespace AppRefiner.Git
                 
                 if (filePaths == null)
                 {
-                    Commands.Stage(repo, "*");
+                    LibGit2Sharp.Commands.Stage(repo, "*");
                 }
                 else
                 {
                     foreach (var file in filePaths)
                     {
-                        Commands.Stage(repo, file);
+                        LibGit2Sharp.Commands.Stage(repo, file);
                     }
                 }
                 

@@ -24,6 +24,7 @@ using System.Threading.Tasks;
 using System.Windows.Forms;
 using System.Drawing.Text;
 using AppRefiner.TooltipProviders;
+using AppRefiner.Commands;
 
 namespace AppRefiner
 {
@@ -114,7 +115,7 @@ namespace AppRefiner
         KeyboardHook commandPaletteHook = new();
         KeyboardHook lintCodeHook = new();
         KeyboardHook applyTemplateHook = new();
-
+        KeyboardHook superGoTo = new();
         private class RuleState
         {
             public string TypeName { get; set; } = "";
@@ -197,6 +198,10 @@ namespace AppRefiner
             applyTemplateHook.KeyPressed += (s, e) => ApplyTemplateCommand();
             applyTemplateHook.RegisterHotKey(AppRefiner.ModifierKeys.Control | AppRefiner.ModifierKeys.Alt, Keys.T);
 
+            superGoTo.KeyPressed += (s, e) => SuperGoToCommand();
+            superGoTo.RegisterHotKey(AppRefiner.ModifierKeys.Control | AppRefiner.ModifierKeys.Alt, Keys.G);
+
+
             // Register standard shortcuts in the tracking dictionary
             registeredShortcuts["CollapseLevel"] = (AppRefiner.ModifierKeys.Alt, Keys.Left);
             registeredShortcuts["ExpandLevel"] = (AppRefiner.ModifierKeys.Alt, Keys.Right);
@@ -205,6 +210,7 @@ namespace AppRefiner
             registeredShortcuts["LintCode"] = (AppRefiner.ModifierKeys.Control | AppRefiner.ModifierKeys.Alt, Keys.L);
             registeredShortcuts["CommandPalette"] = (AppRefiner.ModifierKeys.Control | AppRefiner.ModifierKeys.Shift, Keys.P);
             registeredShortcuts["ApplyTemplate"] = (AppRefiner.ModifierKeys.Control | AppRefiner.ModifierKeys.Alt, Keys.T);
+            registeredShortcuts["SuperGoTo"] = (AppRefiner.ModifierKeys.Control | AppRefiner.ModifierKeys.Alt, Keys.G);
 
             RegisterRefactorShortcuts();
             
@@ -2113,6 +2119,17 @@ namespace AppRefiner
                 () => activeEditor != null
             ));
 
+            AvailableCommands.Add(new Command(
+                "Navigation: Go To Definition",
+                "\"Navigate to methods, properties, functions, getters, and setters within the current file\"",
+                () =>
+                {
+                    // No action needed
+                    SuperGoToCommand();
+                },
+                () => activeEditor != null
+            ));
+
             // Git
             // Add Git Revert to Previous Version command
             AvailableCommands.Add(new Command(
@@ -2701,6 +2718,82 @@ namespace AppRefiner
             });
             Application.DoEvents();
         }
+
+        public void SuperGoToCommand()
+        {
+            if (activeEditor == null) return;
+
+            try
+            {
+                // Parse the content using the parser
+                var definitions = CollectGoToDefinitions();
+
+                if (definitions.Count == 0)
+                {
+                    Debug.Log("No definitions found in the file");
+                    return;
+                }
+
+                // Create and show the definition selection dialog
+                IntPtr mainHandle = Process.GetProcessById((int)activeEditor.ProcessId).MainWindowHandle;
+
+                 ShowGoToDefinitionDialog(definitions, mainHandle);
+               
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError($"Error in GoToDefinitionCommand: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Shows the definition selection dialog
+        /// </summary>
+        private void ShowGoToDefinitionDialog(List<CodeDefinition> definitions, IntPtr mainHandle)
+        {
+            var handleWrapper = new WindowWrapper(mainHandle);
+            var dialog = new DefinitionSelectionDialog(definitions, mainHandle);
+
+            DialogResult result = dialog.ShowDialog(handleWrapper);
+
+            if (result == DialogResult.OK)
+            {
+                CodeDefinition? selectedDefinition = dialog.SelectedDefinition;
+                if (activeEditor != null && selectedDefinition != null)
+                {
+                    // Navigate to the selected definition
+                    ScintillaManager.SetCursorPosition(activeEditor, selectedDefinition.Position);
+
+                    /* Get line from position and make that line the first visible line */
+                    var lineNumber = ScintillaManager.GetLineFromPosition(activeEditor, selectedDefinition.Position);
+                    ScintillaManager.SetFirstVisibleLine(activeEditor, lineNumber);
+                    var startIndex = ScintillaManager.GetLineStartIndex(activeEditor, lineNumber);
+                    var length = ScintillaManager.GetLineLength(activeEditor, lineNumber);
+                    ScintillaManager.SetSelection(activeEditor, startIndex, startIndex + length);
+
+                }
+            }
+        }
+
+        /// <summary>
+        /// Collects all definitions from the editor using the ANTLR parser
+        /// </summary>
+        /// <param name="editor">The editor to collect definitions from</param>
+        /// <returns>A list of code definitions</returns>
+        private List<CodeDefinition> CollectGoToDefinitions()
+        {
+            if (activeEditor == null) return [];
+
+            // Use the parse tree from the editor if available, otherwise parse it now
+            var (program, tokenStream, comments) = activeEditor.GetParsedProgram();
+
+            // Create and run the visitor to collect definitions
+            var visitor = new DefinitionVisitor();
+            ParseTreeWalker.Default.Walk(visitor, program);
+
+            return visitor.Definitions;
+        }
+
 
         private void ApplyTemplateCommand()
         {

@@ -73,6 +73,7 @@ namespace AppRefiner
         private const int SCI_FOLDLINE = 2237;
         private const int SCI_GETCURRENTPOS = 2008;
         private const int SCI_LINEFROMPOSITION = 2166;
+        private const int SCI_LINELENGTH = 2350;
         private const int SCI_POSITIONFROMLINE = 2167;
         private const int SCI_GETFOLDLEVEL = 2223;
         private const int SCI_STYLECLEARALL = 2050;
@@ -1556,6 +1557,13 @@ namespace AppRefiner
             }
         }
 
+        /* Method to get line number from position */
+        public static int GetLineFromPosition(ScintillaEditor editor, int position)
+        {
+            if (editor == null) return -1;
+            return (int)editor.SendMessage(SCI_LINEFROMPOSITION, position, IntPtr.Zero);
+        }
+
         /// <summary>
         /// Gets the start index of the previous line.
         /// </summary>
@@ -1950,6 +1958,12 @@ namespace AppRefiner
                 Debug.Log($"Error reading UTF-8 from memory: {ex.Message}");
                 return null;
             }
+        }
+
+        internal static int GetLineLength(ScintillaEditor activeEditor, int lineNumber)
+        {
+            if (activeEditor == null) return 0;
+            return (int)activeEditor.SendMessage(SCI_LINELENGTH, lineNumber, IntPtr.Zero);
         }
     }
 
