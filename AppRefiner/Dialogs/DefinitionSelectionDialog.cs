@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Windows.Forms;
-using AppRefiner.Commands;
+using System.Linq;
 
 namespace AppRefiner.Dialogs
 {
@@ -14,37 +14,38 @@ namespace AppRefiner.Dialogs
         private readonly Panel headerPanel;
         private readonly Label headerLabel;
         private readonly TextBox searchBox;
-        private readonly ListView definitionsListView;
-        private readonly List<CodeDefinition> allDefinitions;
-        private List<CodeDefinition> filteredDefinitions;
-        private CodeDefinition? selectedDefinition;
+        private readonly TreeView definitionsTreeView;
+        private readonly List<GoToCodeDefinition> allDefinitions;
+        private List<GoToCodeDefinition> filteredDefinitions;
+        private GoToCodeDefinition? selectedDefinition;
         private readonly IntPtr owner;
         private DialogHelper.ModalDialogMouseHandler? mouseHandler;
+        private bool groupingEnabled = true;
 
         /// <summary>
         /// Gets the selected definition after dialog closes
         /// </summary>
-        public CodeDefinition? SelectedDefinition => selectedDefinition;
+        public GoToCodeDefinition? SelectedDefinition => selectedDefinition;
 
         /// <summary>
         /// Initializes a new instance of DefinitionSelectionDialog with a list of code definitions
         /// </summary>
         /// <param name="definitions">The list of code definitions to display</param>
         /// <param name="owner">The owner window handle</param>
-        public DefinitionSelectionDialog(List<CodeDefinition> definitions, IntPtr owner)
+        public DefinitionSelectionDialog(List<GoToCodeDefinition> definitions, IntPtr owner)
         {
             this.owner = owner;
             allDefinitions = definitions;
-            filteredDefinitions = new List<CodeDefinition>(allDefinitions);
+            filteredDefinitions = new List<GoToCodeDefinition>(allDefinitions);
             
             this.headerPanel = new Panel();
             this.headerLabel = new Label();
             this.searchBox = new TextBox();
-            this.definitionsListView = new ListView();
+            this.definitionsTreeView = new TreeView();
             
             InitializeComponent();
             ConfigureForm();
-            PopulateDefinitionsList();
+            PopulateDefinitionsTree();
         }
 
         private void InitializeComponent()
@@ -77,25 +78,24 @@ namespace AppRefiner.Dialogs
             this.searchBox.TextChanged += new EventHandler(this.SearchBox_TextChanged);
             this.searchBox.KeyDown += new KeyEventHandler(this.SearchBox_KeyDown);
 
-            // definitionsListView
-            this.definitionsListView.BorderStyle = BorderStyle.None;
-            this.definitionsListView.Dock = DockStyle.Fill;
-            this.definitionsListView.Font = new Font("Segoe UI", 10F, FontStyle.Regular, GraphicsUnit.Point);
-            this.definitionsListView.FullRowSelect = true;
-            this.definitionsListView.HeaderStyle = ColumnHeaderStyle.None;
-            this.definitionsListView.HideSelection = false;
-            this.definitionsListView.Location = new Point(0, 32);
-            this.definitionsListView.Name = "definitionsListView";
-            this.definitionsListView.Size = new Size(550, 318);
-            this.definitionsListView.TabIndex = 1;
-            this.definitionsListView.UseCompatibleStateImageBehavior = false;
-            this.definitionsListView.View = View.Tile;
-            this.definitionsListView.MouseDoubleClick += new MouseEventHandler(this.DefinitionsListView_MouseDoubleClick);
-            this.definitionsListView.KeyDown += new KeyEventHandler(this.DefinitionsListView_KeyDown);
+            // definitionsTreeView
+            this.definitionsTreeView.BorderStyle = BorderStyle.None;
+            this.definitionsTreeView.Dock = DockStyle.Fill;
+            this.definitionsTreeView.Font = new Font("Segoe UI", 10F, FontStyle.Regular, GraphicsUnit.Point);
+            this.definitionsTreeView.Location = new Point(0, 32);
+            this.definitionsTreeView.Name = "definitionsTreeView";
+            this.definitionsTreeView.Size = new Size(550, 318);
+            this.definitionsTreeView.TabIndex = 1;
+            this.definitionsTreeView.ShowNodeToolTips = true;
+            this.definitionsTreeView.HideSelection = false;
+            this.definitionsTreeView.ItemHeight = 24;
+            this.definitionsTreeView.DoubleClick += new EventHandler(this.DefinitionsTreeView_DoubleClick);
+            this.definitionsTreeView.KeyDown += new KeyEventHandler(this.DefinitionsTreeView_KeyDown);
+            this.definitionsTreeView.AfterSelect += new TreeViewEventHandler(this.DefinitionsTreeView_AfterSelect);
 
             // DefinitionSelectionDialog
             this.ClientSize = new Size(550, 380);
-            this.Controls.Add(this.definitionsListView);
+            this.Controls.Add(this.definitionsTreeView);
             this.Controls.Add(this.searchBox);
             this.Controls.Add(this.headerPanel);
             this.FormBorderStyle = FormBorderStyle.None;
@@ -109,9 +109,6 @@ namespace AppRefiner.Dialogs
             // Add a 1-pixel border to make the dialog visually distinct
             this.Padding = new Padding(1);
             
-            // Add resize event handler to update tile size when form is resized
-            this.Resize += new EventHandler(this.DefinitionSelectionDialog_Resize);
-            
             this.headerPanel.ResumeLayout(false);
             this.ResumeLayout(false);
             this.PerformLayout();
@@ -119,37 +116,125 @@ namespace AppRefiner.Dialogs
 
         private void ConfigureForm()
         {
-            // Change the view to TileView to show both title and description
-            definitionsListView.View = View.Tile;
-            definitionsListView.TileSize = new Size(definitionsListView.Width - 25, 50);
-
-            // Configure the list view for title and description
-            definitionsListView.Columns.Add("Name", 250);
-            definitionsListView.Columns.Add("Description", 250);
-
-            // Show item tooltips
-            definitionsListView.ShowItemToolTips = true;
+            // Configure the tree view for better visualization
+            definitionsTreeView.ShowLines = true;
+            definitionsTreeView.ShowPlusMinus = true;
+            definitionsTreeView.ShowRootLines = true;
+            definitionsTreeView.FullRowSelect = true;
+            
+            // Add context menu for toggling grouping
+            var contextMenu = new ContextMenuStrip();
+            var toggleGroupingItem = new ToolStripMenuItem("Toggle Grouping");
+            toggleGroupingItem.Click += (s, e) => {
+                groupingEnabled = !groupingEnabled;
+                PopulateDefinitionsTree();
+            };
+            contextMenu.Items.Add(toggleGroupingItem);
+            definitionsTreeView.ContextMenuStrip = contextMenu;
         }
 
-        private void PopulateDefinitionsList()
+        private void PopulateDefinitionsTree()
         {
-            definitionsListView.Items.Clear();
+            definitionsTreeView.BeginUpdate();
+            definitionsTreeView.Nodes.Clear();
 
-            foreach (var definition in filteredDefinitions)
+            if (groupingEnabled)
             {
-                var item = new ListViewItem(definition.DisplayText);
-                item.SubItems.Add(definition.Description);
-                item.Tag = definition;
+                // Group by definition type
+                var methodsNode = new TreeNode("Methods");
+                var propertiesNode = new TreeNode("Properties");
+                var functionsNode = new TreeNode("Functions");
+                var instanceVariablesNode = new TreeNode("Instance Variables");
 
-                // Add tooltip with description
-                item.ToolTipText = definition.Description;
+                // For methods, further group by scope
+                var publicMethodsNode = new TreeNode("Public");
+                var protectedMethodsNode = new TreeNode("Protected");
+                var privateMethodsNode = new TreeNode("Private");
+                methodsNode.Nodes.Add(publicMethodsNode);
+                methodsNode.Nodes.Add(protectedMethodsNode);
+                methodsNode.Nodes.Add(privateMethodsNode);
 
-                definitionsListView.Items.Add(item);
+                foreach (var definition in filteredDefinitions)
+                {
+                    var node = new TreeNode(definition.DisplayText);
+                    node.Tag = definition;
+                    node.ToolTipText = definition.Description;
+
+                    switch (definition.DefinitionType)
+                    {
+                        case GoToDefinitionType.Method:
+                            switch (definition.Scope)
+                            {
+                                case GoToDefinitionScope.Public:
+                                    publicMethodsNode.Nodes.Add(node);
+                                    break;
+                                case GoToDefinitionScope.Protected:
+                                    protectedMethodsNode.Nodes.Add(node);
+                                    break;
+                                case GoToDefinitionScope.Private:
+                                    privateMethodsNode.Nodes.Add(node);
+                                    break;
+                                default:
+                                    methodsNode.Nodes.Add(node);
+                                    break;
+                            }
+                            break;
+                        case GoToDefinitionType.Property:
+                            propertiesNode.Nodes.Add(node);
+                            break;
+                        case GoToDefinitionType.Function:
+                            functionsNode.Nodes.Add(node);
+                            break;
+                        case GoToDefinitionType.Getter:
+                        case GoToDefinitionType.Setter:
+                        default:
+                            instanceVariablesNode.Nodes.Add(node);
+                            break;
+                    }
+                }
+
+                // Only add nodes that have children
+                if (publicMethodsNode.Nodes.Count > 0 || protectedMethodsNode.Nodes.Count > 0 || privateMethodsNode.Nodes.Count > 0)
+                {
+                    definitionsTreeView.Nodes.Add(methodsNode);
+                }
+                if (propertiesNode.Nodes.Count > 0) definitionsTreeView.Nodes.Add(propertiesNode);
+                if (functionsNode.Nodes.Count > 0) definitionsTreeView.Nodes.Add(functionsNode);
+                if (instanceVariablesNode.Nodes.Count > 0) definitionsTreeView.Nodes.Add(instanceVariablesNode);
+
+                // Expand all nodes initially
+                definitionsTreeView.ExpandAll();
+            }
+            else
+            {
+                // Flat list without grouping
+                foreach (var definition in filteredDefinitions)
+                {
+                    var node = new TreeNode(definition.DisplayText);
+                    node.Tag = definition;
+                    node.ToolTipText = definition.Description;
+                    definitionsTreeView.Nodes.Add(node);
+                }
             }
 
-            if (definitionsListView.Items.Count > 0)
+            definitionsTreeView.EndUpdate();
+
+            // Select first node if available
+            if (definitionsTreeView.Nodes.Count > 0)
             {
-                definitionsListView.Items[0].Selected = true;
+                SelectFirstLeafNode(definitionsTreeView.Nodes[0]);
+            }
+        }
+
+        private void SelectFirstLeafNode(TreeNode node)
+        {
+            if (node.Nodes.Count > 0)
+            {
+                SelectFirstLeafNode(node.Nodes[0]);
+            }
+            else
+            {
+                definitionsTreeView.SelectedNode = node;
             }
         }
 
@@ -157,7 +242,7 @@ namespace AppRefiner.Dialogs
         {
             if (string.IsNullOrWhiteSpace(filter))
             {
-                filteredDefinitions = new List<CodeDefinition>(allDefinitions);
+                filteredDefinitions = new List<GoToCodeDefinition>(allDefinitions);
             }
             else
             {
@@ -170,13 +255,7 @@ namespace AppRefiner.Dialogs
                     .ToList();
             }
 
-            PopulateDefinitionsList();
-
-            if (definitionsListView.Items.Count > 0)
-            {
-                definitionsListView.Items[0].Selected = true;
-                definitionsListView.EnsureVisible(0);
-            }
+            PopulateDefinitionsTree();
 
             // Ensure focus stays in the search box
             searchBox.Focus();
@@ -191,36 +270,7 @@ namespace AppRefiner.Dialogs
         {
             if (e.KeyCode == Keys.Down)
             {
-                if (definitionsListView.Items.Count > 0)
-                {
-                    int index = 0;
-                    if (definitionsListView.SelectedIndices.Count > 0)
-                    {
-                        index = definitionsListView.SelectedIndices[0] + 1;
-                        if (index >= definitionsListView.Items.Count)
-                            index = 0;
-                    }
-                    definitionsListView.SelectedIndices.Clear();
-                    definitionsListView.Items[index].Selected = true;
-                    definitionsListView.EnsureVisible(index);
-                }
-                e.Handled = true;
-            }
-            else if (e.KeyCode == Keys.Up)
-            {
-                if (definitionsListView.Items.Count > 0)
-                {
-                    int index = definitionsListView.Items.Count - 1;
-                    if (definitionsListView.SelectedIndices.Count > 0)
-                    {
-                        index = definitionsListView.SelectedIndices[0] - 1;
-                        if (index < 0)
-                            index = definitionsListView.Items.Count - 1;
-                    }
-                    definitionsListView.SelectedIndices.Clear();
-                    definitionsListView.Items[index].Selected = true;
-                    definitionsListView.EnsureVisible(index);
-                }
+                definitionsTreeView.Focus();
                 e.Handled = true;
             }
             else if (e.KeyCode == Keys.Enter)
@@ -236,12 +286,12 @@ namespace AppRefiner.Dialogs
             }
         }
 
-        private void DefinitionsListView_MouseDoubleClick(object? sender, MouseEventArgs e)
+        private void DefinitionsTreeView_DoubleClick(object? sender, EventArgs e)
         {
             SelectDefinition();
         }
 
-        private void DefinitionsListView_KeyDown(object? sender, KeyEventArgs e)
+        private void DefinitionsTreeView_KeyDown(object? sender, KeyEventArgs e)
         {
             if (e.KeyCode == Keys.Enter)
             {
@@ -262,18 +312,26 @@ namespace AppRefiner.Dialogs
             }
         }
 
+        private void DefinitionsTreeView_AfterSelect(object? sender, TreeViewEventArgs e)
+        {
+            // If we selected a category node, expand/collapse it
+            if (e.Node.Tag == null && e.Action == TreeViewAction.ByMouse)
+            {
+                if (e.Node.IsExpanded)
+                    e.Node.Collapse();
+                else
+                    e.Node.Expand();
+            }
+        }
+
         private void SelectDefinition()
         {
-            if (definitionsListView.SelectedItems.Count > 0)
+            if (definitionsTreeView.SelectedNode != null && definitionsTreeView.SelectedNode.Tag is GoToCodeDefinition definition)
             {
-                selectedDefinition = (CodeDefinition?)definitionsListView.SelectedItems[0].Tag;
-                
-                if (selectedDefinition != null)
-                {
-                    this.DialogResult = DialogResult.OK;
-                    this.Hide();
-                    this.Close();
-                }
+                selectedDefinition = definition;
+                this.DialogResult = DialogResult.OK;
+                this.Hide();
+                this.Close();
             }
         }
 
@@ -320,12 +378,6 @@ namespace AppRefiner.Dialogs
             {
                 mouseHandler = new DialogHelper.ModalDialogMouseHandler(this, headerPanel, owner);
             }
-        }
-
-        private void DefinitionSelectionDialog_Resize(object? sender, EventArgs e)
-        {
-            // Update tile size when form is resized to prevent horizontal scrolling
-            definitionsListView.TileSize = new Size(definitionsListView.Width - 25, 50);
         }
 
         protected override void OnFormClosed(FormClosedEventArgs e)
