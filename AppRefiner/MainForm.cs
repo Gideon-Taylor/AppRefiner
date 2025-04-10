@@ -3502,7 +3502,15 @@ namespace AppRefiner
                     if (editorToSave != null && editorToSave.IsValid())
                     {
                         Debug.Log($"Processing debounced SAVEPOINTREACHED for {editorToSave.RelativePath}");
-                        
+                        lock (ScintillaManager.editorsExpectingSavePoint)
+                        {
+                            if (ScintillaManager.editorsExpectingSavePoint.Contains(editorToSave.hWnd))
+                            {
+                                // Remove the editor from the list of expecting save points
+                                ScintillaManager.editorsExpectingSavePoint.Remove(editorToSave.hWnd);
+                                return;
+                            }
+                        }
                         // Reset editor state
                         editorToSave.LastContentHash = 0;
                         editorToSave.ContentString = null;

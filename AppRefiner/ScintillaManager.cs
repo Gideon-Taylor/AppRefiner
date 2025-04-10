@@ -231,6 +231,8 @@ namespace AppRefiner
         private static Dictionary<uint, bool> hasLexilla = new();
         private static HashSet<uint> ProcessesWithDarkMode = new();
 
+        public static HashSet<IntPtr> editorsExpectingSavePoint = new();
+
         private const int ANNOTATION_STYLE_OFFSET = 0x100; // Lower, more standard offset value
         private const int BASE_ANNOT_STYLE = ANNOTATION_STYLE_OFFSET;
         private const int ANNOT_STYLE_GRAY = BASE_ANNOT_STYLE;
@@ -1121,6 +1123,7 @@ namespace AppRefiner
             }
             editor.ContentString = formatted;
             SetScintillaText(editor, formatted);
+            editorsExpectingSavePoint.Add(editor.hWnd);
             editor.SendMessage(SCI_SETSAVEPOINT, 0, 0);
 
 
