@@ -95,6 +95,11 @@ namespace AppRefiner.Refactors
             // Trim trailing newlines to prevent accumulation of blank lines
             string imports = newImports.ToString().TrimEnd();
 
+            if (importsBlockContext?.importDeclaration().Length == 0)
+            {
+                imports += "\r\n\r\n";
+            }
+
             if (importsBlockContext != null)
             {
                 // Replace the existing imports block

@@ -126,6 +126,12 @@ namespace AppRefiner.Refactors
             // Generate the new imports block text, joined by newlines
             string newImportsBlockText = string.Join(Environment.NewLine, allImportStatements);
 
+            if (_importsBlockContext?.importDeclaration().Length == 0)
+            {
+                newImportsBlockText += "\r\n\r\n";
+            }
+
+
             // Apply the change: Replace existing block or insert new one
             if (_importsBlockContext != null)
             {
