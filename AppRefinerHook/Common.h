@@ -30,6 +30,7 @@
 #define WM_SCN_SAVEPOINT_REACHED WM_SCN(SCN_SAVEPOINTREACHED)
 #define WM_AR_APP_PACKAGE_SUGGEST 2500 // New message for app package auto-suggest when colon is typed
 #define WM_AR_CREATE_SHORTHAND 2501 // New message for create shorthand when user types "create("
+#define WM_AR_TYPING_PAUSE 2502 // New message for typing pause detection
 #define WM_SCN_USERLIST_SELECTION WM_SCN(SCN_USERLISTSELECTION) // User list selection notification
 
 // Global variables (defined in HookManager.cpp)

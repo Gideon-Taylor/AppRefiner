@@ -82,10 +82,6 @@ namespace AppRefiner
         // Keep reference to delegate to prevent garbage collection
         private WinEventDelegate winEventDelegate;
 
-        System.Threading.Timer? scanTimer;
-        private bool timerRunning = false;
-        private bool timerProcessing = false;
-        private readonly object timerLock = new object();
         private ScintillaEditor? activeEditor = null;
 
         /// <summary>
@@ -134,6 +130,7 @@ namespace AppRefiner
         private const int SCN_SAVEPOINTREACHED = 2002;
         private const int AR_APP_PACKAGE_SUGGEST = 2500; // New constant for app package suggest
         private const int AR_CREATE_SHORTHAND = 2501; // New constant for create shorthand detection
+        private const int AR_TYPING_PAUSE = 2502; // New constant for typing pause detection
         private const int SCN_USERLISTSELECTION = 2014; // User list selection notification
         private const int SCI_REPLACESEL = 0x2170; // Constant for SCI_REPLACESEL
 
@@ -168,8 +165,9 @@ namespace AppRefiner
             LoadStylerStates();
             LoadTooltipStates();
             LoadTemplates();
-            scanTimer = new System.Threading.Timer(ScanTick, null, 0, 1000);
-            timerRunning = true;
+            // We no longer need to start the scanning timer since we now process editors:
+            // 1. When they receive focus via WinEvent 
+            // 2. When typing pauses are detected via AR_TYPING_PAUSE messages
             RegisterCommands();
             // Initialize the tooltip providers
             TooltipManager.Initialize();
@@ -336,6 +334,10 @@ namespace AppRefiner
                 UnhookWinEvent(winEventHook);
                 winEventHook = IntPtr.Zero;
             }
+            
+            // Dispose the savepoint debounce timer if it exists
+            savepointDebounceTimer?.Dispose();
+            savepointDebounceTimer = null;
             
             SaveSettings();
         }
@@ -2078,8 +2080,6 @@ namespace AppRefiner
                 {
                     if (activeEditor != null)
                     {
-                        // Reset the content hash to match so we don't process it next tick.
-                        activeEditor.LastContentHash = 0;
                         // Clear content string to force re-reading
                         activeEditor.ContentString = null;
                         // Clear annotations
@@ -2088,6 +2088,7 @@ namespace AppRefiner
                         ScintillaManager.ResetStyles(activeEditor);
                         // Update status
                         lblStatus.Text = "Force refreshing editor...";
+                        CheckForContentChanges(activeEditor);
                     }
                 }
             ));
@@ -2469,8 +2470,6 @@ namespace AppRefiner
                 // Check if this is the same editor we already have
                 if (activeEditor != null && activeEditor.hWnd == hwnd)
                 {
-                    // Check if content has changed
-                    CheckForContentChanges(activeEditor);
                     // Same editor as before - just return it
                     return activeEditor;
                 }
@@ -2480,15 +2479,6 @@ namespace AppRefiner
                 {
                     var editor = ScintillaManager.GetEditor(hwnd);
                     activeEditor = editor;
-
-                    if (!editor.FoldEnabled)
-                    {
-                        ProcessNewEditor(editor);
-                    }else
-                    {
-                        // Check if content has changed
-                        CheckForContentChanges(editor);
-                    }
                     
                     return editor;
                 }
@@ -2512,14 +2502,7 @@ namespace AppRefiner
             
             // Check if editor is in a clean state before processing
             if (ScintillaManager.IsEditorClean(editor) || true)
-            {
-                // compare content hash to see if things have changed
-                var contentHash = ScintillaManager.GetContentHash(editor);
-                if (contentHash == editor.LastContentHash)
-                {
-                    return;
-                }
-                
+            {                
                 if (chkBetterSQL.Checked && editor.Type == EditorType.SQL)
                 {
                     ScintillaManager.ApplyBetterSQL(editor);
@@ -2545,8 +2528,6 @@ namespace AppRefiner
                     // 3. if its an editor type we don't know
                     DoExplicitFolding();
                 }
-                
-                editor.LastContentHash = contentHash;
             }
         }
 
@@ -2637,57 +2618,23 @@ namespace AppRefiner
                 // Process create shorthand at the current position
                 HandleCreateShorthand(activeEditor, position, autoPairingEnabled);
             }
-        }
-
-        private void ScanTick(object? state)
-        {
-            lock (timerLock)
+            else if (m.Msg == AR_TYPING_PAUSE)
             {
-                // If we're already processing a timer callback, don't process another one
-                if (timerProcessing) return;
+                /* Handle typing pause detection */
+                int position = m.WParam.ToInt32();
+                int line = m.LParam.ToInt32();
                 
-                // Set the processing flag to prevent reentrance
-                timerProcessing = true;
-            }
-            
-            try
-            {
-                // Even with WinEvents, we still need to periodically check for content changes
-                // in the active editor (like when a user makes changes)
-                // This is now a lightweight operation that only checks the current editor's content
-                if (activeEditor != null)
+                Debug.Log($"Received typing pause message. Position: {position}, Line: {line}");
+                
+                // Only process if we have an active editor
+                if (activeEditor != null && activeEditor.IsValid())
                 {
-                    // Validate the editor is still valid
-                    if (activeEditor.IsValid())
-                    {
-                        // Check for content changes in the current editor
-                        CheckForContentChanges(activeEditor);
-                    }
-                    else
-                    {
-                        // Editor is no longer valid, clean it up
-                        ScintillaManager.CleanupEditor(activeEditor);
-                        activeEditor = null;
-                        DisableUIActions();
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                Debug.Log($"Exception in ScanTick: {ex.Message}");
-            }
-            finally
-            {
-                lock (timerLock)
-                {
-                    // Clear the processing flag
-                    timerProcessing = false;
+                    // Log the typing pause event
+                    Debug.Log($"User stopped typing at position {position}, line {line}");
                     
-                    // Only reschedule the timer if we're still supposed to be running
-                    if (timerRunning)
-                    {
-                        scanTimer?.Change(1000, Timeout.Infinite);
-                    }
+                    // Process the editor content now that typing has paused
+                    // This replaces the periodic scanning from the timer
+                    CheckForContentChanges(activeEditor);
                 }
             }
         }
@@ -2930,10 +2877,6 @@ namespace AppRefiner
                 if (activeEditor != null && hwnd != activeEditor.hWnd && !activeEditor.IsValid())
                 {
                     Debug.Log("Active editor has lost focus and isn't valid anymore.");
-                    lock (timerLock)
-                    {
-                        timerRunning = false;
-                    }
                     activeEditor = null;
                     Stylers.InvalidAppClass.ClearValidAppClassPathsCache();
                 }
@@ -2957,13 +2900,16 @@ namespace AppRefiner
                             // Use SetActiveEditor to properly handle the window
                             SetActiveEditor(hwnd);
 
-                            /* Start the content update timer */
-                            lock (timerLock)
+                            if (activeEditor != null && activeEditor.IsValid())
                             {
-                                if (!timerRunning)
+                                if (!activeEditor.FoldEnabled)
                                 {
-                                    timerRunning = true;
-                                    scanTimer = new System.Threading.Timer(ScanTick, null, 1000, Timeout.Infinite);
+                                    ProcessNewEditor(activeEditor);
+                                }
+                                else
+                                {
+                                    // Check if content has changed
+                                    CheckForContentChanges(activeEditor);
                                 }
                             }
                         }));
@@ -3046,76 +2992,6 @@ namespace AppRefiner
 
         }
 
-        private void InitializeGitRepository()
-        {
-            if (activeEditor == null) return;
-            try
-            {
-                // Get the main handle to set as parent for the dialog
-                var mainHandle = Process.GetProcessById((int)activeEditor.ProcessId).MainWindowHandle;
-                var handleWrapper = new WindowWrapper(mainHandle);
-
-                // Create the dialog
-                var dialog = new InitGitRepositoryDialog();
-
-                // Make sure we show the dialog on the UI thread
-                if (InvokeRequired)
-                {
-                    Invoke(() => ShowInitGitDialog(dialog, handleWrapper));
-                }
-                else
-                {
-                    ShowInitGitDialog(dialog, handleWrapper);
-                }
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show(
-                    $"Error initializing Git repository: {ex.Message}",
-                    "Error",
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Error
-                );
-            }
-        }
-
-        private void ShowInitGitDialog(InitGitRepositoryDialog dialog, WindowWrapper handleWrapper)
-        {
-            // Show the dialog and wait for result
-            if (dialog.ShowDialog(handleWrapper) == DialogResult.OK)
-            {
-                string repositoryPath = dialog.RepositoryPath;
-
-                // Try to initialize the repository
-                bool success = Git.GitRepositoryManager.InitializeRepository(repositoryPath);
-                if (success)
-                {
-                    // Save the path to settings
-                    Properties.Settings.Default.GitRepositoryPath = repositoryPath;
-                    Properties.Settings.Default.Save();
-                    
-                    // Initialize the GitRepositoryManager
-                    gitRepositoryManager = new Git.GitRepositoryManager(repositoryPath);
-
-                    MessageBox.Show(
-                        $"Git repository successfully initialized at {repositoryPath}",
-                        "Repository Initialized",
-                        MessageBoxButtons.OK,
-                        MessageBoxIcon.Information
-                    );
-                }
-                else
-                {
-                    MessageBox.Show(
-                        $"Failed to initialize Git repository at {repositoryPath}",
-                        "Repository Initialization Failed",
-                        MessageBoxButtons.OK,
-                        MessageBoxIcon.Error
-                    );
-                }
-            }
-        }
-
         private void ConnectToDB()
         {
             if (activeEditor == null) return;
@@ -3138,15 +3014,6 @@ namespace AppRefiner
             }
         }
 
-        private void DisconnectFromDB()
-        {
-            if (activeEditor != null && activeEditor.DataManager != null)
-            {
-                activeEditor.DataManager.Disconnect();
-                processDataManagers.Remove(activeEditor.ProcessId);
-                activeEditor.DataManager = null;
-            }
-        }
 
         /// <summary>
         /// Populates the DBName property of a ScintillaEditor based on its context
@@ -3403,47 +3270,6 @@ namespace AppRefiner
         }
 
         /// <summary>
-        /// Saves the editor content to the Git repository and creates a commit if the file has changed
-        /// </summary>
-        /// <param name="editor">The editor to save content from</param>
-        private void SaveEditorContentToGit(ScintillaEditor editor)
-        {
-            // Check if we have a valid Git repository manager and the editor has a relative path
-            if (string.IsNullOrEmpty(editor.RelativePath))
-            {
-                return;
-            }
-            
-            try
-            {
-                // Initialize Git repository manager if needed
-                if (gitRepositoryManager == null)
-                {
-                    gitRepositoryManager = Git.GitRepositoryManager.CreateFromSettings();
-                    if (gitRepositoryManager == null)
-                    {
-                        return;
-                    }
-                }
-                
-                // Get the content from the editor
-                string? content = ScintillaManager.GetScintillaText(editor);
-                if (string.IsNullOrEmpty(content))
-                {
-                    Debug.Log($"No content to save for editor: {editor.hWnd:X}");
-                    return;
-                }
-                
-                // Save and commit the content
-                gitRepositoryManager.SaveAndCommitEditorContent(editor, content);
-            }
-            catch (Exception ex)
-            {
-                Debug.Log($"Error saving editor content to Git: {ex.Message}");
-            }
-        }
-
-        /// <summary>
         /// Saves the content of the editor to the Git repository
         /// </summary>
         /// <param name="editor">The editor to save content from</param>
@@ -3520,7 +3346,6 @@ namespace AppRefiner
                             }
                         }
                         // Reset editor state
-                        editorToSave.LastContentHash = 0;
                         editorToSave.ContentString = null;
                         
                         // Clear annotations and reset styles

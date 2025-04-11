@@ -1003,13 +1003,6 @@ namespace AppRefiner
             return editor.SendMessage(SCI_GETMODIFY, 0, 0) == 0;
         }
 
-        internal static int GetContentHash(ScintillaEditor editor)
-        {
-            /* make crc32 hash of content string */
-            var content = GetScintillaText(editor);
-            editor.ContentString = content;
-            return content != null ? GetContentHashFromString(content) : 0;
-        }
 
         internal static int GetContentHashFromString(string content)
         {
@@ -1131,7 +1124,6 @@ namespace AppRefiner
 
 
             /* update local content hash */
-            editor.LastContentHash = GetContentHashFromString(formatted);
         }
 
         internal static void ApplySquiggles(ScintillaEditor editor)
@@ -2097,7 +2089,6 @@ namespace AppRefiner
         // Collection of comments from the token stream
         private List<IToken>? comments;
 
-        public int LastContentHash { get; set; }
         public string? ContentString = null;
         public bool AnnotationsInitialized { get; set; } = false;
         public bool IsDarkMode { get; set; } = false;
@@ -2140,14 +2131,11 @@ namespace AppRefiner
         public (PeopleCodeParser.ProgramContext Program, CommonTokenStream TokenStream, List<IToken> Comments) GetParsedProgram(bool forceReparse = false)
         {
             // Ensure we have the current content
-            if (ContentString == null)
-            {
-                ContentString = ScintillaManager.GetScintillaText(this);
-            }
+            ContentString = ScintillaManager.GetScintillaText(this);
 
             // Calculate hash of current content
             int newHash = ContentString?.GetHashCode() ?? 0;
-
+            Debug.Log("New content hash: " + newHash);
             // If content hasn't changed and we have a cached parse tree, return it
             if (!forceReparse && newHash == contentHash && parsedProgram != null && tokenStream != null && comments != null)
             {

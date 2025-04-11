@@ -3,6 +3,7 @@
 #include "Common.h"
 #include "AutoPairing.h"
 #include "AutoIndent.h"
+#include "EditorManager.h"
 
 // Type definition for hook procedure
 typedef LRESULT (CALLBACK *HookProc)(int nCode, WPARAM wParam, LPARAM lParam);

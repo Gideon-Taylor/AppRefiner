@@ -148,6 +148,7 @@
     <ClInclude Include="AutoIndent.h" />
     <ClInclude Include="AutoPairing.h" />
     <ClInclude Include="Common.h" />
+    <ClInclude Include="EditorManager.h" />
     <ClInclude Include="HookManager.h" />
     <ClInclude Include="Scintilla.h" />
     <ClInclude Include="Sci_position.h" />
@@ -156,6 +157,7 @@
   <ItemGroup>
     <ClCompile Include="AutoIndent.cpp" />
     <ClCompile Include="AutoPairing.cpp" />
+    <ClCompile Include="EditorManager.cpp" />
     <ClCompile Include="dllmain.cpp" />
     <ClCompile Include="HookManager.cpp" />
     <ClCompile Include="ScintillaUtils.cpp" />

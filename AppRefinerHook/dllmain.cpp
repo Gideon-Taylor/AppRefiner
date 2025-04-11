@@ -3,6 +3,7 @@
 #include "AutoPairing.h"
 #include "AutoIndent.h"
 #include "HookManager.h"
+#include "EditorManager.h"
 
 // DLL entry point
 BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserved) {
@@ -12,6 +13,10 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserv
         g_hModule = hModule;
         // Optimize DLL loading by disabling thread attach/detach notifications
         DisableThreadLibraryCalls(hModule);
+
+        // Initialize the EditorManager
+        EditorManager::Initialize();
+        OutputDebugStringA("EditorManager initialized");
 
         // Keep a reference to the DLL to prevent unloading
         if (g_dllSelfReference == NULL && g_hModule != NULL) {
@@ -37,6 +42,10 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserv
             UnhookWindowsHookEx(g_getMsgHook);
             g_getMsgHook = NULL;
         }
+        
+        // Clean up EditorManager
+        EditorManager::Cleanup();
+        OutputDebugStringA("EditorManager cleaned up");
         
         // Release the self-reference if one exists
         if (g_dllSelfReference != NULL) {

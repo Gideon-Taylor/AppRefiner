@@ -15,6 +15,15 @@ void HandleScintillaNotification(HWND hwnd, SCNotification* scn, HWND callbackWi
     if (!scn || !hwnd || !IsWindow(hwnd)) return;
     
     try {
+        // Handle typing events for EditorManager
+        if (scn->nmhdr.code == SCN_CHARADDED || 
+            (scn->nmhdr.code == SCN_MODIFIED && 
+             ((scn->modificationType & SC_MOD_INSERTTEXT) || 
+              (scn->modificationType & SC_MOD_DELETETEXT)))) {
+            // Notify EditorManager about text change event (typing, deletion, cut)
+            EditorManager::HandleTextChangeEvent(hwnd, callbackWindow);
+        }
+        
         if (scn->nmhdr.code == SCN_CHARADDED) {
             // Check if this is a different editor HWND
             if (g_lastEditorHwnd != hwnd) {
@@ -40,7 +49,6 @@ void HandleScintillaNotification(HWND hwnd, SCNotification* scn, HWND callbackWi
                 // Send the app package suggest message with current position as wParam
                 SendMessage(callbackWindow, WM_AR_APP_PACKAGE_SUGGEST, (WPARAM)currentPos, 0);
             }
-            
             
             // Verify the window is still valid before proceeding
             if (IsWindow(hwnd)) {
