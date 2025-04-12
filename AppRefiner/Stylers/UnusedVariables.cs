@@ -6,7 +6,7 @@ namespace AppRefiner.Stylers
 {
     public class UnusedLocalVariableStyler : ScopedStyler<object>
     {
-        private const uint HIGHLIGHT_COLOR = 0x80808060;
+        private const uint HIGHLIGHT_COLOR = 0xBBBBBB00; // Light gray text (no alpha)
         private readonly Dictionary<string, VariableInfo> instanceVariables = new();
 
         public UnusedLocalVariableStyler()
@@ -141,7 +141,7 @@ namespace AppRefiner.Stylers
                         Start = variable.Span.Start,
                         Length = variable.Span.Stop - variable.Span.Start + 1,
                         Tooltip = "Unused variable",
-                        Type = IndicatorType.HIGHLIGHTER
+                        Type = IndicatorType.TEXTCOLOR
                     });
                 }
             }
@@ -162,7 +162,7 @@ namespace AppRefiner.Stylers
                         Start = variable.Span.Start,
                         Length = variable.Span.Stop - variable.Span.Start + 1,
                         Tooltip = "Unused variable",
-                        Type = IndicatorType.HIGHLIGHTER
+                        Type = IndicatorType.TEXTCOLOR
                     });
                 }
             }
@@ -180,7 +180,7 @@ namespace AppRefiner.Stylers
                         Start = variable.Span.Start,
                         Length = variable.Span.Stop - variable.Span.Start + 1,
                         Tooltip = "Unused instance variable",
-                        Type = IndicatorType.HIGHLIGHTER
+                        Type = IndicatorType.TEXTCOLOR
                     });
                 }
             }

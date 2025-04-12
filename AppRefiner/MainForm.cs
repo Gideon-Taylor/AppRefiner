@@ -1199,6 +1199,10 @@ namespace AppRefiner
                 {
                     ScintillaManager.RemoveSquiggleWithColor(editor, indicator.Color, indicator.Start, indicator.Length);
                 }
+                else if (indicator.Type == IndicatorType.TEXTCOLOR)
+                {
+                    ScintillaManager.RemoveTextColorWithColor(editor, indicator.Color, indicator.Start, indicator.Length);
+                }
             }
             
             // Add new indicators
@@ -1211,6 +1215,10 @@ namespace AppRefiner
                 else if (indicator.Type == IndicatorType.SQUIGGLE)
                 {
                     ScintillaManager.SquiggleTextWithColor(editor, indicator.Color, indicator.Start, indicator.Length, indicator.Tooltip);
+                }
+                else if (indicator.Type == IndicatorType.TEXTCOLOR)
+                {
+                    ScintillaManager.TextColorWithColor(editor, indicator.Color, indicator.Start, indicator.Length);
                 }
             }
             

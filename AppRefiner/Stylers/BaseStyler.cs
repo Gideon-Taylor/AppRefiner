@@ -6,7 +6,8 @@ namespace AppRefiner.Stylers
     public enum IndicatorType
     {
         HIGHLIGHTER,
-        SQUIGGLE
+        SQUIGGLE,
+        TEXTCOLOR
         // Future indicator types can be added here
     }
 

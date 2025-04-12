@@ -177,6 +177,9 @@ namespace AppRefiner
         private const int SCI_SETSELALPHA = 2478;
         private const int SCI_SETELEMENTCOLOUR = 2753;
 
+        // indicator style
+        private const int INDIC_TEXTFORE = 17;
+
         // Element identifiers
         private const int SC_ELEMENT_SELECTION_BACK = 31;
         private const int SC_ELEMENT_SELECTION_TEXT = 32;
@@ -1679,6 +1682,27 @@ namespace AppRefiner
         }
 
         /// <summary>
+        /// Creates a new text color indicator with the specified BGRA color
+        /// </summary>
+        /// <param name="editor">The ScintillaEditor to create the text color for</param>
+        /// <param name="bgraColor">The BGRA color value</param>
+        /// <returns>The text color indicator number</returns>
+        public static int CreateTextColor(ScintillaEditor editor, uint bgraColor)
+        {
+            int textColorNumber = editor.NextIndicatorNumber;
+
+            var bgrColor = (bgraColor & 0xFFFFFF00) >> 8; // Remove alpha
+            editor.SendMessage(SCI_INDICSETSTYLE, textColorNumber, INDIC_TEXTFORE);
+            editor.SendMessage(SCI_INDICSETFORE, textColorNumber, new IntPtr(bgrColor));
+
+            editor.ColorToTextColorMap[bgraColor] = textColorNumber;
+            editor.NextIndicatorNumber++;
+
+            return textColorNumber;
+        }
+
+
+        /// <summary>
         /// Adds a squiggle under text with the specified BGRA color.
         /// If a squiggle with the color doesn't exist, it creates a new one.
         /// </summary>
@@ -1968,6 +1992,69 @@ namespace AppRefiner
             if (activeEditor == null) return 0;
             return (int)activeEditor.SendMessage(SCI_LINELENGTH, lineNumber, IntPtr.Zero);
         }
+
+        /// <summary>
+        /// Applies text color to text with the specified BGRA color.
+        /// If a text color indicator with the color doesn't exist, it creates a new one.
+        /// </summary>
+        /// <param name="editor">The ScintillaEditor to apply text color to</param>
+        /// <param name="color">The BGRA color value for the text color</param>
+        /// <param name="start">The start position of the text to apply color to</param>
+        /// <param name="length">The length of the text to apply color to</param>
+        /// <param name="tooltip">Optional tooltip text to display when hovering over the colored text</param>
+        public static void TextColorWithColor(ScintillaEditor editor, uint color, int start, int length, string? tooltip = null)
+        {
+            int textColorNumber = editor.GetTextColor(color);
+            HighlightText(editor, textColorNumber, start, length);
+
+            // Store tooltip if provided
+            if (!string.IsNullOrEmpty(tooltip))
+            {
+                editor.HighlightTooltips[(start, length)] = tooltip;
+            }
+
+            // Add this indicator to the active indicators list if it doesn't already exist
+            if (!editor.ActiveIndicators.Any(i => i.Start == start && i.Length == length && i.Color == color))
+            {
+                editor.ActiveIndicators.Add(new Stylers.Indicator
+                {
+                    Start = start,
+                    Length = length,
+                    Color = color,
+                    Tooltip = tooltip,
+                    Type = Stylers.IndicatorType.TEXTCOLOR
+                });
+            }
+        }
+
+        /// <summary>
+        /// Removes text color of the specified BGRA color from a range of text.
+        /// </summary>
+        /// <param name="editor">The ScintillaEditor to remove text color from</param>
+        /// <param name="color">The BGRA color value of the text color</param>
+        /// <param name="start">The start position of the text to remove color from</param>
+        /// <param name="length">The length of the text</param>
+        public static void RemoveTextColorWithColor(ScintillaEditor editor, uint color, int start, int length)
+        {
+            // Check if this color has a text color indicator registered
+            if (editor.ColorToTextColorMap.TryGetValue(color, out int textColorNumber))
+            {
+                RemoveIndicator(editor, textColorNumber, start, length);
+
+                // Remove any stored tooltip
+                editor.HighlightTooltips.Remove((start, length));
+
+                // Remove matching indicator from ActiveIndicators list
+                for (int i = editor.ActiveIndicators.Count - 1; i >= 0; i--)
+                {
+                    var indicator = editor.ActiveIndicators[i];
+                    if (indicator.Start == start && indicator.Length == length && indicator.Color == color && indicator.Type == Stylers.IndicatorType.TEXTCOLOR)
+                    {
+                        editor.ActiveIndicators.RemoveAt(i);
+                    }
+                }
+            }
+        }
     }
 
     public enum EditorType
@@ -2027,6 +2114,7 @@ namespace AppRefiner
 
         public Dictionary<uint, int> ColorToHighlighterMap = new();
         public Dictionary<uint, int> ColorToSquiggleMap = new();
+        public Dictionary<uint, int> ColorToTextColorMap = new();
         public int NextIndicatorNumber = 0;
 
         /// <summary>
@@ -2131,6 +2219,24 @@ namespace AppRefiner
             else
             {
                 return ScintillaManager.CreateSquiggle(this, color);
+            }
+        }
+
+        /// <summary>
+        /// Gets a text color indicator number for the specified BGRA color.
+        /// If the color doesn't exist in the dictionary, it creates a new text color indicator.
+        /// </summary>
+        /// <param name="color">The BGRA color value</param>
+        /// <returns>The text color indicator number</returns>
+        public int GetTextColor(uint color)
+        {
+            if (ColorToTextColorMap.TryGetValue(color, out int value))
+            {
+                return value;
+            }
+            else
+            {
+                return ScintillaManager.CreateTextColor(this, color);
             }
         }
 

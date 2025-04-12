@@ -4,7 +4,7 @@ namespace AppRefiner.Stylers
 {
     public class UnusedImportsListener : BaseStyler
     {
-        private const uint HIGHLIGHT_COLOR = 0x80808060;
+        private const uint HIGHLIGHT_COLOR = 0xBBBBBB00; // Light gray text (no alpha)
         class ImportInfo
         {
             public string Name { get; }
@@ -101,7 +101,7 @@ namespace AppRefiner.Stylers
                         Length = import.Value.StopIndex - import.Value.StartIndex + 1,
                         Color = HIGHLIGHT_COLOR,
                         Tooltip = "Unused import",
-                        Type = IndicatorType.HIGHLIGHTER
+                        Type = IndicatorType.TEXTCOLOR
                     });
                 }
             }
