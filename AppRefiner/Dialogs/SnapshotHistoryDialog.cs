@@ -1,17 +1,19 @@
 using System;
 using System.Drawing;
 using System.Windows.Forms;
-using AppRefiner.Git;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using AppRefiner.Database.Models;
+using AppRefiner.Snapshots;
+using DiffPlex.DiffBuilder.Model;
 
 namespace AppRefiner.Dialogs
 {
     /// <summary>
     /// Dialog for displaying Git history and reverting to previous versions
     /// </summary>
-    public class GitHistoryDialog : Form
+    public class SnapshotHistoryDialog : Form
     {
         // UI Controls
         private readonly Panel headerPanel;
@@ -25,15 +27,11 @@ namespace AppRefiner.Dialogs
         private DialogHelper.ModalDialogMouseHandler? mouseHandler;
         
         // Data
-        private readonly GitRepositoryManager gitManager;
+        private readonly SnapshotManager snapshotManager;
         private readonly ScintillaEditor editor;
-        private readonly List<CommitInfo> commitHistory;
-        private CommitInfo? selectedCommit;
-        
-        /// <summary>
-        /// Gets the selected commit to revert to
-        /// </summary>
-        public CommitInfo? SelectedCommit => selectedCommit;
+        private readonly List<Snapshot> snapshotHistory;
+        private Snapshot? selectedSnapshot;
+        public Snapshot? SelectedSnapshot => selectedSnapshot;
 
         /// <summary>
         /// Initializes a new instance of the GitHistoryDialog class
@@ -41,9 +39,9 @@ namespace AppRefiner.Dialogs
         /// <param name="gitManager">The Git repository manager</param>
         /// <param name="editor">The editor to show history for</param>
         /// <param name="owner">The owner window handle</param>
-        public GitHistoryDialog(GitRepositoryManager gitManager, ScintillaEditor editor, IntPtr owner = default)
+        public SnapshotHistoryDialog(SnapshotManager snapshotManager, ScintillaEditor editor, IntPtr owner = default)
         {
-            this.gitManager = gitManager;
+            this.snapshotManager = snapshotManager;
             this.editor = editor;
             this.owner = owner;
             
@@ -59,11 +57,11 @@ namespace AppRefiner.Dialogs
             // Get commit history for the file
             if (!string.IsNullOrEmpty(editor.RelativePath))
             {
-                commitHistory = gitManager.GetFileHistory(editor.RelativePath);
+                snapshotHistory = snapshotManager.GetFileHistory(editor.RelativePath, editor.DBName);
             }
             else
             {
-                commitHistory = new List<CommitInfo>();
+                snapshotHistory = new List<Snapshot>();
             }
             
             InitializeComponent();
@@ -184,11 +182,11 @@ namespace AppRefiner.Dialogs
         {
             historyListView.Items.Clear();
             
-            foreach (var commit in commitHistory)
+            foreach (var snapshot in snapshotHistory)
             {
-                var item = new ListViewItem(commit.Date.ToString("yyyy-MM-dd HH:mm:ss"));
-                item.SubItems.Add(commit.Message);
-                item.Tag = commit;
+                var item = new ListViewItem(snapshot.CreatedAt.ToString("yyyy-MM-dd HH:mm:ss"));
+                item.SubItems.Add(snapshot.Description);
+                item.Tag = snapshot;
                 
                 historyListView.Items.Add(item);
             }
@@ -204,14 +202,14 @@ namespace AppRefiner.Dialogs
         {
             if (historyListView.SelectedItems.Count > 0)
             {
-                selectedCommit = (CommitInfo)historyListView.SelectedItems[0].Tag;
+                selectedSnapshot = (Snapshot)historyListView.SelectedItems[0].Tag;
                 revertButton.Enabled = true;
                 viewButton.Enabled = true;
                 diffButton.Enabled = true;
             }
             else
             {
-                selectedCommit = null;
+                selectedSnapshot = null;
                 revertButton.Enabled = false;
                 viewButton.Enabled = false;
                 diffButton.Enabled = false;
@@ -220,19 +218,19 @@ namespace AppRefiner.Dialogs
 
         private void RevertButton_Click(object? sender, EventArgs e)
         {
-            if (selectedCommit != null)
+            if (selectedSnapshot != null)
             {
                 // Confirm revert
                 var caption = editor.Caption ?? "file";
                 var result = MessageBox.Show(
-                    $"Are you sure you want to revert {caption} to the version from {selectedCommit.Date.ToString("yyyy-MM-dd HH:mm:ss")}?\n\nThis will replace the current content in the editor.",
+                    $"Are you sure you want to revert {caption} to the version from {selectedSnapshot.CreatedAt.ToString("yyyy-MM-dd HH:mm:ss")}?\n\nThis will replace the current content in the editor.",
                     "Confirm Revert",
                     MessageBoxButtons.YesNo,
                     MessageBoxIcon.Question);
                 
                 if (result == DialogResult.Yes)
                 {
-                    if (gitManager.RevertEditorToCommit(editor, selectedCommit.CommitId))
+                    if (snapshotManager.ApplySnapshotToEditor(editor, selectedSnapshot.Id))
                     {
                         this.DialogResult = DialogResult.OK;
                         this.Close();
@@ -240,7 +238,7 @@ namespace AppRefiner.Dialogs
                     else
                     {
                         MessageBox.Show(
-                            "Failed to revert to the selected version. See debug log for details.",
+                            "Failed to revert to the selected snapshot. See debug log for details.",
                             "Error",
                             MessageBoxButtons.OK,
                             MessageBoxIcon.Error);
@@ -251,14 +249,14 @@ namespace AppRefiner.Dialogs
 
         private void ViewButton_Click(object? sender, EventArgs e)
         {
-            if (selectedCommit != null && !string.IsNullOrEmpty(editor.RelativePath))
+            if (selectedSnapshot != null && !string.IsNullOrEmpty(editor.RelativePath))
             {
-                var content = gitManager.GetFileContentFromCommit(editor.RelativePath, selectedCommit.CommitId);
+                var content = selectedSnapshot.Content;
                 if (content != null)
                 {
                     using var viewDialog = new TextViewDialog(
                         content, 
-                        $"{editor.Caption} - {selectedCommit.Date.ToString("yyyy-MM-dd HH:mm:ss")}",
+                        $"{editor.Caption} - {selectedSnapshot.CreatedAt.ToString("yyyy-MM-dd HH:mm:ss")}",
                         owner);
                     
                     viewDialog.ShowDialog();
@@ -276,10 +274,10 @@ namespace AppRefiner.Dialogs
 
         private void DiffButton_Click(object? sender, EventArgs e)
         {
-            if (selectedCommit != null && !string.IsNullOrEmpty(editor.RelativePath))
+            if (selectedSnapshot != null && !string.IsNullOrEmpty(editor.RelativePath))
             {
                 // Get the content from the selected commit
-                var historicalContent = gitManager.GetFileContentFromCommit(editor.RelativePath, selectedCommit.CommitId);
+                var historicalContent = selectedSnapshot.Content;
                 
                 if (historicalContent != null)
                 {
@@ -295,7 +293,7 @@ namespace AppRefiner.Dialogs
                         
                         using var diffDialog = new DiffViewDialog(
                             diff,
-                            $"Diff: {editor.Caption} @ {selectedCommit.Date.ToString("yyyy-MM-dd HH:mm:ss")} vs Current Editor",
+                            $"Diff: {editor.Caption} @ {selectedSnapshot.CreatedAt.ToString("yyyy-MM-dd HH:mm:ss")} vs Current Editor",
                             owner);
                         
                         diffDialog.ShowDialog();
@@ -329,43 +327,41 @@ namespace AppRefiner.Dialogs
         /// <returns>A unified diff format string</returns>
         private string GenerateUnifiedDiff(string oldText, string newText, string filePath)
         {
-            // Use LibGit2Sharp's diff functionality via the GitRepositoryManager if available
-            var commitId = selectedCommit?.CommitId;
-            if (commitId != null)
-            {
-                // Try to use the diff from HEAD to the selected commit
-                // This shows what would happen if we reverted to the selected commit
-                var headDiff = gitManager.GetFileDiff(editor.RelativePath,commitId, "HEAD");
-                if (headDiff != null)
-                {
-                    return headDiff;
-                }
-            }
+            // Use DiffPlex to generate a diff
+            var differ = new DiffPlex.Differ();
+            var diffBuilder = new DiffPlex.DiffBuilder.InlineDiffBuilder(differ);
+            var diff = diffBuilder.BuildDiffModel(oldText, newText);
             
-            // Fallback to a simple diff display if LibGit2Sharp's diff isn't available
-            var oldLines = oldText.Split('\n');
-            var newLines = newText.Split('\n');
-            
+            // Format the diff as unified diff text
             var sb = new System.Text.StringBuilder();
+            sb.AppendLine($"--- {filePath} (Old)");
+            sb.AppendLine($"+++ {filePath} (New)");
+            sb.AppendLine();
             
-            // Add a diff header
-            sb.AppendLine($"diff --git a/{filePath} b/{filePath}");
-            sb.AppendLine($"--- a/{filePath}");
-            sb.AppendLine($"+++ b/{filePath}");
-            
-            // Simple diff implementation - just showing all removed lines followed by all added lines
-            sb.AppendLine($"@@ -1,{oldLines.Length} +1,{newLines.Length} @@");
-            
-            // Show removed lines
-            foreach (var line in oldLines)
+            foreach (var line in diff.Lines)
             {
-                sb.AppendLine($"-{line}");
-            }
-            
-            // Show added lines
-            foreach (var line in newLines)
-            {
-                sb.AppendLine($"+{line}");
+                string prefix = "";
+                
+                switch (line.Type)
+                {
+                    case DiffPlex.DiffBuilder.Model.ChangeType.Inserted:
+                        prefix = "+";
+                        break;
+                    case DiffPlex.DiffBuilder.Model.ChangeType.Deleted:
+                        prefix = "-";
+                        break;
+                    case DiffPlex.DiffBuilder.Model.ChangeType.Unchanged:
+                        prefix = " ";
+                        break;
+                    case DiffPlex.DiffBuilder.Model.ChangeType.Modified:
+                        prefix = "~";
+                        break;
+                    case DiffPlex.DiffBuilder.Model.ChangeType.Imaginary:
+                        // Skip imaginary lines
+                        continue;
+                }
+                
+                sb.AppendLine($"{prefix}{line.Text}");
             }
             
             return sb.ToString();

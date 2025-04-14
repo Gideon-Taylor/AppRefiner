@@ -24,6 +24,7 @@ using System.Threading.Tasks;
 using System.Windows.Forms;
 using System.Drawing.Text;
 using AppRefiner.TooltipProviders;
+using AppRefiner.Snapshots;
 
 namespace AppRefiner
 {
@@ -137,7 +138,7 @@ namespace AppRefiner
         private bool isLoadingSettings = false;
 
         // Add a private field for the GitRepositoryManager
-        private Git.GitRepositoryManager? gitRepositoryManager;
+        private SnapshotManager? snapshotManager;
 
         // Fields for editor management
         private HashSet<ScintillaEditor> knownEditors = new HashSet<ScintillaEditor>();
@@ -214,13 +215,8 @@ namespace AppRefiner
             // Setup the WinEvent hook to monitor focus changes
             SetupWinEventHook();
 
-            // Initialize the GitRepositoryManager if a repository path exists in settings
-            if (!string.IsNullOrEmpty(Properties.Settings.Default.GitRepositoryPath) && 
-                Git.GitRepositoryManager.IsValidRepository(Properties.Settings.Default.GitRepositoryPath))
-            {
-                gitRepositoryManager = new Git.GitRepositoryManager(Properties.Settings.Default.GitRepositoryPath);
-                Debug.Log($"Initialized Git repository manager with path: {Properties.Settings.Default.GitRepositoryPath}");
-            }
+            // Initialize snapshot manager
+            snapshotManager = SnapshotManager.CreateFromSettings();
         }
 
         private void lintCodeHandler(object? sender, KeyPressedEventArgs e)
@@ -2141,8 +2137,8 @@ namespace AppRefiner
             // Git
             // Add Git Revert to Previous Version command
             AvailableCommands.Add(new Command(
-                "Git: Revert to Previous Version",
-                "View file history and revert to a previous commit",
+                "Snapshot: Revert to Previous Version",
+                "View file history and revert to a previous snapshot",
                 (progressDialog) =>
                 {
                     try
@@ -2159,32 +2155,21 @@ namespace AppRefiner
                             return;
                         }
 
-                        // Initialize Git repository manager if needed
-                        if (gitRepositoryManager == null)
-                        {
-                            gitRepositoryManager = Git.GitRepositoryManager.CreateFromSettings();
-                            if (gitRepositoryManager == null)
-                            {
-                                MessageBox.Show("Git repository is not configured. Please initialize a Git repository first.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                                return;
-                            }
-                        }
-
                         // Get process handle for dialog ownership
                         var mainHandle = Process.GetProcessById((int)activeEditor.ProcessId).MainWindowHandle;
-                        
+
                         // Show the Git history dialog
                         progressDialog?.UpdateHeader("Loading commit history...");
-                        
+
                         // Run on UI thread to show dialog
                         this.Invoke(() =>
                         {
-                            using var historyDialog = new Dialogs.GitHistoryDialog(gitRepositoryManager, activeEditor, mainHandle);
-                            
+                            using var historyDialog = new Dialogs.SnapshotHistoryDialog(snapshotManager, activeEditor, mainHandle);
+
                             if (historyDialog.ShowDialog(new WindowWrapper(mainHandle)) == DialogResult.OK)
                             {
                                 progressDialog?.UpdateHeader("Reverted to previous version");
-                                progressDialog?.UpdateProgress($"File reverted to version from {historyDialog.SelectedCommit?.Date.ToString("yyyy-MM-dd HH:mm:ss") ?? "unknown"}");
+                                progressDialog?.UpdateProgress($"File reverted to version from {historyDialog.SelectedSnapshot?.CreatedAt.ToString("yyyy-MM-dd HH:mm:ss") ?? "unknown"}");
                             }
                         });
                     }
@@ -2195,8 +2180,8 @@ namespace AppRefiner
                         MessageBox.Show($"Error: {ex.Message}", "Git Revert Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
                     }
                 },
-                () => activeEditor != null && !string.IsNullOrEmpty(activeEditor.RelativePath) && 
-                      Git.GitRepositoryManager.IsValidRepository(Properties.Settings.Default.GitRepositoryPath)
+                () => activeEditor != null && !string.IsNullOrEmpty(activeEditor.RelativePath) &&
+                      snapshotManager != null
             ));
         }
 
@@ -2216,57 +2201,6 @@ namespace AppRefiner
             }
         }
 
-        private void btnGitInit_Click(object sender, EventArgs e)
-        {
-            try
-            {
-                // Create the Init Git Repository dialog
-                var dialog = new Dialogs.InitGitRepositoryDialog();
-                
-                // Show the dialog and wait for result
-                if (dialog.ShowDialog(this) == DialogResult.OK)
-                {
-                    string repositoryPath = dialog.RepositoryPath;
-
-                    // Try to initialize the repository
-                    bool success = Git.GitRepositoryManager.InitializeRepository(repositoryPath);
-                    if (success)
-                    {
-                        // Save the path to settings
-                        Properties.Settings.Default.GitRepositoryPath = repositoryPath;
-                        Properties.Settings.Default.Save();
-                        
-                        // Initialize the GitRepositoryManager
-                        gitRepositoryManager = new Git.GitRepositoryManager(repositoryPath);
-                        
-                        MessageBox.Show(
-                            $"Git repository successfully initialized at {repositoryPath}",
-                            "Repository Initialized",
-                            MessageBoxButtons.OK,
-                            MessageBoxIcon.Information
-                        );
-                    }
-                    else
-                    {
-                        MessageBox.Show(
-                            "Failed to initialize Git repository. Please check the path and try again.",
-                            "Error",
-                            MessageBoxButtons.OK,
-                            MessageBoxIcon.Error
-                        );
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show(
-                    $"Error initializing Git repository: {ex.Message}",
-                    "Error",
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Error
-                );
-            }
-        }
 
         /// <summary>
         /// Discovers all available refactor types in the application and plugins
@@ -2980,7 +2914,7 @@ namespace AppRefiner
                 // Save initial content to Git repository
                 if (!string.IsNullOrEmpty(editor.RelativePath))
                 {
-                    SaveToGitRepository(editor);
+                    SaveSnapshot(editor);
                 }
             }
 
@@ -3273,7 +3207,7 @@ namespace AppRefiner
         /// Saves the content of the editor to the Git repository
         /// </summary>
         /// <param name="editor">The editor to save content from</param>
-        private void SaveToGitRepository(ScintillaEditor editor)
+        private void SaveSnapshot(ScintillaEditor editor)
         {
             if (editor == null || string.IsNullOrEmpty(editor.RelativePath))
             {
@@ -3282,16 +3216,6 @@ namespace AppRefiner
             
             try
             {
-                // Initialize Git repository manager if needed
-                if (gitRepositoryManager == null)
-                {
-                    gitRepositoryManager = Git.GitRepositoryManager.CreateFromSettings();
-                    if (gitRepositoryManager == null)
-                    {
-                        return;
-                    }
-                }
-                
                 // Get content from editor
                 string? content = ScintillaManager.GetScintillaText(editor);
                 if (string.IsNullOrEmpty(content))
@@ -3301,7 +3225,7 @@ namespace AppRefiner
                 }
                 
                 // Save and commit the content
-                gitRepositoryManager.SaveAndCommitEditorContent(editor, content);
+                snapshotManager?.SaveEditorSnapshot(editor, content);
             }
             catch (Exception ex)
             {
@@ -3355,7 +3279,7 @@ namespace AppRefiner
                         // Save content to Git repository
                         if (!string.IsNullOrEmpty(editorToSave.RelativePath))
                         {
-                            SaveToGitRepository(editorToSave);
+                            SaveSnapshot(editorToSave);
                         }
                     }
                 });

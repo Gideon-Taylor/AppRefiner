@@ -51,7 +51,6 @@ namespace AppRefiner
             chkPromptForDB = new CheckBox();
             chkAutoPairing = new CheckBox();
             btnPlugins = new Button();
-            btnGitInit = new Button();
             chkBetterSQL = new CheckBox();
             chkOnlyPPC = new CheckBox();
             chkInitCollapsed = new CheckBox();
@@ -176,7 +175,6 @@ namespace AppRefiner
             grpEditorSettings.Controls.Add(chkPromptForDB);
             grpEditorSettings.Controls.Add(chkAutoPairing);
             grpEditorSettings.Controls.Add(btnPlugins);
-            grpEditorSettings.Controls.Add(btnGitInit);
             grpEditorSettings.Controls.Add(chkBetterSQL);
             grpEditorSettings.Controls.Add(chkOnlyPPC);
             grpEditorSettings.Controls.Add(chkInitCollapsed);
@@ -218,16 +216,6 @@ namespace AppRefiner
             btnPlugins.Text = "Plugins...";
             btnPlugins.UseVisualStyleBackColor = true;
             btnPlugins.Click += btnPlugins_Click;
-            // 
-            // btnGitInit
-            // 
-            btnGitInit.Location = new Point(432, 56);
-            btnGitInit.Name = "btnGitInit";
-            btnGitInit.Size = new Size(110, 23);
-            btnGitInit.TabIndex = 27;
-            btnGitInit.Text = "Git Repository...";
-            btnGitInit.UseVisualStyleBackColor = true;
-            btnGitInit.Click += btnGitInit_Click;
             // 
             // chkBetterSQL
             // 
@@ -663,7 +651,6 @@ namespace AppRefiner
         private TabPage tabPage1;
         private GroupBox grpEditorSettings;
         private Button btnPlugins;
-        private Button btnGitInit;
         private CheckBox chkBetterSQL;
         private CheckBox chkOnlyPPC;
         private CheckBox chkInitCollapsed;

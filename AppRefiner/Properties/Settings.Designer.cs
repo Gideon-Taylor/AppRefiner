@@ -158,12 +158,12 @@ namespace AppRefiner.Properties {
         [global::System.Configuration.UserScopedSettingAttribute()]
         [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
         [global::System.Configuration.DefaultSettingValueAttribute("")]
-        public string GitRepositoryPath {
+        public string SnapshotDatabasePath {
             get {
-                return ((string)(this["GitRepositoryPath"]));
+                return ((string)(this["SnapshotDatabasePath"]));
             }
             set {
-                this["GitRepositoryPath"] = value;
+                this["SnapshotDatabasePath"] = value;
             }
         }
         

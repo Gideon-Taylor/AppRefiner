@@ -1,12 +1,15 @@
 using System;
 using System.Drawing;
 using System.Windows.Forms;
-using System.Text.RegularExpressions;
+using DiffPlex;
+using DiffPlex.Chunkers;
+using DiffPlex.DiffBuilder;
+using DiffPlex.DiffBuilder.Model;
 
 namespace AppRefiner.Dialogs
 {
     /// <summary>
-    /// Dialog for viewing Git diff content with syntax highlighting for changes
+    /// Dialog for viewing diff content with syntax highlighting for changes
     /// </summary>
     public class DiffViewDialog : Form
     {
@@ -26,7 +29,26 @@ namespace AppRefiner.Dialogs
         /// <summary>
         /// Initializes a new instance of the DiffViewDialog class
         /// </summary>
-        /// <param name="diffContent">The diff content to display</param>
+        /// <param name="oldContent">The old content to compare</param>
+        /// <param name="newContent">The new content to compare</param>
+        /// <param name="title">The title to display in the header</param>
+        /// <param name="owner">The owner window handle</param>
+        public DiffViewDialog(string oldContent, string newContent, string title, IntPtr owner = default)
+        {
+            this.owner = owner;
+            this.headerPanel = new Panel();
+            this.headerLabel = new Label();
+            this.diffTextBox = new RichTextBox();
+            this.closeButton = new Button();
+            
+            InitializeComponent(title);
+            ShowDiffContent(oldContent, newContent);
+        }
+
+        /// <summary>
+        /// Backward compatibility constructor that takes a pre-formatted diff string
+        /// </summary>
+        /// <param name="diffContent">The pre-formatted diff content</param>
         /// <param name="title">The title to display in the header</param>
         /// <param name="owner">The owner window handle</param>
         public DiffViewDialog(string diffContent, string title, IntPtr owner = default)
@@ -107,7 +129,80 @@ namespace AppRefiner.Dialogs
         }
 
         /// <summary>
-        /// Formats the diff content with colorized highlighting for additions, deletions, and headers
+        /// Shows the differences between old and new content using DiffPlex
+        /// </summary>
+        /// <param name="oldContent">The old content to compare</param>
+        /// <param name="newContent">The new content to compare</param>
+        private void ShowDiffContent(string oldContent, string newContent)
+        {
+            if (string.IsNullOrEmpty(oldContent) && string.IsNullOrEmpty(newContent))
+            {
+                diffTextBox.Text = "No changes detected.";
+                return;
+            }
+
+            // Use DiffPlex to generate the diff
+            var diffBuilder = new InlineDiffBuilder(new Differ());
+            var diff = diffBuilder.BuildDiffModel(oldContent, newContent);
+            
+            diffTextBox.Clear();
+            diffTextBox.SuspendLayout();
+
+            // Show file header
+            AppendFormattedText("--- Old version", Color.Black, HeaderColor);
+            AppendFormattedText("+++ New version", Color.Black, HeaderColor);
+            AppendFormattedText("", Color.Black, Color.White); // Empty line
+
+            int lineNumber = 1;
+            foreach (var line in diff.Lines)
+            {
+                string lineContent = line.Text;
+                string prefix = "";
+                Color backgroundColor;
+
+                switch (line.Type)
+                {
+                    case ChangeType.Inserted:
+                        prefix = "+";
+                        backgroundColor = AddedColor;
+                        break;
+                    case ChangeType.Deleted:
+                        prefix = "-";
+                        backgroundColor = RemovedColor;
+                        break;
+                    case ChangeType.Unchanged:
+                        prefix = " ";
+                        backgroundColor = Color.White;
+                        break;
+                    case ChangeType.Modified:
+                        prefix = "~";
+                        backgroundColor = HunkHeaderColor;
+                        break;
+                    case ChangeType.Imaginary:
+                        // Skip imaginary lines in the output
+                        continue;
+                    default:
+                        prefix = "";
+                        backgroundColor = Color.White;
+                        break;
+                }
+
+                // Format line number prefix if needed
+                string formattedLine = $"{prefix}{lineContent}";
+                
+                // Append the formatted line
+                AppendFormattedText(formattedLine, Color.Black, backgroundColor);
+                
+                lineNumber++;
+            }
+
+            diffTextBox.SelectionStart = 0;
+            diffTextBox.SelectionLength = 0;
+            diffTextBox.ResumeLayout();
+        }
+
+        /// <summary>
+        /// Legacy method for backwards compatibility - formats a pre-generated diff
         /// </summary>
         /// <param name="diffContent">The raw diff content</param>
         private void FormatDiffContent(string diffContent)
@@ -160,6 +255,20 @@ namespace AppRefiner.Dialogs
             diffTextBox.SelectionStart = 0;
             diffTextBox.SelectionLength = 0;
             diffTextBox.ResumeLayout();
+        }
+
+        /// <summary>
+        /// Create a diff between two content strings and display it
+        /// </summary>
+        /// <param name="oldContent">The old content</param>
+        /// <param name="newContent">The new content</param>
+        /// <param name="title">The title for the dialog</param>
+        /// <param name="owner">The owner window handle</param>
+        /// <returns>The dialog result</returns>
+        public static DialogResult ShowDiff(string oldContent, string newContent, string title, IntPtr owner = default)
+        {
+            using var dialog = new DiffViewDialog(oldContent, newContent, title, owner);
+            return dialog.ShowDialog();
         }
 
         /// <summary>

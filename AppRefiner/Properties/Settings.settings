@@ -35,7 +35,7 @@
     <Setting Name="autoPair" Type="System.Boolean" Scope="User">
       <Value Profile="(Default)">False</Value>
     </Setting>
-    <Setting Name="GitRepositoryPath" Type="System.String" Scope="User">
+    <Setting Name="SnapshotDatabasePath" Type="System.String" Scope="User">
       <Value Profile="(Default)" />
     </Setting>
     <Setting Name="TooltipStates" Type="System.String" Scope="User">
