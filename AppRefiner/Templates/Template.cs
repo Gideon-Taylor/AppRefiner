@@ -91,19 +91,25 @@ namespace AppRefiner.Templates
         public string? TemplateText { get; set; }
 
         /// <summary>
-        /// Position to place the cursor after applying the template (-1 if not specified)
+        /// Position relative to the start of the inserted text to place the cursor after applying the template (-1 if not specified)
         /// </summary>
         public int CursorPosition { get; private set; } = -1;
 
         /// <summary>
-        /// Starting position of the selection range (-1 if not specified)
+        /// Starting position of the selection range relative to the start of the inserted text (-1 if not specified)
         /// </summary>
         public int SelectionStart { get; private set; } = -1;
 
         /// <summary>
-        /// Ending position of the selection range (-1 if not specified)
+        /// Ending position of the selection range relative to the start of the inserted text (-1 if not specified)
         /// </summary>
         public int SelectionEnd { get; private set; } = -1;
+
+        /// <summary>
+        /// Determines if the template should insert at the cursor or replace the entire content.
+        /// Defaults to false (replace).
+        /// </summary>
+        public bool IsInsertMode { get; set; } = false;
 
         public override string ToString()
         {
@@ -173,7 +179,8 @@ namespace AppRefiner.Templates
                     TemplateName = jsonDoc.GetProperty("templateName").GetString()!,
                     Description = jsonDoc.GetProperty("description").GetString()!,
                     Inputs = new List<TemplateInput>(),
-                    TemplateText = templateText
+                    TemplateText = templateText,
+                    IsInsertMode = jsonDoc.TryGetProperty("isInsertMode", out var insertModeProp) && insertModeProp.GetBoolean()
                 };
 
                 var inputs = jsonDoc.GetProperty("inputs");
@@ -223,7 +230,7 @@ namespace AppRefiner.Templates
 
             var markers = new HashSet<string>();
             // Match {{name}} but not {{#if name}} or {{/if}}
-            var regex = new Regex(@"{{(?!\#if\s)(?!\/if)([^{}]+)}}");
+            var regex = new Regex(@"{{(?!\\#if\\s)(?!\\/if)([^{}]+)}}");
             var matches = regex.Matches(TemplateText);
 
             foreach (Match match in matches)
@@ -289,15 +296,18 @@ namespace AppRefiner.Templates
         }
 
         /// <summary>
-        /// Applies the provided values to the template, replacing all markers
+        /// Applies the provided values to the template, replacing all markers and determining final cursor/selection positions.
         /// </summary>
         /// <param name="values">Dictionary of values to apply to the template</param>
         /// <returns>The processed template text with markers replaced by values</returns>
         public string Apply(Dictionary<string, string> values)
         {
             if (TemplateText == null) return string.Empty;
-            // Reset cursor position
+            
+            // Store original cursor/selection state before modification
             CursorPosition = -1;
+            SelectionStart = -1;
+            SelectionEnd = -1;
 
             // Fill in default values for any missing inputs
             var allValues = new Dictionary<string, string>(values);
@@ -322,33 +332,38 @@ namespace AppRefiner.Templates
                 processedTemplate = processedTemplate.Replace("{{" + marker + "}}", replacementValue);
             }
 
-            // Process cursor position marker
+            // Process cursor position marker BEFORE selection markers
             int cursorMarkerIndex = processedTemplate.IndexOf("[[cursor]]");
             if (cursorMarkerIndex >= 0)
             {
                 CursorPosition = cursorMarkerIndex;
                 processedTemplate = processedTemplate.Replace("[[cursor]]", string.Empty);
-            }
-
-            // Process selection range markers
-            int selectStartIndex = processedTemplate.IndexOf("[[select]]");
-            int selectEndIndex = processedTemplate.IndexOf("[[/select]]");
-
-            if (selectStartIndex >= 0 && selectEndIndex >= 0 && selectEndIndex > selectStartIndex)
-            {
-                // Store the positions, adjusting for the marker lengths
-                SelectionStart = selectStartIndex;
-                SelectionEnd = selectEndIndex - "[[select]]".Length;
-
-                // Remove the markers
+                // Remove selection markers if cursor is also present
                 processedTemplate = processedTemplate.Replace("[[select]]", string.Empty);
                 processedTemplate = processedTemplate.Replace("[[/select]]", string.Empty);
             }
             else
             {
-                // Reset selection markers if not properly defined
-                SelectionStart = -1;
-                SelectionEnd = -1;
+                // Process selection range markers ONLY if no cursor marker was found
+                int selectStartIndex = processedTemplate.IndexOf("[[select]]");
+                int selectEndIndex = processedTemplate.IndexOf("[[/select]]");
+
+                if (selectStartIndex >= 0 && selectEndIndex >= 0 && selectEndIndex > selectStartIndex)
+                {
+                    // Store the positions relative to the start of the processed template text
+                    SelectionStart = selectStartIndex;
+                    SelectionEnd = selectEndIndex - "[[select]]".Length; // Adjust for marker length
+
+                    // Remove the markers
+                    processedTemplate = processedTemplate.Replace("[[select]]", string.Empty);
+                    processedTemplate = processedTemplate.Replace("[[/select]]", string.Empty);
+                }
+                else
+                {
+                    // Reset selection markers if not properly defined
+                    SelectionStart = -1;
+                    SelectionEnd = -1;
+                }
             }
 
             return processedTemplate;
@@ -429,7 +444,8 @@ namespace AppRefiner.Templates
                 {
                     TemplateName = jsonDoc.GetProperty("templateName").GetString()!,
                     Description = jsonDoc.GetProperty("description").GetString()!,
-                    Inputs = new List<TemplateInput>()
+                    Inputs = new List<TemplateInput>(),
+                    IsInsertMode = jsonDoc.TryGetProperty("isInsertMode", out var insertModeProp) && insertModeProp.GetBoolean()
                 };
 
                 // Load template text from associated .txt file

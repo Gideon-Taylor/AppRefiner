@@ -96,9 +96,6 @@ namespace AppRefiner
 
         // Map of process IDs to their corresponding data managers
         private Dictionary<uint, IDataManager> processDataManagers = new();
-        private Dictionary<string, Control> templateInputControls = new();
-        private Dictionary<string, Control> templateInputLabels = new();
-        private Dictionary<string, DisplayCondition> templateInputsDisplayConditions = new();
 
         // Static list of available commands
         public static List<Command> AvailableCommands = new();
@@ -150,6 +147,12 @@ namespace AppRefiner
         private ScintillaEditor? pendingSaveEditor = null;
         private const int SAVEPOINT_DEBOUNCE_MS = 300;
 
+        // Add instance of the new TemplateManager
+        private TemplateManager templateManager = new TemplateManager();
+
+        // Dictionary to keep track of generated UI controls for template parameters
+        private Dictionary<string, Control> currentTemplateInputControls = new Dictionary<string, Control>();
+
         public MainForm()
         {
             InitializeComponent();
@@ -165,7 +168,18 @@ namespace AppRefiner
             LoadLinterStates();
             LoadStylerStates();
             LoadTooltipStates();
-            LoadTemplates();
+            // Load templates using the manager and populate ComboBox
+            templateManager.LoadTemplates();
+            cmbTemplates.Items.Clear();
+            templateManager.LoadedTemplates.ForEach(t => cmbTemplates.Items.Add(t));
+            if (cmbTemplates.Items.Count > 0)
+            {
+                cmbTemplates.SelectedIndex = 0;
+                // Trigger selection change to initialize UI
+                CmbTemplates_SelectedIndexChanged(cmbTemplates, EventArgs.Empty); 
+            }
+            cmbTemplates.SelectedIndexChanged += CmbTemplates_SelectedIndexChanged;
+
             // We no longer need to start the scanning timer since we now process editors:
             // 1. When they receive focus via WinEvent 
             // 2. When typing pauses are detected via AR_TYPING_PAUSE messages
@@ -578,213 +592,13 @@ namespace AppRefiner
                 LoadStylerStates();
                 LoadLinterStates();
                 LoadTooltipStates();
-                LoadTemplates();
+                // Removed call to LoadTemplates() as it's handled in OnLoad via TemplateManager
+                // LoadTemplates(); 
             }
             finally
             {
                 isLoadingSettings = false;
             }
-        }
-
-        private void LoadTemplates()
-        {
-            Template.GetAvailableTemplates().ForEach(t =>
-            {
-                cmbTemplates.Items.Add(t);
-            });
-
-            cmbTemplates.SelectedIndexChanged += CmbTemplates_SelectedIndexChanged;
-
-            if (cmbTemplates.Items.Count > 0)
-            {
-                cmbTemplates.SelectedIndex = 0;
-            }
-        }
-
-        private void GenerateTemplateParameterControls(Template template)
-        {
-            // Clear existing controls and dictionaries
-            pnlTemplateParams.Controls.Clear();
-            templateInputControls.Clear();
-            templateInputLabels.Clear();
-            templateInputsDisplayConditions.Clear();
-
-            if (template == null || template.Inputs == null || template.Inputs.Count == 0)
-            {
-                return;
-            }
-
-            const int labelWidth = 150;
-            const int controlWidth = 200;
-            const int verticalSpacing = 30;
-            const int horizontalPadding = 10;
-            int currentY = 10;
-
-            foreach (var input in template.Inputs)
-            {
-                // Create label for parameter
-                Label label = new()
-                {
-                    Text = input.Label + ":",
-                    Location = new Point(horizontalPadding, currentY + 3),
-                    Size = new Size(labelWidth, 20),
-                    AutoSize = false,
-                    Tag = input.Id // Store input ID in Tag for easier reference
-                };
-                pnlTemplateParams.Controls.Add(label);
-                templateInputLabels[input.Id] = label;
-
-                // Create input control based on parameter type
-                Control inputControl;
-                switch (input.Type.ToLower())
-                {
-                    case "boolean":
-                        inputControl = new CheckBox
-                        {
-                            Checked = !string.IsNullOrEmpty(input.DefaultValue) &&
-                                      (input.DefaultValue.ToLower() == "true" || input.DefaultValue == "1" ||
-                                       input.DefaultValue.ToLower() == "yes"),
-                            Location = new Point(labelWidth + (horizontalPadding * 2), currentY),
-                            Size = new Size(controlWidth, 23),
-                            Text = "", // No text needed since we have the label
-                            Tag = input.Id // Store input ID in Tag for easier reference
-                        };
-                        break;
-
-                    // Could add more types here (dropdown, etc.) in the future
-
-                    default: // Default to TextBox for string, number, etc.
-                        inputControl = new TextBox
-                        {
-                            Text = input.DefaultValue ?? string.Empty,
-                            Location = new Point(labelWidth + (horizontalPadding * 2), currentY),
-                            Size = new Size(controlWidth, 23),
-                            Tag = input.Id // Store input ID in Tag for easier reference
-                        };
-                        break;
-                }
-
-                // Add tooltip if description is available
-                if (!string.IsNullOrEmpty(input.Description))
-                {
-                    ToolTip tooltip = new();
-                    tooltip.SetToolTip(inputControl, input.Description);
-                    tooltip.SetToolTip(label, input.Description);
-                }
-
-                // Store display condition if present
-                if (input.DisplayCondition != null)
-                {
-                    templateInputsDisplayConditions[input.Id] = input.DisplayCondition;
-                }
-
-                pnlTemplateParams.Controls.Add(inputControl);
-                templateInputControls[input.Id] = inputControl;
-
-                currentY += verticalSpacing;
-            }
-
-            // Add event handlers for controls that affect display conditions
-            foreach (var kvp in templateInputControls)
-            {
-                if (kvp.Value is CheckBox checkBox)
-                {
-                    checkBox.CheckedChanged += (s, e) => UpdateDisplayConditions();
-                }
-                else if (kvp.Value is TextBox textBox)
-                {
-                    textBox.TextChanged += (s, e) => UpdateDisplayConditions();
-                }
-                // Add handlers for other control types as needed
-            }
-
-            // Initial update of display conditions
-            UpdateDisplayConditions();
-        }
-
-        private void UpdateDisplayConditions()
-        {
-            // Get current values from all controls
-            var currentValues = GetTemplateParameterValues();
-
-            // Track if we need to reflow controls
-            bool visibilityChanged = false;
-
-            // Update visibility for each control with a display condition
-            foreach (var kvp in templateInputsDisplayConditions)
-            {
-                string inputId = kvp.Key;
-                DisplayCondition condition = kvp.Value;
-
-                if (templateInputControls.TryGetValue(inputId, out Control? control))
-                {
-                    bool shouldDisplay = Template.IsDisplayConditionMet(condition, currentValues);
-                    visibilityChanged |= control.Visible != shouldDisplay;
-                    control.Visible = shouldDisplay;
-
-                    // Also update the label visibility
-                    if (templateInputLabels.TryGetValue(inputId, out Control? label))
-                    {
-                        label.Visible = shouldDisplay;
-                    }
-                }
-            }
-
-            // Reflow visible controls to avoid gaps if needed
-            if (visibilityChanged)
-            {
-                ReflowControls();
-            }
-        }
-
-        private void ReflowControls()
-        {
-            // Reposition visible controls to avoid gaps
-            const int verticalSpacing = 30;
-            int currentY = 10;
-
-            // Get all input IDs ordered as they were originally added
-            var orderedInputs = templateInputControls.Keys.ToList();
-
-            foreach (var inputId in orderedInputs)
-            {
-                if (templateInputControls.TryGetValue(inputId, out Control? control) &&
-                    templateInputLabels.TryGetValue(inputId, out Control? label))
-                {
-                    if (control.Visible)
-                    {
-                        // Reposition the control and its label
-                        label.Location = new Point(label.Location.X, currentY + 3);
-                        control.Location = new Point(control.Location.X, currentY);
-                        currentY += verticalSpacing;
-                    }
-                }
-            }
-        }
-
-        private Dictionary<string, string> GetTemplateParameterValues()
-        {
-            var values = new Dictionary<string, string>();
-
-            foreach (var kvp in templateInputControls)
-            {
-                string value = string.Empty;
-
-                if (kvp.Value is TextBox textBox)
-                {
-                    value = textBox.Text;
-                }
-                else if (kvp.Value is CheckBox checkBox)
-                {
-                    value = checkBox.Checked ? "true" : "false";
-                }
-                // Add other control types as needed
-
-                values[kvp.Key] = value;
-
-            }
-
-            return values;
         }
 
         private void SaveSettings()
@@ -1646,26 +1460,200 @@ namespace AppRefiner
         {
             if (cmbTemplates.SelectedItem is Template selectedTemplate)
             {
-                GenerateTemplateParameterControls(selectedTemplate);
+                templateManager.ActiveTemplate = selectedTemplate;
+                GenerateTemplateUI(); // Call helper to generate UI
+            }
+            else
+            {
+                templateManager.ActiveTemplate = null;
+                pnlTemplateParams.Controls.Clear(); // Clear panel if no template selected
+                currentTemplateInputControls.Clear();
             }
         }
 
-        private void btnApplyTemplate_Click(object? sender, EventArgs e)
+        /// <summary>
+        /// Generates the UI controls for the currently active template's parameters.
+        /// </summary>
+        private void GenerateTemplateUI()
         {
-            if (cmbTemplates.SelectedItem is Template selectedTemplate)
-            {
-                var parameterValues = GetTemplateParameterValues();
+            pnlTemplateParams.Controls.Clear();
+            currentTemplateInputControls.Clear(); // Clear previous controls
 
-                if (!selectedTemplate.ValidateInputs(parameterValues))
+            if (templateManager.ActiveTemplate == null) return;
+
+            var definitions = templateManager.GetParameterDefinitionsForActiveTemplate();
+
+            if (definitions == null || definitions.Count == 0)
+            {
+                return;
+            }
+
+            const int labelWidth = 150;
+            const int controlWidth = 200;
+            const int verticalSpacing = 30;
+            const int horizontalPadding = 10;
+            int currentY = 10;
+
+            foreach (var definition in definitions)
+            {
+                // Create label for parameter
+                Label label = new Label
                 {
-                    MessageBox.Show("Please fill in all required fields.", "Required Fields Missing",
-                        MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                    return;
+                    Text = definition.Label + ":",
+                    Location = new Point(horizontalPadding, currentY + 3),
+                    Size = new Size(labelWidth, 20),
+                    AutoSize = false,
+                    Visible = definition.IsVisible,
+                    Tag = definition.Id // Store input ID in Tag for easy reference
+                };
+                pnlTemplateParams.Controls.Add(label);
+
+                // Create input control based on parameter type
+                Control inputControl;
+                switch (definition.Type.ToLower())
+                {
+                    case "boolean":
+                        var chkBox = new CheckBox
+                        {
+                            Checked = definition.CurrentValue.Equals("true", StringComparison.OrdinalIgnoreCase),
+                            Location = new Point(labelWidth + (horizontalPadding * 2), currentY),
+                            Size = new Size(controlWidth, 23),
+                            Text = "", // No text needed since we have the label
+                            Visible = definition.IsVisible,
+                            Tag = definition.Id // Store input ID in Tag
+                        };
+                        // Add event handler to update manager and regenerate UI
+                        chkBox.CheckedChanged += TemplateControl_ValueChanged;
+                        inputControl = chkBox;
+                        break;
+
+                    default: // Default to TextBox for string, number, etc.
+                        var txtBox = new TextBox
+                        {
+                            Text = definition.CurrentValue,
+                            Location = new Point(labelWidth + (horizontalPadding * 2), currentY),
+                            Size = new Size(controlWidth, 23),
+                            Visible = definition.IsVisible,
+                            Tag = definition.Id // Store input ID in Tag
+                        };
+                         // Add event handler to update manager and regenerate UI
+                        txtBox.TextChanged += TemplateControl_ValueChanged;
+                        inputControl = txtBox;
+                        break;
                 }
 
-                string generatedContent = selectedTemplate.Apply(parameterValues);
-                ApplyGeneratedTemplate(selectedTemplate, generatedContent);
+                // Add tooltip if description is available
+                if (!string.IsNullOrEmpty(definition.Description))
+                {
+                    ToolTip tooltip = new ToolTip();
+                    tooltip.SetToolTip(inputControl, definition.Description);
+                    tooltip.SetToolTip(label, definition.Description);
+                }
+
+                pnlTemplateParams.Controls.Add(inputControl);
+                currentTemplateInputControls[definition.Id] = inputControl; // Store reference
+
+                if (definition.IsVisible)
+                {
+                     currentY += verticalSpacing;
+                }
             }
+            
+            // Reflow controls after initial generation
+            ReflowTemplateUI();
+        }
+
+        /// <summary>
+        /// Event handler for when a template parameter control's value changes.
+        /// Updates the TemplateManager and potentially regenerates the UI.
+        /// </summary>
+        private void TemplateControl_ValueChanged(object? sender, EventArgs e)
+        {
+            if (sender is Control control && control.Tag is string inputId)
+            {
+                string newValue = "";
+                if (control is CheckBox chk) {
+                    newValue = chk.Checked ? "true" : "false";
+                } else if (control is TextBox txt) {
+                    newValue = txt.Text;
+                }
+                // Add other control types if needed
+
+                templateManager.UpdateParameterValue(inputId, newValue);
+                
+                // Regenerate UI to handle potential changes in display conditions
+                GenerateTemplateUI(); 
+            }
+        }
+
+        /// <summary>
+        /// Reflows the template parameter controls in the panel to remove gaps from hidden controls.
+        /// </summary>
+        private void ReflowTemplateUI()
+        {
+            const int verticalSpacing = 30;
+            int currentY = 10;
+
+            // Order controls based on their original definition order if possible,
+            // otherwise iterate through the panel's controls.
+            // Assuming controls were added in order: Label then Input for each parameter.
+            var orderedIds = templateManager.GetParameterDefinitionsForActiveTemplate()?.Select(d => d.Id).ToList() ?? new List<string>();
+
+            foreach (string id in orderedIds)
+            {
+                // Find the Label and Control pair for this ID
+                var label = pnlTemplateParams.Controls.OfType<Label>().FirstOrDefault(lbl => lbl.Tag as string == id);
+                var control = currentTemplateInputControls.TryGetValue(id, out var ctrl) ? ctrl : null;
+
+                if (label != null && control != null)
+                {
+                    if (label.Visible) // Assume if label is visible, control should be too
+                    {
+                        label.Location = new Point(label.Location.X, currentY + 3);
+                        control.Location = new Point(control.Location.X, currentY);
+                        currentY += verticalSpacing;
+                    }
+                }
+            }
+        }
+
+
+        private void btnApplyTemplate_Click(object? sender, EventArgs e)
+        {
+             if (activeEditor == null) {
+                 MessageBox.Show("No active editor to apply template to.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                 return;
+             }
+             if (templateManager.ActiveTemplate == null) {
+                 MessageBox.Show("No template selected.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                 return;
+             }
+             
+             // Validate inputs using the manager
+             if (!templateManager.ValidateInputs())
+             {
+                 MessageBox.Show("Please fill in all required fields.", "Required Fields Missing",
+                     MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                 return;
+             }
+             
+             // Check for replacement warning only if it's not insert mode
+             if (!templateManager.ActiveTemplate.IsInsertMode && !string.IsNullOrWhiteSpace(ScintillaManager.GetScintillaText(activeEditor)))
+             {
+                var mainHandle = Process.GetProcessById((int)activeEditor.ProcessId).MainWindowHandle;
+                var handleWrapper = new WindowWrapper(mainHandle);
+                 using var confirmDialog = new TemplateConfirmationDialog(
+                     "Applying this template will replace all content in the current editor. Do you want to continue?",
+                     mainHandle);
+
+                 if (confirmDialog.ShowDialog(handleWrapper) != DialogResult.Yes)
+                 {
+                     return; // User cancelled replacement
+                 }
+             }
+
+             // Apply the template using the manager
+             templateManager.ApplyActiveTemplateToEditor(activeEditor);
         }
 
         /// <summary>
@@ -2118,7 +2106,8 @@ namespace AppRefiner
                 "Apply a template to the current editor",
                 () =>
                 {
-                    ApplyTemplateCommand();
+                    // Directly trigger the button click logic
+                    btnApplyTemplate_Click(null, EventArgs.Empty); 
                 },
                 () => activeEditor != null
             ));
@@ -2685,87 +2674,9 @@ namespace AppRefiner
 
         private void ApplyTemplateCommand()
         {
-            /* only work if there's an active editor */
-            if (activeEditor == null) return;
-
-            // Get all available templates
-            var templates = Template.GetAvailableTemplates();
-
-            if (templates.Count == 0)
-            {
-                MessageBox.Show("No templates found.", "No Templates", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                return;
-            }
-            var mainHandle = Process.GetProcessById((int)activeEditor.ProcessId).MainWindowHandle;
-            var handleWrapper = new WindowWrapper(mainHandle);
-            // Check if editor is not empty and warn user
-            if (!string.IsNullOrWhiteSpace(ScintillaManager.GetScintillaText(activeEditor)))
-            {
-                using var confirmDialog = new TemplateConfirmationDialog(
-                    "Applying a template will replace all content in the current editor. Do you want to continue?",
-                    mainHandle);
-
-                if (confirmDialog.ShowDialog(handleWrapper) != DialogResult.Yes)
-                {
-                    return;
-                }
-            }
-
-            // Show template selection dialog
-            using var templateDialog = new TemplateSelectionDialog(templates, mainHandle);
-            if (templateDialog.ShowDialog(handleWrapper) != DialogResult.OK || templateDialog.SelectedTemplate == null)
-            {
-                return;
-            }
-
-            var selectedTemplate = templateDialog.SelectedTemplate;
-
-            // If the template has inputs, show parameter dialog
-            if (selectedTemplate.Inputs != null && selectedTemplate.Inputs.Count > 0)
-            {
-                using var parameterDialog = new TemplateParameterDialog(selectedTemplate, mainHandle);
-                if (parameterDialog.ShowDialog(handleWrapper) != DialogResult.OK)
-                {
-                    return;
-                }
-
-                var parameterValues = parameterDialog.ParameterValues;
-                string generatedContent = selectedTemplate.Apply(parameterValues);
-                ApplyGeneratedTemplate(selectedTemplate, generatedContent);
-            }
-            else
-            {
-                // Apply template without parameters
-                string generatedContent = selectedTemplate.Apply(new Dictionary<string, string>());
-                ApplyGeneratedTemplate(selectedTemplate, generatedContent);
-            }
-        }
-
-        private void ApplyGeneratedTemplate(Template template, string generatedContent)
-        {
-            if (activeEditor != null)
-            {
-                // Set the generated content in the editor
-                ScintillaManager.SetScintillaText(activeEditor, generatedContent);
-
-                // Handle cursor position or selection range if specified in the template
-                if (template.SelectionStart >= 0 && template.SelectionEnd >= 0)
-                {
-                    // Set the selection range
-                    ScintillaManager.SetSelection(activeEditor, template.SelectionStart, template.SelectionEnd);
-                    WindowHelper.FocusWindow(activeEditor.hWnd);
-                }
-                else if (template.CursorPosition >= 0)
-                {
-                    ScintillaManager.SetCursorPosition(activeEditor, template.CursorPosition);
-                    WindowHelper.FocusWindow(activeEditor.hWnd);
-                }
-            }
-            else
-            {
-                // If no editor is active, show the content in a dialog
-                ShowGeneratedTemplateDialog(generatedContent, template.TemplateName);
-            }
+            // This method is now primarily for the command palette / hotkey
+            // It should trigger the same logic as the button click.
+            btnApplyTemplate_Click(null, EventArgs.Empty);
         }
 
         private void btnDebugLog_Click(object sender, EventArgs e)
