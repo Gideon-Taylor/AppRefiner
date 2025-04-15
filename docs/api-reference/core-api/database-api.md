@@ -1,54 +1,63 @@
 # Database API
 
-The Database API provides interfaces and classes for interacting with PeopleSoft databases in AppRefiner. This document describes the core components of the Database API and how to use them effectively.
+The Database API provides interfaces and classes for interacting with PeopleSoft databases within AppRefiner plugins (like custom Linters, Tooltip Providers, etc.). This document describes the core components available to plugins when database access is enabled and configured.
 
 ## Overview
 
-The Database API is designed to provide a consistent interface for accessing PeopleSoft database objects, regardless of the underlying database system. The main components of this API are:
+The primary interface for database interaction within a plugin is `IDataManager`. An instance of this interface is made available to plugin base classes (e.g., `BaseLintRule.DataManager`) when the plugin declares a database requirement (`Optional` or `Required`) and a valid database connection exists.
 
-- `IDataManager`: The main interface for database operations
-- `IDbConnection`: Interface for database connections
-- Data models: `PeopleCodeItem`, `HtmlDefinition`, and other model classes
+## `IDataManager` Interface
 
-## IDataManager
-
-`IDataManager` is the primary interface for interacting with PeopleSoft databases:
+Provides methods to query PeopleSoft metadata and object definitions.
 
 ```csharp
 public interface IDataManager : IDisposable
 {
-    IDbConnection Connection { get; }
+    // Connection Status
+    IDbConnection Connection { get; } // Access to lower-level connection (use with caution)
     bool IsConnected { get; }
-    
-    bool Connect();
-    void Disconnect();
-    
+
+    // Connection Management (Typically handled by AppRefiner itself)
+    // bool Connect();
+    // void Disconnect();
+
+    // SQL Definitions
     string GetSqlDefinition(string objectName);
     Dictionary<string, string> GetAllSqlDefinitions();
-    
+
+    // HTML Definitions
     HtmlDefinition GetHtmlDefinition(string objectName);
     Dictionary<string, HtmlDefinition> GetAllHtmlDefinitions();
-    
+
+    // PeopleCode Items (e.g., for Project Linting)
     List<PeopleCodeItem> GetPeopleCodeItemsForProject(string projectName);
     List<PeopleCodeItem> GetPeopleCodeItemMetadataForProject(string projectName);
-    bool LoadPeopleCodeItemContent(PeopleCodeItem item);
+    bool LoadPeopleCodeItemContent(PeopleCodeItem item); // Loads PROGTXT for an item
+
+    // Application Classes
+    bool CheckAppClassExists(string appClassPath);
+    string? GetAppClassSourceByPath(string appClassPath);
+    PackageItems GetAppPackageItems(string packagePath); // List subpackages/classes
+
+    // Record Definitions
+    List<RecordFieldInfo>? GetRecordFields(string recordName);
 }
 ```
 
-### Key Properties and Methods
+### Key Methods for Plugins
 
-- `Connection`: Gets the underlying database connection
-- `IsConnected`: Indicates whether the manager is currently connected
-- `Connect()`: Establishes a connection to the database
-- `Disconnect()`: Closes the database connection
-- `GetSqlDefinition()`: Retrieves SQL definitions
-- `GetHtmlDefinition()`: Retrieves HTML definitions
-- `GetPeopleCodeItemsForProject()`: Retrieves PeopleCode items for a project
-- `LoadPeopleCodeItemContent()`: Loads the content for a PeopleCode item
+-   **`IsConnected` (bool)**: Check if a connection is active before attempting calls.
+-   **`GetSqlDefinition(string objectName)`**: Retrieves the text of a specific SQL Object by name.
+-   **`GetHtmlDefinition(string objectName)`**: Retrieves an `HtmlDefinition` object (containing content and max bind number) for an HTML object by name.
+-   **`CheckAppClassExists(string appClassPath)`**: Verifies if an Application Class exists (e.g., `MY_PKG:Utils:MyClass`).
+-   **`GetAppClassSourceByPath(string appClassPath)`**: Retrieves the source code for an existing Application Class.
+-   **`GetAppPackageItems(string packagePath)`**: Gets lists of immediate subpackages and classes within a given package path (e.g., `MY_PKG` or `MY_PKG:Utils`). Returns a `PackageItems` object.
+-   **`GetRecordFields(string recordName)`**: Retrieves metadata for all fields in a specified record definition. Returns a list of `RecordFieldInfo` objects, or `null` if the record doesn't exist. Uses internal caching based on record version.
+-   *(Project-related methods are primarily used by the built-in Project Linter feature)*.
 
-## IDbConnection
+## `IDbConnection` Interface
 
-`IDbConnection` provides a database-agnostic way to interact with the underlying database:
+Provides lower-level database access. **Use with caution within plugins.** Prefer using the specific methods on `IDataManager` where possible.
 
 ```csharp
 public interface IDbConnection : IDisposable
@@ -56,175 +65,112 @@ public interface IDbConnection : IDisposable
     string ConnectionString { get; set; }
     ConnectionState State { get; }
     string ServerName { get; }
-    
     void Open();
     void Close();
-    
     IDbCommand CreateCommand();
     DataTable ExecuteQuery(string sql, Dictionary<string, object>? parameters = null);
     int ExecuteNonQuery(string sql, Dictionary<string, object>? parameters = null);
 }
 ```
 
-### Key Properties and Methods
-
-- `ConnectionString`: Gets or sets the connection string
-- `State`: Gets the current state of the connection
-- `ServerName`: Gets the name of the database server
-- `Open()`: Opens the database connection
-- `Close()`: Closes the database connection
-- `ExecuteQuery()`: Executes a SQL query and returns results
-- `ExecuteNonQuery()`: Executes a non-query SQL command
-
 ## Data Models
 
-### PeopleCodeItem
+Common data structures returned by `IDataManager` methods:
 
-Represents a PeopleSoft PeopleCode object:
+### `PeopleCodeItem`
+
+Represents a PeopleSoft object containing PeopleCode (RecordField, AppPackage Class, AppEngine Action, etc.).
 
 ```csharp
 public class PeopleCodeItem
 {
-    // Object identifiers
-    public int ObjectId1 { get; }
-    public string ObjectValue1 { get; }
-    public int ObjectId2 { get; }
-    public string ObjectValue2 { get; }
-    // ... additional object ID/value pairs
+    // Object identifiers (7 pairs defining the unique object)
+    public int[] ObjectIDs { get; }
+    public string[] ObjectValues { get; }
     
-    // Content properties
+    // Content properties (populated by LoadPeopleCodeItemContent)
     public byte[]? ProgramText { get; private set; }
     public List<NameReference> NameReferences { get; private set; }
     public PeopleCodeType PeopleCodeType { get; private set; }
     
     // Methods
-    public void SetProgramText(byte[] programText);
-    public void SetNameReferences(List<NameReference> nameReferences);
-    public string GetProgramTextAsString(Encoding? encoding = null);
-    public string BuildPath();
-    public ProjectItem ToProjectItem();
-    public PeopleCodeType DeriveObjectType();
+    public string GetProgramTextAsString(Encoding? encoding = null); // Decodes ProgramText
+    public string BuildPath(); // Creates a user-friendly path representation
+    // ... other internal methods
 }
 ```
 
-### HtmlDefinition
+### `HtmlDefinition`
 
-Represents an HTML definition in PeopleSoft:
+Represents an HTML definition.
 
 ```csharp
 public class HtmlDefinition
 {
-    public string Name { get; }
-    public string Type { get; }
-    public string Content { get; }
-    
-    public HtmlDefinition(string name, string type, string content);
+    public string Name { get; } // Should match requested name
+    public string Content { get; } // The actual HTML content
+    public int MaxBindNum { get; } // Highest %Bind(:N) number found
 }
 ```
 
-### NameReference
+### `NameReference`
 
-Represents a reference to a name in PeopleCode:
+Represents a name reference entry from `PSPCMNAMEDT`.
 
 ```csharp
 public class NameReference
 {
-    public int NameNum { get; }
-    public string RecName { get; }
-    public string RefName { get; }
-    
-    public NameReference(int nameNum, string recName, string refName);
+    public int NameNum { get; } // The NAMENUM value
+    public string RecName { get; } // The RECNAME value
+    public string RefName { get; } // The REFNAME value
 }
 ```
 
-### PeopleCodeType
+### `RecordFieldInfo`
 
-Enumeration of PeopleCode object types:
+Represents metadata for a field within a record definition.
 
 ```csharp
-public enum PeopleCodeType
+public class RecordFieldInfo
 {
-    ApplicationEngine = 66,
-    ApplicationPackage = 104,
-    ComponentInterface = 74,
-    Component = 10,
-    ComponentRecField = 999,
-    ComponentRecord = 998,
-    Menu = 3,
-    Message = 997,
-    Page = 9,
-    RecordField = 1,
-    Subscription = 996
+    public string FieldName { get; }
+    public int FieldNum { get; }
+    public int FieldType { get; } // PeopleSoft field type enum value
+    public int Length { get; }
+    public int DecimalPos { get; }
+    public int UseEdit { get; } // Bitmask for key properties (PrimaryKey, SearchKey, etc.)
+    // Helper properties for UseEdit flags can be added
 }
 ```
 
-## DataManagerRequirement
+### `PackageItems`
 
-Enumeration specifying database requirements for features:
+Represents the contents of an Application Package path.
 
 ```csharp
-public enum DataManagerRequirement
-{
-    NotRequired,
-    Optional,
-    Required
-}
+public record PackageItems(string Path, List<string> SubPackages, List<string> Classes);
 ```
 
-## Implementing a Custom Data Manager
+### `PeopleCodeType` Enum
 
-To implement a custom data manager for a specific database system:
+Standard PeopleSoft object type IDs for PeopleCode containers.
 
 ```csharp
-public class MyCustomDataManager : IDataManager
-{
-    private readonly IDbConnection _connection;
-    
-    public IDbConnection Connection => _connection;
-    public bool IsConnected => _connection.State == ConnectionState.Open;
-    
-    public MyCustomDataManager(string connectionString)
-    {
-        _connection = new MyCustomDbConnection(connectionString);
-    }
-    
-    public bool Connect()
-    {
-        try
-        {
-            _connection.Open();
-            return true;
-        }
-        catch (Exception)
-        {
-            return false;
-        }
-    }
-    
-    public void Disconnect()
-    {
-        _connection.Close();
-    }
-    
-    // Implement other methods...
-    
-    public void Dispose()
-    {
-        _connection.Dispose();
-    }
-}
+public enum PeopleCodeType { /* ... values like ApplicationEngine, RecordField, ApplicationPackage ... */ }
 ```
 
-## Best Practices
+## `DataManagerRequirement` Enum
 
-1. **Connection Management**: Always properly open and close connections
-2. **Error Handling**: Implement robust error handling for database operations
-3. **Caching**: Consider caching frequently accessed data
-4. **Security**: Store connection strings securely
-5. **Transactions**: Use transactions for operations that modify data
+Used by plugins (`BaseLintRule`, `BaseStyler`, etc.) to declare database needs.
 
-## See Also
+```csharp
+public enum DataManagerRequirement { NotRequired, Optional, Required }
+```
 
-- [Linter API](linter-api.md)
-- [Refactor API](refactor-api.md)
-- [Styler API](styler-api.md)
+## Best Practices for Plugins Using `IDataManager`
+
+1.  **Check `IsConnected`**: Verify connection before making calls.
+2.  **Declare Requirement**: Set `DatabaseRequirement` correctly in your plugin class.
+3.  **Handle Nulls**: Methods like `GetRecordFields` can return `null` if objects aren't found.
+4.  **Performance**: Database calls can be slow; use judiciously. Caching (like for `GetRecordFields`) is handled internally where feasible.
+5.  **Error Handling**: Wrap database calls in `try-catch` if necessary, although `IDataManager` implementations should handle common errors.

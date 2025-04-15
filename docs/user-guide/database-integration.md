@@ -1,127 +1,64 @@
 # Database Integration
 
-AppRefiner provides powerful database integration features that allow you to work directly with PeopleSoft databases. This guide explains how to configure and use these features effectively.
+AppRefiner can connect to your PeopleSoft Oracle database in a **read-only** capacity to enhance certain features by providing necessary context about PeopleCode objects, classes, and SQL definitions. This guide explains how to configure and leverage this connection.
 
-## Supported Database Systems
+## Purpose of Database Connection
 
-AppRefiner currently supports the following database systems:
+The database connection is used exclusively to:
 
-- Oracle Database (for PeopleSoft implementations)
+- **Improve Linter Accuracy**: Some linters can provide more accurate results when they have access to database context (e.g., verifying object references in SQLExec, checking parameters in function calls).
+- **Enable Project Linting**: The `Lint: Lint Project` command requires a database connection to analyze all objects within the current Application Designer project.
+- **Enhance Tooltips**: Certain tooltip providers use the connection to display more detailed information (e.g., details about PeopleSoft objects, method parameters).
+- **Enable Specific Stylers**: Some stylers require database access (e.g., verifying Application Class imports).
+- **Support Certain Refactors**: Refactoring tools that interact with class definitions or imports need database context (e.g., Resolve Imports, Add Import).
 
-## Configuring Database Connections
+**Important**: AppRefiner **does not** modify the database. It does not provide features for browsing, searching, editing, or saving PeopleCode or other objects directly back to the database. All interactions are read-only to gather context.
 
-To set up a database connection:
+## Configuring and Connecting
 
-1. Go to **Tools > Database Connections** in the menu
-2. Click **Add New Connection**
-3. Enter the following information:
-   - Connection Name: A descriptive name for this connection
-   - Database Type: Oracle
-   - Server: The database server hostname or IP address
-   - Port: The database server port (default: 1521)
-   - Service Name/SID: The Oracle service name or SID
-   - Username: Your database username
-   - Password: Your database password
-   - Schema: The PeopleSoft schema name (usually SYSADM)
-4. Click **Test Connection** to verify the settings
-5. Click **Save** to store the connection
+1.  **Open Command Palette**: Press `Ctrl+Shift+P`.
+2.  **Run Connect Command**: Type and select `DB: Connect to database`.
+3.  **Enter Credentials**: Provide the following information in the connection dialog:
+    *   **TNS Name**: The TNS entry for your PeopleSoft database (from your `tnsnames.ora` file).
+    *   **Username**: Your database username.
+    *   **Password**: Your database password.
+4.  **Choose Authentication Method**:
+    *   **Bootstrap User**: Typically your standard PeopleSoft login (e.g., PS). While this user often has write access, AppRefiner will only perform read operations.
+    *   **Read-Only User**: A user with restricted, read-only database access. If using this method, you may need to explicitly specify the PeopleSoft **Schema Name** (usually `SYSADM` or similar) so AppRefiner knows where to find the objects.
+5.  **Password Saving (Optional)**: You can choose to save your password. If saved, it is encrypted using Windows Data Protection API (DPAPI), specific to your Windows user profile.
+6.  **Connect**: Click the connect button.
 
-## Connecting to a Database
+Alternatively, a "Connect DB..." button may be available on the **Linters Tab** of the main AppRefiner window.
 
-To connect to a configured database:
+Your Username and selected Authentication Method are saved automatically for future connections.
 
-1. Go to **Database > Connect** in the menu
-2. Select the connection you want to use from the dropdown
-3. Click **Connect**
+## Features Utilizing Database Connection
 
-Once connected, the status bar will display the current connection name.
+While not always strictly required (some features may degrade gracefully), a database connection enhances or enables the following:
 
-## Working with PeopleCode Objects
-
-When connected to a database, you can:
-
-### Browse PeopleCode Objects
-
-1. Go to **Database > Browse Objects** in the menu
-2. Use the tree view to navigate through:
-   - Records
-   - Fields
-   - Pages
-   - Components
-   - App Packages
-   - And more
-
-### Search for Objects
-
-1. Go to **Database > Search Objects** in the menu
-2. Enter a search term
-3. Select the object types to include in the search
-4. Click **Search**
-
-### View and Edit PeopleCode
-
-1. Find the object in the browser or search results
-2. Double-click to open the associated PeopleCode
-3. Make your changes in the editor
-4. Save changes back to the database by clicking **Save** or pressing `Ctrl+S`
-
-## Working with SQL Objects
-
-AppRefiner allows you to work with SQL definitions:
-
-### View SQL Definitions
-
-1. Go to **Database > SQL Objects** in the menu
-2. Select the SQL object you want to view
-3. The SQL definition will open in the editor
-
-### Analyze SQL Statements
-
-AppRefiner can analyze SQL statements in your PeopleCode:
-
-1. Open a PeopleCode file containing SQL statements
-2. Right-click on a SQL statement
-3. Select **Analyze SQL**
-4. AppRefiner will check for:
-   - Syntax errors
-   - Performance issues
-   - Best practices violations
-
-## Working with HTML Definitions
-
-AppRefiner allows you to work with HTML definitions:
-
-1. Go to **Database > HTML Objects** in the menu
-2. Select the HTML object you want to view
-3. The HTML definition will open in the editor
-
-## Project Integration
-
-AppRefiner integrates with PeopleSoft projects:
-
-### Load Project PeopleCode
-
-1. Go to **Database > Load Project** in the menu
-2. Select the project you want to load
-3. Choose which object types to include
-4. Click **Load**
-
-All PeopleCode objects in the project will be loaded into AppRefiner.
-
-### Compare with Database
-
-Compare your local changes with the database version:
-
-1. Right-click on an open PeopleCode file
-2. Select **Compare with Database**
-3. A diff view will show the differences between your local version and the database version
+- **Commands**:
+    - `Lint: Lint Project` (Required)
+- **Linters** (Benefit from context):
+    - Linters checking SQLExec/CreateSQL parameters (`SQL_EXEC_VAR`, `CREATE_SQL_VAR`)
+    - Linters validating object types or method calls
+    - (Others may benefit implicitly)
+- **Tooltip Providers**:
+    - `PeopleSoftObjectTooltipProvider` (Required)
+    - `MethodParametersTooltipProvider` (Optional - provides richer info)
+- **Stylers**:
+    - `InvalidAppClass` (Required)
+- **Refactors** (Inferred requirement):
+    - `Refactor: Resolve Imports`
+    - `Refactor: Add Import`
+    - `Refactor: Create AutoComplete`
 
 ## Security Considerations
 
-- Database credentials are stored encrypted in your user profile
-- You can choose to not save passwords, requiring manual entry each time
-- All database operations are performed with your provided credentials, so ensure you have appropriate permissions
+- AppRefiner only performs read operations on the database.
+- Your database Username and selected Authentication Method are stored for convenience.
+- Password storage is optional. If you choose to save the password, it is encrypted using Windows DPAPI, tied to your user account.
+- Ensure the credentials provided have the necessary (read) permissions for AppRefiner to query PeopleSoft metadata tables (like `PSRECDEFN`, `PSPCMPROG`, etc.).
 
 ## Next Steps
 
-To learn about code templates in AppRefiner, proceed to the [Templates](templates.md) section.
+To learn about using code templates in AppRefiner, proceed to the [Templates](templates.md) section.

@@ -6,125 +6,34 @@ AppRefiner provides powerful code styling features to help you maintain clean, r
 
 Code styling in AppRefiner refers to:
 
-1. **Visual formatting** - How code appears in the editor
-2. **Code analysis** - Identifying stylistic issues
-3. **Automatic formatting** - Applying consistent formatting rules
+1. **Visual formatting** - How code appears in the editor through syntax highlighting.
+2. **Code analysis** - Identifying stylistic issues using Code Stylers.
 
 ## Syntax Highlighting
 
-AppRefiner provides rich syntax highlighting for PeopleCode:
-
-- **Keywords** are displayed in blue
-- **Strings** are displayed in red
-- **Comments** are displayed in green
-- **Variables** are displayed in black
-- **Method calls** are displayed in purple
-- **Constants** are displayed in teal
-
-You can customize the colors in **Tools > Options > Editor > Colors**.
+AppRefiner provides rich syntax highlighting for PeopleCode, applying distinct, fixed colors to different code elements like keywords, strings, comments, variables, method calls, and constants to improve readability. These colors are currently not user-configurable.
 
 ## Code Stylers
 
-AppRefiner includes several code stylers that analyze your code for stylistic issues:
+AppRefiner includes several code stylers that analyze your code for specific stylistic issues or provide visual cues. These run automatically as you work.
 
-### Unused Imports
+Available stylers include:
 
-Identifies import statements that are not used in your code.
-
-### Unused Variables
-
-Highlights variables that are declared but never used.
-
-### Meaningless Variable Names
-
-Identifies variables with non-descriptive names (like a, b, x, etc.).
-
-### Property As Variable
-
-Detects when properties are accessed directly instead of through getter/setter methods.
-
-### Todo/Fixme Comments
-
-Highlights TODO, FIXME, NOTE, and other special comment markers with different colors:
-- **TODO** comments are highlighted in orange
-- **FIXME** comments are highlighted in red
-- **NOTE** and **TBD** comments are highlighted in yellow
-- **HACK** and **BUG** comments are highlighted in bright green
-
-This styler also provides a summary annotation at the end of the file listing all marked comments, making it easy to track tasks that need attention.
-
-### Linter Suppression
-
-Highlights areas where linter warnings have been suppressed.
-
-> **For Developers:** For technical details about styler implementation, see the [Styler API Reference](../api-reference/core-api/styler-api.md).
+- **Unused Imports**: Identifies import statements that are not referenced in your code.
+- **Unused Variables**: Highlights variables that are declared but never used.
+- **Undefined Variables**: Highlights variables that are used but not declared.
+- **Meaningless Variable Names**: Flags variables with overly generic or non-descriptive names (e.g., `a`, `b`, `x`).
+- **Property As Variable**: Detects when properties are accessed directly instead of through getter/setter methods where appropriate.
+- **Invalid App Class**: Checks if imported Application Classes actually exist in the database (requires DB connection).
+- **Todo/Fixme Comments**: Highlights `TODO`, `FIXME`, `NOTE`, `BUG`, `HACK`, `TBD` comment markers with distinct colors and provides a summary annotation.
+- **Linter Suppression**: Highlights areas where linter warnings have been suppressed using `/* #AppRefiner suppress(...) */` comments.
 
 ## Enabling and Configuring Stylers
 
-To enable or configure code stylers:
+Stylers can be enabled or disabled individually:
 
-1. Go to **Tools > Options** in the menu
-2. Select the **Stylers** tab
-3. Check the box next to each styler you want to enable
-4. Click **Apply** to save your changes
-
-## Code Formatting
-
-AppRefiner can automatically format your code according to configurable rules:
-
-### Indentation
-
-Control indentation settings:
-
-1. Go to **Tools > Options > Editor > Formatting**
-2. Set your preferred indentation style (Tabs or Spaces)
-3. Set the tab size (usually 2 or 4 spaces)
-
-### Automatic Formatting
-
-To format code automatically:
-
-1. Select the code you want to format (or the entire file)
-2. Press `Ctrl+K, Ctrl+F` or select **Edit > Format Selection** from the menu
-
-### Format on Save
-
-Enable automatic formatting whenever you save a file:
-
-1. Go to **Tools > Options > Editor > Formatting**
-2. Check "Format on Save"
-
-## Code Folding
-
-AppRefiner supports code folding to help you focus on specific parts of your code:
-
-- Click the "-" icon in the margin to collapse a code block
-- Click the "+" icon to expand it
-- Use `Alt+Left` to collapse the current level
-- Use `Alt+Right` to expand the current level
-- Use `Ctrl+Alt+Left` to collapse all blocks
-- Use `Ctrl+Alt+Right` to expand all blocks
-
-## Code Style Configuration
-
-You can customize code style rules to match your team's standards:
-
-1. Go to **Tools > Options > Editor > Code Style**
-2. Configure rules for:
-   - Brace placement
-   - Spacing
-   - Line wrapping
-   - Naming conventions
-   - And more
-
-## Exporting and Importing Style Settings
-
-Share your code style settings with your team:
-
-1. Go to **Tools > Options > Editor > Code Style**
-2. Click **Export** to save your settings to a file
-3. Share this file with your team members
-4. They can click **Import** to apply the same settings
+- **Via UI**: Navigate to the **Stylers Tab** in the main AppRefiner window and check/uncheck the box next to each styler.
+- **Via Command Palette**: Use the `Styler: Toggle [Styler Description]` commands (e.g., `Styler: Toggle Highlights TODO/FIXME comments`) found in the Command Palette (`Ctrl+Shift+P`).
 
 ## Next Steps
 

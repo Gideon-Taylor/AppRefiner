@@ -16,13 +16,16 @@ AppRefiner supports in-line annotations that appear underneath the offending lin
 
 ## When Annotations Appear
 
-Annotations are only produced when a user runs linters on the code. To see annotations in your code:
+Annotations appear in the editor after you explicitly run one or more linters against the current code. To see annotations:
 
-1. Open a code file in the editor
-2. Run the linting process (manually or automatically, depending on your settings)
-3. View the annotations that appear under problematic code lines
+1.  Open a PeopleCode file in Application Designer.
+2.  Run linters using one of the following methods:
+    *   Press the shortcut `Ctrl+Alt+L` (runs all active linters).
+    *   Use the Command Palette (`Ctrl+Shift+P`) to run `Lint: Run All Active Linters` or a specific linter command like `Lint: [Linter Description]`.
+3.  Annotations corresponding to any issues found will appear inline below the relevant code lines.
+4.  You can remove existing annotations using the `Lint: Clear Annotations` command from the Command Palette.
 
-For more information about the linting system, see the [Linting Overview](../linting/overview.md).
+For more details on running linters, see the [Working with Linters](../../user-guide/working-with-linters.md) section in the User Guide.
 
 ## Benefits of Annotations
 
@@ -33,5 +36,5 @@ For more information about the linting system, see the [Linting Overview](../lin
 
 ## Related Features
 
-- [Linting Overview](../linting/overview.md)
+- [Working with Linters](../../user-guide/working-with-linters.md)
 - [Code Folding](code-folding.md)

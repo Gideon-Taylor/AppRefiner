@@ -9,37 +9,14 @@ This section provides detailed information about each feature AppRefiner adds to
 - [SQL Formatting](editor-tweaks/sql-formatting.md)
 - [Dark Mode](editor-tweaks/dark-mode.md)
 - [Annotations](editor-tweaks/annotations.md)
-- [Code Styling](styling.md)
+- [Code Styling](code-styling.md)
 - [Code Flow](editor-tweaks/code-flow.md)
 
 ### Code Analysis
 - [Linting Overview](linting/overview.md)
-- [Available Lint Rules](linting/available-rules.md)
+- [Available Lint Rules](../../user-guide/working-with-linters.md#available-linters) (See User Guide)
 - [Custom Lint Rules](linting/custom-rules.md)
-- [Suppressing Lint Warnings](linting/suppressing-warnings.md)
-
-### SQL Validation
-- [SQL Binding Validation](sql-validation/binding-validation.md)
-- [SQL Injection Prevention](sql-validation/injection-prevention.md)
-- [SQL Definition References](sql-validation/definition-references.md)
+- [Suppressing Lint Warnings](../../user-guide/working-with-linters.md#suppressing-linter-warnings) (See User Guide)
 
 ### Code Refactoring
-- [Refactoring Overview](refactoring/overview.md)
-- [Variable Renaming](refactoring/variable-renaming.md)
-- [Import Optimization](refactoring/import-optimization.md)
-- [FlowerBox Headers](refactoring/flowerbox-headers.md)
-
-### Style Analysis
-- [Style Analysis Overview](styling/overview.md)
-- [Variable Naming](styling/variable-naming.md)
-- [Property Usage](styling/property-usage.md)
-- [Unused Code Detection](styling/unused-code.md)
-
-### Database Integration
-- [Database Connection](database/connection.md)
-- [Enhanced Linting with Database](database/enhanced-linting.md)
-
-### Productivity Features
-- [Global Hotkeys](productivity/global-hotkeys.md)
-- [Templates](productivity/templates.md)
-- [Command Palette](productivity/command-palette.md)
+- [Using Refactoring Tools](../../user-guide/using-refactoring-tools.md) (See User Guide)

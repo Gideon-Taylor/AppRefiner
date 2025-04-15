@@ -16,8 +16,8 @@ The Command Palette works similarly to VS Code, providing quick access to all Ap
 
 | Shortcut | Action |
 |----------|--------|
-| `Ctrl+Alt+L` | Run Linting |
-| `Ctrl+Shift+I` | Resolve Imports |
+| `Ctrl+Alt+L` | Run active linters on the current program and show results as inline annotations |
+| `Ctrl+Shift+I` | Resolve Imports (scan for App Classes and ensure they are imported) |
 
 ## Code Navigation
 
@@ -28,23 +28,6 @@ The Command Palette works similarly to VS Code, providing quick access to all Ap
 | `Ctrl+Alt+Left` | Collapse All |
 | `Ctrl+Alt+Right` | Expand All |
 
-## Code Refactoring
-
-| Shortcut | Action |
-|----------|--------|
-| `Ctrl+Shift+R` | Rename Variable |
-
-## Editor Controls
-
-| Shortcut | Action |
-|----------|--------|
-| `Ctrl+F` | Find |
-| `Ctrl+H` | Replace |
-| `Ctrl+Z` | Undo |
-| `Ctrl+Y` | Redo |
-| `Ctrl+S` | Save |
-| `Ctrl+A` | Select All |
-
 ## Code Folding
 
 | Shortcut | Action |
@@ -54,11 +37,15 @@ The Command Palette works similarly to VS Code, providing quick access to all Ap
 | `Ctrl+Alt+Left` | Collapse All Blocks |
 | `Ctrl+Alt+Right` | Expand All Blocks |
 
+## Code Refactoring
+
+| Shortcut | Action |
+|----------|--------|
+| `Ctrl+Shift+R` | Rename (local/instance variables, parameters, private methods) |
+
 ## Customizing Shortcuts
 
 Currently, AppRefiner does not support customizing keyboard shortcuts. However custom built plugins (linters/stylers/refactors) are able to register their own keyboard shortcuts.
-
-**Note** Custom build plugins 
 
 ## Next Steps
 

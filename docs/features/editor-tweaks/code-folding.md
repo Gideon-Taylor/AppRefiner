@@ -8,17 +8,28 @@ PeopleCode files can become lengthy and complex, especially when they contain mu
 
 ## How to Use Code Folding
 
-### Collapsing Code
+### Visual Indicators
 
-- **Click the `-` symbol** in the gutter margin next to a foldable section of code to collapse it
-- **Use keyboard shortcut Ctrl+M, Ctrl+M** to toggle folding at the current cursor position
-- **Use keyboard shortcut Ctrl+M, Ctrl+L** to collapse all foldable sections in the file
+- **Click the `-` symbol** in the gutter margin (left side of the editor) next to a code block (like a function, method, loop, or comment) to collapse it.
+- **Click the `+` symbol** next to a collapsed block to expand it.
 
-### Expanding Code
+### Keyboard Shortcuts
 
-- **Click the `+` symbol** in the gutter margin next to a collapsed section to expand it
-- **Use keyboard shortcut Ctrl+M, Ctrl+M** to toggle folding at the current cursor position
-- **Use keyboard shortcut Ctrl+M, Ctrl+O** to expand all collapsed sections in the file
+- **Collapse Current Block**: `Alt+Left`
+- **Expand Current Block**: `Alt+Right`
+- **Collapse All Blocks**: `Ctrl+Alt+Left`
+- **Expand All Blocks**: `Ctrl+Alt+Right`
+
+### Command Palette
+
+- Run `Editor: Collapse All` from the Command Palette (`Ctrl+Shift+P`).
+- Run `Editor: Expand All` from the Command Palette (`Ctrl+Shift+P`).
+
+### Initial Folding State (Auto Collapse)
+
+- You can control whether code blocks are automatically collapsed when an editor is first opened.
+- Use the `Editor: Toggle Auto Collapse` command in the Command Palette to turn this setting on or off.
+- This setting corresponds to the "Auto Collapse" checkbox on the Settings tab in the main AppRefiner window.
 
 ## Foldable Sections
 

@@ -12,11 +12,14 @@ AppRefiner's Dark Mode transforms the code editor into a dark-themed color schem
 - **Reduced blue light**: Dark backgrounds emit less blue light, which can help with sleep patterns if you code at night
 - **Improved focus**: The dark background can help highlight syntax coloring and make code stand out more clearly
 
-## Enabling Dark Mode
+## Enabling and Controlling Dark Mode
 
-Dark Mode can be enabled by executing the Dark Mode command from the Command Palette (Ctrl+Shift+P on Windows, Cmd+Shift+P on macOS).
+There are two ways to control Dark Mode:
 
-**Note**: Currently this is a one-way transformation, there is no undo. To reset the editor's appearance, simply close and reopen PeopleCode/HTML/SQL defintion.
+1.  **Apply to Current Editor**: Use the Command Palette (`Ctrl+Shift+P`) and run the `Editor: Dark Mode` command. This applies dark styling immediately to the currently active Application Designer editor window.
+2.  **Apply Automatically**: Use the Command Palette (`Ctrl+Shift+P`) and run the `Editor: Toggle Auto Dark Mode` command. This toggles the setting (found on the Settings tab in AppRefiner) that controls whether dark mode is applied automatically whenever AppRefiner enhances an editor window.
+
+**Note on Reverting**: Applying dark mode via the `Editor: Dark Mode` command is currently a one-way transformation for that specific editor instance. There is no direct "undo" command for it. To revert the appearance of an editor window that had dark mode applied manually, you must close and reopen that specific PeopleCode/HTML/SQL definition in Application Designer. If you used the *Auto Dark Mode* setting, simply toggle it off (`Editor: Toggle Auto Dark Mode`) and reopen the definition.
 
 ## Related Features
 

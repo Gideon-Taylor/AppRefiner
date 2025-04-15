@@ -1,38 +1,29 @@
 ## Code Flow Improvements
 
-> **Security Note**: The following features require code execution within the Application Designer process context through DLL injection. While this enables powerful features, it also means the code runs with the same privileges as the Application Designer. Please ensure you trust the source of the AppRefiner installation.
+> **Security Note**: AppRefiner integrates deeply with Application Designer using techniques like DLL injection to provide enhanced features. This code runs with the same privileges as Application Designer. Ensure you trust the source of your AppRefiner installation.
 
-### Auto Indentation
-AppRefiner provides intelligent auto-indentation for PeopleCode editors that automatically adjusts indentation based on code blocks. The indentation rules understand common PeopleCode constructs including:
-
-- If/End-If blocks
-- For/End-For loops
-- While/End-While loops
-- Method/End-Method blocks
-- Function/End-Function blocks
-- Evaluate/End-Evaluate blocks
-- Try/End-Try blocks
-- Repeat/Until loops
-
-The indentation is context-aware and handles:
-- Proper indentation of nested blocks
-- Special cases like `else` clauses that align with their parent `if` statement
-- Automatic de-indentation of `end-*` statements to match their opening block
-- Proper handling of method declarations in class headers
+AppRefiner provides several features that streamline the process of writing and understanding code within the Application Designer editor:
 
 ### Auto Pairing
-If enabled AppRefiner will automatically pairs quotes and parentheses as you type, making code editing more efficient (note: This requires Auto Indentation to be enabled too):
 
-- When you type an opening quote (`"`), a closing quote is automatically inserted
-- When you type an opening parenthesis (`(`), a closing parenthesis is automatically inserted
-- The cursor is positioned between the paired characters
-- When typing over an auto-inserted closing character, it's skipped instead of duplicated
-- Special handling for commas and semicolons ensures they're placed outside of quoted strings
+Controlled via the "Auto-Pairing" setting (toggled using the `Editor: Toggle Auto Pairing` command), this feature automatically pairs quotes and parentheses as you type:
+
+- When you type an opening quote (`"`), a closing quote is automatically inserted.
+- When you type an opening parenthesis (`(`), a closing parenthesis is automatically inserted.
+- The cursor is positioned between the paired characters for immediate typing.
+- Typing over an auto-inserted closing character skips it, preventing duplication.
+- Special handling exists for commas and semicolons to ensure correct placement relative to quotes.
 
 ### Hover Tooltips
-When you enable Auto Indentation this feature begins working seamlessly. AppRefiner will enhance the editor with hover tooltips that provide additional information about styled code elements:
 
-- Tooltips appear when hovering over styled text (after a 1s delay)
-- Tooltips can display:
-  - Information on styled text (ex: grayed out items can tell you why they are grayed out).
-- Tooltips automatically hide when the mouse moves away from the text
+AppRefiner enhances the editor with hover tooltips that provide contextual information about code elements:
+
+- Tooltips appear when hovering the mouse cursor over certain code elements (after a brief delay).
+- The specific information shown depends on which **Tooltip Providers** are enabled and configured in the **Tooltips Tab** of the main AppRefiner window. Examples include:
+    - Details about PeopleSoft objects (requires DB connection).
+    - Parameter information for function/method calls.
+    - Declaration information for variables.
+    - Explanations for items marked by Stylers (e.g., why a variable is grayed out).
+- Tooltips automatically hide when the mouse moves away.
+
+*Refer to the UI Overview and the Tooltips Tab in AppRefiner for managing specific tooltip providers.*

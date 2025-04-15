@@ -6,15 +6,16 @@ AppRefiner is a productivity tool designed to enhance the PeopleSoft Application
 
 ## Core Architecture Components
 
-### Scintilla Editor Integration
+### Scintilla Editor Integration & Hooking
 
-AppRefiner leverages the Scintilla Editor component that powers Application Designer's code windows. Communication happens through a message-based approach:
+AppRefiner integrates with the Scintilla editor component used by Application Designer's code windows through a combination of standard Windows techniques and deeper integration:
 
-1. **Window Detection**: AppRefiner scans active windows to identify Application Designer code windows
-2. **Message Passing**: Once identified, AppRefiner sends Scintilla-specific messages to the editor window
-3. **Feature Activation**: These messages enable features like code folding, syntax highlighting, and other enhancements
-
-The message-based approach allows AppRefiner to enhance the editor without requiring modifications to Application Designer's code.
+1.  **Window Detection (WinEvents)**: AppRefiner uses WinEvents to efficiently detect when an Application Designer code window gains focus.
+2.  **Initial Enhancement (Window Messages)**: Upon detecting a relevant editor window, AppRefiner sends standard Scintilla messages (`SCI_...`) to apply initial enhancements like code folding margins and basic styling.
+3.  **Deep Integration (DLL Hook)**: To enable more responsive and advanced features, AppRefiner injects a small DLL into the Application Designer process. This hook allows AppRefiner to directly receive Scintilla notifications (`SCN_...`) from the editor control. Key notifications used include:
+    *   `SCN_DWELLSTART` / `SCN_DWELLEND`: Used to trigger hover tooltips.
+    *   `SCN_MODIFIED`: Used, often in conjunction with a short timer, to detect pauses in typing.
+4.  **Event-Driven Updates**: The hook enables features like Tooltips and dynamic Styler updates to react directly to user actions (hovering, finished typing) rather than relying on periodic polling.
 
 ### ANTLR-Based PeopleCode Parser
 
@@ -29,23 +30,20 @@ At the heart of AppRefiner's code analysis capabilities is an ANTLR-based parser
 
 The parser ensures accurate code analysis while maintaining compatibility with PeopleCode's unique syntax and features.
 
-### Scanning Mechanism
+### Update Mechanism
 
-AppRefiner employs a periodic scanning mechanism to detect and enhance Application Designer code windows:
+AppRefiner updates the enhanced editor view using an event-driven approach combined with initial processing:
 
-1. **Window Scanning**: Every 1 second, AppRefiner scans for active Application Designer code windows
-2. **Change Detection**: For each detected window, AppRefiner:
-   - Retrieves the current editor content
-   - Calculates a hash of the content
-   - Compares it with the previously stored hash (if any)
-3. **Optimization**: If the content hash hasn't changed since the last scan, processing is skipped to prevent redundant work
-   - Note: If the automatic detection fails, a "Force Refresh" command is available to manually reset the content hash and trigger a full refresh on the next scan
-4. **Feature Application**: For changed content, AppRefiner:
-   - Enables code folding
-   - Initializes styles
-   - Runs active Stylers to enhance the code display
+1.  **Initial Processing (on Focus)**: When an editor window gains focus (detected via WinEvents), AppRefiner:
+    *   Retrieves the current editor content.
+    *   Calculates a hash of the content and compares it to a stored hash (if available) to avoid reprocessing identical content.
+    *   If content is new or changed, applies initial setup like code folding and runs active Stylers.
+2.  **Subsequent Updates (Hook-Driven)**: After initial processing, the DLL hook monitors editor events:
+    *   **Typing Pause**: When a pause in typing is detected (via `SCN_MODIFIED` events and a timer), AppRefiner re-parses the content and reapplies active Stylers and potentially other visual cues.
+    *   **Hover**: When the mouse hovers over text (`SCN_DWELLSTART`), relevant Tooltip Providers are queried.
+3.  **Manual Refresh**: If the display seems out of sync (e.g., due to an error during a previous update), the `Editor: Force Refresh Current Editor` command (available in the Command Palette) can be used. This clears existing annotations/styles/tooltips for the active editor and forces a full reprocessing, similar to the initial processing step.
 
-This approach ensures that AppRefiner remains responsive while minimizing resource usage.
+This approach balances responsiveness to user actions with optimizations to minimize resource usage.
 
 ## On-Demand Features
 
@@ -69,14 +67,14 @@ AppRefiner is designed with privacy and security in mind:
 AppRefiner is designed to be extensible through:
 
 - **Plugin System**: Allows third-party developers to add new features
-  - **Custom Linters**: Define organization-specific code standards
+  - **[Custom Linters](../api-reference/core-api/custom-linters.md)**: Define organization-specific code standards
   - **Custom Stylers**: Create specialized syntax highlighting rules
   - **Custom Refactors**: Implement additional code transformations
 
 ## Performance Considerations
 
 AppRefiner is designed to be lightweight and responsive:
-- **Content Hashing**: Avoids redundant processing when content hasn't changed
-  - A "Force Refresh" command is available to manually reset the content hash if needed which will trigger a re-styling on the next scan
-- **On-Demand Heavy Operations**: Resource-intensive operations only run when requested
-- **Background Processing**: Ensures UI responsiveness during analysis operations
+- **Content Hashing**: Avoids redundant processing during initial editor focus when content hasn't changed.
+- **On-Demand Heavy Operations**: Resource-intensive operations (Linting, Refactoring) only run when explicitly requested.
+- **Hook-Based Updates**: Reacting to editor events via the hook is generally more efficient than constant polling.
+- A "Force Refresh" command (`Editor: Force Refresh Current Editor`) is available to manually reprocess the editor if needed.

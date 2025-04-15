@@ -20,30 +20,45 @@ AppRefiner adds the following enhancements to the Application Designer PeopleCod
 - **Error and warning indicators**: Visual indicators for code issues
 - **Auto-indentation**: Improved code formatting
 
-## Panels and Views
+## AppRefiner Main Window
 
-### Linting Panel
+AppRefiner runs as a separate application window with a tabbed interface, providing access to configuration and features:
 
-The linting panel displays issues found in your code based on the active linting rules. Each issue includes:
+### Settings Tab
 
-- Severity level (Error, Warning, Information)
-- Description of the issue
-- Line and column number where the issue occurs
+This tab allows you to control the core behavior of AppRefiner:
 
-The linting panel also provides a way to connect to PeopleSoft Oracle databases which can improve linting results. 
+- **General Options**: Toggle features like Auto Collapse (code folding), Auto Dark Mode, Format SQL, Only Enhance PeopleCode Editors, Auto-Pairing (quotes/parentheses).
+- **Database Connection**: Configure whether AppRefiner prompts for database connection details when the first editor is detected.
+- **Plugins**: Set the directory for custom plugins.
 
-**Note:** Bootstrap or readonly credentials to the database are required.
+### Stylers Tab
 
+Manage the syntax highlighting applied to the Application Designer editor. You can enable or disable specific stylers.
 
-### Command Palette
+### Tooltips Tab
 
-Access the command palette with `Ctrl+Shift+P` to quickly:
+Configure the information provided in tooltips when hovering over code elements. You can enable or disable specific tooltip providers.
 
-- Execute commands
+### Linters Tab
+
+Control the code analysis features:
+
+- **Enable/Disable Linters**: Toggle individual linters on or off.
+- **Configure Linters**: Adjust settings for linters that support configuration.
+- **Database Connection**: Connect to PeopleSoft Oracle databases (requires bootstrap or read-only credentials) to improve linting accuracy by providing context about application objects.
+- **Linting Results**: Issues found by active linters (Errors, Warnings, Information) along with descriptions and locations are typically displayed here or directly in the editor.
+
+### Templates Tab
+
+Browse available code templates. While templates can be applied from this tab, using the Command Palette is often more efficient.
+
+## Command Palette
+
+Access the command palette with `Ctrl+Shift+P` within Application Designer to quickly:
+
+- Execute commands (e.g., linting, applying templates, reverting snapshots)
 - Apply refactorings
-- Run linting operations
-
-The Command Palette is the most efficient way to access AppRefiner's functionality, similar to how it works in VS Code.
 
 ## Next Steps
 

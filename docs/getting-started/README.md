@@ -14,7 +14,7 @@ Before installing AppRefiner, ensure your system meets the following requirement
 
 ### Manual Installation
 
-1. Download the latest AppRefiner ZIP package from the [official website](https://example.com/apprefiner/download) or [GitHub releases](https://github.com/example/apprefiner/releases)
+1. Download the latest AppRefiner ZIP package from the [GitHub releases page](https://github.com/Gideon-Taylor/AppRefiner/releases/). Note that these releases provide **framework-dependent** builds. Users requiring a self-contained build will need to build the application from source.
 2. Extract the ZIP file to a location of your choice (e.g., `C:\Program Files\AppRefiner`)
 3. Create shortcuts to AppRefiner.exe as needed
 4. (Optional) Add the installation directory to your system PATH
@@ -28,28 +28,16 @@ After installing AppRefiner:
 3. AppRefiner will automatically detect Application Designer and begin enhancing its functionality
 4. Press `Ctrl+Shift+P` in Application Designer to open the Command Palette and access AppRefiner features
 
-## Version Control with Git
+## Editor Snapshots
 
-AppRefiner integrates with Git to provide powerful automated backups for various definitions:
+AppRefiner automatically maintains a history of recent changes to definitions you work on, providing a safety net for your code. Instead of Git, it uses a local SQLite database to store snapshots.
 
-- PeopleCode
-- HTML
-- SQL (both SQL objects and view SQL)
-- Freeform Stylesheets
-
-1. **Initialize a Git Repository**:
-   - Click the "Git Repository..." button on the main AppRefiner window
-   - Choose a location for your repository
-   - AppRefiner will initialize a repository at the chosen location
-
-2. **Tracking Changes**:
-   - AppRefiner automatically tracks changes as definitions are opened/saved
-   - AppRefiner leverages a single repository and separates defintions by database name and definition type.
-
-3. **Reverting**:
-   - To revert a file to a previous snapshot, you can access the Git: Revert file command from the command palette
-   - A window will open showing you the previous snapshots you can return to
-   - You can view a snapshots full content or you can see a diff showing what changes will happen to the current editor if you accept this snapshot.
+- **Automatic Snapshots**: Every time you save a definition (PeopleCode, HTML, SQL, Freeform Stylesheets) in Application Designer while AppRefiner is running, a snapshot of the content is saved to the database.
+- **Snapshot Limit**: The system keeps the last 'N' snapshots for each definition, automatically removing older ones beyond this configurable limit.
+- **Reverting Changes**:
+  - To revert a definition to a previous state, use the `Snapshot: Revert File` command from the command palette (`Ctrl+Shift+P`).
+  - A window will appear displaying the recent snapshots available for the current editor.
+  - You can view the full content of a snapshot or see a diff comparing the snapshot to the current editor content before choosing to revert.
 
 ## Next Steps
 

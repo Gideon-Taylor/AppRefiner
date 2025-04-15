@@ -12,4 +12,3 @@ This guide provides detailed instructions on how to use AppRefiner as a companio
 - [Database Integration](database-integration.md)
 - [Templates](templates.md)
 - [Command Palette](command-palette.md)
-- [Troubleshooting](troubleshooting.md)
