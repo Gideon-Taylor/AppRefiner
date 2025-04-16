@@ -18,70 +18,22 @@ using System.Drawing;
 using System.IO;
 using System.Linq;
 using System.Reflection;
-using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using System.Drawing.Text;
 using AppRefiner.TooltipProviders;
 using AppRefiner.Snapshots;
+using System.Runtime.InteropServices;
 
 namespace AppRefiner
 {
     public partial class MainForm : Form
     {
-        // Delegate used for both EnumWindows and EnumChildWindows.
-        private delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
-
-        // WinEvent constants
-        private const uint EVENT_OBJECT_FOCUS = 0x8005;
-        private const uint WINEVENT_OUTOFCONTEXT = 0x0000;
-        private const uint WINEVENT_SKIPOWNPROCESS = 0x0002;
-
-        // WinEvent function delegate
-        private delegate void WinEventDelegate(IntPtr hWinEventHook, uint eventType, IntPtr hwnd, int idObject, int idChild, uint dwEventThread, uint dwmsEventTime);
-
-        [DllImport("user32.dll")]
-        private static extern IntPtr SetWinEventHook(uint eventMin, uint eventMax, IntPtr hmodWinEventProc, WinEventDelegate lpfnWinEventProc, uint idProcess, uint idThread, uint dwFlags);
-
-        [DllImport("user32.dll")]
-        private static extern bool UnhookWinEvent(IntPtr hWinEventHook);
-
-        [DllImport("user32.dll")]
-        private static extern bool EnumWindows(EnumWindowsProc lpEnumFunc, IntPtr lParam);
-
-        [DllImport("user32.dll")]
-        private static extern bool EnumChildWindows(IntPtr hWndParent, EnumWindowsProc lpEnumFunc, IntPtr lParam);
-
-        [DllImport("user32.dll")]
-        private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
-
-        [DllImport("user32.dll", SetLastError = true, CharSet = CharSet.Auto)]
-        private static extern int GetClassName(IntPtr hWnd, StringBuilder lpClassName, int nMaxCount);
-
-        [DllImport("user32.dll", SetLastError = true)]
-        private static extern bool GetWindowRect(IntPtr hWnd, out RECT lpRect);
-
-        [DllImport("user32.dll", SetLastError = true)]
-        private static extern bool GetWindowText(IntPtr hWnd, StringBuilder lpString, int nMaxCount);
-
-        [DllImport("user32.dll")]
-        private static extern IntPtr GetParent(IntPtr hWnd);
-
-        [StructLayout(LayoutKind.Sequential)]
-        public struct RECT
-        {
-            public int Left;
-            public int Top;
-            public int Right;
-            public int Bottom;
-        }
-
-        // WinEvent hook handle
-        private IntPtr winEventHook = IntPtr.Zero;
-        
-        // Keep reference to delegate to prevent garbage collection
-        private WinEventDelegate winEventDelegate;
+        // Services for handling OS-level interactions
+        private WinEventService? winEventService;
+        private KeyboardShortcutService? keyboardShortcutService;
+        private LinterManager? linterManager; // Added LinterManager
 
         private ScintillaEditor? activeEditor = null;
 
@@ -90,7 +42,8 @@ namespace AppRefiner
         /// </summary>
         public ScintillaEditor? ActiveEditor => activeEditor;
 
-        private List<BaseLintRule> linterRules = new();
+        // REMOVED: linterRules list (managed by LinterManager)
+        // private List<BaseLintRule> linterRules = new(); 
         private List<BaseStyler> stylers = new(); // Changed from List<BaseStyler> analyzers
         private List<ITooltipProvider> tooltipProviders = new();
 
@@ -100,24 +53,21 @@ namespace AppRefiner
         // Static list of available commands
         public static List<Command> AvailableCommands = new();
 
-        // Standard keyboard hooks
-        KeyboardHook collapseLevel = new();
-        KeyboardHook expandLevel = new();
-        KeyboardHook collapseAll = new();
-        KeyboardHook expandAll = new();
-        KeyboardHook commandPaletteHook = new();
-        KeyboardHook lintCodeHook = new();
-        KeyboardHook applyTemplateHook = new();
-        KeyboardHook superGoTo = new();
-        private class RuleState
+        // REMOVED: Individual KeyboardHook fields (managed by KeyboardShortcutService)
+        // KeyboardHook collapseLevel = new();
+        // KeyboardHook expandLevel = new();
+        // KeyboardHook collapseAll = new();
+        // KeyboardHook expandAll = new();
+        // KeyboardHook commandPaletteHook = new();
+        // KeyboardHook lintCodeHook = new();
+        // KeyboardHook applyTemplateHook = new();
+        // KeyboardHook superGoTo = new();
+        
+        public class RuleState
         {
             public string TypeName { get; set; } = "";
             public bool Active { get; set; }
         }
-
-        // Dictionary to track registered keyboard shortcuts and their key combinations
-        private Dictionary<string, KeyboardHook> refactorShortcuts = new();
-        private Dictionary<string, (ModifierKeys, Keys)> registeredShortcuts = new();
 
         // Path for linting report output
         private string? lintReportPath;
@@ -156,16 +106,26 @@ namespace AppRefiner
         public MainForm()
         {
             InitializeComponent();
-            InitLinterOptions();
+            // REMOVED: InitLinterOptions(); // Initialization moved
             InitStylerOptions();
         }
 
         protected override void OnLoad(EventArgs e)
         {
             base.OnLoad(e);
+            // Instantiate and start services
+            keyboardShortcutService = new KeyboardShortcutService();
+            winEventService = new WinEventService();
+            winEventService.WindowFocused += HandleWindowFocusEvent; 
+            winEventService.Start(); 
+            
+            // Instantiate LinterManager (passing UI elements)
+            linterManager = new LinterManager(this, dataGridView1, dataGridView2, chkLintAnnotate, lblStatus, progressBar1, lintReportPath);
+            linterManager.InitializeLinterOptions(); // Initialize linters via the manager
+            
             // Set the application icon explicitly
             LoadSettings();
-            LoadLinterStates();
+            // REMOVED: LoadLinterStates(); // Handled by LinterManager init
             LoadStylerStates();
             LoadTooltipStates();
             // Load templates using the manager and populate ComboBox
@@ -187,59 +147,74 @@ namespace AppRefiner
             // Initialize the tooltip providers
             TooltipManager.Initialize();
             InitTooltipOptions();
+            // REMOVED: InitLinterOptions(); // Already called via manager
+            InitStylerOptions(); 
+            
+            // Now load the states using the service (Keeping Styler/Tooltip for now)
+            // REMOVED: settingsService.LoadLinterStates(linterRules, dataGridView1);
+            LoadStylerStates(); // Keep direct call for now
+            LoadTooltipStates(); // Keep direct call for now
 
-            // Register keyboard hooks for code folding
-            collapseLevel.KeyPressed += collapseLevelHandler;
-            collapseLevel.RegisterHotKey(AppRefiner.ModifierKeys.Alt, Keys.Left);
-
-            expandLevel.KeyPressed += expandLevelHandler;
-            expandLevel.RegisterHotKey(AppRefiner.ModifierKeys.Alt, Keys.Right);
-
-            collapseAll.KeyPressed += collapseAllHandler;
-            collapseAll.RegisterHotKey(AppRefiner.ModifierKeys.Control | AppRefiner.ModifierKeys.Alt, Keys.Left);
-
-            expandAll.KeyPressed += expandAllHandler;
-            expandAll.RegisterHotKey(AppRefiner.ModifierKeys.Control | AppRefiner.ModifierKeys.Alt, Keys.Right);
-
-            lintCodeHook.KeyPressed += lintCodeHandler;
-            lintCodeHook.RegisterHotKey(AppRefiner.ModifierKeys.Control | AppRefiner.ModifierKeys.Alt, Keys.L);
-
-            commandPaletteHook.KeyPressed += ShowCommandPalette;
-            commandPaletteHook.RegisterHotKey(AppRefiner.ModifierKeys.Control | AppRefiner.ModifierKeys.Shift, Keys.P);
-
-            applyTemplateHook.KeyPressed += (s, e) => ApplyTemplateCommand();
-            applyTemplateHook.RegisterHotKey(AppRefiner.ModifierKeys.Control | AppRefiner.ModifierKeys.Alt, Keys.T);
-
-            superGoTo.KeyPressed += (s, e) => SuperGoToCommand();
-            superGoTo.RegisterHotKey(AppRefiner.ModifierKeys.Control | AppRefiner.ModifierKeys.Alt, Keys.G);
-
-
-            // Register standard shortcuts in the tracking dictionary
-            registeredShortcuts["CollapseLevel"] = (AppRefiner.ModifierKeys.Alt, Keys.Left);
-            registeredShortcuts["ExpandLevel"] = (AppRefiner.ModifierKeys.Alt, Keys.Right);
-            registeredShortcuts["CollapseAll"] = (AppRefiner.ModifierKeys.Control | AppRefiner.ModifierKeys.Alt, Keys.Left);
-            registeredShortcuts["ExpandAll"] = (AppRefiner.ModifierKeys.Control | AppRefiner.ModifierKeys.Alt, Keys.Right);
-            registeredShortcuts["LintCode"] = (AppRefiner.ModifierKeys.Control | AppRefiner.ModifierKeys.Alt, Keys.L);
-            registeredShortcuts["CommandPalette"] = (AppRefiner.ModifierKeys.Control | AppRefiner.ModifierKeys.Shift, Keys.P);
-            registeredShortcuts["ApplyTemplate"] = (AppRefiner.ModifierKeys.Control | AppRefiner.ModifierKeys.Alt, Keys.T);
-            registeredShortcuts["SuperGoTo"] = (AppRefiner.ModifierKeys.Control | AppRefiner.ModifierKeys.Alt, Keys.G);
+            // Register keyboard shortcuts using the service (using fully qualified Enum access)
+            keyboardShortcutService?.RegisterShortcut("CollapseLevel", AppRefiner.ModifierKeys.Alt, Keys.Left, collapseLevelHandler);
+            keyboardShortcutService?.RegisterShortcut("ExpandLevel", AppRefiner.ModifierKeys.Alt, Keys.Right, expandLevelHandler);
+            keyboardShortcutService?.RegisterShortcut("CollapseAll", AppRefiner.ModifierKeys.Control | AppRefiner.ModifierKeys.Alt, Keys.Left, collapseAllHandler);
+            keyboardShortcutService?.RegisterShortcut("ExpandAll", AppRefiner.ModifierKeys.Control | AppRefiner.ModifierKeys.Alt, Keys.Right, expandAllHandler);
+            keyboardShortcutService?.RegisterShortcut("LintCode", AppRefiner.ModifierKeys.Control | AppRefiner.ModifierKeys.Alt, Keys.L, lintCodeHandler);
+            keyboardShortcutService?.RegisterShortcut("CommandPalette", AppRefiner.ModifierKeys.Control | AppRefiner.ModifierKeys.Shift, Keys.P, ShowCommandPalette); // Use the parameterless overload
+            keyboardShortcutService?.RegisterShortcut("ApplyTemplate", AppRefiner.ModifierKeys.Control | AppRefiner.ModifierKeys.Alt, Keys.T, ApplyTemplateCommand);
+            keyboardShortcutService?.RegisterShortcut("SuperGoTo", AppRefiner.ModifierKeys.Control | AppRefiner.ModifierKeys.Alt, Keys.G, SuperGoToCommand); // Use the parameterless overload
+            
 
             RegisterRefactorShortcuts();
             
-            // Setup the WinEvent hook to monitor focus changes
-            SetupWinEventHook();
-
             // Initialize snapshot manager
             snapshotManager = SnapshotManager.CreateFromSettings();
         }
 
-        private void lintCodeHandler(object? sender, KeyPressedEventArgs e)
+        // Renamed from keyboard hook handlers to simple action methods
+        private void collapseLevelHandler()
         {
             if (activeEditor == null) return;
-            ProcessLinters();
+            ScintillaManager.SetLineFoldStatus(activeEditor, true);
         }
-
-        private async void ShowCommandPalette(object? sender, KeyPressedEventArgs e)
+        
+        private void expandLevelHandler()
+        {
+            if (activeEditor == null) return;
+            ScintillaManager.SetLineFoldStatus(activeEditor, false);
+        }
+        
+        private void collapseAllHandler()
+        {
+            if (activeEditor == null) return;
+            ScintillaManager.CollapseTopLevel(activeEditor);
+        }
+        
+        private void expandAllHandler()
+        {
+            if (activeEditor == null) return;
+            ScintillaManager.ExpandTopLevel(activeEditor);
+        }
+        
+        private void lintCodeHandler()
+        {
+            if (activeEditor == null) return;
+            // ProcessLinters();
+        }
+        
+        // Parameterless overload for shortcut service
+        private void ShowCommandPalette()
+        {
+            ShowCommandPalette(null, null); 
+        }
+        
+        // Original handlers for direct KeyPressedEventArgs might need slight adaptation
+        // depending on whether the KeyboardShortcutService provides arguments.
+        // For now, assume simple Action is sufficient.
+        
+        // This is called by the Command Palette
+        private async void ShowCommandPalette(object? sender, KeyPressedEventArgs? e) // Keep original args for now
         {
             if (activeEditor == null) return;
             var mainHandle = Process.GetProcessById((int)activeEditor.ProcessId).MainWindowHandle;
@@ -339,10 +314,10 @@ namespace AppRefiner
             AppRefiner.Events.EventHookInstaller.CleanupAllHooks();
             
             // Clean up the WinEvent hook if active
-            if (winEventHook != IntPtr.Zero)
+            if (winEventService != null)
             {
-                UnhookWinEvent(winEventHook);
-                winEventHook = IntPtr.Zero;
+                winEventService.Dispose();
+                winEventService = null;
             }
             
             // Dispose the savepoint debounce timer if it exists
@@ -379,203 +354,6 @@ namespace AppRefiner
             }
         }
 
-        /// <summary>
-        /// Generate lint reports for all files in the current project
-        /// </summary>
-        /// <param name="editor">The active editor, used to identify the project</param>
-        private void LintProject(ScintillaEditor editor, CommandProgressDialog? progressDialog)
-        {
-            if (editor == null || editor.DataManager == null)
-            {
-                MessageBox.Show("Database connection required for project linting.",
-                    "Database Required",
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Warning);
-                return;
-            }
-
-            // Get project name
-            string projectName = ScintillaManager.GetProjectName(editor);
-
-            // Check if project name is "Untitled", which means no project is open
-            if (projectName == "Untitled")
-            {
-                MessageBox.Show("Please open a project before running the lint tool.",
-                    "No Project Open",
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Warning);
-                return;
-            }
-
-            // Check if string.Empty is returned, which indicates a failure to get the project name
-            if (string.IsNullOrEmpty(projectName))
-            {
-                MessageBox.Show("Unable to determine the project name. Linting cannot be completed.",
-                    "Project Name Error",
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Error);
-                return;
-            }
-
-            // Create a timestamp for the report filename
-            string timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
-            string reportFileName = $"{projectName}_LintReport_{timestamp}.html";
-            string reportPath = Path.Combine(lintReportPath ?? string.Empty, reportFileName);
-
-            // Get metadata for all programs in the project without loading content
-            var ppcProgsMeta = editor.DataManager.GetPeopleCodeItemMetadataForProject(projectName);
-            var activeLinters = linterRules.Where(a => a.Active).ToList();
-
-            // Message to show progress
-            this.Invoke(() =>
-            {
-                lblStatus.Text = $"Linting project - found {ppcProgsMeta.Count} items...";
-                progressBar1.Style = ProgressBarStyle.Marquee;
-                progressBar1.MarqueeAnimationSpeed = 30;
-            });
-
-            // Master collection of all linting reports
-            List<(PeopleCodeItem Program, Report LintReport)> allReports = new();
-            var parseCount = 0;
-            var emptyProgs = 0;
-            var processedCount = 0;
-            // Process each program in the project, one at a time
-            foreach (var ppcProg in ppcProgsMeta)
-            {
-                processedCount++;
-
-                // Update progress periodically
-                if (processedCount % 10 == 0)
-                {
-                    this.Invoke(() =>
-                    {
-                        lblStatus.Text = $"Linting project - processed {processedCount} of {ppcProgsMeta.Count} items...";
-                        progressDialog?.UpdateHeader($"Linting project - processed {processedCount} of {ppcProgsMeta.Count} items...");
-                    });
-                    GC.Collect();
-                }
-
-                // Load the content for this specific program
-                if (!editor.DataManager.LoadPeopleCodeItemContent(ppcProg))
-                {
-                    emptyProgs++;
-                    continue;
-                }
-
-                // Get the program text as string
-                var programText = ppcProg.GetProgramTextAsString();
-                if (string.IsNullOrEmpty(programText))
-                {
-                    emptyProgs++;
-                    continue;
-                }
-
-                // Create lexer and parser for this program
-                PeopleCodeLexer? lexer = new(new Antlr4.Runtime.AntlrInputStream(programText));
-                var stream = new Antlr4.Runtime.CommonTokenStream(lexer);
-
-                // Get all tokens including those on hidden channels
-                stream.Fill();
-
-                // Collect all comments from both comment channels
-                var comments = stream.GetTokens()
-                    .Where(token => token.Channel == PeopleCodeLexer.COMMENTS || token.Channel == PeopleCodeLexer.API_COMMENTS)
-                    .ToList();
-
-                PeopleCodeParser? parser = new(stream);
-                var program = parser.program();
-                parseCount++;
-                parser.Interpreter.ClearDFA();
-
-                // Collection for reports from this program
-                List<Report> programReports = new();
-
-                MultiParseTreeWalker walker = new();
-
-                // Add the suppression listener first
-                var suppresionListner = new LinterSuppressionListener(stream, comments);
-                walker.AddListener(suppresionListner);
-
-                // Configure and run each active linter
-                foreach (var linter in activeLinters)
-                {
-                    // Reset linter state
-                    linter.Reset();
-
-                    // Configure linter for this program
-                    linter.DataManager = editor.DataManager;
-                    linter.Reports = programReports;
-                    linter.Comments = comments;
-                    linter.SuppressionListener = suppresionListner;
-                    walker.AddListener(linter);
-                }
-
-                // Process the program with all linters at once
-                walker.Walk(program);
-
-                // Store reports with the program they came from
-                foreach (var report in programReports)
-                {
-                    allReports.Add((ppcProg, report));
-                }
-
-                // Clean up walker listeners for next program
-                foreach (var linter in activeLinters)
-                {
-                    linter.Reset();
-                }
-
-                programReports.Clear();
-                comments.Clear();
-
-                // Free up resources
-                lexer = null;
-                parser = null;
-                stream = null;
-                program = null;
-
-                // Clear program text to free memory
-                ppcProg.SetProgramText(Array.Empty<byte>());
-                ppcProg.SetNameReferences(new List<NameReference>());
-
-            }
-
-            this.Invoke(() =>
-            {
-                lblStatus.Text = $"Finalizing Report...";
-                progressDialog?.UpdateHeader($"Finalizing Report...");
-            });
-
-            // Always generate the HTML report, even if no issues found
-            GenerateHtmlReport(reportPath, projectName, allReports);
-
-            // Reset UI and show confirmation with link to report
-            this.Invoke(() =>
-            {
-                lblStatus.Text = "Monitoring...";
-                progressBar1.Style = ProgressBarStyle.Blocks;
-
-                string message = allReports.Count > 0
-                    ? $"Project linting complete. {allReports.Count} issues found.\n\nWould you like to open the report?"
-                    : "Project linting complete. No issues found.\n\nWould you like to open the report?";
-
-                var result = MessageBox.Show(
-                    message,
-                    "Project Linting Complete",
-                    MessageBoxButtons.YesNo,
-                    MessageBoxIcon.Information);
-
-                if (result == DialogResult.Yes)
-                {
-                    // Open the report in default browser
-                    System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
-                    {
-                        FileName = reportPath,
-                        UseShellExecute = true
-                    });
-                }
-            });
-        }
 
         private void LoadSettings()
         {
@@ -590,7 +368,6 @@ namespace AppRefiner
                 chkAutoPairing.Checked = Properties.Settings.Default.autoPair;
                 chkPromptForDB.Checked = Properties.Settings.Default.promptForDB;
                 LoadStylerStates();
-                LoadLinterStates();
                 LoadTooltipStates();
                 // Removed call to LoadTemplates() as it's handled in OnLoad via TemplateManager
                 // LoadTemplates(); 
@@ -613,7 +390,6 @@ namespace AppRefiner
             Properties.Settings.Default.promptForDB = chkPromptForDB.Checked;
 
             SaveStylerStates();
-            SaveLinterStates();
             SaveTooltipStates();
 
             Properties.Settings.Default.Save();
@@ -658,46 +434,6 @@ namespace AppRefiner
             }).ToList();
 
             Properties.Settings.Default.StylerStates =
-                System.Text.Json.JsonSerializer.Serialize(states);
-        }
-
-        private void LoadLinterStates()
-        {
-            try
-            {
-                var states = System.Text.Json.JsonSerializer.Deserialize<List<RuleState>>(
-                    Properties.Settings.Default.LinterStates);
-
-                if (states == null) return;
-
-                foreach (var state in states)
-                {
-                    var linter = linterRules.FirstOrDefault(l => l.GetType().FullName == state.TypeName);
-                    if (linter != null)
-                    {
-                        linter.Active = state.Active;
-                        // Update corresponding grid row
-                        var row = dataGridView1.Rows.Cast<DataGridViewRow>()
-                            .FirstOrDefault(r => r.Tag is BaseLintRule l && l == linter);
-                        if (row != null)
-                        {
-                            row.Cells[0].Value = state.Active;
-                        }
-                    }
-                }
-            }
-            catch { /* Use defaults if settings are corrupt */ }
-        }
-
-        private void SaveLinterStates()
-        {
-            var states = linterRules.Select(l => new RuleState
-            {
-                TypeName = l.GetType().FullName ?? "",
-                Active = l.Active
-            }).ToList();
-
-            Properties.Settings.Default.LinterStates =
                 System.Text.Json.JsonSerializer.Serialize(states);
         }
 
@@ -803,97 +539,6 @@ namespace AppRefiner
                 btnClearLint.Enabled = false;
                 btnApplyTemplate.Text = "Generate Template";
             });
-        }
-
-        private void InitLinterOptions()
-        {
-            /* Find all classes in this assembly that extend BaseLintRule*/
-            var linters = AppDomain.CurrentDomain.GetAssemblies()
-                .SelectMany(s => s.GetTypes())
-                .Where(p => typeof(BaseLintRule).IsAssignableFrom(p) && !p.IsAbstract);
-
-            // Load plugins from the plugin directory
-            string pluginDirectory = Path.Combine(
-                Path.GetDirectoryName(Application.ExecutablePath) ?? string.Empty,
-                Properties.Settings.Default.PluginDirectory);
-
-            PluginManager.LoadPlugins(pluginDirectory);
-
-            // Load linter configurations
-            LinterConfigManager.LoadLinterConfigs();
-
-            // Add plugin linter types
-            var pluginLinters = PluginManager.DiscoverLinterTypes();
-            linters = linters.Concat(pluginLinters);
-
-            foreach (var type in linters)
-            {
-                /* Create instance of the linter */
-                BaseLintRule? linter = (BaseLintRule?)Activator.CreateInstance(type);
-
-                if (linter != null)
-                {
-                    /* Create row for datadgridview */
-                    int rowIndex = dataGridView1.Rows.Add(linter.Active, linter.Description);
-                    dataGridView1.Rows[rowIndex].Tag = linter;
-
-                    // Set the button text based on whether the linter has configurable properties
-                    var configurableProperties = linter.GetConfigurableProperties();
-                    DataGridViewButtonCell buttonCell = (DataGridViewButtonCell)dataGridView1.Rows[rowIndex].Cells[2];
-
-                    if (configurableProperties.Count > 0)
-                    {
-                        buttonCell.Value = "Configure...";
-                        // Clear any tag that might indicate no configuration
-                        dataGridView1.Rows[rowIndex].Cells[2].Tag = null;
-                    }
-                    else
-                    {
-                        // Hide the button for linters with no configurable properties
-                        buttonCell.Value = " ";
-                        buttonCell.FlatStyle = FlatStyle.Flat;
-                        buttonCell.Style.BackColor = SystemColors.Control;
-                        buttonCell.Style.SelectionBackColor = SystemColors.Control;
-                        buttonCell.Style.ForeColor = SystemColors.Control;
-                        buttonCell.Style.SelectionForeColor = SystemColors.Control;
-                        buttonCell.Style.SelectionBackColor = SystemColors.Control;
-                        // Store info about configurability in the cell's tag
-                        dataGridView1.Rows[rowIndex].Cells[2].Tag = "NoConfig";
-                    }
-
-                    linterRules.Add(linter);
-                }
-            }
-
-            // Apply saved configurations to linters
-            LinterConfigManager.ApplyConfigurations(linterRules);
-        }
-
-        private void dataGridView1_CellContentClick(object sender, DataGridViewCellEventArgs e)
-        {
-            dataGridView1.CommitEdit(DataGridViewDataErrorContexts.Commit);
-
-            // Check if the clicked cell is in the Configure column
-            if (e.ColumnIndex == 2 && e.RowIndex >= 0)
-            {
-                // Get the linter from the row's Tag
-                if (dataGridView1.Rows[e.RowIndex].Tag is BaseLintRule linter)
-                {
-                    // Check if the linter has configurable properties
-                    if (dataGridView1.Rows[e.RowIndex].Cells[e.ColumnIndex].Tag?.ToString() != "NoConfig")
-                    {
-                        // Show the linter configuration dialog
-                        using (var dialog = new LinterConfigDialog(linter))
-                        {
-                            if (dialog.ShowDialog(this) == DialogResult.OK)
-                            {
-                                // Configuration was updated and saved by the dialog
-                                // No need to do anything else here
-                            }
-                        }
-                    }
-                }
-            }
         }
 
         private void InitStylerOptions() // Changed from InitAnalyzerOptions
@@ -1038,99 +683,6 @@ namespace AppRefiner
             editor.ActiveIndicators = newIndicators;
         }
 
-        private void ProcessLinters()
-        {
-            if (activeEditor == null) return;
-
-            ScintillaManager.ClearAnnotations(activeEditor);
-
-            if (activeEditor == null || activeEditor.Type != EditorType.PeopleCode)
-            {
-                MessageBox.Show("Linting is only available for PeopleCode editors", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                return;
-            }
-
-            if (activeEditor.ContentString == null)
-            {
-                activeEditor.ContentString = ScintillaManager.GetScintillaText(activeEditor);
-            }
-
-            // Get the parsed program, token stream and comments using the caching mechanism
-            var (program, stream, comments) = activeEditor.GetParsedProgram();
-
-            var activeLinters = linterRules.Where(a => a.Active);
-
-            /* Only run NotRequired or Optional linters if there is no database connection */
-            if (activeEditor.DataManager == null)
-            {
-                activeLinters = activeLinters.Where(a => a.DatabaseRequirement != DataManagerRequirement.Required);
-            }
-
-            MultiParseTreeWalker walker = new();
-            List<Report> reports = new();
-
-            /* check to see if there's recently a new datamanager for this editor */
-            if (processDataManagers.TryGetValue(activeEditor.ProcessId, out IDataManager? value))
-            {
-                activeEditor.DataManager = value;
-            }
-
-            // Add the suppression listener first
-            var suppressionListener = new LinterSuppressionListener(stream, comments);
-            walker.AddListener(suppressionListener);
-
-            IDataManager? dataManger = activeEditor.DataManager;
-
-            // Configure and run each active linter
-            foreach (var linter in activeLinters)
-            {
-                linter.DataManager = dataManger;
-                linter.Reports = reports;
-                linter.Comments = comments;  // Make comments available to each linter
-                linter.SuppressionListener = suppressionListener;
-                walker.AddListener(linter);
-            }
-
-            walker.Walk(program);
-
-            foreach (var linter in activeLinters)
-            {
-                linter.Reset();
-            }
-
-            /* Process the reports */
-            activeEditor.SetLinterReports(reports);
-            dataGridView2.Rows.Clear();
-            
-            foreach (var g in reports.GroupBy(r => r.Line).OrderBy(b => b.First().Line))
-            {
-                List<string> messages = new();
-                List<AnnotationStyle> styles = new();
-
-                foreach (var report in g)
-                {
-                    int rowIndex = dataGridView2.Rows.Add(report.Type, report.Message, report.Line);
-                    dataGridView2.Rows[rowIndex].Tag = report;
-
-                    if (chkLintAnnotate.Checked)
-                    {
-                        messages.Add($"{report.Message} ({report.GetFullId()})");
-                        styles.Add(report.Type switch
-                        {
-                            ReportType.Error => AnnotationStyle.Red,
-                            ReportType.Warning => AnnotationStyle.Yellow,
-                            ReportType.Info => AnnotationStyle.Gray,
-                            _ => AnnotationStyle.Gray
-                        });
-                    }
-                }
-
-                if (chkLintAnnotate.Checked)
-                {
-                    ScintillaManager.SetAnnotations(activeEditor, messages, g.First().Line, styles);
-                }
-            }
-        }
 
         private void dataGridView3_CellContentClick(object sender, DataGridViewCellEventArgs e)
         {
@@ -1159,46 +711,18 @@ namespace AppRefiner
 
         private void dataGridView1_CellValueChanged(object sender, DataGridViewCellEventArgs e)
         {
-            if (e.RowIndex < 0)
-            {
-                return;
-            }
-            if (e.ColumnIndex != 0)
-            {
-                return;
-            }
-            if (dataGridView1.Rows[e.RowIndex].Tag == null)
-            {
-                return;
-            }
-            if (dataGridView1.Rows[e.RowIndex].Tag is BaseLintRule linter)
-            {
-                linter.Active = (bool)dataGridView1.Rows[e.RowIndex].Cells[0].Value;
-            }
+            linterManager?.HandleLinterGridCellValueChanged(sender, e);
         }
 
 
         private void dataGridView2_CellClick(object sender, DataGridViewCellEventArgs e)
         {
-            if (activeEditor == null) return;
-            /* Get the tag (Report ) from the selected row */
-            /* instruct Scintilla to select the line and send focus to main window */
-            if (dataGridView2.SelectedRows.Count == 0)
-            {
-                return;
-            }
-            if (dataGridView2.SelectedRows[0].Tag is Report report)
-            {
-                ScintillaManager.SetSelection(activeEditor, report.Span.Start, report.Span.Stop);
-                WindowHelper.FocusWindow(activeEditor.hWnd);
-            }
+            linterManager?.HandleReportGridCellClick(sender, e, activeEditor);
         }
 
         private void btnClearLint_Click(object sender, EventArgs e)
         {
-            if (activeEditor == null) return;
-            ScintillaManager.ClearAnnotations(activeEditor);
-            dataGridView2.Rows.Clear();
+            linterManager?.ClearLintResults(activeEditor);
         }
 
         private void btnDarkMode_Click(object sender, EventArgs e)
@@ -1345,11 +869,19 @@ namespace AppRefiner
                 dataGridView2.Rows.Clear();
             });
             Application.DoEvents();
-            // Run the folding operation in a background thread
+            
+            // Run the linting operation in a background thread via the manager
             await Task.Run(() =>
             {
-                // Ensure the activeEditor is not null before proceeding
-                ProcessLinters();
+                // Need to pass current DataManager associated with the active editor
+                IDataManager? currentDataManager = null;
+                if(activeEditor != null)
+                {
+                    processDataManagers.TryGetValue(activeEditor.ProcessId, out currentDataManager);
+                    // If not found in map, use the one directly on the editor object if available
+                    currentDataManager ??= activeEditor.DataManager; 
+                }
+                linterManager?.ProcessLintersForActiveEditor(activeEditor, currentDataManager);
             });
 
             // Update the UI after the background task completes
@@ -1359,101 +891,6 @@ namespace AppRefiner
                 progressBar1.Style = ProgressBarStyle.Blocks;
             });
             Application.DoEvents();
-        }
-
-        private void ProcessSingleLinter(BaseLintRule linter)
-        {
-            if (activeEditor == null) return;
-
-            ScintillaManager.ClearAnnotations(activeEditor);
-
-            // Clear previous lint results
-            this.Invoke(() =>
-            {
-                dataGridView2.Rows.Clear();
-            });
-
-            if (activeEditor.Type != EditorType.PeopleCode)
-            {
-                MessageBox.Show("Linting is only available for PeopleCode editors", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                return;
-            }
-
-            if (activeEditor.ContentString == null)
-            {
-                activeEditor.ContentString = ScintillaManager.GetScintillaText(activeEditor);
-            }
-
-            // Get the parsed program, token stream and comments using the caching mechanism
-            var (program, stream, comments) = activeEditor.GetParsedProgram();
-
-            // Check if the linter requires database connection
-            if (linter.DatabaseRequirement == DataManagerRequirement.Required && activeEditor.DataManager == null)
-            {
-                MessageBox.Show("This linting rule requires a database connection", "Database Required", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                return;
-            }
-
-            MultiParseTreeWalker walker = new();
-            List<Report> reports = new();
-
-            /* check to see if there's recently a new datamanager for this editor */
-            if (processDataManagers.TryGetValue(activeEditor.ProcessId, out IDataManager? value))
-            {
-                activeEditor.DataManager = value;
-            }
-
-            // Add the suppression listener first
-            var suppressionListener = new LinterSuppressionListener(stream, comments);
-            walker.AddListener(suppressionListener);
-
-            IDataManager? dataManger = activeEditor.DataManager;
-
-            // Configure and run the specific linter
-            linter.DataManager = dataManger;
-            linter.Reports = reports;
-            linter.Comments = comments;
-            linter.SuppressionListener = suppressionListener;
-
-            walker.AddListener(linter);
-            walker.Walk(program);
-
-            // Reset the linter state
-            linter.Reset();
-
-            activeEditor.SetLinterReports(reports);
-            // Process and display reports
-            foreach (var g in reports.GroupBy(r => r.Line).OrderBy(b => b.First().Line))
-            {
-                List<string> messages = new();
-                List<AnnotationStyle> styles = new();
-
-                foreach (var report in g)
-                {
-                    this.Invoke(() =>
-                    {
-                        int rowIndex = dataGridView2.Rows.Add(report.Type, report.Message, report.Line);
-                        dataGridView2.Rows[rowIndex].Tag = report;
-                    });
-
-                    if (chkLintAnnotate.Checked)
-                    {
-                        messages.Add(report.Message);
-                        styles.Add(report.Type switch
-                        {
-                            ReportType.Error => AnnotationStyle.Red,
-                            ReportType.Warning => AnnotationStyle.Yellow,
-                            ReportType.Info => AnnotationStyle.Gray,
-                            _ => AnnotationStyle.Gray
-                        });
-                    }
-                }
-
-                if (chkLintAnnotate.Checked)
-                {
-                    ScintillaManager.SetAnnotations(activeEditor, messages, g.First().Line, styles);
-                }
-            }
         }
 
         private void CmbTemplates_SelectedIndexChanged(object? sender, EventArgs e)
@@ -1656,111 +1093,6 @@ namespace AppRefiner
              templateManager.ApplyActiveTemplateToEditor(activeEditor);
         }
 
-        /// <summary>
-        /// Generates an HTML report of linting results for a project
-        /// </summary>
-        /// <param name="reportPath">The path where the report should be saved</param>
-        /// <param name="projectName">The name of the project</param>
-        /// <param name="reportData">The collection of programs and their lint reports</param>
-        private void GenerateHtmlReport(string reportPath, string projectName,
-            List<(PeopleCodeItem Program, Report LintReport)> reportData)
-        {
-            try
-            {
-                // Group reports by program
-                var groupedReports = reportData
-                    .GroupBy(r => r.Program.BuildPath())
-                    .OrderBy(g => g.Key)
-                    .ToList();
-
-                // Calculate statistics
-                int totalErrors = reportData.Count(r => r.LintReport.Type == ReportType.Error);
-                int totalWarnings = reportData.Count(r => r.LintReport.Type == ReportType.Warning);
-                int totalInfo = reportData.Count(r => r.LintReport.Type == ReportType.Info);
-
-                // Get active linters
-                var activeLinterInfo = linterRules
-                    .Where(l => l.Active)
-                    .Select(l => new { name = l.GetType().Name, description = l.Description })
-                    .ToList();
-
-                // Create a structured report object for JSON serialization
-                var report = new
-                {
-                    projectName,
-                    timestamp = DateTime.Now.ToString(),
-                    totalErrors,
-                    totalWarnings,
-                    totalInfo,
-                    totalIssues = reportData.Count,
-                    activeLinters = activeLinterInfo,
-                    programReports = groupedReports.Select(pg => new
-                    {
-                        programPath = pg.Key,
-                        // Include the PeopleCodeType information
-                        peopleCodeType = pg.First().Program.Type.ToString(),
-                        reports = pg.Select(item => new
-                        {
-                            type = item.LintReport.Type.ToString(),
-                            line = item.LintReport.Line + 1,
-                            message = item.LintReport.Message
-                        }).OrderBy(r => r.line).ToList()
-                    }).ToList()
-                };
-
-                // Convert the report object to JSON
-                string reportJson = System.Text.Json.JsonSerializer.Serialize(report);
-
-                // Get the template file path
-                string templatePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Templates", "LintReportTemplate.html");
-                string templateHtml;
-
-                // Check if template file exists
-                if (System.IO.File.Exists(templatePath))
-                {
-                    // Read the template file
-                    templateHtml = System.IO.File.ReadAllText(templatePath);
-                }
-                else
-                {
-                    // If file doesn't exist, try to read from embedded resource
-                    using (Stream? stream = GetType().Assembly.GetManifestResourceStream("AppRefiner.Templates.LintReportTemplate.html"))
-                    {
-                        if (stream != null)
-                        {
-                            using (var reader = new StreamReader(stream))
-                            {
-                                templateHtml = reader.ReadToEnd();
-                            }
-                        }
-                        else
-                        {
-                            // Fallback message if template isn't found
-                            MessageBox.Show("Lint report template not found. Please check your installation.",
-                                "Template Missing", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                            return;
-                        }
-                    }
-                }
-
-                // Inject the JSON data into the HTML
-                string finalHtml = templateHtml.Replace("{{projectName}}", projectName)
-                                             .Replace("{{timestamp}}", DateTime.Now.ToString());
-
-                // Add the report data as a JavaScript variable
-                finalHtml = finalHtml.Replace("</head>",
-                    $"<script>const reportJSON = {reportJson};</script>\n</head>");
-
-                // Write the final HTML to the report file
-                System.IO.File.WriteAllText(reportPath, finalHtml);
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"Error creating report: {ex.Message}", "Report Error",
-                    MessageBoxButtons.OK, MessageBoxIcon.Error);
-            }
-        }
-
         private void ShowGeneratedTemplateDialog(string content, string title)
         {
             var dialog = new Form
@@ -1794,11 +1126,10 @@ namespace AppRefiner
                 "Run linting rules against the current editor",
                 (progressDialog) =>
                 {
-                    if (activeEditor != null)
-                    {
+                    if (activeEditor == null) return;
+                    // Delegate to button click handler which uses the manager
                         progressDialog?.UpdateHeader("Running linters...");
-                        ProcessLinters();
-                    }
+                    linterManager?.ProcessLintersForActiveEditor(activeEditor, activeEditor.DataManager);
                 }
             ));
 
@@ -1966,38 +1297,55 @@ namespace AppRefiner
             ));
 
             // Add individual linter commands with "Lint: " prefix
-            foreach (var linter in linterRules)
+            // Need to get linters from the manager
+            if (linterManager != null)
             {
+                foreach (var linter in linterManager.LinterRules)
+                {
+                    // Capture the linter instance for the lambda
+                    BaseLintRule currentLinter = linter; 
                 AvailableCommands.Add(new Command(
-                    $"Lint: {linter.Description}",
-                    $"Run {linter.Description} linting rule",
+                        $"Lint: {currentLinter.Description}",
+                        $"Run {currentLinter.Description} linting rule",
                     () =>
                     {
-                        if (activeEditor != null)
-                            ProcessSingleLinter(linter);
-                    }
-                ));
+                            if (activeEditor != null) {
+                                // Need to pass current DataManager
+                                IDataManager? currentDataManager = null;
+                                processDataManagers.TryGetValue(activeEditor.ProcessId, out currentDataManager);
+                                currentDataManager ??= activeEditor.DataManager; 
+                                linterManager?.ProcessSingleLinter(currentLinter, activeEditor, currentDataManager);
+                            }
+                        }
+                    ));
+                }
             }
 
             // Add linter toggle commands
-            foreach (var linter in linterRules)
+            if (linterManager != null)
             {
+                foreach (var linter in linterManager.LinterRules)
+                {
+                    BaseLintRule currentLinter = linter; // Capture instance
                 AvailableCommands.Add(new Command(
-                    $"Lint: Toggle {linter.Description}",
-                    () => linter.Active ? $"Currently enabled - Click to disable" : $"Currently disabled - Click to enable",
+                        $"Lint: Toggle {currentLinter.Description}",
+                        () => currentLinter.Active ? $"Currently enabled - Click to disable" : $"Currently disabled - Click to enable",
                     () =>
                     {
-                        linter.Active = !linter.Active;
+                            currentLinter.Active = !currentLinter.Active;
 
                         // Update corresponding grid row if exists
                         var row = dataGridView1.Rows.Cast<DataGridViewRow>()
-                            .FirstOrDefault(r => r.Tag is BaseLintRule l && l == linter);
+                                .FirstOrDefault(r => r.Tag is BaseLintRule l && l == currentLinter);
                         if (row != null)
                         {
-                            row.Cells[0].Value = linter.Active;
+                                row.Cells[0].Value = currentLinter.Active;
                         }
+                            // Persist change
+                            linterManager?.SaveLinterStatesToSettings();
                     }
                 ));
+                }
             }
 
             // Add database commands with dynamic enabled states
@@ -2080,10 +1428,11 @@ namespace AppRefiner
             // Add project linting commands
             AvailableCommands.Add(new Command(
                 "Project: Set Lint Report Directory",
-                $"Current directory: {lintReportPath}",
+                // Need to get path from manager or settings
+                 () => $"Current directory: {lintReportPath ?? "Not Set"}", 
                 (progressDialog) =>
                 {
-                    SetLintReportDirectory();
+                    linterManager?.SetLintReportDirectory();
                 }
             ));
 
@@ -2093,9 +1442,8 @@ namespace AppRefiner
                 (progressDialog) =>
                 {
                     if (activeEditor != null)
-                    {
-                        progressDialog?.UpdateHeader("Initializing project linting...");
-                        LintProject(activeEditor, progressDialog);
+                     { // Pass active editor for context
+                          linterManager?.LintProject(activeEditor, progressDialog);
                     }
                 },
                 () => activeEditor != null && activeEditor.DataManager != null
@@ -2226,15 +1574,14 @@ namespace AppRefiner
 
         private void RegisterRefactorShortcuts()
         {
-            // Clean up any existing refactor shortcuts
-            foreach (var hook in refactorShortcuts.Values)
-            {
-                hook.Dispose();
-            }
-            refactorShortcuts.Clear();
+            // Clean up any existing refactor shortcuts - Handled by service disposal now
+            // foreach (var hook in refactorShortcuts.Values)
+            // {
+            //     hook.Dispose();
+            // }
+            // REMOVED: refactorShortcuts.Clear();
 
             // Get all refactor types
-            // Add refactoring commands
             var refactorTypes = DiscoverRefactorTypes();
             foreach (var type in refactorTypes)
             {
@@ -2282,37 +1629,13 @@ namespace AppRefiner
                 // Check if this refactor wants a keyboard shortcut
                 if (registerShortcut && key != Keys.None)
                 {
-                    // Check for collision with existing shortcuts
-                    bool hasCollision = false;
-                    string? collisionName = null;
 
-                    foreach (var entry in registeredShortcuts)
-                    {
-                        if (entry.Value.Item1 == modifiers && entry.Value.Item2 == key)
-                        {
-                            hasCollision = true;
-                            collisionName = entry.Key;
-                            break;
-                        }
-                    }
-
-                    if (hasCollision)
-                    {
-                        // Show warning about collision
-                        MessageBox.Show(
-                            $"Failed to register keyboard shortcut for refactor '{refactorName}' due to a collision with '{collisionName}'. The refactor is still available in the command palette.",
-                            "Shortcut Collision",
-                            MessageBoxButtons.OK,
-                            MessageBoxIcon.Warning
-                        );
-                    }
-                    else
-                    {
-                        // Register the shortcut
-                        var hook = new KeyboardHook();
-
-                        // Create a handler that creates and processes the refactor
-                        hook.KeyPressed += (sender, e) =>
+                    // Register the shortcut using the service
+                    bool registered = keyboardShortcutService?.RegisterShortcut(
+                        refactorName, 
+                        modifiers, 
+                        key, 
+                        () => // Action lambda
                         {
                             if (activeEditor == null) return;
 
@@ -2321,15 +1644,8 @@ namespace AppRefiner
                             {
                                 ProcessRefactor(newRefactor);
                             }
-                        };
-
-                        // Register the hotkey
-                        hook.RegisterHotKey(modifiers, key);
-
-                        // Store in our dictionaries
-                        refactorShortcuts[type.FullName ?? type.Name] = hook;
-                        registeredShortcuts[refactorName] = (modifiers, key);
-                    }
+                        }
+                    ) ?? false;
                 }
 
             }
@@ -2688,80 +2004,9 @@ namespace AppRefiner
         // Adds the WinEventHook methods to listen for Scintilla editor creation
         private void SetupWinEventHook()
         {
-            // Create the delegate and save a reference so it won't be garbage collected
-            winEventDelegate = new WinEventDelegate(WinEventProc);
-            
-            // Hook to listen for window creation events in all processes/threads
-            winEventHook = SetWinEventHook(
-                EVENT_OBJECT_FOCUS,       // Event to listen for (window creation)
-                EVENT_OBJECT_FOCUS,   // Also listen for foreground changes
-                IntPtr.Zero,               // No DLL injection
-                winEventDelegate,          // Callback
-                0,                         // All processes
-                0,                         // All threads
-                WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS // Options
-            );
-            
-            if (winEventHook == IntPtr.Zero)
-            {
-                Debug.Log("Failed to set up WinEvent hook");
-            }
-            else
-            {
-                Debug.Log("Successfully set up WinEvent hook for window creation and focus events");
-            }
+
         }
         
-        // WinEvent callback - called when windows are created in other processes
-        private void WinEventProc(IntPtr hWinEventHook, uint eventType, IntPtr hwnd, int idObject, 
-            int idChild, uint dwEventThread, uint dwmsEventTime)
-        {
-            if (eventType == EVENT_OBJECT_FOCUS)
-            {
-                /* If we've focused something other than the active editor, set active editor to null */
-                if (activeEditor != null && hwnd != activeEditor.hWnd && !activeEditor.IsValid())
-                {
-                    Debug.Log("Active editor has lost focus and isn't valid anymore.");
-                    activeEditor = null;
-                    Stylers.InvalidAppClass.ClearValidAppClassPathsCache();
-                }
-
-                // A window has gained focus - check if it's a Scintilla window
-                StringBuilder className = new StringBuilder(256);
-                GetClassName(hwnd, className, className.Capacity);
-                
-                if (className.ToString().Contains("Scintilla"))
-                {
-                    /* Ensure hwnd is owned by "pside.exe" */
-
-                    GetWindowThreadProcessId(hwnd, out var processId);
-                    if ("pside".Equals(Process.GetProcessById((int)processId).ProcessName))
-                    {
-                        Debug.Log($"WinEvent detected Scintilla window focus: 0x{hwnd.ToInt64():X}");
-                        Debug.Log($"idObject: {idObject}, idChild: {idChild}, dwEventThread: {dwEventThread}, dwmsEventTime: {dwmsEventTime}");
-                        // Use BeginInvoke to process on UI thread
-                        this.BeginInvoke(new Action(() =>
-                        {
-                            // Use SetActiveEditor to properly handle the window
-                            SetActiveEditor(hwnd);
-
-                            if (activeEditor != null && activeEditor.IsValid())
-                            {
-                                if (!activeEditor.FoldEnabled)
-                                {
-                                    ProcessNewEditor(activeEditor);
-                                }
-                                else
-                                {
-                                    // Check if content has changed
-                                    CheckForContentChanges(activeEditor);
-                                }
-                            }
-                        }));
-                    }
-                }
-            }
-        }
         
         // Handle a newly detected editor
         private void ProcessNewEditor(ScintillaEditor editor)
@@ -2873,7 +2118,7 @@ namespace AppRefiner
             while (hwnd != IntPtr.Zero)
             {
                 StringBuilder caption = new StringBuilder(256);
-                GetWindowText(hwnd, caption, caption.Capacity);
+                NativeMethods.GetWindowText(hwnd, caption, caption.Capacity); // Use NativeMethods
                 string windowTitle = caption.ToString();
                 
                 // Check if this is the Application Designer window
@@ -2894,7 +2139,7 @@ namespace AppRefiner
                 }
                 
                 // Get the parent window
-                hwnd = GetParent(hwnd);
+                hwnd = NativeMethods.GetParent(hwnd); // Use NativeMethods
             }
         }
 
@@ -2910,14 +2155,14 @@ namespace AppRefiner
                 IntPtr hwnd = editor.hWnd;
                 
                 // Get the grandparent window to examine its caption
-                IntPtr parentHwnd = GetParent(hwnd);
+                IntPtr parentHwnd = NativeMethods.GetParent(hwnd); // Use NativeMethods
                 if (parentHwnd != IntPtr.Zero)
                 {
-                    IntPtr grandparentHwnd = GetParent(parentHwnd);
+                    IntPtr grandparentHwnd = NativeMethods.GetParent(parentHwnd); // Use NativeMethods
                     if (grandparentHwnd != IntPtr.Zero)
                     {
                         StringBuilder caption = new StringBuilder(512);
-                        GetWindowText(grandparentHwnd, caption, caption.Capacity);
+                        NativeMethods.GetWindowText(grandparentHwnd, caption, caption.Capacity); // Use NativeMethods
                         string windowTitle = caption.ToString().Trim();
                         
                         Debug.Log($"Editor grandparent window title: {windowTitle}");
@@ -3394,384 +2639,65 @@ namespace AppRefiner
             ProcessRefactor(new CreateAutoComplete(editor, autoPairingEnabled));
         }
 
+        // Renamed from WinEventProc and updated signature for EventHandler
+        private void HandleWindowFocusEvent(object? sender, IntPtr hwnd)
+        {
+             // Check if the focused window is a Scintilla window
+             StringBuilder className = new StringBuilder(256);
+             NativeMethods.GetClassName(hwnd, className, className.Capacity); // Use NativeMethods
+             
+             if (className.ToString().Contains("Scintilla"))
+             {
+                 // Ensure hwnd is owned by "pside.exe"
+                 NativeMethods.GetWindowThreadProcessId(hwnd, out var processId); // Use NativeMethods
+                 try
+                 {
+                     if ("pside".Equals(Process.GetProcessById((int)processId).ProcessName, StringComparison.OrdinalIgnoreCase))
+                     {
+                         Debug.Log($"WinEvent detected Scintilla window focus: 0x{hwnd.ToInt64():X}");
+                         
+                         // The event handler is already invoked on the correct synchronization context
+                         // by WinEventService, so no need for BeginInvoke here.
+                         
+                         // Handle potential focus loss on the previous editor first
+                         if (activeEditor != null && hwnd != activeEditor.hWnd && !activeEditor.IsValid())
+                         {
+                             Debug.Log("Previous active editor lost focus or became invalid.");
+                              activeEditor = null;
+                              Stylers.InvalidAppClass.ClearValidAppClassPathsCache(); // Example cleanup
+                         }
+                         
+                         // Use SetActiveEditor to properly handle the newly focused window
+                         var newlyFocusedEditor = SetActiveEditor(hwnd);
+ 
+                         if (newlyFocusedEditor != null && newlyFocusedEditor.IsValid())
+                             {
+                                 if (!newlyFocusedEditor.FoldEnabled) // Check if it's truly a *new* editor needing init
+                                 {
+                                     ProcessNewEditor(newlyFocusedEditor);
+                                 }
+                                 else
+                                 {
+                                     // Editor already known and initialized, just check content
+                                     CheckForContentChanges(newlyFocusedEditor);
+                                 }
+                             }
+                         else
+                         {
+                             // Focused editor is null or invalid
+                             if(activeEditor?.hWnd == hwnd) // If the invalid one was our active one
+                             {
+                                 activeEditor = null; // Clear active editor
+                             }
+                         }
+                     }
+                 }
+                 catch (ArgumentException) { /* Process might have exited */ }
+             }
+        }
+
     }
     
-    /// <summary>
-    /// Enumeration of code definition types
-    /// </summary>
-    public enum GoToDefinitionType
-    {
-        Method,
-        Property,
-        Function,
-        Getter,
-        Setter,
-        Instance
-    }
-
-    /// <summary>
-    /// Enumeration of code definition scopes
-    /// </summary>
-    public enum GoToDefinitionScope
-    {
-        Public,
-        Protected,
-        Private,
-        Global  // For functions outside of classes
-    }
-
-    /// <summary>
-    /// Represents a code definition (method, property, function, etc.) that can be navigated to
-    /// </summary>
-    public class GoToCodeDefinition
-    {
-        /// <summary>
-        /// The name of the definition
-        /// </summary>
-        public string Name { get; set; }
-
-        /// <summary>
-        /// The type of the definition (return type for methods, property type, etc.)
-        /// </summary>
-        public string Type { get; set; }
-
-        /// <summary>
-        /// The type of code definition (method, property, function, etc.)
-        /// </summary>
-        public GoToDefinitionType DefinitionType { get; set; }
-
-        /// <summary>
-        /// The scope of the definition (public, protected, private)
-        /// </summary>
-        public GoToDefinitionScope Scope { get; set; }
-
-        /// <summary>
-        /// The position in the source code where the definition begins
-        /// </summary>
-        public int Position { get; set; }
-
-        /// <summary>
-        /// Line number where the definition begins
-        /// </summary>
-        public int Line { get; set; }
-
-        /// <summary>
-        /// Gets the formatted display text for the definition
-        /// </summary>
-        public string DisplayText => $"{Name}: {Type}";
-
-        /// <summary>
-        /// Gets a description of the definition for tooltip or additional information
-        /// </summary>
-        public string Description => $"{GetScopePrefix()}{DefinitionType} {Name} of type {Type} at line {Line}";
-
-        /// <summary>
-        /// Creates a new code definition with the provided parameters
-        /// </summary>
-        public GoToCodeDefinition(string name, string type, GoToDefinitionType definitionType, GoToDefinitionScope scope, int position, int line)
-        {
-            Name = name;
-            Type = type;
-            DefinitionType = definitionType;
-            Scope = scope;
-            Position = position;
-            Line = line;
-        }
-
-        /// <summary>
-        /// Gets the scope prefix for display purposes
-        /// </summary>
-        private string GetScopePrefix()
-        {
-            return Scope switch
-            {
-                GoToDefinitionScope.Public => "[Public] ",
-                GoToDefinitionScope.Protected => "[Protected] ",
-                GoToDefinitionScope.Private => "[Private] ",
-                GoToDefinitionScope.Global => "[Global] ",
-                _ => string.Empty
-            };
-        }
-    }
-
-    /// <summary>
-    /// A visitor implementation that collects code definitions for navigation purposes
-    /// </summary>
-    public class GoToDefinitionVisitor : PeopleCodeParserBaseListener
-    {
-        /// <summary>
-        /// Collection of all definitions found in the code
-        /// </summary>
-        public List<GoToCodeDefinition> Definitions { get; } = new List<GoToCodeDefinition>();
-
-        /// <summary>
-        /// Tracks the current scope during traversal
-        /// </summary>
-        private GoToDefinitionScope currentScope = GoToDefinitionScope.Public;
-
-        /// <summary>
-        /// Dictionary to map method/property names to their scope from the header declarations
-        /// </summary>
-        private Dictionary<string, GoToDefinitionScope> memberScopes = new Dictionary<string, GoToDefinitionScope>(StringComparer.OrdinalIgnoreCase);
-        
-        /// <summary>
-        /// Dictionary to map property names to their types from the header declarations
-        /// </summary>
-        private Dictionary<string, string> propertyTypes = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-
-        /// <summary>
-        /// Process method headers to capture scope information
-        /// </summary>
-        public override void EnterMethodHeader(PeopleCodeParser.MethodHeaderContext context)
-        {
-            if (context.genericID() != null)
-            {
-                var methodName = context.genericID().GetText();
-                // Store the method name with its scope from the header
-                memberScopes[methodName] = currentScope;
-            }
-        }
-
-        /// <summary>
-        /// Process property declarations in headers to capture scope information
-        /// </summary>
-        public override void EnterPropertyGetSet(PeopleCodeParser.PropertyGetSetContext context)
-        {
-            var propertyName = context.genericID().GetText();
-            var propertyType = GetTypeString(context.typeT());
-            
-            // Store the property name with its scope and type from the header
-            memberScopes[propertyName] = currentScope;
-            propertyTypes[propertyName] = propertyType;
-
-            Definitions.Add(new GoToCodeDefinition(
-                propertyName,
-                propertyType,
-                GoToDefinitionType.Property,
-                currentScope,
-                context.Start.StartIndex,
-                context.Start.Line
-            ));
-        }
-
-        /// <summary>
-        /// Process property declarations in headers to capture scope information
-        /// </summary>
-        public override void EnterPropertyDirect(PeopleCodeParser.PropertyDirectContext context)
-        {
-            var propertyName = context.genericID().GetText();
-            var propertyType = GetTypeString(context.typeT());
-            
-            // Store the property name with its scope and type from the header
-            memberScopes[propertyName] = currentScope;
-            propertyTypes[propertyName] = propertyType;
-
-            Definitions.Add(new GoToCodeDefinition(
-                propertyName,
-                propertyType,
-                GoToDefinitionType.Property,
-                currentScope,
-                context.Start.StartIndex,
-                context.Start.Line
-            ));
-        }
-
-        /// <summary>
-        /// Visit Method implementations
-        /// </summary>
-        /// <param name="context">The method context</param>
-        public override void EnterMethod(PeopleCodeParser.MethodContext context)
-        {
-            var methodName = context.genericID().GetText();
-            var returnType = "void"; // Default to void
-
-            // Look up the method's scope from its header declaration
-            var methodScope = GoToDefinitionScope.Public; // Default to public
-            if (memberScopes.TryGetValue(methodName, out var scope))
-            {
-                methodScope = scope;
-            }
-
-            Definitions.Add(new GoToCodeDefinition(
-                methodName,
-                returnType,
-                GoToDefinitionType.Method,
-                methodScope,
-                context.Start.StartIndex,
-                context.Start.Line
-            ));
-        }
-
-        /// <summary>
-        /// Visit Property getter implementations
-        /// </summary>
-        /// <param name="context">The getter context</param>
-        public override void EnterGetter(PeopleCodeParser.GetterContext context)
-        {
-            var propertyName = context.genericID().GetText();
-            
-            // Look up the property's scope from its header declaration
-            var propertyScope = GoToDefinitionScope.Public; // Default to public
-            if (memberScopes.TryGetValue(propertyName, out var scope))
-            {
-                propertyScope = scope;
-            }
-            
-            // Look up the property's type from its header declaration
-            var propertyType = "any"; // Default to any
-            if (propertyTypes.TryGetValue(propertyName, out var type))
-            {
-                propertyType = type;
-            }
-
-            Definitions.Add(new GoToCodeDefinition(
-                propertyName,
-                propertyType,
-                GoToDefinitionType.Getter,
-                propertyScope,
-                context.Start.StartIndex,
-                context.Start.Line
-            ));
-        }
-
-        /// <summary>
-        /// Visit Property setter implementations
-        /// </summary>
-        /// <param name="context">The setter context</param>
-        public override void EnterSetter(PeopleCodeParser.SetterContext context)
-        {
-            var propertyName = context.genericID().GetText();
-            
-            // Look up the property's scope from its header declaration
-            var propertyScope = GoToDefinitionScope.Public; // Default to public
-            if (memberScopes.TryGetValue(propertyName, out var scope))
-            {
-                propertyScope = scope;
-            }
-            
-            // Look up the property's type from its header declaration
-            var propertyType = "any"; // Default to any
-            if (propertyTypes.TryGetValue(propertyName, out var type))
-            {
-                propertyType = type;
-            }
-
-            Definitions.Add(new GoToCodeDefinition(
-                propertyName,
-                propertyType,
-                GoToDefinitionType.Setter,
-                propertyScope,
-                context.Start.StartIndex,
-                context.Start.Line
-            ));
-        }
-
-        /// <summary>
-        /// Visit Function definitions
-        /// </summary>
-        /// <param name="context">The function definition context</param>
-        public override void EnterFunctionDefinition(PeopleCodeParser.FunctionDefinitionContext context)
-        {
-            var functionName = context.allowableFunctionName().GetText();
-            var returnType = "void"; // Default to void
-
-            // Check if there's a return type specified
-            if (context.typeT() != null)
-            {
-                returnType = GetTypeString(context.typeT());
-            }
-
-            Definitions.Add(new GoToCodeDefinition(
-                functionName,
-                returnType,
-                GoToDefinitionType.Function,
-                GoToDefinitionScope.Global, // Functions are always global scope
-                context.Start.StartIndex,
-                context.Start.Line
-            ));
-        }
-
-        /// <summary>
-        /// Visit instance declarations (private variables)
-        /// </summary>
-        public override void EnterInstanceDecl(PeopleCodeParser.InstanceDeclContext context)
-        {
-            var propertyType = GetTypeString(context.typeT());
-
-            // An instance declaration can define multiple variables
-            foreach (var varNode in context.USER_VARIABLE())
-            {
-                var variableName = varNode.GetText();
-                
-                // Store the variable type, but mark as Instance type rather than Property
-                propertyTypes[variableName] = propertyType;
-
-                Definitions.Add(new GoToCodeDefinition(
-                    variableName,
-                    propertyType,
-                    GoToDefinitionType.Instance, // Use Instance instead of Property
-                    GoToDefinitionScope.Private, // Instance variables are always private
-                    varNode.Symbol.StartIndex,
-                    varNode.Symbol.Line
-                ));
-            }
-        }
-
-        /// <summary>
-        /// Enter public header section
-        /// </summary>
-        public override void EnterPublicHeader(PeopleCodeParser.PublicHeaderContext context)
-        {
-            currentScope = GoToDefinitionScope.Public;
-        }
-
-        /// <summary>
-        /// Enter protected header section
-        /// </summary>
-        public override void EnterProtectedHeader(PeopleCodeParser.ProtectedHeaderContext context)
-        {
-            currentScope = GoToDefinitionScope.Protected;
-        }
-
-        /// <summary>
-        /// Enter private header section
-        /// </summary>
-        public override void EnterPrivateHeader(PeopleCodeParser.PrivateHeaderContext context)
-        {
-            currentScope = GoToDefinitionScope.Private;
-        }
-
-        /// <summary>
-        /// Helper method to extract type information from type context
-        /// </summary>
-        private string GetTypeString(PeopleCodeParser.TypeTContext typeContext)
-        {
-            if (typeContext == null)
-                return "any";
-
-            if (typeContext is PeopleCodeParser.ArrayTypeContext arrayType)
-            {
-                var baseType = arrayType.typeT() != null
-                    ? GetTypeString(arrayType.typeT())
-                    : "any";
-                return $"Array of {baseType}";
-            }
-            else if (typeContext is PeopleCodeParser.BaseExceptionTypeContext)
-            {
-                return "Exception";
-            }
-            else if (typeContext is PeopleCodeParser.AppClassTypeContext appClass)
-            {
-                return appClass.appClassPath().GetText();
-            }
-            else if (typeContext is PeopleCodeParser.SimpleTypeTypeContext simpleType)
-            {
-                return simpleType.simpleType().GetText();
-            }
-
-            return typeContext.GetText();
-        }
-    }
 }
 
 

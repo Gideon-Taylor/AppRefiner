@@ -24,12 +24,6 @@ namespace AppRefiner
                 // Dispose of timers
                 savepointDebounceTimer?.Dispose();
 
-                // Clean up hooks
-                if (winEventHook != IntPtr.Zero)
-                {
-                    UnhookWinEvent(winEventHook);
-                    winEventHook = IntPtr.Zero;
-                }
             }
             base.Dispose(disposing);
         }
@@ -640,6 +634,11 @@ namespace AppRefiner
             ((System.ComponentModel.ISupportInitialize)splitContainer3).EndInit();
             splitContainer3.ResumeLayout(false);
             ResumeLayout(false);
+        }
+
+        private void dataGridView1_CellContentClick(object sender, DataGridViewCellEventArgs e)
+        {
+            linterManager?.HandleLinterGridCellContentClick(sender, e);
         }
 
         #endregion
