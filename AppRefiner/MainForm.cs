@@ -34,7 +34,8 @@ namespace AppRefiner
         private WinEventService? winEventService;
         private KeyboardShortcutService? keyboardShortcutService;
         private LinterManager? linterManager; // Added LinterManager
-
+        private StylerManager? stylerManager; // Added StylerManager
+        private AutoCompleteService? autoCompleteService; // Added AutoCompleteService
         private ScintillaEditor? activeEditor = null;
 
         /// <summary>
@@ -44,7 +45,6 @@ namespace AppRefiner
 
         // REMOVED: linterRules list (managed by LinterManager)
         // private List<BaseLintRule> linterRules = new(); 
-        private List<BaseStyler> stylers = new(); // Changed from List<BaseStyler> analyzers
         private List<ITooltipProvider> tooltipProviders = new();
 
         // Map of process IDs to their corresponding data managers
@@ -106,8 +106,6 @@ namespace AppRefiner
         public MainForm()
         {
             InitializeComponent();
-            // REMOVED: InitLinterOptions(); // Initialization moved
-            InitStylerOptions();
         }
 
         protected override void OnLoad(EventArgs e)
@@ -123,10 +121,15 @@ namespace AppRefiner
             linterManager = new LinterManager(this, dataGridView1, dataGridView2, chkLintAnnotate, lblStatus, progressBar1, lintReportPath);
             linterManager.InitializeLinterOptions(); // Initialize linters via the manager
             
+            // Instantiate StylerManager (passing UI elements)
+            stylerManager = new StylerManager(this, dataGridView3); 
+            stylerManager.InitializeStylerOptions(); // Initialize stylers via the manager
+
+            // Instantiate AutoCompleteService
+            autoCompleteService = new AutoCompleteService();
+
             // Set the application icon explicitly
             LoadSettings();
-            // REMOVED: LoadLinterStates(); // Handled by LinterManager init
-            LoadStylerStates();
             LoadTooltipStates();
             // Load templates using the manager and populate ComboBox
             templateManager.LoadTemplates();
@@ -147,12 +150,7 @@ namespace AppRefiner
             // Initialize the tooltip providers
             TooltipManager.Initialize();
             InitTooltipOptions();
-            // REMOVED: InitLinterOptions(); // Already called via manager
-            InitStylerOptions(); 
             
-            // Now load the states using the service (Keeping Styler/Tooltip for now)
-            // REMOVED: settingsService.LoadLinterStates(linterRules, dataGridView1);
-            LoadStylerStates(); // Keep direct call for now
             LoadTooltipStates(); // Keep direct call for now
 
             // Register keyboard shortcuts using the service (using fully qualified Enum access)
@@ -200,7 +198,7 @@ namespace AppRefiner
         private void lintCodeHandler()
         {
             if (activeEditor == null) return;
-            // ProcessLinters();
+            linterManager?.ProcessLintersForActiveEditor(activeEditor, activeEditor.DataManager);
         }
         
         // Parameterless overload for shortcut service
@@ -367,7 +365,7 @@ namespace AppRefiner
                 chkLintAnnotate.Checked = Properties.Settings.Default.lintAnnotate;
                 chkAutoPairing.Checked = Properties.Settings.Default.autoPair;
                 chkPromptForDB.Checked = Properties.Settings.Default.promptForDB;
-                LoadStylerStates();
+                
                 LoadTooltipStates();
                 // Removed call to LoadTemplates() as it's handled in OnLoad via TemplateManager
                 // LoadTemplates(); 
@@ -389,52 +387,10 @@ namespace AppRefiner
             Properties.Settings.Default.autoPair = chkAutoPairing.Checked;
             Properties.Settings.Default.promptForDB = chkPromptForDB.Checked;
 
-            SaveStylerStates();
+            stylerManager?.SaveStylerStatesToSettings();
             SaveTooltipStates();
 
             Properties.Settings.Default.Save();
-        }
-
-        private void LoadStylerStates()
-        {
-            try
-            {
-                var states = System.Text.Json.JsonSerializer.Deserialize<List<RuleState>>(
-                    Properties.Settings.Default.StylerStates);
-
-                if (states == null) return;
-
-                foreach (var state in states)
-                {
-                    var styler = stylers.FirstOrDefault(s => s.GetType().FullName == state.TypeName);
-                    if (styler != null)
-                    {
-                        styler.Active = state.Active;
-                        // Update corresponding grid row
-                        var row = dataGridView3.Rows.Cast<DataGridViewRow>()
-                            .FirstOrDefault(r => r.Tag is BaseStyler s && s == styler);
-                        if (row != null)
-                        {
-                            row.Cells[0].Value = state.Active;
-                        }
-                    }
-                }
-            }
-            catch
-            { /* Use defaults if settings are corrupt */
-            }
-        }
-
-        private void SaveStylerStates()
-        {
-            var states = stylers.Select(s => new RuleState
-            {
-                TypeName = s.GetType().FullName ?? "",
-                Active = s.Active
-            }).ToList();
-
-            Properties.Settings.Default.StylerStates =
-                System.Text.Json.JsonSerializer.Serialize(states);
         }
 
         private void LoadTooltipStates()
@@ -541,172 +497,14 @@ namespace AppRefiner
             });
         }
 
-        private void InitStylerOptions() // Changed from InitAnalyzerOptions
-        {
-            var stylerTypes = AppDomain.CurrentDomain.GetAssemblies()
-                .SelectMany(s => s.GetTypes())
-                .Where(p => typeof(BaseStyler).IsAssignableFrom(p) && !p.IsAbstract);
-
-            // Add plugin styler types
-            var pluginStylers = PluginManager.DiscoverStylerTypes();
-            stylerTypes = stylerTypes.Concat(pluginStylers);
-
-            foreach (var type in stylerTypes)
-            {
-                BaseStyler? styler = (BaseStyler?)Activator.CreateInstance(type);
-                if (styler != null)
-                {
-                    int rowIndex = dataGridView3.Rows.Add(styler.Active, styler.Description);
-                    dataGridView3.Rows[rowIndex].Tag = styler;
-                    stylers.Add(styler);
-                }
-            }
-            
-            // Ensure our new InvalidAppClass styler is added
-            var invalidAppClassStyler = new Stylers.InvalidAppClass();
-            bool alreadyAdded = stylers.Any(s => s is Stylers.InvalidAppClass);
-            if (!alreadyAdded)
-            {
-                int rowIndex = dataGridView3.Rows.Add(invalidAppClassStyler.Active, invalidAppClassStyler.Description);
-                dataGridView3.Rows[rowIndex].Tag = invalidAppClassStyler;
-                stylers.Add(invalidAppClassStyler);
-            }
-        }
-        private void ProcessStylers(ScintillaEditor editor)
-        {
-            if (editor == null || editor.Type != EditorType.PeopleCode)
-            {
-                return;
-            }
-
-            // Get the text from the editor if needed
-            if (editor.ContentString == null)
-            {
-                editor.ContentString = ScintillaManager.GetScintillaText(editor);
-            }
-
-            // Get the parsed program, token stream and comments using the caching mechanism
-            var (program, stream, comments) = editor.GetParsedProgram();
-            
-            // Get active stylers filtering out those that require a database when one isn't available
-            var activeStylers = stylers.Where(a => a.Active && (a.DatabaseRequirement != DataManagerRequirement.Required || editor.DataManager != null));
-            
-            // Assign data manager to each styler
-            foreach (var styler in activeStylers)
-            {
-                styler.DataManager = editor.DataManager;
-            }
-            
-            MultiParseTreeWalker walker = new();
-
-            List<Indicator> newIndicators = new();
-
-            foreach (var styler in activeStylers)
-            {
-                styler.Indicators = newIndicators;
-                styler.Comments = comments;
-                walker.AddListener(styler);
-            }
-
-            walker.Walk(program);
-
-            foreach (var styler in activeStylers)
-            {
-                /* clear out any internal states for the stylers */
-                styler.Reset();
-            }
-
-            // Get sets of current and new indicators for comparison
-            var currentIndicators = editor.ActiveIndicators;
-            
-            // Build a set to track indicators to remove
-            var indicatorsToRemove = new List<Indicator>();
-            
-            // Find all indicators that are no longer needed
-            foreach (var currentIndicator in currentIndicators)
-            {
-                bool stillNeeded = newIndicators.Any(ni => 
-                    ni.Start == currentIndicator.Start && 
-                    ni.Length == currentIndicator.Length && 
-                    ni.Color == currentIndicator.Color &&
-                    ni.Type == currentIndicator.Type);
-                
-                if (!stillNeeded)
-                {
-                    indicatorsToRemove.Add(currentIndicator);
-                }
-            }
-            
-            // Find all indicators that need to be added
-            var indicatorsToAdd = newIndicators.Where(ni => 
-                !currentIndicators.Any(ci => 
-                    ci.Start == ni.Start && 
-                    ci.Length == ni.Length && 
-                    ci.Color == ni.Color &&
-                    ci.Type == ni.Type)).ToList();
-            
-            // Remove indicators that are no longer needed
-            foreach (var indicator in indicatorsToRemove)
-            {
-                if (indicator.Type == IndicatorType.HIGHLIGHTER)
-                {
-                    ScintillaManager.RemoveHighlightWithColor(editor, indicator.Color, indicator.Start, indicator.Length);
-                }
-                else if (indicator.Type == IndicatorType.SQUIGGLE)
-                {
-                    ScintillaManager.RemoveSquiggleWithColor(editor, indicator.Color, indicator.Start, indicator.Length);
-                }
-                else if (indicator.Type == IndicatorType.TEXTCOLOR)
-                {
-                    ScintillaManager.RemoveTextColorWithColor(editor, indicator.Color, indicator.Start, indicator.Length);
-                }
-            }
-            
-            // Add new indicators
-            foreach (var indicator in indicatorsToAdd)
-            {
-                if (indicator.Type == IndicatorType.HIGHLIGHTER)
-                {
-                    ScintillaManager.HighlightTextWithColor(editor, indicator.Color, indicator.Start, indicator.Length, indicator.Tooltip);
-                }
-                else if (indicator.Type == IndicatorType.SQUIGGLE)
-                {
-                    ScintillaManager.SquiggleTextWithColor(editor, indicator.Color, indicator.Start, indicator.Length, indicator.Tooltip);
-                }
-                else if (indicator.Type == IndicatorType.TEXTCOLOR)
-                {
-                    ScintillaManager.TextColorWithColor(editor, indicator.Color, indicator.Start, indicator.Length);
-                }
-            }
-            
-            // Update the editor's active indicator list with the new set
-            editor.ActiveIndicators = newIndicators;
-        }
-
-
         private void dataGridView3_CellContentClick(object sender, DataGridViewCellEventArgs e)
         {
-            dataGridView3.CommitEdit(DataGridViewDataErrorContexts.Commit);
+            stylerManager?.HandleStylerGridCellContentClick(sender, e);
         }
 
         private void dataGridView3_CellValueChanged(object sender, DataGridViewCellEventArgs e)
         {
-            if (e.RowIndex < 0)
-            {
-                return;
-            }
-            if (e.ColumnIndex != 0)
-            {
-                return;
-            }
-            if (dataGridView3.Rows[e.RowIndex].Tag == null)
-            {
-                return;
-            }
-            if (dataGridView3.Rows[e.RowIndex].Tag is BaseStyler styler)
-            {
-                styler.Active = (bool)dataGridView3.Rows[e.RowIndex].Cells[0].Value;
-            }
+            stylerManager?.HandleStylerGridCellValueChanged(sender, e);
         }
 
         private void dataGridView1_CellValueChanged(object sender, DataGridViewCellEventArgs e)
@@ -723,24 +521,6 @@ namespace AppRefiner
         private void btnClearLint_Click(object sender, EventArgs e)
         {
             linterManager?.ClearLintResults(activeEditor);
-        }
-
-        private void btnDarkMode_Click(object sender, EventArgs e)
-        {
-            if (activeEditor == null) return;
-            ScintillaManager.SetDarkMode(activeEditor);
-        }
-
-        private void btnCollapseAll_Click(object sender, EventArgs e)
-        {
-            if (activeEditor == null) return;
-            ScintillaManager.CollapseTopLevel(activeEditor);
-        }
-
-        private void btnExpand_Click(object sender, EventArgs e)
-        {
-            if (activeEditor == null) return;
-            ScintillaManager.ExpandTopLevel(activeEditor);
         }
 
 
@@ -1203,8 +983,11 @@ namespace AppRefiner
                 }
             ));
 
+
+
+
             // Add styler toggle commands with "Styler:" prefix
-            foreach (var styler in stylers)
+            foreach (var styler in stylerManager?.StylerRules ?? new List<BaseStyler>())
             {
                 AvailableCommands.Add(new Command(
                     $"Styler: Toggle {styler.Description}",
@@ -1212,11 +995,9 @@ namespace AppRefiner
                     () =>
                     {
                         styler.Active = !styler.Active;
-                        if (activeEditor != null)
-                        {
-                            ProcessStylers(activeEditor);
-                        }
-
+                        
+                        stylerManager?.ProcessStylersForEditor(activeEditor);
+                        
                         // Update corresponding grid row if exists
                         var row = dataGridView3.Rows.Cast<DataGridViewRow>()
                             .FirstOrDefault(r => r.Tag is BaseStyler s && s == styler);
@@ -1756,7 +1537,7 @@ namespace AppRefiner
                 // Process stylers for PeopleCode
                 if (editor.Type == EditorType.PeopleCode)
                 {
-                    ProcessStylers(editor);
+                    stylerManager?.ProcessStylersForEditor(editor);
                 }
                 
                 if (!editor.HasLexilla || editor.Type == EditorType.SQL || editor.Type == EditorType.Other)
@@ -1774,11 +1555,16 @@ namespace AppRefiner
         protected override void WndProc(ref Message m)
         {
             base.WndProc(ref m);
-            if (activeEditor == null) return;
+            // Need activeEditor for most messages, but check null within specific cases
+            // if (activeEditor == null) return; 
+            // Removed early return, check activeEditor inside cases
 
             /* if message is a WM_SCN_EVENT (check the mask) */
             if ((m.Msg & WM_SCN_EVENT_MASK) == WM_SCN_EVENT_MASK)
             {
+                 // Only process if we have an active editor
+                 if (activeEditor == null || !activeEditor.IsValid()) return;
+
                 /* remove mask */
                 var eventCode = m.Msg & ~WM_SCN_EVENT_MASK;
 
@@ -1793,40 +1579,43 @@ namespace AppRefiner
                         break;
                     case SCN_SAVEPOINTREACHED:
                         Debug.Log("SAVEPOINTREACHED...");
-                        if (activeEditor != null)
+                        // Active editor check already done above
+                        lock (savepointLock)
                         {
-                            lock (savepointLock)
-                            {
-                                // Cancel any pending savepoint timer
-                                savepointDebounceTimer?.Change(Timeout.Infinite, Timeout.Infinite);
+                            // Cancel any pending savepoint timer
+                            savepointDebounceTimer?.Change(Timeout.Infinite, Timeout.Infinite);
 
-                                // Store the editor for later processing
-                                pendingSaveEditor = activeEditor;
+                            // Store the editor for later processing
+                            pendingSaveEditor = activeEditor;
 
-                                // Record the time of this savepoint
-                                lastSavepointTime = DateTime.Now;
+                            // Record the time of this savepoint
+                            lastSavepointTime = DateTime.Now;
 
-                                // Start a new timer to process this savepoint after the debounce period
-                                savepointDebounceTimer = new System.Threading.Timer(
-                                    ProcessSavepoint, null, SAVEPOINT_DEBOUNCE_MS, Timeout.Infinite);
-                            }
+                            // Start a new timer to process this savepoint after the debounce period
+                            savepointDebounceTimer = new System.Threading.Timer(
+                                ProcessSavepoint, null, SAVEPOINT_DEBOUNCE_MS, Timeout.Infinite);
                         }
                         break;
                     case SCN_USERLISTSELECTION:
                         Debug.Log("User list selection received");
+                        // Active editor check already done above
                         // wParam is the list type
                         int listType = m.WParam.ToInt32();
                         // lParam is a pointer to a UTF8 string in the editor's process memory
-                        if (m.LParam != IntPtr.Zero && activeEditor != null)
+                        if (m.LParam != IntPtr.Zero)
                         {
                             // Read the UTF8 string from the editor's process memory
-                            // Use a reasonable buffer size (256 bytes should be enough for most strings)
                             string? selectedText = ScintillaManager.ReadUtf8FromMemory(activeEditor, m.LParam, 256);
                             
                             if (!string.IsNullOrEmpty(selectedText))
                             {
                                 Debug.Log($"User selected: {selectedText} (list type: {listType})");
-                                HandleUserListSelection(activeEditor, selectedText, listType);
+                                // Call the AutoCompleteService
+                                var refactor = autoCompleteService?.HandleUserListSelection(activeEditor, selectedText, listType);
+                                if (refactor != null)
+                                {
+                                    ProcessRefactor(refactor);
+                                }
                             }
                         }
                         break;
@@ -1834,17 +1623,23 @@ namespace AppRefiner
             }
             else if (m.Msg == AR_APP_PACKAGE_SUGGEST)
             {
+                 // Only process if we have an active editor and service
+                 if (activeEditor == null || !activeEditor.IsValid() || autoCompleteService == null) return;
+
                 /* Handle app package suggestion request */
                 Debug.Log($"Received app package suggest message. WParam: {m.WParam}, LParam: {m.LParam}");
                 
                 // WParam contains the current cursor position
                 int position = m.WParam.ToInt32();
                 
-                // Show app package suggestions at the current position
-                ShowAppPackageSuggestions(activeEditor, position);
+                // Call the AutoCompleteService
+                autoCompleteService.ShowAppPackageSuggestions(activeEditor, position);
             }
             else if (m.Msg == AR_CREATE_SHORTHAND)
             {
+                 // Only process if we have an active editor and service
+                 if (activeEditor == null || !activeEditor.IsValid() || autoCompleteService == null) return;
+
                 /* Handle create shorthand detection */
                 Debug.Log($"Received create shorthand message. WParam: {m.WParam}, LParam: {m.LParam}");
                 
@@ -1854,8 +1649,12 @@ namespace AppRefiner
                 // LParam contains the current cursor position
                 int position = m.LParam.ToInt32();
                 
-                // Process create shorthand at the current position
-                HandleCreateShorthand(activeEditor, position, autoPairingEnabled);
+                // Call the AutoCompleteService
+                var refactor = autoCompleteService.PrepareCreateAutoCompleteRefactor(activeEditor, position, autoPairingEnabled);
+                if (refactor != null)
+                {
+                    ProcessRefactor(refactor);
+                }
             }
             else if (m.Msg == AR_TYPING_PAUSE)
             {
@@ -2444,199 +2243,6 @@ namespace AppRefiner
             {
                 Debug.Log($"Error processing debounced savepoint: {ex.Message}");
             }
-        }
-
-        /// <summary>
-        /// Shows app package suggestions when a colon is typed
-        /// </summary>
-        /// <param name="editor">The current Scintilla editor</param>
-        /// <param name="position">Current cursor position</param>
-        private void ShowAppPackageSuggestions(ScintillaEditor editor, int position)
-        {
-            try
-            {
-                if (editor == null || editor.DataManager == null) return;
-
-                // Get the current line and content up to the cursor position
-                int currentLine = (int)editor.SendMessage(0x2166, position, 0); // SCI_LINEFROMPOSITION
-                int lineStartPos = (int)editor.SendMessage(0x2167, currentLine, 0); // SCI_POSITIONFROMLINE
-                
-                string content = ScintillaManager.GetScintillaText(editor) ?? "";
-                string lineContent = content.Substring(lineStartPos, position - lineStartPos);
-
-                // Check if there's a colon in the line content
-                if (!lineContent.Contains(':'))
-                {
-                    Debug.Log("No colon found in line content");
-                    return;
-                }
-
-                // Extract the potential package path - we need to look for identifiers before the colon
-                string packagePath = ExtractPackagePathFromLine(lineContent);
-                if (string.IsNullOrEmpty(packagePath))
-                {
-                    Debug.Log("No valid package path found");
-                    return;
-                }
-
-                Debug.Log($"Extracted package path: {packagePath}");
-
-                // Get package items from database
-                var packageItems = editor.DataManager.GetAppPackageItems(packagePath);
-
-                // Convert to list of strings for autocomplete
-                List<string> suggestions = new List<string>();
-                suggestions.AddRange(packageItems.Subpackages.Select(p => $"{p} (Package)"));
-                suggestions.AddRange(packageItems.Classes.Select(c => $"{c} (Class)"));
-
-                if (suggestions.Count > 0)
-                {
-                    // Show the user list popup with app package suggestions
-                    Debug.Log($"Showing {suggestions.Count} app package suggestions for '{packagePath}'");
-                    bool result = ScintillaManager.ShowUserList(editor, 1, position, suggestions);
-                    
-                    if (!result)
-                    {
-                        Debug.Log("Failed to show user list popup");
-                    }
-                }
-                else
-                {
-                    Debug.Log($"No suggestions found for '{packagePath}'");
-                }
-            }
-            catch (Exception ex)
-            {
-                Debug.Log($"Error getting app package suggestions: {ex.Message}");
-            }
-        }
-
-        /// <summary>
-        /// Extracts a valid package path from a line of text
-        /// </summary>
-        /// <param name="lineContent">The line content to analyze</param>
-        /// <returns>The extracted package path or empty string if not found</returns>
-        private string ExtractPackagePathFromLine(string lineContent)
-        {
-            // If the line ends with a colon, we need to extract everything up to that colon
-            if (lineContent.EndsWith(':'))
-            {
-                // Find the last colon before the end
-                int colonIndex = lineContent.Length - 1;
-                
-                // Extract everything before the colon
-                string beforeColon = lineContent.Substring(0, colonIndex);
-                
-                // Find the last valid package identifier
-                // This could be after a space, another colon, or other delimiters
-                int lastDelimiterIndex = Math.Max(
-                    Math.Max(
-                        beforeColon.LastIndexOf(' '), 
-                        beforeColon.LastIndexOf('\t')
-                    ),
-                    Math.Max(
-                        beforeColon.LastIndexOf('.'),
-                        beforeColon.LastIndexOf('=')
-                    )
-                );
-                
-                // If we found a delimiter, extract the text after it
-                if (lastDelimiterIndex >= 0 && lastDelimiterIndex < beforeColon.Length - 1)
-                {
-                    return beforeColon.Substring(lastDelimiterIndex + 1).Trim();
-                }
-                
-                // If no delimiter, return the whole thing (rare case)
-                return beforeColon.Trim();
-            }
-            else if (lineContent.Contains(':'))
-            {
-                // We might be in the middle of a package path like "Package:SubPackage:"
-                int lastColonIndex = lineContent.LastIndexOf(':');
-                
-                // Start from the last colon and work backward to find the beginning of the path
-                string beforeLastColon = lineContent.Substring(0, lastColonIndex);
-                
-                // Find the last non-package-path character
-                int lastNonPathCharIndex = -1;
-                for (int i = beforeLastColon.Length - 1; i >= 0; i--)
-                {
-                    if (!char.IsLetterOrDigit(beforeLastColon[i]) && 
-                        beforeLastColon[i] != '_' && 
-                        beforeLastColon[i] != ':')
-                    {
-                        lastNonPathCharIndex = i;
-                        break;
-                    }
-                }
-                
-                // Extract the package path
-                if (lastNonPathCharIndex >= 0)
-                {
-                    return beforeLastColon.Substring(lastNonPathCharIndex + 1);
-                }
-                
-                return beforeLastColon;
-            }
-            
-            return string.Empty;
-        }
-
-        private void HandleUserListSelection(ScintillaEditor? editor, string selection, int listType = 0)
-        {
-            [DllImport("user32.dll", CharSet = CharSet.Auto)]
-            static extern IntPtr SendMessage(IntPtr hWnd, int Msg, IntPtr wParam, IntPtr lParam);
-
-            if (editor == null) return;
-            bool isClassSelection = false;
-            if (listType == 1)
-            {
-                var parts = selection.Split(" "); // Remove the type suffix
-                selection = parts[0];
-                isClassSelection = parts[1].Equals("(Class)", StringComparison.OrdinalIgnoreCase);
-            }
-
-
-            /* execute the resolve imports command */
-            if (isClassSelection)
-            {
-                ScintillaManager.InsertTextAtCursor(editor, selection);
-                var lineText = ScintillaManager.GetCurrentLineText(editor);
-                if (lineText != String.Empty)
-                {
-                    AddImport resolveImports = new AddImport(editor, lineText.Split(" ").Last());
-                    ProcessRefactor(resolveImports);
-                }
-            } else
-            {
-                ScintillaManager.InsertTextAtCursor(editor, $"{selection}:");
-
-                /* Send ourselves a AR_APP_PACKAGE_SUGGEST message */
-                //SendMessage(this.Handle, AR_APP_PACKAGE_SUGGEST, ScintillaManager.GetCursorPosition(editor), 0);
-
-                /* after 100ms send the message to ourselves, but let this function return */
-                Task.Delay(100).ContinueWith(_ =>
-                {
-                    //SendMessage(this.Handle, AR_APP_PACKAGE_SUGGEST, ScintillaManager.GetCursorPosition(editor), 0);
-                    ShowAppPackageSuggestions(editor, ScintillaManager.GetCursorPosition(editor));
-                });
-
-            }
-
-        }
-
-        /// <summary>
-        /// Handle the "create(" shorthand pattern detection
-        /// </summary>
-        /// <param name="editor">The active Scintilla editor</param>
-        /// <param name="position">The current cursor position</param>
-        private void HandleCreateShorthand(ScintillaEditor? editor, int position, bool autoPairingEnabled)
-        {
-            if (editor == null || !editor.IsValid()) return;
-            
-            // Execute the CreateAutoComplete refactor
-            Debug.Log($"Create shorthand detected at position {position}");
-            ProcessRefactor(new CreateAutoComplete(editor, autoPairingEnabled));
         }
 
         // Renamed from WinEventProc and updated signature for EventHandler

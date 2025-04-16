@@ -11,9 +11,10 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Windows.Forms;
-using System.Drawing; // For AnnotationStyle potentially
+using System.Drawing;
+using AppRefiner.Linters;
 
-namespace AppRefiner.Linters
+namespace AppRefiner
 {
     public class LinterManager
     {
