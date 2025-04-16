@@ -13,13 +13,20 @@ namespace AppRefiner.Linters
     public static class LinterConfigManager
     {
         private const string CONFIG_FILENAME = "LinterConfig.json";
-        
+        private const string APP_DATA_FOLDER_NAME = "AppRefiner"; // Added application-specific folder name
+
         /// <summary>
-        /// Gets the full path to the linter configuration file
+        /// Gets the full path to the linter configuration file in the user's AppData folder
         /// </summary>
-        private static string ConfigFilePath => Path.Combine(
-            Path.GetDirectoryName(Application.ExecutablePath) ?? string.Empty,
-            CONFIG_FILENAME);
+        private static string ConfigFilePath
+        {
+            get
+            {
+                string appDataPath = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+                string appFolderPath = Path.Combine(appDataPath, APP_DATA_FOLDER_NAME);
+                return Path.Combine(appFolderPath, CONFIG_FILENAME);
+            }
+        }
 
         /// <summary>
         /// Dictionary to store linter configurations by type name
@@ -57,6 +64,13 @@ namespace AppRefiner.Linters
         {
             try
             {
+                // Ensure the directory exists before saving
+                string? directoryPath = Path.GetDirectoryName(ConfigFilePath);
+                if (!string.IsNullOrEmpty(directoryPath) && !Directory.Exists(directoryPath))
+                {
+                    Directory.CreateDirectory(directoryPath);
+                }
+
                 string json = JsonSerializer.Serialize(LinterConfigs, new JsonSerializerOptions
                 {
                     WriteIndented = true
