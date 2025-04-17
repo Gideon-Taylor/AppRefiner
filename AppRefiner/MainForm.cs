@@ -45,8 +45,6 @@ namespace AppRefiner
         /// </summary>
         public ScintillaEditor? ActiveEditor => activeEditor;
 
-        // REMOVED: linterRules list (managed by LinterManager)
-        // private List<BaseLintRule> linterRules = new(); 
         private List<ITooltipProvider> tooltipProviders = new();
 
         // Map of process IDs to their corresponding data managers
@@ -55,16 +53,6 @@ namespace AppRefiner
         // Static list of available commands
         public static List<Command> AvailableCommands = new();
 
-        // REMOVED: Individual KeyboardHook fields (managed by KeyboardShortcutService)
-        // KeyboardHook collapseLevel = new();
-        // KeyboardHook expandLevel = new();
-        // KeyboardHook collapseAll = new();
-        // KeyboardHook expandAll = new();
-        // KeyboardHook commandPaletteHook = new();
-        // KeyboardHook lintCodeHook = new();
-        // KeyboardHook applyTemplateHook = new();
-        // KeyboardHook superGoTo = new();
-        
         public class RuleState
         {
             public string TypeName { get; set; } = "";
@@ -124,14 +112,10 @@ namespace AppRefiner
             // LoadGeneralSettings needs lintReportPath BEFORE LinterManager is created
             settingsService.LoadGeneralSettings(chkInitCollapsed, chkOnlyPPC, chkBetterSQL, chkAutoDark, chkAutoPairing, chkPromptForDB, out lintReportPath);
             linterManager = new LinterManager(this, dataGridView1, lblStatus, progressBar1, lintReportPath, settingsService);
-            // Pass services to LinterManager if needed for saving/loading within manager (Alternative Approach)
-            // linterManager.SettingsService = settingsService; 
             linterManager.InitializeLinterOptions(); // Initialize linters via the manager
             
             // Instantiate StylerManager (passing UI elements)
             stylerManager = new StylerManager(this, dataGridView3, settingsService); 
-            // Pass services to StylerManager if needed
-            // stylerManager.SettingsService = settingsService; 
             stylerManager.InitializeStylerOptions(); // Initialize stylers via the manager
 
             // Instantiate AutoCompleteService
@@ -140,9 +124,6 @@ namespace AppRefiner
             // Instantiate RefactorManager
             refactorManager = new RefactorManager(this);
             
-            // Set the application icon explicitly
-            // LoadSettings(); // Replaced by service call above
-            // LoadTooltipStates(); // Replaced by service call below
             // Load templates using the manager and populate ComboBox
             templateManager.LoadTemplates();
             cmbTemplates.Items.Clear();
@@ -155,9 +136,6 @@ namespace AppRefiner
             }
             cmbTemplates.SelectedIndexChanged += CmbTemplates_SelectedIndexChanged;
 
-            // We no longer need to start the scanning timer since we now process editors:
-            // 1. When they receive focus via WinEvent 
-            // 2. When typing pauses are detected via AR_TYPING_PAUSE messages
             RegisterCommands();
             // Initialize the tooltip providers
             TooltipManager.Initialize();
@@ -386,7 +364,6 @@ namespace AppRefiner
 
             // Persist all changes via service
             settingsService?.SaveChanges();
-            // Properties.Settings.Default.Save(); // Replaced by service call
         }
 
         private void InitTooltipOptions()
@@ -2019,7 +1996,7 @@ namespace AppRefiner
         }
 
         // Add this new method to process the savepoint after debouncing
-        private void ProcessSavepoint(object? state)
+        private void ProcessSavepoint(object? _)
         {
             ScintillaEditor? editorToSave = null;
             
