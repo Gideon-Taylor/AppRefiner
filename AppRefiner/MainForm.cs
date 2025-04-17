@@ -122,9 +122,8 @@ namespace AppRefiner
             
             // Instantiate LinterManager (passing UI elements)
             // LoadGeneralSettings needs lintReportPath BEFORE LinterManager is created
-            settingsService.LoadGeneralSettings(chkInitCollapsed, chkOnlyPPC, chkBetterSQL, chkAutoDark, 
-                                              chkLintAnnotate, chkAutoPairing, chkPromptForDB, out lintReportPath);
-            linterManager = new LinterManager(this, dataGridView1, dataGridView2, chkLintAnnotate, lblStatus, progressBar1, lintReportPath, settingsService);
+            settingsService.LoadGeneralSettings(chkInitCollapsed, chkOnlyPPC, chkBetterSQL, chkAutoDark, chkAutoPairing, chkPromptForDB, out lintReportPath);
+            linterManager = new LinterManager(this, dataGridView1, lblStatus, progressBar1, lintReportPath, settingsService);
             // Pass services to LinterManager if needed for saving/loading within manager (Alternative Approach)
             // linterManager.SettingsService = settingsService; 
             linterManager.InitializeLinterOptions(); // Initialize linters via the manager
@@ -374,7 +373,6 @@ namespace AppRefiner
                 chkOnlyPPC.Checked,
                 chkBetterSQL.Checked,
                 chkAutoDark.Checked,
-                chkLintAnnotate.Checked,
                 chkAutoPairing.Checked,
                 chkPromptForDB.Checked,
                 lintReportPath
@@ -466,12 +464,6 @@ namespace AppRefiner
         private void dataGridView1_CellValueChanged(object sender, DataGridViewCellEventArgs e)
         {
             linterManager?.HandleLinterGridCellValueChanged(sender, e);
-        }
-
-
-        private void dataGridView2_CellClick(object sender, DataGridViewCellEventArgs e)
-        {
-            linterManager?.HandleReportGridCellClick(sender, e, activeEditor);
         }
 
         private void btnClearLint_Click(object sender, EventArgs e)
@@ -602,7 +594,6 @@ namespace AppRefiner
                 lblStatus.Text = "Linting...";
                 progressBar1.Style = ProgressBarStyle.Marquee;
                 progressBar1.MarqueeAnimationSpeed = 30;
-                dataGridView2.Rows.Clear();
             });
             Application.DoEvents();
             
@@ -1126,7 +1117,6 @@ namespace AppRefiner
                     if (activeEditor != null)
                     {
                         ScintillaManager.ClearAnnotations(activeEditor);
-                        dataGridView2.Rows.Clear();
                     }
                 }
             ));

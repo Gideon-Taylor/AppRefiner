@@ -14,9 +14,6 @@
     <Setting Name="autoDark" Type="System.Boolean" Scope="User">
       <Value Profile="(Default)">False</Value>
     </Setting>
-    <Setting Name="lintAnnotate" Type="System.Boolean" Scope="User">
-      <Value Profile="(Default)">True</Value>
-    </Setting>
     <Setting Name="StylerStates" Type="System.String" Scope="User">
       <Value Profile="(Default)">[]</Value>
     </Setting>
@@ -45,7 +42,7 @@
       <Value Profile="(Default)">False</Value>
     </Setting>
     <Setting Name="DbConnectionSettings" Type="System.String" Scope="User">
-      <Value Profile="(Default)"></Value>
+      <Value Profile="(Default)" />
     </Setting>
     <Setting Name="MaxFileSnapshots" Type="System.Int32" Scope="User">
       <Value Profile="(Default)">10</Value>

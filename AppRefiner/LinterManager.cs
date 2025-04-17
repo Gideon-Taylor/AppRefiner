@@ -21,8 +21,6 @@ namespace AppRefiner
         private readonly List<BaseLintRule> linterRules = new();
         private readonly MainForm mainForm; // Reference to MainForm for UI updates/Invoke
         private readonly DataGridView linterGrid; // DataGridView for linter options
-        private readonly DataGridView reportGrid; // DataGridView for lint reports
-        private readonly CheckBox chkLintAnnotate; // Checkbox for annotations
         private readonly Label lblStatus; // Status label
         private readonly ProgressBar progressBar; // Progress bar
         private readonly SettingsService settingsService; // Added SettingsService
@@ -31,14 +29,11 @@ namespace AppRefiner
         // Pass it during construction or retrieve via a SettingsService later.
         private string? lintReportPath; 
 
-        public LinterManager(MainForm form, DataGridView linterOptionsGrid, DataGridView lintReportGrid, 
-                             CheckBox annotateCheckbox, Label statusLabel, ProgressBar progBar, 
+        public LinterManager(MainForm form, DataGridView linterOptionsGrid, Label statusLabel, ProgressBar progBar, 
                              string? initialLintReportPath, SettingsService settings)
         {
             mainForm = form;
             linterGrid = linterOptionsGrid;
-            reportGrid = lintReportGrid;
-            chkLintAnnotate = annotateCheckbox;
             lblStatus = statusLabel;
             progressBar = progBar;
             lintReportPath = initialLintReportPath;
@@ -187,7 +182,6 @@ namespace AppRefiner
              if (activeEditor == null) return;
 
             ScintillaManager.ClearAnnotations(activeEditor);
-            reportGrid.Rows.Clear(); // Clear previous single reports
 
             if (activeEditor.Type != EditorType.PeopleCode)
             {
@@ -228,7 +222,6 @@ namespace AppRefiner
 
         private void DisplayLintReports(List<Report> reports, ScintillaEditor activeEditor)
         {
-            mainForm.Invoke(() => reportGrid.Rows.Clear());
             
             foreach (var g in reports.GroupBy(r => r.Line).OrderBy(b => b.First().Line))
             {
@@ -237,28 +230,17 @@ namespace AppRefiner
 
                 foreach (var report in g)
                 {
-                    mainForm.Invoke(() => {
-                         int rowIndex = reportGrid.Rows.Add(report.Type, report.Message, report.Line);
-                         reportGrid.Rows[rowIndex].Tag = report;
-                    });
-                   
-                    if (chkLintAnnotate.Checked)
+                    messages.Add($"{report.Message} ({report.GetFullId()})");
+                    styles.Add(report.Type switch
                     {
-                        messages.Add($"{report.Message} ({report.GetFullId()})");
-                        styles.Add(report.Type switch
-                        {
-                            ReportType.Error => AnnotationStyle.Red,
-                            ReportType.Warning => AnnotationStyle.Yellow,
-                            ReportType.Info => AnnotationStyle.Gray,
-                            _ => AnnotationStyle.Gray
-                        });
-                    }
+                        ReportType.Error => AnnotationStyle.Red,
+                        ReportType.Warning => AnnotationStyle.Yellow,
+                        ReportType.Info => AnnotationStyle.Gray,
+                        _ => AnnotationStyle.Gray
+                    });
                 }
 
-                if (chkLintAnnotate.Checked)
-                {
-                    ScintillaManager.SetAnnotations(activeEditor, messages, g.First().Line, styles);
-                }
+                ScintillaManager.SetAnnotations(activeEditor, messages, g.First().Line, styles);
             }
         }
 
@@ -266,7 +248,6 @@ namespace AppRefiner
         {
             if (activeEditor == null) return;
             ScintillaManager.ClearAnnotations(activeEditor);
-            reportGrid.Rows.Clear();
         }
 
         // --- Project Linting --- 
@@ -495,17 +476,6 @@ namespace AppRefiner
                     linter.Active = (bool)linterGrid.Rows[e.RowIndex].Cells[0].Value;
                     // Settings are now saved centrally on form close
                 }
-            }
-        }
-
-        public void HandleReportGridCellClick(object sender, DataGridViewCellEventArgs e, ScintillaEditor? activeEditor)
-        {
-            if (activeEditor == null || reportGrid.SelectedRows.Count == 0) return;
-            
-            if (reportGrid.SelectedRows[0].Tag is Report report)
-            {
-                ScintillaManager.SetSelection(activeEditor, report.Span.Start, report.Span.Stop);
-                WindowHelper.FocusWindow(activeEditor.hWnd);
             }
         }
     }

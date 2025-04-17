@@ -73,18 +73,6 @@ namespace AppRefiner.Properties {
         
         [global::System.Configuration.UserScopedSettingAttribute()]
         [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
-        [global::System.Configuration.DefaultSettingValueAttribute("True")]
-        public bool lintAnnotate {
-            get {
-                return ((bool)(this["lintAnnotate"]));
-            }
-            set {
-                this["lintAnnotate"] = value;
-            }
-        }
-        
-        [global::System.Configuration.UserScopedSettingAttribute()]
-        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
         [global::System.Configuration.DefaultSettingValueAttribute("[]")]
         public string StylerStates {
             get {

@@ -21,7 +21,7 @@ namespace AppRefiner
         // --- General Settings --- 
 
         public void LoadGeneralSettings(CheckBox chkInitCollapsed, CheckBox chkOnlyPPC, CheckBox chkBetterSQL, 
-                                      CheckBox chkAutoDark, CheckBox chkLintAnnotate, CheckBox chkAutoPair, 
+                                      CheckBox chkAutoDark, CheckBox chkAutoPair, 
                                       CheckBox chkPromptForDB, out string? lintReportPath)
         {
             // Wrap in try-finally if isLoadingSettings logic is needed externally
@@ -31,7 +31,6 @@ namespace AppRefiner
                 chkOnlyPPC.Checked = Properties.Settings.Default.onlyPPC;
                 chkBetterSQL.Checked = Properties.Settings.Default.betterSQL;
                 chkAutoDark.Checked = Properties.Settings.Default.autoDark;
-                chkLintAnnotate.Checked = Properties.Settings.Default.lintAnnotate;
                 chkAutoPair.Checked = Properties.Settings.Default.autoPair;
                 chkPromptForDB.Checked = Properties.Settings.Default.promptForDB;
                 lintReportPath = Properties.Settings.Default.LintReportPath;
@@ -45,14 +44,13 @@ namespace AppRefiner
         }
 
         public void SaveGeneralSettings(bool initCollapsed, bool onlyPPC, bool betterSQL, 
-                                      bool autoDark, bool lintAnnotate, bool autoPair, 
+                                      bool autoDark, bool autoPair, 
                                       bool promptForDB, string? lintReportPath)
         {
             Properties.Settings.Default.initCollapsed = initCollapsed;
             Properties.Settings.Default.onlyPPC = onlyPPC;
             Properties.Settings.Default.betterSQL = betterSQL;
             Properties.Settings.Default.autoDark = autoDark;
-            Properties.Settings.Default.lintAnnotate = lintAnnotate;
             Properties.Settings.Default.autoPair = autoPair;
             Properties.Settings.Default.promptForDB = promptForDB;
             Properties.Settings.Default.LintReportPath = lintReportPath;

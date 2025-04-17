@@ -59,20 +59,7 @@ namespace AppRefiner
             dataGridViewTextBoxColumnTooltips = new DataGridViewTextBoxColumn();
             tabPage2 = new TabPage();
             splitContainerLint = new SplitContainer();
-            dataGridView1 = new DataGridView();
-            colActive = new DataGridViewCheckBoxColumn();
-            colDescr = new DataGridViewTextBoxColumn();
-            colConfigure = new DataGridViewButtonColumn();
             splitContainer2 = new SplitContainer();
-            btnConnectDB = new Button();
-            btnLintCode = new Button();
-            btnClearLint = new Button();
-            chkLintAnnotate = new CheckBox();
-            dataGridView2 = new DataGridView();
-            colResultType = new DataGridViewTextBoxColumn();
-            colResultMessage = new DataGridViewTextBoxColumn();
-            colResultLine = new DataGridViewTextBoxColumn();
-            label1 = new Label();
             tabPage5 = new TabPage();
             splitContainer3 = new SplitContainer();
             pnlTemplateParams = new Panel();
@@ -80,6 +67,15 @@ namespace AppRefiner
             cmbTemplates = new ComboBox();
             progressBar1 = new ProgressBar();
             lblStatus = new Label();
+            tabPage3 = new TabPage();
+            splitContainer4 = new SplitContainer();
+            dataGridView1 = new DataGridView();
+            colActive = new DataGridViewCheckBoxColumn();
+            colDescr = new DataGridViewTextBoxColumn();
+            colConfigure = new DataGridViewButtonColumn();
+            btnConnectDB = new Button();
+            btnClearLint = new Button();
+            btnLintCode = new Button();
             ((System.ComponentModel.ISupportInitialize)splitContainer1).BeginInit();
             splitContainer1.Panel1.SuspendLayout();
             splitContainer1.Panel2.SuspendLayout();
@@ -94,19 +90,20 @@ namespace AppRefiner
             tabPage2.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)splitContainerLint).BeginInit();
             splitContainerLint.Panel1.SuspendLayout();
-            splitContainerLint.Panel2.SuspendLayout();
             splitContainerLint.SuspendLayout();
-            ((System.ComponentModel.ISupportInitialize)dataGridView1).BeginInit();
             ((System.ComponentModel.ISupportInitialize)splitContainer2).BeginInit();
-            splitContainer2.Panel1.SuspendLayout();
-            splitContainer2.Panel2.SuspendLayout();
             splitContainer2.SuspendLayout();
-            ((System.ComponentModel.ISupportInitialize)dataGridView2).BeginInit();
             tabPage5.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)splitContainer3).BeginInit();
             splitContainer3.Panel1.SuspendLayout();
             splitContainer3.Panel2.SuspendLayout();
             splitContainer3.SuspendLayout();
+            tabPage3.SuspendLayout();
+            ((System.ComponentModel.ISupportInitialize)splitContainer4).BeginInit();
+            splitContainer4.Panel1.SuspendLayout();
+            splitContainer4.Panel2.SuspendLayout();
+            splitContainer4.SuspendLayout();
+            ((System.ComponentModel.ISupportInitialize)dataGridView1).BeginInit();
             SuspendLayout();
             // 
             // splitContainer1
@@ -135,6 +132,7 @@ namespace AppRefiner
             tabControl1.Controls.Add(tabPageTooltips);
             tabControl1.Controls.Add(tabPage2);
             tabControl1.Controls.Add(tabPage5);
+            tabControl1.Controls.Add(tabPage3);
             tabControl1.Dock = DockStyle.Fill;
             tabControl1.Location = new Point(0, 0);
             tabControl1.Name = "tabControl1";
@@ -355,168 +353,19 @@ namespace AppRefiner
             // 
             // splitContainerLint.Panel1
             // 
-            splitContainerLint.Panel1.Controls.Add(dataGridView1);
             splitContainerLint.Panel1.Controls.Add(splitContainer2);
-            // 
-            // splitContainerLint.Panel2
-            // 
-            splitContainerLint.Panel2.Controls.Add(dataGridView2);
-            splitContainerLint.Panel2.Controls.Add(label1);
             splitContainerLint.Size = new Size(556, 459);
             splitContainerLint.SplitterDistance = 230;
             splitContainerLint.TabIndex = 0;
-            // 
-            // dataGridView1
-            // 
-            dataGridView1.AllowUserToAddRows = false;
-            dataGridView1.AllowUserToDeleteRows = false;
-            dataGridView1.AllowUserToResizeColumns = false;
-            dataGridView1.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.AutoSize;
-            dataGridView1.Columns.AddRange(new DataGridViewColumn[] { colActive, colDescr, colConfigure });
-            dataGridView1.Dock = DockStyle.Fill;
-            dataGridView1.Location = new Point(0, 40);
-            dataGridView1.Name = "dataGridView1";
-            dataGridView1.RowHeadersVisible = false;
-            dataGridView1.Size = new Size(556, 190);
-            dataGridView1.TabIndex = 5;
-            dataGridView1.CellContentClick += dataGridView1_CellContentClick;
-            dataGridView1.CellValueChanged += dataGridView1_CellValueChanged;
-            // 
-            // colActive
-            // 
-            colActive.FillWeight = 75.21733F;
-            colActive.HeaderText = "Active";
-            colActive.Name = "colActive";
-            colActive.Width = 50;
-            // 
-            // colDescr
-            // 
-            colDescr.FillWeight = 110.569466F;
-            colDescr.HeaderText = "Description";
-            colDescr.Name = "colDescr";
-            colDescr.ReadOnly = true;
-            colDescr.Width = 410;
-            // 
-            // colConfigure
-            // 
-            colConfigure.FillWeight = 114.213196F;
-            colConfigure.HeaderText = "Configure";
-            colConfigure.Name = "colConfigure";
-            colConfigure.Text = "Configure...";
-            colConfigure.UseColumnTextForButtonValue = true;
-            colConfigure.Width = 75;
             // 
             // splitContainer2
             // 
             splitContainer2.Dock = DockStyle.Top;
             splitContainer2.Location = new Point(0, 0);
             splitContainer2.Name = "splitContainer2";
-            // 
-            // splitContainer2.Panel1
-            // 
-            splitContainer2.Panel1.Controls.Add(btnConnectDB);
-            splitContainer2.Panel1.Controls.Add(btnLintCode);
-            // 
-            // splitContainer2.Panel2
-            // 
-            splitContainer2.Panel2.Controls.Add(btnClearLint);
-            splitContainer2.Panel2.Controls.Add(chkLintAnnotate);
             splitContainer2.Size = new Size(556, 40);
             splitContainer2.SplitterDistance = 378;
             splitContainer2.TabIndex = 0;
-            // 
-            // btnConnectDB
-            // 
-            btnConnectDB.Dock = DockStyle.Right;
-            btnConnectDB.Location = new Point(271, 0);
-            btnConnectDB.Name = "btnConnectDB";
-            btnConnectDB.Size = new Size(107, 40);
-            btnConnectDB.TabIndex = 10;
-            btnConnectDB.Text = "Connect DB...";
-            btnConnectDB.UseVisualStyleBackColor = true;
-            btnConnectDB.Click += btnConnectDB_Click;
-            // 
-            // btnLintCode
-            // 
-            btnLintCode.Dock = DockStyle.Left;
-            btnLintCode.Enabled = false;
-            btnLintCode.Location = new Point(0, 0);
-            btnLintCode.Name = "btnLintCode";
-            btnLintCode.Size = new Size(239, 40);
-            btnLintCode.TabIndex = 9;
-            btnLintCode.Text = "Lint Code";
-            btnLintCode.UseVisualStyleBackColor = true;
-            btnLintCode.Click += btnLintCode_Click;
-            // 
-            // btnClearLint
-            // 
-            btnClearLint.Dock = DockStyle.Right;
-            btnClearLint.Enabled = false;
-            btnClearLint.Location = new Point(99, 0);
-            btnClearLint.Name = "btnClearLint";
-            btnClearLint.Size = new Size(75, 40);
-            btnClearLint.TabIndex = 7;
-            btnClearLint.Text = "Clear";
-            btnClearLint.UseVisualStyleBackColor = true;
-            btnClearLint.Click += btnClearLint_Click;
-            // 
-            // chkLintAnnotate
-            // 
-            chkLintAnnotate.AutoSize = true;
-            chkLintAnnotate.Checked = true;
-            chkLintAnnotate.CheckState = CheckState.Checked;
-            chkLintAnnotate.Location = new Point(5, 11);
-            chkLintAnnotate.Name = "chkLintAnnotate";
-            chkLintAnnotate.Size = new Size(75, 19);
-            chkLintAnnotate.TabIndex = 6;
-            chkLintAnnotate.Text = "Annotate";
-            chkLintAnnotate.UseVisualStyleBackColor = true;
-            // 
-            // dataGridView2
-            // 
-            dataGridView2.AllowUserToAddRows = false;
-            dataGridView2.AllowUserToDeleteRows = false;
-            dataGridView2.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.AutoSize;
-            dataGridView2.Columns.AddRange(new DataGridViewColumn[] { colResultType, colResultMessage, colResultLine });
-            dataGridView2.Dock = DockStyle.Fill;
-            dataGridView2.Location = new Point(0, 25);
-            dataGridView2.Name = "dataGridView2";
-            dataGridView2.RowHeadersVisible = false;
-            dataGridView2.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
-            dataGridView2.Size = new Size(556, 200);
-            dataGridView2.TabIndex = 17;
-            dataGridView2.CellClick += dataGridView2_CellClick;
-            // 
-            // colResultType
-            // 
-            colResultType.HeaderText = "Level";
-            colResultType.Name = "colResultType";
-            colResultType.ReadOnly = true;
-            colResultType.Width = 75;
-            // 
-            // colResultMessage
-            // 
-            colResultMessage.HeaderText = "Message";
-            colResultMessage.Name = "colResultMessage";
-            colResultMessage.ReadOnly = true;
-            colResultMessage.Width = 400;
-            // 
-            // colResultLine
-            // 
-            colResultLine.HeaderText = "Line";
-            colResultLine.Name = "colResultLine";
-            colResultLine.ReadOnly = true;
-            colResultLine.Width = 60;
-            // 
-            // label1
-            // 
-            label1.Dock = DockStyle.Top;
-            label1.Location = new Point(0, 0);
-            label1.Name = "label1";
-            label1.Size = new Size(556, 25);
-            label1.TabIndex = 16;
-            label1.Text = "Results";
-            label1.TextAlign = ContentAlignment.MiddleCenter;
             // 
             // tabPage5
             // 
@@ -595,6 +444,110 @@ namespace AppRefiner
             lblStatus.Text = "Stopped";
             lblStatus.TextAlign = ContentAlignment.MiddleCenter;
             // 
+            // tabPage3
+            // 
+            tabPage3.Controls.Add(splitContainer4);
+            tabPage3.Location = new Point(4, 24);
+            tabPage3.Name = "tabPage3";
+            tabPage3.Padding = new Padding(3);
+            tabPage3.Size = new Size(562, 465);
+            tabPage3.TabIndex = 7;
+            tabPage3.Text = "Linters";
+            tabPage3.UseVisualStyleBackColor = true;
+            // 
+            // splitContainer4
+            // 
+            splitContainer4.Dock = DockStyle.Fill;
+            splitContainer4.Location = new Point(3, 3);
+            splitContainer4.Name = "splitContainer4";
+            splitContainer4.Orientation = Orientation.Horizontal;
+            // 
+            // splitContainer4.Panel1
+            // 
+            splitContainer4.Panel1.Controls.Add(btnConnectDB);
+            splitContainer4.Panel1.Controls.Add(btnClearLint);
+            splitContainer4.Panel1.Controls.Add(btnLintCode);
+            // 
+            // splitContainer4.Panel2
+            // 
+            splitContainer4.Panel2.Controls.Add(dataGridView1);
+            splitContainer4.Size = new Size(556, 459);
+            splitContainer4.SplitterDistance = 49;
+            splitContainer4.TabIndex = 0;
+            // 
+            // dataGridView1
+            // 
+            dataGridView1.AllowUserToAddRows = false;
+            dataGridView1.AllowUserToDeleteRows = false;
+            dataGridView1.AllowUserToResizeColumns = false;
+            dataGridView1.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.AutoSize;
+            dataGridView1.Columns.AddRange(new DataGridViewColumn[] { colActive, colDescr, colConfigure });
+            dataGridView1.Dock = DockStyle.Fill;
+            dataGridView1.Location = new Point(0, 0);
+            dataGridView1.Name = "dataGridView1";
+            dataGridView1.RowHeadersVisible = false;
+            dataGridView1.Size = new Size(556, 406);
+            dataGridView1.TabIndex = 6;
+            // 
+            // colActive
+            // 
+            colActive.FillWeight = 75.21733F;
+            colActive.HeaderText = "Active";
+            colActive.Name = "colActive";
+            colActive.Width = 50;
+            // 
+            // colDescr
+            // 
+            colDescr.FillWeight = 110.569466F;
+            colDescr.HeaderText = "Description";
+            colDescr.Name = "colDescr";
+            colDescr.ReadOnly = true;
+            colDescr.Width = 410;
+            // 
+            // colConfigure
+            // 
+            colConfigure.FillWeight = 114.213196F;
+            colConfigure.HeaderText = "Configure";
+            colConfigure.Name = "colConfigure";
+            colConfigure.Text = "Configure...";
+            colConfigure.UseColumnTextForButtonValue = true;
+            colConfigure.Width = 75;
+            // 
+            // btnConnectDB
+            // 
+            btnConnectDB.Dock = DockStyle.Right;
+            btnConnectDB.Location = new Point(449, 0);
+            btnConnectDB.Name = "btnConnectDB";
+            btnConnectDB.Size = new Size(107, 49);
+            btnConnectDB.TabIndex = 14;
+            btnConnectDB.Text = "Connect DB...";
+            btnConnectDB.UseVisualStyleBackColor = true;
+            btnConnectDB.Click += btnConnectDB_Click;
+            // 
+            // btnClearLint
+            // 
+            btnClearLint.Dock = DockStyle.Left;
+            btnClearLint.Enabled = false;
+            btnClearLint.Location = new Point(239, 0);
+            btnClearLint.Name = "btnClearLint";
+            btnClearLint.Size = new Size(123, 49);
+            btnClearLint.TabIndex = 13;
+            btnClearLint.Text = "Clear Annotations";
+            btnClearLint.UseVisualStyleBackColor = true;
+            btnClearLint.Click += btnClearLint_Click;
+            // 
+            // btnLintCode
+            // 
+            btnLintCode.Dock = DockStyle.Left;
+            btnLintCode.Enabled = false;
+            btnLintCode.Location = new Point(0, 0);
+            btnLintCode.Name = "btnLintCode";
+            btnLintCode.Size = new Size(239, 49);
+            btnLintCode.TabIndex = 12;
+            btnLintCode.Text = "Lint Code";
+            btnLintCode.UseVisualStyleBackColor = true;
+            btnLintCode.Click += btnLintCode_Click;
+            // 
             // MainForm
             // 
             AutoScaleDimensions = new SizeF(7F, 15F);
@@ -618,21 +571,21 @@ namespace AppRefiner
             ((System.ComponentModel.ISupportInitialize)dataGridViewTooltips).EndInit();
             tabPage2.ResumeLayout(false);
             splitContainerLint.Panel1.ResumeLayout(false);
-            splitContainerLint.Panel2.ResumeLayout(false);
             ((System.ComponentModel.ISupportInitialize)splitContainerLint).EndInit();
             splitContainerLint.ResumeLayout(false);
-            ((System.ComponentModel.ISupportInitialize)dataGridView1).EndInit();
-            splitContainer2.Panel1.ResumeLayout(false);
-            splitContainer2.Panel2.ResumeLayout(false);
-            splitContainer2.Panel2.PerformLayout();
             ((System.ComponentModel.ISupportInitialize)splitContainer2).EndInit();
             splitContainer2.ResumeLayout(false);
-            ((System.ComponentModel.ISupportInitialize)dataGridView2).EndInit();
             tabPage5.ResumeLayout(false);
             splitContainer3.Panel1.ResumeLayout(false);
             splitContainer3.Panel2.ResumeLayout(false);
             ((System.ComponentModel.ISupportInitialize)splitContainer3).EndInit();
             splitContainer3.ResumeLayout(false);
+            tabPage3.ResumeLayout(false);
+            splitContainer4.Panel1.ResumeLayout(false);
+            splitContainer4.Panel2.ResumeLayout(false);
+            ((System.ComponentModel.ISupportInitialize)splitContainer4).EndInit();
+            splitContainer4.ResumeLayout(false);
+            ((System.ComponentModel.ISupportInitialize)dataGridView1).EndInit();
             ResumeLayout(false);
         }
 
@@ -664,20 +617,7 @@ namespace AppRefiner
         private DataGridViewTextBoxColumn dataGridViewTextBoxColumnTooltips;
         private TabPage tabPage2;
         private SplitContainer splitContainerLint;
-        private DataGridView dataGridView1;
-        private DataGridViewCheckBoxColumn colActive;
-        private DataGridViewTextBoxColumn colDescr;
-        private DataGridViewButtonColumn colConfigure;
         private SplitContainer splitContainer2;
-        private Button btnConnectDB;
-        private Button btnLintCode;
-        private Button btnClearLint;
-        private CheckBox chkLintAnnotate;
-        private DataGridView dataGridView2;
-        private DataGridViewTextBoxColumn colResultType;
-        private DataGridViewTextBoxColumn colResultMessage;
-        private DataGridViewTextBoxColumn colResultLine;
-        private Label label1;
         private TabPage tabPage5;
         private SplitContainer splitContainer3;
         private Panel pnlTemplateParams;
@@ -686,5 +626,14 @@ namespace AppRefiner
         private Button btnDebugLog;
         private CheckBox chkAutoPairing;
         private CheckBox chkPromptForDB;
+        private TabPage tabPage3;
+        private SplitContainer splitContainer4;
+        private DataGridView dataGridView1;
+        private DataGridViewCheckBoxColumn colActive;
+        private DataGridViewTextBoxColumn colDescr;
+        private DataGridViewButtonColumn colConfigure;
+        private Button btnConnectDB;
+        private Button btnClearLint;
+        private Button btnLintCode;
     }
 }
