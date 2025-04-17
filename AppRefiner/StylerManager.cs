@@ -21,11 +21,13 @@ namespace AppRefiner.Stylers
         private readonly List<BaseStyler> stylers = new();
         private readonly DataGridView stylerGrid; // DataGridView for styler options
         private readonly MainForm mainForm; // Needed for Invoke potentially, though aiming to minimize direct use
+        private readonly SettingsService settingsService; // Added SettingsService
 
-        public StylerManager(MainForm form, DataGridView stylerOptionsGrid)
+        public StylerManager(MainForm form, DataGridView stylerOptionsGrid, SettingsService settings)
         {
             mainForm = form; // Store reference if needed for Invoke
             stylerGrid = stylerOptionsGrid;
+            settingsService = settings; // Store SettingsService
         }
 
         public IEnumerable<BaseStyler> StylerRules => stylers;
@@ -65,69 +67,8 @@ namespace AppRefiner.Stylers
                 }
             }
 
-            // Load saved active states
-            LoadStylerStatesFromSettings();
-        }
-
-        /// <summary>
-        /// Loads the active state of stylers from application settings.
-        /// </summary>
-        private void LoadStylerStatesFromSettings()
-        {
-            try
-            {
-                string? statesJson = Properties.Settings.Default.StylerStates;
-                if (string.IsNullOrEmpty(statesJson)) return;
-
-                var states = JsonSerializer.Deserialize<List<MainForm.RuleState>>(statesJson); // Using MainForm.RuleState for now
-
-                if (states == null) return;
-
-                var stylerMap = stylers.ToDictionary(s => s.GetType().FullName ?? "");
-
-                foreach (var state in states)
-                {
-                    if (stylerMap.TryGetValue(state.TypeName, out var styler))
-                    {
-                        styler.Active = state.Active;
-                        // Update corresponding grid row
-                        var row = stylerGrid.Rows.Cast<DataGridViewRow>()
-                            .FirstOrDefault(r => r.Tag is BaseStyler s && s == styler);
-                        if (row != null && row.Index >= 0 && row.Cells.Count > 0)
-                        {
-                            // Safely update cell value
-                            row.Cells[0].Value = state.Active;
-                        }
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                Debug.LogException(ex, "Error loading styler states in StylerManager");
-                // Use defaults if settings are corrupt
-            }
-        }
-
-        /// <summary>
-        /// Saves the current active state of stylers to application settings.
-        /// </summary>
-        public void SaveStylerStatesToSettings()
-        {
-            try
-            {
-                var states = stylers.Select(s => new MainForm.RuleState // Using MainForm.RuleState for now
-                {
-                    TypeName = s.GetType().FullName ?? "",
-                    Active = s.Active
-                }).ToList();
-
-                Properties.Settings.Default.StylerStates = JsonSerializer.Serialize(states);
-                // Consider calling Properties.Settings.Default.Save() here or centrally later
-            }
-            catch (Exception ex)
-            {
-                Debug.LogException(ex, "Error saving styler states");
-            }
+            // Load saved active states using SettingsService
+            settingsService.LoadStylerStates(stylers, stylerGrid);
         }
 
         /// <summary>
@@ -288,8 +229,7 @@ namespace AppRefiner.Stylers
                     if (stylerGrid.Rows[e.RowIndex].Cells[0].Value is bool isActive)
                     {
                         styler.Active = isActive;
-                        // Persist change (optional, could be done on form close or explicitly)
-                        SaveStylerStatesToSettings();
+                        // Settings are now saved centrally on form close
 
                         // Optional: Trigger immediate re-styling of the active editor if needed
                         // This might require access to the active editor, passed in or retrieved.

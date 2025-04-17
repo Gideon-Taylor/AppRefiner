@@ -36,6 +36,8 @@ namespace AppRefiner
         private LinterManager? linterManager; // Added LinterManager
         private StylerManager? stylerManager; // Added StylerManager
         private AutoCompleteService? autoCompleteService; // Added AutoCompleteService
+        private RefactorManager? refactorManager; // Added RefactorManager
+        private SettingsService? settingsService; // Added SettingsService
         private ScintillaEditor? activeEditor = null;
 
         /// <summary>
@@ -112,25 +114,36 @@ namespace AppRefiner
         {
             base.OnLoad(e);
             // Instantiate and start services
+            settingsService = new SettingsService(); // Instantiate SettingsService first
             keyboardShortcutService = new KeyboardShortcutService();
             winEventService = new WinEventService();
             winEventService.WindowFocused += HandleWindowFocusEvent; 
             winEventService.Start(); 
             
             // Instantiate LinterManager (passing UI elements)
-            linterManager = new LinterManager(this, dataGridView1, dataGridView2, chkLintAnnotate, lblStatus, progressBar1, lintReportPath);
+            // LoadGeneralSettings needs lintReportPath BEFORE LinterManager is created
+            settingsService.LoadGeneralSettings(chkInitCollapsed, chkOnlyPPC, chkBetterSQL, chkAutoDark, 
+                                              chkLintAnnotate, chkAutoPairing, chkPromptForDB, out lintReportPath);
+            linterManager = new LinterManager(this, dataGridView1, dataGridView2, chkLintAnnotate, lblStatus, progressBar1, lintReportPath, settingsService);
+            // Pass services to LinterManager if needed for saving/loading within manager (Alternative Approach)
+            // linterManager.SettingsService = settingsService; 
             linterManager.InitializeLinterOptions(); // Initialize linters via the manager
             
             // Instantiate StylerManager (passing UI elements)
-            stylerManager = new StylerManager(this, dataGridView3); 
+            stylerManager = new StylerManager(this, dataGridView3, settingsService); 
+            // Pass services to StylerManager if needed
+            // stylerManager.SettingsService = settingsService; 
             stylerManager.InitializeStylerOptions(); // Initialize stylers via the manager
 
             // Instantiate AutoCompleteService
             autoCompleteService = new AutoCompleteService();
 
+            // Instantiate RefactorManager
+            refactorManager = new RefactorManager(this);
+            
             // Set the application icon explicitly
-            LoadSettings();
-            LoadTooltipStates();
+            // LoadSettings(); // Replaced by service call above
+            // LoadTooltipStates(); // Replaced by service call below
             // Load templates using the manager and populate ComboBox
             templateManager.LoadTemplates();
             cmbTemplates.Items.Clear();
@@ -149,9 +162,10 @@ namespace AppRefiner
             RegisterCommands();
             // Initialize the tooltip providers
             TooltipManager.Initialize();
-            InitTooltipOptions();
+            InitTooltipOptions(); // Needs to run before LoadTooltipStates
             
-            LoadTooltipStates(); // Keep direct call for now
+            // Load Tooltip states using the service
+            settingsService.LoadTooltipStates(tooltipProviders, dataGridViewTooltips);
 
             // Register keyboard shortcuts using the service (using fully qualified Enum access)
             keyboardShortcutService?.RegisterShortcut("CollapseLevel", AppRefiner.ModifierKeys.Alt, Keys.Left, collapseLevelHandler);
@@ -163,7 +177,7 @@ namespace AppRefiner
             keyboardShortcutService?.RegisterShortcut("ApplyTemplate", AppRefiner.ModifierKeys.Control | AppRefiner.ModifierKeys.Alt, Keys.T, ApplyTemplateCommand);
             keyboardShortcutService?.RegisterShortcut("SuperGoTo", AppRefiner.ModifierKeys.Control | AppRefiner.ModifierKeys.Alt, Keys.G, SuperGoToCommand); // Use the parameterless overload
             
-
+            // Register refactor shortcuts using the RefactorManager
             RegisterRefactorShortcuts();
             
             // Initialize snapshot manager
@@ -352,87 +366,29 @@ namespace AppRefiner
             }
         }
 
-
-        private void LoadSettings()
-        {
-            isLoadingSettings = true;
-            try
-            {
-                chkInitCollapsed.Checked = Properties.Settings.Default.initCollapsed;
-                chkOnlyPPC.Checked = Properties.Settings.Default.onlyPPC;
-                chkBetterSQL.Checked = Properties.Settings.Default.betterSQL;
-                chkAutoDark.Checked = Properties.Settings.Default.autoDark;
-                chkLintAnnotate.Checked = Properties.Settings.Default.lintAnnotate;
-                chkAutoPairing.Checked = Properties.Settings.Default.autoPair;
-                chkPromptForDB.Checked = Properties.Settings.Default.promptForDB;
-                
-                LoadTooltipStates();
-                // Removed call to LoadTemplates() as it's handled in OnLoad via TemplateManager
-                // LoadTemplates(); 
-            }
-            finally
-            {
-                isLoadingSettings = false;
-            }
-        }
-
         private void SaveSettings()
         {
-            Properties.Settings.Default.initCollapsed = chkInitCollapsed.Checked;
-            Properties.Settings.Default.onlyPPC = chkOnlyPPC.Checked;
-            Properties.Settings.Default.betterSQL = chkBetterSQL.Checked;
-            Properties.Settings.Default.autoDark = chkAutoDark.Checked;
-            Properties.Settings.Default.lintAnnotate = chkLintAnnotate.Checked;
-            Properties.Settings.Default.LintReportPath = lintReportPath;
-            Properties.Settings.Default.autoPair = chkAutoPairing.Checked;
-            Properties.Settings.Default.promptForDB = chkPromptForDB.Checked;
+            // Save general settings via service
+            settingsService?.SaveGeneralSettings(
+                chkInitCollapsed.Checked,
+                chkOnlyPPC.Checked,
+                chkBetterSQL.Checked,
+                chkAutoDark.Checked,
+                chkLintAnnotate.Checked,
+                chkAutoPairing.Checked,
+                chkPromptForDB.Checked,
+                lintReportPath
+            );
 
-            stylerManager?.SaveStylerStatesToSettings();
-            SaveTooltipStates();
+            // Save states for each component via service
+            // Note: Requires managers/components to expose their items if service doesn't hold them
+            if (linterManager != null) settingsService?.SaveLinterStates(linterManager.LinterRules);
+            if (stylerManager != null) settingsService?.SaveStylerStates(stylerManager.StylerRules);
+            settingsService?.SaveTooltipStates(tooltipProviders); // Save tooltip states
 
-            Properties.Settings.Default.Save();
-        }
-
-        private void LoadTooltipStates()
-        {
-            try
-            {
-                var states = System.Text.Json.JsonSerializer.Deserialize<List<RuleState>>(
-                    Properties.Settings.Default.TooltipStates);
-
-                if (states == null) return;
-
-                foreach (var state in states)
-                {
-                    var provider = tooltipProviders.FirstOrDefault(p => p.GetType().FullName == state.TypeName);
-                    if (provider != null)
-                    {
-                        provider.Active = state.Active;
-                        // Update corresponding grid row
-                        var row = dataGridViewTooltips.Rows.Cast<DataGridViewRow>()
-                            .FirstOrDefault(r => r.Tag is ITooltipProvider p && p == provider);
-                        if (row != null)
-                        {
-                            row.Cells[0].Value = state.Active;
-                        }
-                    }
-                }
-            }
-            catch
-            { /* Use defaults if settings are corrupt */
-            }
-        }
-
-        private void SaveTooltipStates()
-        {
-            var states = tooltipProviders.Select(p => new RuleState
-            {
-                TypeName = p.GetType().FullName ?? "",
-                Active = p.Active
-            }).ToList();
-
-            Properties.Settings.Default.TooltipStates =
-                System.Text.Json.JsonSerializer.Serialize(states);
+            // Persist all changes via service
+            settingsService?.SaveChanges();
+            // Properties.Settings.Default.Save(); // Replaced by service call
         }
 
         private void InitTooltipOptions()
@@ -997,7 +953,7 @@ namespace AppRefiner
                         styler.Active = !styler.Active;
                         
                         stylerManager?.ProcessStylersForEditor(activeEditor);
-                        
+
                         // Update corresponding grid row if exists
                         var row = dataGridView3.Rows.Cast<DataGridViewRow>()
                             .FirstOrDefault(r => r.Tag is BaseStyler s && s == styler);
@@ -1009,57 +965,51 @@ namespace AppRefiner
                 ));
             }
 
-            // Add refactoring commands
-            var refactorTypes = DiscoverRefactorTypes();
-            foreach (var type in refactorTypes)
+            // Add refactoring commands using RefactorManager
+            if (refactorManager != null)
             {
-                // Get the static properties for display name and description
-                string refactorName = "Refactor";
-                string refactorDescription = "Perform refactoring operation";
-
-                try
+                foreach (var refactorInfo in refactorManager.AvailableRefactors)
                 {
-                    var nameProperty = type.GetProperty("RefactorName", BindingFlags.Public | BindingFlags.Static | BindingFlags.NonPublic);
-                    if (nameProperty != null)
-                    {
-                        refactorName = nameProperty.GetValue(null) as string ?? "Refactor";
-                    }
-
-                    var descProperty = type.GetProperty("RefactorDescription", BindingFlags.Public | BindingFlags.Static | BindingFlags.NonPublic);
-                    if (descProperty != null)
-                    {
-                        refactorDescription = descProperty.GetValue(null) as string ?? "Perform refactoring operation";
-                    }
-                }
-                catch (Exception ex)
-                {
-                    Debug.Log($"Error getting refactor properties for {type.Name}: {ex.Message}");
-                }
-
-                // Create a command for this refactor
+                    // Capture the info for the lambda
+                    RefactorInfo currentRefactorInfo = refactorInfo; 
                 AvailableCommands.Add(new Command(
-                    $"Refactor: {refactorName}{GetShortcutText(type)}",
-                    refactorDescription,
+                        $"Refactor: {currentRefactorInfo.Name}{currentRefactorInfo.ShortcutText}",
+                        currentRefactorInfo.Description,
                     () =>
                     {
                         if (activeEditor != null)
                         {
-                            // Create an instance of the refactor with the standard parameters
+                                try
+                                {
+                                    // Create an instance of the refactor
                             var refactor = (BaseRefactor?)Activator.CreateInstance(
-                                type,
-                                [activeEditor]
+                                        currentRefactorInfo.RefactorType,
+                                        [activeEditor] // Assuming constructor takes ScintillaEditor
                             );
 
                             if (refactor != null)
                             {
-                                ProcessRefactor(refactor);
+                                        // Execute via the manager
+                                        refactorManager.ExecuteRefactor(refactor, activeEditor);
+                                    }
+                                    else
+                                    {
+                                          Debug.LogError($"Failed to create instance of refactor: {currentRefactorInfo.RefactorType.FullName}");
+                                          MessageBox.Show(this, "Error creating refactor instance.", "Refactor Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                                    }
+                                }
+                                catch (Exception ex)
+                                {
+                                     Debug.LogException(ex, $"Error instantiating or executing refactor: {currentRefactorInfo.RefactorType.FullName}");
+                                     MessageBox.Show(this, $"Error running refactor: {ex.Message}", "Refactor Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
                             }
                         }
                     }
                 ));
+                }
             }
 
-            // Add the suppress lint errors command (special case that needs the current line)
+            // Add the suppress lint errors command (special case)
             AvailableCommands.Add(new Command(
                 "Linter: Suppress lint errors",
                 "Suppress lint errors with configurable scope",
@@ -1067,12 +1017,10 @@ namespace AppRefiner
                 {
                     if (activeEditor != null)
                     {
-                        var line = ScintillaManager.GetCurrentLineNumber(activeEditor);
-                        int currentPosition = ScintillaManager.GetCursorPosition(activeEditor);
-                        if (line != -1)
-                        {
-                            ProcessRefactor(new SuppressReportRefactor(activeEditor));
-                        }
+                        // Instantiate the specific refactor
+                        var suppressRefactor = new SuppressReportRefactor(activeEditor);
+                        // Execute via the manager
+                        refactorManager?.ExecuteRefactor(suppressRefactor, activeEditor);
                     }
                 }
             ));
@@ -1122,8 +1070,6 @@ namespace AppRefiner
                         {
                                 row.Cells[0].Value = currentLinter.Active;
                         }
-                            // Persist change
-                            linterManager?.SaveLinterStatesToSettings();
                     }
                 ));
                 }
@@ -1319,168 +1265,60 @@ namespace AppRefiner
             }
         }
 
-
-        /// <summary>
-        /// Discovers all available refactor types in the application and plugins
-        /// </summary>
-        /// <returns>A collection of refactor types</returns>
-        private IEnumerable<Type> DiscoverRefactorTypes()
-        {
-            // Get refactor types from the main assembly
-            var refactorTypes = AppDomain.CurrentDomain.GetAssemblies()
-                .SelectMany(s => s.GetTypes())
-                .Where(p => typeof(BaseRefactor).IsAssignableFrom(p) && !p.IsAbstract && p != typeof(ScopedRefactor<>) && p != typeof(BaseRefactor));
-
-            // Filter out hidden refactors
-            refactorTypes = refactorTypes.Where(type => {
-                try {
-                    var isHiddenProperty = type.GetProperty("IsHidden", 
-                        BindingFlags.Public | BindingFlags.Static | BindingFlags.NonPublic);
-                    return isHiddenProperty == null || !(bool)isHiddenProperty.GetValue(null)!;
-                }
-                catch {
-                    return true; // If we can't determine IsHidden, include the refactor
-                }
-            });
-
-            // Get refactor types from plugins
-            var pluginRefactors = PluginManager.DiscoverRefactorTypes();
-            if (pluginRefactors != null)
-            {
-                refactorTypes = refactorTypes.Concat(pluginRefactors);
-            }
-
-            return refactorTypes;
-        }
-
         private void RegisterRefactorShortcuts()
         {
-            // Clean up any existing refactor shortcuts - Handled by service disposal now
-            // foreach (var hook in refactorShortcuts.Values)
-            // {
-            //     hook.Dispose();
-            // }
-            // REMOVED: refactorShortcuts.Clear();
+            // Use RefactorManager to get shortcut info
+            if (refactorManager == null || keyboardShortcutService == null) return;
 
-            // Get all refactor types
-            var refactorTypes = DiscoverRefactorTypes();
-            foreach (var type in refactorTypes)
+            foreach (var refactorInfo in refactorManager.AvailableRefactors)
             {
-                // Get the static properties for display name and description
-                bool registerShortcut = false;
-                ModifierKeys modifiers = (ModifierKeys)Keys.None;
-                Keys key = Keys.None;
-                string refactorName = string.Empty;
-
-                try
-                {
-                    var registerShortcutProperty = type.GetProperty("RegisterKeyboardShortcut",
-                        BindingFlags.Public | BindingFlags.Static | BindingFlags.NonPublic);
-
-                    if (registerShortcutProperty != null)
-                    {
-                        registerShortcut = (bool)registerShortcutProperty.GetValue(null)!;
-                    }
-
-                    var modifiersProperty = type.GetProperty("ShortcutModifiers",
-                        BindingFlags.Public | BindingFlags.Static | BindingFlags.NonPublic);
-                    if (modifiersProperty != null)
-                    {
-                        modifiers = (ModifierKeys)modifiersProperty.GetValue(null)!;
-                    }
-
-                    var keyProperty = type.GetProperty("ShortcutKey",
-                        BindingFlags.Public | BindingFlags.Static | BindingFlags.NonPublic);
-                    if (keyProperty != null)
-                    {
-                        key = (Keys)keyProperty.GetValue(null)!;
-                    }
-
-                    var nameProperty = type.GetProperty("RefactorName",
-                        BindingFlags.Public | BindingFlags.Static | BindingFlags.NonPublic);
-                    if (nameProperty != null)
-                    {
-                        refactorName = (string)nameProperty.GetValue(null)!;
-                    }
-                }
-                catch (Exception ex)
-                {
-                    Debug.Log($"Error getting refactor properties for {type.Name}: {ex.Message}");
-                }
                 // Check if this refactor wants a keyboard shortcut
-                if (registerShortcut && key != Keys.None)
+                if (refactorInfo.RegisterShortcut && refactorInfo.Key != Keys.None)
                 {
+                    // Capture info for the lambda
+                    RefactorInfo currentRefactorInfo = refactorInfo;
 
                     // Register the shortcut using the service
-                    bool registered = keyboardShortcutService?.RegisterShortcut(
-                        refactorName, 
-                        modifiers, 
-                        key, 
+                    bool registered = keyboardShortcutService.RegisterShortcut(
+                        currentRefactorInfo.Name, // Use Name for unique ID
+                        currentRefactorInfo.Modifiers, 
+                        currentRefactorInfo.Key, 
                         () => // Action lambda
                         {
                             if (activeEditor == null) return;
 
-                            var newRefactor = (BaseRefactor?)Activator.CreateInstance(type, [activeEditor]);
-                            if (newRefactor != null)
+                            try
                             {
-                                ProcessRefactor(newRefactor);
+                                var newRefactor = (BaseRefactor?)Activator.CreateInstance(
+                                    currentRefactorInfo.RefactorType,
+                                    [activeEditor] // Assuming constructor takes ScintillaEditor
+                                );
+
+                                if (newRefactor != null)
+                                {
+                                    // Execute via manager
+                                    refactorManager.ExecuteRefactor(newRefactor, activeEditor);
+                                }
+                                else
+                                {
+                                     Debug.LogError($"Failed to create instance for shortcut: {currentRefactorInfo.RefactorType.FullName}");
+                                     MessageBox.Show(this, "Error creating refactor instance for shortcut.", "Refactor Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    }
+                }
+                catch (Exception ex)
+                {
+                                Debug.LogException(ex, $"Error instantiating or executing refactor from shortcut: {currentRefactorInfo.RefactorType.FullName}");
+                                MessageBox.Show(this, $"Error running refactor from shortcut: {ex.Message}", "Refactor Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
                             }
                         }
-                    ) ?? false;
-                }
+                    );
 
-            }
-        }
-
-        private string GetShortcutText(Type refactorType)
-        {
-            try
-            {
-                // Check if this refactor has a keyboard shortcut
-                var registerShortcutProperty = refactorType.GetProperty("RegisterKeyboardShortcut",
-                    BindingFlags.Public | BindingFlags.Static | BindingFlags.NonPublic);
-
-                if (registerShortcutProperty != null && (bool)registerShortcutProperty.GetValue(null)!)
-                {
-                    // Get the modifier keys and key
-                    var modifiersProperty = refactorType.GetProperty("ShortcutModifiers",
-                        BindingFlags.Public | BindingFlags.Static | BindingFlags.NonPublic);
-                    var keyProperty = refactorType.GetProperty("ShortcutKey",
-                        BindingFlags.Public | BindingFlags.Static | BindingFlags.NonPublic);
-
-                    if (modifiersProperty != null && keyProperty != null)
+                    if (!registered)
                     {
-                        ModifierKeys modifiers = (ModifierKeys)modifiersProperty.GetValue(null)!;
-                        Keys key = (Keys)keyProperty.GetValue(null)!;
-
-                        if (key != Keys.None)
-                        {
-                            // Format the shortcut text
-                            StringBuilder shortcutText = new StringBuilder(" (");
-
-                            if ((modifiers & AppRefiner.ModifierKeys.Control) == AppRefiner.ModifierKeys.Control)
-                                shortcutText.Append("Ctrl+");
-
-                            if ((modifiers & AppRefiner.ModifierKeys.Shift) == AppRefiner.ModifierKeys.Shift)
-                                shortcutText.Append("Shift+");
-
-                            if ((modifiers & AppRefiner.ModifierKeys.Alt) == AppRefiner.ModifierKeys.Alt)
-                                shortcutText.Append("Alt+");
-
-                            shortcutText.Append(key.ToString());
-                            shortcutText.Append(")");
-
-                            return shortcutText.ToString();
-                        }
+                         Debug.LogWarning($"Failed to register shortcut for refactor: {currentRefactorInfo.Name}");
                     }
                 }
             }
-            catch (Exception ex)
-            {
-                Debug.Log($"Error getting shortcut text for {refactorType.Name}: {ex.Message}");
-            }
-
-            return string.Empty;
         }
 
         private ScintillaEditor? SetActiveEditor(IntPtr hwnd)
@@ -1580,20 +1418,20 @@ namespace AppRefiner
                     case SCN_SAVEPOINTREACHED:
                         Debug.Log("SAVEPOINTREACHED...");
                         // Active editor check already done above
-                        lock (savepointLock)
-                        {
-                            // Cancel any pending savepoint timer
-                            savepointDebounceTimer?.Change(Timeout.Infinite, Timeout.Infinite);
+                            lock (savepointLock)
+                            {
+                                // Cancel any pending savepoint timer
+                                savepointDebounceTimer?.Change(Timeout.Infinite, Timeout.Infinite);
 
-                            // Store the editor for later processing
-                            pendingSaveEditor = activeEditor;
+                                // Store the editor for later processing
+                                pendingSaveEditor = activeEditor;
 
-                            // Record the time of this savepoint
-                            lastSavepointTime = DateTime.Now;
+                                // Record the time of this savepoint
+                                lastSavepointTime = DateTime.Now;
 
-                            // Start a new timer to process this savepoint after the debounce period
-                            savepointDebounceTimer = new System.Threading.Timer(
-                                ProcessSavepoint, null, SAVEPOINT_DEBOUNCE_MS, Timeout.Infinite);
+                                // Start a new timer to process this savepoint after the debounce period
+                                savepointDebounceTimer = new System.Threading.Timer(
+                                    ProcessSavepoint, null, SAVEPOINT_DEBOUNCE_MS, Timeout.Infinite);
                         }
                         break;
                     case SCN_USERLISTSELECTION:
@@ -1614,7 +1452,8 @@ namespace AppRefiner
                                 var refactor = autoCompleteService?.HandleUserListSelection(activeEditor, selectedText, listType);
                                 if (refactor != null)
                                 {
-                                    ProcessRefactor(refactor);
+                                    // Execute via RefactorManager
+                                    refactorManager?.ExecuteRefactor(refactor, activeEditor);
                                 }
                             }
                         }
@@ -1653,7 +1492,8 @@ namespace AppRefiner
                 var refactor = autoCompleteService.PrepareCreateAutoCompleteRefactor(activeEditor, position, autoPairingEnabled);
                 if (refactor != null)
                 {
-                    ProcessRefactor(refactor);
+                     // Execute via RefactorManager
+                    refactorManager?.ExecuteRefactor(refactor, activeEditor);
                 }
             }
             else if (m.Msg == AR_TYPING_PAUSE)

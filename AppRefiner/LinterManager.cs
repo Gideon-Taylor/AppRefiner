@@ -25,13 +25,15 @@ namespace AppRefiner
         private readonly CheckBox chkLintAnnotate; // Checkbox for annotations
         private readonly Label lblStatus; // Status label
         private readonly ProgressBar progressBar; // Progress bar
+        private readonly SettingsService settingsService; // Added SettingsService
         
         // We might still need access to the general settings like LintReportPath
         // Pass it during construction or retrieve via a SettingsService later.
         private string? lintReportPath; 
 
         public LinterManager(MainForm form, DataGridView linterOptionsGrid, DataGridView lintReportGrid, 
-                             CheckBox annotateCheckbox, Label statusLabel, ProgressBar progBar, string? initialLintReportPath)
+                             CheckBox annotateCheckbox, Label statusLabel, ProgressBar progBar, 
+                             string? initialLintReportPath, SettingsService settings)
         {
             mainForm = form;
             linterGrid = linterOptionsGrid;
@@ -40,6 +42,7 @@ namespace AppRefiner
             lblStatus = statusLabel;
             progressBar = progBar;
             lintReportPath = initialLintReportPath;
+            settingsService = settings; // Store SettingsService
         }
 
         public IEnumerable<BaseLintRule> LinterRules => linterRules;
@@ -124,45 +127,8 @@ namespace AppRefiner
             // Apply saved configurations to linters
             LinterConfigManager.ApplyConfigurations(linterRules);
             
-             // Now load saved active states (assuming direct access for now)
-            LoadLinterStatesFromSettings();
-        }
-        
-        // Method to load active states (could be part of SettingsService later)
-        private void LoadLinterStatesFromSettings()
-        {
-             try
-            {
-                 var states = System.Text.Json.JsonSerializer.Deserialize<List<MainForm.RuleState>>(
-                    Properties.Settings.Default.LinterStates);
-
-                if (states == null) return;
-                
-                var ruleMap = linterRules.ToDictionary(l => l.GetType().FullName ?? "");
-
-                foreach (var state in states)
-                {
-                    if (ruleMap.TryGetValue(state.TypeName, out var linter))
-                    {
-                        linter.Active = state.Active;
-                        // Update corresponding grid row
-                        var row = linterGrid.Rows.Cast<DataGridViewRow>()
-                            .FirstOrDefault(r => r.Tag is BaseLintRule l && l == linter);
-                        if (row != null)
-                        {
-                             // Check if the row and cell exist before accessing
-                            if (row.Index >= 0 && row.Cells.Count > 0)
-                            {
-                                row.Cells[0].Value = state.Active;
-                            }
-                        }
-                    }
-                }
-            }
-            catch (Exception ex) { 
-                Debug.LogException(ex, "Error loading linter states in LinterManager");
-                /* Use defaults if settings are corrupt */ 
-            }
+            // Now load saved active states using SettingsService
+            settingsService.LoadLinterStates(linterRules, linterGrid);
         }
 
         public void ProcessLintersForActiveEditor(ScintillaEditor? activeEditor, IDataManager? editorDataManager)
@@ -527,30 +493,8 @@ namespace AppRefiner
                 if (linterGrid.Rows[e.RowIndex].Tag is BaseLintRule linter)
                 {
                     linter.Active = (bool)linterGrid.Rows[e.RowIndex].Cells[0].Value;
-                    // Persist change (optional, could be done on form close)
-                    SaveLinterStatesToSettings(); 
+                    // Settings are now saved centrally on form close
                 }
-            }
-        }
-        
-        // Method to save active states (could be part of SettingsService later)
-        public void SaveLinterStatesToSettings()
-        {
-            try
-            {
-                 var states = linterRules.Select(l => new MainForm.RuleState // Use MainForm's RuleState for now
-                {
-                    TypeName = l.GetType().FullName ?? "",
-                    Active = l.Active
-                }).ToList();
-
-                Properties.Settings.Default.LinterStates =
-                    System.Text.Json.JsonSerializer.Serialize(states);
-                // Consider calling Properties.Settings.Default.Save() here or centrally
-            }
-             catch (Exception ex)
-            {
-                Debug.LogException(ex, "Error saving linter states");
             }
         }
 

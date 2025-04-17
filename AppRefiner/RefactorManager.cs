@@ -208,7 +208,7 @@ namespace AppRefiner.Refactors
                 // Check for pre-visitor dialog
                 if (refactorClass.RequiresUserInputDialog && !refactorClass.DeferDialogUntilAfterVisitor)
                 {
-                    if (!refactorClass.ShowRefactorDialog(mainForm)) // Pass owner
+                    if (!refactorClass.ShowRefactorDialog()) // Pass owner Removed owner
                     {
                          Debug.Log("Refactoring cancelled by user (pre-dialog).");
                          return; // User cancelled
@@ -245,7 +245,7 @@ namespace AppRefiner.Refactors
                 // Check for post-visitor dialog
                 if (refactorClass.RequiresUserInputDialog && refactorClass.DeferDialogUntilAfterVisitor)
                 {
-                    if (!refactorClass.ShowRefactorDialog(mainForm)) // Pass owner
+                    if (!refactorClass.ShowRefactorDialog()) // Pass owner Removed owner
                     {
                         Debug.Log("Refactoring cancelled by user (post-dialog).");
                         return; // User cancelled
