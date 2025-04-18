@@ -550,7 +550,10 @@ namespace AppRefiner
                 return;
             }
 
-            DBConnectDialog dialog = new();
+            var mainHandle = Process.GetProcessById((int)activeEditor.ProcessId).MainWindowHandle;
+            var handleWrapper = new WindowWrapper(mainHandle);
+            DBConnectDialog dialog = new(mainHandle, activeEditor.DBName);
+
             if (dialog.ShowDialog() == DialogResult.OK)
             {
                 IDataManager? manager = dialog.DataManager;
@@ -1053,7 +1056,7 @@ namespace AppRefiner
                     {
                         var mainHandle = Process.GetProcessById((int)activeEditor.ProcessId).MainWindowHandle;
                         var handleWrapper = new WindowWrapper(mainHandle);
-                        DBConnectDialog dialog = new(mainHandle);
+                        DBConnectDialog dialog = new(mainHandle, activeEditor.DBName);
                         dialog.StartPosition = FormStartPosition.CenterParent;
 
                         if (dialog.ShowDialog(handleWrapper) == DialogResult.OK)
