@@ -145,17 +145,36 @@ namespace AppRefiner.Refactors
         private static T GetStaticEnumProperty<T>(Type type, string propertyName) where T : struct, Enum
         {
             var prop = type.GetProperty(propertyName, BindingFlags.Public | BindingFlags.Static | BindingFlags.NonPublic | BindingFlags.FlattenHierarchy);
-            if (prop != null && prop.PropertyType.IsEnum)
+            if (prop != null && prop.PropertyType.IsEnum && prop.PropertyType == typeof(T)) // Ensure the property type matches T
             {
                  try
                  {
                       object? value = prop.GetValue(null);
-                      if (value != null && Enum.IsDefined(typeof(T), value))
+                      if (value == null) return default(T); // Return default if value is null
+
+                      // Special handling for ModifierKeys (Flags enum)
+                      if (typeof(T) == typeof(ModifierKeys))
+                      {
+                            // For flags, the combined value is valid, skip Enum.IsDefined
+                            return (T)value; 
+                      }
+                      
+                      // Original check for non-flags enums
+                      if (Enum.IsDefined(typeof(T), value))
                       {
                            return (T)value;
                       }
                  }
-                 catch { /* Ignore conversion errors, return default */ }
+                 catch(InvalidCastException castEx) 
+                 { 
+                      // Log specific cast error if needed
+                      Debug.Log($"Cast exception retrieving {propertyName} from {type.Name}: {castEx.Message}");
+                 } 
+                 catch (Exception ex) // Catch other potential reflection/conversion errors
+                 { 
+                      Debug.LogException(ex, $"Error retrieving enum property {propertyName} from {type.Name}");
+                      /* Ignore conversion errors, return default */ 
+                 }
             }
             return default(T);
         }
