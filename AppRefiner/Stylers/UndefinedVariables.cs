@@ -5,11 +5,11 @@ using static AppRefiner.PeopleCode.PeopleCodeParser;
 
 namespace AppRefiner.Stylers
 {
-    public class UndefinedVariableStyler : ScopedStyler<object>
+    public class UndefinedVariableStyler : ScopedStyler<bool>
     {
         private const uint HIGHLIGHT_COLOR = 0x0000FFA0; // Harsh red color with high alpha
         private readonly HashSet<string> instanceVariables = new();
-        private readonly HashSet<string> markedVariables = new(); // Track already marked variables to avoid duplicates
+        private readonly HashSet<string> classProperties = new(); // Track declared class properties
 
         public UndefinedVariableStyler()
         {
@@ -38,34 +38,55 @@ namespace AppRefiner.Stylers
                 }
             }
         }
-
-        // Handle method parameters to register them as defined variables
-        public override void EnterMethod(MethodContext context)
+        
+        // Handle non-private property declarations (PropertyGetSet)
+        public override void EnterPropertyGetSet(PropertyGetSetContext context)
         {
-            // Call base implementation first to create a new scope
-            base.EnterMethod(context);
+            base.EnterPropertyGetSet(context);
             
-            // Get method name
-            if (context.genericID() == null) return;
+            if (context == null || context.genericID() == null) return;
             
-            // Process method parameters if available in method annotations
-            var methodAnnotations = context.methodAnnotations();
-            if (methodAnnotations == null) return;
+            string propertyName = context.genericID().GetText();
+            if (string.IsNullOrEmpty(propertyName)) return;
             
-            // Process parameter annotations
-            foreach (var paramAnnotation in methodAnnotations.methodParameterAnnotation())
+            // Register property as a defined class property
+            classProperties.Add(propertyName);
+        }
+        
+        // Handle non-private property declarations (PropertyDirect)
+        public override void EnterPropertyDirect(PropertyDirectContext context)
+        {
+            base.EnterPropertyDirect(context);
+            
+            if (context == null || context.genericID() == null) return;
+            
+            string propertyName = context.genericID().GetText();
+            if (string.IsNullOrEmpty(propertyName)) return;
+            
+            // Register property as a defined class property
+            classProperties.Add(propertyName);
+        }
+        
+        // Handle parameters from method headers 
+        public override void EnterMethodHeader(MethodHeaderContext context)
+        {
+            base.EnterMethodHeader(context);
+            
+            // Process method arguments if available
+            var methodArgs = context.methodArguments();
+            if (methodArgs == null) return;
+            
+            // Process each parameter and add it to the current scope
+            foreach (var arg in methodArgs.methodArgument())
             {
-                if (paramAnnotation.methodAnnotationArgument() == null) continue;
-                
-                var arg = paramAnnotation.methodAnnotationArgument();
                 if (arg.USER_VARIABLE() == null) continue;
                 
                 string paramName = arg.USER_VARIABLE().GetText();
                 if (string.IsNullOrEmpty(paramName)) continue;
                 
-                string paramType = arg.annotationType() != null ? arg.annotationType().GetText() : "Any";
+                string paramType = arg.typeT() != null ? arg.typeT().GetText() : "Any";
                 
-                // Register method parameter as a defined variable in the current scope
+                // Register method parameter as a defined variable
                 AddLocalVariable(
                     paramName,
                     paramType,
@@ -138,6 +159,30 @@ namespace AppRefiner.Stylers
                 );
             }
         }
+        
+        // Handle catch clause variables
+        public override void EnterCatchClause(CatchClauseContext context)
+        {
+            base.EnterCatchClause(context);
+            
+            if (context == null || context.USER_VARIABLE() == null) return;
+            
+            string varName = context.USER_VARIABLE().GetText();
+            if (string.IsNullOrEmpty(varName)) return;
+            
+            // Determine the type (Exception or app class)
+            string varType = (context.EXCEPTION() != null) ? "Exception" : 
+                              (context.appClassPath() != null) ? context.appClassPath().GetText() : "Exception";
+            
+            // Register the catch variable
+            AddLocalVariable(
+                varName,
+                varType,
+                context.USER_VARIABLE().Symbol.Line,
+                context.USER_VARIABLE().Symbol.StartIndex,
+                context.USER_VARIABLE().Symbol.StopIndex
+            );
+        }
 
         // Override to check if a used variable is defined
         public override void EnterIdentUserVariable(IdentUserVariableContext context)
@@ -149,12 +194,19 @@ namespace AppRefiner.Stylers
             string varName = context.GetText();
             if (string.IsNullOrEmpty(varName)) return;
             
-            // Don't check special variables or already marked variables
-            if (IsSpecialVariable(varName) || markedVariables.Contains(varName))
+            // Don't check special variables
+            if (IsSpecialVariable(varName))
                 return;
                 
-            // Check if this variable exists in any scope or as an instance variable
-            if (!IsVariableDefined(varName) && !instanceVariables.Contains(varName))
+            // Get the current scope to check if we've already marked this variable in this scope
+            Dictionary<string, bool> currentScope = GetCurrentScope();
+            
+            // Check if this variable is already marked in the current scope
+            if (TryFindInScopes(varName, out _))
+                return;
+                
+            // Check if this variable exists in any scope, as an instance variable, or as a class property
+            if (!IsVariableDefined(varName) && !instanceVariables.Contains(varName) && !classProperties.Contains(varName))
             {
                 // Variable is undefined, mark it
                 Indicators?.Add(new Indicator
@@ -166,8 +218,8 @@ namespace AppRefiner.Stylers
                     Type = IndicatorType.HIGHLIGHTER
                 });
                 
-                // Remember that we've marked this variable to avoid duplicate highlights
-                markedVariables.Add(varName);
+                // Add this variable to the current scope's marked variables
+                AddToCurrentScope(varName, true);
             }
         }
 
@@ -206,17 +258,11 @@ namespace AppRefiner.Stylers
             return TryGetVariableInfo(varName, out _);
         }
         
-        // Required override from base ScopedStyler
-        protected override void OnExitScope(Dictionary<string, object> scope, Dictionary<string, VariableInfo> variableScope)
-        {
-            // Nothing to do here, we're only checking for undefined variables
-        }
-        
         public override void Reset()
         {
             base.Reset();
             instanceVariables.Clear();
-            markedVariables.Clear();
+            classProperties.Clear();
         }
     }
 } 
