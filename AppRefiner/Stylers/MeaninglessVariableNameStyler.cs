@@ -9,7 +9,7 @@ namespace AppRefiner.Stylers
         private const uint HIGHLIGHT_COLOR = 0xD9D6A560;
         private HashSet<string> meaninglessNames = new(StringComparer.OrdinalIgnoreCase)
         {
-            "a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m", "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z",
+            "a", "b", "c", "d", "e", "f", "g", "h", "j", "k", "l", "m", "n", "o", "p", "q", "r", "s", "t", "u", "v", "w",
             "aa", "bb", "cc", "dd", "ee", "ff", "gg", "hh", "ii", "jj", "kk", "ll", "mm", "nn", "oo", "pp", "qq", "rr", "ss", "tt", "uu", "vv", "ww", "xx", "yy", "zz",
             "var", "var1", "var2", "var3", "temp", "tmp", "temp1", "tmp1", "temp2", "tmp2", "foo", "bar", "baz",
             "obj", "object", "str", "string", "num", "number", "int", "integer", "flt", "float", "bool", "boolean",
