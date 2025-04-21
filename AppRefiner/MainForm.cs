@@ -113,6 +113,7 @@ namespace AppRefiner
             settingsService.LoadGeneralSettings(chkInitCollapsed, chkOnlyPPC, chkBetterSQL, chkAutoDark, chkAutoPairing, chkPromptForDB, out lintReportPath);
             linterManager = new LinterManager(this, dataGridView1, lblStatus, progressBar1, lintReportPath, settingsService);
             linterManager.InitializeLinterOptions(); // Initialize linters via the manager
+            dataGridView1.CellPainting += dataGridView1_CellPainting; // Wire up CellPainting
             
             // Instantiate StylerManager (passing UI elements)
             stylerManager = new StylerManager(this, dataGridView3, settingsService); 
@@ -1843,6 +1844,34 @@ namespace AppRefiner
                  }
                  catch (ArgumentException) { /* Process might have exited */ }
              }
+        }
+
+        // Add this new CellPainting event handler method
+        private void dataGridView1_CellPainting(object sender, DataGridViewCellPaintingEventArgs e)
+        {
+            // Check if it's the button column (index 2) and a valid row
+            if (e.ColumnIndex == 2 && e.RowIndex >= 0)
+            {
+                // Check the tag of the cell
+                var cell = dataGridView1.Rows[e.RowIndex].Cells[e.ColumnIndex];
+                if (cell.Tag?.ToString() == "NoConfig")
+                {
+                    // Paint the background to match the grid's default background
+                    using (Brush backColorBrush = new SolidBrush(SystemColors.Control))
+                    using (Pen gridLinePen = new Pen(dataGridView1.GridColor,1)) // Use the grid color for the border
+                    {
+                        // Erase the cell background
+                        e.Graphics.FillRectangle(backColorBrush, e.CellBounds);
+
+                        // Draw the grid lines (border) - Adjust coordinates slightly for standard appearance
+                        e.Graphics.DrawRectangle(gridLinePen, e.CellBounds.Left - 1, e.CellBounds.Top - 1, e.CellBounds.Width, e.CellBounds.Height);
+
+                        // Prevent default painting (including hover effects)
+                        e.Handled = true;
+                    }
+                }
+                // Allow default painting for normal button cells or other columns
+            }
         }
 
     }

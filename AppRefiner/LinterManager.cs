@@ -110,10 +110,13 @@ namespace AppRefiner
                     }
                     else
                     {
-                        buttonCell.Value = " ";
+                        buttonCell.Value = string.Empty;
+                        buttonCell.ReadOnly = true;
                         buttonCell.FlatStyle = FlatStyle.Flat;
                         buttonCell.Style.BackColor = SystemColors.Control;
-                        // ... other styling ...
+                        buttonCell.Style.ForeColor = SystemColors.Control;
+                        buttonCell.Style.SelectionBackColor = SystemColors.Control;
+                        buttonCell.Style.SelectionForeColor = SystemColors.Control;
                         linterGrid.Rows[rowIndex].Cells[2].Tag = "NoConfig";
                     }
                     linterRules.Add(linter);
