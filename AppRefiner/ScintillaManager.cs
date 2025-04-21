@@ -2252,9 +2252,8 @@ namespace AppRefiner
                 Type = caption.Contains("(StyleSheet)") ? EditorType.CSS : EditorType.Other;
             }
 
-            // TODO: move these into manager method
-            //FoldEnabled = ScintillaHelper.GetWindowPropertyInt(handle, "ninja") == 1;
-            //HasLexilla = ScintillaHelper.IsLexillaLoaded(handle);
+            PopulateEditorDBName();
+            DetermineRelativeFilePath();
         }
 
         public IntPtr SendMessage(int Msg, IntPtr wParam, IntPtr lParam)
@@ -2287,6 +2286,259 @@ namespace AppRefiner
         {
             return IsWindow(hWnd);
         }
+
+        /// <summary>
+        /// Populates the DBName property of a ScintillaEditor based on its context
+        /// </summary>
+        /// <param name="editor">The editor to populate the DBName for</param>
+        private void PopulateEditorDBName()
+        {
+            // Start with the editor's handle
+            IntPtr hwnd = this.hWnd;
+
+            // Walk up the parent chain until we find the Application Designer window
+            while (hwnd != IntPtr.Zero)
+            {
+                StringBuilder caption = new StringBuilder(256);
+                NativeMethods.GetWindowText(hwnd, caption, caption.Capacity); // Use NativeMethods
+                string windowTitle = caption.ToString();
+
+                // Check if this is the Application Designer window
+                if (windowTitle.StartsWith("Application Designer"))
+                {
+                    // Split the title by " - " and get the second part (DB name)
+                    string[] parts = windowTitle.Split(new[] { " - " }, StringSplitOptions.None);
+                    if (parts.Length >= 2)
+                    {
+                        this.DBName = parts[1].Trim();
+                        Debug.Log($"Set editor DBName to: {this.DBName}");
+
+                        // Now determine the relative file path based on the database name
+                        break;
+                    }
+                }
+
+                // Get the parent window
+                hwnd = NativeMethods.GetParent(hwnd); // Use NativeMethods
+            }
+        }
+
+        /// <summary>
+        /// Determines the relative file path for an editor based on its window hierarchy and caption
+        /// </summary>
+        /// <param name="editor">The editor to determine the relative path for</param>
+        private void DetermineRelativeFilePath()
+        {
+            try
+            {
+                // Start with the editor's handle
+                IntPtr hwnd = this.hWnd;
+
+                // Get the grandparent window to examine its caption
+                IntPtr parentHwnd = NativeMethods.GetParent(hwnd); // Use NativeMethods
+                if (parentHwnd != IntPtr.Zero)
+                {
+                    IntPtr grandparentHwnd = NativeMethods.GetParent(parentHwnd); // Use NativeMethods
+                    if (grandparentHwnd != IntPtr.Zero)
+                    {
+                        StringBuilder caption = new StringBuilder(512);
+                        NativeMethods.GetWindowText(grandparentHwnd, caption, caption.Capacity); // Use NativeMethods
+                        string windowTitle = caption.ToString().Trim();
+
+                        Debug.Log($"Editor grandparent window title: {windowTitle}");
+
+                        // Determine editor type and generate appropriate relative path
+                        string? relativePath = DetermineRelativePathFromCaption(windowTitle, this.DBName);
+
+                        if (!string.IsNullOrEmpty(relativePath))
+                        {
+                            this.RelativePath = relativePath;
+                            Debug.Log($"Set editor RelativePath to: {relativePath}");
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.Log($"Error determining relative path: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Determines the relative file path based on the window caption and database name
+        /// </summary>
+        /// <param name="caption">The window caption</param>
+        /// <param name="dbName">The database name</param>
+        /// <returns>The relative file path or null if can't be determined</returns>
+        private string? DetermineRelativePathFromCaption(string caption, string? dbName)
+        {
+            // This handles specific parsing logic for different PeopleCode editor types
+            // as indicated by the (type) suffix in the caption
+
+            if (string.IsNullOrEmpty(caption))
+                return null;
+
+            Debug.Log($"Determining path from caption: {caption}");
+
+            // Check for PeopleCode type in caption - usually appears as (PeopleCode) or some other type suffix
+            int typeStartIndex = caption.LastIndexOf('(');
+            int typeEndIndex = caption.LastIndexOf(')');
+
+            if (typeStartIndex >= 0 && typeEndIndex > typeStartIndex)
+            {
+                string editorType = caption.Substring(typeStartIndex + 1, typeEndIndex - typeStartIndex - 1);
+                string captionWithoutType = caption.Substring(0, typeStartIndex).Trim();
+
+                Debug.Log($"Editor type: {editorType}, Caption without type: {captionWithoutType}");
+
+                // Different logic based on editor type
+                switch (editorType)
+                {
+                    case "App Engine Program PeopleCode":
+                        return DeterminePeopleCodePath(captionWithoutType, dbName, "app_engine");
+                    case "Application Package PeopleCode":
+                        return DeterminePeopleCodePath(captionWithoutType, dbName, "app_package");
+                    case "Component Interface PeopleCode":
+                        return DeterminePeopleCodePath(captionWithoutType, dbName, "comp_intfc");
+                    case "Menu PeopleCode":
+                        return DeterminePeopleCodePath(captionWithoutType, dbName, "menu");
+                    case "Message PeopleCode":
+                        return DeterminePeopleCodePath(captionWithoutType, dbName, "message");
+                    case "Page PeopleCode":
+                        return DeterminePeopleCodePath(captionWithoutType, dbName, "page");
+                    case "Record PeopleCode":
+                        return DeterminePeopleCodePath(captionWithoutType, dbName, "record");
+                    case "Component PeopleCode":
+                        return DeterminePeopleCodePath(captionWithoutType, dbName, "component");
+
+                    case "SQL Definition":
+                        return DetermineSqlDefinitionPath(captionWithoutType, dbName);
+
+                    case "HTML":
+                        return DetermineHtmlPath(captionWithoutType, dbName);
+
+                    case "StyleSheet":
+                    case "Style Sheet":
+                        return DetermineStyleSheetPath(captionWithoutType, dbName);
+
+                    default:
+                        // If it contains "PeopleCode" anywhere, treat it as PeopleCode
+                        if (editorType.Contains("PeopleCode"))
+                        {
+                            return DeterminePeopleCodePath(captionWithoutType, dbName, "peoplecode");
+                        }
+
+                        // Generic handling for unknown types
+                        return $"unknown/{editorType.ToLower().Replace(" ", "_")}/{captionWithoutType.Replace(" ", "_").ToLower()}.txt";
+                }
+            }
+
+            // No recognized type in caption
+            return null;
+        }
+
+        /// <summary>
+        /// Determines the relative file path for PeopleCode based on editor caption
+        /// </summary>
+        private string? DeterminePeopleCodePath(string captionWithoutType, string? dbName, string relativeRoot)
+        {
+            // DB name should always be present at this point, but default if not
+            string db = dbName ?? "unknown_db";
+
+            // Clean up the caption
+            captionWithoutType = captionWithoutType.Trim();
+
+            // PeopleCode paths follow a specific format
+            string pcPath = $"{db.ToLower()}/peoplecode/{relativeRoot}/{captionWithoutType.Replace(".", "/")}.pcode";
+
+            Debug.Log($"PeopleCode path: {pcPath}");
+
+            return pcPath;
+        }
+
+        /// <summary>
+        /// Determines the relative file path for SQL definitions
+        /// </summary>
+        private string? DetermineSqlDefinitionPath(string captionWithoutType, string? dbName)
+        {
+            // DB name should always be present at this point, but default if not
+            string db = dbName ?? "unknown_db";
+
+            // Clean up the caption
+            captionWithoutType = captionWithoutType.Trim();
+
+            // SQL objects use a specific suffix format like .0 or .2
+            string sqlType = "sql_object";
+
+            // Check for SQL type indicators at the end (.0, .1, .2, etc.)
+            // Format is typically NAME.NUMBER
+            int lastDotPos = captionWithoutType.LastIndexOf('.');
+            if (lastDotPos >= 0 && lastDotPos < captionWithoutType.Length - 1)
+            {
+                // Try to parse the suffix after the last dot
+                string suffix = captionWithoutType.Substring(lastDotPos + 1);
+
+                // If the suffix is a number, determine the SQL type
+                if (int.TryParse(suffix, out int sqlTypeNumber))
+                {
+                    switch (sqlTypeNumber)
+                    {
+                        case 0:
+                            sqlType = "sql_object";
+                            break;
+                        case 2:
+                            sqlType = "sql_view";
+                            break;
+                        default:
+                            sqlType = $"sql_type_{sqlTypeNumber}";
+                            break;
+                    }
+
+                    // Remove the suffix for the path
+                    captionWithoutType = captionWithoutType.Substring(0, lastDotPos);
+                }
+            }
+
+            // Build the full path
+            string fullPath = $"{db.ToLower()}/sql/{sqlType}/{captionWithoutType}.sql";
+
+            Debug.Log($"SQL path: {fullPath}");
+
+            return fullPath;
+        }
+
+        /// <summary>
+        /// Determines the relative file path for an HTML editor
+        /// </summary>
+        private string? DetermineHtmlPath(string captionWithoutType, string? dbName)
+        {
+            // DB name should always be present at this point, but default if not
+            string db = dbName ?? "unknown_db";
+
+            // HTML paths follow a specific format
+            string htmlPath = $"{db.ToLower()}/html/{captionWithoutType.Replace(".", "/")}.html";
+
+            Debug.Log($"HTML path: {htmlPath}");
+
+            return htmlPath;
+        }
+
+        /// <summary>
+        /// Determines the relative file path for a stylesheet editor
+        /// </summary>
+        private string? DetermineStyleSheetPath(string captionWithoutType, string? dbName)
+        {
+            // DB name should always be present at this point, but default if not
+            string db = dbName ?? "unknown_db";
+
+            // Stylesheet paths follow a specific format
+            string cssPath = $"{db.ToLower()}/stylesheet/{captionWithoutType.Replace(".", "/")}.css";
+
+            Debug.Log($"Stylesheet path: {cssPath}");
+
+            return cssPath;
+        }
+
     }
 
     public enum FontColor
