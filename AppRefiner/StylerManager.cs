@@ -8,6 +8,7 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.IO;
 using System.Linq;
+using System.Reflection; // Added for Assembly.GetExecutingAssembly
 using System.Windows.Forms;
 using System.Text.Json; // For settings serialization
 
@@ -40,16 +41,18 @@ namespace AppRefiner.Stylers
             stylers.Clear();
             stylerGrid.Rows.Clear();
 
-            // Discover stylers from assembly
-            var stylerTypes = AppDomain.CurrentDomain.GetAssemblies()
-                .SelectMany(s => s.GetTypes())
+            // Discover core stylers from the main assembly
+            var executingAssembly = Assembly.GetExecutingAssembly();
+            var coreStylerTypes = executingAssembly.GetTypes()
                 .Where(p => typeof(BaseStyler).IsAssignableFrom(p) && !p.IsAbstract);
 
-            // Discover stylers from plugins (assuming PluginManager is initialized elsewhere)
+            // Discover stylers from plugins
             var pluginStylers = PluginManager.DiscoverStylerTypes();
-            stylerTypes = stylerTypes.Concat(pluginStylers);
 
-            foreach (var type in stylerTypes)
+            // Combine core and plugin stylers, ensuring uniqueness
+            var allStylerTypes = coreStylerTypes.Concat(pluginStylers).Distinct();
+
+            foreach (var type in allStylerTypes)
             {
                 try
                 {
