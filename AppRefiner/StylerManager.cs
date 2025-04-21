@@ -188,7 +188,7 @@ namespace AppRefiner.Stylers
                     ScintillaManager.SquiggleTextWithColor(editor, indicator.Color, indicator.Start, indicator.Length, indicator.Tooltip);
                     break;
                 case IndicatorType.TEXTCOLOR:
-                    ScintillaManager.TextColorWithColor(editor, indicator.Color, indicator.Start, indicator.Length);
+                    ScintillaManager.SetTextColorWithColor(editor, indicator.Color, indicator.Start, indicator.Length);
                     break;
             }
         }
