@@ -362,6 +362,7 @@ namespace AppRefiner
             dataGridView1.TabIndex = 6;
             dataGridView1.CellContentClick += dataGridView1_CellContentClick;
             dataGridView1.CellPainting += dataGridView1_CellPainting;
+            dataGridView1.CellValueChanged += dataGridView1_CellValueChanged;
             // 
             // colActive
             // 
