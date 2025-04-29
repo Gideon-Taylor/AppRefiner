@@ -3,14 +3,14 @@ using System.Diagnostics;
 using System.Text;
 using System.Threading;
 
-namespace AppRefiner
+namespace AppRefiner.Services
 {
     /// <summary>
     /// Service to manage WinEvent hooks, specifically for detecting window focus changes.
     /// </summary>
     public class WinEventService : IDisposable
     {
-        private IntPtr winEventHook = IntPtr.Zero;
+        private nint winEventHook = nint.Zero;
         private NativeMethods.WinEventDelegate? winEventDelegate; // Keep reference to prevent GC
         private SynchronizationContext? syncContext;
 
@@ -18,7 +18,7 @@ namespace AppRefiner
         /// Event raised when a window, potentially a Scintilla editor, gains focus.
         /// The event is invoked on the synchronization context captured during Start.
         /// </summary>
-        public event EventHandler<IntPtr>? WindowFocused;
+        public event EventHandler<nint>? WindowFocused;
 
         public WinEventService()
         {
@@ -31,7 +31,7 @@ namespace AppRefiner
         /// </summary>
         public void Start()
         {
-            if (winEventHook != IntPtr.Zero) return; // Already hooked
+            if (winEventHook != nint.Zero) return; // Already hooked
 
             // Ensure delegate is created only once
             winEventDelegate = new NativeMethods.WinEventDelegate(InternalWinEventProc);
@@ -39,14 +39,14 @@ namespace AppRefiner
             winEventHook = NativeMethods.SetWinEventHook(
                 NativeMethods.EVENT_OBJECT_FOCUS,       // Event Min
                 NativeMethods.EVENT_OBJECT_FOCUS,       // Event Max
-                IntPtr.Zero,                            // hmodWinEventProc
+                nint.Zero,                            // hmodWinEventProc
                 winEventDelegate,                       // lpfnWinEventProc
                 0,                                      // idProcess (all)
                 0,                                      // idThread (all)
                 NativeMethods.WINEVENT_OUTOFCONTEXT | NativeMethods.WINEVENT_SKIPOWNPROCESS
             );
 
-            if (winEventHook == IntPtr.Zero)
+            if (winEventHook == nint.Zero)
             {
                 Debug.Log("Failed to set up WinEvent hook.");
                 // Consider throwing an exception or logging more severely
@@ -62,19 +62,19 @@ namespace AppRefiner
         /// </summary>
         public void Stop()
         {
-            if (winEventHook != IntPtr.Zero)
+            if (winEventHook != nint.Zero)
             {
                 NativeMethods.UnhookWinEvent(winEventHook);
-                winEventHook = IntPtr.Zero;
+                winEventHook = nint.Zero;
                 winEventDelegate = null; // Release reference
                 Debug.Log("WinEvent hook stopped.");
             }
         }
 
         // Internal callback for WinEvents
-        private void InternalWinEventProc(IntPtr hWinEventHook, uint eventType, IntPtr hwnd, int idObject, int idChild, uint dwEventThread, uint dwmsEventTime)
+        private void InternalWinEventProc(nint hWinEventHook, uint eventType, nint hwnd, int idObject, int idChild, uint dwEventThread, uint dwmsEventTime)
         {
-            if (eventType == NativeMethods.EVENT_OBJECT_FOCUS && hwnd != IntPtr.Zero)
+            if (eventType == NativeMethods.EVENT_OBJECT_FOCUS && hwnd != nint.Zero)
             {
                 // Optional: Perform a quick check here if desired (e.g., basic class name check)
                 // However, detailed processing should happen in the event handler
@@ -92,7 +92,7 @@ namespace AppRefiner
             }
         }
 
-        protected virtual void OnWindowFocused(IntPtr hwnd)
+        protected virtual void OnWindowFocused(nint hwnd)
         {
             WindowFocused?.Invoke(this, hwnd);
         }

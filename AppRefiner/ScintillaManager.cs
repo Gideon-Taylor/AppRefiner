@@ -1117,11 +1117,15 @@ namespace AppRefiner
             {
                 return;
             }
+
+            if (editor.ContentString?.SequenceEqual(formatted) ?? false)
+            {
+                return;
+            }
             editor.ContentString = formatted;
             SetScintillaText(editor, formatted);
             editorsExpectingSavePoint.Add(editor.hWnd);
             editor.SendMessage(SCI_SETSAVEPOINT, 0, 0);
-
 
             /* update local content hash */
         }

@@ -425,7 +425,7 @@ namespace AppRefiner.Refactors
         /// <param name="context">The parser rule context to replace</param>
         /// <param name="newText">The new text to replace with</param>
         /// <param name="description">A description of what is being replaced</param>
-        protected void ReplaceNode(ParserRuleContext context, string newText, string description)
+        protected void ReplaceNode(ParserRuleContext context, string newText, string description, bool eatExtraForSemicolon = false)
         {
             // Handle case where node has a Start but no Stop (empty node)
             if (context.Stop == null)
@@ -438,7 +438,7 @@ namespace AppRefiner.Refactors
                 // Normal case - replace the entire node
                 changes.Add(new ReplaceChange(
                     context.Start.StartIndex,
-                    context.Stop.StopIndex,
+                    eatExtraForSemicolon? context.Stop.StopIndex + 1 : context.Stop.StopIndex,
                     newText,
                     description
                 ));

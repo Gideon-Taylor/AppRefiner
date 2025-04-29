@@ -18,8 +18,8 @@ namespace AppRefiner
     public class AutoCompleteService
     {
         // Constants related to Scintilla messages (can be kept private if only used here)
-        private const int SCI_LINEFROMPOSITION = 0x2166;
-        private const int SCI_POSITIONFROMLINE = 0x2167;
+        private const int SCI_LINEFROMPOSITION = 2166;
+        private const int SCI_POSITIONFROMLINE = 2167;
         private const int AR_APP_PACKAGE_SUGGEST = 2500; // Keep for recursive call
 
         [DllImport("user32.dll", CharSet = CharSet.Auto)]
@@ -106,52 +106,70 @@ namespace AppRefiner
         /// </summary>
         /// <param name="lineContentBeforeCursor">The line content up to the cursor.</param>
         /// <returns>The extracted package path or empty string if not found.</returns>
-        private string ExtractPackagePathFromLine(string lineContentBeforeCursor)
+        private string ExtractPackagePathFromLine(string lineContent)
         {
-            // Trim trailing whitespace which might interfere
-            lineContentBeforeCursor = lineContentBeforeCursor.TrimEnd();
-
-            // Work backwards from the end to find the start of the package path
-            int endIndex = lineContentBeforeCursor.Length;
-            int startIndex = -1;
-
-            for (int i = endIndex - 1; i >= 0; i--)
+            // If the line ends with a colon, we need to extract everything up to that colon
+            if (lineContent.EndsWith(':'))
             {
-                char c = lineContentBeforeCursor[i];
-                // Valid characters in a package path are letters, digits, underscore, and colon
-                if (char.IsLetterOrDigit(c) || c == '_' || c == ':')
+                // Find the last colon before the end
+                int colonIndex = lineContent.Length - 1;
+
+                // Extract everything before the colon
+                string beforeColon = lineContent.Substring(0, colonIndex);
+
+                // Find the last valid package identifier
+                // This could be after a space, another colon, or other delimiters
+                int lastDelimiterIndex = Math.Max(
+                    Math.Max(
+                        beforeColon.LastIndexOf(' '),
+                        beforeColon.LastIndexOf('\t')
+                    ),
+                    Math.Max(
+                        beforeColon.LastIndexOf('.'),
+                        beforeColon.LastIndexOf('=')
+                    )
+                );
+
+                // If we found a delimiter, extract the text after it
+                if (lastDelimiterIndex >= 0 && lastDelimiterIndex < beforeColon.Length - 1)
                 {
-                    // Continue scanning backwards
-                    continue;
+                    return beforeColon.Substring(lastDelimiterIndex + 1).Trim();
                 }
-                else
+
+                // If no delimiter, return the whole thing (rare case)
+                return beforeColon.Trim();
+            }
+            else if (lineContent.Contains(':'))
+            {
+                // We might be in the middle of a package path like "Package:SubPackage:"
+                int lastColonIndex = lineContent.LastIndexOf(':');
+
+                // Start from the last colon and work backward to find the beginning of the path
+                string beforeLastColon = lineContent.Substring(0, lastColonIndex);
+
+                // Find the last non-package-path character
+                int lastNonPathCharIndex = -1;
+                for (int i = beforeLastColon.Length - 1; i >= 0; i--)
                 {
-                    // Found a character not allowed in a package path, the path starts after this
-                    startIndex = i + 1;
-                    break;
+                    if (!char.IsLetterOrDigit(beforeLastColon[i]) &&
+                        beforeLastColon[i] != '_' &&
+                        beforeLastColon[i] != ':')
+                    {
+                        lastNonPathCharIndex = i;
+                        break;
+                    }
                 }
+
+                // Extract the package path
+                if (lastNonPathCharIndex >= 0)
+                {
+                    return beforeLastColon.Substring(lastNonPathCharIndex + 1);
+                }
+
+                return beforeLastColon;
             }
 
-            // If we scanned all the way to the beginning
-            if (startIndex == -1)
-            {
-                startIndex = 0;
-            }
-
-            // Extract the potential path
-            string potentialPath = lineContentBeforeCursor.Substring(startIndex, endIndex - startIndex);
-
-            // Validate: Must contain at least one colon, and not end with double colon etc.
-            // Clean up potential leading/trailing colons for robustness before final check
-            potentialPath = potentialPath.Trim(':');
-            if (string.IsNullOrEmpty(potentialPath) || !potentialPath.Contains(':'))
-            {
-                return string.Empty; // Not a valid multi-part path
-            }
-
-            // Further validation could be added here if needed (e.g., check for invalid sequences like "::")
-
-            return potentialPath;
+            return string.Empty;
         }
 
 
@@ -190,41 +208,40 @@ namespace AppRefiner
                 // Insert the class name
                 ScintillaManager.InsertTextAtCursor(editor, itemText);
 
-                // Prepare the AddImport refactor
-                // We need the *last* identifier inserted, which should be itemText
-                 return new AddImport(editor, itemText); // Return refactor for MainForm to process
+                var lineText = ScintillaManager.GetCurrentLineText(editor);
+                return new AddImport(editor, lineText.Split(" ").Last());
             }
             else // It's a package selection or from another list type
             {
                 // Insert the package name followed by a colon
                 ScintillaManager.InsertTextAtCursor(editor, $"{itemText}:");
 
-                 // Check if the list type was App Package (1)
+                // Check if the list type was App Package (1)
                 if (listType == 1)
                 {
                     // Trigger the suggestions again after a short delay
                     // Use Task.Run to avoid blocking the UI thread if SendMessage takes time
                     // and capture necessary context.
-                     IntPtr editorHwnd = editor.hWnd; // Capture HWND
-                     Task.Delay(100).ContinueWith(_ =>
-                     {
-                         try
-                         {
-                             int currentPos = ScintillaManager.GetCursorPosition(editor); // Use captured HWND
-                             if(currentPos >= 0)
-                             {
-                                 Debug.Log($"Triggering recursive app package suggestion from HandleUserListSelection at pos {currentPos}");
-                                 ShowAppPackageSuggestions(editor, currentPos); // Call the method to show suggestions
+                    IntPtr editorHwnd = editor.hWnd; // Capture HWND
+                    Task.Delay(100).ContinueWith(_ =>
+                    {
+                        try
+                        {
+                            int currentPos = ScintillaManager.GetCursorPosition(editor); // Use captured HWND
+                            if (currentPos >= 0)
+                            {
+                                Debug.Log($"Triggering recursive app package suggestion from HandleUserListSelection at pos {currentPos}");
+                                ShowAppPackageSuggestions(editor, currentPos); // Call the method to show suggestions
 
-                             }
-                         }
-                         catch (Exception ex)
-                         {
-                              Debug.LogException(ex, "Error in delayed ShowAppPackageSuggestions call");
-                         }
-                     }, TaskScheduler.Default); // Use default scheduler
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            Debug.LogException(ex, "Error in delayed ShowAppPackageSuggestions call");
+                        }
+                    }, TaskScheduler.Default); // Use default scheduler
                 }
-                 return null; // No immediate refactoring needed
+                return null; // No immediate refactoring needed
             }
         }
 

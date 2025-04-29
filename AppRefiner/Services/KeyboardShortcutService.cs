@@ -1,9 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.Windows.Forms;
-using System.Diagnostics; // Added for Debug.Log
+using System.Diagnostics;
 
-namespace AppRefiner
+namespace AppRefiner.Services
 {
     /// <summary>
     /// Manages global keyboard shortcuts using KeyboardHook.
@@ -81,7 +81,7 @@ namespace AppRefiner
         {
             if (registeredHooks.TryGetValue(name, out var hookInfo))
             {
-                var combination = (Modifiers: hookInfo.Modifiers, Key: hookInfo.Key);
+                var combination = (hookInfo.Modifiers, hookInfo.Key);
                 
                 hookInfo.Hook.Dispose(); // Dispose the hook first
                 registeredHooks.Remove(name); // Remove from dictionary

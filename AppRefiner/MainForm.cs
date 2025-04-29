@@ -25,6 +25,7 @@ using System.Drawing.Text;
 using AppRefiner.TooltipProviders;
 using AppRefiner.Snapshots;
 using System.Runtime.InteropServices;
+using AppRefiner.Services;
 
 namespace AppRefiner
 {
@@ -198,10 +199,6 @@ namespace AppRefiner
         {
             ShowCommandPalette(null, null); 
         }
-        
-        // Original handlers for direct KeyPressedEventArgs might need slight adaptation
-        // depending on whether the KeyboardShortcutService provides arguments.
-        // For now, assume simple Action is sufficient.
         
         // This is called by the Command Palette
         private async void ShowCommandPalette(object? sender, KeyPressedEventArgs? e) // Keep original args for now
