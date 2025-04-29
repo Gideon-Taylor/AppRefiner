@@ -5,7 +5,8 @@ using Antlr4.Runtime.Misc; // For NotNull
 using Antlr4.Runtime;
 using Antlr4.Runtime.Tree; // For IParseTree, ITerminalNode
 using System.Linq;
-using System.Text; // For StringBuilder
+using System.Text;
+using AppRefiner.Refactors; // For StringBuilder
 
 namespace AppRefiner.Stylers
 {
@@ -141,7 +142,6 @@ namespace AppRefiner.Stylers
                 {
                     tooltipBuilder.Append($"\n - Property: {prop.Name}");
                 }
-                tooltipBuilder.Append($"\n\nUse 'Implement Base Class Members' action to resolve.");
                 // Add the indicator
                 Indicators?.Add(new Indicator
                 {
@@ -149,7 +149,9 @@ namespace AppRefiner.Stylers
                     Length = length,
                     Color = WARNING_COLOR,
                     Type = IndicatorType.SQUIGGLE,
-                    Tooltip = tooltipBuilder.ToString()
+                    Tooltip = tooltipBuilder.ToString(),
+                    QuickFix = typeof(ImplementAbstractMembersRefactor),
+                    QuickFixDescription = "Implement missing abstract members"
                 });
             }
             catch (Exception ex)

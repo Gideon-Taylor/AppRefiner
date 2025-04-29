@@ -1,4 +1,5 @@
-﻿using static AppRefiner.PeopleCode.PeopleCodeParser;
+﻿using AppRefiner.Refactors;
+using static AppRefiner.PeopleCode.PeopleCodeParser;
 
 namespace AppRefiner.Stylers
 {
@@ -101,7 +102,9 @@ namespace AppRefiner.Stylers
                         Length = import.Value.StopIndex - import.Value.StartIndex + 1,
                         Color = HIGHLIGHT_COLOR,
                         Tooltip = "Unused import",
-                        Type = IndicatorType.TEXTCOLOR
+                        Type = IndicatorType.TEXTCOLOR,
+                        QuickFix = typeof(ResolveImports),
+                        QuickFixDescription = "Resolve Imports"
                     });
                 }
             }

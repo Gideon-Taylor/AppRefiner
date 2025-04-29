@@ -18,6 +18,25 @@ namespace AppRefiner.Stylers
         public uint Color { get; set; }
         public string? Tooltip { get; set; }
         public IndicatorType Type { get; set; }
+        public Type? QuickFix { get; set; }
+        public string? QuickFixDescription { get; set; }
+
+        /// <summary>
+        /// Gets the formatted tooltip text, including the quick fix description if available.
+        /// </summary>
+        /// <returns>The formatted tooltip string.</returns>
+        public string GetTooltip()
+        {
+            string baseTooltip = Tooltip ?? string.Empty;
+            if (QuickFix != null && !string.IsNullOrEmpty(QuickFixDescription))
+            {
+                if (typeof(Refactors.BaseRefactor).IsAssignableFrom(QuickFix))
+                {
+                    return $"{baseTooltip}\n\nQuick Fix: {QuickFixDescription}";
+                }
+            }
+            return baseTooltip;
+        }
     }
 
     public abstract class BaseStyler : PeopleCodeParserBaseListener

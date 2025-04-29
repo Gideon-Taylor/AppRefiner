@@ -1,5 +1,6 @@
 using Antlr4.Runtime;
 using Antlr4.Runtime.Misc;
+using AppRefiner.Refactors;
 using static AppRefiner.PeopleCode.PeopleCodeParser;
 
 namespace AppRefiner.Stylers
@@ -81,7 +82,9 @@ namespace AppRefiner.Stylers
                     Length = token.StopIndex - token.StartIndex + 1,
                     Color = HIGHLIGHT_COLOR,
                     Tooltip = "Meaningless variable name",
-                    Type = IndicatorType.HIGHLIGHTER
+                    Type = IndicatorType.HIGHLIGHTER,
+                    QuickFix = typeof(RenameLocalVariable),
+                    QuickFixDescription = "Rename variable..."
                 });
             }
         }

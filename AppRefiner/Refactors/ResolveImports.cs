@@ -64,7 +64,8 @@ namespace AppRefiner.Refactors
         /// </summary>
         public override void EnterProgram(ProgramContext context)
         {
-            if (importsBlockContext == null)
+            
+            if (context.importsBlock == null)
             {
                 trackingReferences = true;
             }

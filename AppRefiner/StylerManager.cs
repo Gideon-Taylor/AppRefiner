@@ -185,13 +185,13 @@ namespace AppRefiner.Stylers
              switch (indicator.Type)
             {
                 case IndicatorType.HIGHLIGHTER:
-                    ScintillaManager.HighlightTextWithColor(editor, indicator.Color, indicator.Start, indicator.Length, indicator.Tooltip);
+                    ScintillaManager.HighlightTextWithColor(editor, indicator.Color, indicator.Start, indicator.Length, indicator.GetTooltip());
                     break;
                 case IndicatorType.SQUIGGLE:
-                    ScintillaManager.SquiggleTextWithColor(editor, indicator.Color, indicator.Start, indicator.Length, indicator.Tooltip);
+                    ScintillaManager.SquiggleTextWithColor(editor, indicator.Color, indicator.Start, indicator.Length, indicator.GetTooltip());
                     break;
                 case IndicatorType.TEXTCOLOR:
-                    ScintillaManager.SetTextColorWithColor(editor, indicator.Color, indicator.Start, indicator.Length);
+                    ScintillaManager.SetTextColorWithColor(editor, indicator.Color, indicator.Start, indicator.Length, indicator.GetTooltip());
                     break;
             }
         }

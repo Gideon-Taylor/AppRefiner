@@ -155,10 +155,12 @@ namespace AppRefiner
             keyboardShortcutService?.RegisterShortcut("CommandPalette", AppRefiner.ModifierKeys.Control | AppRefiner.ModifierKeys.Shift, Keys.P, ShowCommandPalette); // Use the parameterless overload
             keyboardShortcutService?.RegisterShortcut("ApplyTemplate", AppRefiner.ModifierKeys.Control | AppRefiner.ModifierKeys.Alt, Keys.T, ApplyTemplateCommand);
             keyboardShortcutService?.RegisterShortcut("SuperGoTo", AppRefiner.ModifierKeys.Control | AppRefiner.ModifierKeys.Alt, Keys.G, SuperGoToCommand); // Use the parameterless overload
-            
+            keyboardShortcutService?.RegisterShortcut("ApplyQuickFix", AppRefiner.ModifierKeys.Control, Keys.OemPeriod, ApplyQuickFixCommand); // Ctrl + .
+
             // Register refactor shortcuts using the RefactorManager
             RegisterRefactorShortcuts();
-            
+
+
             // Initialize snapshot manager
             snapshotManager = SnapshotManager.CreateFromSettings();
         }
@@ -1166,8 +1168,14 @@ namespace AppRefiner
                 () => activeEditor != null
             ));
 
-            // Git
-            // Add Git Revert to Previous Version command
+            AvailableCommands.Add(new Command(
+                "Editor: Apply Quick Fix (Ctrl+.)",
+                "Applies the suggested quick fix for the annotation under the cursor",
+                ApplyQuickFixCommand,
+                IsQuickFixAvailableAtCursor // Enable condition
+            ));
+
+            // Add Revert to Previous Version command
             AvailableCommands.Add(new Command(
                 "Snapshot: Revert to Previous Version",
                 "View file history and revert to a previous snapshot",
@@ -1868,6 +1876,94 @@ namespace AppRefiner
                     }
                 }
                 // Allow default painting for normal button cells or other columns
+            }
+        }
+
+        /// <summary>
+        /// Checks if a quick fix is available for an indicator at the current cursor position.
+        /// </summary>
+        /// <returns>True if a quick fix is available, false otherwise.</returns>
+        private bool IsQuickFixAvailableAtCursor()
+        {
+            if (activeEditor == null || !activeEditor.IsValid())
+            {
+                return false;
+            }
+
+            int currentPosition = ScintillaManager.GetCursorPosition(activeEditor);
+            var quickFix = FindQuickFixTypeAtPosition(currentPosition);
+            return quickFix != null;
+        }
+
+        /// <param name="position">The character position in the editor.</param>
+        /// <returns>The BaseRefactor instance if a quick fix exists, otherwise null.</returns>
+        private Type? FindQuickFixTypeAtPosition(int position) // Renamed and changed return type
+        {
+            if (activeEditor == null || !activeEditor.IsValid())
+            {
+                return null;
+            }
+
+            // Check active indicators
+            foreach (var indicator in activeEditor.ActiveIndicators)
+            {
+                // Check if position falls within the indicator's range
+                if (position >= indicator.Start && position <= (indicator.Start + indicator.Length))
+                {
+                    // Check if this indicator has a quick fix Type
+                    if (indicator.QuickFix != null && typeof(BaseRefactor).IsAssignableFrom(indicator.QuickFix))
+                    {
+                        return indicator.QuickFix; // Return the Type
+                    }
+                }
+            }
+
+            return null; // No quick fix Type found at this position
+        }
+
+        /// <summary>
+        /// Applies the quick fix found at the current cursor position.
+        /// </summary>
+        private void ApplyQuickFixCommand()
+        {
+            if (activeEditor == null || !activeEditor.IsValid() || refactorManager == null)
+            {
+                return;
+            }
+
+            int currentPosition = ScintillaManager.GetCursorPosition(activeEditor);
+            var quickFixType = FindQuickFixTypeAtPosition(currentPosition);
+
+            if (quickFixType != null)
+            {
+                try
+                {
+                    // Instantiate the refactor using the Type and the activeEditor
+                    // Assuming the refactor has a constructor that takes ScintillaEditor
+                    var refactorInstance = (BaseRefactor?)Activator.CreateInstance(quickFixType, [activeEditor]);
+
+                    if (refactorInstance != null)
+                    {
+                        Debug.Log($"Applying quick fix: {refactorInstance.GetType().Name}");
+                        // Execute the refactor using the RefactorManager
+                        refactorManager.ExecuteRefactor(refactorInstance, activeEditor);
+                    }
+                    else
+                    {
+                         Debug.LogError($"Failed to create instance of quick fix refactor: {quickFixType.FullName}");
+                         MessageBox.Show(this, "Error creating quick fix instance.", "Quick Fix Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    }
+                }
+                catch (Exception ex)
+                {
+                     Debug.LogException(ex, $"Error instantiating or executing quick fix refactor: {quickFixType.FullName}");
+                     MessageBox.Show(this, $"Error applying quick fix: {ex.Message}", "Quick Fix Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                }
+            }
+            else
+            {
+                Debug.Log("No quick fix available at the current cursor position.");
+                // Optionally provide feedback to the user (e.g., status bar message)
             }
         }
 

@@ -15,7 +15,7 @@ namespace AppRefiner.Refactors
     /// Refactoring operation to implement required methods and properties from a base class or interface.
     /// Specifically starting with implementing the base class constructor.
     /// </summary>
-    public class ImplementBaseClassRefactor : BaseRefactor
+    public class ImplementAbstractMembersRefactor : BaseRefactor
     {
         public new static string RefactorName => "Implement Base Class Members";
         public new static string RefactorDescription => "Generates method/property stubs required by the parent class or interface, starting with the constructor.";
@@ -42,7 +42,7 @@ namespace AppRefiner.Refactors
         /// </summary>
         /// <param name="editor">The ScintillaEditor instance.</param>
         /// <param name="astService">The AST service for parsing.</param>
-        public ImplementBaseClassRefactor(ScintillaEditor editor)
+        public ImplementAbstractMembersRefactor(ScintillaEditor editor)
             : base(editor) 
         {
 
