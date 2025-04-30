@@ -5,7 +5,7 @@ namespace AppRefiner.Stylers
 {
     public class UnusedImportsListener : BaseStyler
     {
-        private const uint HIGHLIGHT_COLOR = 0xBBBBBB00; // Light gray text (no alpha)
+        private const uint HIGHLIGHT_COLOR = 0x73737380; // Light gray text (no alpha)
         class ImportInfo
         {
             public string Name { get; }

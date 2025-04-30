@@ -1,12 +1,13 @@
 using System;
 using System.Linq;
+using System.Text;
 
 namespace AppRefiner.TooltipProviders
 {
     /// <summary>
     /// Provides tooltips for highlighted regions in the editor.
     /// </summary>
-    public class HighlightTooltipProvider : BaseTooltipProvider
+    public class ActiveIndicatorsTooltipProvider : BaseTooltipProvider
     {
         /// <summary>
         /// Name of the tooltip provider.
@@ -38,22 +39,31 @@ namespace AppRefiner.TooltipProviders
             }
             
             // Check if editor has highlight tooltips
-            if (editor.HighlightTooltips == null || editor.HighlightTooltips.Count == 0)
+            if (editor.ActiveIndicators == null || editor.ActiveIndicators.Count == 0)
             {
                 return null;
             }
             
             // Find the first tooltip that contains the position
-            var tooltip = editor.HighlightTooltips.FirstOrDefault(t => 
-                t.Key.Start <= position && t.Key.Start + t.Key.Length >= position);
+            var activeIndicators = editor.ActiveIndicators.Where(t => 
+                t.Start <= position && t.Start + t.Length >= position);
             
-            // Return the tooltip text if found
-            if (!tooltip.Equals(default))
+            if (!activeIndicators.Any())
             {
-                return tooltip.Value;
+                return null;
             }
-            
-            return null;
+
+            StringBuilder tooltips = new StringBuilder();
+            foreach (var t in activeIndicators)
+            {
+                if (t.Tooltip != null)
+                {
+                    tooltips.AppendLine(t.GetTooltip());
+                    tooltips.Append("\n");
+                }
+            }
+
+            return tooltips.ToString().Trim();
         }
     }
 } 

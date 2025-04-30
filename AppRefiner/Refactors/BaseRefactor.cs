@@ -326,7 +326,7 @@ namespace AppRefiner.Refactors
         protected int LineNumber { get; } = ScintillaManager.GetCurrentLineNumber(editor);
 
         private string? source;
-        private CommonTokenStream? tokenStream;
+        protected CommonTokenStream? tokenStream;
         private int cursorPosition = -1;
         private bool failed;
         private string? failureMessage;

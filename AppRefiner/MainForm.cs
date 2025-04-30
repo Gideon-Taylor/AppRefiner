@@ -1151,8 +1151,7 @@ namespace AppRefiner
                 "Apply a template to the current editor",
                 () =>
                 {
-                    // Directly trigger the button click logic
-                    btnApplyTemplate_Click(null, EventArgs.Empty); 
+                    ApplyTemplateCommand();
                 },
                 () => activeEditor != null
             ));
@@ -1603,9 +1602,44 @@ namespace AppRefiner
 
         private void ApplyTemplateCommand()
         {
-            // This method is now primarily for the command palette / hotkey
-            // It should trigger the same logic as the button click.
-            btnApplyTemplate_Click(null, EventArgs.Empty);
+            /* only work if there's an active editor */
+            if (activeEditor == null) return;
+
+            // Get all available templates
+            var templates = Template.GetAvailableTemplates();
+
+            if (templates.Count == 0)
+            {
+                MessageBox.Show("No templates found.", "No Templates", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+            var mainHandle = Process.GetProcessById((int)activeEditor.ProcessId).MainWindowHandle;
+            var handleWrapper = new WindowWrapper(mainHandle);
+
+            // Show template selection dialog
+            using var templateDialog = new TemplateSelectionDialog(templates, mainHandle);
+            if (templateDialog.ShowDialog(handleWrapper) != DialogResult.OK || templateDialog.SelectedTemplate == null)
+            {
+                return;
+            }
+
+            // Check if editor is not empty and warn user
+            if (!string.IsNullOrWhiteSpace(ScintillaManager.GetScintillaText(activeEditor)))
+            {
+                using var confirmDialog = new TemplateConfirmationDialog(
+                    "Applying a template will replace all content in the current editor. Do you want to continue?",
+                    mainHandle);
+
+                if (confirmDialog.ShowDialog(handleWrapper) != DialogResult.Yes)
+                {
+                    return;
+                }
+            }
+
+            var selectedTemplate = templateDialog.SelectedTemplate;
+            templateManager.ActiveTemplate = selectedTemplate;
+            templateManager.PromptForInputs(mainHandle, handleWrapper);
+            templateManager.ApplyActiveTemplateToEditor(activeEditor);
         }
 
         private void btnDebugLog_Click(object sender, EventArgs e)

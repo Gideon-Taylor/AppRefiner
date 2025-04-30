@@ -32,7 +32,7 @@ namespace AppRefiner.Stylers
             {
                 if (typeof(Refactors.BaseRefactor).IsAssignableFrom(QuickFix))
                 {
-                    return $"{baseTooltip}\n\nQuick Fix: {QuickFixDescription}";
+                    return $"{baseTooltip}\nQuick Fix (Ctrl + .): {QuickFixDescription}";
                 }
             }
             return baseTooltip;

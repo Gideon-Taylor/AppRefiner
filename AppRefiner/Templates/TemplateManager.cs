@@ -1,6 +1,8 @@
+using AppRefiner.Dialogs;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 // Remove direct dependency on System.Windows.Forms if possible
 // using System.Windows.Forms; 
 
@@ -173,6 +175,21 @@ namespace AppRefiner.Templates
             return true;
         }
 
+        public void PromptForInputs(IntPtr mainHandle, WindowWrapper handleWrapper)
+        {
+            if (ActiveTemplate == null) return;
+            if (ActiveTemplate.Inputs != null && ActiveTemplate.Inputs.Count > 0)
+            {
+                using var parameterDialog = new TemplateParameterDialog(ActiveTemplate, mainHandle);
+                if (parameterDialog.ShowDialog(handleWrapper) != DialogResult.OK)
+                {
+                    return;
+                }
+
+                currentParameterValues = parameterDialog.ParameterValues;
+            }
+        }
+
         /// <summary>
         /// Applies the ActiveTemplate using the current parameter values to the specified editor.
         /// </summary>
@@ -180,6 +197,7 @@ namespace AppRefiner.Templates
         public void ApplyActiveTemplateToEditor(ScintillaEditor editor)
         {
             if (editor == null || ActiveTemplate == null) return;
+
 
             // Apply values to get the final content string
             string generatedContent = ActiveTemplate.Apply(currentParameterValues);

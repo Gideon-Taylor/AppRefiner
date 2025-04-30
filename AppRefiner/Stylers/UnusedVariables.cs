@@ -1,13 +1,18 @@
 using AppRefiner.Linters.Models;
+using AppRefiner.Refactors;
 using System;
+using System.Reflection;
 using static AppRefiner.PeopleCode.PeopleCodeParser;
 
 namespace AppRefiner.Stylers
 {
     public class UnusedLocalVariableStyler : ScopedStyler<object>
     {
-        private const uint HIGHLIGHT_COLOR = 0xBBBBBB00; // Light gray text (no alpha)
+        private const uint HIGHLIGHT_COLOR = 0x73737380; // Light gray text (no alpha)
         private readonly Dictionary<string, VariableInfo> instanceVariables = new();
+        // Track method parameters for later association with method scopes
+        private readonly Dictionary<string, List<VariableInfo>> pendingMethodParameters = new();
+        private string? currentMethodName;
 
         public UnusedLocalVariableStyler()
         {
@@ -43,6 +48,77 @@ namespace AppRefiner.Stylers
                     }
                 }
             }
+        }
+
+        // Track method header declarations to associate parameters later
+        public override void EnterMethodHeader(MethodHeaderContext context)
+        {
+            base.EnterMethodHeader(context);
+
+            var genericIdNode = context.genericID();
+            if (genericIdNode != null)
+            {
+                var methodName = genericIdNode.GetText();
+                currentMethodName = methodName;
+
+                if (!pendingMethodParameters.ContainsKey(methodName))
+                {
+                    pendingMethodParameters[methodName] = new List<VariableInfo>();
+                }
+            }
+        }
+
+        // Handle method parameters - store them for later association with method scope
+        public override void EnterMethodArgument(MethodArgumentContext context)
+        {
+            base.EnterMethodArgument(context);
+
+            if (currentMethodName == null)
+            {
+                return; // Safety check
+            }
+
+            var varNode = context.USER_VARIABLE();
+            if (varNode != null)
+            {
+                string varName = varNode.GetText();
+                var line = varNode.Symbol.Line;
+                var start = varNode.Symbol.StartIndex;
+                var stop = varNode.Symbol.StopIndex;
+
+                // Store the parameter for later association with method scope
+                pendingMethodParameters[currentMethodName].Add(
+                    new VariableInfo(varName, "Parameter", line, (start, stop))
+                );
+            }
+        }
+
+        // When entering a method implementation, associate any pending parameters with this scope
+        public override void EnterMethod(MethodContext context)
+        {
+            base.EnterMethod(context);
+
+            var genericIdNode = context.genericID();
+            if (genericIdNode != null)
+            {
+                var methodName = genericIdNode.GetText();
+
+                // Check if we have pending parameters for this method
+                if (pendingMethodParameters.TryGetValue(methodName, out var parameters))
+                {
+                    // Add each parameter to the current method scope
+                    foreach (var paramInfo in parameters)
+                    {
+                        // Use the existing AddLocalVariable method from ScopedStyler
+                        AddLocalVariable(paramInfo.Name, paramInfo.Type, paramInfo.Line, paramInfo.Span.Start, paramInfo.Span.Stop);
+                    }
+
+                    // Remove the entry as parameters are now associated with the scope
+                    pendingMethodParameters.Remove(methodName);
+                }
+            }
+            // Clear currentMethodName after processing the method entry
+            currentMethodName = null;
         }
 
         // Override to track usage of instance variables
@@ -123,6 +199,24 @@ namespace AppRefiner.Stylers
             );
         }
 
+        // Handle function parameters directly in the function scope
+        public override void EnterFunctionArgument(FunctionArgumentContext context)
+        {
+            base.EnterFunctionArgument(context);
+
+            var varNode = context.USER_VARIABLE();
+            if (varNode != null)
+            {
+                string varName = varNode.GetText();
+                var line = varNode.Symbol.Line;
+                var start = varNode.Symbol.StartIndex;
+                var stop = varNode.Symbol.StopIndex;
+
+                // Add function parameter directly to the current scope
+                AddLocalVariable(varName, "Parameter", line, start, stop);
+            }
+        }
+
         protected override void OnExitScope(Dictionary<string, object> scope, Dictionary<string, VariableInfo> variableScope)
         {
             if (variableScope == null) return;
@@ -140,8 +234,10 @@ namespace AppRefiner.Stylers
                         Color = HIGHLIGHT_COLOR,
                         Start = variable.Span.Start,
                         Length = variable.Span.Stop - variable.Span.Start + 1,
-                        Tooltip = "Unused variable",
-                        Type = IndicatorType.TEXTCOLOR
+                        Tooltip = variable.Type == "Parameter" ? "Unused parameter" : "Unused variable", // Adjusted tooltip
+                        Type = IndicatorType.TEXTCOLOR,
+                        QuickFix = typeof(DeleteUnusedVariableDeclaration),
+                        QuickFixDescription = variable.Type == "Parameter" ? "Delete unused parameter" : "Delete unused variable declaration" // Adjusted description
                     });
                 }
             }
@@ -161,8 +257,10 @@ namespace AppRefiner.Stylers
                         Color = HIGHLIGHT_COLOR,
                         Start = variable.Span.Start,
                         Length = variable.Span.Stop - variable.Span.Start + 1,
-                        Tooltip = "Unused variable",
-                        Type = IndicatorType.TEXTCOLOR
+                        Tooltip = variable.Type == "Parameter" ? "Unused parameter" : "Unused variable", // Adjusted tooltip
+                        Type = IndicatorType.TEXTCOLOR,
+                        QuickFix = typeof(DeleteUnusedVariableDeclaration),
+                        QuickFixDescription = variable.Type == "Parameter" ? "Delete unused parameter" : "Delete unused variable declaration" // Adjusted description
                     });
                 }
             }
@@ -180,7 +278,9 @@ namespace AppRefiner.Stylers
                         Start = variable.Span.Start,
                         Length = variable.Span.Stop - variable.Span.Start + 1,
                         Tooltip = "Unused instance variable",
-                        Type = IndicatorType.TEXTCOLOR
+                        Type = IndicatorType.TEXTCOLOR,
+                        QuickFix = typeof(DeleteUnusedVariableDeclaration),
+                        QuickFixDescription = "Delete unused instance variable"
                     });
                 }
             }
@@ -190,6 +290,8 @@ namespace AppRefiner.Stylers
         {
             base.Reset();
             instanceVariables.Clear();
+            pendingMethodParameters.Clear();
+            currentMethodName = null;
         }
     }
 }

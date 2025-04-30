@@ -72,10 +72,6 @@ namespace AppRefiner
         public Dictionary<uint, int> ColorToTextColorMap = new();
         public int NextIndicatorNumber = 0;
 
-        /// <summary>
-        /// Stores highlight tooltips created by stylers for displaying when hovering over highlighted text
-        /// </summary>
-        public Dictionary<(int Start, int Length), string> HighlightTooltips { get; set; } = new Dictionary<(int Start, int Length), string>();
 
         /// <summary>
         /// Stores the currently active indicators in the editor

@@ -628,12 +628,6 @@ namespace AppRefiner
             int highlighterNumber = editor.GetHighlighter(color);
             HighlightText(editor, highlighterNumber, start, length);
             
-            // Store tooltip if provided
-            if (!string.IsNullOrEmpty(tooltip))
-            {
-                editor.HighlightTooltips[(start, length)] = tooltip;
-            }
-            
             // Add this indicator to the active indicators list if it doesn't already exist
             if (!editor.ActiveIndicators.Any(i => i.Start == start && i.Length == length && i.Color == color))
             {
@@ -662,9 +656,6 @@ namespace AppRefiner
             {
                 RemoveIndicator(editor, highlighterNumber, start, length);
                 
-                // Remove any stored tooltip
-                editor.HighlightTooltips.Remove((start, length));
-                
                 // Remove matching indicator from ActiveIndicators list
                 for (int i = editor.ActiveIndicators.Count - 1; i >= 0; i--)
                 {
@@ -674,41 +665,6 @@ namespace AppRefiner
                         editor.ActiveIndicators.RemoveAt(i);
                     }
                 }
-            }
-        }
-
-        /// <summary>
-        /// Clears all indicators of a specific color from the entire document
-        /// </summary>
-        /// <param name="editor">The ScintillaEditor to clear indicators from</param>
-        /// <param name="color">The BGRA color value of the highlighter to clear</param>
-        public static void ClearAllIndicatorsWithColor(ScintillaEditor editor, uint color)
-        {
-            if (editor.ColorToHighlighterMap.TryGetValue(color, out int highlighterNumber))
-            {
-                // Get document length
-                int docLength = (int)editor.SendMessage(SCI_GETLENGTH, IntPtr.Zero, IntPtr.Zero);
-                
-                // Clear indicators for the entire document
-                RemoveIndicator(editor, highlighterNumber, 0, docLength);
-                
-                // Remove all tooltips associated with this highlighter
-                var keysToRemove = editor.HighlightTooltips.Keys
-                    .Where(key => {
-                        // Check if this range has this indicator
-                        editor.SendMessage(SCI_SETINDICATORCURRENT, highlighterNumber, IntPtr.Zero);
-                        int indicatorValue = (int)editor.SendMessage(SCI_INDICATORVALUEAT, highlighterNumber, key.Start);
-                        return indicatorValue == 1;
-                    })
-                    .ToList();
-                
-                foreach (var key in keysToRemove)
-                {
-                    editor.HighlightTooltips.Remove(key);
-                }
-                
-                // Remove matching indicators from ActiveIndicators list
-                editor.ActiveIndicators.RemoveAll(indicator => indicator.Color == color && indicator.Type == Stylers.IndicatorType.HIGHLIGHTER);
             }
         }
 
@@ -726,9 +682,6 @@ namespace AppRefiner
             {
                 RemoveIndicator(editor, i, 0, docLength);
             }
-            
-            // Clear all tooltip data
-            editor.HighlightTooltips.Clear();
             
             // Clear the active indicators list
             editor.ActiveIndicators.Clear();
@@ -1574,10 +1527,9 @@ namespace AppRefiner
             return editor == null ? -1 : (int)editor.SendMessage(SCI_LINEFROMPOSITION, editor.SendMessage(SCI_GETCURRENTPOS, 0, 0), 0);
         }
 
-        public static string GetCurrentLineText(ScintillaEditor editor)
+        public static string GetLineText(ScintillaEditor editor, int lineNumber)
         {
             if (editor == null) return string.Empty;
-            int lineNumber = GetCurrentLineNumber(editor);
             int start = (int)editor.SendMessage(SCI_POSITIONFROMLINE, lineNumber, IntPtr.Zero);
             int end = (int)editor.SendMessage(SCI_GETLINEENDPOSITION, lineNumber, IntPtr.Zero);
 
@@ -1586,6 +1538,13 @@ namespace AppRefiner
 
 
             return editor.ContentString?.Substring(start, end - start) ?? string.Empty;
+        }
+
+        public static string GetCurrentLineText(ScintillaEditor editor)
+        {
+            if (editor == null) return string.Empty;
+            int lineNumber = GetCurrentLineNumber(editor);
+            return GetLineText(editor, lineNumber);
         }
 
         /// <summary>
@@ -1698,12 +1657,6 @@ namespace AppRefiner
             int squiggleNumber = editor.GetSquiggle(color);
             HighlightText(editor, squiggleNumber, start, length);
             
-            // Store tooltip if provided
-            if (!string.IsNullOrEmpty(tooltip))
-            {
-                editor.HighlightTooltips[(start, length)] = tooltip;
-            }
-            
             // Add this indicator to the active indicators list if it doesn't already exist
             if (!editor.ActiveIndicators.Any(i => i.Start == start && i.Length == length && i.Color == color))
             {
@@ -1732,9 +1685,6 @@ namespace AppRefiner
             {
                 RemoveIndicator(editor, squiggleNumber, start, length);
                 
-                // Remove any stored tooltip
-                editor.HighlightTooltips.Remove((start, length));
-                
                 // Remove matching indicator from ActiveIndicators list
                 for (int i = editor.ActiveIndicators.Count - 1; i >= 0; i--)
                 {
@@ -1744,41 +1694,6 @@ namespace AppRefiner
                         editor.ActiveIndicators.RemoveAt(i);
                     }
                 }
-            }
-        }
-
-        /// <summary>
-        /// Clears all squiggles of a specific color from the entire document
-        /// </summary>
-        /// <param name="editor">The ScintillaEditor to clear squiggles from</param>
-        /// <param name="color">The BGRA color value of the squiggle to clear</param>
-        public static void ClearAllSquigglesWithColor(ScintillaEditor editor, uint color)
-        {
-            if (editor.ColorToSquiggleMap.TryGetValue(color, out int squiggleNumber))
-            {
-                // Get document length
-                int docLength = (int)editor.SendMessage(SCI_GETLENGTH, IntPtr.Zero, IntPtr.Zero);
-                
-                // Clear indicators for the entire document
-                RemoveIndicator(editor, squiggleNumber, 0, docLength);
-                
-                // Remove all tooltips associated with this squiggle
-                var keysToRemove = editor.HighlightTooltips.Keys
-                    .Where(key => {
-                        // Check if this range has this indicator
-                        editor.SendMessage(SCI_SETINDICATORCURRENT, squiggleNumber, IntPtr.Zero);
-                        int indicatorValue = (int)editor.SendMessage(SCI_INDICATORVALUEAT, squiggleNumber, key.Start);
-                        return indicatorValue == 1;
-                    })
-                    .ToList();
-                
-                foreach (var key in keysToRemove)
-                {
-                    editor.HighlightTooltips.Remove(key);
-                }
-                
-                // Remove matching indicators from ActiveIndicators list
-                editor.ActiveIndicators.RemoveAll(indicator => indicator.Color == color && indicator.Type == Stylers.IndicatorType.SQUIGGLE);
             }
         }
 
@@ -1989,12 +1904,6 @@ namespace AppRefiner
             int textColorNumber = editor.GetTextColor(color);
             HighlightText(editor, textColorNumber, start, length);
 
-            // Store tooltip if provided
-            if (!string.IsNullOrEmpty(tooltip))
-            {
-                editor.HighlightTooltips[(start, length)] = tooltip;
-            }
-
             // Add this indicator to the active indicators list if it doesn't already exist
             if (!editor.ActiveIndicators.Any(i => i.Start == start && i.Length == length && i.Color == color))
             {
@@ -2022,9 +1931,6 @@ namespace AppRefiner
             if (editor.ColorToTextColorMap.TryGetValue(color, out int textColorNumber))
             {
                 RemoveIndicator(editor, textColorNumber, start, length);
-
-                // Remove any stored tooltip
-                editor.HighlightTooltips.Remove((start, length));
 
                 // Remove matching indicator from ActiveIndicators list
                 for (int i = editor.ActiveIndicators.Count - 1; i >= 0; i--)
