@@ -22,6 +22,11 @@ namespace AppRefiner.Refactors
         public new static bool RegisterKeyboardShortcut => false; // TODO: Maybe enable later?
         public new static bool IsHidden => false;
 
+        /// <summary>
+        /// Specifies that the ResolveImports refactor should run after this one.
+        /// </summary>
+        public override System.Type? FollowUpRefactorType => typeof(ResolveImports); // Override
+
         // --- Location Tracking --- 
         private int _lastMethodImplementationEnd = -1;
         private int _publicHeaderEnd = -1;

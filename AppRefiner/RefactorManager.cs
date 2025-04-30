@@ -303,11 +303,36 @@ namespace AppRefiner.Refactors
                       ScintillaManager.SetFirstVisibleLine(activeEditor, currentFirstVisibleLine);
                 }
 
-                 if (!string.IsNullOrEmpty(result.Message))
-                 {
+                // Check for and execute follow-up refactor
+                Type? followUpType = refactorClass.FollowUpRefactorType;
+                if (followUpType != null)
+                {
+                    Debug.Log($"Executing follow-up refactor: {followUpType.Name}");
+                    try
+                    {
+                        // Instantiate the follow-up refactor
+                        if (Activator.CreateInstance(followUpType, activeEditor) is BaseRefactor followUpRefactor)
+                        {
+                            // Execute it immediately
+                            ExecuteRefactor(followUpRefactor, activeEditor); // Recursive call
+                        }
+                        else
+                        {
+                            Debug.Log($"Failed to create instance of follow-up refactor type: {followUpType.FullName}");
+                            mainForm.Invoke(() => MessageBox.Show(mainForm, $"Could not start follow-up refactor: {followUpType.Name}", "Follow-up Error", MessageBoxButtons.OK, MessageBoxIcon.Warning));
+                        }
+                    }
+                    catch (Exception followUpEx)
+                    {
+                        Debug.LogException(followUpEx, $"Error executing follow-up refactor {followUpType.Name}");
+                        mainForm.Invoke(() => MessageBox.Show(mainForm, $"An error occurred during the follow-up refactor: {followUpType.Name}\n\n{followUpEx.Message}", "Follow-up Error", MessageBoxButtons.OK, MessageBoxIcon.Error));
+                    }
+                }
+                else if (!string.IsNullOrEmpty(result.Message)) // Only show initial message if no follow-up
+                {
                     // Show success message if provided
                     mainForm.Invoke(() => MessageBox.Show(mainForm, result.Message, "Refactoring Complete", MessageBoxButtons.OK, MessageBoxIcon.Information));
-                 }
+                }
 
             }
             catch (Exception ex)

@@ -321,6 +321,12 @@ namespace AppRefiner.Refactors
         /// </summary>
         public static Keys ShortcutKey => Keys.None;
 
+        /// <summary>
+        /// Gets the type of a refactor that should be run immediately after this one completes successfully.
+        /// Returns null if no follow-up refactor is needed.
+        /// </summary>
+        public virtual Type? FollowUpRefactorType => null;
+
         protected ScintillaEditor Editor { get; } = editor ?? throw new ArgumentNullException(nameof(editor));
         protected int CurrentPosition { get; } = ScintillaManager.GetCursorPosition(editor);
         protected int LineNumber { get; } = ScintillaManager.GetCurrentLineNumber(editor);
