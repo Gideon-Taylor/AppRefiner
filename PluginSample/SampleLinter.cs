@@ -44,7 +44,6 @@ namespace PluginSample
         {
             base.Reset(); // Call base Reset if needed
             // Clear any linter-specific state here
-            Reports?.Clear();
         }
     }
 } 
