@@ -72,12 +72,30 @@ A lot has happened since the podcast episode! Here are some highlights:
 3. Run AppRefiner.exe
 4. AppRefiner will automatically detect Application Designer and begin enhancing its functionality
 
-### Keyboard Shortcuts
-- **Ctrl+Shift+P**: Open Command Palette
-- **Alt+Left/Right**: Collapse/Expand current section
-- **Ctrl+Alt+Left/Right**: Collapse/Expand all top-level sections
-- **Ctrl+Shift+R**: Rename local variable
-- **Ctrl+Alt+L**: Trigger code linting
+### Keyboard Shortcuts Cheat Sheet
+
+AppRefiner provides several keyboard shortcuts that work directly within the PeopleSoft Application Designer editor window.
+
+| Shortcut                | Action                                         |
+| :---------------------- | :--------------------------------------------- |
+| **General**             |                                                |
+| `Ctrl`+`Shift`+`P`      | Show Command Palette                           |
+| **Code Folding**        |                                                |
+| `Alt`+`Left`            | Collapse current code section/level            |
+| `Alt`+`Right`           | Expand current code section/level              |
+| `Ctrl`+`Alt`+`Left`     | Collapse all top-level sections                |
+| `Ctrl`+`Alt`+`Right`    | Expand all top-level sections                  |
+| **Navigation**          |                                                |
+| `Ctrl`+`Alt`+`G`        | Go To Definition (Methods, Properties, etc.)   |
+| **Linting & Analysis**  |                                                |
+| `Ctrl`+`Alt`+`L`        | Lint current code                              |
+| `Ctrl`+`.`              | Apply Quick Fix (when available)               |
+| **Refactoring**         |                                                |
+| `Ctrl`+`Shift`+`R`      | Rename Variable or Method                      |
+| `Ctrl`+`Shift`+`I`      | Resolve Imports                                |
+| `Ctrl`+`Shift`+`M`      | Sort Methods                                   |
+| **Templates**           |                                                |
+| `Ctrl`+`Alt`+`T`        | Apply Template                                 |
 
 ## Documentation
 
