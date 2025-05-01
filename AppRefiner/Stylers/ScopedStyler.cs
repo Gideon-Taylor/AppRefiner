@@ -1,3 +1,4 @@
+using Antlr4.Runtime.Misc;
 using AppRefiner.Linters.Models;
 using static AppRefiner.PeopleCode.PeopleCodeParser;
 
@@ -91,6 +92,30 @@ namespace AppRefiner.Stylers
                 }
             }
             return false;
+        }
+
+
+        public override void EnterNonLocalVarDeclaration([NotNull] NonLocalVarDeclarationContext context)
+        {
+            base.EnterNonLocalVarDeclaration(context);
+
+            // Extract type information from the type context
+            var typeContext = context.typeT();
+            string typeName = GetTypeFromContext(typeContext);
+
+            // Process each variable declaration in the list
+            foreach (var varNode in context.USER_VARIABLE())
+            {
+                string varName = varNode.GetText();
+                AddLocalVariable(
+                    varName,
+                    typeName,
+                    varNode.Symbol.Line,
+                    varNode.Symbol.StartIndex,
+                    varNode.Symbol.StopIndex
+                );
+                OnVariableDeclared(variableScopeStack.Peek()[varName]);
+            }
         }
 
         // Parser overrides for scope management
