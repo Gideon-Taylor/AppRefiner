@@ -1003,17 +1003,6 @@ namespace AppRefiner
                 }
             ));
 
-            // Add project linting commands
-            AvailableCommands.Add(new Command(
-                "Project: Set Lint Report Directory",
-                // Need to get path from manager or settings
-                 () => $"Current directory: {lintReportPath ?? "Not Set"}", 
-                (progressDialog) =>
-                {
-                    linterManager?.SetLintReportDirectory();
-                }
-            ));
-
             AvailableCommands.Add(new Command(
                 "Project: Lint Project",
                 "Run all linters on the entire project and generate a report",
@@ -1831,6 +1820,10 @@ namespace AppRefiner
             autoCompleteService?.ShowQuickFixSuggestions(activeEditor, position);
         }
 
+        private void btnReportDirectory_Click(object sender, EventArgs e)
+        {
+            linterManager?.SetLintReportDirectory();
+        }
     }
     
 }

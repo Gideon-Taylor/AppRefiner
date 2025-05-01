@@ -73,6 +73,7 @@ namespace AppRefiner
             cmbTemplates = new ComboBox();
             progressBar1 = new ProgressBar();
             lblStatus = new Label();
+            btnReportDirectory = new Button();
             ((System.ComponentModel.ISupportInitialize)splitContainer1).BeginInit();
             splitContainer1.Panel1.SuspendLayout();
             splitContainer1.Panel2.SuspendLayout();
@@ -154,6 +155,7 @@ namespace AppRefiner
             // 
             // grpEditorSettings
             // 
+            grpEditorSettings.Controls.Add(btnReportDirectory);
             grpEditorSettings.Controls.Add(chkPromptForDB);
             grpEditorSettings.Controls.Add(chkAutoPairing);
             grpEditorSettings.Controls.Add(btnPlugins);
@@ -507,6 +509,16 @@ namespace AppRefiner
             lblStatus.Text = "Stopped";
             lblStatus.TextAlign = ContentAlignment.MiddleCenter;
             // 
+            // btnReportDirectory
+            // 
+            btnReportDirectory.Location = new Point(432, 56);
+            btnReportDirectory.Name = "btnReportDirectory";
+            btnReportDirectory.Size = new Size(110, 23);
+            btnReportDirectory.TabIndex = 30;
+            btnReportDirectory.Text = "Report Directory...";
+            btnReportDirectory.UseVisualStyleBackColor = true;
+            btnReportDirectory.Click += btnReportDirectory_Click;
+            // 
             // MainForm
             // 
             AutoScaleDimensions = new SizeF(7F, 15F);
@@ -590,5 +602,6 @@ namespace AppRefiner
         private Panel pnlTemplateParams;
         private Button btnApplyTemplate;
         private ComboBox cmbTemplates;
+        private Button btnReportDirectory;
     }
 }
