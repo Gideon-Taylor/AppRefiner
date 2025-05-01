@@ -420,16 +420,6 @@ namespace AppRefiner
 
         }
 
-        private void DisableUIActions()
-        {
-            this.Invoke(() =>
-            {
-                btnLintCode.Enabled = false;
-                btnClearLint.Enabled = false;
-                btnApplyTemplate.Text = "Generate Template";
-            });
-        }
-
         private void dataGridView3_CellContentClick(object sender, DataGridViewCellEventArgs e)
         {
             stylerManager?.HandleStylerGridCellContentClick(sender, e);
@@ -450,95 +440,6 @@ namespace AppRefiner
             linterManager?.ClearLintResults(activeEditor);
         }
 
-
-        private void ProcessRefactor(BaseRefactor refactorClass)
-        {
-            if (activeEditor == null) return;
-            ScintillaManager.ClearAnnotations(activeEditor);
-
-            var freshText = ScintillaManager.GetScintillaText(activeEditor);
-            if (freshText == null) return;
-
-            // Capture current cursor position
-            int currentCursorPosition = ScintillaManager.GetCursorPosition(activeEditor);
-
-            // Capture current first visible line
-            int currentFirstVisibleLine = ScintillaManager.GetFirstVisibleLine(activeEditor);
-
-            // Check if this refactor requires user input dialog and is not deferred
-            if (refactorClass.RequiresUserInputDialog && !refactorClass.DeferDialogUntilAfterVisitor)
-            {
-                // Show the dialog and check if user confirmed
-                bool dialogConfirmed = refactorClass.ShowRefactorDialog();
-
-                // If user canceled, abort the refactoring
-                if (!dialogConfirmed)
-                {
-                    return;
-                }
-            }
-
-            // Ensure we have the latest content
-            activeEditor.ContentString = freshText;
-            
-            // Get the parsed program, token stream and comments using the caching mechanism
-            var (program, stream, _) = activeEditor.GetParsedProgram(true); // Force refresh to ensure we're using the freshest content
-
-            // Initialize the refactor with cursor position
-            refactorClass.Initialize(freshText, stream, currentCursorPosition);
-
-            // Run the refactor
-            ParseTreeWalker walker = new();
-            walker.Walk(refactorClass, program);
-
-            // Check if refactoring was successful
-            var result = refactorClass.GetResult();
-            if (!result.Success)
-            {
-                this.Invoke(() =>
-                {
-                    MessageBox.Show(
-                        this,
-                        result.Message,
-                        "Refactoring Failed",
-                        MessageBoxButtons.OK,
-                        MessageBoxIcon.Warning
-                    );
-                });
-                return;
-            }
-
-            // Check if this refactor requires a deferred user input dialog
-            if (refactorClass.RequiresUserInputDialog && refactorClass.DeferDialogUntilAfterVisitor)
-            {
-                // Show the dialog and check if user confirmed
-                bool dialogConfirmed = refactorClass.ShowRefactorDialog();
-
-                // If user canceled, abort the refactoring
-                if (!dialogConfirmed)
-                {
-                    return;
-                }
-            }
-            // TODO start undo transaction?
-
-            // Apply the refactored code
-            var newText = refactorClass.GetRefactoredCode();
-            if (newText == null) return;
-
-            ScintillaManager.SetScintillaText(activeEditor, newText);
-
-            // Get and set the updated cursor position
-            int updatedCursorPosition = refactorClass.GetUpdatedCursorPosition();
-            if (updatedCursorPosition >= 0)
-            {
-                // Set the cursor position without scrolling to it
-                ScintillaManager.SetCursorPositionWithoutScroll(activeEditor, updatedCursorPosition);
-                
-                // Restore the first visible line
-                    ScintillaManager.SetFirstVisibleLine(activeEditor, currentFirstVisibleLine);
-            }
-        }
 
         private void btnConnectDB_Click(object sender, EventArgs e)
         {
@@ -800,28 +701,6 @@ namespace AppRefiner
 
              // Apply the template using the manager
              templateManager.ApplyActiveTemplateToEditor(activeEditor);
-        }
-
-        private void ShowGeneratedTemplateDialog(string content, string title)
-        {
-            var dialog = new Form
-            {
-                Text = $"Generated Template: {title}",
-                Size = new Size(800, 600),
-                StartPosition = FormStartPosition.CenterParent
-            };
-
-            var textBox = new TextBox
-            {
-                Multiline = true,
-                Dock = DockStyle.Fill,
-                ScrollBars = ScrollBars.Both,
-                Text = content,
-                Font = new Font("Consolas", 10)
-            };
-
-            dialog.Controls.Add(textBox);
-            dialog.ShowDialog();
         }
 
         private void RegisterCommands()
