@@ -82,7 +82,7 @@ namespace AppRefiner
 
         // Fields for editor management
         private HashSet<ScintillaEditor> knownEditors = new HashSet<ScintillaEditor>();
-        
+
         // Fields for debouncing SAVEPOINTREACHED events
         private readonly object savepointLock = new object();
         private DateTime lastSavepointTime = DateTime.MinValue;
@@ -108,18 +108,18 @@ namespace AppRefiner
             settingsService = new SettingsService(); // Instantiate SettingsService first
             keyboardShortcutService = new KeyboardShortcutService();
             winEventService = new WinEventService();
-            winEventService.WindowFocused += HandleWindowFocusEvent; 
-            winEventService.Start(); 
-            
+            winEventService.WindowFocused += HandleWindowFocusEvent;
+            winEventService.Start();
+
             // Instantiate LinterManager (passing UI elements)
             // LoadGeneralSettings needs lintReportPath BEFORE LinterManager is created
             settingsService.LoadGeneralSettings(chkInitCollapsed, chkOnlyPPC, chkBetterSQL, chkAutoDark, chkAutoPairing, chkPromptForDB, out lintReportPath);
             linterManager = new LinterManager(this, dataGridView1, lblStatus, progressBar1, lintReportPath, settingsService);
             linterManager.InitializeLinterOptions(); // Initialize linters via the manager
             dataGridView1.CellPainting += dataGridView1_CellPainting; // Wire up CellPainting
-            
+
             // Instantiate StylerManager (passing UI elements)
-            stylerManager = new StylerManager(this, dataGridView3, settingsService); 
+            stylerManager = new StylerManager(this, dataGridView3, settingsService);
             stylerManager.InitializeStylerOptions(); // Initialize stylers via the manager
 
             // Instantiate AutoCompleteService
@@ -127,7 +127,7 @@ namespace AppRefiner
 
             // Instantiate RefactorManager
             refactorManager = new RefactorManager(this);
-            
+
             // Load templates using the manager and populate ComboBox
             templateManager.LoadTemplates();
             cmbTemplates.Items.Clear();
@@ -136,7 +136,7 @@ namespace AppRefiner
             {
                 cmbTemplates.SelectedIndex = 0;
                 // Trigger selection change to initialize UI
-                CmbTemplates_SelectedIndexChanged(cmbTemplates, EventArgs.Empty); 
+                CmbTemplates_SelectedIndexChanged(cmbTemplates, EventArgs.Empty);
             }
             cmbTemplates.SelectedIndexChanged += CmbTemplates_SelectedIndexChanged;
 
@@ -144,7 +144,7 @@ namespace AppRefiner
             // Initialize the tooltip providers
             TooltipManager.Initialize();
             InitTooltipOptions(); // Needs to run before LoadTooltipStates
-            
+
             // Load Tooltip states using the service
             settingsService.LoadTooltipStates(tooltipProviders, dataGridViewTooltips);
 
@@ -173,37 +173,37 @@ namespace AppRefiner
             if (activeEditor == null) return;
             ScintillaManager.SetLineFoldStatus(activeEditor, true);
         }
-        
+
         private void expandLevelHandler()
         {
             if (activeEditor == null) return;
             ScintillaManager.SetLineFoldStatus(activeEditor, false);
         }
-        
+
         private void collapseAllHandler()
         {
             if (activeEditor == null) return;
             ScintillaManager.CollapseTopLevel(activeEditor);
         }
-        
+
         private void expandAllHandler()
         {
             if (activeEditor == null) return;
             ScintillaManager.ExpandTopLevel(activeEditor);
         }
-        
+
         private void lintCodeHandler()
         {
             if (activeEditor == null) return;
             linterManager?.ProcessLintersForActiveEditor(activeEditor, activeEditor.DataManager);
         }
-        
+
         // Parameterless overload for shortcut service
         private void ShowCommandPalette()
         {
-            ShowCommandPalette(null, null); 
+            ShowCommandPalette(null, null);
         }
-        
+
         // This is called by the Command Palette
         private async void ShowCommandPalette(object? sender, KeyPressedEventArgs? e) // Keep original args for now
         {
@@ -303,18 +303,18 @@ namespace AppRefiner
         {
             // Clean up all hooks to ensure they're properly removed
             AppRefiner.Events.EventHookInstaller.CleanupAllHooks();
-            
+
             // Clean up the WinEvent hook if active
             if (winEventService != null)
             {
                 winEventService.Dispose();
                 winEventService = null;
             }
-            
+
             // Dispose the savepoint debounce timer if it exists
             savepointDebounceTimer?.Dispose();
             savepointDebounceTimer = null;
-            
+
             SaveSettings();
         }
 
@@ -479,17 +479,17 @@ namespace AppRefiner
                 progressBar1.MarqueeAnimationSpeed = 30;
             });
             Application.DoEvents();
-            
+
             // Run the linting operation in a background thread via the manager
             await Task.Run(() =>
             {
                 // Need to pass current DataManager associated with the active editor
                 IDataManager? currentDataManager = null;
-                if(activeEditor != null)
+                if (activeEditor != null)
                 {
                     processDataManagers.TryGetValue(activeEditor.ProcessId, out currentDataManager);
                     // If not found in map, use the one directly on the editor object if available
-                    currentDataManager ??= activeEditor.DataManager; 
+                    currentDataManager ??= activeEditor.DataManager;
                 }
                 linterManager?.ProcessLintersForActiveEditor(activeEditor, currentDataManager);
             });
@@ -583,7 +583,7 @@ namespace AppRefiner
                             Visible = definition.IsVisible,
                             Tag = definition.Id // Store input ID in Tag
                         };
-                         // Add event handler to update manager and regenerate UI
+                        // Add event handler to update manager and regenerate UI
                         txtBox.TextChanged += TemplateControl_ValueChanged;
                         inputControl = txtBox;
                         break;
@@ -602,10 +602,10 @@ namespace AppRefiner
 
                 if (definition.IsVisible)
                 {
-                     currentY += verticalSpacing;
+                    currentY += verticalSpacing;
                 }
             }
-            
+
             // Reflow controls after initial generation
             ReflowTemplateUI();
         }
@@ -619,17 +619,20 @@ namespace AppRefiner
             if (sender is Control control && control.Tag is string inputId)
             {
                 string newValue = "";
-                if (control is CheckBox chk) {
+                if (control is CheckBox chk)
+                {
                     newValue = chk.Checked ? "true" : "false";
-                } else if (control is TextBox txt) {
+                }
+                else if (control is TextBox txt)
+                {
                     newValue = txt.Text;
                 }
                 // Add other control types if needed
 
                 templateManager.UpdateParameterValue(inputId, newValue);
-                
+
                 // Regenerate UI to handle potential changes in display conditions
-                GenerateTemplateUI(); 
+                GenerateTemplateUI();
             }
         }
 
@@ -667,40 +670,42 @@ namespace AppRefiner
 
         private void btnApplyTemplate_Click(object? sender, EventArgs e)
         {
-             if (activeEditor == null) {
-                 MessageBox.Show("No active editor to apply template to.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                 return;
-             }
-             if (templateManager.ActiveTemplate == null) {
-                 MessageBox.Show("No template selected.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                 return;
-             }
-             
-             // Validate inputs using the manager
-             if (!templateManager.ValidateInputs())
-             {
-                 MessageBox.Show("Please fill in all required fields.", "Required Fields Missing",
-                     MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                 return;
-             }
-             
-             // Check for replacement warning only if it's not insert mode
-             if (!templateManager.ActiveTemplate.IsInsertMode && !string.IsNullOrWhiteSpace(ScintillaManager.GetScintillaText(activeEditor)))
-             {
+            if (activeEditor == null)
+            {
+                MessageBox.Show("No active editor to apply template to.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+            if (templateManager.ActiveTemplate == null)
+            {
+                MessageBox.Show("No template selected.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            // Validate inputs using the manager
+            if (!templateManager.ValidateInputs())
+            {
+                MessageBox.Show("Please fill in all required fields.", "Required Fields Missing",
+                    MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            // Check for replacement warning only if it's not insert mode
+            if (!templateManager.ActiveTemplate.IsInsertMode && !string.IsNullOrWhiteSpace(ScintillaManager.GetScintillaText(activeEditor)))
+            {
                 var mainHandle = Process.GetProcessById((int)activeEditor.ProcessId).MainWindowHandle;
                 var handleWrapper = new WindowWrapper(mainHandle);
-                 using var confirmDialog = new TemplateConfirmationDialog(
-                     "Applying this template will replace all content in the current editor. Do you want to continue?",
-                     mainHandle);
+                using var confirmDialog = new TemplateConfirmationDialog(
+                    "Applying this template will replace all content in the current editor. Do you want to continue?",
+                    mainHandle);
 
-                 if (confirmDialog.ShowDialog(handleWrapper) != DialogResult.Yes)
-                 {
-                     return; // User cancelled replacement
-                 }
-             }
+                if (confirmDialog.ShowDialog(handleWrapper) != DialogResult.Yes)
+                {
+                    return; // User cancelled replacement
+                }
+            }
 
-             // Apply the template using the manager
-             templateManager.ApplyActiveTemplateToEditor(activeEditor);
+            // Apply the template using the manager
+            templateManager.ApplyActiveTemplateToEditor(activeEditor);
         }
 
         private void RegisterCommands()
@@ -716,7 +721,7 @@ namespace AppRefiner
                 {
                     if (activeEditor == null) return;
                     // Delegate to button click handler which uses the manager
-                        progressDialog?.UpdateHeader("Running linters...");
+                    progressDialog?.UpdateHeader("Running linters...");
                     linterManager?.ProcessLintersForActiveEditor(activeEditor, activeEditor.DataManager);
                 }
             ));
@@ -803,7 +808,7 @@ namespace AppRefiner
                     () =>
                     {
                         styler.Active = !styler.Active;
-                        
+
                         stylerManager?.ProcessStylersForEditor(activeEditor);
 
                         // Update corresponding grid row if exists
@@ -823,41 +828,41 @@ namespace AppRefiner
                 foreach (var refactorInfo in refactorManager.AvailableRefactors)
                 {
                     // Capture the info for the lambda
-                    RefactorInfo currentRefactorInfo = refactorInfo; 
-                AvailableCommands.Add(new Command(
-                        $"Refactor: {currentRefactorInfo.Name}{currentRefactorInfo.ShortcutText}",
-                        currentRefactorInfo.Description,
-                    () =>
-                    {
-                        if (activeEditor != null)
+                    RefactorInfo currentRefactorInfo = refactorInfo;
+                    AvailableCommands.Add(new Command(
+                            $"Refactor: {currentRefactorInfo.Name}{currentRefactorInfo.ShortcutText}",
+                            currentRefactorInfo.Description,
+                        () =>
                         {
+                            if (activeEditor != null)
+                            {
                                 try
                                 {
                                     // Create an instance of the refactor
-                            var refactor = (BaseRefactor?)Activator.CreateInstance(
-                                        currentRefactorInfo.RefactorType,
-                                        [activeEditor] // Assuming constructor takes ScintillaEditor
-                            );
+                                    var refactor = (BaseRefactor?)Activator.CreateInstance(
+                                            currentRefactorInfo.RefactorType,
+                                            [activeEditor] // Assuming constructor takes ScintillaEditor
+                                );
 
-                            if (refactor != null)
-                            {
+                                    if (refactor != null)
+                                    {
                                         // Execute via the manager
                                         refactorManager.ExecuteRefactor(refactor, activeEditor);
                                     }
                                     else
                                     {
-                                          Debug.LogError($"Failed to create instance of refactor: {currentRefactorInfo.RefactorType.FullName}");
-                                          MessageBox.Show(this, "Error creating refactor instance.", "Refactor Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                                        Debug.LogError($"Failed to create instance of refactor: {currentRefactorInfo.RefactorType.FullName}");
+                                        MessageBox.Show(this, "Error creating refactor instance.", "Refactor Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
                                     }
                                 }
                                 catch (Exception ex)
                                 {
-                                     Debug.LogException(ex, $"Error instantiating or executing refactor: {currentRefactorInfo.RefactorType.FullName}");
-                                     MessageBox.Show(this, $"Error running refactor: {ex.Message}", "Refactor Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                                    Debug.LogException(ex, $"Error instantiating or executing refactor: {currentRefactorInfo.RefactorType.FullName}");
+                                    MessageBox.Show(this, $"Error running refactor: {ex.Message}", "Refactor Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                                }
                             }
                         }
-                    }
-                ));
+                    ));
                 }
             }
 
@@ -884,21 +889,22 @@ namespace AppRefiner
                 foreach (var linter in linterManager.LinterRules)
                 {
                     // Capture the linter instance for the lambda
-                    BaseLintRule currentLinter = linter; 
-                AvailableCommands.Add(new Command(
-                        $"Lint: {currentLinter.Description}",
-                        $"Run {currentLinter.Description} linting rule",
-                    () =>
-                    {
-                            if (activeEditor != null) {
+                    BaseLintRule currentLinter = linter;
+                    AvailableCommands.Add(new Command(
+                            $"Lint: {currentLinter.Description}",
+                            $"Run {currentLinter.Description} linting rule",
+                        () =>
+                        {
+                            if (activeEditor != null)
+                            {
                                 // Need to pass current DataManager
                                 IDataManager? currentDataManager = null;
                                 processDataManagers.TryGetValue(activeEditor.ProcessId, out currentDataManager);
-                                currentDataManager ??= activeEditor.DataManager; 
+                                currentDataManager ??= activeEditor.DataManager;
                                 linterManager?.ProcessSingleLinter(currentLinter, activeEditor, currentDataManager);
                             }
                         }
-                    ));
+                        ));
                 }
             }
 
@@ -908,22 +914,22 @@ namespace AppRefiner
                 foreach (var linter in linterManager.LinterRules)
                 {
                     BaseLintRule currentLinter = linter; // Capture instance
-                AvailableCommands.Add(new Command(
-                        $"Lint: Toggle {currentLinter.Description}",
-                        () => currentLinter.Active ? $"Currently enabled - Click to disable" : $"Currently disabled - Click to enable",
-                    () =>
-                    {
+                    AvailableCommands.Add(new Command(
+                            $"Lint: Toggle {currentLinter.Description}",
+                            () => currentLinter.Active ? $"Currently enabled - Click to disable" : $"Currently disabled - Click to enable",
+                        () =>
+                        {
                             currentLinter.Active = !currentLinter.Active;
 
-                        // Update corresponding grid row if exists
-                        var row = dataGridView1.Rows.Cast<DataGridViewRow>()
-                                .FirstOrDefault(r => r.Tag is BaseLintRule l && l == currentLinter);
-                        if (row != null)
-                        {
+                            // Update corresponding grid row if exists
+                            var row = dataGridView1.Rows.Cast<DataGridViewRow>()
+                                    .FirstOrDefault(r => r.Tag is BaseLintRule l && l == currentLinter);
+                            if (row != null)
+                            {
                                 row.Cells[0].Value = currentLinter.Active;
+                            }
                         }
-                    }
-                ));
+                    ));
                 }
             }
 
@@ -991,7 +997,7 @@ namespace AppRefiner
                     if (activeEditor != null)
                     {
                         // Clear content string to force re-reading
-                        activeEditor.ContentString = null;
+                        activeEditor.ContentString = ScintillaManager.GetScintillaText(activeEditor);
                         // Clear annotations
                         ScintillaManager.ClearAnnotations(activeEditor);
                         // Reset styles
@@ -1009,8 +1015,8 @@ namespace AppRefiner
                 (progressDialog) =>
                 {
                     if (activeEditor != null)
-                     { // Pass active editor for context
-                          linterManager?.LintProject(activeEditor, progressDialog);
+                    { // Pass active editor for context
+                        linterManager?.LintProject(activeEditor, progressDialog);
                     }
                 },
                 () => activeEditor != null && activeEditor.DataManager != null
@@ -1126,8 +1132,8 @@ namespace AppRefiner
                     // Register the shortcut using the service
                     bool registered = keyboardShortcutService.RegisterShortcut(
                         currentRefactorInfo.Name, // Use Name for unique ID
-                        currentRefactorInfo.Modifiers, 
-                        currentRefactorInfo.Key, 
+                        currentRefactorInfo.Modifiers,
+                        currentRefactorInfo.Key,
                         () => // Action lambda
                         {
                             if (activeEditor == null) return;
@@ -1146,12 +1152,12 @@ namespace AppRefiner
                                 }
                                 else
                                 {
-                                     Debug.LogError($"Failed to create instance for shortcut: {currentRefactorInfo.RefactorType.FullName}");
-                                     MessageBox.Show(this, "Error creating refactor instance for shortcut.", "Refactor Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                    }
-                }
-                catch (Exception ex)
-                {
+                                    Debug.LogError($"Failed to create instance for shortcut: {currentRefactorInfo.RefactorType.FullName}");
+                                    MessageBox.Show(this, "Error creating refactor instance for shortcut.", "Refactor Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                                }
+                            }
+                            catch (Exception ex)
+                            {
                                 Debug.LogException(ex, $"Error instantiating or executing refactor from shortcut: {currentRefactorInfo.RefactorType.FullName}");
                                 MessageBox.Show(this, $"Error running refactor from shortcut: {ex.Message}", "Refactor Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
                             }
@@ -1160,7 +1166,7 @@ namespace AppRefiner
 
                     if (!registered)
                     {
-                         Debug.LogWarning($"Failed to register shortcut for refactor: {currentRefactorInfo.Name}");
+                        Debug.LogWarning($"Failed to register shortcut for refactor: {currentRefactorInfo.Name}");
                     }
                 }
             }
@@ -1176,13 +1182,13 @@ namespace AppRefiner
                     // Same editor as before - just return it
                     return activeEditor;
                 }
-                
+
                 // This is a different editor or we didn't have one before
                 try
                 {
                     var editor = ScintillaManager.GetEditor(hwnd);
                     activeEditor = editor;
-                    
+
                     return editor;
                 }
                 catch (Exception ex)
@@ -1243,8 +1249,8 @@ namespace AppRefiner
             /* if message is a WM_SCN_EVENT (check the mask) */
             if ((m.Msg & WM_SCN_EVENT_MASK) == WM_SCN_EVENT_MASK)
             {
-                 // Only process if we have an active editor
-                 if (activeEditor == null || !activeEditor.IsValid()) return;
+                // Only process if we have an active editor
+                if (activeEditor == null || !activeEditor.IsValid()) return;
 
                 /* remove mask */
                 var eventCode = m.Msg & ~WM_SCN_EVENT_MASK;
@@ -1261,20 +1267,20 @@ namespace AppRefiner
                     case SCN_SAVEPOINTREACHED:
                         Debug.Log("SAVEPOINTREACHED...");
                         // Active editor check already done above
-                            lock (savepointLock)
-                            {
-                                // Cancel any pending savepoint timer
-                                savepointDebounceTimer?.Change(Timeout.Infinite, Timeout.Infinite);
+                        lock (savepointLock)
+                        {
+                            // Cancel any pending savepoint timer
+                            savepointDebounceTimer?.Change(Timeout.Infinite, Timeout.Infinite);
 
-                                // Store the editor for later processing
-                                pendingSaveEditor = activeEditor;
+                            // Store the editor for later processing
+                            pendingSaveEditor = activeEditor;
 
-                                // Record the time of this savepoint
-                                lastSavepointTime = DateTime.Now;
+                            // Record the time of this savepoint
+                            lastSavepointTime = DateTime.Now;
 
-                                // Start a new timer to process this savepoint after the debounce period
-                                savepointDebounceTimer = new System.Threading.Timer(
-                                    ProcessSavepoint, null, SAVEPOINT_DEBOUNCE_MS, Timeout.Infinite);
+                            // Start a new timer to process this savepoint after the debounce period
+                            savepointDebounceTimer = new System.Threading.Timer(
+                                ProcessSavepoint, null, SAVEPOINT_DEBOUNCE_MS, Timeout.Infinite);
                         }
                         break;
                     case SCN_USERLISTSELECTION:
@@ -1287,7 +1293,7 @@ namespace AppRefiner
                         {
                             // Read the UTF8 string from the editor's process memory
                             string? selectedText = ScintillaManager.ReadUtf8FromMemory(activeEditor, m.LParam, 256);
-                            
+
                             if (!string.IsNullOrEmpty(selectedText))
                             {
                                 Debug.Log($"User selected: {selectedText} (list type: {listType})");
@@ -1308,37 +1314,37 @@ namespace AppRefiner
             }
             else if (m.Msg == AR_APP_PACKAGE_SUGGEST)
             {
-                 // Only process if we have an active editor and service
-                 if (activeEditor == null || !activeEditor.IsValid() || autoCompleteService == null) return;
+                // Only process if we have an active editor and service
+                if (activeEditor == null || !activeEditor.IsValid() || autoCompleteService == null) return;
 
                 /* Handle app package suggestion request */
                 Debug.Log($"Received app package suggest message. WParam: {m.WParam}, LParam: {m.LParam}");
-                
+
                 // WParam contains the current cursor position
                 int position = m.WParam.ToInt32();
-                
+
                 // Call the AutoCompleteService
                 autoCompleteService.ShowAppPackageSuggestions(activeEditor, position);
             }
             else if (m.Msg == AR_CREATE_SHORTHAND)
             {
-                 // Only process if we have an active editor and service
-                 if (activeEditor == null || !activeEditor.IsValid() || autoCompleteService == null) return;
+                // Only process if we have an active editor and service
+                if (activeEditor == null || !activeEditor.IsValid() || autoCompleteService == null) return;
 
                 /* Handle create shorthand detection */
                 Debug.Log($"Received create shorthand message. WParam: {m.WParam}, LParam: {m.LParam}");
-                
+
                 // WParam contains auto-pairing status (bool)
                 bool autoPairingEnabled = m.WParam.ToInt32() != 0;
-                
+
                 // LParam contains the current cursor position
                 int position = m.LParam.ToInt32();
-                
+
                 // Call the AutoCompleteService
                 var refactor = autoCompleteService.PrepareCreateAutoCompleteRefactor(activeEditor, position, autoPairingEnabled);
                 if (refactor != null)
                 {
-                     // Execute via RefactorManager
+                    // Execute via RefactorManager
                     refactorManager?.ExecuteRefactor(refactor, activeEditor);
                 }
             }
@@ -1347,15 +1353,17 @@ namespace AppRefiner
                 /* Handle typing pause detection */
                 int position = m.WParam.ToInt32();
                 int line = m.LParam.ToInt32();
-                
+
                 Debug.Log($"Received typing pause message. Position: {position}, Line: {line}");
-                
+
                 // Only process if we have an active editor
                 if (activeEditor != null && activeEditor.IsValid())
                 {
                     // Log the typing pause event
                     Debug.Log($"User stopped typing at position {position}, line {line}");
-                    
+
+                    activeEditor.ContentString = ScintillaManager.GetScintillaText(activeEditor);
+
                     // Process the editor content now that typing has paused
                     // This replaces the periodic scanning from the timer
                     CheckForContentChanges(activeEditor);
@@ -1415,8 +1423,8 @@ namespace AppRefiner
                 // Create and show the definition selection dialog
                 IntPtr mainHandle = Process.GetProcessById((int)activeEditor.ProcessId).MainWindowHandle;
 
-                 ShowGoToDefinitionDialog(definitions, mainHandle);
-               
+                ShowGoToDefinitionDialog(definitions, mainHandle);
+
             }
             catch (Exception ex)
             {
@@ -1520,12 +1528,12 @@ namespace AppRefiner
             Debug.Log("Displaying debug dialog...");
             Debug.ShowDebugDialog(Handle);
         }
-        
+
         // Handle a newly detected editor
         private void ProcessNewEditor(ScintillaEditor editor)
         {
             if (editor == null) return;
-            
+
             if (!editor.IsValid())
             {
                 ScintillaManager.CleanupEditor(editor);
@@ -1541,42 +1549,42 @@ namespace AppRefiner
             // Update the active editor reference
             activeEditor = editor;
             EnableUIActions();
-            
+
             // If "only PPC" is checked and the editor is not PPC, skip
             if (chkOnlyPPC.Checked && editor.Type != EditorType.PeopleCode)
             {
                 return;
             }
-            
+
             if (!editor.FoldEnabled)
             {
                 Debug.Log($"Found new editor via WinEvent, enabling folding. HWND: {editor.hWnd:X}, PID: {editor.ProcessId:X} Thread: {editor.ThreadID:X}");
-                
+
                 if (chkAutoDark.Checked)
                 {
                     ScintillaManager.SetDarkMode(editor);
                 }
-                
+
                 Debug.Log($"Editor isn't subclassed: {editor.hWnd}");
                 bool success = EventHookInstaller.SubclassWindow(editor.ThreadID, WindowHelper.GetParentWindow(editor.hWnd), this.Handle);
                 Debug.Log($"Window subclassing result: {success}");
                 ScintillaManager.SetMouseDwellTime(editor, 1000);
-                
-                
+
+
                 ScintillaManager.EnableFolding(editor);
                 ScintillaManager.FixEditorTabs(editor, !chkBetterSQL.Checked);
                 editor.FoldEnabled = true;
-                
+
                 if (chkBetterSQL.Checked && editor.Type == EditorType.SQL)
                 {
                     ScintillaManager.ApplyBetterSQL(editor);
                 }
-                
+
                 if (chkInitCollapsed.Checked)
                 {
                     ScintillaManager.CollapseTopLevel(editor);
                 }
-                
+
                 // Save initial content to Git repository
                 if (!string.IsNullOrEmpty(editor.RelativePath))
                 {
@@ -1598,7 +1606,7 @@ namespace AppRefiner
 
             var mainHandle = Process.GetProcessById((int)activeEditor.ProcessId).MainWindowHandle;
             var handleWrapper = new WindowWrapper(mainHandle);
-            
+
             // Pass the editor's DBName to the dialog constructor
             DBConnectDialog dialog = new(mainHandle, activeEditor.DBName);
             dialog.StartPosition = FormStartPosition.CenterParent;
@@ -1624,7 +1632,7 @@ namespace AppRefiner
             {
                 return;
             }
-            
+
             try
             {
                 // Get content from editor
@@ -1634,7 +1642,7 @@ namespace AppRefiner
                     Debug.Log($"No content to save for editor: {editor.hWnd:X}");
                     return;
                 }
-                
+
                 // Save and commit the content
                 snapshotManager?.SaveEditorSnapshot(editor, content);
             }
@@ -1648,20 +1656,20 @@ namespace AppRefiner
         private void ProcessSavepoint(object? _)
         {
             ScintillaEditor? editorToSave = null;
-            
+
             lock (savepointLock)
             {
                 // If there's no pending editor, just return
                 if (pendingSaveEditor == null)
                     return;
-                
+
                 // Get the editor to save
                 editorToSave = pendingSaveEditor;
-                
+
                 // Clear the pending editor
                 pendingSaveEditor = null;
             }
-            
+
             try
             {
                 // Make sure we're on the UI thread
@@ -1680,16 +1688,16 @@ namespace AppRefiner
                                 return;
                             }
                         }
-                        // Reset editor state
-                        editorToSave.ContentString = null;
-                        
+
                         // Clear annotations and reset styles
                         ScintillaManager.ClearAnnotations(editorToSave);
                         ScintillaManager.ResetStyles(editorToSave);
-                        
+
                         // Save content to Git repository
                         if (!string.IsNullOrEmpty(editorToSave.RelativePath))
                         {
+                            // Reset editor state
+                            editorToSave.ContentString = ScintillaManager.GetScintillaText(editorToSave);
                             SaveSnapshot(editorToSave);
                         }
                     }
@@ -1704,58 +1712,58 @@ namespace AppRefiner
         // Renamed from WinEventProc and updated signature for EventHandler
         private void HandleWindowFocusEvent(object? sender, IntPtr hwnd)
         {
-             // Check if the focused window is a Scintilla window
-             StringBuilder className = new StringBuilder(256);
-             NativeMethods.GetClassName(hwnd, className, className.Capacity); // Use NativeMethods
-             
-             if (className.ToString().Contains("Scintilla"))
-             {
-                 // Ensure hwnd is owned by "pside.exe"
-                 NativeMethods.GetWindowThreadProcessId(hwnd, out var processId); // Use NativeMethods
-                 try
-                 {
-                     if ("pside".Equals(Process.GetProcessById((int)processId).ProcessName, StringComparison.OrdinalIgnoreCase))
-                     {
-                         Debug.Log($"WinEvent detected Scintilla window focus: 0x{hwnd.ToInt64():X}");
-                         
-                         // The event handler is already invoked on the correct synchronization context
-                         // by WinEventService, so no need for BeginInvoke here.
-                         
-                         // Handle potential focus loss on the previous editor first
-                         if (activeEditor != null && hwnd != activeEditor.hWnd && !activeEditor.IsValid())
-                         {
-                             Debug.Log("Previous active editor lost focus or became invalid.");
-                              activeEditor = null;
-                              Stylers.InvalidAppClass.ClearValidAppClassPathsCache(); // Example cleanup
-                         }
-                         
-                         // Use SetActiveEditor to properly handle the newly focused window
-                         var newlyFocusedEditor = SetActiveEditor(hwnd);
- 
-                         if (newlyFocusedEditor != null && newlyFocusedEditor.IsValid())
-                             {
-                                 if (!newlyFocusedEditor.FoldEnabled) // Check if it's truly a *new* editor needing init
-                                 {
-                                     ProcessNewEditor(newlyFocusedEditor);
-                                 }
-                                 else
-                                 {
-                                     // Editor already known and initialized, just check content
-                                     CheckForContentChanges(newlyFocusedEditor);
-                                 }
-                             }
-                         else
-                         {
-                             // Focused editor is null or invalid
-                             if(activeEditor?.hWnd == hwnd) // If the invalid one was our active one
-                             {
-                                 activeEditor = null; // Clear active editor
-                             }
-                         }
-                     }
-                 }
-                 catch (ArgumentException) { /* Process might have exited */ }
-             }
+            // Check if the focused window is a Scintilla window
+            StringBuilder className = new StringBuilder(256);
+            NativeMethods.GetClassName(hwnd, className, className.Capacity); // Use NativeMethods
+
+            if (className.ToString().Contains("Scintilla"))
+            {
+                // Ensure hwnd is owned by "pside.exe"
+                NativeMethods.GetWindowThreadProcessId(hwnd, out var processId); // Use NativeMethods
+                try
+                {
+                    if ("pside".Equals(Process.GetProcessById((int)processId).ProcessName, StringComparison.OrdinalIgnoreCase))
+                    {
+                        Debug.Log($"WinEvent detected Scintilla window focus: 0x{hwnd.ToInt64():X}");
+
+                        // The event handler is already invoked on the correct synchronization context
+                        // by WinEventService, so no need for BeginInvoke here.
+
+                        // Handle potential focus loss on the previous editor first
+                        if (activeEditor != null && hwnd != activeEditor.hWnd && !activeEditor.IsValid())
+                        {
+                            Debug.Log("Previous active editor lost focus or became invalid.");
+                            activeEditor = null;
+                            Stylers.InvalidAppClass.ClearValidAppClassPathsCache(); // Example cleanup
+                        }
+
+                        // Use SetActiveEditor to properly handle the newly focused window
+                        var newlyFocusedEditor = SetActiveEditor(hwnd);
+
+                        if (newlyFocusedEditor != null && newlyFocusedEditor.IsValid())
+                        {
+                            if (!newlyFocusedEditor.FoldEnabled) // Check if it's truly a *new* editor needing init
+                            {
+                                ProcessNewEditor(newlyFocusedEditor);
+                            }
+                            else
+                            {
+                                // Editor already known and initialized, just check content
+                                CheckForContentChanges(newlyFocusedEditor);
+                            }
+                        }
+                        else
+                        {
+                            // Focused editor is null or invalid
+                            if (activeEditor?.hWnd == hwnd) // If the invalid one was our active one
+                            {
+                                activeEditor = null; // Clear active editor
+                            }
+                        }
+                    }
+                }
+                catch (ArgumentException) { /* Process might have exited */ }
+            }
         }
 
         // Add this new CellPainting event handler method
@@ -1770,7 +1778,7 @@ namespace AppRefiner
                 {
                     // Paint the background to match the grid's default background
                     using (Brush backColorBrush = new SolidBrush(SystemColors.Control))
-                    using (Pen gridLinePen = new Pen(dataGridView1.GridColor,1)) // Use the grid color for the border
+                    using (Pen gridLinePen = new Pen(dataGridView1.GridColor, 1)) // Use the grid color for the border
                     {
                         // Erase the cell background
                         e.Graphics.FillRectangle(backColorBrush, e.CellBounds);
@@ -1825,7 +1833,7 @@ namespace AppRefiner
             linterManager?.SetLintReportDirectory();
         }
     }
-    
+
 }
 
 

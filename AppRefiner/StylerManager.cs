@@ -88,13 +88,6 @@ namespace AppRefiner.Stylers
 
             var editorDataManager = editor?.DataManager;
 
-   
-            if (editor.ContentString == null)
-            {
-                editor.ContentString = ScintillaManager.GetScintillaText(editor);
-                if(editor.ContentString == null) return; // Bail if text couldn't be retrieved
-            }
-
             var (program, stream, comments) = editor.GetParsedProgram();
 
             // Get active stylers, filtering by database requirement

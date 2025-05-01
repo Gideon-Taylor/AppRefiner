@@ -13,6 +13,7 @@ using System.Text;
 using System.Windows.Forms;
 using System.Drawing;
 using AppRefiner.Linters;
+using AppRefiner.Refactors;
 
 namespace AppRefiner
 {
@@ -57,14 +58,15 @@ namespace AppRefiner
             {
                 lintReportPath = folderDialog.SelectedPath;
                 // Persist this change - ideally via SettingsService, but for now directly
-                Properties.Settings.Default.LintReportPath = lintReportPath; 
-                Properties.Settings.Default.Save(); 
+                Properties.Settings.Default.LintReportPath = lintReportPath;
+                Properties.Settings.Default.Save();
 
                 MessageBox.Show($"Lint reports will be saved to: {lintReportPath}",
                     "Lint Report Directory Updated",
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Information);
             }
+
         }
 
         public void InitializeLinterOptions()

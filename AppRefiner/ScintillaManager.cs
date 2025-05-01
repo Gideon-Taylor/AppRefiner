@@ -925,11 +925,7 @@ namespace AppRefiner
         internal static void SetFoldRegions(ScintillaEditor editor)
         {
 
-            if (editor.ContentString == null)
-            {
-                editor.ContentString = GetScintillaText(editor);
-                if (editor.ContentString == null) { return; }
-            }
+            if (editor.ContentString == null) return;
 
             // Split the document text into lines.
             // This handles both Windows (CRLF) and Unix (LF) line endings.

@@ -212,8 +212,8 @@ namespace AppRefiner.Refactors
             {
                 ScintillaManager.ClearAnnotations(activeEditor); // Consider if this should be optional
 
-                var freshText = ScintillaManager.GetScintillaText(activeEditor);
-                if (freshText == null)
+                activeEditor.ContentString = ScintillaManager.GetScintillaText(activeEditor);
+                if (activeEditor.ContentString == null)
                 {
                     Debug.Log("Failed to get text from editor for refactoring.");
                     mainForm.Invoke(showErrorMessage);
@@ -234,12 +234,10 @@ namespace AppRefiner.Refactors
                     }
                 }
 
-                // Ensure the refactor uses the latest text
-                activeEditor.ContentString = freshText;
                 var (program, stream, _) = activeEditor.GetParsedProgram(true); // Force refresh
 
                 // Initialize the refactor
-                refactorClass.Initialize(freshText, stream, currentCursorPosition);
+                refactorClass.Initialize(activeEditor.ContentString, stream, currentCursorPosition);
 
                 // Run the refactor visitor
                 ParseTreeWalker walker = new();

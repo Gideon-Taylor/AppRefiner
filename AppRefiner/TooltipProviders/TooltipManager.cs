@@ -212,15 +212,11 @@ namespace AppRefiner.TooltipProviders
             List<ParseTreeTooltipProvider> providers)
         {
             var applicableProviders = new List<ParseTreeTooltipProvider>();
-            
+
+            if (editor.ContentString == null) return [];
+
             try
             {
-                // Ensure we have editor content
-                if (editor.ContentString == null)
-                {
-                    editor.ContentString = ScintillaManager.GetScintillaText(editor);
-                }
-                
                 // Create lexer and token stream
                 var lexer = new PeopleCodeLexer(new Antlr4.Runtime.AntlrInputStream(editor.ContentString));
                 var tokenStream = new Antlr4.Runtime.CommonTokenStream(lexer);
@@ -290,13 +286,12 @@ namespace AppRefiner.TooltipProviders
             List<ParseTreeTooltipProvider> applicableProviders,
             List<string> tooltips)
         {
+            if (editor.ContentString == null)
+                return;
+
             try
             {
-                // Ensure we have editor content
-                if (editor.ContentString == null)
-                {
-                    editor.ContentString = ScintillaManager.GetScintillaText(editor);
-                }
+                
 
                 var (program, tokenStream, comments) = editor.GetParsedProgram();
 
