@@ -28,6 +28,37 @@ Rather than replacing Application Designer, AppRefiner seamlessly integrates wit
 - **Database Integration**: Connect to Oracle PeopleSoft databases to enhance linting capabilities
 - **Global Hotkeys**: Keyboard shortcuts that work directly inside Application Designer
 
+## What's New Since the Podcast
+
+A lot has happened since the podcast episode! Here are some highlights:
+
+*   **Core Features & Enhancements:**
+    *   **Inline Annotations & Quick Fixes:** Introduced inline annotations (squiggles, highlights, text color) for stylers, replacing the old Linter tab/grid. Many stylers now offer "Quick Fixes" directly from the annotation tooltip to automatically resolve the issue.
+    *   **Refactoring Improvements:**
+        *   Refactors can now trigger follow-up refactors (e.g., implementing a base class automatically resolves imports).
+    *   **Templates:** Added support for templates that insert into existing code instead of replacing the content.
+    *   **Database Integration:** Improved the database connection experience, especially with saved passwords. 
+    *   **Performance:** AppRefiner no longer relies on a scanning timer, instead it now detects typing pauses and processes stylers/tooltips at that point for better performance.
+*   **New Functionality:**
+    *   Added App Class Path autocompletion (requires DB connection).
+    *   Implemented a `create()` shortcut which automatically expands to the the app class name.
+    *   Added a "Go To" command which gives a high level structure of the Application Class and allows for navigation.
+    *   Added a styler to detect `Find()` calls with string literals as the second parameter.
+    *   Added a styler/refactor for implementing abstract base class methods/properties or interfaces.
+    *   Added a styler that leverages SQL linters for real-time feedback (ex: incorrect number of bind parameters).
+*   **Configuration & Settings:**
+    *   Added a setting to limit the number of past snapshots kept.
+    *   Made linter configurations per-user.
+*   **Code Quality & Structure:**
+    *   Significant internal refactoring, breaking up `MainForm` into dedicated services/managers (`RefactorManager`, `SettingsService`, `TemplateManager`).
+    *   Extracted `ScintillaEditor` to its own file.
+    *   Switched from Git to SQLite for snapshot management.
+    *   Quote/Parenthesis pairing is now a stable feature.
+    *   Fixed `UndefinedVariable` styler issues (parameter handling, color format).
+*   **Documentation & Extensibility:**
+    *   Revamped all documentation in preparation for release.
+    *   Added a sample plugin project.
+
 ## Getting Started
 
 ### Prerequisites
