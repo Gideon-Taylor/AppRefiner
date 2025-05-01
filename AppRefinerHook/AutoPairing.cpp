@@ -41,40 +41,6 @@ void HandleAutoPairing(HWND hwndScintilla, SCNotification* notification) {
         // Update the tracker with the current line
         g_autoPairTracker.checkLine(currentLine);
         
-        // Handle commas and semicolons - move them outside of auto-paired quotes
-        if (notification->ch == ',' || notification->ch == ';') {
-            // Get the character at the current position
-            int nextCharValue = SendMessage(hwndScintilla, SCI_GETCHARAT, currentPos, 0);
-            if (nextCharValue < 0) {
-                // Invalid position
-                isProcessing = false;
-                return;
-            }
-            
-            char nextChar = (char)nextCharValue;
-            
-            // If the next character is a quote and we have an auto-paired quote to consume
-            if (nextChar == '"' && g_autoPairTracker.quoteCount > 0) {
-                // Delete the typed character (we'll reinsert it after the quote)
-                SendMessage(hwndScintilla, SCI_DELETERANGE, currentPos - 1, 1);
-                
-                // Move cursor past the quote
-                SendMessage(hwndScintilla, SCI_GOTOPOS, currentPos, 0);
-                
-                // Insert the comma or semicolon after the quote
-                char charToInsert[2] = { notification->ch, 0 };
-                SendMessage(hwndScintilla, SCI_ADDTEXT, 1, (LPARAM)charToInsert);
-                
-                // Decrement the quote count since we've effectively consumed it
-                g_autoPairTracker.decrementCount('"');
-                
-                isProcessing = false;
-                return;
-            }
-            // Otherwise, let the character be inserted normally
-            isProcessing = false;
-            return;
-        }
         
         // Special handling for quotes since opening and closing are the same character
         if (notification->ch == '"') {
