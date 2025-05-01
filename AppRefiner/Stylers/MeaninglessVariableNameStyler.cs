@@ -83,8 +83,7 @@ namespace AppRefiner.Stylers
                     Color = HIGHLIGHT_COLOR,
                     Tooltip = "Meaningless variable name",
                     Type = IndicatorType.HIGHLIGHTER,
-                    QuickFix = typeof(RenameLocalVariable),
-                    QuickFixDescription = "Rename variable..."
+                    QuickFixes = [(typeof(RenameLocalVariable),"Rename variable...")]
                 });
             }
         }

@@ -26,6 +26,8 @@ using AppRefiner.TooltipProviders;
 using AppRefiner.Snapshots;
 using System.Runtime.InteropServices;
 using AppRefiner.Services;
+using static AppRefiner.AutoCompleteService;
+using DiffPlex.Model;
 
 namespace AppRefiner
 {
@@ -1411,7 +1413,7 @@ namespace AppRefiner
                         Debug.Log("User list selection received");
                         // Active editor check already done above
                         // wParam is the list type
-                        int listType = m.WParam.ToInt32();
+                        UserListType listType = (UserListType)m.WParam.ToInt32();
                         // lParam is a pointer to a UTF8 string in the editor's process memory
                         if (m.LParam != IntPtr.Zero)
                         {
@@ -1425,8 +1427,11 @@ namespace AppRefiner
                                 var refactor = autoCompleteService?.HandleUserListSelection(activeEditor, selectedText, listType);
                                 if (refactor != null)
                                 {
-                                    // Execute via RefactorManager
-                                    refactorManager?.ExecuteRefactor(refactor, activeEditor);
+                                    Task.Delay(100).ContinueWith(_ =>
+                                    {
+                                        // Execute via RefactorManager
+                                        refactorManager?.ExecuteRefactor(refactor, activeEditor);
+                                    }, TaskScheduler.Default); // Use default scheduler
                                 }
                             }
                         }
@@ -1925,38 +1930,15 @@ namespace AppRefiner
             }
 
             int currentPosition = ScintillaManager.GetCursorPosition(activeEditor);
-            var quickFix = FindQuickFixTypeAtPosition(currentPosition);
-            return quickFix != null;
-        }
 
-        /// <param name="position">The character position in the editor.</param>
-        /// <returns>The BaseRefactor instance if a quick fix exists, otherwise null.</returns>
-        private Type? FindQuickFixTypeAtPosition(int position) // Renamed and changed return type
-        {
-            if (activeEditor == null || !activeEditor.IsValid())
-            {
-                return null;
-            }
+            /* if any active indicator exists that contains a quick fix that is also in range of the current position return true */
 
-            // Check active indicators
-            foreach (var indicator in activeEditor.ActiveIndicators)
-            {
-                // Check if position falls within the indicator's range
-                if (position >= indicator.Start && position <= (indicator.Start + indicator.Length))
-                {
-                    // Check if this indicator has a quick fix Type
-                    if (indicator.QuickFix != null && typeof(BaseRefactor).IsAssignableFrom(indicator.QuickFix))
-                    {
-                        return indicator.QuickFix; // Return the Type
-                    }
-                }
-            }
-
-            return null; // No quick fix Type found at this position
+            return activeEditor.ActiveIndicators.Where(i => i.Start <= currentPosition && i.Start + i.Length >= currentPosition)
+                .Any(i => i.QuickFixes.Count > 0);
         }
 
         /// <summary>
-        /// Applies the quick fix found at the current cursor position.
+        /// Applies the first available quick fix found at the current cursor position.
         /// </summary>
         private void ApplyQuickFixCommand()
         {
@@ -1965,40 +1947,9 @@ namespace AppRefiner
                 return;
             }
 
-            int currentPosition = ScintillaManager.GetCursorPosition(activeEditor);
-            var quickFixType = FindQuickFixTypeAtPosition(currentPosition);
+            int position = ScintillaManager.GetCursorPosition(activeEditor);
 
-            if (quickFixType != null)
-            {
-                try
-                {
-                    // Instantiate the refactor using the Type and the activeEditor
-                    // Assuming the refactor has a constructor that takes ScintillaEditor
-                    var refactorInstance = (BaseRefactor?)Activator.CreateInstance(quickFixType, [activeEditor]);
-
-                    if (refactorInstance != null)
-                    {
-                        Debug.Log($"Applying quick fix: {refactorInstance.GetType().Name}");
-                        // Execute the refactor using the RefactorManager
-                        refactorManager.ExecuteRefactor(refactorInstance, activeEditor);
-                    }
-                    else
-                    {
-                         Debug.LogError($"Failed to create instance of quick fix refactor: {quickFixType.FullName}");
-                         MessageBox.Show(this, "Error creating quick fix instance.", "Quick Fix Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                    }
-                }
-                catch (Exception ex)
-                {
-                     Debug.LogException(ex, $"Error instantiating or executing quick fix refactor: {quickFixType.FullName}");
-                     MessageBox.Show(this, $"Error applying quick fix: {ex.Message}", "Quick Fix Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                }
-            }
-            else
-            {
-                Debug.Log("No quick fix available at the current cursor position.");
-                // Optionally provide feedback to the user (e.g., status bar message)
-            }
+            autoCompleteService?.ShowQuickFixSuggestions(activeEditor, position);
         }
 
     }

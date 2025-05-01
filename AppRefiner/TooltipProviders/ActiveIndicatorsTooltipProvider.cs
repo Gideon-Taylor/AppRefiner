@@ -58,10 +58,11 @@ namespace AppRefiner.TooltipProviders
             {
                 if (t.Tooltip != null)
                 {
-                    tooltips.AppendLine(t.GetTooltip());
-                    tooltips.Append("\n");
+                    tooltips.AppendLine(t.Tooltip);
                 }
             }
+
+            tooltips.Append("Quick fixes... (Ctrl+.)\n");
 
             return tooltips.ToString().Trim();
         }

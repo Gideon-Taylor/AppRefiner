@@ -1,4 +1,5 @@
 using AppRefiner.Linters.Models;
+using AppRefiner.Refactors;
 using System;
 using System.Collections.Generic;
 using static AppRefiner.PeopleCode.PeopleCodeParser;
@@ -215,7 +216,12 @@ namespace AppRefiner.Stylers
                     Start = context.Start.StartIndex,
                     Length = context.Stop.StopIndex - context.Start.StartIndex + 1,
                     Tooltip = "Undefined variable",
-                    Type = IndicatorType.HIGHLIGHTER
+                    Type = IndicatorType.HIGHLIGHTER,
+                    QuickFixes = [
+                        (typeof(BaseRefactor),"Declare local variable"),
+                        (typeof(BaseRefactor),"Declare instance variable"),
+                        (typeof(BaseRefactor),"Declare class property"),
+                    ]
                 });
                 
                 // Add this variable to the current scope's marked variables

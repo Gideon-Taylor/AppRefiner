@@ -1,5 +1,5 @@
 using AppRefiner.Linters.Models;
-using AppRefiner.Refactors;
+using AppRefiner.QuickFixes;
 using System;
 using System.Reflection;
 using static AppRefiner.PeopleCode.PeopleCodeParser;
@@ -236,8 +236,7 @@ namespace AppRefiner.Stylers
                         Length = variable.Span.Stop - variable.Span.Start + 1,
                         Tooltip = variable.Type == "Parameter" ? "Unused parameter" : "Unused variable", // Adjusted tooltip
                         Type = IndicatorType.TEXTCOLOR,
-                        QuickFix = typeof(DeleteUnusedVariableDeclaration),
-                        QuickFixDescription = variable.Type == "Parameter" ? "Delete unused parameter" : "Delete unused variable declaration" // Adjusted description
+                        QuickFixes = [(typeof(DeleteUnusedVariableDeclaration), variable.Type == "Parameter" ? "Delete unused parameter" : "Delete unused variable declaration")]
                     });
                 }
             }
@@ -259,8 +258,7 @@ namespace AppRefiner.Stylers
                         Length = variable.Span.Stop - variable.Span.Start + 1,
                         Tooltip = variable.Type == "Parameter" ? "Unused parameter" : "Unused variable", // Adjusted tooltip
                         Type = IndicatorType.TEXTCOLOR,
-                        QuickFix = typeof(DeleteUnusedVariableDeclaration),
-                        QuickFixDescription = variable.Type == "Parameter" ? "Delete unused parameter" : "Delete unused variable declaration" // Adjusted description
+                        QuickFixes = [(typeof(DeleteUnusedVariableDeclaration),variable.Type == "Parameter" ? "Delete unused parameter" : "Delete unused variable declaration")]
                     });
                 }
             }
@@ -279,8 +277,7 @@ namespace AppRefiner.Stylers
                         Length = variable.Span.Stop - variable.Span.Start + 1,
                         Tooltip = "Unused instance variable",
                         Type = IndicatorType.TEXTCOLOR,
-                        QuickFix = typeof(DeleteUnusedVariableDeclaration),
-                        QuickFixDescription = "Delete unused instance variable"
+                        QuickFixes = [(typeof(DeleteUnusedVariableDeclaration),"Delete unused instance variable")]
                     });
                 }
             }

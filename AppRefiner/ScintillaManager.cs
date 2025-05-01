@@ -18,6 +18,7 @@ using Antlr4.Runtime;
 using Antlr4.Runtime.Tree;
 using AppRefiner.PeopleCode;
 using Antlr4.Runtime.Atn;
+using static AppRefiner.AutoCompleteService;
 
 namespace AppRefiner
 {
@@ -608,65 +609,27 @@ namespace AppRefiner
         /// <param name="highlighterNumber">The highlighter number</param>
         /// <param name="start">The start position of the text</param>
         /// <param name="length">The length of the text</param>
-        private static void RemoveIndicator(ScintillaEditor editor, int highlighterNumber, int start, int length)
+        public static void RemoveIndicator(ScintillaEditor editor, Indicator indicator)
         {
-            editor.SendMessage(SCI_SETINDICATORCURRENT, highlighterNumber, IntPtr.Zero);
-            editor.SendMessage(SCI_INDICATORCLEARRANGE, start, length);
+            int indicatorNumber = 0;
+            switch (indicator.Type)
+            {
+                case IndicatorType.HIGHLIGHTER:
+                    indicatorNumber = editor.GetHighlighter(indicator.Color);
+                    break;
+                case IndicatorType.SQUIGGLE:
+                    indicatorNumber = editor.GetSquiggle(indicator.Color);
+                    break;
+                case IndicatorType.TEXTCOLOR:
+                    indicatorNumber = editor.GetTextColor(indicator.Color);
+                    break;
+            }
+
+
+            editor.SendMessage(SCI_SETINDICATORCURRENT, indicatorNumber, IntPtr.Zero);
+            editor.SendMessage(SCI_INDICATORCLEARRANGE, indicator.Start, indicator.Length);
         }
 
-        /// <summary>
-        /// Highlights text with a highlighter of the specified BGRA color.
-        /// If a highlighter with the color doesn't exist, it creates a new one.
-        /// </summary>
-        /// <param name="editor">The ScintillaEditor to highlight text in</param>
-        /// <param name="color">The BGRA color value for the highlighter</param>
-        /// <param name="start">The start position of the text to highlight</param>
-        /// <param name="length">The length of the text to highlight</param>
-        /// <param name="tooltip">Optional tooltip text to display when hovering over the highlighted text</param>
-        public static void HighlightTextWithColor(ScintillaEditor editor, uint color, int start, int length, string? tooltip = null)
-        {
-            int highlighterNumber = editor.GetHighlighter(color);
-            HighlightText(editor, highlighterNumber, start, length);
-            
-            // Add this indicator to the active indicators list if it doesn't already exist
-            if (!editor.ActiveIndicators.Any(i => i.Start == start && i.Length == length && i.Color == color))
-            {
-                editor.ActiveIndicators.Add(new Stylers.Indicator
-                {
-                    Start = start,
-                    Length = length,
-                    Color = color,
-                    Tooltip = tooltip,
-                    Type = Stylers.IndicatorType.HIGHLIGHTER
-                });
-            }
-        }
-
-        /// <summary>
-        /// Removes highlighting of the specified BGRA color from a range of text.
-        /// </summary>
-        /// <param name="editor">The ScintillaEditor to remove highlighting from</param>
-        /// <param name="color">The BGRA color value of the highlighter</param>
-        /// <param name="start">The start position of the text to remove highlighting from</param>
-        /// <param name="length">The length of the text</param>
-        public static void RemoveHighlightWithColor(ScintillaEditor editor, uint color, int start, int length)
-        {
-            // Check if this color has a highlighter registered
-            if (editor.ColorToHighlighterMap.TryGetValue(color, out int highlighterNumber))
-            {
-                RemoveIndicator(editor, highlighterNumber, start, length);
-                
-                // Remove matching indicator from ActiveIndicators list
-                for (int i = editor.ActiveIndicators.Count - 1; i >= 0; i--)
-                {
-                    var indicator = editor.ActiveIndicators[i];
-                    if (indicator.Start == start && indicator.Length == length && indicator.Color == color && indicator.Type == Stylers.IndicatorType.HIGHLIGHTER)
-                    {
-                        editor.ActiveIndicators.RemoveAt(i);
-                    }
-                }
-            }
-        }
 
         /// <summary>
         /// Clears all indicators from the document
@@ -674,15 +637,11 @@ namespace AppRefiner
         /// <param name="editor">The ScintillaEditor to clear all indicators from</param>
         public static void ClearAllIndicators(ScintillaEditor editor)
         {
-            // Get document length
-            int docLength = (int)editor.SendMessage(SCI_GETLENGTH, IntPtr.Zero, IntPtr.Zero);
-            
-            // Clear all indicators (indicator numbers 0-31)
-            for (int i = 0; i <= 31; i++)
+            foreach (var indicator in editor.ActiveIndicators)
             {
-                RemoveIndicator(editor, i, 0, docLength);
+                RemoveIndicator(editor, indicator);
             }
-            
+
             // Clear the active indicators list
             editor.ActiveIndicators.Clear();
         }
@@ -1643,58 +1602,27 @@ namespace AppRefiner
         }
 
 
-        /// <summary>
-        /// Adds a squiggle under text with the specified BGRA color.
-        /// If a squiggle with the color doesn't exist, it creates a new one.
-        /// </summary>
-        /// <param name="editor">The ScintillaEditor to add squiggle to</param>
-        /// <param name="color">The BGRA color value for the squiggle</param>
-        /// <param name="start">The start position of the text to add squiggle to</param>
-        /// <param name="length">The length of the text to add squiggle to</param>
-        /// <param name="tooltip">Optional tooltip text to display when hovering over the squiggled text</param>
-        public static void SquiggleTextWithColor(ScintillaEditor editor, uint color, int start, int length, string? tooltip = null)
+        public static void AddIndicator(ScintillaEditor editor, Indicator indicator)
         {
-            int squiggleNumber = editor.GetSquiggle(color);
-            HighlightText(editor, squiggleNumber, start, length);
-            
-            // Add this indicator to the active indicators list if it doesn't already exist
-            if (!editor.ActiveIndicators.Any(i => i.Start == start && i.Length == length && i.Color == color))
-            {
-                editor.ActiveIndicators.Add(new Stylers.Indicator
-                {
-                    Start = start,
-                    Length = length,
-                    Color = color,
-                    Tooltip = tooltip,
-                    Type = Stylers.IndicatorType.SQUIGGLE
-                });
-            }
-        }
 
-        /// <summary>
-        /// Removes squiggle of the specified BGRA color from a range of text.
-        /// </summary>
-        /// <param name="editor">The ScintillaEditor to remove squiggle from</param>
-        /// <param name="color">The BGRA color value of the squiggle</param>
-        /// <param name="start">The start position of the text to remove squiggle from</param>
-        /// <param name="length">The length of the text</param>
-        public static void RemoveSquiggleWithColor(ScintillaEditor editor, uint color, int start, int length)
-        {
-            // Check if this color has a squiggle registered
-            if (editor.ColorToSquiggleMap.TryGetValue(color, out int squiggleNumber))
+            switch (indicator.Type)
             {
-                RemoveIndicator(editor, squiggleNumber, start, length);
-                
-                // Remove matching indicator from ActiveIndicators list
-                for (int i = editor.ActiveIndicators.Count - 1; i >= 0; i--)
-                {
-                    var indicator = editor.ActiveIndicators[i];
-                    if (indicator.Start == start && indicator.Length == length && indicator.Color == color && indicator.Type == Stylers.IndicatorType.SQUIGGLE)
-                    {
-                        editor.ActiveIndicators.RemoveAt(i);
-                    }
-                }
+                case IndicatorType.HIGHLIGHTER:
+                    int highlighterNumber = editor.GetHighlighter(indicator.Color);
+                    HighlightText(editor, highlighterNumber, indicator.Start, indicator.Length);
+                    break;
+                case IndicatorType.SQUIGGLE:
+                    int squiggleNumber = editor.GetSquiggle(indicator.Color);
+                    HighlightText(editor, squiggleNumber, indicator.Start, indicator.Length);
+                    break;
+                case IndicatorType.TEXTCOLOR:
+                    int textColorNumber = editor.GetTextColor(indicator.Color);
+                    HighlightText(editor, textColorNumber, indicator.Start, indicator.Length);
+                    break;
             }
+
+            editor.ActiveIndicators.Add(indicator);
+
         }
 
 
@@ -1721,7 +1649,7 @@ namespace AppRefiner
         /// <param name="position">The position to show the list at</param>
         /// <param name="options">List of strings to show as user list options</param>
         /// <returns>True if the user list was shown successfully</returns>
-        public static bool ShowUserList(ScintillaEditor editor, int listType, int position, List<string> options, bool acceptSingle = true)
+        public static bool ShowUserList(ScintillaEditor editor, UserListType listType, int position, List<string> options, bool acceptSingle = true)
         {
             if (editor == null || editor.hProc == IntPtr.Zero || options == null || options.Count == 0)
             {
@@ -1890,58 +1818,5 @@ namespace AppRefiner
             return (int)activeEditor.SendMessage(SCI_LINELENGTH, lineNumber, IntPtr.Zero);
         }
 
-        /// <summary>
-        /// Applies text color to text with the specified BGRA color.
-        /// If a text color indicator with the color doesn't exist, it creates a new one.
-        /// </summary>
-        /// <param name="editor">The ScintillaEditor to apply text color to</param>
-        /// <param name="color">The BGRA color value for the text color</param>
-        /// <param name="start">The start position of the text to apply color to</param>
-        /// <param name="length">The length of the text to apply color to</param>
-        /// <param name="tooltip">Optional tooltip text to display when hovering over the colored text</param>
-        public static void SetTextColorWithColor(ScintillaEditor editor, uint color, int start, int length, string? tooltip = null)
-        {
-            int textColorNumber = editor.GetTextColor(color);
-            HighlightText(editor, textColorNumber, start, length);
-
-            // Add this indicator to the active indicators list if it doesn't already exist
-            if (!editor.ActiveIndicators.Any(i => i.Start == start && i.Length == length && i.Color == color))
-            {
-                editor.ActiveIndicators.Add(new Stylers.Indicator
-                {
-                    Start = start,
-                    Length = length,
-                    Color = color,
-                    Tooltip = tooltip,
-                    Type = Stylers.IndicatorType.TEXTCOLOR
-                });
-            }
-        }
-
-        /// <summary>
-        /// Removes text color of the specified BGRA color from a range of text.
-        /// </summary>
-        /// <param name="editor">The ScintillaEditor to remove text color from</param>
-        /// <param name="color">The BGRA color value of the text color</param>
-        /// <param name="start">The start position of the text to remove color from</param>
-        /// <param name="length">The length of the text</param>
-        public static void RemoveTextColorWithColor(ScintillaEditor editor, uint color, int start, int length)
-        {
-            // Check if this color has a text color indicator registered
-            if (editor.ColorToTextColorMap.TryGetValue(color, out int textColorNumber))
-            {
-                RemoveIndicator(editor, textColorNumber, start, length);
-
-                // Remove matching indicator from ActiveIndicators list
-                for (int i = editor.ActiveIndicators.Count - 1; i >= 0; i--)
-                {
-                    var indicator = editor.ActiveIndicators[i];
-                    if (indicator.Start == start && indicator.Length == length && indicator.Color == color && indicator.Type == Stylers.IndicatorType.TEXTCOLOR)
-                    {
-                        editor.ActiveIndicators.RemoveAt(i);
-                    }
-                }
-            }
-        }
     }
 }

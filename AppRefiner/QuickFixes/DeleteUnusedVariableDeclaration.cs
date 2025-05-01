@@ -2,6 +2,7 @@ using Antlr4.Runtime;
 using Antlr4.Runtime.Misc;
 using Antlr4.Runtime.Tree;
 using AppRefiner.Linters.Models;
+using AppRefiner.Refactors;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -9,7 +10,7 @@ using System.Linq;
 using static AppRefiner.PeopleCode.PeopleCodeParser;
 using static SqlParser.Ast.Owner;
 
-namespace AppRefiner.Refactors
+namespace AppRefiner.QuickFixes
 {
     /// <summary>
     /// Refactoring operation that deletes unused local variables, private instance variables,
@@ -64,8 +65,8 @@ namespace AppRefiner.Refactors
                     if (variables.Length == 1)
                     {
                         /* Delete whole line */
-                        var lineStartIndex = ScintillaManager.GetLineStartIndex(this.Editor, variable.Symbol.Line - 1);
-                        var lineEndIndex = lineStartIndex + ScintillaManager.GetLineLength(this.Editor, variable.Symbol.Line - 1);
+                        var lineStartIndex = ScintillaManager.GetLineStartIndex(Editor, variable.Symbol.Line - 1);
+                        var lineEndIndex = lineStartIndex + ScintillaManager.GetLineLength(Editor, variable.Symbol.Line - 1);
                         DeleteText(lineStartIndex, lineEndIndex - 1, "Remove instance variable declaration");
                         return;
                     }
@@ -103,8 +104,8 @@ namespace AppRefiner.Refactors
                         if (variables.Length == 1)
                         {
                             /* Delete whole line */
-                            var lineStartIndex = ScintillaManager.GetLineStartIndex(this.Editor, variable.Symbol.Line - 1);
-                            var lineEndIndex = lineStartIndex + ScintillaManager.GetLineLength(this.Editor, variable.Symbol.Line - 1);
+                            var lineStartIndex = ScintillaManager.GetLineStartIndex(Editor, variable.Symbol.Line - 1);
+                            var lineEndIndex = lineStartIndex + ScintillaManager.GetLineLength(Editor, variable.Symbol.Line - 1);
                             DeleteText(lineStartIndex, lineEndIndex - 1, "Remove instance variable declaration");
                             return;
                         }
@@ -138,7 +139,12 @@ namespace AppRefiner.Refactors
                     /* found the variable node we want to delete... */
                     var argIndex = Array.IndexOf(arguments, arg);
                     var totalArgs = arguments.Length;
-
+                    if (totalArgs == 1)
+                    {
+                        /* Delete whole line */
+                        DeleteText(arg.Start.StartIndex, arg.Stop.StopIndex, "Remove method argument");
+                        return;
+                    }
                     if (argIndex == totalArgs - 1)
                     {
                         var commaToken = context.COMMA().Where(c => c.Symbol.StopIndex < CurrentPosition).Last();

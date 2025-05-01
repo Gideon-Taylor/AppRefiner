@@ -1,5 +1,7 @@
 using AppRefiner.Database;
 using AppRefiner.PeopleCode;
+using System;
+using System.Collections.Generic;
 
 namespace AppRefiner.Stylers
 {
@@ -18,25 +20,7 @@ namespace AppRefiner.Stylers
         public uint Color { get; set; }
         public string? Tooltip { get; set; }
         public IndicatorType Type { get; set; }
-        public Type? QuickFix { get; set; }
-        public string? QuickFixDescription { get; set; }
-
-        /// <summary>
-        /// Gets the formatted tooltip text, including the quick fix description if available.
-        /// </summary>
-        /// <returns>The formatted tooltip string.</returns>
-        public string GetTooltip()
-        {
-            string baseTooltip = Tooltip ?? string.Empty;
-            if (QuickFix != null && !string.IsNullOrEmpty(QuickFixDescription))
-            {
-                if (typeof(Refactors.BaseRefactor).IsAssignableFrom(QuickFix))
-                {
-                    return $"{baseTooltip}\nQuick Fix (Ctrl + .): {QuickFixDescription}";
-                }
-            }
-            return baseTooltip;
-        }
+        public List<(Type RefactorClass, string Description)> QuickFixes { get; set; }
     }
 
     public abstract class BaseStyler : PeopleCodeParserBaseListener

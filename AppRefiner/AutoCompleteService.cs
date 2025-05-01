@@ -2,6 +2,7 @@ using AppRefiner.Database;
 using AppRefiner.Database.Models;
 using AppRefiner.PeopleCode;
 using AppRefiner.Refactors; // For BaseRefactor, AddImport, CreateAutoComplete
+using AppRefiner.Stylers;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -9,6 +10,7 @@ using System.Linq;
 using System.Runtime.InteropServices; // For DllImport
 using System.Text;
 using System.Threading.Tasks;
+using static SqlParser.Ast.Expression;
 
 namespace AppRefiner
 {
@@ -17,6 +19,12 @@ namespace AppRefiner
     /// </summary>
     public class AutoCompleteService
     {
+        public enum UserListType
+        {
+            AppPackage = 1,
+            QuickFix = 2
+        }
+
         // Constants related to Scintilla messages (can be kept private if only used here)
         private const int SCI_LINEFROMPOSITION = 2166;
         private const int SCI_POSITIONFROMLINE = 2167;
@@ -24,6 +32,27 @@ namespace AppRefiner
 
         [DllImport("user32.dll", CharSet = CharSet.Auto)]
         static extern IntPtr SendMessage(IntPtr hWnd, int Msg, IntPtr wParam, IntPtr lParam);
+
+        public void ShowQuickFixSuggestions(ScintillaEditor? editor, int position)
+        {
+            if (editor == null || !editor.IsValid()) return;
+
+            List<string> quickFixList = new List<string>();
+
+            editor.ActiveIndicators.Where(i => i.Start <= position && i.Start + i.Length >= position)
+                .ToList()
+                .ForEach(indicator =>
+                {
+
+                    quickFixList.AddRange(indicator.QuickFixes.Select(q => q.Description));
+
+                });
+
+            if (quickFixList.Count > 0)
+            {
+                ScintillaManager.ShowUserList(editor, UserListType.QuickFix, position, quickFixList);
+            }
+        }
 
 
         /// <summary>
@@ -82,7 +111,7 @@ namespace AppRefiner
                     // Show the user list popup with app package suggestions
                     // ListType 1 indicates App Package suggestions
                     Debug.Log($"Showing {suggestions.Count} app package suggestions for '{packagePath}'");
-                    bool result = ScintillaManager.ShowUserList(editor, 1, position, suggestions);
+                    bool result = ScintillaManager.ShowUserList(editor, UserListType.AppPackage, position, suggestions);
 
                     if (!result)
                     {
@@ -172,36 +201,23 @@ namespace AppRefiner
             return string.Empty;
         }
 
-
-        /// <summary>
-        /// Handles the selection made by the user from an autocomplete list.
-        /// </summary>
-        /// <param name="editor">The active Scintilla editor.</param>
-        /// <param name="selection">The raw text selected by the user.</param>
-        /// <param name="listType">The type identifier of the list shown (e.g., 1 for App Packages).</param>
-        /// <returns>A BaseRefactor instance if refactoring is needed (e.g., AddImport), otherwise null.</returns>
-        public BaseRefactor? HandleUserListSelection(ScintillaEditor editor, string selection, int listType)
+        private BaseRefactor? HandleAppPackageListSelection(ScintillaEditor editor, string selection)
         {
-            if (editor == null || !editor.IsValid()) return null;
-
             bool isClassSelection = false;
             string itemText = selection; // The text to potentially insert
 
-            // If listType is 1 (App Package), parse the selection
-            if (listType == 1)
+            var parts = selection.Split(new[] { " (" }, StringSplitOptions.None); // Split carefully
+            if (parts.Length >= 2)
             {
-                var parts = selection.Split(new[] { " (" }, StringSplitOptions.None); // Split carefully
-                if (parts.Length >= 2)
-                {
-                    itemText = parts[0]; // Get the actual item name
-                    isClassSelection = parts[1].StartsWith("Class)", StringComparison.OrdinalIgnoreCase);
-                }
-                else
-                {
-                     Debug.Log($"Could not parse App Package selection: {selection}");
-                     return null; // Couldn't parse, do nothing
-                }
+                itemText = parts[0]; // Get the actual item name
+                isClassSelection = parts[1].StartsWith("Class)", StringComparison.OrdinalIgnoreCase);
             }
+            else
+            {
+                Debug.Log($"Could not parse App Package selection: {selection}");
+                return null; // Couldn't parse, do nothing
+            }
+
 
             if (isClassSelection)
             {
@@ -216,32 +232,84 @@ namespace AppRefiner
                 // Insert the package name followed by a colon
                 ScintillaManager.InsertTextAtCursor(editor, $"{itemText}:");
 
-                // Check if the list type was App Package (1)
-                if (listType == 1)
+                // Trigger the suggestions again after a short delay
+                // Use Task.Run to avoid blocking the UI thread if SendMessage takes time
+                // and capture necessary context.
+                IntPtr editorHwnd = editor.hWnd; // Capture HWND
+                Task.Delay(100).ContinueWith(_ =>
                 {
-                    // Trigger the suggestions again after a short delay
-                    // Use Task.Run to avoid blocking the UI thread if SendMessage takes time
-                    // and capture necessary context.
-                    IntPtr editorHwnd = editor.hWnd; // Capture HWND
-                    Task.Delay(100).ContinueWith(_ =>
+                    try
                     {
-                        try
+                        int currentPos = ScintillaManager.GetCursorPosition(editor); // Use captured HWND
+                        if (currentPos >= 0)
                         {
-                            int currentPos = ScintillaManager.GetCursorPosition(editor); // Use captured HWND
-                            if (currentPos >= 0)
-                            {
-                                Debug.Log($"Triggering recursive app package suggestion from HandleUserListSelection at pos {currentPos}");
-                                ShowAppPackageSuggestions(editor, currentPos); // Call the method to show suggestions
+                            Debug.Log($"Triggering recursive app package suggestion from HandleUserListSelection at pos {currentPos}");
+                            ShowAppPackageSuggestions(editor, currentPos); // Call the method to show suggestions
 
-                            }
                         }
-                        catch (Exception ex)
-                        {
-                            Debug.LogException(ex, "Error in delayed ShowAppPackageSuggestions call");
-                        }
-                    }, TaskScheduler.Default); // Use default scheduler
-                }
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.LogException(ex, "Error in delayed ShowAppPackageSuggestions call");
+                    }
+                }, TaskScheduler.Default); // Use default scheduler
+
                 return null; // No immediate refactoring needed
+            }
+        }
+
+        public BaseRefactor? HandleQuickFixSelection(ScintillaEditor editor, string selection)
+        {
+
+            /* Look through active indicators of the editor, find one that contains a QuickFixDescriptions entry that matches the selection
+             * and return the QuickFix refactor type associated with it */
+
+            if (editor == null || !editor.IsValid()) return null;
+            foreach (var indicator in editor.ActiveIndicators)
+            {
+                if (indicator.QuickFixes != null && indicator.QuickFixes.Select(q => q.Description).Contains(selection))
+                {
+                    var quickFix = indicator.QuickFixes.Where(q => q.Description == selection).FirstOrDefault();
+                    var refactorType = quickFix.RefactorClass;
+                    if (refactorType == null)
+                    {
+                        Debug.Log($"No refactor type found for selection '{selection}'");
+                        return null;
+                    }
+                    var instance = Activator.CreateInstance(refactorType, [editor]);
+                    if (instance == null)
+                    {
+                        Debug.Log($"Failed to create instance of refactor type '{refactorType}'");
+                        return null;
+                    }
+                    return (BaseRefactor)instance ; // Create an instance of the refactor type
+                }
+            }
+
+            return null;
+        }
+
+        /// <summary>
+        /// Handles the selection made by the user from an autocomplete list.
+        /// </summary>
+        /// <param name="editor">The active Scintilla editor.</param>
+        /// <param name="selection">The raw text selected by the user.</param>
+        /// <param name="listType">The type identifier of the list shown (e.g., 1 for App Packages).</param>
+        /// <returns>A BaseRefactor instance if refactoring is needed (e.g., AddImport), otherwise null.</returns>
+        public BaseRefactor? HandleUserListSelection(ScintillaEditor editor, string selection, UserListType listType)
+        {
+            if (editor == null || !editor.IsValid()) return null;
+
+            switch(listType)
+            {
+                case UserListType.AppPackage:
+                    return HandleAppPackageListSelection(editor, selection);
+                case UserListType.QuickFix:
+                    // Handle quick fix selection here if needed
+                    return HandleQuickFixSelection(editor, selection);
+                default:
+                    Debug.Log($"Unknown list type: {listType}");
+                    return null;
             }
         }
 

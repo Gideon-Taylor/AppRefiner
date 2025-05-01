@@ -103,8 +103,7 @@ namespace AppRefiner.Stylers
                         Color = HIGHLIGHT_COLOR,
                         Tooltip = "Unused import",
                         Type = IndicatorType.TEXTCOLOR,
-                        QuickFix = typeof(ResolveImports),
-                        QuickFixDescription = "Resolve Imports"
+                        QuickFixes = [(typeof(ResolveImports),"Resolve Imports")]
                     });
                 }
             }

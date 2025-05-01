@@ -6,7 +6,7 @@ using Antlr4.Runtime;
 using Antlr4.Runtime.Tree; // For IParseTree, ITerminalNode
 using System.Linq;
 using System.Text;
-using AppRefiner.Refactors; // For StringBuilder
+using AppRefiner.QuickFixes; // For StringBuilder
 
 namespace AppRefiner.Stylers
 {
@@ -150,8 +150,7 @@ namespace AppRefiner.Stylers
                     Color = WARNING_COLOR,
                     Type = IndicatorType.SQUIGGLE,
                     Tooltip = tooltipBuilder.ToString(),
-                    QuickFix = typeof(ImplementAbstractMembersRefactor),
-                    QuickFixDescription = "Implement missing abstract members"
+                    QuickFixes = [(typeof(ImplementAbstractMembersRefactor),"Implement missing abstract members")]
                 });
             }
             catch (Exception ex)

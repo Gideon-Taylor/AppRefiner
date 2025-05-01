@@ -7,9 +7,10 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Windows.Forms; // For ModifierKeys, Keys if needed later
-using static AppRefiner.PeopleCode.PeopleCodeParser; // Add static import for context types
+using static AppRefiner.PeopleCode.PeopleCodeParser;
+using AppRefiner.Refactors;
 
-namespace AppRefiner.Refactors
+namespace AppRefiner.QuickFixes
 {
     /// <summary>
     /// Refactoring operation to implement required methods and properties from a base class or interface.
@@ -190,7 +191,7 @@ namespace AppRefiner.Refactors
             base.ExitProgram(context);
 
             // Pass the context to the generator method
-            var appClass = AppRefiner.Ast.Program.Parse(context, _currentClassName, Editor.DataManager);
+            var appClass = Ast.Program.Parse(context, _currentClassName, Editor.DataManager);
 
             if (GetResult().Success)
             {
@@ -203,7 +204,7 @@ namespace AppRefiner.Refactors
             }
         }
 
-        private void GenerateConstructorImplementation(ProgramContext programContext, AppRefiner.Ast.Program program)
+        private void GenerateConstructorImplementation(ProgramContext programContext, Ast.Program program)
         {
             var appClass = program.ContainedAppClass;
             if (appClass == null)
@@ -383,7 +384,7 @@ namespace AppRefiner.Refactors
         /// <summary>
         /// Generates implementation stubs for inherited abstract methods and properties.
         /// </summary>
-        private void GenerateAbstractMemberStubs(ProgramContext programContext, AppRefiner.Ast.Program program)
+        private void GenerateAbstractMemberStubs(ProgramContext programContext, Ast.Program program)
         {
             var appClass = program.ContainedAppClass;
             if (appClass == null) return; // Should have failed earlier if null

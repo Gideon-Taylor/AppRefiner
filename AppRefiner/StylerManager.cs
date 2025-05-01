@@ -164,36 +164,14 @@ namespace AppRefiner.Stylers
             editor.ActiveIndicators = newIndicators; // Replace the old list
         }
 
-        private void RemoveIndicator(ScintillaEditor editor, Indicator indicator)
+        public void RemoveIndicator(ScintillaEditor editor, Indicator indicator)
         {
-            switch (indicator.Type)
-            {
-                case IndicatorType.HIGHLIGHTER:
-                    ScintillaManager.RemoveHighlightWithColor(editor, indicator.Color, indicator.Start, indicator.Length);
-                    break;
-                case IndicatorType.SQUIGGLE:
-                    ScintillaManager.RemoveSquiggleWithColor(editor, indicator.Color, indicator.Start, indicator.Length);
-                    break;
-                case IndicatorType.TEXTCOLOR:
-                    ScintillaManager.RemoveTextColorWithColor(editor, indicator.Color, indicator.Start, indicator.Length);
-                    break;
-            }
+            ScintillaManager.RemoveIndicator(editor, indicator);
         }
 
-        private void AddIndicator(ScintillaEditor editor, Indicator indicator)
+        public void AddIndicator(ScintillaEditor editor, Indicator indicator)
         {
-             switch (indicator.Type)
-            {
-                case IndicatorType.HIGHLIGHTER:
-                    ScintillaManager.HighlightTextWithColor(editor, indicator.Color, indicator.Start, indicator.Length, indicator.GetTooltip());
-                    break;
-                case IndicatorType.SQUIGGLE:
-                    ScintillaManager.SquiggleTextWithColor(editor, indicator.Color, indicator.Start, indicator.Length, indicator.GetTooltip());
-                    break;
-                case IndicatorType.TEXTCOLOR:
-                    ScintillaManager.SetTextColorWithColor(editor, indicator.Color, indicator.Start, indicator.Length, indicator.GetTooltip());
-                    break;
-            }
+            ScintillaManager.AddIndicator(editor, indicator);
         }
 
 
