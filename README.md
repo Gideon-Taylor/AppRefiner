@@ -28,7 +28,7 @@ Rather than replacing Application Designer, AppRefiner seamlessly integrates wit
 - **Database Integration**: Connect to Oracle PeopleSoft databases to enhance linting capabilities
 - **Global Hotkeys**: Keyboard shortcuts that work directly inside Application Designer
 
-## What's New Since the Podcast
+## What's New Since the [Podcast](https://youtu.be/w5nbiNPKHjI)
 
 A lot has happened since the podcast episode! Here are some highlights:
 
