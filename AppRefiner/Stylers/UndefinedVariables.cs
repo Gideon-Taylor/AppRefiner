@@ -51,7 +51,7 @@ namespace AppRefiner.Stylers
             if (string.IsNullOrEmpty(propertyName)) return;
             
             // Register property as a defined class property
-            classProperties.Add(propertyName);
+            classProperties.Add($"&{propertyName}");
         }
         
         // Handle non-private property declarations (PropertyDirect)
@@ -63,9 +63,9 @@ namespace AppRefiner.Stylers
             
             string propertyName = context.genericID().GetText();
             if (string.IsNullOrEmpty(propertyName)) return;
-            
+
             // Register property as a defined class property
-            classProperties.Add(propertyName);
+            classProperties.Add($"&{propertyName}");
         }
         
         // Handle parameters from method headers 
