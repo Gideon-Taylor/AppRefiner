@@ -50,6 +50,16 @@ namespace AppRefiner.Services
             return programAst?.ContainedInterface; // Extract Interface from Program
         }
 
+        /// <summary>
+        /// Gets the full Program AST for a given path, using the cache if available.
+        /// </summary>
+        /// <param name="fullPath">The full path of the program (e.g., PKG:SUB:Class or PKG:SUB:Interface).</param>
+        /// <returns>The parsed Program AST node, or null if not found or on error.</returns>
+        public AppRefiner.Ast.Program? GetProgramAst(string fullPath)
+        {
+            return GetOrParseProgram(fullPath); // Call the private method
+        }
+
         // Gets Program from cache or parses it - use fully qualified return type
         private AppRefiner.Ast.Program? GetOrParseProgram(string fullPath)
         {
