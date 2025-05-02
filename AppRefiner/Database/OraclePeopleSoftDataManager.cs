@@ -63,8 +63,9 @@ namespace AppRefiner.Database
                 }
                 return true;
             }
-            catch (Exception)
+            catch (Exception ex)
             {
+                Debug.LogError($"Failed to connect to database: {ex.Message}");
                 // Connection failed
                 return false;
             }
