@@ -202,5 +202,17 @@ namespace AppRefiner.Properties {
                 this["MaxFileSnapshots"] = value;
             }
         }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("")]
+        public string TNS_ADMIN {
+            get {
+                return ((string)(this["TNS_ADMIN"]));
+            }
+            set {
+                this["TNS_ADMIN"] = value;
+            }
+        }
     }
 }

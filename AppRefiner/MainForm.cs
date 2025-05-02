@@ -64,7 +64,7 @@ namespace AppRefiner
 
         // Path for linting report output
         private string? lintReportPath;
-
+        private string? TNS_ADMIN;
         private const int WM_SCN_EVENT_MASK = 0x7000;
         private const int SCN_DWELLSTART = 2016;
         private const int SCN_DWELLEND = 2017;
@@ -113,7 +113,7 @@ namespace AppRefiner
 
             // Instantiate LinterManager (passing UI elements)
             // LoadGeneralSettings needs lintReportPath BEFORE LinterManager is created
-            settingsService.LoadGeneralSettings(chkInitCollapsed, chkOnlyPPC, chkBetterSQL, chkAutoDark, chkAutoPairing, chkPromptForDB, out lintReportPath);
+            settingsService.LoadGeneralSettings(chkInitCollapsed, chkOnlyPPC, chkBetterSQL, chkAutoDark, chkAutoPairing, chkPromptForDB, out lintReportPath, out TNS_ADMIN);
             linterManager = new LinterManager(this, dataGridView1, lblStatus, progressBar1, lintReportPath, settingsService);
             linterManager.InitializeLinterOptions(); // Initialize linters via the manager
             dataGridView1.CellPainting += dataGridView1_CellPainting; // Wire up CellPainting
@@ -355,7 +355,8 @@ namespace AppRefiner
                 chkAutoDark.Checked,
                 chkAutoPairing.Checked,
                 chkPromptForDB.Checked,
-                lintReportPath
+                lintReportPath,
+                TNS_ADMIN
             );
 
             // Save states for each component via service
@@ -1832,8 +1833,32 @@ namespace AppRefiner
         {
             linterManager?.SetLintReportDirectory();
         }
-    }
 
+        private void btnTNSADMIN_Click(object sender, EventArgs e)
+        {
+            /* Folder selection dialog and save result to TNS_ADMIN */
+            using (var folderDialog = new FolderBrowserDialog())
+            {
+                folderDialog.Description = "Select the TNS_ADMIN directory";
+                folderDialog.ShowNewFolderButton = false;
+                if (string.IsNullOrEmpty(TNS_ADMIN))
+                {
+                    folderDialog.SelectedPath = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+                }
+                else
+                {
+                    folderDialog.SelectedPath = TNS_ADMIN;
+                }
+                if (folderDialog.ShowDialog(this) == DialogResult.OK)
+                {
+                    TNS_ADMIN = folderDialog.SelectedPath;
+                    SaveSettings();
+                    Debug.Log($"TNS_ADMIN property set to: {folderDialog.SelectedPath}");
+                }
+            }
+        }
+
+    }
 }
 
 

@@ -10,7 +10,6 @@ namespace AppRefiner.Database
     public class OracleDbConnection : IDbConnection
     {
         private OracleConnection _connection;
-
         /// <summary>
         /// Gets or sets the connection string
         /// </summary>
@@ -55,6 +54,15 @@ namespace AppRefiner.Database
         public OracleDbConnection(string connectionString)
         {
             _connection = new OracleConnection(connectionString);
+            /* If TNS_ADMIN setting is populated, set it here */
+            if (!string.IsNullOrEmpty(Properties.Settings.Default.TNS_ADMIN))
+            {
+                string TNS_ADMIN = Properties.Settings.Default.TNS_ADMIN;
+                OracleConfiguration.TnsAdmin = TNS_ADMIN;
+                _connection.TnsAdmin = TNS_ADMIN;
+                Debug.Log($"TNS_ADMIN set to: {_connection.TnsAdmin} via settings");
+            }
+
         }
 
         /// <summary>
@@ -187,6 +195,11 @@ namespace AppRefiner.Database
         /// <returns>The full path to tnsnames.ora, or null if not found</returns>
         private static string? GetTnsNamesPath()
         {
+            if (!string.IsNullOrEmpty(Properties.Settings.Default.TNS_ADMIN))
+            {
+                return Path.Combine(Properties.Settings.Default.TNS_ADMIN, "tnsnames.ora");
+            }
+
             // Check TNS_ADMIN environment variable first
             string? tnsAdmin = Environment.GetEnvironmentVariable("TNS_ADMIN");
             if (!string.IsNullOrEmpty(tnsAdmin))
