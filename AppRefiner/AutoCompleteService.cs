@@ -39,7 +39,7 @@ namespace AppRefiner
 
             List<string> quickFixList = new List<string>();
 
-            editor.ActiveIndicators.Where(i => i.Start <= position && i.Start + i.Length >= position)
+            editor.ActiveIndicators.Where(i => i.Start <= position && i.Start + i.Length >= position && i.QuickFixes != null)
                 .ToList()
                 .ForEach(indicator =>
                 {

@@ -53,6 +53,7 @@ namespace AppRefiner.TooltipProviders
                 return null;
             }
 
+
             StringBuilder tooltips = new StringBuilder();
             foreach (var t in activeIndicators)
             {
@@ -62,7 +63,13 @@ namespace AppRefiner.TooltipProviders
                 }
             }
 
-            tooltips.Append("Quick fixes... (Ctrl+.)\n");
+            /* If any active indicators have quick fixes... */
+            var hasQuickFixes = activeIndicators.SelectMany(t => t.QuickFixes ?? []).Any();
+            if (hasQuickFixes)
+            {
+                tooltips.Append("Quick fixes... (Ctrl+.)\n");
+            }
+            
 
             return tooltips.ToString().Trim();
         }
