@@ -40,15 +40,17 @@ namespace AppRefiner
             splitContainer1 = new SplitContainer();
             tabControl1 = new TabControl();
             tabPage1 = new TabPage();
+            btnTNSADMIN = new Button();
+            btnReportDirectory = new Button();
             btnDebugLog = new Button();
             grpEditorSettings = new GroupBox();
             chkPromptForDB = new CheckBox();
             chkAutoPairing = new CheckBox();
-            btnPlugins = new Button();
             chkBetterSQL = new CheckBox();
             chkOnlyPPC = new CheckBox();
             chkInitCollapsed = new CheckBox();
             chkAutoDark = new CheckBox();
+            btnPlugins = new Button();
             tabPage4 = new TabPage();
             dataGridView3 = new DataGridView();
             dataGridViewCheckBoxColumn1 = new DataGridViewCheckBoxColumn();
@@ -73,7 +75,7 @@ namespace AppRefiner
             cmbTemplates = new ComboBox();
             progressBar1 = new ProgressBar();
             lblStatus = new Label();
-            btnReportDirectory = new Button();
+            groupBox1 = new GroupBox();
             ((System.ComponentModel.ISupportInitialize)splitContainer1).BeginInit();
             splitContainer1.Panel1.SuspendLayout();
             splitContainer1.Panel2.SuspendLayout();
@@ -96,6 +98,7 @@ namespace AppRefiner
             splitContainer3.Panel1.SuspendLayout();
             splitContainer3.Panel2.SuspendLayout();
             splitContainer3.SuspendLayout();
+            groupBox1.SuspendLayout();
             SuspendLayout();
             // 
             // splitContainer1
@@ -133,6 +136,7 @@ namespace AppRefiner
             // 
             // tabPage1
             // 
+            tabPage1.Controls.Add(groupBox1);
             tabPage1.Controls.Add(btnDebugLog);
             tabPage1.Controls.Add(grpEditorSettings);
             tabPage1.Location = new Point(4, 24);
@@ -142,6 +146,26 @@ namespace AppRefiner
             tabPage1.TabIndex = 0;
             tabPage1.Text = "Editor Tweaks";
             tabPage1.UseVisualStyleBackColor = true;
+            // 
+            // btnTNSADMIN
+            // 
+            btnTNSADMIN.Location = new Point(6, 51);
+            btnTNSADMIN.Name = "btnTNSADMIN";
+            btnTNSADMIN.Size = new Size(150, 23);
+            btnTNSADMIN.TabIndex = 31;
+            btnTNSADMIN.Text = "TNS_ADMIN Directory...";
+            btnTNSADMIN.UseVisualStyleBackColor = true;
+            btnTNSADMIN.Click += btnTNSADMIN_Click;
+            // 
+            // btnReportDirectory
+            // 
+            btnReportDirectory.Location = new Point(6, 22);
+            btnReportDirectory.Name = "btnReportDirectory";
+            btnReportDirectory.Size = new Size(150, 23);
+            btnReportDirectory.TabIndex = 30;
+            btnReportDirectory.Text = "Lint Report Directory...";
+            btnReportDirectory.UseVisualStyleBackColor = true;
+            btnReportDirectory.Click += btnReportDirectory_Click;
             // 
             // btnDebugLog
             // 
@@ -155,12 +179,11 @@ namespace AppRefiner
             // 
             // grpEditorSettings
             // 
-            grpEditorSettings.Controls.Add(btnReportDirectory);
             grpEditorSettings.Controls.Add(chkPromptForDB);
             grpEditorSettings.Controls.Add(chkAutoPairing);
-            grpEditorSettings.Controls.Add(btnPlugins);
             grpEditorSettings.Controls.Add(chkBetterSQL);
             grpEditorSettings.Controls.Add(chkOnlyPPC);
+            grpEditorSettings.Controls.Add(btnPlugins);
             grpEditorSettings.Controls.Add(chkInitCollapsed);
             grpEditorSettings.Controls.Add(chkAutoDark);
             grpEditorSettings.Location = new Point(6, 6);
@@ -190,16 +213,6 @@ namespace AppRefiner
             chkAutoPairing.TabIndex = 26;
             chkAutoPairing.Text = "Pair quotes and parens";
             chkAutoPairing.UseVisualStyleBackColor = true;
-            // 
-            // btnPlugins
-            // 
-            btnPlugins.Location = new Point(432, 18);
-            btnPlugins.Name = "btnPlugins";
-            btnPlugins.Size = new Size(110, 23);
-            btnPlugins.TabIndex = 24;
-            btnPlugins.Text = "Plugins...";
-            btnPlugins.UseVisualStyleBackColor = true;
-            btnPlugins.Click += btnPlugins_Click;
             // 
             // chkBetterSQL
             // 
@@ -240,6 +253,16 @@ namespace AppRefiner
             chkAutoDark.TabIndex = 14;
             chkAutoDark.Text = "Auto Dark Mode";
             chkAutoDark.UseVisualStyleBackColor = true;
+            // 
+            // btnPlugins
+            // 
+            btnPlugins.Location = new Point(432, 18);
+            btnPlugins.Name = "btnPlugins";
+            btnPlugins.Size = new Size(110, 23);
+            btnPlugins.TabIndex = 24;
+            btnPlugins.Text = "Plugins...";
+            btnPlugins.UseVisualStyleBackColor = true;
+            btnPlugins.Click += btnPlugins_Click;
             // 
             // tabPage4
             // 
@@ -509,15 +532,16 @@ namespace AppRefiner
             lblStatus.Text = "Stopped";
             lblStatus.TextAlign = ContentAlignment.MiddleCenter;
             // 
-            // btnReportDirectory
+            // groupBox1
             // 
-            btnReportDirectory.Location = new Point(432, 56);
-            btnReportDirectory.Name = "btnReportDirectory";
-            btnReportDirectory.Size = new Size(110, 23);
-            btnReportDirectory.TabIndex = 30;
-            btnReportDirectory.Text = "Report Directory...";
-            btnReportDirectory.UseVisualStyleBackColor = true;
-            btnReportDirectory.Click += btnReportDirectory_Click;
+            groupBox1.Controls.Add(btnReportDirectory);
+            groupBox1.Controls.Add(btnTNSADMIN);
+            groupBox1.Location = new Point(10, 106);
+            groupBox1.Name = "groupBox1";
+            groupBox1.Size = new Size(544, 100);
+            groupBox1.TabIndex = 32;
+            groupBox1.TabStop = false;
+            groupBox1.Text = "Directories";
             // 
             // MainForm
             // 
@@ -551,6 +575,7 @@ namespace AppRefiner
             splitContainer3.Panel2.ResumeLayout(false);
             ((System.ComponentModel.ISupportInitialize)splitContainer3).EndInit();
             splitContainer3.ResumeLayout(false);
+            groupBox1.ResumeLayout(false);
             ResumeLayout(false);
         }
 
@@ -603,5 +628,7 @@ namespace AppRefiner
         private Button btnApplyTemplate;
         private ComboBox cmbTemplates;
         private Button btnReportDirectory;
+        private Button btnTNSADMIN;
+        private GroupBox groupBox1;
     }
 }

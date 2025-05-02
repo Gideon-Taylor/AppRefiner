@@ -20,9 +20,9 @@ namespace AppRefiner
 
         // --- General Settings --- 
 
-        public void LoadGeneralSettings(CheckBox chkInitCollapsed, CheckBox chkOnlyPPC, CheckBox chkBetterSQL, 
-                                      CheckBox chkAutoDark, CheckBox chkAutoPair, 
-                                      CheckBox chkPromptForDB, out string? lintReportPath)
+        public void LoadGeneralSettings(CheckBox chkInitCollapsed, CheckBox chkOnlyPPC, CheckBox chkBetterSQL,
+                                      CheckBox chkAutoDark, CheckBox chkAutoPair,
+                                      CheckBox chkPromptForDB, out string? lintReportPath, out string? TNS_ADMIN)
         {
             // Wrap in try-finally if isLoadingSettings logic is needed externally
             try
@@ -34,18 +34,20 @@ namespace AppRefiner
                 chkAutoPair.Checked = Properties.Settings.Default.autoPair;
                 chkPromptForDB.Checked = Properties.Settings.Default.promptForDB;
                 lintReportPath = Properties.Settings.Default.LintReportPath;
+                TNS_ADMIN = Properties.Settings.Default.TNS_ADMIN;
             }
             catch (Exception ex)
             {
-                 Debug.LogException(ex, "Error loading general settings");
-                 lintReportPath = null; // Default on error
-                 // Optionally apply default values to checkboxes here
+                Debug.LogException(ex, "Error loading general settings");
+                lintReportPath = null; // Default on error
+                TNS_ADMIN = null; // Default on error
+                                  // Optionally apply default values to checkboxes here
             }
         }
 
         public void SaveGeneralSettings(bool initCollapsed, bool onlyPPC, bool betterSQL, 
                                       bool autoDark, bool autoPair, 
-                                      bool promptForDB, string? lintReportPath)
+                                      bool promptForDB, string? lintReportPath, string? TNS_ADMIN)
         {
             Properties.Settings.Default.initCollapsed = initCollapsed;
             Properties.Settings.Default.onlyPPC = onlyPPC;
@@ -54,7 +56,7 @@ namespace AppRefiner
             Properties.Settings.Default.autoPair = autoPair;
             Properties.Settings.Default.promptForDB = promptForDB;
             Properties.Settings.Default.LintReportPath = lintReportPath;
-            // Note: Saving Linter/Styler/Tooltip states is handled separately
+            Properties.Settings.Default.TNS_ADMIN = TNS_ADMIN;
         }
         
         public void SaveChanges()

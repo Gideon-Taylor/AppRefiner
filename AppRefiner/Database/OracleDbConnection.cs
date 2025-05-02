@@ -55,6 +55,14 @@ namespace AppRefiner.Database
         public OracleDbConnection(string connectionString)
         {
             _connection = new OracleConnection(connectionString);
+            /* If TNS_ADMIN setting is populated, set it here */
+            if (!string.IsNullOrEmpty(Properties.Settings.Default.TNS_ADMIN))
+            {
+                OracleConfiguration.TnsAdmin = Properties.Settings.Default.TNS_ADMIN;
+                _connection.TnsAdmin = Properties.Settings.Default.TNS_ADMIN;
+                Debug.Log($"TNS_ADMIN set to: {_connection.TnsAdmin} via settings");
+            }
+
         }
 
         /// <summary>
