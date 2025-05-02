@@ -41,6 +41,11 @@ jobs:
           echo "current_date=$currentDate" >> $env:GITHUB_OUTPUT
         shell: pwsh
 
+      - name: Get short commit hash
+        id: vars
+        run: echo "sha_short=$(git rev-parse --short HEAD)" >> $env:GITHUB_OUTPUT
+        shell: pwsh
+
 #      - name: Generate build attestation
 #        uses: actions/attest-build-provenance@v1
 #        with:
@@ -52,8 +57,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tag_name: ${{ steps.date.outputs.current_date }}
-          release_name: Release ${{ steps.date.outputs.current_date }}
+          tag_name: ${{ steps.date.outputs.current_date }}-${{ steps.vars.outputs.sha_short }}
+          release_name: Release ${{ steps.date.outputs.current_date }}-${{ steps.vars.outputs.sha_short }}
           draft: false
           prerelease: false
 
@@ -64,5 +69,5 @@ jobs:
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
           asset_path: "AppRefiner-${{ steps.date.outputs.current_date }}-framework-dependent.zip"
-          asset_name: "AppRefiner-${{ steps.date.outputs.current_date }}.zip"
+          asset_name: "AppRefiner-${{ steps.date.outputs.current_date }}-${{ steps.vars.outputs.sha_short }}.zip"
           asset_content_type: application/zip
