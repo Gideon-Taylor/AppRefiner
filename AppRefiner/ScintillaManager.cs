@@ -794,7 +794,7 @@ namespace AppRefiner
             editor.SendMessage(SCI_FOLDALL, 1, 0);
         }
 
-        internal static void SetLineFoldStatus(ScintillaEditor activeEditor, bool folded)
+        internal static void SetCurrentLineFoldStatus(ScintillaEditor activeEditor, bool folded)
         {
             // Get current cursor position
             int cursorPos = (int)activeEditor.SendMessage(SCI_GETCURRENTPOS, IntPtr.Zero, IntPtr.Zero);
@@ -975,6 +975,29 @@ namespace AppRefiner
                 // The wParam is the line number, and lParam is the fold level value.
                 editor.SendMessage(SCI_SETFOLDLEVEL, line, level);
             }
+        }
+
+        internal static void SetExplicitFoldRegion(ScintillaEditor editor, int startLine, int endLine, bool collapseByDefault)
+        {
+            const int AppRefinerRegionOffset = 20; /* Some amount of indentation that's unlikely to actually occur */
+            // Set the fold level for the start line to indicate a fold header.
+            editor.SendMessage(SCI_SETFOLDLEVEL, startLine, SC_FOLDLEVELHEADERFLAG | (SC_FOLDLEVELBASE + AppRefinerRegionOffset));
+            // Set the fold level for the end line to indicate a fold end.
+            editor.SendMessage(SCI_SETFOLDLEVEL, endLine, SC_FOLDLEVELBASE + AppRefinerRegionOffset);
+
+            /* increment the fold level of every line in between */
+            for (int i = startLine + 1; i < endLine; i++)
+            {
+                int foldLevel = (int)editor.SendMessage(SCI_GETFOLDLEVEL, i, IntPtr.Zero);
+                editor.SendMessage(SCI_SETFOLDLEVEL, i, (AppRefinerRegionOffset+foldLevel + 1));
+            }
+
+            if (collapseByDefault)
+            {
+                // Collapse the region if specified
+                SetLineFoldStatus(editor, startLine, true);
+            }
+
         }
 
         /// <summary>
@@ -1814,5 +1837,9 @@ namespace AppRefiner
             return (int)activeEditor.SendMessage(SCI_LINELENGTH, lineNumber, IntPtr.Zero);
         }
 
+        internal static void SetLineFoldStatus(ScintillaEditor activeEditor, int lineNumber, bool folded)
+        {
+            activeEditor.SendMessage(SCI_FOLDLINE, lineNumber, folded ? 0 : 1);
+        }
     }
 }

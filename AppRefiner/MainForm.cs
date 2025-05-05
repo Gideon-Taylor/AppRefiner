@@ -28,6 +28,7 @@ using System.Runtime.InteropServices;
 using AppRefiner.Services;
 using static AppRefiner.AutoCompleteService;
 using DiffPlex.Model;
+using System.Linq.Expressions;
 
 namespace AppRefiner
 {
@@ -171,13 +172,13 @@ namespace AppRefiner
         private void collapseLevelHandler()
         {
             if (activeEditor == null) return;
-            ScintillaManager.SetLineFoldStatus(activeEditor, true);
+            ScintillaManager.SetCurrentLineFoldStatus(activeEditor, true);
         }
 
         private void expandLevelHandler()
         {
             if (activeEditor == null) return;
-            ScintillaManager.SetLineFoldStatus(activeEditor, false);
+            ScintillaManager.SetCurrentLineFoldStatus(activeEditor, false);
         }
 
         private void collapseAllHandler()
@@ -290,13 +291,13 @@ namespace AppRefiner
         private void expandLevelHandler(object? sender, KeyPressedEventArgs e)
         {
             if (activeEditor == null) return;
-            ScintillaManager.SetLineFoldStatus(activeEditor, false);
+            ScintillaManager.SetCurrentLineFoldStatus(activeEditor, false);
         }
 
         private void collapseLevelHandler(object? sender, KeyPressedEventArgs e)
         {
             if (activeEditor == null) return;
-            ScintillaManager.SetLineFoldStatus(activeEditor, true);
+            ScintillaManager.SetCurrentLineFoldStatus(activeEditor, true);
         }
 
         protected override void OnFormClosing(FormClosingEventArgs e)
@@ -1204,6 +1205,51 @@ namespace AppRefiner
                 return null;
             }
         }
+        
+        private void FoldAppRefinerRegions()
+        {
+            if (activeEditor == null || activeEditor.ContentString == null) return;
+
+            var content = activeEditor.ContentString;
+            if (!content.Contains("/* #region")) return; // No regions to fold
+
+            var lines = content.Split('\n', StringSplitOptions.None);
+            var regionStart = 0;
+            var regionEnd = 0;
+            var collapseByDefault = false;
+            for(var x = 0;x < lines.Length; x++)
+            {
+                var line = lines[x].TrimStart();
+
+                if (line.StartsWith("/* #region"))
+                {
+                    /* If the next character is a - we will default this region to collapsed */
+                    if (line.Length > 10 && line[10] == '-')
+                    {
+                        collapseByDefault = true;
+                    }
+
+                    // Fold the line
+                    regionStart = x;
+                    
+                }
+                else if (line.StartsWith("/* #endregion"))
+                {
+                    // Unfold the line
+                    regionEnd = x;
+
+
+                    if (regionStart != 0 && regionEnd != 0 && regionEnd > regionStart)
+                    {
+                        // Unfold the line
+                        ScintillaManager.SetExplicitFoldRegion(activeEditor, regionStart, regionEnd, collapseByDefault);
+
+                    }
+                }
+
+                
+            }
+        }
 
         // Check if content has changed and process if necessary
         private void CheckForContentChanges(ScintillaEditor editor)
@@ -1236,6 +1282,8 @@ namespace AppRefiner
                 // 3. if its an editor type we don't know
                 DoExplicitFolding();
             }
+
+            FoldAppRefinerRegions();
 
         }
 
@@ -1575,6 +1623,17 @@ namespace AppRefiner
                 ScintillaManager.EnableFolding(editor);
                 ScintillaManager.FixEditorTabs(editor, !chkBetterSQL.Checked);
                 editor.FoldEnabled = true;
+                editor.ContentString = ScintillaManager.GetScintillaText(editor);
+
+                if (!editor.HasLexilla || editor.Type == EditorType.SQL || editor.Type == EditorType.Other)
+                {
+                    // Perform folding ourselves 
+                    // 1. if they are missing Lexilla
+                    // 2. if it is a SQL object 
+                    // 3. if its an editor type we don't know
+                    DoExplicitFolding();
+                }
+                FoldAppRefinerRegions();
 
                 if (chkBetterSQL.Checked && editor.Type == EditorType.SQL)
                 {
