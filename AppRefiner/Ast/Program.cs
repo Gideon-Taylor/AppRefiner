@@ -49,7 +49,7 @@ namespace AppRefiner.Ast
         public static Program Parse(
             ProgramContext context, // Type already correct
             string fullPath,
-            IDataManager dataManager)
+            IDataManager? dataManager)
         {
             var program = new Program();
 

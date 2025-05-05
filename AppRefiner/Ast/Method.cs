@@ -4,6 +4,7 @@ using System.Linq;
 using Antlr4.Runtime.Tree;
 using static AppRefiner.PeopleCode.PeopleCodeParser;
 using AppRefiner.Database;
+using AppRefiner.Database.Models;
 
 namespace AppRefiner.Ast
 {
@@ -43,6 +44,11 @@ namespace AppRefiner.Ast
         public bool IsConstructor { get; private set; }
 
         /// <summary>
+        /// Gets a value indicating whether this method overrides a method from a base class.
+        /// </summary>
+        public bool OverridesBaseMethod { get; set; }
+
+        /// <summary>
         /// Gets the full name of the declaring type.
         /// </summary>
         public string DeclaringTypeFullName { get; set; } = string.Empty;
@@ -63,7 +69,7 @@ namespace AppRefiner.Ast
         /// <param name="parentClassNameOrInterfaceName">The name of the containing class or interface.</param>
         /// <param name="dataManager">The data manager for potential type lookups (currently unused).</param>
         /// <returns>A new Method instance.</returns>
-        public static Method Parse(MethodHeaderContext context, Scope scope, string parentClassNameOrInterfaceName, IDataManager dataManager)
+        public static Method Parse(MethodHeaderContext context, Scope scope, string parentClassNameOrInterfaceName)
         {
             var methodName = context.genericID().GetText();
             var method = new Method
@@ -72,7 +78,8 @@ namespace AppRefiner.Ast
                 Scope = scope,
                 IsAbstract = context.ABSTRACT() != null,
                 // Check if method name matches the parent class/interface name
-                IsConstructor = !string.IsNullOrEmpty(parentClassNameOrInterfaceName) && methodName.Equals(parentClassNameOrInterfaceName, StringComparison.OrdinalIgnoreCase)
+                IsConstructor = !string.IsNullOrEmpty(parentClassNameOrInterfaceName) && methodName.Equals(parentClassNameOrInterfaceName, StringComparison.OrdinalIgnoreCase),
+                OverridesBaseMethod = false // Initialize to false
             };
 
             var argsContext = context.methodArguments();

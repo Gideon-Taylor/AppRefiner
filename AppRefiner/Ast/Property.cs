@@ -55,9 +55,8 @@ namespace AppRefiner.Ast
         /// </summary>
         /// <param name="context">The ANTLR context for the property declaration.</param>
         /// <param name="scope">The scope determined by the containing class section.</param>
-        /// <param name="dataManager">The data manager for potential type lookups (currently unused).</param>
         /// <returns>A new Property instance.</returns>
-        public static Property Parse(PropertyDeclarationContext context, Scope scope, IDataManager dataManager)
+        public static Property Parse(PropertyDeclarationContext context, Scope scope)
         {
             // Initialize Name and Type here, will be set inside the type checks
             string name = string.Empty;

@@ -14,14 +14,14 @@ namespace AppRefiner.Services
     /// </summary>
     public class AstService
     {
-        private readonly IDataManager _dataManager;
+        private readonly IDataManager? _dataManager;
         // Cache stores fully qualified Program objects to avoid ambiguity
         private readonly ConcurrentDictionary<string, AppRefiner.Ast.Program> _programCache 
             = new ConcurrentDictionary<string, AppRefiner.Ast.Program>();
 
-        public AstService(IDataManager dataManager)
+        public AstService(IDataManager? dataManager)
         {
-            _dataManager = dataManager ?? throw new ArgumentNullException(nameof(dataManager));
+            _dataManager = dataManager;
         }
 
         /// <summary>
@@ -45,6 +45,11 @@ namespace AppRefiner.Services
         /// <returns>The parsed Interface AST node, or null if not found or not an Interface.</returns>
         public Interface? GetInterfaceAst(string fullPath)
         {
+            if (_dataManager == null)
+            {
+                return null;
+            }
+
             // Use fully qualified type for variable
             AppRefiner.Ast.Program? programAst = GetOrParseProgram(fullPath);
             return programAst?.ContainedInterface; // Extract Interface from Program
@@ -63,6 +68,11 @@ namespace AppRefiner.Services
         // Gets Program from cache or parses it - use fully qualified return type
         private AppRefiner.Ast.Program? GetOrParseProgram(string fullPath)
         {
+            if (_dataManager == null)
+            {
+                return null;
+            }
+
              // Use fully qualified type for cache check
              if (_programCache.TryGetValue(fullPath, out AppRefiner.Ast.Program? cachedProgram))
             {

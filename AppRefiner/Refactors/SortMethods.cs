@@ -356,7 +356,7 @@ namespace AppRefiner.Refactors
                     methodName,
                     context.Start.StartIndex,
                     context.Stop.StopIndex,
-                    GetOriginalText(context)!
+                    GetOriginalText(context, true)!
                 ));
             }
         }
@@ -379,7 +379,7 @@ namespace AppRefiner.Refactors
                     true,
                     context.Start.StartIndex,
                     context.Stop.StopIndex,
-                    GetOriginalText(context)!
+                    GetOriginalText(context, true)!
                 ));
             }
         }
@@ -402,7 +402,7 @@ namespace AppRefiner.Refactors
                     false,
                     context.Start.StartIndex,
                     context.Stop.StopIndex,
-                    GetOriginalText(context)!
+                    GetOriginalText(context, true)!
                 ));
             }
         }

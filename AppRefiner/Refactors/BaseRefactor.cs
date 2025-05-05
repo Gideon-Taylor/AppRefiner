@@ -524,13 +524,19 @@ namespace AppRefiner.Refactors
         /// <summary>
         /// Gets the original text for a parser rule context
         /// </summary>
-        protected string? GetOriginalText(ParserRuleContext context)
+        protected string? GetOriginalText(ParserRuleContext context, bool includeSemicolon = false)
         {
+            bool needToCaptureSemicolon = false;
+            if (includeSemicolon && source != null && source.Length > context.Stop.StopIndex + 2)
+            {
+                needToCaptureSemicolon = source[context.Stop.StopIndex + 1] == ';';
+            }
+
             return source == null
                 ? null
                 : source.Substring(
                 context.Start.StartIndex,
-                context.Stop.StopIndex - context.Start.StartIndex + 1
+                context.Stop.StopIndex - context.Start.StartIndex + 1 + (needToCaptureSemicolon ? 1 : 0)
             );
         }
     }

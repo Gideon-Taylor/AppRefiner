@@ -79,7 +79,7 @@ namespace AppRefiner.Ast
         public static AppClass Parse(
             AppClassProgramContext progContext,
             string fullPath, 
-            IDataManager dataManager)
+            IDataManager? dataManager)
         {
             // AppClassProgram only contains one ClassDeclaration
             ClassDeclarationContext declarationContext = progContext.classDeclaration();
@@ -140,13 +140,13 @@ namespace AppRefiner.Ast
             {
                 ParseNonPrivateHeader(headerContext.publicHeader()?.nonPrivateHeader(), Scope.Public, astClass, dataManager, astClass.Name);
                 ParseNonPrivateHeader(headerContext.protectedHeader()?.nonPrivateHeader(), Scope.Protected, astClass, dataManager, astClass.Name);
-                ParsePrivateHeader(headerContext.privateHeader(), Scope.Private, astClass, dataManager, astClass.Name);
+                ParsePrivateHeader(headerContext.privateHeader(), Scope.Private, astClass, astClass.Name);
             }
 
             return astClass;
         }
 
-        private static void ParseNonPrivateHeader(NonPrivateHeaderContext? headerContext, Scope scope, AppClass targetClass, IDataManager dataManager, string className)
+        private static void ParseNonPrivateHeader(NonPrivateHeaderContext? headerContext, Scope scope, AppClass targetClass, IDataManager? dataManager, string className)
         {
             if (headerContext == null) return;
 
@@ -154,16 +154,46 @@ namespace AppRefiner.Ast
             {
                 if (member is NonPrivateMethodHeaderContext methodMember)
                 {
-                    targetClass.Methods.Add(Method.Parse(methodMember.methodHeader(), scope, className, dataManager));
+                    var method = Method.Parse(methodMember.methodHeader(), scope, className);
+
+                    /* check if method name exists in any parent class or interface */
+                    if (targetClass.ExtendedClass != null)
+                    {
+                        var parent = targetClass.ExtendedClass;
+                        while (parent != null)
+                        {
+                            if (parent.Methods.Any(m => m.Name == method.Name))
+                            {
+                                method.OverridesBaseMethod = true;
+                            }
+                            parent = parent.ExtendedClass;
+                        }
+                    }
+
+                    if (targetClass.ImplementedInterface != null)
+                    {
+                        var parent = targetClass.ImplementedInterface;
+                        while (parent != null)
+                        {
+                            if (parent.Methods.Any(m => m.Name == method.Name))
+                            {
+                                method.OverridesBaseMethod = true;
+                            }
+                            parent = parent.ExtendedInterface;
+                        }
+                    }
+
+
+                    targetClass.Methods.Add(method);
                 }
                 else if (member is NonPrivatePropertyContext propertyMember)
                 {
-                    targetClass.Properties.Add(Property.Parse(propertyMember.propertyDeclaration(), scope, dataManager));
+                    targetClass.Properties.Add(Property.Parse(propertyMember.propertyDeclaration(), scope));
                 }
             }
         }
 
-         private static void ParsePrivateHeader(PrivateHeaderContext? headerContext, Scope scope, AppClass targetClass, IDataManager dataManager, string className)
+         private static void ParsePrivateHeader(PrivateHeaderContext? headerContext, Scope scope, AppClass targetClass, string className)
         {
             if (headerContext == null) return;
 
@@ -171,7 +201,7 @@ namespace AppRefiner.Ast
             {
                 if (member is PrivateMethodHeaderContext methodMember)
                 {
-                    targetClass.Methods.Add(Method.Parse(methodMember.methodHeader(), scope, className, dataManager));
+                    targetClass.Methods.Add(Method.Parse(methodMember.methodHeader(), scope, className));
                 }
                 else if (member is PrivatePropertyContext propertyMember)
                 {

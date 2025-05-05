@@ -59,7 +59,7 @@ namespace AppRefiner.Ast
         public static Interface Parse(
             InterfaceProgramContext progContext, // Changed context type
             string fullPath, 
-            IDataManager dataManager)
+            IDataManager? dataManager)
         {
             InterfaceDeclarationContext declarationContext = progContext.interfaceDeclaration();
             ClassHeaderContext? headerContext = null;
@@ -96,15 +96,15 @@ namespace AppRefiner.Ast
             {
                  // Pass astInterface.Name to the header parsing method
                  // Interfaces only have Public scope directly defined in header
-                ParseHeader(headerContext.publicHeader()?.nonPrivateHeader(), Scope.Public, astInterface, dataManager, astInterface.Name);
+                ParseHeader(headerContext.publicHeader()?.nonPrivateHeader(), Scope.Public, astInterface, astInterface.Name);
                 // Although grammar allows protected/private headers, they shouldn't contain methods/props for a valid interface
-                ParseHeader(headerContext.protectedHeader()?.nonPrivateHeader(), Scope.Protected, astInterface, dataManager, astInterface.Name);
+                ParseHeader(headerContext.protectedHeader()?.nonPrivateHeader(), Scope.Protected, astInterface, astInterface.Name);
             }
             
             return astInterface;
         }
 
-        private static void ParseHeader(NonPrivateHeaderContext? headerContext, Scope scope, Interface targetInterface, IDataManager dataManager, string interfaceName)
+        private static void ParseHeader(NonPrivateHeaderContext? headerContext, Scope scope, Interface targetInterface, string interfaceName)
         {
             if (headerContext == null) return;
 
@@ -112,11 +112,26 @@ namespace AppRefiner.Ast
             {
                 if (member is NonPrivateMethodHeaderContext methodMember)
                 {
-                    targetInterface.Methods.Add(Method.Parse(methodMember.methodHeader(), scope, interfaceName, dataManager));
+                    var method = Method.Parse(methodMember.methodHeader(), scope, interfaceName);
+
+                    if (targetInterface.ExtendedInterface != null)
+                    {
+                        var parent = targetInterface.ExtendedInterface;
+                        while (parent != null)
+                        {
+                            if (parent.Methods.Any(m => m.Name == method.Name))
+                            {
+                                method.OverridesBaseMethod = true;
+                            }
+                            parent = parent.ExtendedInterface;
+                        }
+                    }
+
+                    targetInterface.Methods.Add(method);
                 }
                 else if (member is NonPrivatePropertyContext propertyMember)
                 {
-                    targetInterface.Properties.Add(Property.Parse(propertyMember.propertyDeclaration(), scope, dataManager));
+                    targetInterface.Properties.Add(Property.Parse(propertyMember.propertyDeclaration(), scope));
                 }
             }
         }
