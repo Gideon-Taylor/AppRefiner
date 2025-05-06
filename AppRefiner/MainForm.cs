@@ -1256,6 +1256,15 @@ namespace AppRefiner
         {
             if (editor == null) return;
 
+            /* Update editor caption */
+            var caption = WindowHelper.GetGrandparentWindowCaption(editor.hWnd);
+            if (caption == "Suppress")
+            {
+                Thread.Sleep(1000);
+                caption = WindowHelper.GetGrandparentWindowCaption(editor.hWnd);
+            }
+
+            editor.Caption = caption;
 
             if (chkBetterSQL.Checked && editor.Type == EditorType.SQL)
             {
@@ -1738,6 +1747,18 @@ namespace AppRefiner
                     // Check if the editor is still valid
                     if (editorToSave != null && editorToSave.IsValid())
                     {
+                        /* Esnure caption (and thus relative path) is accurate. */
+                        var caption = WindowHelper.GetGrandparentWindowCaption(editorToSave.hWnd);
+                        if (caption == "Suppress")
+                        {
+                            Thread.Sleep(1000);
+                            caption = WindowHelper.GetGrandparentWindowCaption(editorToSave.hWnd);
+                        }
+
+                        editorToSave.Caption = caption;
+
+
+
                         Debug.Log($"Processing debounced SAVEPOINTREACHED for {editorToSave.RelativePath}");
                         lock (ScintillaManager.editorsExpectingSavePoint)
                         {

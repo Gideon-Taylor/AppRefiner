@@ -10,6 +10,7 @@ using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading.Tasks;
+using static System.Windows.Forms.VisualStyles.VisualStyleElement.Window;
 
 namespace AppRefiner
 {
@@ -31,7 +32,38 @@ namespace AppRefiner
         public IntPtr hProc;
         public uint ProcessId;
         public uint ThreadID;
-        public string? Caption = null;
+        private string? _caption = null;
+        public string? Caption { 
+            get
+            {
+                return _caption;
+            }
+            set
+            {
+                _caption = value;
+                if (value != null)
+                {
+
+                    if (_caption.Contains("PeopleCode"))
+                    {
+                        Type = EditorType.PeopleCode;
+                    }
+                    else if (_caption.Contains("(HTML)"))
+                    {
+                        Type = EditorType.HTML;
+                    }
+                    else if (_caption.Contains("(SQL Definition)"))
+                    {
+                        Type = EditorType.SQL;
+                    }
+                    else
+                    {
+                        Type = _caption.Contains("(StyleSheet)") ? EditorType.CSS : EditorType.Other;
+                    }
+                    DetermineRelativeFilePath();
+                }
+            }
+        }
         public bool FoldEnabled = false;
         public bool HasLexilla = false;
 
@@ -195,25 +227,7 @@ namespace AppRefiner
             ThreadID = threadID;
             Caption = caption;
 
-            if (caption.Contains("PeopleCode"))
-            {
-                Type = EditorType.PeopleCode;
-            }
-            else if (caption.Contains("(HTML)"))
-            {
-                Type = EditorType.HTML;
-            }
-            else if (caption.Contains("(SQL Definition)"))
-            {
-                Type = EditorType.SQL;
-            }
-            else
-            {
-                Type = caption.Contains("(StyleSheet)") ? EditorType.CSS : EditorType.Other;
-            }
-
             PopulateEditorDBName();
-            DetermineRelativeFilePath();
         }
 
         public IntPtr SendMessage(int Msg, IntPtr wParam, IntPtr lParam)
