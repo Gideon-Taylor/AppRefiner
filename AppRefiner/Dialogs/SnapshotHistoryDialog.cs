@@ -11,7 +11,7 @@ using DiffPlex.DiffBuilder.Model;
 namespace AppRefiner.Dialogs
 {
     /// <summary>
-    /// Dialog for displaying Git history and reverting to previous versions
+    /// Dialog for displaying Snapshot history and reverting to previous versions
     /// </summary>
     public class SnapshotHistoryDialog : Form
     {
@@ -34,9 +34,9 @@ namespace AppRefiner.Dialogs
         public Snapshot? SelectedSnapshot => selectedSnapshot;
 
         /// <summary>
-        /// Initializes a new instance of the GitHistoryDialog class
+        /// Initializes a new instance of the SnapshotHistoryDialog class
         /// </summary>
-        /// <param name="gitManager">The Git repository manager</param>
+        /// <param name="snapshotManager">The Snapshot manager</param>
         /// <param name="editor">The editor to show history for</param>
         /// <param name="owner">The owner window handle</param>
         public SnapshotHistoryDialog(SnapshotManager snapshotManager, ScintillaEditor editor, IntPtr owner = default)
@@ -80,7 +80,7 @@ namespace AppRefiner.Dialogs
             this.headerPanel.Controls.Add(this.headerLabel);
 
             // headerLabel
-            this.headerLabel.Text = "Git History";
+            this.headerLabel.Text = "Snapshot History";
             this.headerLabel.ForeColor = Color.White;
             this.headerLabel.Font = new Font("Segoe UI", 9F, FontStyle.Regular, GraphicsUnit.Point);
             this.headerLabel.Dock = DockStyle.Fill;
@@ -156,8 +156,8 @@ namespace AppRefiner.Dialogs
                 this.Close();
             };
 
-            // GitHistoryDialog
-            this.Text = "Git History";
+            // SnapshotHistoryDialog
+            this.Text = "Snapshot History";
             this.ClientSize = new Size(600, 350);
             this.Controls.Add(this.headerPanel);
             this.Controls.Add(this.historyListView);

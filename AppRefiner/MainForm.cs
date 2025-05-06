@@ -78,7 +78,7 @@ namespace AppRefiner
 
         private bool isLoadingSettings = false;
 
-        // Add a private field for the GitRepositoryManager
+        // Add a private field for the SnapshotManager
         private SnapshotManager? snapshotManager;
 
         // Fields for editor management
@@ -1068,14 +1068,14 @@ namespace AppRefiner
 
                         if (string.IsNullOrEmpty(activeEditor.RelativePath))
                         {
-                            MessageBox.Show("This editor is not associated with a file in the Git repository.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                            MessageBox.Show("This editor is not associated with a file in the Snapshot database.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
                             return;
                         }
 
                         // Get process handle for dialog ownership
                         var mainHandle = Process.GetProcessById((int)activeEditor.ProcessId).MainWindowHandle;
 
-                        // Show the Git history dialog
+                        // Show the Snapshot history dialog
                         progressDialog?.UpdateHeader("Loading commit history...");
 
                         // Run on UI thread to show dialog
@@ -1092,9 +1092,9 @@ namespace AppRefiner
                     }
                     catch (Exception ex)
                     {
-                        Debug.Log($"Error in Git revert command: {ex.Message}");
+                        Debug.Log($"Error in while reverting: {ex.Message}");
                         progressDialog?.UpdateProgress($"Error: {ex.Message}");
-                        MessageBox.Show($"Error: {ex.Message}", "Git Revert Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                        MessageBox.Show($"Error: {ex.Message}", "Revert Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
                     }
                 },
                 () => activeEditor != null && !string.IsNullOrEmpty(activeEditor.RelativePath) &&
@@ -1654,7 +1654,7 @@ namespace AppRefiner
                     ScintillaManager.CollapseTopLevel(editor);
                 }
 
-                // Save initial content to Git repository
+                // Save initial content to Snapshot database
                 if (!string.IsNullOrEmpty(editor.RelativePath))
                 {
                     SaveSnapshot(editor);
@@ -1692,7 +1692,7 @@ namespace AppRefiner
         }
 
         /// <summary>
-        /// Saves the content of the editor to the Git repository
+        /// Saves the content of the editor to the Snapshot database
         /// </summary>
         /// <param name="editor">The editor to save content from</param>
         private void SaveSnapshot(ScintillaEditor editor)
@@ -1717,7 +1717,7 @@ namespace AppRefiner
             }
             catch (Exception ex)
             {
-                Debug.Log($"Error saving to Git repository: {ex.Message}");
+                Debug.Log($"Error saving to snapshot database: {ex.Message}");
             }
         }
 
@@ -1774,7 +1774,7 @@ namespace AppRefiner
                         ScintillaManager.ClearAnnotations(editorToSave);
                         ScintillaManager.ResetStyles(editorToSave);
 
-                        // Save content to Git repository
+                        // Save content to Snapshot database
                         if (!string.IsNullOrEmpty(editorToSave.RelativePath))
                         {
                             // Reset editor state

@@ -94,7 +94,7 @@ namespace AppRefiner
         // Database name associated with this editor
         public string? DBName { get; set; }
 
-        // Relative path to the file in the Git repository
+        // Relative path to the file in the Snapshot database
         public string? RelativePath { get; set; }
 
         public Dictionary<int, List<Report>> LineToReports = new();
