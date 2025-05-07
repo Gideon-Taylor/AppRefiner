@@ -925,5 +925,271 @@ namespace AppRefiner.Database
         {
             _recordFieldCache.Clear();
         }
+
+        public List<EventMapInfo> GetEventMapXrefs(string classPath)
+        {
+            var parts = classPath.Split(':');
+            var root = parts[0];
+            var className = parts[parts.Length - 1];
+            var path = string.Join(":", parts.Skip(1).SkipLast(1));
+            if (path == "")
+            {
+                path = ":";
+            }
+
+
+            string sql = @"SELECT
+                            evt.portal_objname,
+                            portal.PORTAL_URI_SEG2 AS COMPONENT,
+                            portal.PORTAL_URI_SEG3 AS SEGMENT,
+                            evt.RECNAME as RECORD,
+                            evt.FIELDNAME as FIELD,
+                            evt.PNLNAME,
+                            evt.SEQNUM,
+                            evt.ptcs_procseq,
+                            evt.ptcs_cmpevent,
+                            evt.ptcs_cmprecevent
+                        FROM
+                            psptcssrvconf evt
+                            INNER JOIN psprsmdefn    portal ON portal.portal_objname = evt.portal_objname
+                            INNER JOIN psptcssrvdefn svc ON svc.ptcs_serviceid = evt.ptcs_serviceid
+                        WHERE
+                            evt.portal_name = '_PTCS_PTEVMAP'
+                            AND svc.packageroot = :root
+                            AND svc.qualifypath = :path
+                            AND svc.appclassid = :class";
+            Dictionary<string, object> parameters = new();
+            parameters.Add(":root", root);
+            parameters.Add(":path", path);
+            parameters.Add(":class", className);
+
+            DataTable result = _connection.ExecuteQuery(sql, parameters);
+            List<EventMapInfo> infos = new();
+            foreach (DataRow row in result.Rows)
+            {
+                var info = new EventMapInfo();
+                info.ContentReference = row["PORTAL_OBJNAME"].ToString()!.Trim() ?? string.Empty;
+                info.Component = row["COMPONENT"].ToString()!.Trim() ?? string.Empty;
+                info.Segment = row["SEGMENT"].ToString()!.Trim() ?? string.Empty;
+                info.Record = row["RECORD"].ToString()!.Trim() ?? string.Empty;
+                info.Field = row["FIELD"].ToString()!.Trim() ?? string.Empty;
+                info.Page = row["PNLNAME"].ToString()!.Trim() ?? string.Empty;
+                info.ComponentEvent = row["ptcs_cmpevent"].ToString()!.Trim() ?? string.Empty;
+                info.ComponentRecordEvent = row["ptcs_cmprecevent"].ToString()!.Trim() ?? string.Empty;
+                info.SequenceNumber = Convert.ToInt32(row["SEQNUM"]);
+
+                var eventSeq = row["ptcs_procseq"].ToString() ?? string.Empty;
+                switch (eventSeq)
+                {
+                    case "PRE":
+                        info.Sequence = EventMapSequence.Pre;
+                        break;
+                    case "OVER":
+                        info.Sequence = EventMapSequence.Replace;
+                        break;
+                    case "POST":
+                        info.Sequence = EventMapSequence.Post;
+                        break;
+                    default:
+                        break;
+                }
+
+                /* Determine the "type" */
+                if (info.Component != string.Empty && info.Segment != string.Empty)
+                {
+                    info.Type = EventMapType.Component;
+                }
+                if (info.Component != string.Empty && info.Segment != string.Empty && info.Record != string.Empty)
+                {
+                    info.Type = EventMapType.ComponentRecord;
+                }
+                if (info.Component != string.Empty && info.Segment != string.Empty && info.Record != string.Empty && info.Field != string.Empty)
+                {
+                    info.Type = EventMapType.ComponentRecordField;
+                }
+                if (info.Page != string.Empty)
+                {
+                    info.Type = EventMapType.Page;
+                }
+
+                infos.Add(info);
+            }
+
+            return infos;
+        }
+
+        public List<EventMapItem> GetEventMapItems(EventMapInfo eventMapInfo)
+        {
+            string sql;
+            Dictionary<string, object> parameters = new();
+            List<EventMapItem> results = new();
+
+            switch (eventMapInfo.Type)
+            {
+                case EventMapType.Component:
+                    sql = @"
+                        SELECT DISTINCT
+                            evt.portal_objname,
+                            evt.ptcs_procseq,
+                            evt.SEQNUM,
+                            svc.packageroot,
+                            svc.qualifypath,
+                            svc.appclassid
+                        FROM
+                            psptcssrvconf evt
+                            INNER JOIN psprsmdefn portal ON portal.portal_objname = evt.portal_objname
+                            INNER JOIN psptcssrvdefn svc ON svc.ptcs_serviceid = evt.ptcs_serviceid
+                        WHERE
+                            evt.portal_name = '_PTCS_PTEVMAP'
+                            AND portal.PORTAL_URI_SEG2 = :component
+                            AND portal.PORTAL_URI_SEG3 = :segment
+                            AND evt.ptcs_cmpevent = :cmpevent";
+
+                    parameters.Add(":component", eventMapInfo.Component ?? string.Empty);
+                    parameters.Add(":segment", eventMapInfo.Segment ?? string.Empty);
+                    parameters.Add(":cmpevent", eventMapInfo.ComponentEvent ?? string.Empty);
+                    break;
+
+                case EventMapType.ComponentRecord:
+                    sql = @"
+                        SELECT DISTINCT
+                            evt.portal_objname,
+                            evt.ptcs_procseq,
+                            evt.SEQNUM,
+                            svc.packageroot,
+                            svc.qualifypath,
+                            svc.appclassid
+                        FROM
+                            psptcssrvconf evt
+                            INNER JOIN psprsmdefn portal ON portal.portal_objname = evt.portal_objname
+                            INNER JOIN psptcssrvdefn svc ON svc.ptcs_serviceid = evt.ptcs_serviceid
+                        WHERE
+                            evt.portal_name = '_PTCS_PTEVMAP'
+                            AND portal.PORTAL_URI_SEG2 = :component
+                            AND portal.PORTAL_URI_SEG3 = :segment
+                            AND evt.RECNAME = :record
+                            AND evt.ptcs_cmprecevent = :cmprecevent";
+
+                    parameters.Add(":component", eventMapInfo.Component ?? string.Empty);
+                    parameters.Add(":segment", eventMapInfo.Segment ?? string.Empty);
+                    parameters.Add(":record", eventMapInfo.Record ?? string.Empty);
+                    parameters.Add(":cmprecevent", eventMapInfo.ComponentRecordEvent ?? string.Empty);
+                    break;
+
+                case EventMapType.ComponentRecordField:
+                    sql = @"
+                        SELECT DISTINCT
+                            evt.portal_objname,
+                            evt.ptcs_procseq,
+                            evt.SEQNUM,
+                            svc.packageroot,
+                            svc.qualifypath,
+                            svc.appclassid
+                        FROM
+                            psptcssrvconf evt
+                            INNER JOIN psprsmdefn portal ON portal.portal_objname = evt.portal_objname
+                            INNER JOIN psptcssrvdefn svc ON svc.ptcs_serviceid = evt.ptcs_serviceid
+                        WHERE
+                            evt.portal_name = '_PTCS_PTEVMAP'
+                            AND portal.PORTAL_URI_SEG2 = :component
+                            AND portal.PORTAL_URI_SEG3 = :segment
+                            AND evt.RECNAME = :record
+                            AND evt.FIELDNAME = :field
+                            AND evt.ptcs_cmprecevent = :cmprecevent";
+
+                    parameters.Add(":component", eventMapInfo.Component ?? string.Empty);
+                    parameters.Add(":segment", eventMapInfo.Segment ?? string.Empty);
+                    parameters.Add(":record", eventMapInfo.Record ?? string.Empty);
+                    parameters.Add(":field", eventMapInfo.Field ?? string.Empty);
+                    parameters.Add(":cmprecevent", eventMapInfo.ComponentRecordEvent ?? string.Empty);
+                    break;
+
+                case EventMapType.Page:
+                    sql = @"
+                        SELECT DISTINCT
+                            evt.portal_objname,
+                            portal.PORTAL_URI_SEG2,
+                            portal.PORTAL_URI_SEG3,
+                            evt.ptcs_procseq,
+                            evt.SEQNUM,
+                            svc.packageroot,
+                            svc.qualifypath,
+                            svc.appclassid
+                        FROM
+                            psptcssrvconf evt
+                            INNER JOIN psprsmdefn portal ON portal.portal_objname = evt.portal_objname
+                            INNER JOIN psptcssrvdefn svc ON svc.ptcs_serviceid = evt.ptcs_serviceid
+                        WHERE
+                            evt.portal_name = '_PTCS_PTEVMAP'
+                            AND evt.PNLNAME = :page
+                            AND evt.ptcs_cmprecevent = :cmprecevent";
+
+                    parameters.Add(":page", eventMapInfo.Page ?? string.Empty);
+                    parameters.Add(":cmprecevent", eventMapInfo.ComponentRecordEvent ?? string.Empty);
+                    break;
+
+                default:
+                    return results;
+            }
+
+            try
+            {
+                DataTable result = _connection.ExecuteQuery(sql, parameters);
+
+                foreach (DataRow row in result.Rows)
+                {
+                    EventMapSequence sequence;
+                    string procSeq = row["ptcs_procseq"].ToString() ?? string.Empty;
+                    
+                    if (procSeq.Equals("PRE", StringComparison.OrdinalIgnoreCase))
+                        sequence = EventMapSequence.Pre;
+                    else if (procSeq.Equals("OVER", StringComparison.OrdinalIgnoreCase))
+                        sequence = EventMapSequence.Replace;
+                    else // "POST" or any other value
+                        sequence = EventMapSequence.Post;
+
+                    string cref = row["PORTAL_OBJNAME"].ToString() ?? string.Empty;
+
+                    string component = string.Empty;
+                    string segment = string.Empty;
+                    
+                    if (eventMapInfo.Type == EventMapType.Page)
+                    {
+                        component = row["PORTAL_URI_SEG2"].ToString() ?? string.Empty;
+                        segment = row["PORTAL_URI_SEG3"].ToString() ?? string.Empty;
+                    }
+                    else
+                    {
+                        component = eventMapInfo.Component ?? string.Empty;
+                        segment = eventMapInfo.Segment ?? string.Empty;
+                    }
+
+                    var packagePath = row["qualifypath"].ToString() ?? string.Empty;
+                    if (packagePath == ":")
+                    {
+                        packagePath = string.Empty;
+                    }
+
+                    results.Add(new EventMapItem
+                    {
+                        ContentReference = cref,
+                        Sequence = sequence,
+                        SeqNumber = Convert.ToInt32(row["SEQNUM"]),
+                        Component = component,
+                        Segment = segment,
+                        PackageRoot = row["packageroot"].ToString() ?? string.Empty,
+                        PackagePath = row["qualifypath"].ToString() ?? string.Empty,
+                        ClassName = row["appclassid"].ToString() ?? string.Empty
+                    });
+                }
+            }
+            catch (Exception ex)
+            {
+                // Consider logging the exception here
+                // Logger.LogError($"Error retrieving event map items: {ex.Message}");
+            }
+
+            return results;
+        }
     }
 }

@@ -214,5 +214,53 @@ namespace AppRefiner.Properties {
                 this["TNS_ADMIN"] = value;
             }
         }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("False")]
+        public bool checkEventMapping {
+            get {
+                return ((bool)(this["checkEventMapping"]));
+            }
+            set {
+                this["checkEventMapping"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("False")]
+        public bool checkEventMapXrefs {
+            get {
+                return ((bool)(this["checkEventMapXrefs"]));
+            }
+            set {
+                this["checkEventMapXrefs"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("False")]
+        public bool showClassText {
+            get {
+                return ((bool)(this["showClassText"]));
+            }
+            set {
+                this["showClassText"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("False")]
+        public bool showClassPath {
+            get {
+                return ((bool)(this["showClassPath"]));
+            }
+            set {
+                this["showClassPath"] = value;
+            }
+        }
     }
 }

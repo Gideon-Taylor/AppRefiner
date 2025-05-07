@@ -2,6 +2,159 @@ using AppRefiner.Database.Models;
 
 namespace AppRefiner.Database
 {
+    public enum EventMapType
+    {
+        Component, ComponentRecord, ComponentRecordField, Page
+    }
+
+    public enum EventMapSequence
+    {
+        Pre, Post, Replace
+    }
+
+    public class EventMapInfo
+    {
+        public EventMapType Type;
+        public string? Component;
+        public string? Segment;
+        public string? Record;
+        public string? Field;
+        public string? Page;
+        public string? ComponentEvent;
+        public string? ComponentRecordEvent;
+
+
+        /* These fields are used by xref lookups */
+        public string? ContentReference;
+        public int SequenceNumber;
+        public EventMapSequence Sequence;
+
+        public override string ToString()
+        {
+            /*
+             * Format:
+             * EventMapType:Component:Segment:Record:Field:Page:ComponentEvent:ComponentRecordEvent
+             * Example:
+             * Component:MY_COMPONENT:MY_SEGMENT:MY_RECORD:MY_FIELD:MY_PAGE:MY_EVENT
+             */
+            var xrefSuffix = "";
+            if (!string.IsNullOrEmpty(ContentReference))
+            {
+                xrefSuffix = $"Process Order {Sequence} ({SequenceNumber}) ";
+            }
+            switch (Type)
+            {
+                case EventMapType.Component:
+                    return $"Component: {Component}.{Segment}.{XlatToEvent(ComponentEvent!)} {xrefSuffix}";
+                case EventMapType.ComponentRecord:
+                    return $"ComponentRecord: {Component}.{Segment}.{Record}.{XlatToEvent(ComponentRecordEvent!)} {xrefSuffix}";
+                case EventMapType.ComponentRecordField:
+                    return $"ComponentRecordField: {Component}.{Segment}.{Record}.{Field}.{XlatToEvent(ComponentRecordEvent!)} {xrefSuffix}";
+                case EventMapType.Page:
+                    return $"Page: {Page}.{XlatToEvent(ComponentRecordEvent!)} {xrefSuffix}";
+                default:
+                    return $"Unknown EventMapType {xrefSuffix}";
+            }
+        }
+
+        public static string EventToXlat(string evt)
+        {
+            switch (evt)
+            {
+                case "PostBuild":
+                    return "POST";
+                case "PreBuild":
+                    return "PRE";
+                case "SavePostChange":
+                    return "SPOS";
+                case "SavePreChange":
+                    return "SPRE";
+                case "Workflow":
+                    return "WFLO";
+                case "Activate":
+                    return "PACT";
+                case "RowDelete":
+                    return "RDEL";
+                case "FieldChange":
+                    return "RFCH";
+                case "FieldDefault":
+                    return "RFDT";
+                case "FieldEdit":
+                    return "RFED";
+                case "RowInit":
+                    return "RINI";
+                case "RowInsert":
+                    return "RINS";
+                case "RowSelect":
+                    return "RSEL";
+                case "SaveEdit":
+                    return "SEDT";
+                case "SearchInit":
+                    return "SINT";
+                case "SearchSave":
+                    return "SSVE";
+
+                default:
+                    Debug.Log($"Unknown event: {evt}");
+                    return "UNKN";
+            }
+        }
+
+        public static string XlatToEvent(string xlat)
+        {
+            switch (xlat)
+            {
+                case "POST":
+                    return "PostBuild";
+                case "PRE":
+                    return "PreBuild";
+                case "SPOS":
+                    return "SavePostChange";
+                case "SPRE":
+                    return "SavePreChange";
+                case "WFLO":
+                    return "Workflow";
+                case "PACT":
+                    return "Activate";
+                case "RDEL":
+                    return "RowDelete";
+                case "RFCH":
+                    return "FieldChange";
+                case "RFDT":
+                    return "FieldDefault";
+                case "RFED":
+                    return "FieldEdit";
+                case "RINI":
+                    return "RowInit";
+                case "RINS":
+                    return "RowInsert";
+                case "RSEL":
+                    return "RowSelect";
+                case "SEDT":
+                    return "SaveEdit";
+                case "SINT":
+                    return "SearchInit";
+                case "SSVE":
+                    return "SearchSave";
+                default:
+                    Debug.Log($"Unknown event: {xlat}");
+                    return xlat;
+            }
+        }
+    }
+
+    public class EventMapItem
+    {
+        public EventMapSequence Sequence;
+        public int SeqNumber;
+        public string? ContentReference;
+        public string? Component;
+        public string? Segment;
+        public string? PackageRoot;
+        public string? PackagePath;
+        public string? ClassName;
+    }
+
     /// <summary>
     /// Interface for data management operations
     /// </summary>
@@ -102,5 +255,9 @@ namespace AppRefiner.Database
         /// <param name="packagePath">The package path (root package or path like ROOT:SubPackage:SubPackage2)</param>
         /// <returns>Dictionary containing lists of subpackages and classes in the current package path</returns>
         PackageItems GetAppPackageItems(string packagePath);
+
+        List<EventMapItem> GetEventMapItems(EventMapInfo eventMapInfo);
+
+        List<EventMapInfo> GetEventMapXrefs(string classPath);
     }
 }

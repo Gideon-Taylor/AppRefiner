@@ -154,7 +154,7 @@ namespace AppRefiner.Stylers
             }
 
             // Update the editor's active indicator list with the new set
-            editor.ActiveIndicators = newIndicators; // Replace the old list
+            //editor.ActiveIndicators = newIndicators; // Replace the old list
         }
 
         public void RemoveIndicator(ScintillaEditor editor, Indicator indicator)

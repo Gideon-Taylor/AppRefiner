@@ -40,17 +40,23 @@ namespace AppRefiner
             splitContainer1 = new SplitContainer();
             tabControl1 = new TabControl();
             tabPage1 = new TabPage();
-            btnTNSADMIN = new Button();
+            groupBox2 = new GroupBox();
+            groupBox4 = new GroupBox();
+            optClassText = new RadioButton();
+            optClassPath = new RadioButton();
+            chkEventMapping = new CheckBox();
+            groupBox1 = new GroupBox();
             btnReportDirectory = new Button();
+            btnTNSADMIN = new Button();
             btnDebugLog = new Button();
             grpEditorSettings = new GroupBox();
             chkPromptForDB = new CheckBox();
             chkAutoPairing = new CheckBox();
             chkBetterSQL = new CheckBox();
             chkOnlyPPC = new CheckBox();
+            btnPlugins = new Button();
             chkInitCollapsed = new CheckBox();
             chkAutoDark = new CheckBox();
-            btnPlugins = new Button();
             tabPage4 = new TabPage();
             dataGridView3 = new DataGridView();
             dataGridViewCheckBoxColumn1 = new DataGridViewCheckBoxColumn();
@@ -75,13 +81,16 @@ namespace AppRefiner
             cmbTemplates = new ComboBox();
             progressBar1 = new ProgressBar();
             lblStatus = new Label();
-            groupBox1 = new GroupBox();
+            chkEventMapXrefs = new CheckBox();
             ((System.ComponentModel.ISupportInitialize)splitContainer1).BeginInit();
             splitContainer1.Panel1.SuspendLayout();
             splitContainer1.Panel2.SuspendLayout();
             splitContainer1.SuspendLayout();
             tabControl1.SuspendLayout();
             tabPage1.SuspendLayout();
+            groupBox2.SuspendLayout();
+            groupBox4.SuspendLayout();
+            groupBox1.SuspendLayout();
             grpEditorSettings.SuspendLayout();
             tabPage4.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)dataGridView3).BeginInit();
@@ -98,7 +107,6 @@ namespace AppRefiner
             splitContainer3.Panel1.SuspendLayout();
             splitContainer3.Panel2.SuspendLayout();
             splitContainer3.SuspendLayout();
-            groupBox1.SuspendLayout();
             SuspendLayout();
             // 
             // splitContainer1
@@ -136,6 +144,7 @@ namespace AppRefiner
             // 
             // tabPage1
             // 
+            tabPage1.Controls.Add(groupBox2);
             tabPage1.Controls.Add(groupBox1);
             tabPage1.Controls.Add(btnDebugLog);
             tabPage1.Controls.Add(grpEditorSettings);
@@ -147,15 +156,71 @@ namespace AppRefiner
             tabPage1.Text = "Editor Tweaks";
             tabPage1.UseVisualStyleBackColor = true;
             // 
-            // btnTNSADMIN
+            // groupBox2
             // 
-            btnTNSADMIN.Location = new Point(6, 51);
-            btnTNSADMIN.Name = "btnTNSADMIN";
-            btnTNSADMIN.Size = new Size(150, 23);
-            btnTNSADMIN.TabIndex = 31;
-            btnTNSADMIN.Text = "TNS_ADMIN Directory...";
-            btnTNSADMIN.UseVisualStyleBackColor = true;
-            btnTNSADMIN.Click += btnTNSADMIN_Click;
+            groupBox2.Controls.Add(chkEventMapXrefs);
+            groupBox2.Controls.Add(groupBox4);
+            groupBox2.Controls.Add(chkEventMapping);
+            groupBox2.Location = new Point(10, 212);
+            groupBox2.Name = "groupBox2";
+            groupBox2.Size = new Size(544, 119);
+            groupBox2.TabIndex = 0;
+            groupBox2.TabStop = false;
+            groupBox2.Text = "Event Mapping";
+            // 
+            // groupBox4
+            // 
+            groupBox4.Controls.Add(optClassText);
+            groupBox4.Controls.Add(optClassPath);
+            groupBox4.Location = new Point(6, 45);
+            groupBox4.Name = "groupBox4";
+            groupBox4.Size = new Size(127, 68);
+            groupBox4.TabIndex = 34;
+            groupBox4.TabStop = false;
+            groupBox4.Text = "Show";
+            // 
+            // optClassText
+            // 
+            optClassText.AutoSize = true;
+            optClassText.Location = new Point(6, 43);
+            optClassText.Name = "optClassText";
+            optClassText.Size = new Size(76, 19);
+            optClassText.TabIndex = 4;
+            optClassText.TabStop = true;
+            optClassText.Text = "Class Text";
+            optClassText.UseVisualStyleBackColor = true;
+            // 
+            // optClassPath
+            // 
+            optClassPath.AutoSize = true;
+            optClassPath.Location = new Point(6, 18);
+            optClassPath.Name = "optClassPath";
+            optClassPath.Size = new Size(79, 19);
+            optClassPath.TabIndex = 3;
+            optClassPath.TabStop = true;
+            optClassPath.Text = "Class Path";
+            optClassPath.UseVisualStyleBackColor = true;
+            // 
+            // chkEventMapping
+            // 
+            chkEventMapping.AutoSize = true;
+            chkEventMapping.Location = new Point(6, 22);
+            chkEventMapping.Name = "chkEventMapping";
+            chkEventMapping.Size = new Size(143, 19);
+            chkEventMapping.TabIndex = 0;
+            chkEventMapping.Text = "Detect Event Mapping";
+            chkEventMapping.UseVisualStyleBackColor = true;
+            // 
+            // groupBox1
+            // 
+            groupBox1.Controls.Add(btnReportDirectory);
+            groupBox1.Controls.Add(btnTNSADMIN);
+            groupBox1.Location = new Point(10, 106);
+            groupBox1.Name = "groupBox1";
+            groupBox1.Size = new Size(544, 100);
+            groupBox1.TabIndex = 32;
+            groupBox1.TabStop = false;
+            groupBox1.Text = "Directories";
             // 
             // btnReportDirectory
             // 
@@ -166,6 +231,16 @@ namespace AppRefiner
             btnReportDirectory.Text = "Lint Report Directory...";
             btnReportDirectory.UseVisualStyleBackColor = true;
             btnReportDirectory.Click += btnReportDirectory_Click;
+            // 
+            // btnTNSADMIN
+            // 
+            btnTNSADMIN.Location = new Point(6, 51);
+            btnTNSADMIN.Name = "btnTNSADMIN";
+            btnTNSADMIN.Size = new Size(150, 23);
+            btnTNSADMIN.TabIndex = 31;
+            btnTNSADMIN.Text = "TNS_ADMIN Directory...";
+            btnTNSADMIN.UseVisualStyleBackColor = true;
+            btnTNSADMIN.Click += btnTNSADMIN_Click;
             // 
             // btnDebugLog
             // 
@@ -234,6 +309,16 @@ namespace AppRefiner
             chkOnlyPPC.Text = "Only PPC";
             chkOnlyPPC.UseVisualStyleBackColor = true;
             // 
+            // btnPlugins
+            // 
+            btnPlugins.Location = new Point(432, 18);
+            btnPlugins.Name = "btnPlugins";
+            btnPlugins.Size = new Size(110, 23);
+            btnPlugins.TabIndex = 24;
+            btnPlugins.Text = "Plugins...";
+            btnPlugins.UseVisualStyleBackColor = true;
+            btnPlugins.Click += btnPlugins_Click;
+            // 
             // chkInitCollapsed
             // 
             chkInitCollapsed.AutoSize = true;
@@ -253,16 +338,6 @@ namespace AppRefiner
             chkAutoDark.TabIndex = 14;
             chkAutoDark.Text = "Auto Dark Mode";
             chkAutoDark.UseVisualStyleBackColor = true;
-            // 
-            // btnPlugins
-            // 
-            btnPlugins.Location = new Point(432, 18);
-            btnPlugins.Name = "btnPlugins";
-            btnPlugins.Size = new Size(110, 23);
-            btnPlugins.TabIndex = 24;
-            btnPlugins.Text = "Plugins...";
-            btnPlugins.UseVisualStyleBackColor = true;
-            btnPlugins.Click += btnPlugins_Click;
             // 
             // tabPage4
             // 
@@ -532,16 +607,15 @@ namespace AppRefiner
             lblStatus.Text = "Stopped";
             lblStatus.TextAlign = ContentAlignment.MiddleCenter;
             // 
-            // groupBox1
+            // chkEventMapXrefs
             // 
-            groupBox1.Controls.Add(btnReportDirectory);
-            groupBox1.Controls.Add(btnTNSADMIN);
-            groupBox1.Location = new Point(10, 106);
-            groupBox1.Name = "groupBox1";
-            groupBox1.Size = new Size(544, 100);
-            groupBox1.TabIndex = 32;
-            groupBox1.TabStop = false;
-            groupBox1.Text = "Directories";
+            chkEventMapXrefs.AutoSize = true;
+            chkEventMapXrefs.Location = new Point(164, 22);
+            chkEventMapXrefs.Name = "chkEventMapXrefs";
+            chkEventMapXrefs.Size = new Size(194, 19);
+            chkEventMapXrefs.TabIndex = 35;
+            chkEventMapXrefs.Text = "Show Event Mapped References";
+            chkEventMapXrefs.UseVisualStyleBackColor = true;
             // 
             // MainForm
             // 
@@ -558,6 +632,11 @@ namespace AppRefiner
             splitContainer1.ResumeLayout(false);
             tabControl1.ResumeLayout(false);
             tabPage1.ResumeLayout(false);
+            groupBox2.ResumeLayout(false);
+            groupBox2.PerformLayout();
+            groupBox4.ResumeLayout(false);
+            groupBox4.PerformLayout();
+            groupBox1.ResumeLayout(false);
             grpEditorSettings.ResumeLayout(false);
             grpEditorSettings.PerformLayout();
             tabPage4.ResumeLayout(false);
@@ -575,7 +654,6 @@ namespace AppRefiner
             splitContainer3.Panel2.ResumeLayout(false);
             ((System.ComponentModel.ISupportInitialize)splitContainer3).EndInit();
             splitContainer3.ResumeLayout(false);
-            groupBox1.ResumeLayout(false);
             ResumeLayout(false);
         }
 
@@ -630,5 +708,11 @@ namespace AppRefiner
         private Button btnReportDirectory;
         private Button btnTNSADMIN;
         private GroupBox groupBox1;
+        private GroupBox groupBox2;
+        private CheckBox chkEventMapping;
+        private GroupBox groupBox4;
+        private RadioButton optClassText;
+        private RadioButton optClassPath;
+        private CheckBox chkEventMapXrefs;
     }
 }

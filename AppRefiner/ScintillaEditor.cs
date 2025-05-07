@@ -32,6 +32,8 @@ namespace AppRefiner
         public IntPtr hProc;
         public uint ProcessId;
         public uint ThreadID;
+        public EventMapInfo? EventMapInfo = null;
+        public string ClassPath = string.Empty;
         private string? _caption = null;
         public string? Caption { 
             get
@@ -61,6 +63,8 @@ namespace AppRefiner
                         Type = _caption.Contains("(StyleSheet)") ? EditorType.CSS : EditorType.Other;
                     }
                     DetermineRelativeFilePath();
+                    SetEventMapInfo();
+                    SetClassPath();
                 }
             }
         }
@@ -103,7 +107,6 @@ namespace AppRefiner
         public Dictionary<uint, int> ColorToSquiggleMap = new();
         public Dictionary<uint, int> ColorToTextColorMap = new();
         public int NextIndicatorNumber = 0;
-
 
         /// <summary>
         /// Stores the currently active indicators in the editor
@@ -294,6 +297,67 @@ namespace AppRefiner
 
                 // Get the parent window
                 hwnd = NativeMethods.GetParent(hwnd); // Use NativeMethods
+            }
+        }
+
+        private void SetClassPath()
+        {
+            if (this.Caption == null) return;
+            if (this.Caption.EndsWith("(Application Package PeopleCode)"))
+            {
+                var parts = this.Caption.Replace(" (Application Package PeopleCode)", "").Split('.', StringSplitOptions.None);
+                ClassPath = string.Join(":", parts.SkipLast(1));
+            } else
+            {
+                ClassPath = string.Empty;
+            }
+        }
+        private void SetEventMapInfo()
+        {
+            if (this.Caption == null) return;
+
+            
+            if (this.Caption.EndsWith("(Component PeopleCode)"))
+            {
+                var info = new EventMapInfo();
+                var parts = this.Caption.Replace(" (Component PeopleCode)", "").Split('.', StringSplitOptions.None);
+                if (parts.Length == 3)
+                {
+                    info.Type = EventMapType.Component;
+                    info.Component = parts[0];
+                    info.Segment = parts[1];
+                    info.ComponentEvent = EventMapInfo.EventToXlat(parts[2]);
+                } else if (parts.Length == 4)
+                {
+                    info.Type = EventMapType.ComponentRecord;
+                    info.Component = parts[0];
+                    info.Segment = parts[1];
+                    info.Record = parts[2];
+                    info.ComponentRecordEvent = EventMapInfo.EventToXlat(parts[3]);
+                } else if (parts.Length == 5)
+                {
+                    info.Type = EventMapType.ComponentRecordField;
+                    info.Component = parts[0];
+                    info.Segment = parts[1];
+                    info.Record = parts[2];
+                    info.Field = parts[3];
+                    info.ComponentRecordEvent = EventMapInfo.EventToXlat(parts[4]);
+                }
+                this.EventMapInfo = info;
+            } else if (this.Caption.EndsWith(" (Page PeopleCode)"))
+            {
+                var info = new EventMapInfo();
+                var parts = this.Caption.Replace(" (Page PeopleCode)", "").Split('.', StringSplitOptions.None);
+                if (parts.Length == 2)
+                {
+                    info.Type = EventMapType.Page;
+                    info.Page = parts[0];
+                    info.ComponentRecordEvent = EventMapInfo.EventToXlat(parts[1]);
+                }
+                this.EventMapInfo = info;
+            } else
+            {
+                this.EventMapInfo = null;
             }
         }
 

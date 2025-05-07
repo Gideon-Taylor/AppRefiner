@@ -114,7 +114,9 @@ namespace AppRefiner
 
             // Instantiate LinterManager (passing UI elements)
             // LoadGeneralSettings needs lintReportPath BEFORE LinterManager is created
-            settingsService.LoadGeneralSettings(chkInitCollapsed, chkOnlyPPC, chkBetterSQL, chkAutoDark, chkAutoPairing, chkPromptForDB, out lintReportPath, out TNS_ADMIN);
+            settingsService.LoadGeneralSettings(chkInitCollapsed, chkOnlyPPC, chkBetterSQL, chkAutoDark, 
+                                                chkAutoPairing, chkPromptForDB, out lintReportPath, out TNS_ADMIN,
+                                                chkEventMapping, chkEventMapXrefs, optClassPath, optClassText);
             linterManager = new LinterManager(this, dataGridView1, lblStatus, progressBar1, lintReportPath, settingsService);
             linterManager.InitializeLinterOptions(); // Initialize linters via the manager
             dataGridView1.CellPainting += dataGridView1_CellPainting; // Wire up CellPainting
@@ -357,7 +359,11 @@ namespace AppRefiner
                 chkAutoPairing.Checked,
                 chkPromptForDB.Checked,
                 lintReportPath,
-                TNS_ADMIN
+                TNS_ADMIN,
+                chkEventMapping.Checked,
+                chkEventMapXrefs.Checked,
+                optClassPath.Checked,
+                optClassText.Checked
             );
 
             // Save states for each component via service
@@ -1205,7 +1211,7 @@ namespace AppRefiner
                 return null;
             }
         }
-        
+
         private void FoldAppRefinerRegions()
         {
             if (activeEditor == null || activeEditor.ContentString == null) return;
@@ -1217,7 +1223,7 @@ namespace AppRefiner
             var regionStart = 0;
             var regionEnd = 0;
             var collapseByDefault = false;
-            for(var x = 0;x < lines.Length; x++)
+            for (var x = 0; x < lines.Length; x++)
             {
                 var line = lines[x].TrimStart();
 
@@ -1231,7 +1237,7 @@ namespace AppRefiner
 
                     // Fold the line
                     regionStart = x;
-                    
+
                 }
                 else if (line.StartsWith("/* #endregion"))
                 {
@@ -1247,7 +1253,7 @@ namespace AppRefiner
                     }
                 }
 
-                
+
             }
         }
 
@@ -1586,6 +1592,191 @@ namespace AppRefiner
             Debug.Log("Displaying debug dialog...");
             Debug.ShowDebugDialog(Handle);
         }
+        
+
+        private static string FormatPrefixText(ScintillaEditor activeEditor, List<EventMapItem> overrideItems, List<EventMapItem> preItems, bool showClassText)
+        {
+            StringBuilder sb = new();
+            sb.Append("Event Mapping Information:\n");
+            /* Handle override items */
+            var groups = overrideItems.GroupBy(i => i.ContentReference);
+            foreach(var g in groups)
+            {
+                var cref = g.Key;
+                var item = g.First();
+                var pageComponentNote = string.Empty;
+                var padding = "";
+                sb.Append($"Content Reference: {cref}\n");
+                padding = "   ";
+                if (activeEditor.EventMapInfo?.Type == EventMapType.Page)
+                {
+                    pageComponentNote = $"When viewed on Component: {item.Component}.{item.Segment}";
+                    padding = padding + "   ";
+                }
+                sb.Append($"{padding}WARNING:{pageComponentNote} This code is currently being overriden by an event mapped class.\nClass: {item.PackageRoot}:{item.PackagePath}:{item.ClassName}\n");
+            }
+
+
+            /* Handle Pre sequence items */
+            groups = preItems.GroupBy(i => i.ContentReference);
+            foreach (var g in groups)
+            {
+                var cref = g.Key;
+                var pageComponentNote = string.Empty;
+                var padding = "";
+                sb.Append($"Content Reference: {cref}\n");
+                padding = "   ";
+                foreach (var item in g)
+                {
+                    if (activeEditor.EventMapInfo?.Type == EventMapType.Page)
+                    {
+                        pageComponentNote = $"When viewed on Component: {item.Component}.{item.Segment}";
+                        padding = padding + "   ";
+                    }
+                    if (showClassText && activeEditor.EventMapInfo?.Type != EventMapType.Page)
+                    {
+                        sb.Append($"{padding}/****************************************************************************************\n");
+                        sb.Append($"{padding}/* Sequence: {item.SeqNumber}) {pageComponentNote} Event Mapped Pre Class: {item.PackageRoot}:{item.PackagePath}:{item.ClassName} */\n");
+                        sb.Append($"{padding}****************************************************************************************/\n");
+                        sb.Append(GetClassTextWithPadding(activeEditor, item, padding + "   "));
+                        sb.Append('\n');
+                    }
+                    else
+                    {
+                        sb.Append($"{padding}(Sequence: {item.SeqNumber}){pageComponentNote} Event Mapped Pre Class: {item.PackageRoot}:{item.PackagePath}:{item.ClassName}\n");
+                    }
+                }
+            }
+
+            return sb.ToString();
+        }
+
+        private static string FormatPostfixText(ScintillaEditor activeEditor, List<EventMapItem> postItems, bool showClassText)
+        {
+            StringBuilder sb = new();
+            sb.Append("Event Mapping Information:\n");
+            /* Handle Pre sequence items */
+            var groups = postItems.GroupBy(i => i.ContentReference);
+            foreach (var g in groups)
+            {
+                var cref = g.Key;
+                var pageComponentNote = string.Empty;
+                var padding = "";
+                sb.Append($"Content Reference: {cref}\n");
+                padding = "   ";
+                foreach (var item in g)
+                {
+                    if (activeEditor.EventMapInfo?.Type == EventMapType.Page)
+                    {
+                        pageComponentNote = $"When viewed on Component: {item.Component}.{item.Segment}";
+                        padding = padding + "   ";
+                    }
+                    if (showClassText && activeEditor.EventMapInfo?.Type != EventMapType.Page)
+                    {
+                        sb.Append($"{padding}/****************************************************************************************\n");
+                        sb.Append($"{padding}/* Sequence: {item.SeqNumber}) {pageComponentNote} Event Mapped Post Class: {item.PackageRoot}:{item.PackagePath}:{item.ClassName} */\n");
+                        sb.Append($"{padding}****************************************************************************************/\n");
+                        sb.Append(GetClassTextWithPadding(activeEditor, item, padding + "   "));
+                        sb.Append('\n');
+                    }
+                    else
+                    {
+                        sb.Append($"{padding}(Sequence: {item.SeqNumber}){pageComponentNote} Event Mapped Post Class: {item.PackageRoot}:{item.PackagePath}:{item.ClassName}\n");
+                    }
+                }
+            }
+
+            return sb.ToString();
+        }
+
+        private static string GetClassTextWithPadding(ScintillaEditor editor, EventMapItem item, string padding)
+        {
+            var source = editor.DataManager?.GetAppClassSourceByPath($"{item.PackageRoot}:{item.PackagePath}:{item.ClassName}") ?? "/* <Source not found> */";
+
+            var lines = source.Split('\n');
+            var sb = new StringBuilder();
+            foreach (var line in lines)
+            {
+                sb.Append($"{padding}{line}\n");
+            }
+            return sb.ToString();
+        }
+
+
+        private void ProcessEventMapping()
+        {
+            if (activeEditor == null || activeEditor.DataManager == null) return;
+            var editorCleanState = ScintillaManager.IsEditorClean(activeEditor);
+            Debug.Log($"Editor clean state: {editorCleanState}");
+            var checkForEventMapping = chkEventMapping.Checked;
+            var checkForEventMapXrefs = chkEventMapXrefs.Checked;
+            Debug.Log($"Event map info: {activeEditor.EventMapInfo}");
+            if (checkForEventMapping && activeEditor.EventMapInfo != null)
+            {
+                var showClassText = optClassText.Checked;
+                Debug.Log($"Show class text: {showClassText}");
+
+                var items = activeEditor.DataManager.GetEventMapItems(activeEditor.EventMapInfo);
+                
+                Debug.Log($"EventMap items: {items.Count}");
+
+                var preItems = items.Where(i => i.Sequence == EventMapSequence.Pre).OrderBy(i => i.SeqNumber).ToList();
+                var postItems = items.Where(i => i.Sequence == EventMapSequence.Post).OrderBy(i => i.SeqNumber).ToList();
+                var overrideItems = items.Where(i => i.Sequence == EventMapSequence.Replace).OrderBy(i => i.SeqNumber).ToList();
+
+                Debug.Log($"Pre items: {preItems.Count}, Post items: {postItems.Count}, Override items: {overrideItems.Count}");
+
+                Debug.Log($"Inserting event mapping information...");
+                if (overrideItems.Count + preItems.Count > 0)
+                {
+                    ScintillaManager.InsertTextAtLocation(activeEditor, 0, "\n");
+                    var preText = FormatPrefixText(activeEditor, overrideItems, preItems, showClassText);
+                    ScintillaManager.SetAnnotation(activeEditor, 0, preText, AnnotationStyle.Gray);
+                }
+                
+
+                if (postItems.Count > 0)
+                {                    
+                    Debug.Log($"Inserting event mapping information:");
+                    var lineCount = ScintillaManager.GetLineCount(activeEditor);
+                    var postText = FormatPostfixText(activeEditor, postItems, showClassText);
+                    ScintillaManager.SetAnnotation(activeEditor, lineCount-1, postText, AnnotationStyle.Gray);                    
+                }
+
+            }
+
+            if (checkForEventMapXrefs)
+            {
+                if (activeEditor.ClassPath != string.Empty)
+                {
+                    var xrefs = activeEditor.DataManager.GetEventMapXrefs(activeEditor.ClassPath);
+                    var groups = xrefs.GroupBy(x => x.ContentReference);
+
+                    if (xrefs.Count > 0)
+                    {
+                        StringBuilder sb = new StringBuilder();
+                        sb.Append("Event Mapping Xrefs:\n");
+
+                        foreach(var g in groups)
+                        {
+                            sb.Append($"Content Reference: {g.Key}\n");
+                            foreach (var xref in xrefs)
+                            {
+                                sb.Append($"  {xref}\n");
+                            }
+                        }
+
+                        ScintillaManager.InsertTextAtLocation(activeEditor, 0, "\n");
+                        ScintillaManager.SetAnnotation(activeEditor, 0, sb.ToString(), AnnotationStyle.Gray);
+                    }
+                }
+            }
+            if (editorCleanState)
+            {
+                Debug.Log("Resetting save point");
+                ScintillaManager.SetSavePoint(activeEditor, true);
+            }
+        }
 
         // Handle a newly detected editor
         private void ProcessNewEditor(ScintillaEditor editor)
@@ -1665,6 +1856,12 @@ namespace AppRefiner
             if (chkPromptForDB.Checked && editor.DataManager == null)
             {
                 ConnectToDB();
+            }
+            Debug.Log($"Event mapping flags: {chkEventMapping.Checked}, {chkEventMapXrefs.Checked}");
+            if (editor.DataManager!=null && (chkEventMapping.Checked || chkEventMapXrefs.Checked))
+            {
+                Debug.Log($"Processing event mapping for editor: {editor.RelativePath}");
+                ProcessEventMapping();
             }
 
         }
@@ -1781,12 +1978,20 @@ namespace AppRefiner
                             editorToSave.ContentString = ScintillaManager.GetScintillaText(editorToSave);
                             SaveSnapshot(editorToSave);
                         }
+
+                        Debug.Log("Event mapping flags: " + chkEventMapping.Checked + ", " + chkEventMapXrefs.Checked);
+                        if (editorToSave.DataManager != null && (chkEventMapping.Checked || chkEventMapXrefs.Checked))
+                        {
+                            Debug.Log($"Processing event mapping for editor: {editorToSave.RelativePath}");
+                            ProcessEventMapping();
+                        }
                     }
                 });
             }
             catch (Exception ex)
             {
                 Debug.Log($"Error processing debounced savepoint: {ex.Message}");
+                Debug.Log(ex.StackTrace);
             }
         }
 
@@ -1938,6 +2143,10 @@ namespace AppRefiner
             }
         }
 
+        private void radioButton2_CheckedChanged(object sender, EventArgs e)
+        {
+
+        }
     }
 }
 

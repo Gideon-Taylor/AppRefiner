@@ -22,7 +22,9 @@ namespace AppRefiner
 
         public void LoadGeneralSettings(CheckBox chkInitCollapsed, CheckBox chkOnlyPPC, CheckBox chkBetterSQL,
                                       CheckBox chkAutoDark, CheckBox chkAutoPair,
-                                      CheckBox chkPromptForDB, out string? lintReportPath, out string? TNS_ADMIN)
+                                      CheckBox chkPromptForDB, out string? lintReportPath, out string? TNS_ADMIN, 
+                                      CheckBox eventMapping, CheckBox eventMapXrefs, RadioButton showClassPath,
+                                      RadioButton showClassText)
         {
             // Wrap in try-finally if isLoadingSettings logic is needed externally
             try
@@ -34,6 +36,10 @@ namespace AppRefiner
                 chkAutoPair.Checked = Properties.Settings.Default.autoPair;
                 chkPromptForDB.Checked = Properties.Settings.Default.promptForDB;
                 lintReportPath = Properties.Settings.Default.LintReportPath;
+                eventMapping.Checked = Properties.Settings.Default.checkEventMapping;
+                eventMapXrefs.Checked = Properties.Settings.Default.checkEventMapXrefs;
+                showClassPath.Checked = Properties.Settings.Default.showClassPath;
+                showClassText.Checked = Properties.Settings.Default.showClassText;
                 TNS_ADMIN = Properties.Settings.Default.TNS_ADMIN;
             }
             catch (Exception ex)
@@ -47,7 +53,9 @@ namespace AppRefiner
 
         public void SaveGeneralSettings(bool initCollapsed, bool onlyPPC, bool betterSQL, 
                                       bool autoDark, bool autoPair, 
-                                      bool promptForDB, string? lintReportPath, string? TNS_ADMIN)
+                                      bool promptForDB, string? lintReportPath, string? TNS_ADMIN,
+                                      bool eventMapping, bool eventMapXrefs,
+                                      bool showClassPath, bool showClassText)
         {
             Properties.Settings.Default.initCollapsed = initCollapsed;
             Properties.Settings.Default.onlyPPC = onlyPPC;
@@ -57,6 +65,11 @@ namespace AppRefiner
             Properties.Settings.Default.promptForDB = promptForDB;
             Properties.Settings.Default.LintReportPath = lintReportPath;
             Properties.Settings.Default.TNS_ADMIN = TNS_ADMIN;
+            Properties.Settings.Default.checkEventMapping = eventMapping;
+            Properties.Settings.Default.checkEventMapXrefs = eventMapXrefs;
+            Properties.Settings.Default.showClassPath = showClassPath;
+            Properties.Settings.Default.showClassText = showClassText;
+
         }
         
         public void SaveChanges()

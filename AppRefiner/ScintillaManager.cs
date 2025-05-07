@@ -19,6 +19,7 @@ using Antlr4.Runtime.Tree;
 using AppRefiner.PeopleCode;
 using Antlr4.Runtime.Atn;
 using static AppRefiner.AutoCompleteService;
+using DiffPlex.Model;
 
 namespace AppRefiner
 {
@@ -34,6 +35,7 @@ namespace AppRefiner
         // Scintilla messages.
         private const int SCI_SETTEXT = 2181;
         private const int SCI_GETTEXT = 2182;
+        private const int SCI_INSERTTEXT = 2003;
         private const int SCI_GETLENGTH = 2006;
         private const int SCI_SETPROPERTY = 4004;
         private const int SCI_SETFOLDLEVEL = 2222;
@@ -62,6 +64,7 @@ namespace AppRefiner
         private const int SC_MARKNUM_FOLDEROPEN = 31;
         private const int SC_MARK_FULLRECT = 26;
         private const int SCI_GETLINEENDPOSITION = 2136;
+        private const int SCI_GETLINECOUNT = 2154;
         private const int SC_MARK_BOXPLUS = 12;
         private const int SC_MARK_BOXMINUS = 14;
         private const int SC_MARK_VLINE = 9;
@@ -628,6 +631,8 @@ namespace AppRefiner
 
             editor.SendMessage(SCI_SETINDICATORCURRENT, indicatorNumber, IntPtr.Zero);
             editor.SendMessage(SCI_INDICATORCLEARRANGE, indicator.Start, indicator.Length);
+
+            editor.ActiveIndicators.Remove(indicator);
         }
 
 
@@ -637,13 +642,13 @@ namespace AppRefiner
         /// <param name="editor">The ScintillaEditor to clear all indicators from</param>
         public static void ClearAllIndicators(ScintillaEditor editor)
         {
-            foreach (var indicator in editor.ActiveIndicators)
+            for (var x = 0; x < editor.ActiveIndicators.Count; x++) 
             {
-                RemoveIndicator(editor, indicator);
+                RemoveIndicator(editor, editor.ActiveIndicators[x]);
             }
 
             // Clear the active indicators list
-            editor.ActiveIndicators.Clear();
+            //editor.ActiveIndicators.Clear();
         }
 
         public static void InitAnnotationStyles(ScintillaEditor editor)
@@ -910,7 +915,7 @@ namespace AppRefiner
 
         }
 
-        internal static bool IsEditorClean(ScintillaEditor editor)
+        public static bool IsEditorClean(ScintillaEditor editor)
         {
             return editor.SendMessage(SCI_GETMODIFY, 0, 0) == 0;
         }
@@ -1061,17 +1066,14 @@ namespace AppRefiner
             /* update local content hash */
         }
 
-        internal static void ApplySquiggles(ScintillaEditor editor)
+        public static void SetSavePoint(ScintillaEditor editor, bool editorExpectingSave = false)
         {
-            /* set indicator to indicator 0 */
-            editor.SendMessage(SCI_SETINDICATORCURRENT, 0, 0);
-
-            /* fill in the first 10 characters */
-            editor.SendMessage(SCI_INDICATORFILLRANGE, 0, 10);
-
-            SetAnnotation(editor, 0, "Import is not needed");
+            if (editorExpectingSave)
+            {
+                editorsExpectingSavePoint.Add(editor.hWnd);
+            }
+            editor.SendMessage(SCI_SETSAVEPOINT, 0, 0);
         }
-
 
         internal static void ShowCallTip(ScintillaEditor editor, IntPtr position)
         {
@@ -1391,7 +1393,9 @@ namespace AppRefiner
             
             // Clear all indicators
             ClearAllIndicators(activeEditor);
-            
+
+            ClearAnnotations(activeEditor);
+
             // Recolorize the document
             var docLength = activeEditor.SendMessage(SCI_GETLENGTH, 0, 0);
             activeEditor.SendMessage(SCI_COLOURISE, 0, docLength);
@@ -1840,6 +1844,39 @@ namespace AppRefiner
         internal static void SetLineFoldStatus(ScintillaEditor activeEditor, int lineNumber, bool folded)
         {
             activeEditor.SendMessage(SCI_FOLDLINE, lineNumber, folded ? 0 : 1);
+        }
+
+        internal static bool InsertTextAtLocation(ScintillaEditor editor, int location, string text)
+        {
+            if (editor == null || string.IsNullOrEmpty(text))
+                return false;
+
+            // Convert the text into a byte array using the default encoding.
+            // We need to include an extra byte for the terminating null.
+            byte[] textBytes = Encoding.Default.GetBytes(text);
+            int neededSize = textBytes.Length + 1; // +1 for the null terminator
+
+            var remoteBuffer = GetProcessBuffer(editor, (uint)neededSize);
+
+            // Create a buffer that includes a terminating null.
+            byte[] buffer = new byte[neededSize];
+            Buffer.BlockCopy(textBytes, 0, buffer, 0, textBytes.Length);
+            buffer[neededSize - 1] = 0;  // Ensure null termination.
+
+            // Write the text into the remote process's memory.
+            if (!WriteProcessMemory(editor.hProc, remoteBuffer, buffer, neededSize, out int bytesWritten) || bytesWritten != neededSize)
+                return false;
+
+            // Use SCI_REPLACESEL to insert text at the current cursor position
+            // SCI_REPLACESEL(0, pointer to null-terminated string)
+            editor.SendMessage(SCI_INSERTTEXT, location, remoteBuffer);
+
+            return true;
+        }
+
+        internal static int GetLineCount(ScintillaEditor activeEditor)
+        {
+            return (int)activeEditor.SendMessage(SCI_GETLINECOUNT, 0, 0);
         }
     }
 }
