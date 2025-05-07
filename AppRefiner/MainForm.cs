@@ -767,69 +767,6 @@ namespace AppRefiner
                 }
             ));
 
-            // Add toggle commands for MainForm checkboxes
-            AvailableCommands.Add(new Command(
-                "Editor: Toggle Auto Collapse",
-                () => chkInitCollapsed.Checked ? "Auto Collapse is ON - Click to disable" : "Auto Collapse is OFF - Click to enable",
-                () =>
-                {
-                    chkInitCollapsed.Checked = !chkInitCollapsed.Checked;
-                }
-            ));
-
-            AvailableCommands.Add(new Command(
-                "Editor: Toggle Only PeopleCode Editors",
-                () => chkOnlyPPC.Checked ? "Only PeopleCode is ON - Click to disable" : "Only PeopleCode is OFF - Click to enable",
-                () =>
-                {
-                    chkOnlyPPC.Checked = !chkOnlyPPC.Checked;
-                }
-            ));
-
-            AvailableCommands.Add(new Command(
-                "Editor: Toggle Auto Dark Mode",
-                () => chkAutoDark.Checked ? "Auto Dark Mode is ON - Click to disable" : "Auto Dark Mode is OFF - Click to enable",
-                () =>
-                {
-                    chkAutoDark.Checked = !chkAutoDark.Checked;
-                }
-            ));
-
-            AvailableCommands.Add(new Command(
-                "Editor: Toggle Auto Format SQL",
-                () => chkBetterSQL.Checked ? "Auto Format SQL is ON - Click to disable" : "Auto Format SQL is OFF - Click to enable",
-                () =>
-                {
-                    chkBetterSQL.Checked = !chkBetterSQL.Checked;
-                }
-            ));
-
-
-
-
-            // Add styler toggle commands with "Styler:" prefix
-            foreach (var styler in stylerManager?.StylerRules ?? new List<BaseStyler>())
-            {
-                AvailableCommands.Add(new Command(
-                    $"Styler: Toggle {styler.Description}",
-                    () => styler.Active ? $"Currently enabled - Click to disable" : $"Currently disabled - Click to enable",
-                    () =>
-                    {
-                        styler.Active = !styler.Active;
-
-                        stylerManager?.ProcessStylersForEditor(activeEditor);
-
-                        // Update corresponding grid row if exists
-                        var row = dataGridView3.Rows.Cast<DataGridViewRow>()
-                            .FirstOrDefault(r => r.Tag is BaseStyler s && s == styler);
-                        if (row != null)
-                        {
-                            row.Cells[0].Value = styler.Active;
-                        }
-                    }
-                ));
-            }
-
             // Add refactoring commands using RefactorManager
             if (refactorManager != null)
             {
@@ -913,31 +850,6 @@ namespace AppRefiner
                             }
                         }
                         ));
-                }
-            }
-
-            // Add linter toggle commands
-            if (linterManager != null)
-            {
-                foreach (var linter in linterManager.LinterRules)
-                {
-                    BaseLintRule currentLinter = linter; // Capture instance
-                    AvailableCommands.Add(new Command(
-                            $"Lint: Toggle {currentLinter.Description}",
-                            () => currentLinter.Active ? $"Currently enabled - Click to disable" : $"Currently disabled - Click to enable",
-                        () =>
-                        {
-                            currentLinter.Active = !currentLinter.Active;
-
-                            // Update corresponding grid row if exists
-                            var row = dataGridView1.Rows.Cast<DataGridViewRow>()
-                                    .FirstOrDefault(r => r.Tag is BaseLintRule l && l == currentLinter);
-                            if (row != null)
-                            {
-                                row.Cells[0].Value = currentLinter.Active;
-                            }
-                        }
-                    ));
                 }
             }
 
