@@ -290,7 +290,11 @@ localVariableDeclAssignment
 	;
 
 ifStatement
-	:	IF expression THEN SEMI* statementBlock? (ELSE SEMI* statementBlock?)? END_IF
+	:	IF expression THEN SEMI* statementBlock? elseStatement? END_IF
+	;
+
+elseStatement
+	:  ELSE SEMI* statementBlock?
 	;
 
 forStatement

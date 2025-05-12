@@ -69,9 +69,7 @@ namespace AppRefiner.Linters
         {
             // If this statement block is inside an ELSE clause and contains an immediate IF statement,
             // that's a pattern we should highlight even if the nesting isn't too deep yet
-            if (context.Parent is IfStatementContext ifStmt &&
-                context == ifStmt.GetChild(ifStmt.ChildCount - 2) && // The block before END_IF is the ELSE block
-                ifStmt.ELSE() != null)
+            if (context.Parent is ElseStatementContext elseStmt)
             {
                 // Check if the first statement in this block is an IF
                 var statements = context.statements();
