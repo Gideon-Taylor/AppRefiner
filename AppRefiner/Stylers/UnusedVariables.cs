@@ -1,3 +1,4 @@
+using Antlr4.Runtime.Misc;
 using AppRefiner.Linters.Models;
 using AppRefiner.QuickFixes;
 using System;
@@ -136,6 +137,21 @@ namespace AppRefiner.Stylers
             {
                 instanceVar.Used = true;
             }
+        }
+
+        public override void EnterForStatement([NotNull] ForStatementContext context)
+        {
+            base.EnterForStatement(context);
+            if (context == null) return;
+            var forVar = context.USER_VARIABLE();
+            if (forVar == null) return;
+            string forVarName = forVar.GetText();
+            // Check if this is an instance variable and mark it as used
+            if (instanceVariables.TryGetValue(forVarName, out var instanceVar) && instanceVar != null)
+            {
+                instanceVar.Used = true;
+            }
+
         }
 
         // Track %This dot access to instance variables (without the & prefix)
