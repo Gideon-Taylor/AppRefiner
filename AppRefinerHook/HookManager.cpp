@@ -15,6 +15,24 @@ void HandleScintillaNotification(HWND hwnd, SCNotification* scn, HWND callbackWi
     if (!scn || !hwnd || !IsWindow(hwnd)) return;
     
     try {
+
+        /* Check if we are deleting the entire document */
+        if (scn->nmhdr.code == SCN_MODIFIED) {
+
+            if (scn->modificationType == (SC_MOD_BEFOREDELETE | SC_PERFORMED_USER)) {
+                /* Get document length */
+                int docLength = SendMessage(scn->nmhdr.hwndFrom, SCI_GETLENGTH, 0, 0);
+
+                /* are we about to delete the entire thing (ie, position == 0 and length == doc length */
+                if (scn->position == 0 && scn->length == docLength) {
+                    // Notify the callback window about the deletion
+                    SendMessage(callbackWindow, WM_AR_BEFORE_DELETE_ALL, (WPARAM)0, (LPARAM)docLength);
+                }
+            }
+
+        }
+
+
         // Handle typing events for EditorManager
         if (scn->nmhdr.code == SCN_CHARADDED || 
             (scn->nmhdr.code == SCN_MODIFIED && 
@@ -201,8 +219,8 @@ LRESULT CALLBACK SubclassProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam
                 // Check if it's a Scintilla control (class name starts with "Scintilla")
                 if (strncmp(className, "Scintilla", 9) == 0) {
                     // It's a Scintilla control, so we can treat lParam as SCNotification
-                    SCNotification* scn = (SCNotification*)lParam;
-                    
+                    SCNotification* scn = (SCNotification*)lParam;                    
+
                     // Process the Scintilla notification with the callback window
                     HandleScintillaNotification(nmhdr->hwndFrom, scn, callbackWindow);
                 }
