@@ -21,6 +21,53 @@ namespace AppRefiner.Stylers
             Active = true;
         }
 
+        
+
+        // handle non private properties (class properties) 
+        public override void EnterNonPrivateProperty([NotNull] NonPrivatePropertyContext context)
+        {
+            base.EnterNonPrivateProperty(context);
+
+            var propDecl = context.propertyDeclaration();
+            
+            if (propDecl is PropertyGetSetContext propGetSet)
+            {
+
+                var propID = propGetSet.genericID();
+                if (propID == null) return;
+                var propName = propID.GetText();
+
+                var propAsVar = $"&{propName}";
+                // Add to instance variables dictionary
+                if (!instanceVariables.ContainsKey(propAsVar))
+                {
+                    instanceVariables[propAsVar] = new VariableInfo(
+                        propAsVar,
+                        "Property", // Type is just "Instance" for now
+                        propID.Start.Line,
+                        (propID.Start.StartIndex, propID.Stop.StopIndex)
+                    );
+                }
+            } else if (propDecl is PropertyDirectContext propDirect)
+            {
+                var propID = propDirect.genericID();
+                if (propID == null) return;
+                var propName = propID.GetText();
+                var propAsVar = $"&{propName}";
+                // Add to instance variables dictionary
+                if (!instanceVariables.ContainsKey(propAsVar))
+                {
+                    instanceVariables[propAsVar] = new VariableInfo(
+                        propAsVar,
+                        "Property", // Type is just "Instance" for now
+                        propID.Start.Line,
+                        (propID.Start.StartIndex, propID.Stop.StopIndex)
+                    );
+                }
+            }
+
+        }
+
         // Handle private instance variables
         public override void EnterPrivateProperty(PrivatePropertyContext context)
         {
@@ -214,6 +261,7 @@ namespace AppRefiner.Stylers
                 varNode.Symbol.StopIndex
             );
         }
+
 
         // Handle function parameters directly in the function scope
         public override void EnterFunctionArgument(FunctionArgumentContext context)
