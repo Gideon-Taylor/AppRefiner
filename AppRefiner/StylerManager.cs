@@ -102,6 +102,7 @@ namespace AppRefiner.Stylers
                 styler.DataManager = editorDataManager;
                 styler.Indicators = newIndicators; // Styler adds indicators to this list
                 styler.Comments = comments;
+                styler.Editor = editor;
                 walker.AddListener(styler);
             }
 

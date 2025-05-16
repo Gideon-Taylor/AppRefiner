@@ -50,5 +50,7 @@ namespace AppRefiner.Stylers
         /// The database manager instance, if available
         /// </summary>
         public IDataManager? DataManager { get; set; }
+
+        public ScintillaEditor? Editor { get; set; }
     }
 }
