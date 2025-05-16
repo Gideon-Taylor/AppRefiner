@@ -12,8 +12,8 @@ namespace AppRefiner.Stylers
         protected ScopedStyler()
         {
             // Start with a global scope
-            scopeStack.Push(new Dictionary<string, T>());
-            variableScopeStack.Push(new Dictionary<string, VariableInfo>());
+            scopeStack.Push(new Dictionary<string, T>(StringComparer.InvariantCultureIgnoreCase));
+            variableScopeStack.Push(new Dictionary<string, VariableInfo>(StringComparer.InvariantCultureIgnoreCase));
         }
 
         // Variable tracking methods
@@ -121,8 +121,8 @@ namespace AppRefiner.Stylers
         // Parser overrides for scope management
         public override void EnterMethod(MethodContext context)
         {
-            scopeStack.Push(new Dictionary<string, T>());
-            variableScopeStack.Push(new Dictionary<string, VariableInfo>());
+            scopeStack.Push(new Dictionary<string, T>(StringComparer.InvariantCultureIgnoreCase));
+            variableScopeStack.Push(new Dictionary<string, VariableInfo>(StringComparer.InvariantCultureIgnoreCase));
             OnEnterScope();
         }
 
@@ -135,8 +135,8 @@ namespace AppRefiner.Stylers
 
         public override void EnterFunctionDefinition(FunctionDefinitionContext context)
         {
-            scopeStack.Push(new Dictionary<string, T>());
-            variableScopeStack.Push(new Dictionary<string, VariableInfo>());
+            scopeStack.Push(new Dictionary<string, T>(StringComparer.InvariantCultureIgnoreCase));
+            variableScopeStack.Push(new Dictionary<string, VariableInfo>(StringComparer.InvariantCultureIgnoreCase));
             OnEnterScope();
         }
 
@@ -149,8 +149,8 @@ namespace AppRefiner.Stylers
 
         public override void EnterGetter(GetterContext context)
         {
-            scopeStack.Push(new Dictionary<string, T>());
-            variableScopeStack.Push(new Dictionary<string, VariableInfo>());
+            scopeStack.Push(new Dictionary<string, T>(StringComparer.InvariantCultureIgnoreCase));
+            variableScopeStack.Push(new Dictionary<string, VariableInfo>(StringComparer.InvariantCultureIgnoreCase));
             OnEnterScope();
         }
 
@@ -163,8 +163,8 @@ namespace AppRefiner.Stylers
 
         public override void EnterSetter(SetterContext context)
         {
-            scopeStack.Push(new Dictionary<string, T>());
-            variableScopeStack.Push(new Dictionary<string, VariableInfo>());
+            scopeStack.Push(new Dictionary<string, T>(StringComparer.InvariantCultureIgnoreCase));
+            variableScopeStack.Push(new Dictionary<string, VariableInfo>(StringComparer.InvariantCultureIgnoreCase));
             OnEnterScope();
         }
 
@@ -239,8 +239,8 @@ namespace AppRefiner.Stylers
                 dict.Clear();
             }
 
-            scopeStack.Push(new Dictionary<string, T>());
-            variableScopeStack.Push(new Dictionary<string, VariableInfo>());
+            scopeStack.Push(new Dictionary<string, T>(StringComparer.InvariantCultureIgnoreCase));
+            variableScopeStack.Push(new Dictionary<string, VariableInfo>(StringComparer.InvariantCultureIgnoreCase));
         }
 
         // Helper method to extract type information from the type context

@@ -10,9 +10,9 @@ namespace AppRefiner.Stylers
     public class UnusedLocalVariableStyler : ScopedStyler<object>
     {
         private const uint HIGHLIGHT_COLOR = 0x73737380; // Light gray text (no alpha)
-        private readonly Dictionary<string, VariableInfo> instanceVariables = new();
+        private readonly Dictionary<string, VariableInfo> instanceVariables = new(StringComparer.InvariantCultureIgnoreCase);
         // Track method parameters for later association with method scopes
-        private readonly Dictionary<string, List<VariableInfo>> pendingMethodParameters = new();
+        private readonly Dictionary<string, List<VariableInfo>> pendingMethodParameters = new(StringComparer.InvariantCultureIgnoreCase);
         private string? currentMethodName;
 
         public UnusedLocalVariableStyler()

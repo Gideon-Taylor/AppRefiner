@@ -9,8 +9,8 @@ namespace AppRefiner.Stylers
     public class UndefinedVariableStyler : ScopedStyler<bool>
     {
         private const uint HIGHLIGHT_COLOR = 0x0000FFA0; // Harsh red color with high alpha
-        private readonly HashSet<string> instanceVariables = new();
-        private readonly HashSet<string> classProperties = new(); // Track declared class properties
+        private readonly HashSet<string> instanceVariables = new(StringComparer.InvariantCultureIgnoreCase);
+        private readonly HashSet<string> classProperties = new(StringComparer.InvariantCultureIgnoreCase); // Track declared class properties
 
         public UndefinedVariableStyler()
         {
