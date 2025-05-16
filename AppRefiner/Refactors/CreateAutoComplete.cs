@@ -4,6 +4,8 @@ using System.Diagnostics;
 using System.Collections.Generic;
 using System.Linq;
 using static AppRefiner.PeopleCode.PeopleCodeParser;
+using AppRefiner.Database;
+using AppRefiner.Services;
 
 namespace AppRefiner.Refactors
 {
@@ -422,6 +424,23 @@ namespace AppRefiner.Refactors
 
                 // If auto-pairing is disabled, we need to add both opening and closing parentheses
                 insertText = " " + detectedClassType + "(";
+
+                if (Editor.DataManager != null)
+                {
+                    var appClassAST = new AstService(Editor.DataManager).GetAppClassAst(detectedClassType);
+                    if (appClassAST != null)
+                    {
+                        var className = appClassAST.Name;
+                        /* find constructor if any */
+                        var constructor = appClassAST.Methods.Where(m => m.Name.Equals(className)).FirstOrDefault();
+                        if (constructor != null)
+                        {
+                            // Add constructor parameters to the insert text
+                            var paramsList = constructor.Parameters.Select(p => p.Name).ToList();
+                            insertText += string.Join(", ", paramsList);
+                        }
+                    }
+                }
 
                 // Replace from after "create" to the opening parenthesis and add both parentheses
                 ReplaceText(
