@@ -15,17 +15,25 @@ void HandleScintillaNotification(HWND hwnd, SCNotification* scn, HWND callbackWi
     if (!scn || !hwnd || !IsWindow(hwnd)) return;
     
     try {
-
+        char debugMsg[256];
+        
         /* Check if we are deleting the entire document */
         if (scn->nmhdr.code == SCN_MODIFIED) {
 
             if (scn->modificationType == (SC_MOD_BEFOREDELETE | SC_PERFORMED_USER)) {
+				sprintf_s(debugMsg, "SCN_MODIFIED: SC_MOD_BEFOREDELETE detected\n");
+				OutputDebugStringA(debugMsg);
                 /* Get document length */
                 int docLength = SendMessage(scn->nmhdr.hwndFrom, SCI_GETLENGTH, 0, 0);
+				sprintf_s(debugMsg, "Document length: %d\n", docLength);
+				OutputDebugStringA(debugMsg);
 
+				sprintf_s(debugMsg, "Delete length: %p, position: %p\n", scn->length, scn->position);
+				OutputDebugStringA(debugMsg);
                 /* are we about to delete the entire thing (ie, position == 0 and length == doc length */
                 if (scn->position == 0 && scn->length == docLength) {
                     // Notify the callback window about the deletion
+					sprintf_s(debugMsg, "Sending WM_AR_BEFORE_DELETE_ALL message to callback window: %p\n", callbackWindow);
                     SendMessage(callbackWindow, WM_AR_BEFORE_DELETE_ALL, (WPARAM)0, (LPARAM)docLength);
                 }
             }

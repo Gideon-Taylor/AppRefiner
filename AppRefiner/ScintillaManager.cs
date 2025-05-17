@@ -39,6 +39,7 @@ namespace AppRefiner
         private const int SCI_GETLENGTH = 2006;
         private const int SCI_SETPROPERTY = 4004;
         private const int SCI_SETFOLDLEVEL = 2222;
+        private const int SCI_GETFOLDEXPANDED = 2230;
         private const int SCI_REPLACESEL = 2170;
         private const int SC_FOLDLEVELBASE = 0x400;
         private const int SC_FOLDLEVELWHITEFLAG = 0x1000;
@@ -835,6 +836,27 @@ namespace AppRefiner
 
 
             }
+        }
+
+        internal static (int Level, bool Header) GetCurrentLineFoldLevel(ScintillaEditor editor, int lineNum)
+        {
+            // Check if the line is a fold point and toggle it
+            int foldLevel = (int)editor.SendMessage(SCI_GETFOLDLEVEL, lineNum, IntPtr.Zero);
+            int currentLineLevel = foldLevel & SC_FOLDLEVELNUMBERMASK;
+
+            // Check if the line is a fold header (can be folded)
+            bool isHeader = (foldLevel & SC_FOLDLEVELHEADERFLAG) != 0;
+            return (currentLineLevel, isHeader);
+
+        }
+
+        /* Assumes that lineNum is known to be a fold header already */
+        internal static bool IsLineFolded(ScintillaEditor editor, int lineNum)
+        {
+            // Check if the line is a fold point and toggle it
+            int foldLevelExpanded = (int)editor.SendMessage(SCI_GETFOLDEXPANDED, lineNum, IntPtr.Zero);
+
+            return foldLevelExpanded == 0;
         }
 
         internal static void SetDarkMode(ScintillaEditor editor)
