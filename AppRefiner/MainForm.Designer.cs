@@ -41,6 +41,7 @@ namespace AppRefiner
             tabControl1 = new TabControl();
             tabPage1 = new TabPage();
             groupBox2 = new GroupBox();
+            chkEventMapXrefs = new CheckBox();
             groupBox4 = new GroupBox();
             optClassText = new RadioButton();
             optClassPath = new RadioButton();
@@ -81,7 +82,7 @@ namespace AppRefiner
             cmbTemplates = new ComboBox();
             progressBar1 = new ProgressBar();
             lblStatus = new Label();
-            chkEventMapXrefs = new CheckBox();
+            linkDocs = new LinkLabel();
             ((System.ComponentModel.ISupportInitialize)splitContainer1).BeginInit();
             splitContainer1.Panel1.SuspendLayout();
             splitContainer1.Panel2.SuspendLayout();
@@ -144,6 +145,7 @@ namespace AppRefiner
             // 
             // tabPage1
             // 
+            tabPage1.Controls.Add(linkDocs);
             tabPage1.Controls.Add(groupBox2);
             tabPage1.Controls.Add(groupBox1);
             tabPage1.Controls.Add(btnDebugLog);
@@ -167,6 +169,16 @@ namespace AppRefiner
             groupBox2.TabIndex = 0;
             groupBox2.TabStop = false;
             groupBox2.Text = "Event Mapping";
+            // 
+            // chkEventMapXrefs
+            // 
+            chkEventMapXrefs.AutoSize = true;
+            chkEventMapXrefs.Location = new Point(164, 22);
+            chkEventMapXrefs.Name = "chkEventMapXrefs";
+            chkEventMapXrefs.Size = new Size(194, 19);
+            chkEventMapXrefs.TabIndex = 35;
+            chkEventMapXrefs.Text = "Show Event Mapped References";
+            chkEventMapXrefs.UseVisualStyleBackColor = true;
             // 
             // groupBox4
             // 
@@ -607,15 +619,16 @@ namespace AppRefiner
             lblStatus.Text = "Stopped";
             lblStatus.TextAlign = ContentAlignment.MiddleCenter;
             // 
-            // chkEventMapXrefs
+            // linkDocs
             // 
-            chkEventMapXrefs.AutoSize = true;
-            chkEventMapXrefs.Location = new Point(164, 22);
-            chkEventMapXrefs.Name = "chkEventMapXrefs";
-            chkEventMapXrefs.Size = new Size(194, 19);
-            chkEventMapXrefs.TabIndex = 35;
-            chkEventMapXrefs.Text = "Show Event Mapped References";
-            chkEventMapXrefs.UseVisualStyleBackColor = true;
+            linkDocs.AutoSize = true;
+            linkDocs.Location = new Point(6, 444);
+            linkDocs.Name = "linkDocs";
+            linkDocs.Size = new Size(127, 15);
+            linkDocs.TabIndex = 33;
+            linkDocs.TabStop = true;
+            linkDocs.Text = "View Documentation...";
+            linkDocs.LinkClicked += linkDocs_LinkClicked;
             // 
             // MainForm
             // 
@@ -632,6 +645,7 @@ namespace AppRefiner
             splitContainer1.ResumeLayout(false);
             tabControl1.ResumeLayout(false);
             tabPage1.ResumeLayout(false);
+            tabPage1.PerformLayout();
             groupBox2.ResumeLayout(false);
             groupBox2.PerformLayout();
             groupBox4.ResumeLayout(false);
@@ -714,5 +728,6 @@ namespace AppRefiner
         private RadioButton optClassText;
         private RadioButton optClassPath;
         private CheckBox chkEventMapXrefs;
+        private LinkLabel linkDocs;
     }
 }

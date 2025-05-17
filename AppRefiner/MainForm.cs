@@ -114,7 +114,7 @@ namespace AppRefiner
 
             // Instantiate LinterManager (passing UI elements)
             // LoadGeneralSettings needs lintReportPath BEFORE LinterManager is created
-            settingsService.LoadGeneralSettings(chkInitCollapsed, chkOnlyPPC, chkBetterSQL, chkAutoDark, 
+            settingsService.LoadGeneralSettings(chkInitCollapsed, chkOnlyPPC, chkBetterSQL, chkAutoDark,
                                                 chkAutoPairing, chkPromptForDB, out lintReportPath, out TNS_ADMIN,
                                                 chkEventMapping, chkEventMapXrefs, optClassPath, optClassText);
             linterManager = new LinterManager(this, dataGridView1, lblStatus, progressBar1, lintReportPath, settingsService);
@@ -1504,7 +1504,7 @@ namespace AppRefiner
             Debug.Log("Displaying debug dialog...");
             Debug.ShowDebugDialog(Handle);
         }
-        
+
 
         private static string FormatPrefixText(ScintillaEditor activeEditor, List<EventMapItem> overrideItems, List<EventMapItem> preItems, bool showClassText)
         {
@@ -1629,7 +1629,7 @@ namespace AppRefiner
                 Debug.Log($"Show class text: {showClassText}");
 
                 var items = activeEditor.DataManager.GetEventMapItems(activeEditor.EventMapInfo);
-                
+
                 Debug.Log($"EventMap items: {items.Count}");
 
                 var preItems = items.Where(i => i.Sequence == EventMapSequence.Pre).OrderBy(i => i.SeqNumber).ToList();
@@ -1645,10 +1645,10 @@ namespace AppRefiner
                     var preText = FormatPrefixText(activeEditor, overrideItems, preItems, showClassText);
                     ScintillaManager.SetAnnotation(activeEditor, 0, preText, AnnotationStyle.Gray);
                 }
-                
+
 
                 if (postItems.Count > 0)
-                {                    
+                {
                     Debug.Log($"Inserting event mapping information:");
                     var lineCount = ScintillaManager.GetLineCount(activeEditor);
                     var postText = FormatPostfixText(activeEditor, postItems, showClassText);
@@ -2058,6 +2058,17 @@ namespace AppRefiner
         private void radioButton2_CheckedChanged(object sender, EventArgs e)
         {
 
+        }
+
+        private void linkDocs_LinkClicked(object sender, LinkLabelLinkClickedEventArgs e)
+        {
+            /* Navigate to URL */
+            var si = new ProcessStartInfo("https://github.com/Gideon-Taylor/AppRefiner/blob/main/docs/README.md")
+            {
+                UseShellExecute = true
+            };
+            Process.Start(si);
+            linkDocs.LinkVisited = true;
         }
     }
 }
