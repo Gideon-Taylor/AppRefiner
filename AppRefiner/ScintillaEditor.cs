@@ -42,6 +42,12 @@ namespace AppRefiner
             }
             set
             {
+                if (_caption != null && !_caption.Equals(value))
+                {
+                    /* caption has changed, so clear out any old fold paths */
+                    CollapsedFoldPaths.Clear();
+                }
+
                 _caption = value;
                 if (value != null)
                 {
@@ -65,6 +71,7 @@ namespace AppRefiner
                     DetermineRelativeFilePath();
                     SetEventMapInfo();
                     SetClassPath();
+                    
                 }
             }
         }
@@ -116,6 +123,8 @@ namespace AppRefiner
 
         /* static var to capture total time spent parsing */
         public static Stopwatch TotalParseTime { get; set; } = new Stopwatch();
+
+        public List<List<int>> CollapsedFoldPaths { get; set; } = [];
 
         /// <summary>
         /// Gets or creates a parsed program tree for the current editor content.

@@ -73,6 +73,7 @@ namespace AppRefiner
         private const int AR_APP_PACKAGE_SUGGEST = 2500; // New constant for app package suggest
         private const int AR_CREATE_SHORTHAND = 2501; // New constant for create shorthand detection
         private const int AR_TYPING_PAUSE = 2502; // New constant for typing pause detection
+        private const int AR_BEFORE_DELETE_ALL = 2503; // New constant for before delete all detection
         private const int SCN_USERLISTSELECTION = 2014; // User list selection notification
         private const int SCI_REPLACESEL = 0x2170; // Constant for SCI_REPLACESEL
 
@@ -1124,50 +1125,7 @@ namespace AppRefiner
             }
         }
 
-        private void FoldAppRefinerRegions()
-        {
-            if (activeEditor == null || activeEditor.ContentString == null) return;
 
-            var content = activeEditor.ContentString;
-            if (!content.Contains("/* #region")) return; // No regions to fold
-
-            var lines = content.Split('\n', StringSplitOptions.None);
-            var regionStart = 0;
-            var regionEnd = 0;
-            var collapseByDefault = false;
-            for (var x = 0; x < lines.Length; x++)
-            {
-                var line = lines[x].TrimStart();
-
-                if (line.StartsWith("/* #region"))
-                {
-                    /* If the next character is a - we will default this region to collapsed */
-                    if (line.Length > 10 && line[10] == '-')
-                    {
-                        collapseByDefault = true;
-                    }
-
-                    // Fold the line
-                    regionStart = x;
-
-                }
-                else if (line.StartsWith("/* #endregion"))
-                {
-                    // Unfold the line
-                    regionEnd = x;
-
-
-                    if (regionStart != 0 && regionEnd != 0 && regionEnd > regionStart)
-                    {
-                        // Unfold the line
-                        ScintillaManager.SetExplicitFoldRegion(activeEditor, regionStart, regionEnd, collapseByDefault);
-
-                    }
-                }
-
-
-            }
-        }
 
         // Check if content has changed and process if necessary
         private void CheckForContentChanges(ScintillaEditor editor)
@@ -1201,16 +1159,7 @@ namespace AppRefiner
                 stylerManager?.ProcessStylersForEditor(editor);
             }
 
-            if (!editor.HasLexilla || editor.Type == EditorType.SQL || editor.Type == EditorType.Other)
-            {
-                // Perform folding ourselves 
-                // 1. if they are missing Lexilla
-                // 2. if it is a SQL object 
-                // 3. if its an editor type we don't know
-                DoExplicitFolding();
-            }
-
-            FoldAppRefinerRegions();
+            FoldingManager.ProcessFolding(editor);
 
         }
 
@@ -1345,41 +1294,24 @@ namespace AppRefiner
                     CheckForContentChanges(activeEditor);
                 }
             }
-        }
-
-        private async void DoExplicitFolding()
+            else if (m.Msg == AR_BEFORE_DELETE_ALL)
         {
-            if (activeEditor == null)
+                Debug.Log("Received before delete all message");
+                // Only process if we have an active editor
+                if (activeEditor != null && activeEditor.IsValid())
             {
-                return;
+                    var collapsedFoldPaths = FoldingManager.GetCollapsedFoldPathsDirectly(activeEditor);
+                    if (collapsedFoldPaths.Count > 0)
+                    {
+                        activeEditor.CollapsedFoldPaths = collapsedFoldPaths;
+                        FoldingManager.PrintCollapsedFoldPathsDebug(collapsedFoldPaths);
             }
 
-            // Set the status label and progress bar before starting the background task
-            this.Invoke(() =>
-            {
-                lblStatus.Text = "Folding...";
-                progressBar1.Style = ProgressBarStyle.Marquee;
-                progressBar1.MarqueeAnimationSpeed = 30;
-            });
-            Application.DoEvents();
-            // Run the folding operation in a background thread
-            await Task.Run(() =>
-            {
-                // Ensure the activeEditor is not null before proceeding
-                if (activeEditor != null)
-                {
-                    ScintillaManager.SetFoldRegions(activeEditor);
                 }
-            });
+            }
 
-            // Update the UI after the background task completes
-            this.Invoke(() =>
-            {
-                lblStatus.Text = "Monitoring...";
-                progressBar1.Style = ProgressBarStyle.Blocks;
-            });
-            Application.DoEvents();
         }
+
 
         public void SuperGoToCommand()
         {
@@ -1512,7 +1444,7 @@ namespace AppRefiner
             sb.Append("Event Mapping Information:\n");
             /* Handle override items */
             var groups = overrideItems.GroupBy(i => i.ContentReference);
-            foreach(var g in groups)
+            foreach (var g in groups)
             {
                 var cref = g.Key;
                 var item = g.First();
@@ -1652,7 +1584,7 @@ namespace AppRefiner
                     Debug.Log($"Inserting event mapping information:");
                     var lineCount = ScintillaManager.GetLineCount(activeEditor);
                     var postText = FormatPostfixText(activeEditor, postItems, showClassText);
-                    ScintillaManager.SetAnnotation(activeEditor, lineCount-1, postText, AnnotationStyle.Gray);                    
+                    ScintillaManager.SetAnnotation(activeEditor, lineCount - 1, postText, AnnotationStyle.Gray);
                 }
 
             }
@@ -1669,7 +1601,7 @@ namespace AppRefiner
                         StringBuilder sb = new StringBuilder();
                         sb.Append("Event Mapping Xrefs:\n");
 
-                        foreach(var g in groups)
+                        foreach (var g in groups)
                         {
                             sb.Append($"Content Reference: {g.Key}\n");
                             foreach (var xref in xrefs)
@@ -1737,15 +1669,7 @@ namespace AppRefiner
                 editor.FoldEnabled = true;
                 editor.ContentString = ScintillaManager.GetScintillaText(editor);
 
-                if (!editor.HasLexilla || editor.Type == EditorType.SQL || editor.Type == EditorType.Other)
-                {
-                    // Perform folding ourselves 
-                    // 1. if they are missing Lexilla
-                    // 2. if it is a SQL object 
-                    // 3. if its an editor type we don't know
-                    DoExplicitFolding();
-                }
-                FoldAppRefinerRegions();
+                FoldingManager.ProcessFolding(editor);
 
                 if (chkBetterSQL.Checked && editor.Type == EditorType.SQL)
                 {
@@ -1770,7 +1694,7 @@ namespace AppRefiner
                 ConnectToDB();
             }
             Debug.Log($"Event mapping flags: {chkEventMapping.Checked}, {chkEventMapXrefs.Checked}");
-            if (editor.DataManager!=null && (chkEventMapping.Checked || chkEventMapXrefs.Checked))
+            if (editor.DataManager != null && (chkEventMapping.Checked || chkEventMapXrefs.Checked))
             {
                 Debug.Log($"Processing event mapping for editor: {editor.RelativePath}");
                 ProcessEventMapping();
@@ -1897,6 +1821,9 @@ namespace AppRefiner
                             Debug.Log($"Processing event mapping for editor: {editorToSave.RelativePath}");
                             ProcessEventMapping();
                         }
+
+                        /* Reapplying code folds */
+                        FoldingManager.ApplyCollapsedFoldPaths(editorToSave, editorToSave.CollapsedFoldPaths);
                     }
                 });
             }
