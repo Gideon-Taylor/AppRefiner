@@ -556,48 +556,8 @@ namespace AppRefiner
 
 
             editor.SendMessage(SCI_SETFOLDFLAGS, 16 | 4, 0); //Display a horizontal line above and below the line after folding 
-            editor.FoldEnabled = true;
+            editor.FoldingEnabled = true;
 
-            /* Use marker 21 for salmon highlight 
-            editor.SendMessage(SCI_MARKERDEFINE, 21, SC_MARK_BACKGROUND);
-            editor.SendMessage(SCI_MARKERSETBACK, 21, 0x7AA0FF);
-
-             Use marker 22 for gray highlight 
-            editor.SendMessage(SCI_MARKERDEFINE, 22, SC_MARK_BACKGROUND);
-            editor.SendMessage(SCI_MARKERSETBACK, 22, 0x808080);
-*/
-
-            /* Set up indicators */
-
-            /* Create Salmon Highlighter */
-            /* editor.SendMessage(SCI_INDICSETSTYLE, SALMON_HIGLIGHTER, INDIC_FULLBOX);
-            editor.SendMessage(SCI_INDICSETFORE, SALMON_HIGLIGHTER, 0x4DB7FF);
-            editor.SendMessage(SCI_INDICSETALPHA, SALMON_HIGLIGHTER, 0x80);
-            editor.SendMessage(SCI_INDICSETUNDER, SALMON_HIGLIGHTER, 1);
-
-            editor.SendMessage(SCI_INDICSETSTYLE, GRAY_HIGLIGHTER, INDIC_FULLBOX);
-            editor.SendMessage(SCI_INDICSETFORE, GRAY_HIGLIGHTER, 0x808080);
-            editor.SendMessage(SCI_INDICSETALPHA, GRAY_HIGLIGHTER, 0x60);
-            editor.SendMessage(SCI_INDICSETUNDER, GRAY_HIGLIGHTER, 1);
-
-             Create Blue Highlighter 
-            editor.SendMessage(SCI_INDICSETSTYLE, BLUE_HIGLIGHTER, INDIC_FULLBOX);
-            editor.SendMessage(SCI_INDICSETFORE, BLUE_HIGLIGHTER, 0xD9D6A5); 
-            editor.SendMessage(SCI_INDICSETALPHA, BLUE_HIGLIGHTER, 0x60);
-            editor.SendMessage(SCI_INDICSETUNDER, BLUE_HIGLIGHTER, 1);
-
-             Create Linter Suppression Highlighter 
-            editor.SendMessage(SCI_INDICSETSTYLE, LINTER_SUPPRESSION_HIGHLIGHTER, INDIC_FULLBOX);
-            editor.SendMessage(SCI_INDICSETFORE, LINTER_SUPPRESSION_HIGHLIGHTER, 0x50CB50); 
-            editor.SendMessage(SCI_INDICSETALPHA, LINTER_SUPPRESSION_HIGHLIGHTER, 0x40);
-            editor.SendMessage(SCI_INDICSETUNDER, LINTER_SUPPRESSION_HIGHLIGHTER, 1);
-
-            // Initialize the ColorToHighlighterMap with the predefined highlighters
-            editor.ColorToHighlighterMap[0x4DB7FF] = SALMON_HIGLIGHTER;    // Salmon
-            editor.ColorToHighlighterMap[0x808080] = GRAY_HIGLIGHTER;      // Gray
-            editor.ColorToHighlighterMap[0xD9D6A5] = BLUE_HIGLIGHTER;      // Blue
-            editor.ColorToHighlighterMap[0x50CB50] = LINTER_SUPPRESSION_HIGHLIGHTER; // Linter Suppression
-            */            
         }
 
         private static void HighlightText(ScintillaEditor editor, int highlighterNumber, int start, int length)

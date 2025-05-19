@@ -40,6 +40,7 @@ namespace AppRefiner
             splitContainer1 = new SplitContainer();
             tabControl1 = new TabControl();
             tabPage1 = new TabPage();
+            linkDocs = new LinkLabel();
             groupBox2 = new GroupBox();
             chkEventMapXrefs = new CheckBox();
             groupBox4 = new GroupBox();
@@ -82,7 +83,7 @@ namespace AppRefiner
             cmbTemplates = new ComboBox();
             progressBar1 = new ProgressBar();
             lblStatus = new Label();
-            linkDocs = new LinkLabel();
+            chkCodeFolding = new CheckBox();
             ((System.ComponentModel.ISupportInitialize)splitContainer1).BeginInit();
             splitContainer1.Panel1.SuspendLayout();
             splitContainer1.Panel2.SuspendLayout();
@@ -157,6 +158,17 @@ namespace AppRefiner
             tabPage1.TabIndex = 0;
             tabPage1.Text = "Editor Tweaks";
             tabPage1.UseVisualStyleBackColor = true;
+            // 
+            // linkDocs
+            // 
+            linkDocs.AutoSize = true;
+            linkDocs.Location = new Point(6, 444);
+            linkDocs.Name = "linkDocs";
+            linkDocs.Size = new Size(127, 15);
+            linkDocs.TabIndex = 33;
+            linkDocs.TabStop = true;
+            linkDocs.Text = "View Documentation...";
+            linkDocs.LinkClicked += linkDocs_LinkClicked;
             // 
             // groupBox2
             // 
@@ -266,6 +278,7 @@ namespace AppRefiner
             // 
             // grpEditorSettings
             // 
+            grpEditorSettings.Controls.Add(chkCodeFolding);
             grpEditorSettings.Controls.Add(chkPromptForDB);
             grpEditorSettings.Controls.Add(chkAutoPairing);
             grpEditorSettings.Controls.Add(chkBetterSQL);
@@ -314,7 +327,7 @@ namespace AppRefiner
             // chkOnlyPPC
             // 
             chkOnlyPPC.AutoSize = true;
-            chkOnlyPPC.Location = new Point(10, 47);
+            chkOnlyPPC.Location = new Point(10, 69);
             chkOnlyPPC.Name = "chkOnlyPPC";
             chkOnlyPPC.Size = new Size(76, 19);
             chkOnlyPPC.TabIndex = 16;
@@ -334,7 +347,7 @@ namespace AppRefiner
             // chkInitCollapsed
             // 
             chkInitCollapsed.AutoSize = true;
-            chkInitCollapsed.Location = new Point(10, 22);
+            chkInitCollapsed.Location = new Point(10, 47);
             chkInitCollapsed.Name = "chkInitCollapsed";
             chkInitCollapsed.Size = new Size(100, 19);
             chkInitCollapsed.TabIndex = 15;
@@ -619,16 +632,15 @@ namespace AppRefiner
             lblStatus.Text = "Stopped";
             lblStatus.TextAlign = ContentAlignment.MiddleCenter;
             // 
-            // linkDocs
+            // chkCodeFolding
             // 
-            linkDocs.AutoSize = true;
-            linkDocs.Location = new Point(6, 444);
-            linkDocs.Name = "linkDocs";
-            linkDocs.Size = new Size(127, 15);
-            linkDocs.TabIndex = 33;
-            linkDocs.TabStop = true;
-            linkDocs.Text = "View Documentation...";
-            linkDocs.LinkClicked += linkDocs_LinkClicked;
+            chkCodeFolding.AutoSize = true;
+            chkCodeFolding.Location = new Point(10, 22);
+            chkCodeFolding.Name = "chkCodeFolding";
+            chkCodeFolding.Size = new Size(97, 19);
+            chkCodeFolding.TabIndex = 29;
+            chkCodeFolding.Text = "Code Folding";
+            chkCodeFolding.UseVisualStyleBackColor = true;
             // 
             // MainForm
             // 
@@ -729,5 +741,6 @@ namespace AppRefiner
         private RadioButton optClassPath;
         private CheckBox chkEventMapXrefs;
         private LinkLabel linkDocs;
+        private CheckBox chkCodeFolding;
     }
 }

@@ -20,7 +20,7 @@ namespace AppRefiner
 
         // --- General Settings --- 
 
-        public void LoadGeneralSettings(CheckBox chkInitCollapsed, CheckBox chkOnlyPPC, CheckBox chkBetterSQL,
+        public void LoadGeneralSettings(CheckBox chkCodeFolding, CheckBox chkInitCollapsed, CheckBox chkOnlyPPC, CheckBox chkBetterSQL,
                                       CheckBox chkAutoDark, CheckBox chkAutoPair,
                                       CheckBox chkPromptForDB, out string? lintReportPath, out string? TNS_ADMIN, 
                                       CheckBox eventMapping, CheckBox eventMapXrefs, RadioButton showClassPath,
@@ -29,6 +29,7 @@ namespace AppRefiner
             // Wrap in try-finally if isLoadingSettings logic is needed externally
             try
             {
+                chkCodeFolding.Checked = Properties.Settings.Default.codeFolding;
                 chkInitCollapsed.Checked = Properties.Settings.Default.initCollapsed;
                 chkOnlyPPC.Checked = Properties.Settings.Default.onlyPPC;
                 chkBetterSQL.Checked = Properties.Settings.Default.betterSQL;
@@ -51,12 +52,13 @@ namespace AppRefiner
             }
         }
 
-        public void SaveGeneralSettings(bool initCollapsed, bool onlyPPC, bool betterSQL, 
+        public void SaveGeneralSettings(bool codeFolding, bool initCollapsed, bool onlyPPC, bool betterSQL, 
                                       bool autoDark, bool autoPair, 
                                       bool promptForDB, string? lintReportPath, string? TNS_ADMIN,
                                       bool eventMapping, bool eventMapXrefs,
                                       bool showClassPath, bool showClassText)
         {
+            Properties.Settings.Default.codeFolding = codeFolding;
             Properties.Settings.Default.initCollapsed = initCollapsed;
             Properties.Settings.Default.onlyPPC = onlyPPC;
             Properties.Settings.Default.betterSQL = betterSQL;

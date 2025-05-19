@@ -81,7 +81,7 @@ namespace AppRefiner
 
         public static void ProcessFolding(ScintillaEditor editor)
         {
-            if (!editor.HasLexilla || editor.Type == EditorType.SQL || editor.Type == EditorType.Other)
+            if (editor.FoldingEnabled && (!editor.HasLexilla || editor.Type == EditorType.SQL || editor.Type == EditorType.Other))
             {
                 // Ensure the activeEditor is not null before proceeding
                 if (editor != null)

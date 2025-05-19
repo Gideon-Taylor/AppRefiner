@@ -75,7 +75,8 @@ namespace AppRefiner
                 }
             }
         }
-        public bool FoldEnabled = false;
+        public bool Initialized = false;
+        public bool FoldingEnabled = false;
         public bool HasLexilla = false;
 
         public EditorType Type;

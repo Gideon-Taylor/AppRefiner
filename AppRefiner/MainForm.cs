@@ -115,7 +115,7 @@ namespace AppRefiner
 
             // Instantiate LinterManager (passing UI elements)
             // LoadGeneralSettings needs lintReportPath BEFORE LinterManager is created
-            settingsService.LoadGeneralSettings(chkInitCollapsed, chkOnlyPPC, chkBetterSQL, chkAutoDark,
+            settingsService.LoadGeneralSettings(chkCodeFolding, chkInitCollapsed, chkOnlyPPC, chkBetterSQL, chkAutoDark,
                                                 chkAutoPairing, chkPromptForDB, out lintReportPath, out TNS_ADMIN,
                                                 chkEventMapping, chkEventMapXrefs, optClassPath, optClassText);
             linterManager = new LinterManager(this, dataGridView1, lblStatus, progressBar1, lintReportPath, settingsService);
@@ -353,6 +353,7 @@ namespace AppRefiner
         {
             // Save general settings via service
             settingsService?.SaveGeneralSettings(
+                chkCodeFolding.Checked,
                 chkInitCollapsed.Checked,
                 chkOnlyPPC.Checked,
                 chkBetterSQL.Checked,
@@ -1649,9 +1650,9 @@ namespace AppRefiner
                 return;
             }
 
-            if (!editor.FoldEnabled)
+            if (!editor.Initialized)
             {
-                Debug.Log($"Found new editor via WinEvent, enabling folding. HWND: {editor.hWnd:X}, PID: {editor.ProcessId:X} Thread: {editor.ThreadID:X}");
+                Debug.Log($"Found new editor via WinEvent HWND: {editor.hWnd:X}, PID: {editor.ProcessId:X} Thread: {editor.ThreadID:X}");
 
                 if (chkAutoDark.Checked)
                 {
@@ -1664,42 +1665,46 @@ namespace AppRefiner
                 ScintillaManager.SetMouseDwellTime(editor, 1000);
 
 
-                ScintillaManager.EnableFolding(editor);
-                ScintillaManager.FixEditorTabs(editor, !chkBetterSQL.Checked);
-                editor.FoldEnabled = true;
-                editor.ContentString = ScintillaManager.GetScintillaText(editor);
-
-                FoldingManager.ProcessFolding(editor);
-
-                if (chkBetterSQL.Checked && editor.Type == EditorType.SQL)
+                if (chkCodeFolding.Checked)
                 {
-                    ScintillaManager.ApplyBetterSQL(editor);
+                    ScintillaManager.EnableFolding(editor);
+
+                    editor.ContentString = ScintillaManager.GetScintillaText(editor);
+
+                    FoldingManager.ProcessFolding(editor);
+
+                    if (chkBetterSQL.Checked && editor.Type == EditorType.SQL)
+                    {
+                        ScintillaManager.ApplyBetterSQL(editor);
+                    }
+
+                    if (chkInitCollapsed.Checked)
+                    {
+                        ScintillaManager.CollapseTopLevel(editor);
+                    }
+
+                    // Save initial content to Snapshot database
+                    if (!string.IsNullOrEmpty(editor.RelativePath))
+                    {
+                        SaveSnapshot(editor);
+                    }
+
+                    editor.Initialized = true;
                 }
 
-                if (chkInitCollapsed.Checked)
+                /* If promptForDB is set, lets check if we have a datamanger already? if not, prompt for a db connection */
+                if (chkPromptForDB.Checked && editor.DataManager == null)
                 {
-                    ScintillaManager.CollapseTopLevel(editor);
+                    ConnectToDB();
+                }
+                Debug.Log($"Event mapping flags: {chkEventMapping.Checked}, {chkEventMapXrefs.Checked}");
+                if (editor.DataManager != null && (chkEventMapping.Checked || chkEventMapXrefs.Checked))
+                {
+                    Debug.Log($"Processing event mapping for editor: {editor.RelativePath}");
+                    ProcessEventMapping();
                 }
 
-                // Save initial content to Snapshot database
-                if (!string.IsNullOrEmpty(editor.RelativePath))
-                {
-                    SaveSnapshot(editor);
-                }
             }
-
-            /* If promptForDB is set, lets check if we have a datamanger already? if not, prompt for a db connection */
-            if (chkPromptForDB.Checked && editor.DataManager == null)
-            {
-                ConnectToDB();
-            }
-            Debug.Log($"Event mapping flags: {chkEventMapping.Checked}, {chkEventMapXrefs.Checked}");
-            if (editor.DataManager != null && (chkEventMapping.Checked || chkEventMapXrefs.Checked))
-            {
-                Debug.Log($"Processing event mapping for editor: {editor.RelativePath}");
-                ProcessEventMapping();
-            }
-
         }
 
         private void ConnectToDB()
@@ -1867,7 +1872,7 @@ namespace AppRefiner
 
                         if (newlyFocusedEditor != null && newlyFocusedEditor.IsValid())
                         {
-                            if (!newlyFocusedEditor.FoldEnabled) // Check if it's truly a *new* editor needing init
+                            if (!newlyFocusedEditor.Initialized) // Check if it's truly a *new* editor needing init
                             {
                                 ProcessNewEditor(newlyFocusedEditor);
                             }
