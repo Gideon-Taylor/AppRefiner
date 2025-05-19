@@ -24,6 +24,8 @@ namespace AppRefiner
         public bool CheckEventMapXrefs { get; set; }
         public bool ShowClassPath { get; set; }
         public bool ShowClassText { get; set; }
+
+        public bool RememberFolds { get; set; }
     }
 
     public class SettingsService
@@ -55,6 +57,7 @@ namespace AppRefiner
                 settings.ShowClassPath = Properties.Settings.Default.showClassPath;
                 settings.ShowClassText = Properties.Settings.Default.showClassText;
                 settings.TNS_ADMIN = Properties.Settings.Default.TNS_ADMIN;
+                settings.RememberFolds = Properties.Settings.Default.rememberFolds;
             }
             catch (Exception ex)
             {
@@ -81,6 +84,7 @@ namespace AppRefiner
             Properties.Settings.Default.checkEventMapXrefs = settings.CheckEventMapXrefs;
             Properties.Settings.Default.showClassPath = settings.ShowClassPath;
             Properties.Settings.Default.showClassText = settings.ShowClassText;
+            Properties.Settings.Default.rememberFolds = settings.RememberFolds;
         }
         
         public void SaveChanges()

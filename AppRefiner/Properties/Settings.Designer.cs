@@ -274,5 +274,17 @@ namespace AppRefiner.Properties {
                 this["codeFolding"] = value;
             }
         }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("False")]
+        public bool rememberFolds {
+            get {
+                return ((bool)(this["rememberFolds"]));
+            }
+            set {
+                this["rememberFolds"] = value;
+            }
+        }
     }
 }

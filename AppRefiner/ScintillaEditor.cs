@@ -19,6 +19,20 @@ namespace AppRefiner
         PeopleCode, HTML, SQL, CSS, Other
     }
 
+    public delegate void CaptionChangedEventHandler(object sender, CaptionChangedEventArgs e);
+
+    public class CaptionChangedEventArgs : EventArgs
+    {
+        public string? OldCaption { get; }
+        public string? NewCaption { get; }
+
+        public CaptionChangedEventArgs(string? oldCaption, string? newCaption)
+        {
+            OldCaption = oldCaption;
+            NewCaption = newCaption;
+        }
+    }
+
     public class ScintillaEditor
     {
         [DllImport("user32.dll", CharSet = CharSet.Auto)]
@@ -35,6 +49,22 @@ namespace AppRefiner
         public EventMapInfo? EventMapInfo = null;
         public string ClassPath = string.Empty;
         private string? _caption = null;
+
+        public event CaptionChangedEventHandler? CaptionChanged;
+
+        protected virtual void OnCaptionChanged(CaptionChangedEventArgs e)
+        {
+            CaptionChanged?.Invoke(this, e);
+        }
+
+        public bool HasCaptionEventHander
+        {
+            get
+            {
+                return CaptionChanged != null;
+            }
+        }
+
         public string? Caption { 
             get
             {
@@ -42,16 +72,30 @@ namespace AppRefiner
             }
             set
             {
-                if (_caption != null && !_caption.Equals(value))
+                string? previousCaption = _caption; // Capture the caption *before* any change
+
+                // Determine if the caption will actually change.
+                bool hasChanged = false;
+                if (previousCaption == null)
                 {
-                    /* caption has changed, so clear out any old fold paths */
-                    CollapsedFoldPaths.Clear();
+                    if (value != null)
+                    {
+                        hasChanged = true;
+                    }
+                }
+                else // previousCaption is not null
+                {
+                    if (value == null || !previousCaption.Equals(value))
+                    {
+                        hasChanged = true;
+                    }
                 }
 
-                _caption = value;
-                if (value != null)
-                {
+                _caption = value; // Update the internal field
 
+                // All the logic that depends on the new caption value
+                if (_caption != null)
+                {
                     if (_caption.Contains("PeopleCode"))
                     {
                         Type = EditorType.PeopleCode;
@@ -72,6 +116,12 @@ namespace AppRefiner
                     SetEventMapInfo();
                     SetClassPath();
                     
+                }
+
+                // If the caption has actually changed, raise the event *after* all other logic.
+                if (hasChanged)
+                {
+                    OnCaptionChanged(new CaptionChangedEventArgs(previousCaption, _caption));
                 }
             }
         }
@@ -236,11 +286,13 @@ namespace AppRefiner
         public ScintillaEditor(IntPtr hWnd, uint procID, uint threadID, string caption)
         {
             this.hWnd = hWnd;
+
+            PopulateEditorDBName();
+
             ProcessId = procID;
             ThreadID = threadID;
             Caption = caption;
 
-            PopulateEditorDBName();
         }
 
         public IntPtr SendMessage(int Msg, IntPtr wParam, IntPtr lParam)

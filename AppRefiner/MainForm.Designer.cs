@@ -52,6 +52,7 @@ namespace AppRefiner
             btnTNSADMIN = new Button();
             btnDebugLog = new Button();
             grpEditorSettings = new GroupBox();
+            chkCodeFolding = new CheckBox();
             chkPromptForDB = new CheckBox();
             chkAutoPairing = new CheckBox();
             chkBetterSQL = new CheckBox();
@@ -83,7 +84,7 @@ namespace AppRefiner
             cmbTemplates = new ComboBox();
             progressBar1 = new ProgressBar();
             lblStatus = new Label();
-            chkCodeFolding = new CheckBox();
+            chkRememberFolds = new CheckBox();
             ((System.ComponentModel.ISupportInitialize)splitContainer1).BeginInit();
             splitContainer1.Panel1.SuspendLayout();
             splitContainer1.Panel2.SuspendLayout();
@@ -278,6 +279,7 @@ namespace AppRefiner
             // 
             // grpEditorSettings
             // 
+            grpEditorSettings.Controls.Add(chkRememberFolds);
             grpEditorSettings.Controls.Add(chkCodeFolding);
             grpEditorSettings.Controls.Add(chkPromptForDB);
             grpEditorSettings.Controls.Add(chkAutoPairing);
@@ -292,6 +294,16 @@ namespace AppRefiner
             grpEditorSettings.TabIndex = 20;
             grpEditorSettings.TabStop = false;
             grpEditorSettings.Text = "Settings";
+            // 
+            // chkCodeFolding
+            // 
+            chkCodeFolding.AutoSize = true;
+            chkCodeFolding.Location = new Point(10, 22);
+            chkCodeFolding.Name = "chkCodeFolding";
+            chkCodeFolding.Size = new Size(97, 19);
+            chkCodeFolding.TabIndex = 29;
+            chkCodeFolding.Text = "Code Folding";
+            chkCodeFolding.UseVisualStyleBackColor = true;
             // 
             // chkPromptForDB
             // 
@@ -317,7 +329,7 @@ namespace AppRefiner
             // chkBetterSQL
             // 
             chkBetterSQL.AutoSize = true;
-            chkBetterSQL.Location = new Point(116, 47);
+            chkBetterSQL.Location = new Point(126, 47);
             chkBetterSQL.Name = "chkBetterSQL";
             chkBetterSQL.Size = new Size(88, 19);
             chkBetterSQL.TabIndex = 17;
@@ -327,7 +339,7 @@ namespace AppRefiner
             // chkOnlyPPC
             // 
             chkOnlyPPC.AutoSize = true;
-            chkOnlyPPC.Location = new Point(10, 69);
+            chkOnlyPPC.Location = new Point(126, 69);
             chkOnlyPPC.Name = "chkOnlyPPC";
             chkOnlyPPC.Size = new Size(76, 19);
             chkOnlyPPC.TabIndex = 16;
@@ -357,7 +369,7 @@ namespace AppRefiner
             // chkAutoDark
             // 
             chkAutoDark.AutoSize = true;
-            chkAutoDark.Location = new Point(116, 22);
+            chkAutoDark.Location = new Point(126, 22);
             chkAutoDark.Name = "chkAutoDark";
             chkAutoDark.Size = new Size(113, 19);
             chkAutoDark.TabIndex = 14;
@@ -632,15 +644,15 @@ namespace AppRefiner
             lblStatus.Text = "Stopped";
             lblStatus.TextAlign = ContentAlignment.MiddleCenter;
             // 
-            // chkCodeFolding
+            // chkRememberFolds
             // 
-            chkCodeFolding.AutoSize = true;
-            chkCodeFolding.Location = new Point(10, 22);
-            chkCodeFolding.Name = "chkCodeFolding";
-            chkCodeFolding.Size = new Size(97, 19);
-            chkCodeFolding.TabIndex = 29;
-            chkCodeFolding.Text = "Code Folding";
-            chkCodeFolding.UseVisualStyleBackColor = true;
+            chkRememberFolds.AutoSize = true;
+            chkRememberFolds.Location = new Point(10, 69);
+            chkRememberFolds.Name = "chkRememberFolds";
+            chkRememberFolds.Size = new Size(115, 19);
+            chkRememberFolds.TabIndex = 30;
+            chkRememberFolds.Text = "Remember Folds";
+            chkRememberFolds.UseVisualStyleBackColor = true;
             // 
             // MainForm
             // 
@@ -742,5 +754,6 @@ namespace AppRefiner
         private CheckBox chkEventMapXrefs;
         private LinkLabel linkDocs;
         private CheckBox chkCodeFolding;
+        private CheckBox chkRememberFolds;
     }
 }

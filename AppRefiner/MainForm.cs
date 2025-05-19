@@ -29,6 +29,7 @@ using AppRefiner.Services;
 using static AppRefiner.AutoCompleteService;
 using DiffPlex.Model;
 using System.Linq.Expressions;
+using OracleInternal.Common;
 
 namespace AppRefiner
 {
@@ -132,6 +133,7 @@ namespace AppRefiner
             chkEventMapXrefs.Checked = generalSettings.CheckEventMapXrefs;
             optClassPath.Checked = generalSettings.ShowClassPath;
             optClassText.Checked = generalSettings.ShowClassText;
+            chkRememberFolds.Checked = generalSettings.RememberFolds;
 
             linterManager = new LinterManager(this, dataGridView1, lblStatus, progressBar1, lintReportPath, settingsService);
             linterManager.InitializeLinterOptions(); // Initialize linters via the manager
@@ -204,6 +206,7 @@ namespace AppRefiner
             chkEventMapXrefs.CheckedChanged += GeneralSetting_Changed;
             optClassPath.CheckedChanged += GeneralSetting_Changed;
             optClassText.CheckedChanged += GeneralSetting_Changed;
+            chkRememberFolds.CheckedChanged += GeneralSetting_Changed;
 
             // DataGridViews CellValueChanged events will also call SaveSettings
         }
@@ -234,7 +237,8 @@ namespace AppRefiner
                 CheckEventMapping = chkEventMapping.Checked,
                 CheckEventMapXrefs = chkEventMapXrefs.Checked,
                 ShowClassPath = optClassPath.Checked,
-                ShowClassText = optClassText.Checked
+                ShowClassText = optClassText.Checked,
+                RememberFolds = chkRememberFolds.Checked
             };
             settingsService.SaveGeneralSettings(generalSettingsToSave);
 
@@ -253,24 +257,28 @@ namespace AppRefiner
         {
             if (activeEditor == null) return;
             ScintillaManager.SetCurrentLineFoldStatus(activeEditor, true);
+            UpdateSavedFoldsForEditor(activeEditor);
         }
 
         private void expandLevelHandler()
         {
             if (activeEditor == null) return;
             ScintillaManager.SetCurrentLineFoldStatus(activeEditor, false);
+            UpdateSavedFoldsForEditor(activeEditor);
         }
 
         private void collapseAllHandler()
         {
             if (activeEditor == null) return;
             ScintillaManager.CollapseTopLevel(activeEditor);
+            UpdateSavedFoldsForEditor(activeEditor);
         }
 
         private void expandAllHandler()
         {
             if (activeEditor == null) return;
             ScintillaManager.ExpandTopLevel(activeEditor);
+            UpdateSavedFoldsForEditor(activeEditor);
         }
 
         private void lintCodeHandler()
@@ -1346,23 +1354,40 @@ namespace AppRefiner
                 }
             }
             else if (m.Msg == AR_BEFORE_DELETE_ALL)
-        {
+            {
                 Debug.Log("Received before delete all message");
                 // Only process if we have an active editor
                 if (activeEditor != null && activeEditor.IsValid())
-            {
-                    var collapsedFoldPaths = FoldingManager.GetCollapsedFoldPathsDirectly(activeEditor);
-                    if (collapsedFoldPaths.Count > 0)
-                    {
-                        activeEditor.CollapsedFoldPaths = collapsedFoldPaths;
-                        FoldingManager.PrintCollapsedFoldPathsDebug(collapsedFoldPaths);
-            }
+                {
+                    UpdateSavedFoldsForEditor(activeEditor);
 
                 }
             }
 
+            else if (m.Msg == AR_FOLD_MARGIN_CLICK)
+            {
+                UpdateSavedFoldsForEditor(activeEditor);
+            }
         }
 
+        private void UpdateSavedFoldsForEditor(ScintillaEditor? editor)
+        {
+            if (editor == null) return;
+
+            if (chkRememberFolds.Checked && editor != null && editor.IsValid())
+            {
+                var collapsedFoldPaths = FoldingManager.GetCollapsedFoldPathsDirectly(editor);
+                if (collapsedFoldPaths.Count > 0)
+                {
+                    editor.CollapsedFoldPaths = collapsedFoldPaths;
+                    FoldingManager.PrintCollapsedFoldPathsDebug(collapsedFoldPaths);
+                    if (chkRememberFolds.Checked)
+                    {
+                        FoldingManager.UpdatePersistedFolds(editor);
+                    }
+                }
+            }
+        }
 
         public void SuperGoToCommand()
         {
@@ -1721,7 +1746,12 @@ namespace AppRefiner
 
                     editor.ContentString = ScintillaManager.GetScintillaText(editor);
 
+                    if (chkRememberFolds.Checked) {
+                        editor.CollapsedFoldPaths = FoldingManager.RetrievePersistedFolds(editor);
+                    }
+
                     FoldingManager.ProcessFolding(editor);
+                    FoldingManager.ApplyCollapsedFoldPaths(editor);
 
                     if (chkBetterSQL.Checked && editor.Type == EditorType.SQL)
                     {
@@ -1878,7 +1908,7 @@ namespace AppRefiner
                         }
 
                         /* Reapplying code folds */
-                        FoldingManager.ApplyCollapsedFoldPaths(editorToSave, editorToSave.CollapsedFoldPaths);
+                        FoldingManager.ApplyCollapsedFoldPaths(editorToSave);
                     }
                 });
             }
@@ -1919,6 +1949,23 @@ namespace AppRefiner
 
                         // Use SetActiveEditor to properly handle the newly focused window
                         var newlyFocusedEditor = SetActiveEditor(hwnd);
+
+                        /* If editor doesn't have a CaptionChanged handler, set one */
+                        if (newlyFocusedEditor != null && !newlyFocusedEditor.HasCaptionEventHander)
+                        {
+                            newlyFocusedEditor.CaptionChanged += (s, e) =>
+                            {
+                                newlyFocusedEditor.ContentString = ScintillaManager.GetScintillaText(newlyFocusedEditor);
+                                newlyFocusedEditor.CollapsedFoldPaths.Clear();
+                                if(chkRememberFolds.Checked)
+                                {
+                                    newlyFocusedEditor.CollapsedFoldPaths = FoldingManager.RetrievePersistedFolds(newlyFocusedEditor);
+                                }
+
+                                CheckForContentChanges(newlyFocusedEditor);
+                            };
+                        }
+                        
 
                         if (newlyFocusedEditor != null && newlyFocusedEditor.IsValid())
                         {
@@ -2052,6 +2099,7 @@ namespace AppRefiner
             Process.Start(si);
             linkDocs.LinkVisited = true;
         }
+
     }
 }
 
