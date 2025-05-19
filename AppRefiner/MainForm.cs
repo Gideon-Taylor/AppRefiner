@@ -74,6 +74,7 @@ namespace AppRefiner
         private const int AR_CREATE_SHORTHAND = 2501; // New constant for create shorthand detection
         private const int AR_TYPING_PAUSE = 2502; // New constant for typing pause detection
         private const int AR_BEFORE_DELETE_ALL = 2503; // New constant for before delete all detection
+        private const int AR_FOLD_MARGIN_CLICK = 2504;
         private const int SCN_USERLISTSELECTION = 2014; // User list selection notification
         private const int SCI_REPLACESEL = 0x2170; // Constant for SCI_REPLACESEL
 

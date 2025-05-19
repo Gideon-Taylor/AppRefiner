@@ -32,6 +32,8 @@
 #define WM_AR_CREATE_SHORTHAND 2501 // New message for create shorthand when user types "create("
 #define WM_AR_TYPING_PAUSE 2502 // New message for typing pause detection
 #define WM_AR_BEFORE_DELETE_ALL 2503 // Before delete all notification
+#define WM_AR_FOLD_MARGIN_CLICK 2504 // Fold margin click notification
+
 #define WM_SCN_USERLIST_SELECTION WM_SCN(SCN_USERLISTSELECTION) // User list selection notification
 
 // Global variables (defined in HookManager.cpp)

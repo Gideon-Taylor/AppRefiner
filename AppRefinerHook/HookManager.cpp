@@ -40,6 +40,15 @@ void HandleScintillaNotification(HWND hwnd, SCNotification* scn, HWND callbackWi
 
         }
 
+        if (scn->nmhdr.code == SCN_MARGINCLICK) {
+			// Check if the margin clicked is the one we are interested in
+            sprintf_s(debugMsg, "Margin Click: %d Position:%p\n", scn->margin, scn->position); 
+			if (scn->margin == 2) {
+				// Notify EditorManager about the margin click event
+                // Send the app package suggest message with current position as wParam
+                SendMessage(callbackWindow, WM_AR_FOLD_MARGIN_CLICK, scn->position , 0);
+			}
+        }
 
         // Handle typing events for EditorManager
         if (scn->nmhdr.code == SCN_CHARADDED || 
