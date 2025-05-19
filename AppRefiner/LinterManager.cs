@@ -14,6 +14,7 @@ using System.Windows.Forms;
 using System.Drawing;
 using AppRefiner.Linters;
 using AppRefiner.Refactors;
+using System.Diagnostics;
 
 namespace AppRefiner
 {
@@ -63,8 +64,7 @@ namespace AppRefiner
 
                 MessageBox.Show($"Lint reports will be saved to: {lintReportPath}",
                     "Lint Report Directory Updated",
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Information);
+                    MessageBoxButtons.OK);
             }
 
         }
@@ -131,6 +131,17 @@ namespace AppRefiner
             settingsService.LoadLinterStates(linterRules, linterGrid);
         }
 
+        private void ShowMessageBox(ScintillaEditor activeEditor, string message, string caption, MessageBoxButtons buttons,Action<DialogResult>? callback = null)
+        {
+            Task.Delay(100).ContinueWith(_ =>
+            {
+                // Show message box with specific error
+                var mainHandle = Process.GetProcessById((int)activeEditor.ProcessId).MainWindowHandle;
+                var handleWrapper = new WindowWrapper(mainHandle);
+                new MessageBoxDialog(message, caption, buttons, mainHandle, callback).ShowDialog(handleWrapper);
+            });
+        }
+
         public void ProcessLintersForActiveEditor(ScintillaEditor? activeEditor, IDataManager? editorDataManager)
         {
             if (activeEditor == null) return;
@@ -139,7 +150,7 @@ namespace AppRefiner
 
             if (activeEditor.Type != EditorType.PeopleCode)
             {
-                MessageBox.Show("Linting is only available for PeopleCode editors", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                ShowMessageBox(activeEditor, "Linting is only available for PeopleCode editors", "Error", MessageBoxButtons.OK);
                 return;
             }
 
@@ -190,13 +201,13 @@ namespace AppRefiner
 
             if (activeEditor.Type != EditorType.PeopleCode)
             {
-                MessageBox.Show("Linting is only available for PeopleCode editors", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                ShowMessageBox(activeEditor, "Linting is only available for PeopleCode editors", "Error", MessageBoxButtons.OK);
                 return;
             }
             
             if (linter.DatabaseRequirement == DataManagerRequirement.Required && editorDataManager == null)
             {
-                MessageBox.Show("This linting rule requires a database connection", "Database Required", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                ShowMessageBox(activeEditor, "This linting rule requires a database connection", "Database Required", MessageBoxButtons.OK);
                 return;
             }
             
@@ -261,7 +272,7 @@ namespace AppRefiner
         {
             if (editorContext?.DataManager == null)
             {
-                MessageBox.Show("Database connection required for project linting.", "Database Required", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                ShowMessageBox(editorContext, "Database connection required for project linting.", "Database Required", MessageBoxButtons.OK);
                 return;
             }
             IDataManager dataManager = editorContext.DataManager;
@@ -269,15 +280,15 @@ namespace AppRefiner
             string projectName = ScintillaManager.GetProjectName(editorContext);
             if (projectName == "Untitled" || string.IsNullOrEmpty(projectName))
             {
-                 MessageBox.Show(string.IsNullOrEmpty(projectName) ? "Unable to determine the project name." : "Please open a project first.", 
-                                "Project Linting Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                 ShowMessageBox(editorContext, string.IsNullOrEmpty(projectName) ? "Unable to determine the project name." : "Please open a project first.", 
+                                "Project Linting Error", MessageBoxButtons.OK);
                 return;
             }
             
             if (string.IsNullOrEmpty(lintReportPath) || !Directory.Exists(lintReportPath))
             {
-                 MessageBox.Show($"Lint report directory is not set or does not exist: {lintReportPath}", 
-                                "Lint Report Path Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                 ShowMessageBox(editorContext, $"Lint report directory is not set or does not exist: {lintReportPath}", 
+                                "Lint Report Path Error", MessageBoxButtons.OK);
                 return;
             }
 
@@ -345,9 +356,9 @@ namespace AppRefiner
             UpdateStatus("Finalizing Report...", true);
             progressDialog?.UpdateHeader("Finalizing Report...");
 
-            GenerateHtmlReport(reportPath, projectName, allReports);
+            GenerateHtmlReport(editorContext, reportPath, projectName, allReports);
 
-            FinalizeProjectLinting(reportPath, allReports.Count);
+            FinalizeProjectLinting(editorContext, reportPath, allReports.Count);
         }
         
         private void UpdateStatus(string message, bool marquee)
@@ -359,29 +370,34 @@ namespace AppRefiner
              });
         }
         
-        private void FinalizeProjectLinting(string reportPath, int issueCount)
+        private void FinalizeProjectLinting(ScintillaEditor editorContext, string reportPath, int issueCount)
         {
              mainForm.Invoke(() => {
-                  lblStatus.Text = "Monitoring...";
-                  progressBar.Style = ProgressBarStyle.Blocks;
-                  
-                  string message = issueCount > 0
-                    ? $"Project linting complete. {issueCount} issues found.\n\nWould you like to open the report?"
-                    : "Project linting complete. No issues found.\n\nWould you like to open the report?";
+                 lblStatus.Text = "Monitoring...";
+                 progressBar.Style = ProgressBarStyle.Blocks;
 
-                var result = MessageBox.Show(message, "Project Linting Complete", MessageBoxButtons.YesNo, MessageBoxIcon.Information);
-                if (result == DialogResult.Yes)
-                {
-                    try {
-                        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo { FileName = reportPath, UseShellExecute = true });
-                    } catch (Exception ex) {
-                        MessageBox.Show($"Error opening report: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                    }
-                }
+                 string message = issueCount > 0
+                   ? $"Project linting complete. {issueCount} issues found.\n\nWould you like to open the report?"
+                   : "Project linting complete. No issues found.\n\nWould you like to open the report?";
+
+                 ShowMessageBox(editorContext, message, "Project Linting Complete", MessageBoxButtons.YesNo, (result) =>
+                 {
+                     if (result == DialogResult.Yes)
+                     {
+                         try
+                         {
+                             Process.Start(new ProcessStartInfo { FileName = reportPath, UseShellExecute = true });
+                         }
+                         catch (Exception ex)
+                         {
+                             ShowMessageBox(editorContext, $"Error opening report: {ex.Message}", "Error", MessageBoxButtons.OK);
+                         }
+                     }
+                 });
              });
         }
         
-        private void GenerateHtmlReport(string reportPath, string projectName,
+        private void GenerateHtmlReport(ScintillaEditor editorContext, string reportPath, string projectName,
             List<(PeopleCodeItem Program, Report LintReport)> reportData)
         {
             try
@@ -435,7 +451,7 @@ namespace AppRefiner
                     using (Stream? stream = GetType().Assembly.GetManifestResourceStream("AppRefiner.Templates.LintReportTemplate.html"))
                     {
                         if (stream != null) { using (var reader = new StreamReader(stream)) { templateHtml = reader.ReadToEnd(); } }
-                        else { MessageBox.Show("Lint report template not found.", "Template Missing", MessageBoxButtons.OK, MessageBoxIcon.Warning); return; }
+                        else { ShowMessageBox(editorContext, "Lint report template not found.", "Template Missing", MessageBoxButtons.OK); return; }
                     }
                 }
 
@@ -447,7 +463,7 @@ namespace AppRefiner
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Error creating report: {ex.Message}", "Report Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                ShowMessageBox(editorContext, $"Error creating report: {ex.Message}", "Report Error", MessageBoxButtons.OK);
             }
         }
 

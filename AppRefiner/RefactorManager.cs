@@ -1,4 +1,5 @@
 using Antlr4.Runtime.Tree;
+using AppRefiner.Dialogs;
 using AppRefiner.Events; // For ModifierKeys
 using AppRefiner.PeopleCode;
 using AppRefiner.Plugins;
@@ -9,6 +10,7 @@ using System.Linq;
 using System.Reflection;
 using System.Text;
 using System.Windows.Forms;
+using static SqlParser.Ast.AlterRoleOperation;
 
 namespace AppRefiner.Refactors
 {
@@ -199,15 +201,6 @@ namespace AppRefiner.Refactors
                  return;
             }
 
-            // Use Invoke for UI operations like MessageBox
-            Action showErrorMessage = () => MessageBox.Show(
-                        mainForm, // Use mainForm as owner
-                        "Refactoring Failed",
-                        "Refactoring Failed", // Default title
-                        MessageBoxButtons.OK,
-                        MessageBoxIcon.Warning
-                    );
-
             try
             {
                 ScintillaManager.ClearAnnotations(activeEditor); // Consider if this should be optional
@@ -216,7 +209,13 @@ namespace AppRefiner.Refactors
                 if (activeEditor.ContentString == null)
                 {
                     Debug.Log("Failed to get text from editor for refactoring.");
-                    mainForm.Invoke(showErrorMessage);
+                    Task.Delay(100).ContinueWith(_ =>
+                    {
+                        // Show message box with specific error
+                        var mainHandle = Process.GetProcessById((int)activeEditor.ProcessId).MainWindowHandle;
+                        var handleWrapper = new WindowWrapper(mainHandle);
+                        new MessageBoxDialog("Refactoring failed", "Refactoring Failed", MessageBoxButtons.OK, mainHandle).ShowDialog(handleWrapper);
+                    });
                     return;
                 }
 
@@ -249,13 +248,15 @@ namespace AppRefiner.Refactors
                 {
                     Debug.Log($"Refactoring failed: {result.Message}");
                     // Update message box call to show specific error
-                     mainForm.Invoke(() => MessageBox.Show(
-                        mainForm,
-                        result.Message, // Show specific message
-                        "Refactoring Failed",
-                        MessageBoxButtons.OK,
-                        MessageBoxIcon.Warning
-                    ));
+
+                    Task.Delay(100).ContinueWith(_ =>
+                    {
+                        // Show message box with specific error
+                        var mainHandle = Process.GetProcessById((int)activeEditor.ProcessId).MainWindowHandle;
+                        var handleWrapper = new WindowWrapper(mainHandle);
+                        new MessageBoxDialog(result.Message ?? "Refactoring failed", "Refactoring Failed", MessageBoxButtons.OK, mainHandle).ShowDialog(handleWrapper); 
+                    });
+
                     return;
                 }
 
@@ -336,7 +337,13 @@ namespace AppRefiner.Refactors
             catch (Exception ex)
             {
                  Debug.LogException(ex, $"Critical error during ExecuteRefactor for {refactorClass.GetType().Name}");
-                 mainForm.Invoke(showErrorMessage); // Show generic error on unexpected exception
+                Task.Delay(100).ContinueWith(_ =>
+                {
+                    // Show message box with specific error
+                    var mainHandle = Process.GetProcessById((int)activeEditor.ProcessId).MainWindowHandle;
+                    var handleWrapper = new WindowWrapper(mainHandle);
+                    new MessageBoxDialog($"Execption during refactor: {ex.ToString()}", "Refactoring Failed", MessageBoxButtons.OK, mainHandle).ShowDialog(handleWrapper);
+                });
             }
         }
     }
