@@ -407,13 +407,11 @@ namespace AppRefiner.Refactors
 
             if (!isAppropriateContext)
             {
-                SetFailure("Not in a valid create() statement context");
                 return;
             }
 
             if (createStartPos < 0 || createEndPos < 0)
             {
-                SetFailure("Could not locate create() statement bounds");
                 return;
             }
 
