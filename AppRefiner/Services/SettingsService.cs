@@ -9,6 +9,23 @@ using System.Windows.Forms; // Required for CheckBox references if loading/savin
 
 namespace AppRefiner
 {
+    public class GeneralSettingsData
+    {
+        public bool CodeFolding { get; set; }
+        public bool InitCollapsed { get; set; }
+        public bool OnlyPPC { get; set; }
+        public bool BetterSQL { get; set; }
+        public bool AutoDark { get; set; }
+        public bool AutoPair { get; set; }
+        public bool PromptForDB { get; set; }
+        public string? LintReportPath { get; set; }
+        public string? TNS_ADMIN { get; set; }
+        public bool CheckEventMapping { get; set; }
+        public bool CheckEventMapXrefs { get; set; }
+        public bool ShowClassPath { get; set; }
+        public bool ShowClassText { get; set; }
+    }
+
     public class SettingsService
     {
         // Helper class for serializing/deserializing active states
@@ -20,58 +37,50 @@ namespace AppRefiner
 
         // --- General Settings --- 
 
-        public void LoadGeneralSettings(CheckBox chkCodeFolding, CheckBox chkInitCollapsed, CheckBox chkOnlyPPC, CheckBox chkBetterSQL,
-                                      CheckBox chkAutoDark, CheckBox chkAutoPair,
-                                      CheckBox chkPromptForDB, out string? lintReportPath, out string? TNS_ADMIN, 
-                                      CheckBox eventMapping, CheckBox eventMapXrefs, RadioButton showClassPath,
-                                      RadioButton showClassText)
+        public GeneralSettingsData LoadGeneralSettings()
         {
-            // Wrap in try-finally if isLoadingSettings logic is needed externally
+            var settings = new GeneralSettingsData();
             try
             {
-                chkCodeFolding.Checked = Properties.Settings.Default.codeFolding;
-                chkInitCollapsed.Checked = Properties.Settings.Default.initCollapsed;
-                chkOnlyPPC.Checked = Properties.Settings.Default.onlyPPC;
-                chkBetterSQL.Checked = Properties.Settings.Default.betterSQL;
-                chkAutoDark.Checked = Properties.Settings.Default.autoDark;
-                chkAutoPair.Checked = Properties.Settings.Default.autoPair;
-                chkPromptForDB.Checked = Properties.Settings.Default.promptForDB;
-                lintReportPath = Properties.Settings.Default.LintReportPath;
-                eventMapping.Checked = Properties.Settings.Default.checkEventMapping;
-                eventMapXrefs.Checked = Properties.Settings.Default.checkEventMapXrefs;
-                showClassPath.Checked = Properties.Settings.Default.showClassPath;
-                showClassText.Checked = Properties.Settings.Default.showClassText;
-                TNS_ADMIN = Properties.Settings.Default.TNS_ADMIN;
+                settings.CodeFolding = Properties.Settings.Default.codeFolding;
+                settings.InitCollapsed = Properties.Settings.Default.initCollapsed;
+                settings.OnlyPPC = Properties.Settings.Default.onlyPPC;
+                settings.BetterSQL = Properties.Settings.Default.betterSQL;
+                settings.AutoDark = Properties.Settings.Default.autoDark;
+                settings.AutoPair = Properties.Settings.Default.autoPair;
+                settings.PromptForDB = Properties.Settings.Default.promptForDB;
+                settings.LintReportPath = Properties.Settings.Default.LintReportPath;
+                settings.CheckEventMapping = Properties.Settings.Default.checkEventMapping;
+                settings.CheckEventMapXrefs = Properties.Settings.Default.checkEventMapXrefs;
+                settings.ShowClassPath = Properties.Settings.Default.showClassPath;
+                settings.ShowClassText = Properties.Settings.Default.showClassText;
+                settings.TNS_ADMIN = Properties.Settings.Default.TNS_ADMIN;
             }
             catch (Exception ex)
             {
                 Debug.LogException(ex, "Error loading general settings");
-                lintReportPath = null; // Default on error
-                TNS_ADMIN = null; // Default on error
-                                  // Optionally apply default values to checkboxes here
+                // Return default settings object on error or rethrow/handle as appropriate
+                // For now, returning potentially partially filled or default object
+                return new GeneralSettingsData(); // Or handle specific properties default
             }
+            return settings;
         }
 
-        public void SaveGeneralSettings(bool codeFolding, bool initCollapsed, bool onlyPPC, bool betterSQL, 
-                                      bool autoDark, bool autoPair, 
-                                      bool promptForDB, string? lintReportPath, string? TNS_ADMIN,
-                                      bool eventMapping, bool eventMapXrefs,
-                                      bool showClassPath, bool showClassText)
+        public void SaveGeneralSettings(GeneralSettingsData settings)
         {
-            Properties.Settings.Default.codeFolding = codeFolding;
-            Properties.Settings.Default.initCollapsed = initCollapsed;
-            Properties.Settings.Default.onlyPPC = onlyPPC;
-            Properties.Settings.Default.betterSQL = betterSQL;
-            Properties.Settings.Default.autoDark = autoDark;
-            Properties.Settings.Default.autoPair = autoPair;
-            Properties.Settings.Default.promptForDB = promptForDB;
-            Properties.Settings.Default.LintReportPath = lintReportPath;
-            Properties.Settings.Default.TNS_ADMIN = TNS_ADMIN;
-            Properties.Settings.Default.checkEventMapping = eventMapping;
-            Properties.Settings.Default.checkEventMapXrefs = eventMapXrefs;
-            Properties.Settings.Default.showClassPath = showClassPath;
-            Properties.Settings.Default.showClassText = showClassText;
-
+            Properties.Settings.Default.codeFolding = settings.CodeFolding;
+            Properties.Settings.Default.initCollapsed = settings.InitCollapsed;
+            Properties.Settings.Default.onlyPPC = settings.OnlyPPC;
+            Properties.Settings.Default.betterSQL = settings.BetterSQL;
+            Properties.Settings.Default.autoDark = settings.AutoDark;
+            Properties.Settings.Default.autoPair = settings.AutoPair;
+            Properties.Settings.Default.promptForDB = settings.PromptForDB;
+            Properties.Settings.Default.LintReportPath = settings.LintReportPath;
+            Properties.Settings.Default.TNS_ADMIN = settings.TNS_ADMIN;
+            Properties.Settings.Default.checkEventMapping = settings.CheckEventMapping;
+            Properties.Settings.Default.checkEventMapXrefs = settings.CheckEventMapXrefs;
+            Properties.Settings.Default.showClassPath = settings.ShowClassPath;
+            Properties.Settings.Default.showClassText = settings.ShowClassText;
         }
         
         public void SaveChanges()

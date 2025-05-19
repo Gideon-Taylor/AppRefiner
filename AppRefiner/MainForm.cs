@@ -106,6 +106,8 @@ namespace AppRefiner
         protected override void OnLoad(EventArgs e)
         {
             base.OnLoad(e);
+            isLoadingSettings = true; // Prevent immediate saves during initial load
+
             // Instantiate and start services
             settingsService = new SettingsService(); // Instantiate SettingsService first
             keyboardShortcutService = new KeyboardShortcutService();
@@ -115,9 +117,21 @@ namespace AppRefiner
 
             // Instantiate LinterManager (passing UI elements)
             // LoadGeneralSettings needs lintReportPath BEFORE LinterManager is created
-            settingsService.LoadGeneralSettings(chkCodeFolding, chkInitCollapsed, chkOnlyPPC, chkBetterSQL, chkAutoDark,
-                                                chkAutoPairing, chkPromptForDB, out lintReportPath, out TNS_ADMIN,
-                                                chkEventMapping, chkEventMapXrefs, optClassPath, optClassText);
+            var generalSettings = settingsService.LoadGeneralSettings();
+            chkCodeFolding.Checked = generalSettings.CodeFolding;
+            chkInitCollapsed.Checked = generalSettings.InitCollapsed;
+            chkOnlyPPC.Checked = generalSettings.OnlyPPC;
+            chkBetterSQL.Checked = generalSettings.BetterSQL;
+            chkAutoDark.Checked = generalSettings.AutoDark;
+            chkAutoPairing.Checked = generalSettings.AutoPair; // Assuming chkAutoPairing corresponds to AutoPair
+            chkPromptForDB.Checked = generalSettings.PromptForDB;
+            lintReportPath = generalSettings.LintReportPath;
+            TNS_ADMIN = generalSettings.TNS_ADMIN;
+            chkEventMapping.Checked = generalSettings.CheckEventMapping;
+            chkEventMapXrefs.Checked = generalSettings.CheckEventMapXrefs;
+            optClassPath.Checked = generalSettings.ShowClassPath;
+            optClassText.Checked = generalSettings.ShowClassText;
+
             linterManager = new LinterManager(this, dataGridView1, lblStatus, progressBar1, lintReportPath, settingsService);
             linterManager.InitializeLinterOptions(); // Initialize linters via the manager
             dataGridView1.CellPainting += dataGridView1_CellPainting; // Wire up CellPainting
@@ -169,6 +183,68 @@ namespace AppRefiner
 
             // Initialize snapshot manager
             snapshotManager = SnapshotManager.CreateFromSettings();
+
+            // Attach event handlers for immediate save
+            AttachEventHandlersForImmediateSave();
+
+            isLoadingSettings = false; // Allow immediate saves now
+        }
+
+        private void AttachEventHandlersForImmediateSave()
+        {
+            chkCodeFolding.CheckedChanged += GeneralSetting_Changed;
+            chkInitCollapsed.CheckedChanged += GeneralSetting_Changed;
+            chkOnlyPPC.CheckedChanged += GeneralSetting_Changed;
+            chkBetterSQL.CheckedChanged += GeneralSetting_Changed;
+            chkAutoDark.CheckedChanged += GeneralSetting_Changed;
+            chkAutoPairing.CheckedChanged += GeneralSetting_Changed;
+            chkPromptForDB.CheckedChanged += GeneralSetting_Changed;
+            chkEventMapping.CheckedChanged += GeneralSetting_Changed;
+            chkEventMapXrefs.CheckedChanged += GeneralSetting_Changed;
+            optClassPath.CheckedChanged += GeneralSetting_Changed;
+            optClassText.CheckedChanged += GeneralSetting_Changed;
+
+            // DataGridViews CellValueChanged events will also call SaveSettings
+        }
+
+        private void GeneralSetting_Changed(object? sender, EventArgs e)
+        {
+            if (isLoadingSettings) return;
+            SaveSettings(); // Call the consolidated SaveSettings method
+        }
+
+        private void SaveSettings()
+        {
+            if (isLoadingSettings) return; // Prevent saving during initial load
+            if (settingsService == null) return;
+
+            // 1. Gather and save General Settings to memory
+            var generalSettingsToSave = new GeneralSettingsData
+            {
+                CodeFolding = chkCodeFolding.Checked,
+                InitCollapsed = chkInitCollapsed.Checked,
+                OnlyPPC = chkOnlyPPC.Checked,
+                BetterSQL = chkBetterSQL.Checked,
+                AutoDark = chkAutoDark.Checked,
+                AutoPair = chkAutoPairing.Checked,
+                PromptForDB = chkPromptForDB.Checked,
+                LintReportPath = lintReportPath,
+                TNS_ADMIN = TNS_ADMIN,
+                CheckEventMapping = chkEventMapping.Checked,
+                CheckEventMapXrefs = chkEventMapXrefs.Checked,
+                ShowClassPath = optClassPath.Checked,
+                ShowClassText = optClassText.Checked
+            };
+            settingsService.SaveGeneralSettings(generalSettingsToSave);
+
+            // 2. Save Linter, Styler, and Tooltip states to memory
+            if (linterManager != null) settingsService.SaveLinterStates(linterManager.LinterRules);
+            if (stylerManager != null) settingsService.SaveStylerStates(stylerManager.StylerRules);
+            settingsService.SaveTooltipStates(tooltipProviders);
+
+            // 3. Persist ALL changes to disk
+            settingsService.SaveChanges();
+            Debug.Log("All settings saved and persisted immediately.");
         }
 
         // Renamed from keyboard hook handlers to simple action methods
@@ -339,43 +415,13 @@ namespace AppRefiner
             if (folderDialog.ShowDialog() == DialogResult.OK)
             {
                 lintReportPath = folderDialog.SelectedPath;
-                Properties.Settings.Default.LintReportPath = lintReportPath;
-                Properties.Settings.Default.Save();
+                SaveSettings(); // Save all settings
 
                 MessageBox.Show($"Lint reports will be saved to: {lintReportPath}",
                     "Lint Report Directory Updated",
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Information);
             }
-        }
-
-        private void SaveSettings()
-        {
-            // Save general settings via service
-            settingsService?.SaveGeneralSettings(
-                chkCodeFolding.Checked,
-                chkInitCollapsed.Checked,
-                chkOnlyPPC.Checked,
-                chkBetterSQL.Checked,
-                chkAutoDark.Checked,
-                chkAutoPairing.Checked,
-                chkPromptForDB.Checked,
-                lintReportPath,
-                TNS_ADMIN,
-                chkEventMapping.Checked,
-                chkEventMapXrefs.Checked,
-                optClassPath.Checked,
-                optClassText.Checked
-            );
-
-            // Save states for each component via service
-            // Note: Requires managers/components to expose their items if service doesn't hold them
-            if (linterManager != null) settingsService?.SaveLinterStates(linterManager.LinterRules);
-            if (stylerManager != null) settingsService?.SaveStylerStates(stylerManager.StylerRules);
-            settingsService?.SaveTooltipStates(tooltipProviders); // Save tooltip states
-
-            // Persist all changes via service
-            settingsService?.SaveChanges();
         }
 
         private void InitTooltipOptions()
@@ -413,6 +459,7 @@ namespace AppRefiner
             if (dataGridViewTooltips.Rows[e.RowIndex].Tag is ITooltipProvider provider)
             {
                 provider.Active = (bool)dataGridViewTooltips.Rows[e.RowIndex].Cells[0].Value;
+                SaveSettings(); // Call the consolidated SaveSettings method
             }
         }
 
@@ -438,11 +485,13 @@ namespace AppRefiner
         private void dataGridView3_CellValueChanged(object sender, DataGridViewCellEventArgs e)
         {
             stylerManager?.HandleStylerGridCellValueChanged(sender, e);
+            SaveSettings(); // Call the consolidated SaveSettings method
         }
 
         private void dataGridView1_CellValueChanged(object sender, DataGridViewCellEventArgs e)
         {
             linterManager?.HandleLinterGridCellValueChanged(sender, e);
+            SaveSettings(); // Call the consolidated SaveSettings method
         }
 
         private void btnClearLint_Click(object sender, EventArgs e)
@@ -1981,7 +2030,7 @@ namespace AppRefiner
                 if (folderDialog.ShowDialog(this) == DialogResult.OK)
                 {
                     TNS_ADMIN = folderDialog.SelectedPath;
-                    SaveSettings();
+                    SaveSettings(); // Save all settings
                     Debug.Log($"TNS_ADMIN property set to: {folderDialog.SelectedPath}");
                 }
             }
