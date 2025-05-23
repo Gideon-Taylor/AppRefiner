@@ -1024,6 +1024,20 @@ namespace AppRefiner
             ));
 
             AvailableCommands.Add(new Command(
+                "SQL: Format SQL",
+                "\"Format SQL code in the current editor\"",
+                () =>
+                {
+                    if (activeEditor != null)
+                    {
+                        // No action needed
+                        ScintillaManager.ForceSQLFormat(activeEditor);
+                    }
+                },
+                () => activeEditor != null && activeEditor.Type == EditorType.SQL
+                ));
+
+            AvailableCommands.Add(new Command(
                 "Editor: Apply Quick Fix (Ctrl+.)",
                 "Applies the suggested quick fix for the annotation under the cursor",
                 ApplyQuickFixCommand,
@@ -1201,10 +1215,10 @@ namespace AppRefiner
 
             editor.Caption = caption;
 
-            if (chkBetterSQL.Checked && editor.Type == EditorType.SQL)
+            /* if (chkBetterSQL.Checked && editor.Type == EditorType.SQL)
             {
                 ScintillaManager.ApplyBetterSQL(editor);
-            }
+            } */
 
             // Apply dark mode whenever content changes if auto dark mode is enabled
             if (chkAutoDark.Checked)
@@ -1901,11 +1915,18 @@ namespace AppRefiner
                         }
 
                         Debug.Log("Event mapping flags: " + chkEventMapping.Checked + ", " + chkEventMapXrefs.Checked);
-                        if (editorToSave.DataManager != null && (chkEventMapping.Checked || chkEventMapXrefs.Checked))
+                        if (editorToSave.Type == EditorType.PeopleCode &&
+                            editorToSave.DataManager != null &&
+                            (chkEventMapping.Checked || chkEventMapXrefs.Checked))
                         {
                             Debug.Log($"Processing event mapping for editor: {editorToSave.RelativePath}");
                             ProcessEventMapping();
                         }
+
+                        if (chkBetterSQL.Checked && editorToSave.Type == EditorType.SQL)
+                        {
+                            ScintillaManager.ApplyBetterSQL(editorToSave);
+                        } 
 
                         /* Reapplying code folds */
                         FoldingManager.ApplyCollapsedFoldPaths(editorToSave);

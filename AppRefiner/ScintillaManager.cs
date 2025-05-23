@@ -1024,9 +1024,36 @@ namespace AppRefiner
             .MaxColumnLength(80)
             .Build();
 
+        internal static void ForceSQLFormat(ScintillaEditor editor)
+        {
+            if (editor.Type != EditorType.SQL)
+            {
+                return;
+            }
+
+            editor.ContentString ??= GetScintillaText(editor);
+            var cursorPosition = ScintillaManager.GetCursorPosition(editor);
+            var contentWithMarker = editor.ContentString?.Insert(cursorPosition, "--AppRefiner--");
+            var formatted = SqlFormatter.Of(Dialect.StandardSql)
+                .Extend(cfg => cfg.PlusSpecialWordChars("%").PlusNamedPlaceholderTypes(new string[] { ":" }).PlusOperators(new string[] { "%Concat" }))
+                .Format(contentWithMarker, formatConfig).Replace("\n", "\r\n");
+
+            var newCursorPosition = formatted.IndexOf("--AppRefiner--");
+            if (newCursorPosition > 0)
+            {
+                formatted = formatted.Remove(newCursorPosition, "--AppRefiner--".Length);
+            }
+
+            editor.ContentString = formatted;
+            SetScintillaText(editor, formatted);
+            SetCursorPosition(editor, newCursorPosition);
+        }
+
         internal static void ApplyBetterSQL(ScintillaEditor editor)
         {
             editor.ContentString ??= GetScintillaText(editor);
+
+            var cursorPosition = ScintillaManager.GetCursorPosition(editor);
 
             var formatted = SqlFormatter.Of(Dialect.StandardSql)
                 .Extend(cfg => cfg.PlusSpecialWordChars("%").PlusNamedPlaceholderTypes(new string[] { ":" }).PlusOperators(new string[] { "%Concat" }))
