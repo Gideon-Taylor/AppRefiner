@@ -1694,7 +1694,7 @@ namespace AppRefiner
                         foreach (var g in groups)
                         {
                             sb.Append($"Content Reference: {g.Key}\n");
-                            foreach (var xref in xrefs)
+                            foreach (var xref in g)
                             {
                                 sb.Append($"  {xref}\n");
                             }
