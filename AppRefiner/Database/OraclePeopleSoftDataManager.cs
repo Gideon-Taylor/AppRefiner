@@ -937,8 +937,8 @@ namespace AppRefiner.Database
                 path = ":";
             }
 
-
-            string sql = @"SELECT
+            // distinct here covers the fact the CREF may exist in multiple portal registries and so shows up as duplicates.
+            string sql = @"SELECT DISTINCT
                             evt.portal_objname,
                             portal.PORTAL_URI_SEG2 AS COMPONENT,
                             portal.PORTAL_URI_SEG3 AS SEGMENT,
