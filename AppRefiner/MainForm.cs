@@ -87,6 +87,7 @@ namespace AppRefiner
 
         // Fields for editor management
         private HashSet<ScintillaEditor> knownEditors = new HashSet<ScintillaEditor>();
+        private HashSet<uint> processesToNotDBPrompt = new HashSet<uint>();
 
         // Fields for debouncing SAVEPOINTREACHED events
         private readonly object savepointLock = new object();
@@ -1809,7 +1810,7 @@ namespace AppRefiner
                 }
 
                 /* If promptForDB is set, lets check if we have a datamanger already? if not, prompt for a db connection */
-                if (chkPromptForDB.Checked && editor.DataManager == null)
+                if (chkPromptForDB.Checked && editor.DataManager == null && !processesToNotDBPrompt.Contains(editor.ProcessId))
                 {
                     ConnectToDB();
                 }
@@ -1842,6 +1843,8 @@ namespace AppRefiner
                     processDataManagers[activeEditor.ProcessId] = manager;
                     activeEditor.DataManager = manager;
                 }
+            } else {
+                processesToNotDBPrompt.Add(activeEditor.ProcessId);
             }
         }
 
