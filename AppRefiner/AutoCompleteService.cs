@@ -328,5 +328,13 @@ namespace AppRefiner
             // Return the refactor instance for MainForm to process
             return new CreateAutoComplete(editor, autoPairingEnabled);
         }
+
+
+        public BaseRefactor? PrepareConcatAutoCompleteRefactor(ScintillaEditor editor) {
+            if (editor == null || !editor.IsValid()) return null;
+
+            // Return the refactor instance for MainForm to process
+            return new ConcatAutoComplete(editor);
+        }
     }
 } 

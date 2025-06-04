@@ -76,6 +76,7 @@ namespace AppRefiner
         private const int AR_TYPING_PAUSE = 2502; // New constant for typing pause detection
         private const int AR_BEFORE_DELETE_ALL = 2503; // New constant for before delete all detection
         private const int AR_FOLD_MARGIN_CLICK = 2504;
+        private const int AR_CONCAT_SHORTHAND = 2505; // New constant for concat shorthand detection
         private const int SCN_USERLISTSELECTION = 2014; // User list selection notification
         private const int SCI_REPLACESEL = 0x2170; // Constant for SCI_REPLACESEL
 
@@ -1344,6 +1345,27 @@ namespace AppRefiner
                 {
                     // Execute via RefactorManager
                     refactorManager?.ExecuteRefactor(refactor, activeEditor);
+                }
+            }
+            else if (m.Msg == AR_CONCAT_SHORTHAND)
+            {
+                 // Only process if we have an active editor and service
+                if (activeEditor == null || !activeEditor.IsValid() || autoCompleteService == null) return;
+
+                /* Handle create shorthand detection */
+                Debug.Log($"Received concat shorthand message. WParam: {m.WParam}, LParam: {m.LParam}");
+
+                /* Concat expansion is powered by custom PeopleCode parser rules to detect the concat expression and its type (+=, -=, |=) */
+                // Call the AutoCompleteService
+                var refactor = autoCompleteService.PrepareConcatAutoCompleteRefactor(activeEditor);
+                if (refactor != null)
+                {
+                    // Execute via RefactorManager
+                    Task.Delay(250).ContinueWith(_ =>
+                    {
+                        // Execute via RefactorManager
+                        refactorManager?.ExecuteRefactor(refactor, activeEditor);
+                    }, TaskScheduler.Default); // Use default scheduler
                 }
             }
             else if (m.Msg == AR_TYPING_PAUSE)

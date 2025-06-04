@@ -365,6 +365,7 @@ expression
 	|	expression NOT? op=(NEQ | EQ) expression			#EqualityExpr
 	|	expression op=(AND | OR) expression					#AndOrExpr
 	|	expression PIPE expression							#ConcatenationExpr
+	|   expression (ADD EQ | PIPE EQ | SUBTR EQ) expression   #ConcatShortHandExpr
 	|	literal												#LiteralExpr
 	|	ident												#IdentifierExpr
 	|	appClassPath										#MetadataExpr
