@@ -117,7 +117,7 @@ void HandleScintillaNotification(HWND hwnd, SCNotification* scn, HWND callbackWi
                     SendMessage(hwnd, SCI_GETTEXTRANGE, 0, (LPARAM)&tr);
                     
                     // Convert to lowercase for case-insensitive comparison
-                    for (int i = 0; i < keywordLength - 1; i++) {
+                    for (int i = 0; i < keywordLength; i++) {
                         buffer[i] = tolower(buffer[i]);
                     }
                     
@@ -130,6 +130,29 @@ void HandleScintillaNotification(HWND hwnd, SCNotification* scn, HWND callbackWi
                         // Send the create shorthand message with auto-pairing status as wParam
                         // and current position as lParam
                         SendMessage(callbackWindow, WM_AR_CREATE_SHORTHAND, (WPARAM)g_enableAutoPairing, (LPARAM)currentPos);
+                    }
+                }
+            }
+
+            // Check for += shorthand
+            if (scn->ch == '=' && callbackWindow && IsWindow(callbackWindow)) {
+                int currentPos = SendMessage(hwnd, SCI_GETCURRENTPOS, 0, 0); // Position after '='
+
+                // currentPos is 0-indexed. We need at least two characters for "+="
+                // If currentPos is 1 (meaning '=' is at index 0), currentPos - 2 is invalid.
+                // If currentPos is 2 (meaning '=' is at index 1), currentPos - 2 is 0 (valid for '+').
+                if (currentPos >= 2) { 
+                    char charBeforeEquals = (char)SendMessage(hwnd, SCI_GETCHARAT, currentPos - 2, 0); // Get char at pos of expected '+'
+
+                    /* Support += -= and |= */
+                    if (charBeforeEquals == '+' || charBeforeEquals == '-' || charBeforeEquals == '|') {
+                        char debugMsg[100];
+                        sprintf_s(debugMsg, "Detected '+=' pattern at position %d (char: '%c')\n", currentPos, scn->ch);
+                        OutputDebugStringA(debugMsg);
+
+                        // Send the concat shorthand message
+                        // WM_AR_CONCAT_SHORTHAND would need to be defined in Common.h or similar
+                        SendMessage(callbackWindow, WM_AR_CONCAT_SHORTHAND, (WPARAM)charBeforeEquals, (LPARAM)currentPos);
                     }
                 }
             }
