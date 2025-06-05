@@ -78,7 +78,8 @@ namespace AppRefiner.Stylers
                     Length = report.Span.Stop - report.Span.Start + 1,
                     Color = color, // Use the determined color based on severity
                     Tooltip = report.Message,
-                    Type = IndicatorType.SQUIGGLE
+                    Type = IndicatorType.SQUIGGLE,
+                    QuickFixes = []
                 });
             }
         }

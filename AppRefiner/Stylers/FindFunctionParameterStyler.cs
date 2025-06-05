@@ -52,7 +52,8 @@ namespace AppRefiner.Stylers
                     Length = context.Stop.StopIndex - context.Start.StartIndex + 1,
                     Color = LightGreen,
                     Tooltip = "Parameters may be backwards for Find() function. Expected Find(&needle, &haystack).",
-                    Type = IndicatorType.SQUIGGLE
+                    Type = IndicatorType.SQUIGGLE,
+                    QuickFixes = []
                 });
             }
 

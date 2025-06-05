@@ -85,7 +85,8 @@ namespace AppRefiner.Stylers
                         Length = userVariable.Symbol.Text.Length,
                         Color = HIGHLIGHT_COLOR,
                         Tooltip = "Property used as variable outside constructor",
-                        Type = IndicatorType.HIGHLIGHTER
+                        Type = IndicatorType.HIGHLIGHTER,
+                        QuickFixes = []
                     });
                 }
             }

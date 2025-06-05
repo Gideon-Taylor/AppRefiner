@@ -73,7 +73,8 @@ namespace AppRefiner.Stylers
                     Length = context.Stop.StopIndex - context.Start.StartIndex + 1,
                     Color = ERROR_COLOR,
                     Type = IndicatorType.SQUIGGLE,
-                    Tooltip = $"Invalid Application Class path: {appClassPath}"
+                    Tooltip = $"Invalid Application Class path: {appClassPath}",
+                    QuickFixes = []
                 });
             }
         }

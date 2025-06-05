@@ -61,7 +61,8 @@ namespace AppRefiner.Stylers
                         Length = endIndex - startIndex + 1,
                         Color = ErrorColor,
                         Tooltip = $"For loop re-uses iterator {iterator} which is used by an outer for loop.",
-                        Type = IndicatorType.SQUIGGLE
+                        Type = IndicatorType.SQUIGGLE,
+                        QuickFixes = []
                     });
                 }
 

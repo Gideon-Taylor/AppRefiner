@@ -94,7 +94,8 @@ namespace AppRefiner.Stylers
                         Length = comment.StopIndex - comment.StartIndex + 1,
                         Color = color,
                         Type = IndicatorType.HIGHLIGHTER,
-                        Tooltip = $"{marker}: {content}"
+                        Tooltip = $"{marker}: {content}",
+                        QuickFixes = []
                     });
                     
                     // Only process the first matching marker

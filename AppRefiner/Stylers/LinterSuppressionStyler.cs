@@ -49,7 +49,8 @@ namespace AppRefiner.Stylers
                             Length = comment.Text.Length,
                             Color = HILIGHT_COLOR,
                             Type = IndicatorType.HIGHLIGHTER,
-                            Tooltip = $"Suppressed rules: {suppressedRules}"
+                            Tooltip = $"Suppressed rules: {suppressedRules}",
+                            QuickFixes = []
                         });
                     }
                 }
