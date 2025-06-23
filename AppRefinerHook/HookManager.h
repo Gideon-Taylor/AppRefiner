@@ -11,6 +11,9 @@ typedef LRESULT (CALLBACK *HookProc)(int nCode, WPARAM wParam, LPARAM lParam);
 // Subclass procedure for handling window messages
 LRESULT CALLBACK SubclassProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam, UINT_PTR uIdSubclass, DWORD_PTR dwRefData);
 
+// Scintilla editor subclass procedure for handling escape key and user list visibility
+LRESULT CALLBACK ScintillaSubclassProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam, UINT_PTR uIdSubclass, DWORD_PTR dwRefData);
+
 // GetMessage hook procedure - for thread messages
 LRESULT CALLBACK GetMsgHook(int nCode, WPARAM wParam, LPARAM lParam);
 

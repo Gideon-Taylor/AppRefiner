@@ -45,3 +45,7 @@ extern bool g_enableAutoPairing;
 extern DWORD g_lastClipboardSequence;
 extern DWORD g_lastSeenClipboardSequence;
 extern bool g_hasUnprocessedCopy;
+
+// Subclass IDs for our window subclassing
+const UINT_PTR SUBCLASS_ID = 1001;
+const UINT_PTR SCINTILLA_SUBCLASS_ID = 1002;

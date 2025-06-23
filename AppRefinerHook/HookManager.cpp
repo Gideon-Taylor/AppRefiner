@@ -12,8 +12,6 @@ DWORD g_lastClipboardSequence = 0;
 DWORD g_lastSeenClipboardSequence = 0;  // Track the last sequence we processed
 bool g_hasUnprocessedCopy = false;      // Track if there's an unprocessed copy operation
 
-// Subclass ID for our window subclassing
-const UINT_PTR SUBCLASS_ID = 1001;
 
 // Function to check for unprocessed copy operation
 bool HasUnprocessedCopyOperation() {
@@ -332,6 +330,42 @@ LRESULT CALLBACK SubclassProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam
     return DefSubclassProc(hWnd, uMsg, wParam, lParam);
 }
 
+// Scintilla editor subclass procedure for handling escape key and user list visibility
+LRESULT CALLBACK ScintillaSubclassProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam, UINT_PTR uIdSubclass, DWORD_PTR dwRefData) {
+    try {
+        // Handle WM_NCDESTROY message to remove subclassing
+        if (uMsg == WM_NCDESTROY) {
+            RemoveWindowSubclass(hWnd, ScintillaSubclassProc, SCINTILLA_SUBCLASS_ID);
+            return DefSubclassProc(hWnd, uMsg, wParam, lParam);
+        }
+
+        // Handle escape key on WM_KEYUP to dismiss UserList
+        if (uMsg == WM_KEYUP && wParam == VK_ESCAPE) {
+            // Check if a user list is currently active
+            LRESULT userListActive = SendMessage(hWnd, SCI_AUTOCACTIVE, 0, 0);
+            
+            if (userListActive) {
+                // Cancel the user list/autocompletion
+                SendMessage(hWnd, SCI_AUTOCCANCEL, 0, 0);
+                
+                // Return 0 to indicate we handled the message and prevent further processing
+                return 0;
+            }
+        }
+    }
+    catch (const std::exception& e) {
+        char errorMsg[256];
+        sprintf_s(errorMsg, "Exception in ScintillaSubclassProc: %s", e.what());
+        OutputDebugStringA(errorMsg);
+    }
+    catch (...) {
+        OutputDebugStringA("Unknown exception in ScintillaSubclassProc");
+    }
+
+    // Call default subclass procedure for all other messages
+    return DefSubclassProc(hWnd, uMsg, wParam, lParam);
+}
+
 // GetMessage hook procedure - for thread messages
 LRESULT CALLBACK GetMsgHook(int nCode, WPARAM wParam, LPARAM lParam) {
     // Always call the next hook if code is less than zero
@@ -361,16 +395,35 @@ LRESULT CALLBACK GetMsgHook(int nCode, WPARAM wParam, LPARAM lParam) {
             HWND callbackWindow = (HWND)msg->lParam;
             
             if (hWndToSubclass && IsWindow(hWndToSubclass)) {
-                // Subclass the window, passing callbackWindow as dwRefData
-                if (SetWindowSubclass(hWndToSubclass, SubclassProc, SUBCLASS_ID, (DWORD_PTR)callbackWindow)) {
-                    char debugMsg[100];
-                    sprintf_s(debugMsg, "Successfully subclassed window: %p with callback: %p\n", hWndToSubclass, callbackWindow);
-                    OutputDebugStringA(debugMsg);
-                   
+                // Subclass the parent window, passing callbackWindow as dwRefData
+                SetWindowSubclass(hWndToSubclass, SubclassProc, SUBCLASS_ID, (DWORD_PTR)callbackWindow);
+                
+                // Now find and subclass the child Scintilla editor window
+                HWND scintillaChild = FindWindowExA(hWndToSubclass, NULL, "Scintilla", NULL);
+                if (scintillaChild && IsWindow(scintillaChild)) {
+                    SetWindowSubclass(scintillaChild, ScintillaSubclassProc, SCINTILLA_SUBCLASS_ID, 0);
                 } else {
-                    char debugMsg[100];
-                    sprintf_s(debugMsg, "Failed to subclass window: %p, error: %d\n", hWndToSubclass, GetLastError());
-                    OutputDebugStringA(debugMsg);
+                    // If direct child search fails, try recursive search
+                    struct FindScintillaData {
+                        HWND scintillaHwnd;
+                    } findData = { NULL };
+                    
+                    // Enumerate child windows to find Scintilla editor
+                    EnumChildWindows(hWndToSubclass, [](HWND hWnd, LPARAM lParam) -> BOOL {
+                        FindScintillaData* data = (FindScintillaData*)lParam;
+                        char className[256] = { 0 };
+                        if (GetClassNameA(hWnd, className, sizeof(className)) > 0) {
+                            if (strncmp(className, "Scintilla", 9) == 0) {
+                                data->scintillaHwnd = hWnd;
+                                return FALSE; // Stop enumeration
+                            }
+                        }
+                        return TRUE; // Continue enumeration
+                    }, (LPARAM)&findData);
+                    
+                    if (findData.scintillaHwnd && IsWindow(findData.scintillaHwnd)) {
+                        SetWindowSubclass(findData.scintillaHwnd, ScintillaSubclassProc, SCINTILLA_SUBCLASS_ID, 0);
+                    }
                 }
             } else {
                 OutputDebugStringA("Invalid window handle for subclassing");
