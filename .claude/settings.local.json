@@ -2,7 +2,8 @@
   "permissions": {
     "allow": [
       "Bash(dotnet search:*)",
-      "Bash(grep:*)"
+      "Bash(grep:*)",
+      "Bash(rg:*)"
     ]
   },
   "enableAllProjectMcpServers": false
