@@ -146,6 +146,8 @@ namespace AppRefiner
         private CommonTokenStream? tokenStream;
         // Collection of comments from the token stream
         private List<IToken>? comments;
+        // Tracks whether the last parse operation was successful (no syntax errors)
+        private bool parseSuccessful = true;
 
         public string? ContentString = null;
         public bool AnnotationsInitialized { get; set; } = false;
@@ -155,6 +157,11 @@ namespace AppRefiner
 
         // Database name associated with this editor
         public string? DBName { get; set; }
+
+        /// <summary>
+        /// Gets whether the last parse operation was successful (no syntax errors)
+        /// </summary>
+        public bool IsParseSuccessful => parseSuccessful;
 
         // Relative path to the file in the Snapshot database
         public string? RelativePath { get; set; }
@@ -215,6 +222,13 @@ namespace AppRefiner
 
             PeopleCodeParser parser = new(tokenStream);
             parsedProgram = parser.program();
+
+            // Check if parsing was successful (no syntax errors)
+            parseSuccessful = parser.NumberOfSyntaxErrors == 0;
+            if (!parseSuccessful)
+            {
+                Debug.Log($"Parse completed with {parser.NumberOfSyntaxErrors} syntax error(s)");
+            }
 
             TotalParseTime.Stop();
             Debug.Log($"Parse time: {TotalParseTime.Elapsed - currentStart}");
