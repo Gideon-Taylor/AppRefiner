@@ -327,6 +327,13 @@ namespace AppRefiner.Refactors
         /// </summary>
         public virtual Type? FollowUpRefactorType => null;
 
+        /// <summary>
+        /// Gets whether this refactor should run even when the ANTLR parse has syntax errors.
+        /// Defaults to true for backward compatibility, but refactors that modify imports or 
+        /// other structure-sensitive elements should set this to false.
+        /// </summary>
+        public virtual bool RunOnIncompleteParse => true;
+
         protected ScintillaEditor Editor { get; } = editor ?? throw new ArgumentNullException(nameof(editor));
         protected int CurrentPosition { get; } = ScintillaManager.GetCursorPosition(editor);
         protected int LineNumber { get; } = ScintillaManager.GetCurrentLineNumber(editor);

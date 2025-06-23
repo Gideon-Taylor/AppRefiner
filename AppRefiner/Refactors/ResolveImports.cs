@@ -36,6 +36,12 @@ namespace AppRefiner.Refactors
         public new static Keys ShortcutKey => Keys.I;
 
         /// <summary>
+        /// Gets whether this refactor should run on incomplete parses
+        /// ResolveImports should only run when parsing is successful to avoid corrupting import statements
+        /// </summary>
+        public override bool RunOnIncompleteParse => false;
+
+        /// <summary>
         /// When entering an app class path, record it as used if we're in tracking mode
         /// </summary>
         public override void EnterAppClassPath(AppClassPathContext context)
