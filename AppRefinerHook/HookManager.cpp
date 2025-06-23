@@ -7,8 +7,40 @@ bool g_enableAutoPairing = false;  // Flag to control auto-pairing feature
 HWND g_lastEditorHwnd = NULL;      // Track the last editor HWND that received SCN_CHARADDED
 HMODULE g_dllSelfReference = NULL; // Self-reference to prevent DLL unloading
 
+// Clipboard tracking for paste detection
+DWORD g_lastClipboardSequence = 0;
+DWORD g_lastSeenClipboardSequence = 0;  // Track the last sequence we processed
+bool g_hasUnprocessedCopy = false;      // Track if there's an unprocessed copy operation
+
 // Subclass ID for our window subclassing
 const UINT_PTR SUBCLASS_ID = 1001;
+
+// Function to check for unprocessed copy operation
+bool HasUnprocessedCopyOperation() {
+    DWORD currentSequence = GetClipboardSequenceNumber();
+    
+    // Check if clipboard sequence changed (indicating new copy/cut operation)
+    if (currentSequence != g_lastClipboardSequence) {
+        g_lastClipboardSequence = currentSequence;
+        g_hasUnprocessedCopy = true;
+        
+        char debugMsg[100];
+        sprintf_s(debugMsg, "New clipboard activity detected. Sequence: %lu\n", currentSequence);
+        OutputDebugStringA(debugMsg);
+    }
+    
+    return g_hasUnprocessedCopy;
+}
+
+// Function to mark copy operation as processed (called after paste detection)
+void MarkCopyOperationProcessed() {
+    g_hasUnprocessedCopy = false;
+    g_lastSeenClipboardSequence = g_lastClipboardSequence;
+    
+    char debugMsg[100];
+    sprintf_s(debugMsg, "Copy operation marked as processed. Sequence: %lu\n", g_lastSeenClipboardSequence);
+    OutputDebugStringA(debugMsg);
+}
 
 // Function to handle Scintilla notifications
 void HandleScintillaNotification(HWND hwnd, SCNotification* scn, HWND callbackWindow) {
@@ -48,6 +80,27 @@ void HandleScintillaNotification(HWND hwnd, SCNotification* scn, HWND callbackWi
                 // Send the app package suggest message with current position as wParam
                 SendMessage(callbackWindow, WM_AR_FOLD_MARGIN_CLICK, scn->position , 0);
 			}
+        }
+
+        // Handle paste operations specifically
+        if (scn->nmhdr.code == SCN_MODIFIED && 
+            (scn->modificationType & SC_MOD_INSERTTEXT) && 
+            (scn->modificationType & SC_PERFORMED_USER)) {
+            
+            // Check if this is likely a paste operation
+            // Criteria: 1) Multi-character insert (more than typical typing)
+            //          2) There's an unprocessed copy operation available
+            //          3) Insert size suggests paste rather than single character or newline
+            if (scn->length > 5 && HasUnprocessedCopyOperation()) {
+                sprintf_s(debugMsg, "Detected paste operation: length=%d, position=%d\n", scn->length, scn->position);
+                OutputDebugStringA(debugMsg);
+                
+                // Mark the copy operation as processed so we don't trigger on subsequent edits
+                MarkCopyOperationProcessed();
+                
+                // Send paste notification to callback window
+                SendMessage(callbackWindow, WM_AR_TEXT_PASTED, (WPARAM)scn->position, (LPARAM)scn->length);
+            }
         }
 
         // Handle typing events for EditorManager

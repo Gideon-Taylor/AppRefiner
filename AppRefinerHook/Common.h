@@ -34,6 +34,7 @@
 #define WM_AR_BEFORE_DELETE_ALL 2503 // Before delete all notification
 #define WM_AR_FOLD_MARGIN_CLICK 2504 // Fold margin click notification
 #define WM_AR_CONCAT_SHORTHAND 2505 // Concat shorthand notification
+#define WM_AR_TEXT_PASTED 2506 // Text pasted notification
 #define WM_SCN_USERLIST_SELECTION WM_SCN(SCN_USERLISTSELECTION) // User list selection notification
 
 // Global variables (defined in HookManager.cpp)
@@ -41,3 +42,6 @@ extern HHOOK g_getMsgHook;
 extern HMODULE g_hModule;
 extern HMODULE g_dllSelfReference;
 extern bool g_enableAutoPairing;
+extern DWORD g_lastClipboardSequence;
+extern DWORD g_lastSeenClipboardSequence;
+extern bool g_hasUnprocessedCopy;

@@ -18,6 +18,16 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserv
         EditorManager::Initialize();
         OutputDebugStringA("EditorManager initialized");
 
+        // Initialize clipboard tracking
+        extern DWORD g_lastClipboardSequence;
+        extern DWORD g_lastSeenClipboardSequence;
+        extern bool g_hasUnprocessedCopy;
+        
+        g_lastClipboardSequence = GetClipboardSequenceNumber();
+        g_lastSeenClipboardSequence = g_lastClipboardSequence;
+        g_hasUnprocessedCopy = false;
+        OutputDebugStringA("Clipboard tracking initialized");
+
         // Keep a reference to the DLL to prevent unloading
         if (g_dllSelfReference == NULL && g_hModule != NULL) {
             char dllPath[MAX_PATH];
