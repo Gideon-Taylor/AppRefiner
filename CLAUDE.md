@@ -131,6 +131,29 @@ Components requiring database access should declare `DataManagerRequirement` and
 - AST parsing is performed on background threads
 - Always dispose of resources properly
 
+### MessageBox Dialog Pattern
+When displaying MessageBox dialogs, **always use this pattern** instead of `MessageBox.Show()`:
+
+```csharp
+Task.Delay(100).ContinueWith(_ =>
+{
+    // Show message box with specific error
+    var mainHandle = Process.GetProcessById((int)activeEditor.ProcessId).MainWindowHandle;
+    var handleWrapper = new WindowWrapper(mainHandle);
+    new MessageBoxDialog("Your message here", "Dialog Title", MessageBoxButtons.OK, mainHandle).ShowDialog(handleWrapper);
+});
+```
+
+### AppRefiner Debug Pattern
+AppRefiner uses a custom Debug class and not the .NET delivered one. The Debug class has a Log() method that should be used instead of the standard Debug.WriteLine().
+
+**Key Requirements:**
+- Use `Task.Delay(100).ContinueWith()` for proper threading
+- Get the main window handle from the editor's process ID
+- Use `WindowWrapper` for proper dialog ownership
+- Use `MessageBoxDialog` instead of `MessageBox.Show()`
+- Pass the main window handle to both the dialog constructor and `ShowDialog()`
+
 ### Performance Optimization
 - Leverage caching at AST, database, and settings levels
 - Use lazy evaluation where possible
