@@ -77,6 +77,7 @@ namespace AppRefiner
         private const int AR_BEFORE_DELETE_ALL = 2503; // New constant for before delete all detection
         private const int AR_FOLD_MARGIN_CLICK = 2504;
         private const int AR_CONCAT_SHORTHAND = 2505; // New constant for concat shorthand detection
+        private const int AR_TEXT_PASTED = 2506; // New constant for text pasted detection
         private const int SCN_USERLISTSELECTION = 2014; // User list selection notification
         private const int SCI_REPLACESEL = 0x2170; // Constant for SCI_REPLACESEL
 
@@ -1404,6 +1405,41 @@ namespace AppRefiner
             else if (m.Msg == AR_FOLD_MARGIN_CLICK)
             {
                 UpdateSavedFoldsForEditor(activeEditor);
+            }
+            else if (m.Msg == AR_TEXT_PASTED)
+            {
+                // Only process if we have an active editor
+                if (activeEditor == null || !activeEditor.IsValid()) return;
+                
+                Debug.Log($"Text pasted detected at position: {m.WParam}, length: {m.LParam}");
+                
+                // Trigger ResolveImports refactor automatically
+                TriggerResolveImportsRefactor();
+            }
+        }
+
+        private void TriggerResolveImportsRefactor()
+        {
+            if (activeEditor == null || !activeEditor.IsValid() || refactorManager == null)
+            {
+                return;
+            }
+
+            try
+            {
+                // Create an instance of the ResolveImports refactor
+                var resolveImportsRefactor = new ResolveImports(activeEditor);
+
+                // Execute via the RefactorManager
+                Task.Delay(100).ContinueWith(_ => {
+                    refactorManager.ExecuteRefactor(resolveImportsRefactor, activeEditor);
+                },TaskScheduler.Default);
+                
+            }
+            catch (Exception ex)
+            {
+                Debug.Log($"Error executing ResolveImports refactor: {ex.Message}");
+                // Note: Intentionally not showing MessageBox for automatic execution to avoid interrupting user workflow
             }
         }
 
