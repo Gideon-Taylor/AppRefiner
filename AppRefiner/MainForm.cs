@@ -1430,10 +1430,10 @@ namespace AppRefiner
                 // Create an instance of the ResolveImports refactor
                 var resolveImportsRefactor = new ResolveImports(activeEditor);
 
-                // Execute via the RefactorManager
+                // Execute via the RefactorManager (showUserMessages: false for automatic execution)
                 Task.Delay(100).ContinueWith(_ => {
-                    refactorManager.ExecuteRefactor(resolveImportsRefactor, activeEditor);
-                },TaskScheduler.Default);
+                    refactorManager.ExecuteRefactor(resolveImportsRefactor, activeEditor, showUserMessages: false);
+                }, TaskScheduler.Default);
                 
             }
             catch (Exception ex)
