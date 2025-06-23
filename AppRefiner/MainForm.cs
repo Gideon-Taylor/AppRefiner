@@ -1411,7 +1411,7 @@ namespace AppRefiner
         {
             if (editor == null) return;
 
-            if (chkRememberFolds.Checked && editor != null && editor.IsValid())
+            if (editor != null && editor.IsValid())
             {
                 var collapsedFoldPaths = FoldingManager.GetCollapsedFoldPathsDirectly(editor);
                 if (collapsedFoldPaths.Count > 0)
