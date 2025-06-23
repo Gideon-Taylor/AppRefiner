@@ -188,7 +188,7 @@ namespace AppRefiner.Refactors
         /// </summary>
         /// <param name="refactorClass">The instantiated refactor class to execute.</param>
         /// <param name="activeEditor">The editor to apply the refactoring to.</param>
-        public void ExecuteRefactor(BaseRefactor refactorClass, ScintillaEditor? activeEditor)
+        public void ExecuteRefactor(BaseRefactor refactorClass, ScintillaEditor? activeEditor, bool showUserMessages = true)
         {
             if (activeEditor == null || !activeEditor.IsValid())
             {
@@ -235,6 +235,24 @@ namespace AppRefiner.Refactors
 
                 var (program, stream, _) = activeEditor.GetParsedProgram(true); // Force refresh
 
+                // Check if parsing was successful and if this refactor can run on incomplete parses
+                if (!activeEditor.IsParseSuccessful && !refactorClass.RunOnIncompleteParse)
+                {
+                    Debug.Log($"Skipping refactor '{refactorClass.GetType().Name}' due to parse errors and RunOnIncompleteParse=false");
+                    if (showUserMessages)
+                    {
+                        Task.Delay(100).ContinueWith(_ =>
+                        {
+                            var mainHandle = Process.GetProcessById((int)activeEditor.ProcessId).MainWindowHandle;
+                            var handleWrapper = new WindowWrapper(mainHandle);
+                            new MessageBoxDialog($"The refactor '{refactorClass.GetType().Name}' cannot run because there are syntax errors in the code.\n\n" +
+                                "Please fix the syntax errors first, then try the refactor again.", 
+                                "Refactor Skipped - Syntax Errors", MessageBoxButtons.OK, mainHandle).ShowDialog(handleWrapper);
+                        });
+                    }
+                    return;
+                }
+
                 // Initialize the refactor
                 refactorClass.Initialize(activeEditor.ContentString, stream, currentCursorPosition);
 
@@ -276,10 +294,15 @@ namespace AppRefiner.Refactors
                 {
                      Debug.Log("Refactoring produced null text output.");
                      // Optionally show an error, but maybe success was just no change needed
-                     if (!string.IsNullOrEmpty(result.Message))
+                     if (!string.IsNullOrEmpty(result.Message) && showUserMessages)
                      {
                           // Show success message if provided
-                          mainForm.Invoke(() => MessageBox.Show(mainForm, result.Message, "Refactoring Note", MessageBoxButtons.OK, MessageBoxIcon.Information));
+                          Task.Delay(100).ContinueWith(_ =>
+                          {
+                              var mainHandle = Process.GetProcessById((int)activeEditor.ProcessId).MainWindowHandle;
+                              var handleWrapper = new WindowWrapper(mainHandle);
+                              new MessageBoxDialog(result.Message, "Refactoring Note", MessageBoxButtons.OK, mainHandle).ShowDialog(handleWrapper);
+                          });
                      }
                      return; 
                 }
@@ -318,19 +341,40 @@ namespace AppRefiner.Refactors
                         else
                         {
                             Debug.Log($"Failed to create instance of follow-up refactor type: {followUpType.FullName}");
-                            mainForm.Invoke(() => MessageBox.Show(mainForm, $"Could not start follow-up refactor: {followUpType.Name}", "Follow-up Error", MessageBoxButtons.OK, MessageBoxIcon.Warning));
+                            if (showUserMessages)
+                            {
+                                Task.Delay(100).ContinueWith(_ =>
+                                {
+                                    var mainHandle = Process.GetProcessById((int)activeEditor.ProcessId).MainWindowHandle;
+                                    var handleWrapper = new WindowWrapper(mainHandle);
+                                    new MessageBoxDialog($"Could not start follow-up refactor: {followUpType.Name}", "Follow-up Error", MessageBoxButtons.OK, mainHandle).ShowDialog(handleWrapper);
+                                });
+                            }
                         }
                     }
                     catch (Exception followUpEx)
                     {
                         Debug.LogException(followUpEx, $"Error executing follow-up refactor {followUpType.Name}");
-                        mainForm.Invoke(() => MessageBox.Show(mainForm, $"An error occurred during the follow-up refactor: {followUpType.Name}\n\n{followUpEx.Message}", "Follow-up Error", MessageBoxButtons.OK, MessageBoxIcon.Error));
+                        if (showUserMessages)
+                        {
+                            Task.Delay(100).ContinueWith(_ =>
+                            {
+                                var mainHandle = Process.GetProcessById((int)activeEditor.ProcessId).MainWindowHandle;
+                                var handleWrapper = new WindowWrapper(mainHandle);
+                                new MessageBoxDialog($"An error occurred during the follow-up refactor: {followUpType.Name}\n\n{followUpEx.Message}", "Follow-up Error", MessageBoxButtons.OK, mainHandle).ShowDialog(handleWrapper);
+                            });
+                        }
                     }
                 }
-                else if (!string.IsNullOrEmpty(result.Message)) // Only show initial message if no follow-up
+                else if (!string.IsNullOrEmpty(result.Message) && showUserMessages) // Only show initial message if no follow-up
                 {
                     // Show success message if provided
-                    mainForm.Invoke(() => MessageBox.Show(mainForm, result.Message, "Refactoring Complete", MessageBoxButtons.OK, MessageBoxIcon.Information));
+                    Task.Delay(100).ContinueWith(_ =>
+                    {
+                        var mainHandle = Process.GetProcessById((int)activeEditor.ProcessId).MainWindowHandle;
+                        var handleWrapper = new WindowWrapper(mainHandle);
+                        new MessageBoxDialog(result.Message, "Refactoring Complete", MessageBoxButtons.OK, mainHandle).ShowDialog(handleWrapper);
+                    });
                 }
 
             }
