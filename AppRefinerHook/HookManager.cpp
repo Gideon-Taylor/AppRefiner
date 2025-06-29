@@ -330,7 +330,7 @@ LRESULT CALLBACK SubclassProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam
     return DefSubclassProc(hWnd, uMsg, wParam, lParam);
 }
 
-// Scintilla editor subclass procedure for handling escape key and user list visibility
+// Scintilla editor subclass procedure for handling escape key and key combinations
 LRESULT CALLBACK ScintillaSubclassProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam, UINT_PTR uIdSubclass, DWORD_PTR dwRefData) {
     try {
         // Handle WM_NCDESTROY message to remove subclassing
@@ -338,6 +338,9 @@ LRESULT CALLBACK ScintillaSubclassProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPAR
             RemoveWindowSubclass(hWnd, ScintillaSubclassProc, SCINTILLA_SUBCLASS_ID);
             return DefSubclassProc(hWnd, uMsg, wParam, lParam);
         }
+
+        // Get the callback window from dwRefData
+        HWND callbackWindow = (HWND)dwRefData;
 
         // Handle escape key on WM_KEYUP to dismiss UserList
         if (uMsg == WM_KEYUP && wParam == VK_ESCAPE) {
@@ -350,6 +353,28 @@ LRESULT CALLBACK ScintillaSubclassProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPAR
                 
                 // Return 0 to indicate we handled the message and prevent further processing
                 return 0;
+            }
+        }
+
+        // Handle key combinations with modifier keys on WM_KEYUP
+        if ((uMsg == WM_KEYUP || uMsg == WM_SYSKEYUP) && callbackWindow && IsWindow(callbackWindow)) {
+            // Check for modifier keys
+            bool hasCtrl = (GetKeyState(VK_CONTROL) & 0x8000) != 0;
+            bool hasShift = (GetKeyState(VK_SHIFT) & 0x8000) != 0;
+            bool hasAlt = (GetKeyState(VK_MENU) & 0x8000) != 0;
+            
+            // Only forward if at least one modifier key is pressed
+            if (hasCtrl || hasShift || hasAlt) {
+                // Pack modifier flags into high word of wParam, virtual key code in low word
+                WPARAM modifierFlags = 0;
+                if (hasCtrl) modifierFlags |= 0x10000;  // Ctrl = bit 16
+                if (hasShift) modifierFlags |= 0x20000; // Shift = bit 17
+                if (hasAlt) modifierFlags |= 0x40000;   // Alt = bit 18
+                
+                WPARAM combinedParam = modifierFlags | (wParam & 0xFFFF);
+                
+                // Forward the key combination to C# application
+                SendMessage(callbackWindow, WM_AR_KEY_COMBINATION, combinedParam, 0);
             }
         }
     }
@@ -401,7 +426,7 @@ LRESULT CALLBACK GetMsgHook(int nCode, WPARAM wParam, LPARAM lParam) {
                 // Now find and subclass the child Scintilla editor window
                 HWND scintillaChild = FindWindowExA(hWndToSubclass, NULL, "Scintilla", NULL);
                 if (scintillaChild && IsWindow(scintillaChild)) {
-                    SetWindowSubclass(scintillaChild, ScintillaSubclassProc, SCINTILLA_SUBCLASS_ID, 0);
+                    SetWindowSubclass(scintillaChild, ScintillaSubclassProc, SCINTILLA_SUBCLASS_ID, (DWORD_PTR)callbackWindow);
                 } else {
                     // If direct child search fails, try recursive search
                     struct FindScintillaData {
@@ -422,7 +447,7 @@ LRESULT CALLBACK GetMsgHook(int nCode, WPARAM wParam, LPARAM lParam) {
                     }, (LPARAM)&findData);
                     
                     if (findData.scintillaHwnd && IsWindow(findData.scintillaHwnd)) {
-                        SetWindowSubclass(findData.scintillaHwnd, ScintillaSubclassProc, SCINTILLA_SUBCLASS_ID, 0);
+                        SetWindowSubclass(findData.scintillaHwnd, ScintillaSubclassProc, SCINTILLA_SUBCLASS_ID, (DWORD_PTR)callbackWindow);
                     }
                 }
             } else {

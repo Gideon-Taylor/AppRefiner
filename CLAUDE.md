@@ -38,6 +38,8 @@ msbuild AppRefinerHook/AppRefinerHook.vcxproj /p:Configuration=Release /p:Platfo
 # Located in PeopleCodeParser project
 ```
 
+**IMPORTANT FOR CLAUDE CODE USERS**: Do not attempt to build the project directly when working in WSL environments. AppRefiner is a Windows-specific application that relies on Windows Forms, Win32 APIs, and Visual Studio C++ build tools. Building should only be done on Windows with proper development tools installed.
+
 ### Project Structure
 - **AppRefiner/**: Main Windows Forms application (.NET 8)
 - **PeopleCodeParser/**: ANTLR-based PeopleCode parser (.NET 8)

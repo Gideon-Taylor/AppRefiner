@@ -37,7 +37,7 @@ namespace AppRefiner
     {
         // Services for handling OS-level interactions
         private WinEventService? winEventService;
-        private KeyboardShortcutService? keyboardShortcutService;
+        private ApplicationKeyboardService? applicationKeyboardService;
         private LinterManager? linterManager; // Added LinterManager
         private StylerManager? stylerManager; // Added StylerManager
         private AutoCompleteService? autoCompleteService; // Added AutoCompleteService
@@ -78,6 +78,7 @@ namespace AppRefiner
         private const int AR_FOLD_MARGIN_CLICK = 2504;
         private const int AR_CONCAT_SHORTHAND = 2505; // New constant for concat shorthand detection
         private const int AR_TEXT_PASTED = 2506; // New constant for text pasted detection
+        private const int AR_KEY_COMBINATION = 2507; // New constant for key combination detection
         private const int SCN_USERLISTSELECTION = 2014; // User list selection notification
         private const int SCI_REPLACESEL = 0x2170; // Constant for SCI_REPLACESEL
 
@@ -115,7 +116,7 @@ namespace AppRefiner
 
             // Instantiate and start services
             settingsService = new SettingsService(); // Instantiate SettingsService first
-            keyboardShortcutService = new KeyboardShortcutService();
+            applicationKeyboardService = new ApplicationKeyboardService();
             winEventService = new WinEventService();
             winEventService.WindowFocused += HandleWindowFocusEvent;
             winEventService.Start();
@@ -172,16 +173,16 @@ namespace AppRefiner
             // Load Tooltip states using the service
             settingsService.LoadTooltipStates(tooltipProviders, dataGridViewTooltips);
 
-            // Register keyboard shortcuts using the service (using fully qualified Enum access)
-            keyboardShortcutService?.RegisterShortcut("CollapseLevel", AppRefiner.ModifierKeys.Alt, Keys.Left, collapseLevelHandler);
-            keyboardShortcutService?.RegisterShortcut("ExpandLevel", AppRefiner.ModifierKeys.Alt, Keys.Right, expandLevelHandler);
-            keyboardShortcutService?.RegisterShortcut("CollapseAll", AppRefiner.ModifierKeys.Control | AppRefiner.ModifierKeys.Alt, Keys.Left, collapseAllHandler);
-            keyboardShortcutService?.RegisterShortcut("ExpandAll", AppRefiner.ModifierKeys.Control | AppRefiner.ModifierKeys.Alt, Keys.Right, expandAllHandler);
-            keyboardShortcutService?.RegisterShortcut("LintCode", AppRefiner.ModifierKeys.Control | AppRefiner.ModifierKeys.Alt, Keys.L, lintCodeHandler);
-            keyboardShortcutService?.RegisterShortcut("CommandPalette", AppRefiner.ModifierKeys.Control | AppRefiner.ModifierKeys.Shift, Keys.P, ShowCommandPalette); // Use the parameterless overload
-            keyboardShortcutService?.RegisterShortcut("ApplyTemplate", AppRefiner.ModifierKeys.Control | AppRefiner.ModifierKeys.Alt, Keys.T, ApplyTemplateCommand);
-            keyboardShortcutService?.RegisterShortcut("SuperGoTo", AppRefiner.ModifierKeys.Control | AppRefiner.ModifierKeys.Alt, Keys.G, SuperGoToCommand); // Use the parameterless overload
-            keyboardShortcutService?.RegisterShortcut("ApplyQuickFix", AppRefiner.ModifierKeys.Control, Keys.OemPeriod, ApplyQuickFixCommand); // Ctrl + .
+            // Register keyboard shortcuts using the application-scoped service (using fully qualified Enum access)
+            applicationKeyboardService?.RegisterShortcut("CollapseLevel", AppRefiner.ModifierKeys.Alt, Keys.Left, collapseLevelHandler);
+            applicationKeyboardService?.RegisterShortcut("ExpandLevel", AppRefiner.ModifierKeys.Alt, Keys.Right, expandLevelHandler);
+            applicationKeyboardService?.RegisterShortcut("CollapseAll", AppRefiner.ModifierKeys.Control | AppRefiner.ModifierKeys.Alt, Keys.Left, collapseAllHandler);
+            applicationKeyboardService?.RegisterShortcut("ExpandAll", AppRefiner.ModifierKeys.Control | AppRefiner.ModifierKeys.Alt, Keys.Right, expandAllHandler);
+            applicationKeyboardService?.RegisterShortcut("LintCode", AppRefiner.ModifierKeys.Control | AppRefiner.ModifierKeys.Alt, Keys.L, lintCodeHandler);
+            applicationKeyboardService?.RegisterShortcut("CommandPalette", AppRefiner.ModifierKeys.Control | AppRefiner.ModifierKeys.Shift, Keys.P, ShowCommandPalette); // Use the parameterless overload
+            applicationKeyboardService?.RegisterShortcut("ApplyTemplate", AppRefiner.ModifierKeys.Control | AppRefiner.ModifierKeys.Alt, Keys.T, ApplyTemplateCommand);
+            applicationKeyboardService?.RegisterShortcut("SuperGoTo", AppRefiner.ModifierKeys.Control | AppRefiner.ModifierKeys.Alt, Keys.G, SuperGoToCommand); // Use the parameterless overload
+            applicationKeyboardService?.RegisterShortcut("ApplyQuickFix", AppRefiner.ModifierKeys.Control, Keys.OemPeriod, ApplyQuickFixCommand); // Ctrl + .
 
             // Register refactor shortcuts using the RefactorManager
             RegisterRefactorShortcuts();
@@ -401,6 +402,13 @@ namespace AppRefiner
             {
                 winEventService.Dispose();
                 winEventService = null;
+            }
+
+            // Clean up the ApplicationKeyboardService if active
+            if (applicationKeyboardService != null)
+            {
+                applicationKeyboardService.Dispose();
+                applicationKeyboardService = null;
             }
 
             // Dispose the savepoint debounce timer if it exists
@@ -1116,7 +1124,7 @@ namespace AppRefiner
         private void RegisterRefactorShortcuts()
         {
             // Use RefactorManager to get shortcut info
-            if (refactorManager == null || keyboardShortcutService == null) return;
+            if (refactorManager == null || applicationKeyboardService == null) return;
 
             foreach (var refactorInfo in refactorManager.AvailableRefactors)
             {
@@ -1127,7 +1135,7 @@ namespace AppRefiner
                     RefactorInfo currentRefactorInfo = refactorInfo;
 
                     // Register the shortcut using the service
-                    bool registered = keyboardShortcutService.RegisterShortcut(
+                    bool registered = applicationKeyboardService?.RegisterShortcut(
                         currentRefactorInfo.Name, // Use Name for unique ID
                         currentRefactorInfo.Modifiers,
                         currentRefactorInfo.Key,
@@ -1159,7 +1167,7 @@ namespace AppRefiner
                                 MessageBox.Show(this, $"Error running refactor from shortcut: {ex.Message}", "Refactor Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
                             }
                         }
-                    );
+                    ) ?? false;
 
                     if (!registered)
                     {
@@ -1415,6 +1423,16 @@ namespace AppRefiner
                 
                 // Trigger ResolveImports refactor automatically
                 TriggerResolveImportsRefactor();
+            }
+            else if (m.Msg == AR_KEY_COMBINATION)
+            {
+                // Only process if we have an active editor and application keyboard service
+                if (activeEditor == null || !activeEditor.IsValid() || applicationKeyboardService == null) return;
+                
+                Debug.Log($"Key combination detected: {m.WParam:X}");
+                
+                // Forward to application keyboard service for processing
+                applicationKeyboardService.ProcessKeyMessage(m.WParam.ToInt32());
             }
         }
 
