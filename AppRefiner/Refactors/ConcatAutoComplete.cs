@@ -37,7 +37,8 @@ namespace AppRefiner.Refactors
 
         /// <summary>
         /// Called when the parser enters a ConcatShortHandExpr rule.
-        /// This is where the transformation from "lhs += rhs" to "lhs = lhs | rhs" occurs.
+        /// This is where the transformation from "lhs +=" to "lhs = lhs +" occurs.
+        /// We only replace the left-hand side and operator, preserving everything else on the line.
         /// </summary>
         /// <param name="context">The context for the ConcatShortHandExpr rule.</param>
         public override void EnterConcatShortHandExpr(ConcatShortHandExprContext context)
@@ -51,60 +52,55 @@ namespace AppRefiner.Refactors
             }
 
             var lhsExprCtx = context.expression(0); // Left-hand side expression
-            var rhsExprCtx = context.expression(1); // Right-hand side expression
 
-            // The ANTLR rule 'expression ADD EQ expression' ensures that if ConcatShortHandExprContext is formed,
-            // lhsExprCtx and rhsExprCtx will be non-null. Their text content might be empty or represent
-            // incompletely parsed input, especially for rhsExprCtx if triggered immediately after "+=".
-
+            // Get the left-hand side text
             string lhsText = lhsExprCtx.GetText();
-            string rhsOriginalText = rhsExprCtx.GetText();
-            string rhsTextForConcat;
-
-            if (string.IsNullOrWhiteSpace(rhsOriginalText))
-            {
-                // If the parsed RHS text is empty or consists only of whitespace,
-                // substitute with an empty PeopleCode string literal for the concatenation.
-                rhsTextForConcat = "";
-            }
-            else
-            {
-                rhsTextForConcat = rhsOriginalText;
-            }
-
+            
+            // Determine the operator character
             var concatChar = "";
             if (context.ADD() != null)
             {
-                // If the ADD token is present, it indicates an increment operation.
-                concatChar = "+"; // Use PeopleCode concatenation operator
+                concatChar = "+";
             }
             else if (context.SUBTR() != null)
             {
-                concatChar = "-"; // Use assignment operator
-            } else if (context.PIPE() != null)
+                concatChar = "-";
+            } 
+            else if (context.PIPE() != null)
             {
-                // If the PIPE token is present, it indicates a pipe operation.
-                concatChar = "|"; // Use PeopleCode pipe operator
+                concatChar = "|";
             }
 
+            // Get the original text to find where the operator ends
+            var originalText = GetOriginalText(context);
+            
+            // Find the operator pattern in the original text
+            var operatorPattern = $@"({System.Text.RegularExpressions.Regex.Escape(concatChar)}=)";
+            var operatorMatch = System.Text.RegularExpressions.Regex.Match(originalText, operatorPattern);
+            
+            if (!operatorMatch.Success)
+            {
+                Debug.Log($"Could not find operator pattern {concatChar}= in original text: '{originalText}'");
+                refactorApplied = true;
+                return;
+            }
 
-                // Construct the new expression: lhs = lhs | rhs
-            string newText = $"{lhsText} = {lhsText} {concatChar} {rhsTextForConcat}";
+            // Calculate the positions
+            int lhsEndIndex = context.Start.StartIndex + lhsExprCtx.Stop.StopIndex - lhsExprCtx.Start.StartIndex + 1;
+            int operatorEndIndex = context.Start.StartIndex + operatorMatch.Index + operatorMatch.Length;
 
-            // The ConcatShortHandExpr context spans the entire "lhs += rhs" text.
-            int startIndex = context.Start.StartIndex;
-            int stopIndex = context.Stop.StopIndex;
+            // Replace only the "lhs +=" part with "lhs = lhs +"
+            string newText = $"{lhsText} = {lhsText} {concatChar}";
 
             Debug.Log($"ConcatAutoComplete: Applying refactor for ConcatShortHandExpr.");
-            Debug.Log($"  Original matched rule text: '{context.GetText()}'");
+            Debug.Log($"  Original text: '{originalText}'");
             Debug.Log($"  LHS text: '{lhsText}'");
-            Debug.Log($"  RHS original text: '{rhsOriginalText}'");
-            Debug.Log($"  RHS text for concatenation: '{rhsTextForConcat}'");
-            Debug.Log($"  Calculated replacement: StartIndex={startIndex}, StopIndex={stopIndex}");
-            Debug.Log($"  New expression to insert: '{newText}'");
+            Debug.Log($"  Operator: '{concatChar}='");
+            Debug.Log($"  Replacement range: {context.Start.StartIndex} to {operatorEndIndex - 1}");
+            Debug.Log($"  New text: '{newText}'");
 
-            // Perform the text replacement in the editor.
-            ReplaceText(startIndex, stopIndex, newText, RefactorDescription);
+            // Replace only the "lhs operator=" portion, leaving everything after untouched
+            ReplaceText(context.Start.StartIndex, operatorEndIndex - 1, newText, RefactorDescription);
             
             refactorApplied = true; // Mark as applied to prevent re-application.
         }
