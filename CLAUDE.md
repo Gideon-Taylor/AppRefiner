@@ -169,6 +169,86 @@ The project uses the existing test files and validation through:
 - Plugin validation through PluginSample project
 - Build validation through CI/CD pipeline
 
+## Better Find Dialog Implementation
+
+### Architecture Overview
+The Better Find dialog (`BetterFindDialog.cs`) is a comprehensive replacement for Application Designer's basic search functionality, leveraging Scintilla's advanced search capabilities including regex support, replacement with captured groups, and various search options.
+
+### Key Components
+
+#### Search State Management
+- **SearchState Class**: Encapsulates all search-related state per editor
+- **Per-Editor State**: Each ScintillaEditor has its own SearchState instance
+- **Persistent History**: Maintains search and replace term history
+- **Option Persistence**: Remembers user preferences across sessions
+
+```csharp
+public class SearchState
+{
+    public string LastSearchTerm { get; set; } = string.Empty;
+    public string LastReplaceText { get; set; } = string.Empty;
+    public List<string> SearchHistory { get; set; } = new();
+    public List<string> ReplaceHistory { get; set; } = new();
+    // ... search options (MatchCase, WholeWord, UseRegex, etc.)
+}
+```
+
+#### Dialog Implementation
+- **Modal Dialog**: Uses DialogHelper.ModalDialogMouseHandler for proper modal behavior
+- **AppRefiner Styling**: Consistent with other dialogs (dark header, light content)
+- **Keyboard Navigation**: Full keyboard support with standard shortcuts
+- **Real-time Validation**: Regex syntax validation with error display
+
+#### Search Operations
+- **Cross-Process Memory**: Uses VirtualAllocEx/WriteProcessMemory for string marshalling
+- **Scintilla Integration**: Direct use of Scintilla search API (SCI_SEARCHINTARGET, etc.)
+- **Search Highlighting**: Visual feedback using Scintilla indicators
+- **Direction Support**: Forward/backward search with proper wrapping
+
+### Keyboard Shortcuts
+- **Ctrl+Alt+F**: Open Better Find dialog
+- **F3**: Find next (works in dialog and globally)
+- **Shift+F3**: Find previous (works in dialog and globally)
+- **Escape**: Close dialog
+- **Enter**: Execute search/replace
+- **Ctrl+Enter**: Replace current/Replace all (with Shift)
+
+### Command Integration
+The Better Find functionality is integrated into the command palette system:
+- "Better Find" - Opens the dialog
+- "Find Next" - Finds next occurrence using current search state
+- "Find Previous" - Finds previous occurrence using current search state
+
+### Implementation Files
+- **BetterFindDialog.cs**: Main dialog implementation with UI and event handling
+- **ScintillaEditor.cs**: Added SearchState property for per-editor state management
+- **ScintillaManager.cs**: Added search constants and core search methods
+- **MainForm.cs**: Added keyboard shortcut handlers and command registration
+
+### Key Methods in ScintillaManager
+- `FindNext(ScintillaEditor editor)`: Execute forward search
+- `FindPrevious(ScintillaEditor editor)`: Execute backward search
+- `ReplaceSelection(ScintillaEditor editor, string replaceText)`: Replace current selection
+- `ReplaceAll(ScintillaEditor editor, string searchTerm, string replaceText)`: Replace all occurrences
+- `HighlightAllMatches(ScintillaEditor editor, string searchTerm, int searchFlags)`: Visual highlighting
+- `ClearSearchHighlights(ScintillaEditor editor)`: Remove search highlights
+
+### Usage Pattern
+1. User opens Better Find dialog (Ctrl+Alt+F)
+2. Dialog loads previous search state from ScintillaEditor.SearchState
+3. User enters search criteria and options
+4. Dialog validates input (especially regex patterns)
+5. User performs search/replace operations
+6. Dialog saves state back to ScintillaEditor.SearchState
+7. Search highlights are applied for visual feedback
+8. Dialog cleanup removes highlights when closed
+
+### Extension Points
+- **Custom Search Flags**: Easy to add new Scintilla search options
+- **Search History**: Expandable history management
+- **UI Customization**: Modular UI creation methods for easy modification
+- **Command Integration**: Seamless integration with command palette system
+
 ## Key Files and Locations
 
 - **MainForm.cs**: Central coordination and UI management
@@ -178,3 +258,4 @@ The project uses the existing test files and validation through:
 - **Ast/**: AST model definitions
 - **Templates/**: Code generation templates
 - **Dialogs/**: UI dialog implementations
+- **Dialogs/BetterFindDialog.cs**: Advanced search and replace dialog

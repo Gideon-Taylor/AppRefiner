@@ -183,6 +183,9 @@ namespace AppRefiner
             applicationKeyboardService?.RegisterShortcut("ApplyTemplate", AppRefiner.ModifierKeys.Control | AppRefiner.ModifierKeys.Alt, Keys.T, ApplyTemplateCommand);
             applicationKeyboardService?.RegisterShortcut("SuperGoTo", AppRefiner.ModifierKeys.Control | AppRefiner.ModifierKeys.Alt, Keys.G, SuperGoToCommand); // Use the parameterless overload
             applicationKeyboardService?.RegisterShortcut("ApplyQuickFix", AppRefiner.ModifierKeys.Control, Keys.OemPeriod, ApplyQuickFixCommand); // Ctrl + .
+            applicationKeyboardService?.RegisterShortcut("BetterFind", AppRefiner.ModifierKeys.Control | AppRefiner.ModifierKeys.Alt, Keys.F, showBetterFindHandler);
+            applicationKeyboardService?.RegisterShortcut("FindNext", AppRefiner.ModifierKeys.Control, Keys.F3, findNextHandler);
+            applicationKeyboardService?.RegisterShortcut("FindPrevious", AppRefiner.ModifierKeys.Shift, Keys.F3, findPreviousHandler);
 
             // Register refactor shortcuts using the RefactorManager
             RegisterRefactorShortcuts();
@@ -289,6 +292,24 @@ namespace AppRefiner
         {
             if (activeEditor == null) return;
             linterManager?.ProcessLintersForActiveEditor(activeEditor, activeEditor.DataManager);
+        }
+
+        private void showBetterFindHandler()
+        {
+            if (activeEditor == null) return;
+            ScintillaManager.ShowBetterFindDialog(activeEditor);
+        }
+
+        private void findNextHandler()
+        {
+            if (activeEditor == null) return;
+            ScintillaManager.FindNext(activeEditor);
+        }
+
+        private void findPreviousHandler()
+        {
+            if (activeEditor == null) return;
+            ScintillaManager.FindPrevious(activeEditor);
         }
 
         // Parameterless overload for shortcut service
@@ -1103,6 +1124,44 @@ namespace AppRefiner
                 () => activeEditor != null && !string.IsNullOrEmpty(activeEditor.RelativePath) &&
                       snapshotManager != null
             ));
+
+            // Better Find commands
+            /*AvailableCommands.Add(new Command(
+                "Editor: Better Find (Ctrl+Alt+F)",
+                "Open the Better Find dialog for advanced search and replace",
+                (progressDialog) =>
+                {
+                    if (activeEditor != null)
+                        Task.Delay(100).ContinueWith(_ =>
+                        {
+                            // Execute via RefactorManager
+                            ScintillaManager.ShowBetterFindDialog(activeEditor);
+                        }, TaskScheduler.Default); // Use default scheduler
+                },
+                () => activeEditor != null // Enable condition
+            ));
+
+            AvailableCommands.Add(new Command(
+                "Editor: Find Next (F3)",
+                "Find the next occurrence of the search term",
+                (progressDialog) =>
+                {
+                    if (activeEditor != null)
+                        ScintillaManager.FindNext(activeEditor);
+                },
+                () => activeEditor != null && activeEditor.SearchState.HasValidSearch // Enable condition
+            ));
+
+            AvailableCommands.Add(new Command(
+                "Editor: Find Previous (Shift+F3)",
+                "Find the previous occurrence of the search term",
+                (progressDialog) =>
+                {
+                    if (activeEditor != null)
+                        ScintillaManager.FindPrevious(activeEditor);
+                },
+                () => activeEditor != null && activeEditor.SearchState.HasValidSearch // Enable condition
+            )); */
         }
 
         private void btnPlugins_Click(object sender, EventArgs e)

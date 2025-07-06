@@ -20,6 +20,9 @@ using AppRefiner.PeopleCode;
 using Antlr4.Runtime.Atn;
 using static AppRefiner.AutoCompleteService;
 using DiffPlex.Model;
+using System.Threading.Tasks;
+using AppRefiner.Dialogs;
+using static SqlParser.Ast.MatchRecognizeSymbol;
 
 namespace AppRefiner
 {
@@ -28,6 +31,26 @@ namespace AppRefiner
         Gray = 0,
         Yellow = 1,
         Red = 2
+    }
+
+    public class SearchMatch
+    {
+        public int Position { get; set; }
+        public int Length { get; set; }
+        public int LineNumber { get; set; }
+        public string LineText = "";
+        
+
+        public override string ToString()
+        {
+            // Format: "Line 42: function myFunction() {"
+            string displayText = LineText?.Trim() ?? "";
+            if (displayText.Length > 80)
+            {
+                displayText = displayText.Substring(0, 77) + "...";
+            }
+            return $"Line {LineNumber}: {displayText}";
+        }
     }
 
     public class ScintillaManager
@@ -66,6 +89,7 @@ namespace AppRefiner
         private const int SC_MARK_FULLRECT = 26;
         private const int SCI_GETLINEENDPOSITION = 2136;
         private const int SCI_GETLINECOUNT = 2154;
+        private const int SCI_GETLINE = 2153;
         private const int SC_MARK_BOXPLUS = 12;
         private const int SC_MARK_BOXMINUS = 14;
         private const int SC_MARK_VLINE = 9;
@@ -80,6 +104,8 @@ namespace AppRefiner
         private const int SCI_LINEFROMPOSITION = 2166;
         private const int SCI_LINELENGTH = 2350;
         private const int SCI_POSITIONFROMLINE = 2167;
+        private const int SCI_POINTXFROMPOSITION = 2164;
+        private const int SCI_POINTYFROMPOSITION = 2165;
         private const int SCI_GETFOLDLEVEL = 2223;
         private const int SCI_STYLECLEARALL = 2050;
         private const int SCI_STYLESETFORE = 2051;
@@ -96,6 +122,41 @@ namespace AppRefiner
         private const int SCI_SETFOLDMARGINHICOLOUR = 2291;
         private const int SCI_GETFIRSTVISIBLELINE = 2152;
         private const int SCI_SETFIRSTVISIBLELINE = 2613;
+
+        // Search and replace constants
+        private const int SCI_SETTARGETSTART = 2190;
+        private const int SCI_GETTARGETSTART = 2191;
+        private const int SCI_SETTARGETSTARTVIRTUALSPACE = 2728;
+        private const int SCI_GETTARGETSTARTVIRTUALSPACE = 2729;
+        private const int SCI_SETTARGETEND = 2192;
+        private const int SCI_GETTARGETEND = 2193;
+        private const int SCI_SETTARGETENDVIRTUALSPACE = 2730;
+        private const int SCI_GETTARGETENDVIRTUALSPACE = 2731;
+        private const int SCI_SETTARGETRANGE = 2686;
+        private const int SCI_TARGETFROMSELECTION = 2287;
+        private const int SCI_TARGETWHOLEDOCUMENT = 2690;
+        private const int SCI_SETSEARCHFLAGS = 2198;
+        private const int SCI_GETSEARCHFLAGS = 2199;
+        private const int SCI_SEARCHINTARGET = 2197;
+        private const int SCI_GETTARGETTEXT = 2687;
+        private const int SCI_REPLACETARGET = 2194;
+        private const int SCI_REPLACETARGETMINIMAL = 2779;
+        private const int SCI_REPLACETARGETRE = 2195;
+        private const int SCI_GETTAG = 2616;
+        private const int SCI_FINDTEXT = 2150;
+        private const int SCI_FINDTEXTFULL = 2199;
+        private const int SCI_SEARCHANCHOR = 2366;
+        private const int SCI_SEARCHNEXT = 2367;
+        private const int SCI_SEARCHPREV = 2368;
+
+        // Search flag constants
+        private const int SCFIND_NONE = 0;
+        private const int SCFIND_MATCHCASE = 4;
+        private const int SCFIND_WHOLEWORD = 2;
+        private const int SCFIND_WORDSTART = 0x00100000;
+        private const int SCFIND_REGEXP = 0x00200000;
+        private const int SCFIND_POSIX = 0x00400000;
+        private const int SCFIND_CXX11REGEX = 0x00800000;
 
         // Autocompletion constants
         private const int SCI_AUTOCSHOW = 2100;
@@ -181,6 +242,9 @@ namespace AppRefiner
         private const int SCI_SETSELBACK = 2068;
         private const int SCI_SETSELALPHA = 2478;
         private const int SCI_SETELEMENTCOLOUR = 2753;
+
+        private const int SCI_BEGINUNDOACTION = 2078;
+        private const int SCI_ENDUNDOACTION = 2079;
 
         // indicator style
         private const int INDIC_TEXTFORE = 17;
@@ -341,6 +405,19 @@ namespace AppRefiner
             return editor;
         }
 
+        public static IntPtr GetStandaloneProcessBuffer(ScintillaEditor editor, uint neededSize)
+        {
+            var processHandle = editor.hProc;
+            var buffer = VirtualAllocEx(processHandle, IntPtr.Zero, neededSize, MEM_COMMIT, PAGE_READWRITE);
+            return buffer;
+        }
+
+        public static void FreeStandaloneProcessBuffer(ScintillaEditor editor, IntPtr address)
+        {
+            VirtualFreeEx(editor.hProc, address, 0, MEM_RELEASE);
+            processBuffers.Remove(editor.ProcessId);
+        }
+
         public static IntPtr GetProcessBuffer(ScintillaEditor editor, uint neededSize)
         {
             var processId = editor.ProcessId;
@@ -353,7 +430,7 @@ namespace AppRefiner
             else
             {
                 /* If buffer is too small, free current one and allocate a new one */
-        var(buffer, size) = processBuffers[processId];
+                var(buffer, size) = processBuffers[processId];
                 if (size < neededSize)
                 {
                     VirtualFreeEx(editor.hProc, buffer, 0, MEM_RELEASE);
@@ -1887,5 +1964,791 @@ namespace AppRefiner
         {
             return (int)activeEditor.SendMessage(SCI_GETLINECOUNT, 0, 0);
         }
+
+        #region Better Find/Replace Methods
+
+        /// <summary>
+        /// Shows the Better Find dialog for the specified editor
+        /// </summary>
+        /// <param name="editor">The editor to show the find dialog for</param>
+        public static void ShowBetterFindDialog(ScintillaEditor editor)
+        {
+            Task.Delay(100).ContinueWith(_ =>
+            {
+                try
+                {
+                    var mainHandle = Process.GetProcessById((int)editor.ProcessId).MainWindowHandle;
+                    var handleWrapper = new WindowWrapper(0);
+                    
+                    var dialog = new Dialogs.BetterFindDialog(editor, 0);
+                    WindowHelper.CenterFormOnWindow(dialog, mainHandle);
+
+                    // Make the dialog always on top
+                    dialog.MakeAlwaysOnTop();
+
+                    // Show as non-modal dialog
+                    dialog.ShowDialog();
+                    
+
+                }
+                catch (Exception ex)
+                {
+                    Debug.LogError($"Error showing Better Find dialog: {ex.Message}");
+                }
+            }, TaskScheduler.Default);
+        }
+
+        /// <summary>
+        /// Finds the next occurrence of the search term in the editor
+        /// </summary>
+        /// <param name="editor">The editor to search in</param>
+        /// <returns>True if text was found, false otherwise</returns>
+        public static bool FindNext(ScintillaEditor editor)
+        {
+            if (!editor.SearchState.HasValidSearch)
+            {
+                ShowBetterFindDialog(editor);
+                return false;
+            }
+
+            return PerformSearch(editor, forward: true);
+        }
+
+        /// <summary>
+        /// Finds the previous occurrence of the search term in the editor
+        /// </summary>
+        /// <param name="editor">The editor to search in</param>
+        /// <returns>True if text was found, false otherwise</returns>
+        public static bool FindPrevious(ScintillaEditor editor)
+        {
+            if (!editor.SearchState.HasValidSearch)
+            {
+                ShowBetterFindDialog(editor);
+                return false;
+            }
+
+            return PerformSearch(editor, forward: false);
+        }
+
+        /// <summary>
+        /// Performs a search operation in the specified direction
+        /// </summary>
+        /// <param name="editor">The editor to search in</param>
+        /// <param name="forward">True to search forward, false to search backward</param>
+        /// <returns>True if text was found, false otherwise</returns>
+        private static bool PerformSearch(ScintillaEditor editor, bool forward)
+        {
+            var searchState = editor.SearchState;
+            var searchFlags = BuildSearchFlags(searchState);
+            
+            int docLength = (int)editor.SendMessage(SCI_GETLENGTH, IntPtr.Zero, IntPtr.Zero);
+            
+            // Determine search range based on scope preference
+            int rangeStart, rangeEnd;
+            if (searchState.SearchInSelection && searchState.HasValidSelection)
+            {
+                // Use stored selection range
+                rangeStart = searchState.SelectionStart;
+                rangeEnd = searchState.SelectionEnd;
+            }
+            else
+            {
+                // Search whole document
+                rangeStart = 0;
+                rangeEnd = docLength;
+            }
+            
+            // Get current position - use selection start if there's a selection, otherwise cursor position
+            int currentPos;
+            var (currentSelText, currentSelStart, currentSelEnd) = GetSelectedText(editor);
+            if (!string.IsNullOrEmpty(currentSelText))
+            {
+                // Use selection start for backward search, selection end for forward search
+                currentPos = forward ? currentSelEnd : currentSelStart;
+            }
+            else
+            {
+                currentPos = GetCursorPosition(editor);
+            }
+            
+            // Set search target based on direction and current position within range
+            int targetStart, targetEnd;
+            if (forward)
+            {
+                targetStart = Math.Max(currentPos, rangeStart);
+                targetEnd = rangeEnd;
+            }
+            else
+            {
+                // For backward search, targetStart > targetEnd to find last match
+                targetStart = Math.Min(currentPos, rangeEnd);
+                targetEnd = rangeStart;
+            }
+
+            // Set the target range
+            editor.SendMessage(SCI_SETTARGETRANGE, targetStart, targetEnd);
+            
+            // Set search flags
+            editor.SendMessage(SCI_SETSEARCHFLAGS, searchFlags, IntPtr.Zero);
+            
+            // Perform the search using marshalled string
+            bool found = PerformSearchInTarget(editor, searchState.LastSearchTerm);
+            
+            if (!found && searchState.WrapSearch)
+            {
+                // Try wrapping around within the same scope
+                if (forward)
+                {
+                    // Search from beginning of range to current position
+                    editor.SendMessage(SCI_SETTARGETRANGE, rangeStart, Math.Min(currentPos, rangeEnd));
+                }
+                else
+                {
+                    // For backward search wrapping, targetStart > targetEnd to find last match
+                    // Search from end of range to current position
+                    editor.SendMessage(SCI_SETTARGETRANGE, rangeEnd, Math.Max(currentPos, rangeStart));
+                }
+                
+                found = PerformSearchInTarget(editor, searchState.LastSearchTerm);
+            }
+            
+            if (found)
+            {
+                // Get the found text position
+                int foundStart = (int)editor.SendMessage(SCI_GETTARGETSTART, IntPtr.Zero, IntPtr.Zero);
+                int foundEnd = (int)editor.SendMessage(SCI_GETTARGETEND, IntPtr.Zero, IntPtr.Zero);
+
+                /* Debugging, get the capture groups 1 through 9 */
+                /*var lineBuffer = GetProcessBuffer(editor, (uint)editor.SendMessage(SCI_GETLENGTH,0,0));
+                for (var x = 1; x <= 9; x++)
+                {
+                    var tagResp = editor.SendMessage(SCI_GETTAG, x, lineBuffer);
+
+                    byte[] lineData = new byte[tagResp];
+                    if (ReadProcessMemory(editor.hProc, lineBuffer, lineData, (int)tagResp, out int lineRead) && lineRead == tagResp)
+                    {
+                        var lineText = Encoding.Default.GetString(lineData).TrimEnd('\r', '\n');
+                    }
+                }*/
+
+                // Select the found text and scroll to it
+                SetSelection(editor, foundStart, foundEnd);
+                //SetCursorPosition(editor, foundEnd);
+                
+                // Update last match position
+                searchState.LastMatchPosition = foundStart;
+            }
+            
+            return found;
+        }
+
+        
+
+        /// <summary>
+        /// Clears all search highlight indicators from the editor
+        /// </summary>
+        /// <param name="editor">The editor to clear highlights from</param>
+        public static void ClearSearchHighlights(ScintillaEditor editor)
+        {
+            uint highlightColor = 0x80FFFF00; // Same color used for search highlights
+            
+            // Remove all indicators of this color
+            var indicatorsToRemove = editor.ActiveIndicators
+                .Where(i => i.Type == IndicatorType.HIGHLIGHTER && i.Color == highlightColor)
+                .ToList();
+
+            foreach (var indicator in indicatorsToRemove)
+            {
+                RemoveIndicator(editor, indicator);
+            }
+        }
+
+        /// <summary>
+        /// Performs the actual search in the target using marshalled strings
+        /// </summary>
+        /// <param name="editor">The editor to search in</param>
+        /// <param name="searchTerm">The term to search for</param>
+        /// <returns>True if text was found, false otherwise</returns>
+        private static bool PerformSearchInTarget(ScintillaEditor editor, string searchTerm)
+        {
+            if (string.IsNullOrEmpty(searchTerm))
+                return false;
+
+            // Convert search term to bytes and marshall to remote process
+            byte[] searchBytes = Encoding.Default.GetBytes(searchTerm);
+            int neededSize = searchBytes.Length + 1; // +1 for null terminator
+
+            var remoteBuffer = GetProcessBuffer(editor, (uint)neededSize);
+
+            // Create buffer with null terminator
+            byte[] buffer = new byte[neededSize];
+            Buffer.BlockCopy(searchBytes, 0, buffer, 0, searchBytes.Length);
+            buffer[neededSize - 1] = 0; // Ensure null termination
+
+            // Write to remote process memory
+            if (!WriteProcessMemory(editor.hProc, remoteBuffer, buffer, neededSize, out int bytesWritten) || bytesWritten != neededSize)
+                return false;
+
+            // Perform the search
+            int result = (int)editor.SendMessage(SCI_SEARCHINTARGET, searchBytes.Length, remoteBuffer);
+            
+            return result != -1;
+        }
+
+        /// <summary>
+        /// Builds search flags from the search state
+        /// </summary>
+        /// <param name="searchState">The search state containing options</param>
+        /// <returns>Combined search flags</returns>
+        private static int BuildSearchFlags(SearchState searchState)
+        {
+            int flags = SCFIND_NONE;
+            
+            if (searchState.MatchCase)
+                flags |= SCFIND_MATCHCASE;
+            
+            if (searchState.WholeWord)
+                flags |= SCFIND_WHOLEWORD;
+            
+            if (searchState.WordStart)
+                flags |= SCFIND_WORDSTART;
+            
+            if (searchState.UseRegex)
+            {
+                flags |= SCFIND_REGEXP;
+                flags |= SCFIND_POSIX;
+            }
+            
+            return flags;
+        }
+
+        /// <summary>
+        /// Replaces the current selection with the replacement text
+        /// </summary>
+        /// <param name="editor">The editor to perform replacement in</param>
+        /// <param name="replaceText">The text to replace with</param>
+        /// <returns>True if replacement was successful, false otherwise</returns>
+        public static bool ReplaceSelection(ScintillaEditor editor, string replaceText)
+        {
+            if (string.IsNullOrEmpty(replaceText))
+                replaceText = string.Empty;
+
+            var searchState = editor.SearchState;
+            
+            // Check if we have a selection
+            var (selectedText, start, end) = GetSelectedText(editor);
+            if (selectedText == null)
+                return false;
+
+            // Set target to current selection
+            editor.SendMessage(SCI_SETTARGETRANGE, start, end);
+            
+            // Marshall replacement text
+            byte[] replaceBytes = Encoding.Default.GetBytes(replaceText);
+            int neededSize = replaceBytes.Length + 1;
+            
+            var remoteBuffer = GetProcessBuffer(editor, (uint)neededSize);
+            
+            byte[] buffer = new byte[neededSize];
+            Buffer.BlockCopy(replaceBytes, 0, buffer, 0, replaceBytes.Length);
+            buffer[neededSize - 1] = 0;
+            
+            if (!WriteProcessMemory(editor.hProc, remoteBuffer, buffer, neededSize, out int bytesWritten) || bytesWritten != neededSize)
+                return false;
+
+            var replacementLength = replaceText.Length;
+
+            // Perform replacement
+            if (searchState.UseRegex)
+            {
+                replacementLength = (int)editor.SendMessage(SCI_REPLACETARGETRE, replaceBytes.Length, remoteBuffer);
+            }
+            else
+            {
+                replacementLength = (int)editor.SendMessage(SCI_REPLACETARGET, replaceBytes.Length, remoteBuffer);
+            }
+
+            /* move to the end of the replacement */
+            editor.SendMessage(SCI_GOTOPOS, start + replacementLength,0);
+
+            return true;
+        }
+
+        public static (bool Success,int Length) ReplaceRange(ScintillaEditor editor, int start, int end, int replaceTextLength, IntPtr replaceTextBuffer)
+        {
+            var searchState = editor.SearchState;
+            var replacementLength = replaceTextLength;
+
+            editor.SendMessage(SCI_SETTARGETRANGE, start, end);
+
+            // Perform replacement
+            if (searchState.UseRegex)
+            {
+                replacementLength = (int)editor.SendMessage(SCI_REPLACETARGETRE, replaceTextLength, replaceTextBuffer);
+            }
+            else
+            {
+                replacementLength = (int)editor.SendMessage(SCI_REPLACETARGET, replaceTextLength, replaceTextBuffer);
+            }
+
+            return (true,replacementLength);
+
+        }
+
+        /// <summary>
+        /// Replaces all occurrences of the search term with the replacement text
+        /// </summary>
+        /// <param name="editor">The editor to perform replacements in</param>
+        /// <param name="searchTerm">The term to search for</param>
+        /// <param name="replaceText">The text to replace with</param>
+        /// <returns>Number of replacements made</returns>
+        public static int ReplaceAll(ScintillaEditor editor, string searchTerm, string replaceText)
+        {
+            if (string.IsNullOrEmpty(searchTerm))
+                return 0;
+
+            var searchState = editor.SearchState;
+            var searchFlags = BuildSearchFlags(searchState);
+            int replaceCount = 0;
+
+            // Determine search range based on scope preference
+            int rangeStart, rangeEnd;
+            if (searchState.SearchInSelection && searchState.HasValidSelection)
+            {
+                rangeStart = searchState.SelectionStart;
+                rangeEnd = searchState.SelectionEnd;
+            }
+            else
+            {
+                rangeStart = 0;
+                rangeEnd = (int)editor.SendMessage(SCI_GETLENGTH, IntPtr.Zero, IntPtr.Zero);
+            }
+
+            // Set search flags
+            editor.SendMessage(SCI_SETSEARCHFLAGS, searchFlags, IntPtr.Zero);
+
+            // Marshall search string
+            byte[] searchBytes = Encoding.Default.GetBytes(searchTerm);
+            int searchSize = searchBytes.Length + 1;
+
+            var searchBuffer = GetProcessBuffer(editor, (uint)searchSize);
+
+            byte[] searchBufferData = new byte[searchSize];
+            Buffer.BlockCopy(searchBytes, 0, searchBufferData, 0, searchBytes.Length);
+            searchBufferData[searchSize - 1] = 0;
+
+            if (!WriteProcessMemory(editor.hProc, searchBuffer, searchBufferData, searchSize, out int searchBytesWritten) ||
+                searchBytesWritten != searchSize)
+                return 0;
+
+            // Find and mark all matches
+            int currentPos = rangeStart;
+
+            /* Set up separate buffer with the replacement text */
+            if (string.IsNullOrEmpty(replaceText))
+                replaceText = string.Empty;
+
+            // Marshall replacement text
+            byte[] replaceBytes = Encoding.Default.GetBytes(replaceText);
+            int neededSize = replaceBytes.Length + 1;
+
+            var replaceTextBuffer = GetStandaloneProcessBuffer(editor, (uint)neededSize);
+
+            byte[] buffer = new byte[neededSize];
+            Buffer.BlockCopy(replaceBytes, 0, buffer, 0, replaceBytes.Length);
+            buffer[neededSize - 1] = 0;
+
+            if (!WriteProcessMemory(editor.hProc, replaceTextBuffer, buffer, neededSize, out int bytesWritten) || bytesWritten != neededSize)
+                return ( 0);
+
+            try
+            {
+                editor.SendMessage(SCI_BEGINUNDOACTION, 0, 0);
+                while (true)
+                {
+                    editor.SendMessage(SCI_SETTARGETRANGE, currentPos, rangeEnd);
+
+                    int result = (int)editor.SendMessage(SCI_SEARCHINTARGET, searchBytes.Length, searchBuffer);
+                    if (result == -1)
+                        break;
+
+                    int targetStart = (int)editor.SendMessage(SCI_GETTARGETSTART, IntPtr.Zero, IntPtr.Zero);
+                    int targetEnd = (int)editor.SendMessage(SCI_GETTARGETEND, IntPtr.Zero, IntPtr.Zero);
+
+                    if (targetStart < rangeStart || targetStart >= rangeEnd)
+                        break;
+
+                    var (success, length) = ReplaceRange(editor, targetStart, targetEnd, replaceText.Length, replaceTextBuffer);
+                    if (success)
+                    {
+                        currentPos = targetStart + length;
+                        replaceCount++;
+                    }
+                    else
+                    {
+                        currentPos = targetEnd;
+                    }
+                }
+            }
+            catch (Exception) { }
+            finally
+            {
+                editor.SendMessage(SCI_ENDUNDOACTION, 0, 0);
+                FreeStandaloneProcessBuffer(editor, replaceTextBuffer);
+            }
+
+            return replaceCount;
+        }
+
+        /// <summary>
+        /// Counts all matches of the search term in the editor
+        /// </summary>
+        /// <param name="editor">The editor to count matches in</param>
+        /// <param name="searchTerm">The term to search for</param>
+        /// <returns>Number of matches found</returns>
+        public static int CountMatches(ScintillaEditor editor, string searchTerm)
+        {
+            if (string.IsNullOrEmpty(searchTerm))
+                return 0;
+
+            var searchState = editor.SearchState;
+            var searchFlags = BuildSearchFlags(searchState);
+            int matchCount = 0;
+            
+            // Determine search range based on scope preference
+            int rangeStart, rangeEnd;
+            if (searchState.SearchInSelection && searchState.HasValidSelection)
+            {
+                rangeStart = searchState.SelectionStart;
+                rangeEnd = searchState.SelectionEnd;
+            }
+            else
+            {
+                rangeStart = 0;
+                rangeEnd = (int)editor.SendMessage(SCI_GETLENGTH, IntPtr.Zero, IntPtr.Zero);
+            }
+            
+            // Set search flags
+            editor.SendMessage(SCI_SETSEARCHFLAGS, searchFlags, IntPtr.Zero);
+            
+            // Marshall search string
+            byte[] searchBytes = Encoding.Default.GetBytes(searchTerm);
+            int searchSize = searchBytes.Length + 1;
+            
+            var searchBuffer = GetProcessBuffer(editor, (uint)searchSize);
+            
+            byte[] searchBufferData = new byte[searchSize];
+            Buffer.BlockCopy(searchBytes, 0, searchBufferData, 0, searchBytes.Length);
+            searchBufferData[searchSize - 1] = 0;
+            
+            if (!WriteProcessMemory(editor.hProc, searchBuffer, searchBufferData, searchSize, out int searchBytesWritten) || 
+                searchBytesWritten != searchSize)
+                return 0;
+
+            // Count matches
+            int currentPos = rangeStart;
+            while (true)
+            {
+                editor.SendMessage(SCI_SETTARGETRANGE, currentPos, rangeEnd);
+                
+                int result = (int)editor.SendMessage(SCI_SEARCHINTARGET, searchBytes.Length, searchBuffer);
+                if (result == -1)
+                    break;
+                
+                int targetStart = (int)editor.SendMessage(SCI_GETTARGETSTART, IntPtr.Zero, IntPtr.Zero);
+                int targetEnd = (int)editor.SendMessage(SCI_GETTARGETEND, IntPtr.Zero, IntPtr.Zero);
+                
+                if (targetStart < rangeStart || targetStart >= rangeEnd)
+                    break;
+                
+                matchCount++;
+                currentPos = targetEnd;
+            }
+            
+            return matchCount;
+        }
+
+        /// <summary>
+        /// Creates indicators for all matches of the search term ("Mark All" functionality)
+        /// </summary>
+        /// <param name="editor">The editor to mark matches in</param>
+        /// <param name="searchTerm">The term to search for</param>
+        /// <returns>Number of matches marked</returns>
+        public static int MarkAllMatches(ScintillaEditor editor, string searchTerm)
+        {
+            if (string.IsNullOrEmpty(searchTerm))
+                return 0;
+
+            var searchState = editor.SearchState;
+            var searchFlags = BuildSearchFlags(searchState);
+            int matchCount = 0;
+            
+            // Clear previous search indicators
+            ClearSearchIndicators(editor);
+            
+            // Use distinct color for mark all (light blue)
+            uint markColor = 0xFFFF0060;
+            int highlighter = editor.GetHighlighter(markColor);
+            
+            // Determine search range based on scope preference
+            int rangeStart, rangeEnd;
+            if (searchState.SearchInSelection && searchState.HasValidSelection)
+            {
+                rangeStart = searchState.SelectionStart;
+                rangeEnd = searchState.SelectionEnd;
+            }
+            else
+            {
+                rangeStart = 0;
+                rangeEnd = (int)editor.SendMessage(SCI_GETLENGTH, IntPtr.Zero, IntPtr.Zero);
+            }
+            
+            // Set search flags
+            editor.SendMessage(SCI_SETSEARCHFLAGS, searchFlags, IntPtr.Zero);
+            
+            // Marshall search string
+            byte[] searchBytes = Encoding.Default.GetBytes(searchTerm);
+            int searchSize = searchBytes.Length + 1;
+            
+            var searchBuffer = GetProcessBuffer(editor, (uint)searchSize);
+            
+            byte[] searchBufferData = new byte[searchSize];
+            Buffer.BlockCopy(searchBytes, 0, searchBufferData, 0, searchBytes.Length);
+            searchBufferData[searchSize - 1] = 0;
+            
+            if (!WriteProcessMemory(editor.hProc, searchBuffer, searchBufferData, searchSize, out int searchBytesWritten) || 
+                searchBytesWritten != searchSize)
+                return 0;
+
+            // Find and mark all matches
+            int currentPos = rangeStart;
+            while (true)
+            {
+                editor.SendMessage(SCI_SETTARGETRANGE, currentPos, rangeEnd);
+                
+                int result = (int)editor.SendMessage(SCI_SEARCHINTARGET, searchBytes.Length, searchBuffer);
+                if (result == -1)
+                    break;
+                
+                int targetStart = (int)editor.SendMessage(SCI_GETTARGETSTART, IntPtr.Zero, IntPtr.Zero);
+                int targetEnd = (int)editor.SendMessage(SCI_GETTARGETEND, IntPtr.Zero, IntPtr.Zero);
+                
+                if (targetStart < rangeStart || targetStart >= rangeEnd)
+                    break;
+                
+                // Add search indicator
+                var indicator = new Indicator()
+                {
+                    Type = IndicatorType.HIGHLIGHTER,
+                    Color = markColor,
+                    Start = targetStart,
+                    Length = targetEnd - targetStart
+                };
+                AddIndicator(editor, indicator);
+                editor.SearchIndicators.Add(indicator);
+                
+                matchCount++;
+                currentPos = targetEnd;
+            }
+            
+            return matchCount;
+        }
+
+        /// <summary>
+        /// Finds all matches of the search term and returns detailed information about each match
+        /// </summary>
+        /// <param name="editor">The editor to search in</param>
+        /// <param name="searchTerm">The term to search for</param>
+        /// <returns>List of SearchMatch objects containing position and line information</returns>
+        public static List<SearchMatch> FindAllMatches(ScintillaEditor editor, string searchTerm)
+        {
+            var matches = new List<SearchMatch>();
+
+            if (string.IsNullOrEmpty(searchTerm))
+                return matches;
+
+            var searchState = editor.SearchState;
+            var searchFlags = BuildSearchFlags(searchState);
+
+            // Determine search range based on scope preference
+            int rangeStart, rangeEnd;
+            if (searchState.SearchInSelection && searchState.HasValidSelection)
+            {
+                rangeStart = searchState.SelectionStart;
+                rangeEnd = searchState.SelectionEnd;
+            }
+            else
+            {
+                rangeStart = 0;
+                rangeEnd = (int)editor.SendMessage(SCI_GETLENGTH, IntPtr.Zero, IntPtr.Zero);
+            }
+
+            // Set search flags
+            editor.SendMessage(SCI_SETSEARCHFLAGS, searchFlags, IntPtr.Zero);
+
+            // Marshall search string
+            byte[] searchBytes = Encoding.Default.GetBytes(searchTerm);
+            int searchSize = searchBytes.Length + 1;
+
+            var searchBuffer = GetProcessBuffer(editor, (uint)searchSize);
+
+            byte[] searchBufferData = new byte[searchSize];
+            Buffer.BlockCopy(searchBytes, 0, searchBufferData, 0, searchBytes.Length);
+            searchBufferData[searchSize - 1] = 0;
+
+            if (!WriteProcessMemory(editor.hProc, searchBuffer, searchBufferData, searchSize, out int searchBytesWritten) ||
+                searchBytesWritten != searchSize)
+                return matches;
+
+            // Count matches
+            int currentPos = rangeStart;
+            while (true)
+            {
+                editor.SendMessage(SCI_SETTARGETRANGE, currentPos, rangeEnd);
+
+                int result = (int)editor.SendMessage(SCI_SEARCHINTARGET, searchBytes.Length, searchBuffer);
+                if (result == -1)
+                    break;
+
+                int targetStart = (int)editor.SendMessage(SCI_GETTARGETSTART, IntPtr.Zero, IntPtr.Zero);
+                int targetEnd = (int)editor.SendMessage(SCI_GETTARGETEND, IntPtr.Zero, IntPtr.Zero);
+
+                if (targetStart < rangeStart || targetStart >= rangeEnd)
+                    break;
+
+                currentPos = targetEnd;
+
+
+                /* Add match */
+                // Get line information
+                int lineNumber = (int)editor.SendMessage(SCI_LINEFROMPOSITION, targetStart, IntPtr.Zero);
+
+                // Create SearchMatch
+                var match = new SearchMatch
+                {
+                    Position = targetStart,
+                    Length = targetEnd - targetStart,
+                    LineNumber = lineNumber
+                };
+
+                matches.Add(match);
+
+
+            }
+
+            /* Now that the process buffer is free to use, retrieve line information (line text) */
+            foreach(var match in matches)
+            {
+                int lineStart = (int)editor.SendMessage(SCI_POSITIONFROMLINE, match.LineNumber, IntPtr.Zero);
+                int lineEnd = (int)editor.SendMessage(SCI_GETLINEENDPOSITION, match.LineNumber, IntPtr.Zero);
+
+                // Get line text
+                string lineText = string.Empty;
+                if (lineEnd > lineStart)
+                {
+                    editor.SendMessage(SCI_SETTARGETRANGE, lineStart, lineEnd);
+                    int lineLength = lineEnd - lineStart;
+
+                    if (lineLength > 0)
+                    {
+                        var lineBuffer = GetProcessBuffer(editor, (uint)(lineLength + 1));
+
+                        if (lineBuffer != IntPtr.Zero)
+                        {
+                            int lineResult = (int)editor.SendMessage(SCI_GETTARGETTEXT, IntPtr.Zero, lineBuffer);
+                            if (lineResult > 0)
+                            {
+                                byte[] lineData = new byte[lineLength];
+                                if (ReadProcessMemory(editor.hProc, lineBuffer, lineData, lineLength, out int lineRead) && lineRead == lineLength)
+                                {
+                                    lineText = Encoding.Default.GetString(lineData).TrimEnd('\r', '\n');
+                                    match.LineText = lineText;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            return matches;
+        }
+
+        /// <summary>
+        /// Clears all search indicators created by the "Mark All" feature
+        /// </summary>
+        /// <param name="editor">The editor to clear indicators from</param>
+        public static void ClearSearchIndicators(ScintillaEditor editor)
+        {
+            // Remove all search indicators
+            foreach (var indicator in editor.SearchIndicators)
+            {
+                RemoveIndicator(editor, indicator);
+            }
+            
+            // Clear the list
+            editor.SearchIndicators.Clear();
+        }
+
+        /// <summary>
+        /// Gets the screen coordinates of a text position in the editor
+        /// </summary>
+        /// <param name="editor">The editor to get coordinates from</param>
+        /// <param name="textPosition">The text position to convert</param>
+        /// <returns>Point representing screen coordinates, or Point.Empty if failed</returns>
+        public static Point GetTextScreenCoordinates(ScintillaEditor editor, int textPosition)
+        {
+            try
+            {
+                // Get relative coordinates within the Scintilla control
+                int x = (int)editor.SendMessage(SCI_POINTXFROMPOSITION, IntPtr.Zero, textPosition);
+                int y = (int)editor.SendMessage(SCI_POINTYFROMPOSITION, IntPtr.Zero, textPosition);
+                
+                // Convert to screen coordinates using WindowHelper
+                return WindowHelper.ClientToScreen(editor.hWnd, new Point(x, y));
+            }
+            catch
+            {
+                return Point.Empty;
+            }
+        }
+
+        /// <summary>
+        /// Gets the screen rectangle occupied by a range of text
+        /// </summary>
+        /// <param name="editor">The editor to get coordinates from</param>
+        /// <param name="startPos">Start position of text range</param>
+        /// <param name="endPos">End position of text range</param>
+        /// <returns>Rectangle representing screen area of text, or Rectangle.Empty if failed</returns>
+        public static Rectangle GetTextScreenRect(ScintillaEditor editor, int startPos, int endPos)
+        {
+            try
+            {
+                Point startPoint = GetTextScreenCoordinates(editor, startPos);
+                Point endPoint = GetTextScreenCoordinates(editor, endPos);
+                
+                if (startPoint.IsEmpty || endPoint.IsEmpty)
+                    return Rectangle.Empty;
+                
+                // Create rectangle encompassing the text range
+                // Add some padding for better visibility
+                int padding = 5;
+                int left = Math.Min(startPoint.X, endPoint.X) - padding;
+                int top = Math.Min(startPoint.Y, endPoint.Y) - padding;
+                int right = Math.Max(startPoint.X, endPoint.X) + padding;
+                int bottom = Math.Max(startPoint.Y, endPoint.Y) + padding;
+                
+                // Estimate text height (using font metrics would be more accurate, but this is simpler)
+                int estimatedTextHeight = 20; // Default text height
+                bottom = Math.Max(bottom, top + estimatedTextHeight);
+                
+                return new Rectangle(left, top, right - left, bottom - top);
+            }
+            catch
+            {
+                return Rectangle.Empty;
+            }
+        }
+
+        #endregion
     }
 }

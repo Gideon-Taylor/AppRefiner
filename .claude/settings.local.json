@@ -17,7 +17,9 @@
       "mcp__serena__write_memory",
       "mcp__serena__read_memory",
       "mcp__serena__replace_regex",
-      "Bash(find:*)"
+      "Bash(find:*)",
+      "WebFetch(domain:scintilla.org)",
+      "Bash(git add:*)"
     ]
   },
   "enableAllProjectMcpServers": false

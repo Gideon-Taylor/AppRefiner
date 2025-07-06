@@ -19,6 +19,74 @@ namespace AppRefiner
         PeopleCode, HTML, SQL, CSS, Other
     }
 
+    public class SearchState
+    {
+        public string LastSearchTerm { get; set; } = string.Empty;
+        public string LastReplaceText { get; set; } = string.Empty;
+        public bool MatchCase { get; set; } = false;
+        public bool WholeWord { get; set; } = false;
+        public bool WordStart { get; set; } = false;
+        public bool UseRegex { get; set; } = false;
+        public bool UsePosixRegex { get; set; } = false;
+        public bool UseCxx11Regex { get; set; } = false;
+        public bool WrapSearch { get; set; } = true;
+        public bool SearchInSelection { get; set; } = false;
+        public int SelectionStart { get; set; } = -1;
+        public int SelectionEnd { get; set; } = -1;
+        public int LastMatchPosition { get; set; } = -1;
+        public int LastSearchFlags { get; set; } = 0;
+
+        // Search history (limited to last 10 searches)
+        public List<string> SearchHistory { get; set; } = new();
+        public List<string> ReplaceHistory { get; set; } = new();
+
+        // Helper properties
+        public bool HasValidSearch => !string.IsNullOrEmpty(LastSearchTerm);
+        public bool HasValidSelection => SelectionStart >= 0 && SelectionEnd >= 0 && SelectionStart < SelectionEnd;
+
+        // Helper method to update search history
+        public void UpdateSearchHistory(string term)
+        {
+            if (string.IsNullOrWhiteSpace(term)) return;
+            
+            // Remove if already exists
+            SearchHistory.Remove(term);
+            // Add to front
+            SearchHistory.Insert(0, term);
+            // Limit to 10 items
+            if (SearchHistory.Count > 10)
+                SearchHistory.RemoveAt(10);
+        }
+
+        // Helper method to update replace history
+        public void UpdateReplaceHistory(string term)
+        {
+            if (string.IsNullOrWhiteSpace(term)) return;
+            
+            // Remove if already exists
+            ReplaceHistory.Remove(term);
+            // Add to front
+            ReplaceHistory.Insert(0, term);
+            // Limit to 10 items
+            if (ReplaceHistory.Count > 10)
+                ReplaceHistory.RemoveAt(10);
+        }
+        
+        // Helper method to set selection range
+        public void SetSelectionRange(int start, int end)
+        {
+            SelectionStart = start;
+            SelectionEnd = end;
+        }
+        
+        // Helper method to clear selection range
+        public void ClearSelectionRange()
+        {
+            SelectionStart = -1;
+            SelectionEnd = -1;
+        }
+    }
+
     public delegate void CaptionChangedEventHandler(object sender, CaptionChangedEventArgs e);
 
     public class CaptionChangedEventArgs : EventArgs
@@ -177,6 +245,16 @@ namespace AppRefiner
         /// Stores the currently active indicators in the editor
         /// </summary>
         public List<Indicator> ActiveIndicators { get; set; } = new List<Indicator>();
+
+        /// <summary>
+        /// Search state for this editor instance
+        /// </summary>
+        public SearchState SearchState { get; set; } = new SearchState();
+
+        /// <summary>
+        /// Stores the search-related indicators created by the "Mark All" feature
+        /// </summary>
+        public List<Indicator> SearchIndicators { get; set; } = new List<Indicator>();
 
 
         /* static var to capture total time spent parsing */

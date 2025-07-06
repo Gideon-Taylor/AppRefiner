@@ -35,6 +35,9 @@ namespace AppRefiner
         [DllImport("user32.dll")]
         private static extern bool IsIconic(IntPtr hWnd);
 
+        [DllImport("user32.dll")]
+        private static extern bool ClientToScreen(IntPtr hWnd, ref POINT lpPoint);
+
         [StructLayout(LayoutKind.Sequential)]
         public struct RECT
         {
@@ -42,6 +45,13 @@ namespace AppRefiner
             public int Top;
             public int Right;
             public int Bottom;
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        public struct POINT
+        {
+            public int X;
+            public int Y;
         }
 
         /// <summary>
@@ -163,6 +173,22 @@ namespace AppRefiner
         internal static nint GetParentWindow(nint hWnd)
         {
             return GetParent(hWnd);
+        }
+
+        /// <summary>
+        /// Converts client coordinates to screen coordinates
+        /// </summary>
+        /// <param name="hWnd">Handle to the window whose client area contains the point</param>
+        /// <param name="clientPoint">Point in client coordinates</param>
+        /// <returns>Point in screen coordinates</returns>
+        public static Point ClientToScreen(IntPtr hWnd, Point clientPoint)
+        {
+            POINT point = new POINT { X = clientPoint.X, Y = clientPoint.Y };
+            if (ClientToScreen(hWnd, ref point))
+            {
+                return new Point(point.X, point.Y);
+            }
+            return Point.Empty;
         }
 
     }
