@@ -160,6 +160,12 @@ namespace AppRefiner.Stylers
                 AddIndicator(editor, indicator);
             }
 
+            /* Re-add any active bookmark indicators */
+            foreach (var indicator in editor.BookmarkIndicators)
+            {
+                AddIndicator(editor, indicator);
+            }
+
             // Update the editor's active indicator list with the new set
             //editor.ActiveIndicators = newIndicators; // Replace the old list
         }

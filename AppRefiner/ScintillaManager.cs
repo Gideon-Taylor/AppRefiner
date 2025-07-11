@@ -122,6 +122,7 @@ namespace AppRefiner
         private const int SCI_SETFOLDMARGINHICOLOUR = 2291;
         private const int SCI_GETFIRSTVISIBLELINE = 2152;
         private const int SCI_SETFIRSTVISIBLELINE = 2613;
+        private const int SCI_LINESCROLL = 2168;
 
         // Search and replace constants
         private const int SCI_SETTARGETSTART = 2190;
@@ -2687,6 +2688,115 @@ namespace AppRefiner
             
             // Clear the list
             editor.SearchIndicators.Clear();
+        }
+
+        /// <summary>
+        /// Places a bookmark at the current cursor position
+        /// </summary>
+        /// <param name="editor">The editor to place the bookmark in</param>
+        /// <returns>True if bookmark was placed successfully, false otherwise</returns>
+        public static bool PlaceBookmark(ScintillaEditor editor)
+        {
+            if (editor == null) return false;
+
+            try
+            {
+                // Get current cursor position
+                int currentPosition = (int)editor.SendMessage(SCI_GETCURRENTPOS, IntPtr.Zero, IntPtr.Zero);
+                
+                // Get current first visible line for viewport restoration
+                int firstVisibleLine = GetFirstVisibleLine(editor);
+
+                // Get the current line to highlight the entire line
+                int currentLine = (int)editor.SendMessage(SCI_LINEFROMPOSITION, currentPosition, IntPtr.Zero);
+                int lineStart = (int)editor.SendMessage(SCI_POSITIONFROMLINE, currentLine, IntPtr.Zero);
+                int lineEnd = (int)editor.SendMessage(SCI_GETLINEENDPOSITION, currentLine, IntPtr.Zero);
+
+                // Create bookmark indicator with distinct color (gold) for entire line
+                uint bookmarkColor = 0x04FFCFFF; // Gold color for bookmarks
+                var bookmarkIndicator = new Indicator()
+                {
+                    Type = IndicatorType.HIGHLIGHTER,
+                    Color = bookmarkColor,
+                    Start = lineStart,
+                    Length = lineEnd - lineStart // Highlight entire line
+                };
+
+                // Add indicator to Scintilla and lists
+                AddIndicator(editor, bookmarkIndicator);
+                editor.BookmarkIndicators.Add(bookmarkIndicator);
+
+                // Create bookmark and push to stack
+                var bookmark = new Bookmark
+                {
+                    Position = currentPosition,
+                    FirstVisibleLine = firstVisibleLine,
+                    BookmarkIndicator = bookmarkIndicator
+                };
+
+                editor.BookmarkStack.Push(bookmark);
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Goes to the previous bookmark and removes it from the stack
+        /// </summary>
+        /// <param name="editor">The editor to navigate in</param>
+        /// <returns>True if navigation was successful, false if no bookmarks available</returns>
+        public static bool GoToPreviousBookmark(ScintillaEditor editor)
+        {
+            if (editor == null || editor.BookmarkStack.Count == 0) return false;
+
+            try
+            {
+                // Pop the most recent bookmark
+                var bookmark = editor.BookmarkStack.Pop();
+
+                // Remove the visual indicator
+                RemoveIndicator(editor, bookmark.BookmarkIndicator);
+                editor.BookmarkIndicators.Remove(bookmark.BookmarkIndicator);
+
+                // Restore cursor position
+                editor.SendMessage(SCI_GOTOPOS, bookmark.Position, IntPtr.Zero);
+
+                // Restore viewport (first visible line)
+                int currentFirstVisible = GetFirstVisibleLine(editor);
+                int lineDifference = bookmark.FirstVisibleLine - currentFirstVisible;
+                if (lineDifference != 0)
+                {
+                    editor.SendMessage(SCI_LINESCROLL, IntPtr.Zero, new IntPtr(lineDifference));
+                }
+
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Clears all bookmarks and their indicators from the editor
+        /// </summary>
+        /// <param name="editor">The editor to clear bookmarks from</param>
+        public static void ClearBookmarkIndicators(ScintillaEditor editor)
+        {
+            if (editor == null) return;
+
+            // Remove all bookmark indicators
+            foreach (var indicator in editor.BookmarkIndicators)
+            {
+                RemoveIndicator(editor, indicator);
+            }
+
+            // Clear the lists and stack
+            editor.BookmarkIndicators.Clear();
+            editor.BookmarkStack.Clear();
         }
 
         /// <summary>

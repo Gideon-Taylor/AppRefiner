@@ -186,6 +186,8 @@ namespace AppRefiner
             applicationKeyboardService?.RegisterShortcut("BetterFind", AppRefiner.ModifierKeys.Control | AppRefiner.ModifierKeys.Alt, Keys.F, showBetterFindHandler);
             applicationKeyboardService?.RegisterShortcut("FindNext", AppRefiner.ModifierKeys.Control, Keys.F3, findNextHandler);
             applicationKeyboardService?.RegisterShortcut("FindPrevious", AppRefiner.ModifierKeys.Shift, Keys.F3, findPreviousHandler);
+            applicationKeyboardService?.RegisterShortcut("PlaceBookmark", AppRefiner.ModifierKeys.Control, Keys.B, placeBookmarkHandler);
+            applicationKeyboardService?.RegisterShortcut("GoToPreviousBookmark", AppRefiner.ModifierKeys.Control, Keys.OemMinus, goToPreviousBookmarkHandler);
 
             // Register refactor shortcuts using the RefactorManager
             RegisterRefactorShortcuts();
@@ -310,6 +312,18 @@ namespace AppRefiner
         {
             if (activeEditor == null) return;
             ScintillaManager.FindPrevious(activeEditor);
+        }
+
+        private void placeBookmarkHandler()
+        {
+            if (activeEditor == null) return;
+            ScintillaManager.PlaceBookmark(activeEditor);
+        }
+
+        private void goToPreviousBookmarkHandler()
+        {
+            if (activeEditor == null) return;
+            ScintillaManager.GoToPreviousBookmark(activeEditor);
         }
 
         // Parameterless overload for shortcut service
@@ -1162,6 +1176,29 @@ namespace AppRefiner
                 },
                 () => activeEditor != null && activeEditor.SearchState.HasValidSearch // Enable condition
             )); */
+
+            // Bookmark commands
+            AvailableCommands.Add(new Command(
+                "Editor: Place Bookmark (Ctrl+B)",
+                "Place a bookmark at the current cursor position",
+                (progressDialog) =>
+                {
+                    if (activeEditor != null)
+                        ScintillaManager.PlaceBookmark(activeEditor);
+                },
+                () => activeEditor != null // Enable condition
+            ));
+
+            AvailableCommands.Add(new Command(
+                "Editor: Go to Previous Bookmark (Ctrl+-)",
+                "Navigate to the previous bookmark and remove it from the stack",
+                (progressDialog) =>
+                {
+                    if (activeEditor != null)
+                        ScintillaManager.GoToPreviousBookmark(activeEditor);
+                },
+                () => activeEditor != null && activeEditor.BookmarkStack.Count > 0 // Enable condition
+            ));
         }
 
         private void btnPlugins_Click(object sender, EventArgs e)

@@ -14,6 +14,27 @@ using static System.Windows.Forms.VisualStyles.VisualStyleElement.Window;
 
 namespace AppRefiner
 {
+    /// <summary>
+    /// Represents a bookmark in the editor with position and visual indicator information
+    /// </summary>
+    public struct Bookmark
+    {
+        /// <summary>
+        /// Character position in the document where the bookmark was placed
+        /// </summary>
+        public int Position { get; set; }
+
+        /// <summary>
+        /// The first visible line at the time the bookmark was placed (for viewport restoration)
+        /// </summary>
+        public int FirstVisibleLine { get; set; }
+
+        /// <summary>
+        /// The visual indicator associated with this bookmark
+        /// </summary>
+        public Indicator BookmarkIndicator { get; set; }
+    }
+
     public enum EditorType
     {
         PeopleCode, HTML, SQL, CSS, Other
@@ -256,6 +277,15 @@ namespace AppRefiner
         /// </summary>
         public List<Indicator> SearchIndicators { get; set; } = new List<Indicator>();
 
+        /// <summary>
+        /// Stores the bookmark indicators for this editor
+        /// </summary>
+        public List<Indicator> BookmarkIndicators { get; set; } = new List<Indicator>();
+
+        /// <summary>
+        /// Stack of bookmarks for navigation (LIFO - most recent bookmark first)
+        /// </summary>
+        public Stack<Bookmark> BookmarkStack { get; set; } = new Stack<Bookmark>();
 
         /* static var to capture total time spent parsing */
         public static Stopwatch TotalParseTime { get; set; } = new Stopwatch();
