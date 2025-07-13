@@ -52,6 +52,7 @@ namespace AppRefiner
         public bool UseCxx11Regex { get; set; } = false;
         public bool WrapSearch { get; set; } = true;
         public bool SearchInSelection { get; set; } = false;
+        public bool SearchInMethod { get; set; } = false;
         public int SelectionStart { get; set; } = -1;
         public int SelectionEnd { get; set; } = -1;
         public int LastMatchPosition { get; set; } = -1;

@@ -19,6 +19,9 @@ namespace AppRefiner.Dialogs
 
         [DllImport("user32.dll")]
         private static extern IntPtr GetForegroundWindow();
+        
+        [DllImport("user32.dll")]
+        private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
 
         [DllImport("user32.dll")]
         private static extern bool BringWindowToTop(IntPtr hWnd);
@@ -42,11 +45,10 @@ namespace AppRefiner.Dialogs
         private CheckBox wholeWordCheckBox;
         private CheckBox wordStartCheckBox;
         private CheckBox useRegexCheckBox;
-        private GroupBox regexTypeGroupBox;
-        private RadioButton usePosixRegexRadio;
-        private RadioButton useCxx11RegexRadio;
+        private CheckBox wrapAroundCheckBox;
         private RadioButton selectionRadioButton;
         private RadioButton wholeDocumentRadioButton;
+        private RadioButton methodRadioButton;
         private Button findNextButton;
         private Button findPreviousButton;
         private Button replaceButton;
@@ -135,11 +137,37 @@ namespace AppRefiner.Dialogs
 
         /// <summary>
         /// Ensures the dialog stays on top when focus changes
+        /// Closes dialog if foreground window doesn't belong to AppRefiner or pside processes
         /// </summary>
         public void EnsureOnTop()
         {
             if (this.Handle != IntPtr.Zero && this.Visible)
             {
+                // Check if current foreground window belongs to AppRefiner.exe or pside.exe
+                IntPtr foregroundWindow = GetForegroundWindow();
+                if (foregroundWindow != IntPtr.Zero)
+                {
+                    GetWindowThreadProcessId(foregroundWindow, out uint processId);
+                    try
+                    {
+                        var process = System.Diagnostics.Process.GetProcessById((int)processId);
+                        string processName = process.ProcessName.ToLowerInvariant();
+                        
+                        // Close dialog if foreground window doesn't belong to our target processes
+                        if (processName != "apprefiner" && processName != "pside")
+                        {
+                            this.Close();
+                            return;
+                        }
+                    }
+                    catch
+                    {
+                        // If we can't get process info, assume it's not our process and close
+                        this.Close();
+                        return;
+                    }
+                }
+                
                 BringWindowToTop(this.Handle);
                 MakeAlwaysOnTop();
             }
@@ -342,39 +370,21 @@ namespace AppRefiner.Dialogs
                 FlatStyle = FlatStyle.Flat
             };
 
-            /* Regex type group box */
-            // Regex options column 2
-            regexTypeGroupBox = new GroupBox
+            wrapAroundCheckBox = new CheckBox
             {
-                Text = "Regex Type",
+                Text = "Wrap around",
                 Location = new Point(130, 45),
-                Size = new Size(120, 70),
-                FlatStyle = FlatStyle.Flat,
-                Enabled = false // Initially disabled, enabled when useRegexCheckBox is checked
-            };
-
-            usePosixRegexRadio = new RadioButton
-            {
-                Text = "POSIX",
-                Location = new Point(10, 20),
-                Size = new Size(85, 20),
+                Size = new Size(100, 20),
                 FlatStyle = FlatStyle.Flat
             };
 
-            useCxx11RegexRadio = new RadioButton
-            {
-                Text = "C++11",
-                Location = new Point(10, 40),
-                Size = new Size(85, 20),
-                FlatStyle = FlatStyle.Flat
-            };
 
-            // Scope options column 4
+            // Scope options column 3
             var scopeGroupBox = new GroupBox
             {
                 Text = "Scope",
-                Location = new Point(365, 20),
-                Size = new Size(100, 95),
+                Location = new Point(370, 15),
+                Size = new Size(100, 105),
                 FlatStyle = FlatStyle.Flat
             };
 
@@ -396,16 +406,23 @@ namespace AppRefiner.Dialogs
                 Enabled = false // Will be enabled if there's a selection
             };
 
+            methodRadioButton = new RadioButton
+            {
+                Text = "Method",
+                Location = new Point(10, 70),
+                Size = new Size(85, 20),
+                FlatStyle = FlatStyle.Flat
+            };
+
             scopeGroupBox.Controls.Add(wholeDocumentRadioButton);
             scopeGroupBox.Controls.Add(selectionRadioButton);
+            scopeGroupBox.Controls.Add(methodRadioButton);
 
             optionsGroupBox.Controls.Add(matchCaseCheckBox);
             optionsGroupBox.Controls.Add(wholeWordCheckBox);
             optionsGroupBox.Controls.Add(wordStartCheckBox);
             optionsGroupBox.Controls.Add(useRegexCheckBox);
-            optionsGroupBox.Controls.Add(regexTypeGroupBox);
-            regexTypeGroupBox.Controls.Add(usePosixRegexRadio);
-            regexTypeGroupBox.Controls.Add(useCxx11RegexRadio);
+            optionsGroupBox.Controls.Add(wrapAroundCheckBox);
             optionsGroupBox.Controls.Add(scopeGroupBox);
 
             contentPanel.Controls.Add(optionsGroupBox);
@@ -633,13 +650,9 @@ namespace AppRefiner.Dialogs
             wholeWordCheckBox.Checked = searchState.WholeWord;
             wordStartCheckBox.Checked = searchState.WordStart;
             useRegexCheckBox.Checked = searchState.UseRegex;
-            usePosixRegexRadio.Checked = searchState.UsePosixRegex;
-            useCxx11RegexRadio.Checked = searchState.UseCxx11Regex;
+            wrapAroundCheckBox.Checked = searchState.WrapSearch;
+            // Always use POSIX regex when regex is enabled
             
-            // Load scope preference
-            wholeDocumentRadioButton.Checked = !searchState.SearchInSelection;
-            selectionRadioButton.Checked = searchState.SearchInSelection;
-
             // Check if there's a selection and store it in SearchState
             var (selectedText, selStart, selEnd) = ScintillaManager.GetSelectedText(editor);
             if (!string.IsNullOrEmpty(selectedText))
@@ -647,6 +660,14 @@ namespace AppRefiner.Dialogs
                 selectionRadioButton.Enabled = true;
                 // Store the initial selection range for search scope
                 searchState.SetSelectionRange(selStart, selEnd);
+                
+                // Default to Selection scope when text is selected
+                wholeDocumentRadioButton.Checked = false;
+                selectionRadioButton.Checked = true;
+                methodRadioButton.Checked = false;
+                searchState.SearchInSelection = true;
+                searchState.SearchInMethod = false;
+                
                 if (string.IsNullOrEmpty(findComboBox.Text))
                 {
                     findComboBox.Text = selectedText;
@@ -654,11 +675,14 @@ namespace AppRefiner.Dialogs
             }
             else
             {
-                // No selection, clear stored range
+                // No selection, clear stored range and use previous scope preference
                 searchState.ClearSelectionRange();
+                // Load scope preference
+                wholeDocumentRadioButton.Checked = !searchState.SearchInSelection && !searchState.SearchInMethod;
+                selectionRadioButton.Checked = searchState.SearchInSelection;
+                methodRadioButton.Checked = searchState.SearchInMethod;
             }
 
-            UpdateRegexControls();
         }
 
         private void SaveToEditor()
@@ -684,9 +708,12 @@ namespace AppRefiner.Dialogs
             searchState.WholeWord = wholeWordCheckBox.Checked;
             searchState.WordStart = wordStartCheckBox.Checked;
             searchState.UseRegex = useRegexCheckBox.Checked;
-            searchState.UsePosixRegex = usePosixRegexRadio.Checked;
-            searchState.UseCxx11Regex = useCxx11RegexRadio.Checked;
+            searchState.WrapSearch = wrapAroundCheckBox.Checked;
+            // Always use POSIX regex when regex is enabled
+            searchState.UsePosixRegex = useRegexCheckBox.Checked;
+            searchState.UseCxx11Regex = false;
             searchState.SearchInSelection = selectionRadioButton.Checked;
+            searchState.SearchInMethod = methodRadioButton.Checked;
         }
 
         private void UpdateReplaceVisibility()
@@ -726,11 +753,6 @@ namespace AppRefiner.Dialogs
                 statusLabel.Location = new Point(statusLabel.Location.X, statusLabel.Location.Y + deltaY);
             }
 
-        }
-
-        private void UpdateRegexControls()
-        {
-            regexTypeGroupBox.Enabled = useRegexCheckBox.Checked;
         }
 
         private void UpdateStatus(string message)
@@ -922,8 +944,6 @@ namespace AppRefiner.Dialogs
 
         private void UseRegexCheckBox_CheckedChanged(object sender, EventArgs e)
         {
-            UpdateRegexControls();
-
             // Validate regex when enabling regex mode
             if (useRegexCheckBox.Checked)
             {
@@ -957,22 +977,13 @@ namespace AppRefiner.Dialogs
                     return;
                 }
 
-                // Test compile the regex to check for syntax errors
-                if (useCxx11RegexRadio.Checked)
-                {
-                    // For C++11 regex, we can't easily validate in C#, so just clear any error
-                    UpdateStatus("");
-                }
-                else
-                {
-                    // For basic regex, we can validate using .NET regex
-                    var regexOptions = System.Text.RegularExpressions.RegexOptions.None;
-                    if (!matchCaseCheckBox.Checked)
-                        regexOptions |= System.Text.RegularExpressions.RegexOptions.IgnoreCase;
+                // Test compile the regex to check for syntax errors (always POSIX)
+                var regexOptions = System.Text.RegularExpressions.RegexOptions.None;
+                if (!matchCaseCheckBox.Checked)
+                    regexOptions |= System.Text.RegularExpressions.RegexOptions.IgnoreCase;
 
-                    var regex = new System.Text.RegularExpressions.Regex(findComboBox.Text, regexOptions);
-                    UpdateStatus($"Regex is valid");
-                }
+                var regex = new System.Text.RegularExpressions.Regex(findComboBox.Text, regexOptions);
+                UpdateStatus($"Regex is valid");
             }
             catch (ArgumentException ex)
             {

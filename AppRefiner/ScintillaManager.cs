@@ -2032,6 +2032,108 @@ namespace AppRefiner
         }
 
         /// <summary>
+        /// Gets the start and end range of the current method at the cursor position
+        /// Uses ANTLR parsing to identify method boundaries including method headers, function definitions, getters, and setters
+        /// </summary>
+        /// <param name="editor">The ScintillaEditor instance</param>
+        /// <param name="cursorPosition">Current cursor position</param>
+        /// <returns>A tuple containing (start, end) positions of the current method, or (0, program_length) if no method found</returns>
+        private static (int start, int end) GetCurrentMethodRange(ScintillaEditor editor, int cursorPosition)
+        {
+            try
+            {
+                // Get the program text
+                string? programText = GetScintillaText(editor);
+                if (string.IsNullOrEmpty(programText))
+                {
+                    return (0, programText?.Length ?? 0);
+                }
+
+                // Parse the program using ANTLR
+                var parseTree = ProgramParser.Parse(programText);
+                
+                // Create a listener to find methods/functions containing the cursor position
+                var methodFinder = new MethodRangeFinder(cursorPosition);
+                ParseTreeWalker.Default.Walk(methodFinder, parseTree);
+                
+                // Return the found range or full document if no method found
+                return methodFinder.FoundRange ?? (0, programText.Length);
+            }
+            catch (Exception ex)
+            {
+                Debug.Log($"Error in GetCurrentMethodRange: {ex.Message}");
+                string? programText = GetScintillaText(editor);
+                return (0, programText?.Length ?? 0);
+            }
+        }
+
+        /// <summary>
+        /// ANTLR listener to find method boundaries containing a specific position
+        /// </summary>
+        private class MethodRangeFinder : PeopleCodeParserBaseListener
+        {
+            private readonly int _targetPosition;
+            public (int start, int end)? FoundRange { get; private set; }
+
+            public MethodRangeFinder(int targetPosition)
+            {
+                _targetPosition = targetPosition;
+            }
+
+            public override void EnterMethod(PeopleCodeParser.MethodContext context)
+            {
+                if (FoundRange.HasValue) return; // Already found a method
+
+                int startPos = context.Start.StartIndex;
+                int endPos = context.Stop.StopIndex + 1;
+
+                if (startPos <= _targetPosition && _targetPosition <= endPos)
+                {
+                    FoundRange = (startPos, endPos);
+                }
+            }
+
+            public override void EnterFunctionDefinition(PeopleCodeParser.FunctionDefinitionContext context)
+            {
+                if (FoundRange.HasValue) return; // Already found a method
+
+                int startPos = context.Start.StartIndex;
+                int endPos = context.Stop.StopIndex + 1;
+
+                if (startPos <= _targetPosition && _targetPosition <= endPos)
+                {
+                    FoundRange = (startPos, endPos);
+                }
+            }
+
+            public override void EnterGetter(PeopleCodeParser.GetterContext context)
+            {
+                if (FoundRange.HasValue) return; // Already found a method
+
+                int startPos = context.Start.StartIndex;
+                int endPos = context.Stop.StopIndex + 1;
+
+                if (startPos <= _targetPosition && _targetPosition <= endPos)
+                {
+                    FoundRange = (startPos, endPos);
+                }
+            }
+
+            public override void EnterSetter(PeopleCodeParser.SetterContext context)
+            {
+                if (FoundRange.HasValue) return; // Already found a method
+
+                int startPos = context.Start.StartIndex;
+                int endPos = context.Stop.StopIndex + 1;
+
+                if (startPos <= _targetPosition && _targetPosition <= endPos)
+                {
+                    FoundRange = (startPos, endPos);
+                }
+            }
+        }
+
+        /// <summary>
         /// Performs a search operation in the specified direction
         /// </summary>
         /// <param name="editor">The editor to search in</param>
@@ -2054,9 +2156,18 @@ namespace AppRefiner
             }
             else
             {
-                // Search whole document
-                rangeStart = 0;
-                rangeEnd = docLength;
+                if (searchState.SearchInMethod)
+                {
+                    // Limit to current method/function/getter/setter if possible, else whole document.
+                    (rangeStart, rangeEnd) = ScintillaManager.GetCurrentMethodRange(editor, GetCursorPosition(editor));
+                } else
+                {
+                    // Search whole document
+                    rangeStart = 0;
+                    rangeEnd = docLength;
+                }
+                    
+                
             }
             
             // Get current position - use selection start if there's a selection, otherwise cursor position
