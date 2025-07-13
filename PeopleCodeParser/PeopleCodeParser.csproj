@@ -5,11 +5,6 @@
 		<ImplicitUsings>enable</ImplicitUsings>
 		<Nullable>enable</Nullable>
 	</PropertyGroup>
-
-	<ItemGroup>
-		<PackageReference Include="Antlr4.Runtime.Standard" Version="4.13.1" />
-		<PackageReference Include="Antlr4BuildTasks" Version="12.9.0" />
-	</ItemGroup>
 	<ItemGroup>
 		<Antlr4 Include="PeopleCodeLexer.g4" />
 		<Antlr4 Include="PeopleCodeParser.g4">
@@ -19,5 +14,9 @@
 			<Package>AppRefiner.PeopleCode</Package>
 			<JavaExec>PATH</JavaExec>
 		</Antlr4>
+	</ItemGroup>
+	<ItemGroup>
+	  <PackageReference Include="Antlr4.Runtime.Standard" Version="4.13.1" />
+	  <PackageReference Include="Antlr4BuildTasks" Version="12.10.0" />
 	</ItemGroup>
 </Project>
