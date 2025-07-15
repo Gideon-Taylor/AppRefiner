@@ -183,7 +183,8 @@ namespace AppRefiner
             applicationKeyboardService?.RegisterShortcut("ApplyTemplate", AppRefiner.ModifierKeys.Control | AppRefiner.ModifierKeys.Alt, Keys.T, ApplyTemplateCommand);
             applicationKeyboardService?.RegisterShortcut("SuperGoTo", AppRefiner.ModifierKeys.Control | AppRefiner.ModifierKeys.Alt, Keys.G, SuperGoToCommand); // Use the parameterless overload
             applicationKeyboardService?.RegisterShortcut("ApplyQuickFix", AppRefiner.ModifierKeys.Control, Keys.OemPeriod, ApplyQuickFixCommand); // Ctrl + .
-            applicationKeyboardService?.RegisterShortcut("BetterFind", AppRefiner.ModifierKeys.Control | AppRefiner.ModifierKeys.Alt, Keys.F, showBetterFindHandler);
+            applicationKeyboardService?.RegisterShortcut("BetterFind", AppRefiner.ModifierKeys.Control, Keys.J, showBetterFindHandler);
+            applicationKeyboardService?.RegisterShortcut("BetterFindReplace", AppRefiner.ModifierKeys.Control, Keys.K, showBetterFindReplaceHandler);
             applicationKeyboardService?.RegisterShortcut("FindNext", AppRefiner.ModifierKeys.Control, Keys.F3, findNextHandler);
             applicationKeyboardService?.RegisterShortcut("FindPrevious", AppRefiner.ModifierKeys.Shift, Keys.F3, findPreviousHandler);
             applicationKeyboardService?.RegisterShortcut("PlaceBookmark", AppRefiner.ModifierKeys.Control, Keys.B, placeBookmarkHandler);
@@ -300,6 +301,12 @@ namespace AppRefiner
         {
             if (activeEditor == null) return;
             ScintillaManager.ShowBetterFindDialog(activeEditor);
+        }
+
+        private void showBetterFindReplaceHandler()
+        {
+            if (activeEditor == null) return;
+            ScintillaManager.ShowBetterFindDialog(activeEditor, enableReplaceMode: true);
         }
 
         private void findNextHandler()

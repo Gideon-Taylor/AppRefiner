@@ -1972,7 +1972,8 @@ namespace AppRefiner
         /// Shows the Better Find dialog for the specified editor
         /// </summary>
         /// <param name="editor">The editor to show the find dialog for</param>
-        public static void ShowBetterFindDialog(ScintillaEditor editor)
+        /// <param name="enableReplaceMode">Whether to enable replace mode on startup</param>
+        public static void ShowBetterFindDialog(ScintillaEditor editor, bool enableReplaceMode = false)
         {
             Task.Delay(100).ContinueWith(_ =>
             {
@@ -1981,7 +1982,7 @@ namespace AppRefiner
                     var mainHandle = Process.GetProcessById((int)editor.ProcessId).MainWindowHandle;
                     var handleWrapper = new WindowWrapper(0);
                     
-                    var dialog = new Dialogs.BetterFindDialog(editor, 0);
+                    var dialog = new Dialogs.BetterFindDialog(editor, 0, enableReplaceMode);
                     WindowHelper.CenterFormOnWindow(dialog, mainHandle);
 
                     // Make the dialog always on top
@@ -1989,7 +1990,10 @@ namespace AppRefiner
 
                     // Show as non-modal dialog
                     dialog.ShowDialog();
-                    
+
+                    /* focus dialog window */
+                    dialog.Focus();
+
 
                 }
                 catch (Exception ex)
