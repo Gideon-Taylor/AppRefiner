@@ -72,7 +72,7 @@ namespace AppRefiner.Dialogs
         private bool isDragging = false;
         private Point dragStartPoint;
 
-        public BetterFindDialog(ScintillaEditor editor, IntPtr ownerHandle)
+        public BetterFindDialog(ScintillaEditor editor, IntPtr ownerHandle, bool enableReplaceMode = false)
         {
             this.editor = editor ?? throw new ArgumentNullException(nameof(editor));
             this.owner = ownerHandle;
@@ -89,6 +89,13 @@ namespace AppRefiner.Dialogs
             this.BackColor = Color.FromArgb(240, 240, 245);
             this.Font = new Font("Segoe UI", 9F);
             this.Size = new Size(500, 300);
+            this.Load += BetterFindDialog_Load;
+            // Enable replace mode if requested
+            if (enableReplaceMode)
+            {
+                enableReplaceCheckBox.Checked = true;
+                UpdateReplaceVisibility();
+            }
 
             // Create modal mouse handler
             //mouseHandler = new DialogHelper.ModalDialogMouseHandler(this, headerPanel, ownerHandle);
@@ -101,6 +108,11 @@ namespace AppRefiner.Dialogs
 
             // Initialize timer to maintain always-on-top behavior
             InitializeAlwaysOnTopTimer();
+        }
+
+        private void BetterFindDialog_Load(object? sender, EventArgs e)
+        {
+            findComboBox.Focus();
         }
 
         /// <summary>
@@ -134,6 +146,7 @@ namespace AppRefiner.Dialogs
                 SetWindowPos(this.Handle, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW);
             }
         }
+
 
         /// <summary>
         /// Ensures the dialog stays on top when focus changes
@@ -182,6 +195,14 @@ namespace AppRefiner.Dialogs
                 MakeAlwaysOnTop();
                 // Start the timer to maintain always-on-top behavior
                 alwaysOnTopTimer?.Start();
+                
+                // Ensure focus goes to the find combo box
+                this.BeginInvoke(new Action(() =>
+                {
+                    this.Activate();
+                    findComboBox.Focus();
+                    findComboBox.SelectAll();
+                }));
             }
             else
             {
@@ -661,16 +682,32 @@ namespace AppRefiner.Dialogs
                 // Store the initial selection range for search scope
                 searchState.SetSelectionRange(selStart, selEnd);
                 
-                // Default to Selection scope when text is selected
-                wholeDocumentRadioButton.Checked = false;
-                selectionRadioButton.Checked = true;
-                methodRadioButton.Checked = false;
-                searchState.SearchInSelection = true;
-                searchState.SearchInMethod = false;
+                // Determine if selection spans multiple lines using smart logic
+                int startLine = ScintillaManager.GetLineFromPosition(editor, selStart);
+                int endLine = ScintillaManager.GetLineFromPosition(editor, selEnd);
                 
-                if (string.IsNullOrEmpty(findComboBox.Text))
+                if (startLine == endLine)
                 {
-                    findComboBox.Text = selectedText;
+                    // Same line: Use selected text as search term, keep Document scope
+                    if (string.IsNullOrEmpty(findComboBox.Text))
+                    {
+                        findComboBox.Text = selectedText;
+                    }
+                    wholeDocumentRadioButton.Checked = true;
+                    selectionRadioButton.Checked = false;
+                    methodRadioButton.Checked = false;
+                    searchState.SearchInSelection = false;
+                    searchState.SearchInMethod = false;
+                }
+                else
+                {
+                    // Multi-line: Clear search term, use Selection scope
+                    findComboBox.Text = "";
+                    wholeDocumentRadioButton.Checked = false;
+                    selectionRadioButton.Checked = true;
+                    methodRadioButton.Checked = false;
+                    searchState.SearchInSelection = true;
+                    searchState.SearchInMethod = false;
                 }
             }
             else
