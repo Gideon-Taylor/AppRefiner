@@ -224,8 +224,26 @@ namespace AppRefiner
                 // Insert the class name
                 ScintillaManager.InsertTextAtCursor(editor, itemText);
 
-                var lineText = ScintillaManager.GetCurrentLineText(editor);
-                return new AddImport(editor, lineText.Split(" ").Last());
+                // Get the current cursor position after insertion
+                int currentPos = ScintillaManager.GetCursorPosition(editor);
+                int currentLine = ScintillaManager.GetLineFromPosition(editor, currentPos);
+                int lineStartPos = ScintillaManager.GetLineStartIndex(editor, currentLine);
+                
+                // Get the full line text and trim it to cursor position
+                var fullLineText = ScintillaManager.GetCurrentLineText(editor);
+                int cursorPosInLine = currentPos - lineStartPos;
+                
+                if (cursorPosInLine > 0 && cursorPosInLine <= fullLineText.Length)
+                {
+                    string lineTextToCursor = fullLineText.Substring(0, cursorPosInLine);
+                    string classPath = lineTextToCursor.Split(' ').Last();
+                    return new AddImport(editor, classPath);
+                }
+                else
+                {
+                    Debug.Log("Could not determine cursor position in line for import extraction");
+                    return null;
+                }
             }
             else // It's a package selection or from another list type
             {
