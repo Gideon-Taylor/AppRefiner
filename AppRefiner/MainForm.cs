@@ -151,7 +151,8 @@ namespace AppRefiner
             autoCompleteService = new AutoCompleteService();
 
             // Instantiate RefactorManager
-            refactorManager = new RefactorManager(this);
+            refactorManager = new RefactorManager(this, gridRefactors);
+            refactorManager.InitializeRefactorOptions(); // Initialize refactors via the manager
 
             // Load templates using the manager and populate ComboBox
             templateManager.LoadTemplates();
@@ -554,6 +555,11 @@ namespace AppRefiner
         {
             linterManager?.HandleLinterGridCellValueChanged(sender, e);
             SaveSettings(); // Call the consolidated SaveSettings method
+        }
+
+        private void gridRefactors_CellContentClick(object sender, DataGridViewCellEventArgs e)
+        {
+            refactorManager?.HandleRefactorGridCellContentClick(sender, e);
         }
 
         private void btnClearLint_Click(object sender, EventArgs e)
@@ -2193,6 +2199,34 @@ namespace AppRefiner
                     }
                 }
                 catch (ArgumentException) { /* Process might have exited */ }
+            }
+        }
+
+        // Add this new CellPainting event handler method
+        private void gridRefactors_CellPainting(object sender, DataGridViewCellPaintingEventArgs e)
+        {
+            // Check if it's the button column (index 2) and a valid row
+            if (e.ColumnIndex == 2 && e.RowIndex >= 0)
+            {
+                // Check the tag of the cell
+                var cell = gridRefactors.Rows[e.RowIndex].Cells[e.ColumnIndex];
+                if (cell.Tag?.ToString() == "NoConfig")
+                {
+                    // Paint the background to match the grid's default background
+                    using (Brush backColorBrush = new SolidBrush(SystemColors.Control))
+                    using (Pen gridLinePen = new Pen(gridRefactors.GridColor, 1)) // Use the grid color for the border
+                    {
+                        // Erase the cell background
+                        e.Graphics.FillRectangle(backColorBrush, e.CellBounds);
+
+                        // Draw the grid lines (border) - Adjust coordinates slightly for standard appearance
+                        e.Graphics.DrawRectangle(gridLinePen, e.CellBounds.Left - 1, e.CellBounds.Top - 1, e.CellBounds.Width, e.CellBounds.Height);
+
+                        // Prevent default painting (including hover effects)
+                        e.Handled = true;
+                    }
+                }
+                // Allow default painting for normal button cells or other columns
             }
         }
 

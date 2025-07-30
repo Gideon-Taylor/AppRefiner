@@ -2,7 +2,10 @@ using Antlr4.Runtime;
 using Antlr4.Runtime.Tree;
 using AppRefiner.PeopleCode;
 using System.Diagnostics;
+using System.Reflection;
 using System.Text;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace AppRefiner.Refactors
 {
@@ -334,7 +337,7 @@ namespace AppRefiner.Refactors
         /// </summary>
         public virtual bool RunOnIncompleteParse => true;
 
-        protected ScintillaEditor Editor { get; } = editor ?? throw new ArgumentNullException(nameof(editor));
+        protected ScintillaEditor Editor { get; } = editor;
         protected int CurrentPosition { get; } = ScintillaManager.GetCursorPosition(editor);
         protected int LineNumber { get; } = ScintillaManager.GetCurrentLineNumber(editor);
 
@@ -545,6 +548,166 @@ namespace AppRefiner.Refactors
                 context.Start.StartIndex,
                 context.Stop.StopIndex - context.Start.StartIndex + 1 + (needToCaptureSemicolon ? 1 : 0)
             );
+        }
+
+        /// <summary>
+        /// Gets all configurable properties for a specific refactor type
+        /// </summary>
+        /// <param name="refactorType">The refactor type to inspect</param>
+        /// <returns>A list of PropertyInfo objects representing configurable properties</returns>
+        public static List<PropertyInfo> GetConfigurableProperties(Type refactorType)
+        {
+            var properties = refactorType.GetProperties(BindingFlags.Public | BindingFlags.Instance)
+                .Where(p => p.CanRead && p.CanWrite && 
+                          p.GetCustomAttribute<JsonIgnoreAttribute>() == null &&
+                          IsConfigurableProperty(p))
+                .ToList();
+
+            return properties;
+        }
+
+        /// <summary>
+        /// Determines if a property should be configurable
+        /// </summary>
+        /// <param name="property">The property to check</param>
+        /// <returns>True if the property should be configurable</returns>
+        private static bool IsConfigurableProperty(PropertyInfo property)
+        {
+            // Exclude specific properties that shouldn't be configurable
+            var excludedProperties = new HashSet<string>
+            {
+                nameof(Editor),
+                nameof(CurrentPosition),
+                nameof(LineNumber),
+                nameof(RequiresUserInputDialog),
+                nameof(DeferDialogUntilAfterVisitor),
+                nameof(FollowUpRefactorType),
+                nameof(RunOnIncompleteParse)
+            };
+
+            return !excludedProperties.Contains(property.Name);
+        }
+
+        /// <summary>
+        /// Gets the default configuration for a specific refactor type
+        /// </summary>
+        /// <param name="refactorType">The refactor type</param>
+        /// <returns>JSON string containing the default configuration</returns>
+        public static string GetDefaultRefactorConfig(Type refactorType)
+        {
+            var configProperties = GetConfigurableProperties(refactorType);
+            var config = new Dictionary<string, object?>();
+
+            // Create a temporary instance to get default values
+            try
+            {
+                // BaseRefactor requires an editor parameter, but we just need default values
+                // We'll create a minimal mock or handle this differently for each refactor
+                var tempInstance = Activator.CreateInstance(refactorType, new object[] { null! });
+                if (tempInstance != null)
+                {
+                    foreach (var property in configProperties)
+                    {
+                        config[property.Name] = property.GetValue(tempInstance);
+                    }
+                }
+            }
+            catch
+            {
+                // If we can't create an instance, just use default values for property types
+                foreach (var property in configProperties)
+                {
+                    config[property.Name] = GetDefaultValueForType(property.PropertyType);
+                }
+            }
+
+            return JsonSerializer.Serialize(config, new JsonSerializerOptions
+            {
+                WriteIndented = true
+            });
+        }
+
+        /// <summary>
+        /// Gets a default value for a given type
+        /// </summary>
+        /// <param name="type">The type to get a default value for</param>
+        /// <returns>The default value for the type</returns>
+        private static object? GetDefaultValueForType(Type type)
+        {
+            if (type == typeof(bool)) return false;
+            if (type == typeof(int)) return 0;
+            if (type == typeof(string)) return string.Empty;
+            if (type.IsEnum) return Enum.GetValues(type).GetValue(0);
+            return null;
+        }
+
+        /// <summary>
+        /// Applies configuration to this refactor instance
+        /// </summary>
+        /// <param name="jsonConfig">JSON string containing the configuration</param>
+        public virtual void ApplyRefactorConfig(string jsonConfig)
+        {
+            if (string.IsNullOrEmpty(jsonConfig)) return;
+
+            try
+            {
+                var config = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(jsonConfig);
+                if (config == null) return;
+
+                var configProperties = GetConfigurableProperties(GetType());
+
+                foreach (var property in configProperties)
+                {
+                    if (config.TryGetValue(property.Name, out var value))
+                    {
+                        try
+                        {
+                            var typedValue = JsonSerializer.Deserialize(value.GetRawText(), property.PropertyType);
+                            property.SetValue(this, typedValue);
+                        }
+                        catch
+                        {
+                            // Skip properties that can't be deserialized
+                        }
+                    }
+                }
+            }
+            catch
+            {
+                // If configuration fails, continue with defaults
+            }
+        }
+
+        /// <summary>
+        /// Gets the current configuration of this refactor instance as JSON
+        /// </summary>
+        /// <returns>JSON string containing the current configuration</returns>
+        public virtual string GetCurrentRefactorConfig()
+        {
+            var configProperties = GetConfigurableProperties(GetType());
+            var config = new Dictionary<string, object?>();
+
+            foreach (var property in configProperties)
+            {
+                config[property.Name] = property.GetValue(this);
+            }
+
+            return JsonSerializer.Serialize(config, new JsonSerializerOptions
+            {
+                WriteIndented = true
+            });
+        }
+
+        /// <summary>
+        /// Helper method to get static string properties from a type using reflection
+        /// </summary>
+        /// <param name="type">The type to inspect</param>
+        /// <param name="propertyName">The name of the property to get</param>
+        /// <returns>The string value of the property or null if not found</returns>
+        public static string? GetStaticStringProperty(Type type, string propertyName)
+        {
+            var prop = type.GetProperty(propertyName, BindingFlags.Public | BindingFlags.Static | BindingFlags.NonPublic | BindingFlags.FlattenHierarchy);
+            return prop?.GetValue(null) as string;
         }
     }
 }

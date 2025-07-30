@@ -3,9 +3,12 @@ using AppRefiner.Dialogs;
 using AppRefiner.Events; // For ModifierKeys
 using AppRefiner.PeopleCode;
 using AppRefiner.Plugins;
+using AppRefiner.Refactors;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Drawing;
+using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Text;
@@ -45,15 +48,14 @@ namespace AppRefiner.Refactors
         {
             if (!register || k == Keys.None)
             {
-                return string.Empty;
+                return "Cmd Palette";
             }
 
-            StringBuilder shortcutText = new StringBuilder(" (");
+            StringBuilder shortcutText = new StringBuilder();
             if ((mods & ModifierKeys.Control) == ModifierKeys.Control) shortcutText.Append("Ctrl+");
             if ((mods & ModifierKeys.Shift) == ModifierKeys.Shift) shortcutText.Append("Shift+");
             if ((mods & ModifierKeys.Alt) == ModifierKeys.Alt) shortcutText.Append("Alt+");
             shortcutText.Append(k.ToString());
-            shortcutText.Append(")");
             return shortcutText.ToString();
         }
     }
@@ -65,11 +67,16 @@ namespace AppRefiner.Refactors
     {
         private readonly List<RefactorInfo> availableRefactors = new();
         private readonly MainForm mainForm; // Needed for Invoke, dialog ownership
+        private readonly DataGridView? refactorGrid; // DataGridView for refactor options
 
-        public RefactorManager(MainForm form)
+        public RefactorManager(MainForm form, DataGridView? refactorOptionsGrid = null)
         {
             mainForm = form;
+            refactorGrid = refactorOptionsGrid;
             DiscoverAndCacheRefactors();
+            
+            // Load refactor configurations
+            RefactorConfigManager.LoadRefactorConfigs();
         }
 
         /// <summary>
@@ -129,6 +136,52 @@ namespace AppRefiner.Refactors
             }
               // Sort by name for consistent ordering
              availableRefactors.Sort((r1, r2) => string.Compare(r1.Name, r2.Name, StringComparison.OrdinalIgnoreCase));
+        }
+
+        /// <summary>
+        /// Initializes the refactor options grid if provided
+        /// </summary>
+        public void InitializeRefactorOptions()
+        {
+            if (refactorGrid == null) return;
+
+            refactorGrid.Rows.Clear();
+            
+            // Plugin discovery should remain here or be moved to a central PluginService
+            string pluginDirectory = Path.Combine(
+                Path.GetDirectoryName(Application.ExecutablePath) ?? string.Empty,
+                Properties.Settings.Default.PluginDirectory);
+
+            PluginManager.LoadPlugins(pluginDirectory);
+
+            // Refresh discovery after loading plugins
+            DiscoverAndCacheRefactors();
+
+            foreach (var refactorInfo in availableRefactors)
+            {
+                int rowIndex = refactorGrid.Rows.Add(refactorInfo.Description, refactorInfo.ShortcutText);
+                refactorGrid.Rows[rowIndex].Tag = refactorInfo;
+
+                var configurableProperties = BaseRefactor.GetConfigurableProperties(refactorInfo.RefactorType);
+                DataGridViewButtonCell buttonCell = (DataGridViewButtonCell)refactorGrid.Rows[rowIndex].Cells[2];
+
+                if (configurableProperties.Count > 0)
+                {
+                    buttonCell.Value = "Configure...";
+                    refactorGrid.Rows[rowIndex].Cells[2].Tag = null;
+                }
+                else
+                {
+                    buttonCell.Value = string.Empty;
+                    buttonCell.ReadOnly = true;
+                    buttonCell.FlatStyle = FlatStyle.Flat;
+                    buttonCell.Style.BackColor = SystemColors.Control;
+                    buttonCell.Style.ForeColor = SystemColors.Control;
+                    buttonCell.Style.SelectionBackColor = SystemColors.Control;
+                    buttonCell.Style.SelectionForeColor = SystemColors.Control;
+                    refactorGrid.Rows[rowIndex].Cells[2].Tag = "NoConfig";
+                }
+            }
         }
 
         // Helper methods for reflection
@@ -255,6 +308,9 @@ namespace AppRefiner.Refactors
 
                 // Initialize the refactor
                 refactorClass.Initialize(activeEditor.ContentString, stream, currentCursorPosition);
+
+                // NEW: Apply configuration just-in-time before visitor runs
+                RefactorConfigManager.ApplyConfigurationToInstance(refactorClass);
 
                 // Run the refactor visitor
                 ParseTreeWalker walker = new();
@@ -390,5 +446,29 @@ namespace AppRefiner.Refactors
                 });
             }
         }
+
+        // --- Grid Event Handlers (to be called from MainForm) ---
+
+        public void HandleRefactorGridCellContentClick(object sender, DataGridViewCellEventArgs e)
+        {
+            if (refactorGrid == null) return;
+            
+            refactorGrid.CommitEdit(DataGridViewDataErrorContexts.Commit);
+            if (e.ColumnIndex == 2 && e.RowIndex >= 0)
+            {
+                if (refactorGrid.Rows[e.RowIndex].Tag is RefactorInfo refactorInfo)
+                {
+                    if (refactorGrid.Rows[e.RowIndex].Cells[e.ColumnIndex].Tag?.ToString() != "NoConfig")
+                    {
+                        // Show configuration dialog for the refactor type
+                        using (var dialog = new RefactorConfigDialog(refactorInfo.RefactorType))
+                        {
+                            dialog.ShowDialog(mainForm); // Show dialog owned by MainForm
+                        }
+                    }
+                }
+            }
+        }
+
     }
 } 

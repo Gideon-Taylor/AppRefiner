@@ -11,8 +11,26 @@ namespace AppRefiner.Refactors
     {
         public new static string RefactorName => "Resolve Imports";
         public new static string RefactorDescription => "Resolves all class references in the code and creates explicit imports for each one";
+        
+        /// <summary>
+        /// Whether to sort imports alphabetically. If false, maintains original order and adds new imports at the bottom.
+        /// </summary>
+        public bool SortImportsAlphabetically { get; set; } = true;
+        
+        /// <summary>
+        /// Whether to preserve existing wildcard imports that cover used classes. 
+        /// If true, keeps wildcard imports when they match used class packages.
+        /// </summary>
+        public bool PreserveWildcardImports { get; set; } = false;
+        
         // Tracks unique application class paths used in the code
         private readonly HashSet<string> usedClassPaths = [];
+
+        // Tracks existing import paths in their original order (for non-sorting mode)
+        private readonly List<string> existingImportPaths = [];
+        
+        // Tracks existing wildcard imports separately (for wildcard preservation)
+        private readonly List<string> existingWildcardImports = [];
 
         // The imports block if found
         private ImportsBlockContext? importsBlockContext;
@@ -62,6 +80,27 @@ namespace AppRefiner.Refactors
         public override void ExitImportsBlock(ImportsBlockContext context)
         {
             importsBlockContext = context;
+            
+            // Capture existing imports in their original order
+            if (context.importDeclaration() != null)
+            {
+                foreach (var importDecl in context.importDeclaration())
+                {
+                    var appClassPath = importDecl.appClassPath();
+                    if (appClassPath != null)
+                    {
+                        string importPath = appClassPath.GetText();
+                        existingImportPaths.Add(importPath);
+                        
+                        // Track wildcard imports separately
+                        if (IsWildcardImport(importPath))
+                        {
+                            existingWildcardImports.Add(importPath);
+                        }
+                    }
+                }
+            }
+            
             trackingReferences = true;
         }
 
@@ -87,14 +126,97 @@ namespace AppRefiner.Refactors
 
             // Generate the new imports block with explicit imports
             var newImports = new StringBuilder();
-
-            // Order the imports by the full path
-            var orderedImports = usedClassPaths
-                .OrderBy(path => path)
-                .ToList();
+            
+            List<string> finalImportList;
+            
+            if (PreserveWildcardImports)
+            {
+                // Handle wildcard preservation logic
+                finalImportList = new List<string>();
+                var uncoveredClasses = new HashSet<string>();
+                
+                // First, determine which classes are covered by wildcards
+                foreach (var usedPath in usedClassPaths)
+                {
+                    if (!IsClassCoveredByWildcard(usedPath))
+                    {
+                        uncoveredClasses.Add(usedPath);
+                    }
+                }
+                
+                if (SortImportsAlphabetically)
+                {
+                    // Add relevant wildcards and uncovered classes, sorted
+                    var relevantWildcards = existingWildcardImports
+                        .Where(wildcard => HasUsedClassesInPackage(GetWildcardPackage(wildcard)))
+                        .ToList();
+                    
+                    var allImports = relevantWildcards.Concat(uncoveredClasses).OrderBy(path => path);
+                    finalImportList.AddRange(allImports);
+                }
+                else
+                {
+                    // Maintain original order for existing imports, add new ones at bottom
+                    foreach (var existingPath in existingImportPaths)
+                    {
+                        if (IsWildcardImport(existingPath))
+                        {
+                            // Keep wildcard if it covers any used classes
+                            if (HasUsedClassesInPackage(GetWildcardPackage(existingPath)))
+                            {
+                                finalImportList.Add(existingPath);
+                            }
+                        }
+                        else if (uncoveredClasses.Contains(existingPath))
+                        {
+                            // Keep explicit import if it's still needed and not covered by wildcard
+                            finalImportList.Add(existingPath);
+                        }
+                    }
+                    
+                    // Add new uncovered classes at the bottom
+                    foreach (var uncoveredClass in uncoveredClasses)
+                    {
+                        if (!existingImportPaths.Contains(uncoveredClass))
+                        {
+                            finalImportList.Add(uncoveredClass);
+                        }
+                    }
+                }
+            }
+            else if (SortImportsAlphabetically)
+            {
+                // Sort all imports alphabetically (existing + new)
+                finalImportList = usedClassPaths
+                    .OrderBy(path => path)
+                    .ToList();
+            }
+            else
+            {
+                // Maintain original order and add new imports at the bottom
+                finalImportList = new List<string>();
+                
+                // Add existing imports in their original order
+                foreach (var existingPath in existingImportPaths)
+                {
+                    if (usedClassPaths.Contains(existingPath))
+                    {
+                        finalImportList.Add(existingPath);
+                    }
+                }
+                
+                // Add new imports at the bottom (those not in existing imports)
+                foreach (var usedPath in usedClassPaths)
+                {
+                    if (!existingImportPaths.Contains(usedPath))
+                    {
+                        finalImportList.Add(usedPath);
+                    }
+                }
+            }
 
             // Generate explicit import for each class path
-            foreach (var classPath in orderedImports)
+            foreach (var classPath in finalImportList)
             {
                 newImports.AppendLine($"import {classPath};");
             }
@@ -150,6 +272,71 @@ namespace AppRefiner.Refactors
                         "Add missing imports");
                 }
             }
+        }
+
+        /// <summary>
+        /// Checks if an import path is a wildcard import (ends with :*)
+        /// </summary>
+        private static bool IsWildcardImport(string importPath)
+        {
+            return importPath.EndsWith(":*");
+        }
+
+        /// <summary>
+        /// Gets the package path from a wildcard import by removing the :* suffix
+        /// </summary>
+        private static string GetWildcardPackage(string wildcardImport)
+        {
+            return wildcardImport.Replace(":*", "");
+        }
+
+        /// <summary>
+        /// Extracts the package path from a full class path
+        /// Example: IS_CO_BASE:JSON:JsonObject → IS_CO_BASE:JSON
+        /// </summary>
+        private static string GetPackageFromClassPath(string classPath)
+        {
+            int lastColonIndex = classPath.LastIndexOf(':');
+            return lastColonIndex > 0 ? classPath.Substring(0, lastColonIndex) : classPath;
+        }
+
+        /// <summary>
+        /// Checks if a class path is covered by any existing wildcard imports
+        /// </summary>
+        private bool IsClassCoveredByWildcard(string classPath)
+        {
+            if (!PreserveWildcardImports || existingWildcardImports.Count == 0)
+                return false;
+
+            string classPackage = GetPackageFromClassPath(classPath);
+            
+            foreach (var wildcardImport in existingWildcardImports)
+            {
+                string wildcardPackage = GetWildcardPackage(wildcardImport);
+                if (classPackage.Equals(wildcardPackage, StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+            }
+            
+            return false;
+        }
+
+        /// <summary>
+        /// Checks if there are any used classes in the specified package
+        /// </summary>
+        private bool HasUsedClassesInPackage(string packagePath)
+        {
+            foreach (var usedPath in usedClassPaths)
+            {
+                string classPackage = GetPackageFromClassPath(usedPath);
+                if (classPackage.Equals(packagePath, StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+            }
+            
+            return false;
         }
     }
 }

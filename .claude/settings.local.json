@@ -19,7 +19,8 @@
       "mcp__serena__replace_regex",
       "Bash(find:*)",
       "WebFetch(domain:scintilla.org)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(gh issue:*)"
     ]
   },
   "enableAllProjectMcpServers": false

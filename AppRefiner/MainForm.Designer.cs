@@ -52,6 +52,7 @@ namespace AppRefiner
             btnTNSADMIN = new Button();
             btnDebugLog = new Button();
             grpEditorSettings = new GroupBox();
+            chkRememberFolds = new CheckBox();
             chkCodeFolding = new CheckBox();
             chkPromptForDB = new CheckBox();
             chkAutoPairing = new CheckBox();
@@ -77,6 +78,11 @@ namespace AppRefiner
             dataGridViewTooltips = new DataGridView();
             dataGridViewCheckBoxColumnTooltips = new DataGridViewCheckBoxColumn();
             dataGridViewTextBoxColumnTooltips = new DataGridViewTextBoxColumn();
+            tabPage2 = new TabPage();
+            gridRefactors = new DataGridView();
+            dataGridViewTextBoxColumn2 = new DataGridViewTextBoxColumn();
+            Column1 = new DataGridViewTextBoxColumn();
+            dataGridViewButtonColumn1 = new DataGridViewButtonColumn();
             tabPage5 = new TabPage();
             splitContainer3 = new SplitContainer();
             pnlTemplateParams = new Panel();
@@ -84,7 +90,6 @@ namespace AppRefiner
             cmbTemplates = new ComboBox();
             progressBar1 = new ProgressBar();
             lblStatus = new Label();
-            chkRememberFolds = new CheckBox();
             ((System.ComponentModel.ISupportInitialize)splitContainer1).BeginInit();
             splitContainer1.Panel1.SuspendLayout();
             splitContainer1.Panel2.SuspendLayout();
@@ -105,6 +110,8 @@ namespace AppRefiner
             ((System.ComponentModel.ISupportInitialize)dataGridView1).BeginInit();
             tabPageTooltips.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)dataGridViewTooltips).BeginInit();
+            tabPage2.SuspendLayout();
+            ((System.ComponentModel.ISupportInitialize)gridRefactors).BeginInit();
             tabPage5.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)splitContainer3).BeginInit();
             splitContainer3.Panel1.SuspendLayout();
@@ -137,6 +144,7 @@ namespace AppRefiner
             tabControl1.Controls.Add(tabPage4);
             tabControl1.Controls.Add(tabPage3);
             tabControl1.Controls.Add(tabPageTooltips);
+            tabControl1.Controls.Add(tabPage2);
             tabControl1.Controls.Add(tabPage5);
             tabControl1.Dock = DockStyle.Fill;
             tabControl1.Location = new Point(0, 0);
@@ -294,6 +302,16 @@ namespace AppRefiner
             grpEditorSettings.TabIndex = 20;
             grpEditorSettings.TabStop = false;
             grpEditorSettings.Text = "Settings";
+            // 
+            // chkRememberFolds
+            // 
+            chkRememberFolds.AutoSize = true;
+            chkRememberFolds.Location = new Point(10, 69);
+            chkRememberFolds.Name = "chkRememberFolds";
+            chkRememberFolds.Size = new Size(115, 19);
+            chkRememberFolds.TabIndex = 30;
+            chkRememberFolds.Text = "Remember Folds";
+            chkRememberFolds.UseVisualStyleBackColor = true;
             // 
             // chkCodeFolding
             // 
@@ -567,6 +585,56 @@ namespace AppRefiner
             dataGridViewTextBoxColumnTooltips.ReadOnly = true;
             dataGridViewTextBoxColumnTooltips.Width = 500;
             // 
+            // tabPage2
+            // 
+            tabPage2.Controls.Add(gridRefactors);
+            tabPage2.Location = new Point(4, 24);
+            tabPage2.Name = "tabPage2";
+            tabPage2.Padding = new Padding(3);
+            tabPage2.Size = new Size(562, 465);
+            tabPage2.TabIndex = 8;
+            tabPage2.Text = "Refactors";
+            tabPage2.UseVisualStyleBackColor = true;
+            // 
+            // gridRefactors
+            // 
+            gridRefactors.AllowUserToAddRows = false;
+            gridRefactors.AllowUserToDeleteRows = false;
+            gridRefactors.AllowUserToResizeColumns = false;
+            gridRefactors.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.AutoSize;
+            gridRefactors.Columns.AddRange(new DataGridViewColumn[] { dataGridViewTextBoxColumn2, Column1, dataGridViewButtonColumn1 });
+            gridRefactors.Dock = DockStyle.Fill;
+            gridRefactors.Location = new Point(3, 3);
+            gridRefactors.Name = "gridRefactors";
+            gridRefactors.RowHeadersVisible = false;
+            gridRefactors.Size = new Size(556, 459);
+            gridRefactors.TabIndex = 7;
+            gridRefactors.CellContentClick += gridRefactors_CellContentClick;
+            gridRefactors.CellPainting += gridRefactors_CellPainting;
+            // 
+            // dataGridViewTextBoxColumn2
+            // 
+            dataGridViewTextBoxColumn2.FillWeight = 110.569466F;
+            dataGridViewTextBoxColumn2.HeaderText = "Description";
+            dataGridViewTextBoxColumn2.Name = "dataGridViewTextBoxColumn2";
+            dataGridViewTextBoxColumn2.ReadOnly = true;
+            dataGridViewTextBoxColumn2.Width = 372;
+            // 
+            // Column1
+            // 
+            Column1.HeaderText = "Shortcut";
+            Column1.Name = "Column1";
+            Column1.ReadOnly = true;
+            // 
+            // dataGridViewButtonColumn1
+            // 
+            dataGridViewButtonColumn1.FillWeight = 114.213196F;
+            dataGridViewButtonColumn1.HeaderText = "Configure";
+            dataGridViewButtonColumn1.Name = "dataGridViewButtonColumn1";
+            dataGridViewButtonColumn1.Text = "Configure...";
+            dataGridViewButtonColumn1.UseColumnTextForButtonValue = true;
+            dataGridViewButtonColumn1.Width = 80;
+            // 
             // tabPage5
             // 
             tabPage5.Controls.Add(splitContainer3);
@@ -644,16 +712,6 @@ namespace AppRefiner
             lblStatus.Text = "Stopped";
             lblStatus.TextAlign = ContentAlignment.MiddleCenter;
             // 
-            // chkRememberFolds
-            // 
-            chkRememberFolds.AutoSize = true;
-            chkRememberFolds.Location = new Point(10, 69);
-            chkRememberFolds.Name = "chkRememberFolds";
-            chkRememberFolds.Size = new Size(115, 19);
-            chkRememberFolds.TabIndex = 30;
-            chkRememberFolds.Text = "Remember Folds";
-            chkRememberFolds.UseVisualStyleBackColor = true;
-            // 
             // MainForm
             // 
             AutoScaleDimensions = new SizeF(7F, 15F);
@@ -687,17 +745,14 @@ namespace AppRefiner
             ((System.ComponentModel.ISupportInitialize)dataGridView1).EndInit();
             tabPageTooltips.ResumeLayout(false);
             ((System.ComponentModel.ISupportInitialize)dataGridViewTooltips).EndInit();
+            tabPage2.ResumeLayout(false);
+            ((System.ComponentModel.ISupportInitialize)gridRefactors).EndInit();
             tabPage5.ResumeLayout(false);
             splitContainer3.Panel1.ResumeLayout(false);
             splitContainer3.Panel2.ResumeLayout(false);
             ((System.ComponentModel.ISupportInitialize)splitContainer3).EndInit();
             splitContainer3.ResumeLayout(false);
             ResumeLayout(false);
-        }
-
-        private void DataGridView1_CellPainting1(object sender, DataGridViewCellPaintingEventArgs e)
-        {
-            throw new NotImplementedException();
         }
 
         private void dataGridView1_CellContentClick(object sender, DataGridViewCellEventArgs e)
@@ -755,5 +810,10 @@ namespace AppRefiner
         private LinkLabel linkDocs;
         private CheckBox chkCodeFolding;
         private CheckBox chkRememberFolds;
+        private TabPage tabPage2;
+        private DataGridView gridRefactors;
+        private DataGridViewTextBoxColumn dataGridViewTextBoxColumn2;
+        private DataGridViewTextBoxColumn Column1;
+        private DataGridViewButtonColumn dataGridViewButtonColumn1;
     }
 }
