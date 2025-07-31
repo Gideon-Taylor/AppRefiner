@@ -33,7 +33,7 @@ namespace AppRefiner.Events
         public static extern bool UnsubclassWindow(IntPtr hWnd);
 
         // Method to subclass a window
-        public static bool SubclassWindow(uint threadId, IntPtr windowToSubclass, IntPtr callbackWindow)
+        public static bool SubclassWindow(uint threadId, IntPtr windowToSubclass, IntPtr callbackWindow, bool autoPairingEnabled)
         {
             // If we already have a hook for this thread, use it
             if (!_activeHooks.TryGetValue(threadId, out IntPtr existingHookId))
@@ -55,7 +55,7 @@ namespace AppRefiner.Events
             // Toggle auto-pairing if subclassing was successful
             if (result)
             {
-                result = PostThreadMessage(threadId, WM_TOGGLE_AUTO_PAIRING, 1, IntPtr.Zero);
+                result = PostThreadMessage(threadId, WM_TOGGLE_AUTO_PAIRING, autoPairingEnabled ? 1 : 0, IntPtr.Zero);
             }
 
             // Do not unhook here, as unhooking might cause the DLL to unload
@@ -81,6 +81,16 @@ namespace AppRefiner.Events
             _activeHooks.Clear();
         }
         
+        // Method to send auto-pairing toggle to a specific thread
+        public static bool SendAutoPairingToggle(uint threadId, bool enabled)
+        {
+            if (_activeHooks.ContainsKey(threadId))
+            {
+                return PostThreadMessage(threadId, WM_TOGGLE_AUTO_PAIRING, enabled ? 1 : 0, IntPtr.Zero);
+            }
+            return false;
+        }
+
         // Method to unhook a specific thread
         public static bool UnhookThread(uint threadId)
         {

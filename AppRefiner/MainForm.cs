@@ -261,6 +261,27 @@ namespace AppRefiner
             // 3. Persist ALL changes to disk
             settingsService.SaveChanges();
             Debug.Log("All settings saved and persisted immediately.");
+
+            // 4. Notify all hooked editors of auto-pairing setting changes
+            NotifyAutoPairingChange(generalSettingsToSave.AutoPair);
+        }
+
+        // Method to notify all hooked editors of auto-pairing setting changes
+        private void NotifyAutoPairingChange(bool enabled)
+        {
+            if (knownEditors == null) return;
+
+            // Get distinct thread IDs to avoid sending duplicate messages
+            var distinctThreadIds = knownEditors
+                .Where(editor => editor != null)
+                .Select(editor => editor.ThreadID)
+                .Distinct();
+
+            foreach (var threadId in distinctThreadIds)
+            {
+                bool result = EventHookInstaller.SendAutoPairingToggle(threadId, enabled);
+                Debug.Log($"Sent auto-pairing toggle ({enabled}) to thread {threadId}: {result}");
+        }
         }
 
         // Renamed from keyboard hook handlers to simple action methods
@@ -1929,7 +1950,7 @@ namespace AppRefiner
                 }
 
                 Debug.Log($"Editor isn't subclassed: {editor.hWnd}");
-                bool success = EventHookInstaller.SubclassWindow(editor.ThreadID, WindowHelper.GetParentWindow(editor.hWnd), this.Handle);
+                bool success = EventHookInstaller.SubclassWindow(editor.ThreadID, WindowHelper.GetParentWindow(editor.hWnd), this.Handle, chkAutoPairing.Checked);
                 Debug.Log($"Window subclassing result: {success}");
                 ScintillaManager.SetMouseDwellTime(editor, 1000);
 
@@ -2175,6 +2196,8 @@ namespace AppRefiner
                             if (!newlyFocusedEditor.Initialized) // Check if it's truly a *new* editor needing init
                             {
                                 ProcessNewEditor(newlyFocusedEditor);
+                                // Add editor to hashset of known editors
+                                knownEditors.Add(newlyFocusedEditor);
                             }
                             else
                             {
