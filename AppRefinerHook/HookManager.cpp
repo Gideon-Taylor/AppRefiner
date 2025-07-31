@@ -178,9 +178,57 @@ void HandleScintillaNotification(HWND hwnd, SCNotification* scn, HWND callbackWi
                         sprintf_s(debugMsg, "Detected 'create(' pattern at position %d\n", currentPos);
                         OutputDebugStringA(debugMsg);
                         
+                        // If auto-pairing is disabled, insert the closing parenthesis
+                        if (!g_enableAutoPairing) {
+                            // Insert closing parenthesis at current position
+                            SendMessage(hwnd, SCI_INSERTTEXT, currentPos, (LPARAM)")");
+                            sprintf_s(debugMsg, "Auto-pairing disabled: inserted closing ')' for create( at position %d\n", currentPos);
+                            OutputDebugStringA(debugMsg);
+                        }
+                        
                         // Send the create shorthand message with auto-pairing status as wParam
                         // and current position as lParam
                         SendMessage(callbackWindow, WM_AR_CREATE_SHORTHAND, (WPARAM)g_enableAutoPairing, (LPARAM)currentPos);
+                    }
+                }
+
+                // Check for MsgBox shorthand detection
+                const char* msgboxKeyword = "msgbox";
+                int msgboxKeywordLength = 6; // "msgbox" length
+                
+                // Check if we have enough characters before the current position
+                if (currentPos >= msgboxKeywordLength) {
+                    // Get the characters before the current position
+                    char msgboxBuffer[7] = { 0 }; // "msgbox" + null terminator
+                    Sci_TextRange msgboxTr;
+                    msgboxTr.chrg.cpMin = currentPos - msgboxKeywordLength - 1;
+                    msgboxTr.chrg.cpMax = currentPos - 1; // -1 because current position is after the '('
+                    msgboxTr.lpstrText = msgboxBuffer;
+                    
+                    SendMessage(hwnd, SCI_GETTEXTRANGE, 0, (LPARAM)&msgboxTr);
+                    
+                    // Convert to lowercase for case-insensitive comparison
+                    for (int i = 0; i < msgboxKeywordLength; i++) {
+                        msgboxBuffer[i] = tolower(msgboxBuffer[i]);
+                    }
+                    
+                    // Check if the text matches "msgbox"
+                    if (strcmp(msgboxBuffer, msgboxKeyword) == 0) {
+                        char debugMsg[100];
+                        sprintf_s(debugMsg, "Detected 'MsgBox(' pattern at position %d\n", currentPos);
+                        OutputDebugStringA(debugMsg);
+                        
+                        // If auto-pairing is disabled, insert the closing parenthesis
+                        if (!g_enableAutoPairing) {
+                            // Insert closing parenthesis at current position
+                            SendMessage(hwnd, SCI_INSERTTEXT, currentPos, (LPARAM)")");
+                            sprintf_s(debugMsg, "Auto-pairing disabled: inserted closing ')' for MsgBox( at position %d\n", currentPos);
+                            OutputDebugStringA(debugMsg);
+                        }
+                        
+                        // Send the MsgBox shorthand message with auto-pairing status as wParam
+                        // and current position as lParam
+                        SendMessage(callbackWindow, WM_AR_MSGBOX_SHORTHAND, (WPARAM)g_enableAutoPairing, (LPARAM)currentPos);
                     }
                 }
             }

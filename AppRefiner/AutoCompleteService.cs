@@ -354,5 +354,21 @@ namespace AppRefiner
             // Return the refactor instance for MainForm to process
             return new ConcatAutoComplete(editor);
         }
+
+        /// <summary>
+        /// Handles the detection of the "MsgBox(" shorthand pattern.
+        /// </summary>
+        /// <param name="editor">The active Scintilla editor.</param>
+        /// <param name="position">The current cursor position where the pattern was completed.</param>
+        /// <param name="autoPairingEnabled">Whether auto-pairing is enabled in the editor settings.</param>
+        /// <returns>A MsgBoxAutoComplete refactor instance to be processed.</returns>
+        public BaseRefactor? PrepareMsgBoxAutoCompleteRefactor(ScintillaEditor editor, int position, bool autoPairingEnabled)
+        {
+            if (editor == null || !editor.IsValid()) return null;
+
+            Debug.Log($"MsgBox shorthand detected at position {position}. Auto-pairing: {autoPairingEnabled}");
+            // Return the refactor instance for MainForm to process
+            return new MsgBoxAutoComplete(editor, autoPairingEnabled);
+        }
     }
 } 

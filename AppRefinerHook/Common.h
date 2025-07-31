@@ -36,6 +36,7 @@
 #define WM_AR_CONCAT_SHORTHAND 2505 // Concat shorthand notification
 #define WM_AR_TEXT_PASTED 2506 // Text pasted notification
 #define WM_AR_KEY_COMBINATION 2507 // Key combination with modifiers notification
+#define WM_AR_MSGBOX_SHORTHAND 2508 // New message for MsgBox shorthand when user types "MsgBox("
 #define WM_SCN_USERLIST_SELECTION WM_SCN(SCN_USERLISTSELECTION) // User list selection notification
 
 // Global variables (defined in HookManager.cpp)

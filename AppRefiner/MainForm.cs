@@ -79,6 +79,7 @@ namespace AppRefiner
         private const int AR_CONCAT_SHORTHAND = 2505; // New constant for concat shorthand detection
         private const int AR_TEXT_PASTED = 2506; // New constant for text pasted detection
         private const int AR_KEY_COMBINATION = 2507; // New constant for key combination detection
+        private const int AR_MSGBOX_SHORTHAND = 2508;
         private const int SCN_USERLISTSELECTION = 2014; // User list selection notification
         private const int SCI_REPLACESEL = 0x2170; // Constant for SCI_REPLACESEL
 
@@ -281,7 +282,7 @@ namespace AppRefiner
             {
                 bool result = EventHookInstaller.SendAutoPairingToggle(threadId, enabled);
                 Debug.Log($"Sent auto-pairing toggle ({enabled}) to thread {threadId}: {result}");
-        }
+            }
         }
 
         // Renamed from keyboard hook handlers to simple action methods
@@ -1481,9 +1482,32 @@ namespace AppRefiner
                     refactorManager?.ExecuteRefactor(refactor, activeEditor);
                 }
             }
+            else if (m.Msg == AR_MSGBOX_SHORTHAND)
+            {
+                // Only process if we have an active editor and service
+                if (activeEditor == null || !activeEditor.IsValid() || autoCompleteService == null) return;
+
+                /* Handle create shorthand detection */
+                Debug.Log($"Received MsgBox shorthand message. WParam: {m.WParam}, LParam: {m.LParam}");
+
+                // WParam contains auto-pairing status (bool)
+                bool autoPairingEnabled = m.WParam.ToInt32() != 0;
+
+                // LParam contains the current cursor position
+                int position = m.LParam.ToInt32();
+
+                // Call the AutoCompleteService
+                var refactor = autoCompleteService.PrepareMsgBoxAutoCompleteRefactor(activeEditor, position, autoPairingEnabled);
+                if (refactor != null)
+                {
+                    // Execute via RefactorManager
+                    refactorManager?.ExecuteRefactor(refactor, activeEditor);
+                    ScintillaManager.SetCursorPosition(activeEditor, ScintillaManager.GetCursorPosition(activeEditor) - 3);
+                }
+            }
             else if (m.Msg == AR_CONCAT_SHORTHAND)
             {
-                 // Only process if we have an active editor and service
+                // Only process if we have an active editor and service
                 if (activeEditor == null || !activeEditor.IsValid() || autoCompleteService == null) return;
 
                 /* Handle create shorthand detection */
@@ -1542,9 +1566,9 @@ namespace AppRefiner
             {
                 // Only process if we have an active editor
                 if (activeEditor == null || !activeEditor.IsValid()) return;
-                
+
                 Debug.Log($"Text pasted detected at position: {m.WParam}, length: {m.LParam}");
-                
+
                 // Trigger ResolveImports refactor automatically
                 TriggerResolveImportsRefactor();
             }
@@ -1552,9 +1576,9 @@ namespace AppRefiner
             {
                 // Only process if we have an active editor and application keyboard service
                 if (activeEditor == null || !activeEditor.IsValid() || applicationKeyboardService == null) return;
-                
+
                 Debug.Log($"Key combination detected: {m.WParam:X}");
-                
+
                 // Forward to application keyboard service for processing
                 applicationKeyboardService.ProcessKeyMessage(m.WParam.ToInt32());
             }
@@ -1576,7 +1600,7 @@ namespace AppRefiner
                 Task.Delay(100).ContinueWith(_ => {
                     refactorManager.ExecuteRefactor(resolveImportsRefactor, activeEditor, showUserMessages: false);
                 }, TaskScheduler.Default);
-                
+
             }
             catch (Exception ex)
             {
@@ -2129,7 +2153,7 @@ namespace AppRefiner
                         if (chkBetterSQL.Checked && editorToSave.Type == EditorType.SQL)
                         {
                             ScintillaManager.ApplyBetterSQL(editorToSave);
-                        } 
+                        }
 
                         /* Reapplying code folds */
                         FoldingManager.ApplyCollapsedFoldPaths(editorToSave);
@@ -2189,7 +2213,7 @@ namespace AppRefiner
                                 CheckForContentChanges(newlyFocusedEditor);
                             };
                         }
-                        
+
 
                         if (newlyFocusedEditor != null && newlyFocusedEditor.IsValid())
                         {
