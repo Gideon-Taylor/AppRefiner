@@ -48,7 +48,7 @@ namespace AppRefiner.Refactors
         {
             if (!register || k == Keys.None)
             {
-                return "Cmd Palette";
+                return "";
             }
 
             StringBuilder shortcutText = new StringBuilder();
@@ -159,7 +159,7 @@ namespace AppRefiner.Refactors
 
             foreach (var refactorInfo in availableRefactors)
             {
-                int rowIndex = refactorGrid.Rows.Add(refactorInfo.Description, refactorInfo.ShortcutText);
+                int rowIndex = refactorGrid.Rows.Add(refactorInfo.Description, String.IsNullOrEmpty(refactorInfo.ShortcutText) ? "Cmd Palette" : refactorInfo.ShortcutText);
                 refactorGrid.Rows[rowIndex].Tag = refactorInfo;
 
                 var configurableProperties = BaseRefactor.GetConfigurableProperties(refactorInfo.RefactorType);
