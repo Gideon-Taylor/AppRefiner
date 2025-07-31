@@ -368,9 +368,6 @@ namespace AppRefiner
             // Create progress dialog with parent handle
             var progressDialog = new CommandProgressDialog(parentHandle);
 
-            // Create a task completion source to wait for command execution
-            var tcs = new TaskCompletionSource<bool>();
-
             try
             {
                 // Show the dialog without blocking so we can execute the command
@@ -378,27 +375,24 @@ namespace AppRefiner
                 progressDialog.BringToFront();
                 Application.DoEvents();
 
-                // Execute the command asynchronously
-                await Task.Run(() =>
+                // Allow UI to update before starting command
+                await Task.Delay(100);
+
+                // Execute the command action directly on the UI thread
+                // Most AppRefiner commands need UI thread access anyway
+                try
                 {
-                    try
+                    commandAction(progressDialog);
+                }
+                catch (Exception ex)
+                {
+                    // Handle any exceptions during command execution using AppRefiner pattern
+                    await Task.Delay(100).ContinueWith(_ =>
                     {
-                        commandAction(progressDialog);
-                        tcs.SetResult(true);
-                    }
-                    catch (Exception ex)
-                    {
-                        // Handle any exceptions during command execution
-                        this.Invoke(() =>
-                        {
-                            MessageBox.Show("Error executing command: " + ex.Message,
-                                "Command Error",
-                                MessageBoxButtons.OK,
-                                MessageBoxIcon.Error);
-                        });
-                        tcs.SetResult(false);
-                    }
-                });
+                        var handleWrapper = new WindowWrapper(parentHandle);
+                        new MessageBoxDialog($"Error executing command: {ex.Message}", "Command Error", MessageBoxButtons.OK, parentHandle).ShowDialog(handleWrapper);
+                    });
+                }
 
                 // Wait for a short delay to ensure progress is visible
                 await Task.Delay(200);
