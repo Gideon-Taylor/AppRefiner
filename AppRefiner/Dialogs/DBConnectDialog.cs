@@ -43,6 +43,10 @@ namespace AppRefiner.Dialogs
         
         // Track if settings were loaded successfully
         private bool settingsLoaded = false;
+        
+        // Cached database connection lists for smart detection
+        private List<string> oracleNames = new();
+        private List<string> sqlServerDsns = new();
 
         // UI Controls
         private readonly Panel headerPanel;
@@ -142,6 +146,7 @@ namespace AppRefiner.Dialogs
             this.dbTypeComboBox.Size = new Size(250, 23);
             this.dbTypeComboBox.TabIndex = 2;
             this.dbTypeComboBox.Items.Add("Oracle");
+            this.dbTypeComboBox.Items.Add("SQL Server");
             this.dbTypeComboBox.SelectedIndex = 0;
             this.dbTypeComboBox.SelectedIndexChanged += DbTypeComboBox_SelectedIndexChanged;
 
@@ -294,10 +299,18 @@ namespace AppRefiner.Dialogs
             this.ResumeLayout(false);
             this.PerformLayout();
 
-            // Load TNS names for Oracle
-            if (this.dbTypeComboBox.SelectedItem?.ToString() == "Oracle")
+            // Load all database connections for smart detection
+            LoadAllDatabaseConnections();
+            
+            // Load database names based on initially selected type
+            string? dbType = this.dbTypeComboBox.SelectedItem?.ToString();
+            if (dbType == "Oracle")
             {
                 LoadOracleTnsNames();
+            }
+            else if (dbType == "SQL Server")
+            {
+                LoadSqlServerDsns();
             }
             
             // Update UI based on initial radio button selection
@@ -316,6 +329,9 @@ namespace AppRefiner.Dialogs
                 // Show namespace controls
                 namespaceLabel.Visible = true;
                 namespaceTextBox.Visible = true;
+                
+                // Handle SQL Server-specific namespace behavior
+                UpdateNamespaceForSqlServer();
                 
                 // Adjust positions of username and password controls
                 usernameLabel.Location = new Point(20, 170);
@@ -341,6 +357,9 @@ namespace AppRefiner.Dialogs
                 namespaceLabel.Visible = false;
                 namespaceTextBox.Visible = false;
                 
+                // Reset namespace to editable when not in read-only mode
+                namespaceTextBox.ReadOnly = false;
+                namespaceTextBox.Text = string.Empty;
                 // Reset positions of username and password controls
                 usernameLabel.Location = new Point(20, 140);
                 usernameTextBox.Location = new Point(130, 140);
@@ -418,19 +437,80 @@ namespace AppRefiner.Dialogs
                     case "Oracle":
                         LoadOracleTnsNames();
                         break;
+                    case "SQL Server":
+                        LoadSqlServerDsns();
+                        break;
                 }
+                
+                // Update UI based on the new database type selection
+                UpdateUIForConnectionType();
             }
         }
 
         private void LoadOracleTnsNames()
         {
-            var tnsNames = OracleDbConnection.GetAllTnsNames();
             dbNameComboBox.Items.Clear();
-            dbNameComboBox.Items.AddRange(tnsNames.ToArray());
+            dbNameComboBox.Items.AddRange(oracleNames.ToArray());
             
             if (dbNameComboBox.Items.Count > 0)
             {
                 dbNameComboBox.SelectedIndex = 0;
+            }
+        }
+
+        private void LoadSqlServerDsns()
+        {
+            dbNameComboBox.Items.Clear();
+            dbNameComboBox.Items.AddRange(sqlServerDsns.ToArray());
+            
+            if (dbNameComboBox.Items.Count > 0)
+            {
+                dbNameComboBox.SelectedIndex = 0;
+            }
+        }
+        
+        /// <summary>
+        /// Loads all available database connections for smart detection
+        /// </summary>
+        private void LoadAllDatabaseConnections()
+        {
+            try
+            {
+                // Load Oracle TNS names
+                oracleNames = OracleDbConnection.GetAllTnsNames();
+                
+                // Load SQL Server DSNs (both System and User)
+                sqlServerDsns = SqlServerDbConnection.GetAvailableDsns();
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError($"Error loading database connections: {ex.Message}");
+                
+                // Fallback to empty lists
+                oracleNames = new List<string>();
+                sqlServerDsns = new List<string>();
+            }
+        }
+
+        /// <summary>
+        /// Updates namespace behavior for SQL Server read-only connections
+        /// </summary>
+        private void UpdateNamespaceForSqlServer()
+        {
+            string? dbType = dbTypeComboBox.SelectedItem?.ToString();
+            
+            if (dbType == "SQL Server" && readOnlyRadioButton.Checked)
+            {
+                // For SQL Server read-only connections, set namespace to database name and make it read-only
+                namespaceTextBox.ReadOnly = true;
+                namespaceTextBox.Text = dbNameComboBox.Text ?? "";
+                namespaceTextBox.BackColor = SystemColors.Control; // Visual indication it's read-only
+            }
+            else
+            {
+                // For Oracle or non-read-only connections, allow namespace editing
+                namespaceTextBox.ReadOnly = false;
+                namespaceTextBox.BackColor = SystemColors.Window; // Normal editable appearance
             }
         }
 
@@ -441,6 +521,9 @@ namespace AppRefiner.Dialogs
             if (!string.IsNullOrEmpty(dbName))
             {
                 settingsLoaded = ApplySettingsForDatabase(dbName);
+                
+                // Update namespace for SQL Server read-only connections when DB name changes
+                UpdateNamespaceForSqlServer();
                 
                 // Auto-connect on initial load if password is saved
                 if (isInitialLoad && settingsLoaded && !string.IsNullOrEmpty(passwordTextBox.Text) && 
@@ -507,7 +590,19 @@ namespace AppRefiner.Dialogs
                     return;
                 }
 
-                var connectionString = $"Data Source={dbName};User Id={username};Password={password};";
+                string connectionString;
+                if (dbType == "Oracle")
+                {
+                    connectionString = $"Data Source={dbName};User Id={username};Password={password};";
+                }
+                else if (dbType == "SQL Server")
+                {
+                    connectionString = $"DSN={dbName};UID={username};PWD={password};";
+                }
+                else
+                {
+                    throw new NotSupportedException($"Database type '{dbType}' is not supported.");
+                }
                 string? namespaceForConnection = readOnlyRadioButton.Checked ? @namespace : null;
                 
                 try
@@ -521,6 +616,9 @@ namespace AppRefiner.Dialogs
                         {
                             case "Oracle":
                                 DataManager = new OraclePeopleSoftDataManager(connectionString, namespaceForConnection);
+                                break;
+                            case "SQL Server":
+                                DataManager = new SqlServerPeopleSoftDataManager(connectionString, namespaceForConnection);
                                 break;
                         }
 
@@ -559,26 +657,86 @@ namespace AppRefiner.Dialogs
         }
 
         /// <summary>
-        /// Selects a database in the combo box by name
+        /// Selects a database in the combo box by name with smart type detection
         /// </summary>
         /// <param name="dbName">The database name to select</param>
         private void SelectDatabaseByName(string dbName)
         {
-            // Find the database in the combo box
-            for (int i = 0; i < dbNameComboBox.Items.Count; i++)
+            if (string.IsNullOrEmpty(dbName))
+                return;
+
+            // Smart detection: Check which database type contains this name
+            bool foundInOracle = oracleNames.Any(name => name.Equals(dbName, StringComparison.OrdinalIgnoreCase));
+            bool foundInSqlServer = sqlServerDsns.Any(dsn => dsn.Equals(dbName, StringComparison.OrdinalIgnoreCase));
+
+            // Auto-select database type based on where the name was found
+            if (foundInOracle && !foundInSqlServer)
             {
-                if (dbNameComboBox.Items[i].ToString()?.Contains(dbName) == true)
+                // Found only in Oracle - select Oracle type
+                dbTypeComboBox.SelectedIndex = 0; // Oracle
+                LoadOracleTnsNames();
+                
+                // Select the specific database name
+                for (int i = 0; i < dbNameComboBox.Items.Count; i++)
                 {
-                    dbNameComboBox.SelectedIndex = i;
-                    return;
+                    if (dbNameComboBox.Items[i].ToString()?.Equals(dbName, StringComparison.OrdinalIgnoreCase) == true)
+                    {
+                        dbNameComboBox.SelectedIndex = i;
+                        return;
+                    }
                 }
             }
-            
-            // If not found, add it to the combo box
-            if (!string.IsNullOrEmpty(dbName) && !dbNameComboBox.Items.Contains(dbName))
+            else if (foundInSqlServer && !foundInOracle)
             {
-                dbNameComboBox.Items.Add(dbName);
-                dbNameComboBox.SelectedItem = dbName;
+                // Found only in SQL Server - select SQL Server type
+                dbTypeComboBox.SelectedIndex = 1; // SQL Server
+                LoadSqlServerDsns();
+                
+                // Select the specific database name
+                for (int i = 0; i < dbNameComboBox.Items.Count; i++)
+                {
+                    if (dbNameComboBox.Items[i].ToString()?.Equals(dbName, StringComparison.OrdinalIgnoreCase) == true)
+                    {
+                        dbNameComboBox.SelectedIndex = i;
+                        return;
+                    }
+                }
+            }
+            else if (foundInOracle && foundInSqlServer)
+            {
+                // Found in both - prefer Oracle (existing behavior)
+                dbTypeComboBox.SelectedIndex = 0; // Oracle
+                LoadOracleTnsNames();
+                
+                // Select the specific database name
+                for (int i = 0; i < dbNameComboBox.Items.Count; i++)
+                {
+                    if (dbNameComboBox.Items[i].ToString()?.Equals(dbName, StringComparison.OrdinalIgnoreCase) == true)
+                    {
+                        dbNameComboBox.SelectedIndex = i;
+                        return;
+                    }
+                }
+            }
+            else
+            {
+                // Not found in either - use fallback behavior (existing logic)
+                // Search current combo box contents first
+                for (int i = 0; i < dbNameComboBox.Items.Count; i++)
+                {
+                    if (dbNameComboBox.Items[i].ToString()?.Contains(dbName, StringComparison.OrdinalIgnoreCase) == true)
+                    {
+                        dbNameComboBox.SelectedIndex = i;
+                        return;
+                    }
+                }
+                
+                // If not found, add it to the current combo box
+                if (!dbNameComboBox.Items.Contains(dbName))
+                {
+                    dbNameComboBox.Items.Add(dbName);
+                    dbNameComboBox.SelectedItem = dbName;
+                }
             }
         }
 
