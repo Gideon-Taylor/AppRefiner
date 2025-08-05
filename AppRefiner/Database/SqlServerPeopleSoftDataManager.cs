@@ -937,25 +937,25 @@ namespace AppRefiner.Database
 
             // distinct here covers the fact the CREF may exist in multiple portal registries and so shows up as duplicates.
             string sql = @"SELECT DISTINCT
-                            evt.portal_objname,
-                            portal.PORTAL_URI_SEG2 AS COMPONENT,
-                            portal.PORTAL_URI_SEG3 AS SEGMENT,
-                            evt.RECNAME as RECORD,
-                            evt.FIELDNAME as FIELD,
-                            evt.PNLNAME,
-                            evt.SEQNUM,
-                            evt.ptcs_procseq,
-                            evt.ptcs_cmpevent,
-                            evt.ptcs_cmprecevent
+                            EVT.PORTAL_OBJNAME,
+                            PORTAL.PORTAL_URI_SEG2 AS COMPONENT,
+                            PORTAL.PORTAL_URI_SEG3 AS SEGMENT,
+                            EVT.RECNAME AS RECORD,
+                            EVT.FIELDNAME AS FIELD,
+                            EVT.PNLNAME,
+                            EVT.SEQNUM,
+                            EVT.PTCS_PROCSEQ,
+                            EVT.PTCS_CMPEVENT,
+                            EVT.PTCS_CMPRECEVENT
                         FROM
-                            psptcssrvconf evt
-                            INNER JOIN psprsmdefn    portal ON portal.portal_objname = evt.portal_objname
-                            INNER JOIN psptcssrvdefn svc ON svc.ptcs_serviceid = evt.ptcs_serviceid
+                            PSPTCSSRVCONF EVT
+                            INNER JOIN PSPRSMDEFN PORTAL ON PORTAL.PORTAL_OBJNAME = EVT.PORTAL_OBJNAME
+                            INNER JOIN PSPTCSSRVDEFN SVC ON SVC.PTCS_SERVICEID = EVT.PTCS_SERVICEID
                         WHERE
-                            evt.portal_name = '_PTCS_PTEVMAP'
-                            AND svc.packageroot = ?
-                            AND svc.qualifypath = ?
-                            AND svc.appclassid = ?";
+                            EVT.PORTAL_NAME = '_PTCS_PTEVMAP'
+                            AND SVC.PACKAGEROOT = ?
+                            AND SVC.QUALIFYPATH = ?
+                            AND SVC.APPCLASSID = ?";
             Dictionary<string, object> parameters = new();
             parameters.Add("param1", root);
             parameters.Add("param2", path);
@@ -972,8 +972,8 @@ namespace AppRefiner.Database
                 info.Record = row["RECORD"].ToString()!.Trim() ?? string.Empty;
                 info.Field = row["FIELD"].ToString()!.Trim() ?? string.Empty;
                 info.Page = row["PNLNAME"].ToString()!.Trim() ?? string.Empty;
-                info.ComponentEvent = row["ptcs_cmpevent"].ToString()!.Trim() ?? string.Empty;
-                info.ComponentRecordEvent = row["ptcs_cmprecevent"].ToString()!.Trim() ?? string.Empty;
+                info.ComponentEvent = row["PTCS_CMPEVENT"].ToString()!.Trim() ?? string.Empty;
+                info.ComponentRecordEvent = row["PTCS_CMPRECEVENT"].ToString()!.Trim() ?? string.Empty;
                 info.SequenceNumber = Convert.ToInt32(row["SEQNUM"]);
 
                 var eventSeq = row["ptcs_procseq"].ToString() ?? string.Empty;
@@ -1027,21 +1027,21 @@ namespace AppRefiner.Database
                 case EventMapType.Component:
                     sql = @"
                         SELECT DISTINCT
-                            evt.portal_objname,
-                            evt.ptcs_procseq,
-                            evt.SEQNUM,
-                            svc.packageroot,
-                            svc.qualifypath,
-                            svc.appclassid
+                            EVT.PORTAL_OBJNAME,
+                            EVT.PTCS_PROCSEQ,
+                            EVT.SEQNUM,
+                            SVC.PACKAGEROOT,
+                            SVC.QUALIFYPATH,
+                            SVC.APPCLASSID
                         FROM
-                            psptcssrvconf evt
-                            INNER JOIN psprsmdefn portal ON portal.portal_objname = evt.portal_objname
-                            INNER JOIN psptcssrvdefn svc ON svc.ptcs_serviceid = evt.ptcs_serviceid
+                            PSPTCSSRVCONF EVT
+                            INNER JOIN PSPRSMDEFN PORTAL ON PORTAL.PORTAL_OBJNAME = EVT.PORTAL_OBJNAME
+                            INNER JOIN PSPTCSSRVDEFN SVC ON SVC.PTCS_SERVICEID = EVT.PTCS_SERVICEID
                         WHERE
-                            evt.portal_name = '_PTCS_PTEVMAP'
-                            AND portal.PORTAL_URI_SEG2 = ?
-                            AND portal.PORTAL_URI_SEG3 = ?
-                            AND evt.ptcs_cmpevent = ?";
+                            EVT.PORTAL_NAME = '_PTCS_PTEVMAP'
+                            AND PORTAL.PORTAL_URI_SEG2 = ?
+                            AND PORTAL.PORTAL_URI_SEG3 = ?
+                            AND EVT.PTCS_CMPEVENT = ?";
 
                     parameters.Add("param1", eventMapInfo.Component ?? string.Empty);
                     parameters.Add("param2", eventMapInfo.Segment ?? string.Empty);
@@ -1051,22 +1051,22 @@ namespace AppRefiner.Database
                 case EventMapType.ComponentRecord:
                     sql = @"
                         SELECT DISTINCT
-                            evt.portal_objname,
-                            evt.ptcs_procseq,
-                            evt.SEQNUM,
-                            svc.packageroot,
-                            svc.qualifypath,
-                            svc.appclassid
+                            EVT.PORTAL_OBJNAME,
+                            EVT.PTCS_PROCSEQ,
+                            EVT.SEQNUM,
+                            SVC.PACKAGEROOT,
+                            SVC.QUALIFYPATH,
+                            SVC.APPCLASSID
                         FROM
-                            psptcssrvconf evt
-                            INNER JOIN psprsmdefn portal ON portal.portal_objname = evt.portal_objname
-                            INNER JOIN psptcssrvdefn svc ON svc.ptcs_serviceid = evt.ptcs_serviceid
+                            PSPTCSSRVCONF EVT
+                            INNER JOIN PSPRSMDEFN PORTAL ON PORTAL.PORTAL_OBJNAME = EVT.PORTAL_OBJNAME
+                            INNER JOIN PSPTCSSRVDEFN SVC ON SVC.PTCS_SERVICEID = EVT.PTCS_SERVICEID
                         WHERE
-                            evt.portal_name = '_PTCS_PTEVMAP'
-                            AND portal.PORTAL_URI_SEG2 = ?
-                            AND portal.PORTAL_URI_SEG3 = ?
-                            AND evt.RECNAME = ?
-                            AND evt.ptcs_cmprecevent = ?";
+                            EVT.PORTAL_NAME = '_PTCS_PTEVMAP'
+                            AND PORTAL.PORTAL_URI_SEG2 = ?
+                            AND PORTAL.PORTAL_URI_SEG3 = ?
+                            AND EVT.RECNAME = ?
+                            AND EVT.PTCS_CMPRECEVENT = ?";
 
                     parameters.Add("param1", eventMapInfo.Component ?? string.Empty);
                     parameters.Add("param2", eventMapInfo.Segment ?? string.Empty);
@@ -1077,23 +1077,23 @@ namespace AppRefiner.Database
                 case EventMapType.ComponentRecordField:
                     sql = @"
                         SELECT DISTINCT
-                            evt.portal_objname,
-                            evt.ptcs_procseq,
-                            evt.SEQNUM,
-                            svc.packageroot,
-                            svc.qualifypath,
-                            svc.appclassid
+                            EVT.PORTAL_OBJNAME,
+                            EVT.PTCS_PROCSEQ,
+                            EVT.SEQNUM,
+                            SVC.PACKAGEROOT,
+                            SVC.QUALIFYPATH,
+                            SVC.APPCLASSID
                         FROM
-                            psptcssrvconf evt
-                            INNER JOIN psprsmdefn portal ON portal.portal_objname = evt.portal_objname
-                            INNER JOIN psptcssrvdefn svc ON svc.ptcs_serviceid = evt.ptcs_serviceid
+                            PSPTCSSRVCONF EVT
+                            INNER JOIN PSPRSMDEFN PORTAL ON PORTAL.PORTAL_OBJNAME = EVT.PORTAL_OBJNAME
+                            INNER JOIN PSPTCSSRVDEFN SVC ON SVC.PTCS_SERVICEID = EVT.PTCS_SERVICEID
                         WHERE
-                            evt.portal_name = '_PTCS_PTEVMAP'
-                            AND portal.PORTAL_URI_SEG2 = ?
-                            AND portal.PORTAL_URI_SEG3 = ?
-                            AND evt.RECNAME = ?
-                            AND evt.FIELDNAME = ?
-                            AND evt.ptcs_cmprecevent = ?";
+                            EVT.PORTAL_NAME = '_PTCS_PTEVMAP'
+                            AND PORTAL.PORTAL_URI_SEG2 = ?
+                            AND PORTAL.PORTAL_URI_SEG3 = ?
+                            AND EVT.RECNAME = ?
+                            AND EVT.FIELDNAME = ?
+                            AND EVT.PTCS_CMPRECEVENT = ?";
 
                     parameters.Add("param1", eventMapInfo.Component ?? string.Empty);
                     parameters.Add("param2", eventMapInfo.Segment ?? string.Empty);
@@ -1105,22 +1105,22 @@ namespace AppRefiner.Database
                 case EventMapType.Page:
                     sql = @"
                         SELECT DISTINCT
-                            evt.portal_objname,
-                            portal.PORTAL_URI_SEG2,
-                            portal.PORTAL_URI_SEG3,
-                            evt.ptcs_procseq,
-                            evt.SEQNUM,
-                            svc.packageroot,
-                            svc.qualifypath,
-                            svc.appclassid
+                            EVT.PORTAL_OBJNAME,
+                            PORTAL.PORTAL_URI_SEG2,
+                            PORTAL.PORTAL_URI_SEG3,
+                            EVT.PTCS_PROCSEQ,
+                            EVT.SEQNUM,
+                            SVC.PACKAGEROOT,
+                            SVC.QUALIFYPATH,
+                            SVC.APPCLASSID
                         FROM
-                            psptcssrvconf evt
-                            INNER JOIN psprsmdefn portal ON portal.portal_objname = evt.portal_objname
-                            INNER JOIN psptcssrvdefn svc ON svc.ptcs_serviceid = evt.ptcs_serviceid
+                            PSPTCSSRVCONF EVT
+                            INNER JOIN PSPRSMDEFN PORTAL ON PORTAL.PORTAL_OBJNAME = EVT.PORTAL_OBJNAME
+                            INNER JOIN PSPTCSSRVDEFN SVC ON SVC.PTCS_SERVICEID = EVT.PTCS_SERVICEID
                         WHERE
-                            evt.portal_name = '_PTCS_PTEVMAP'
-                            AND evt.PNLNAME = ?
-                            AND evt.ptcs_cmprecevent = ?";
+                            EVT.PORTAL_NAME = '_PTCS_PTEVMAP'
+                            AND EVT.PNLNAME = ?
+                            AND EVT.PTCS_CMPRECEVENT = ?";
 
                     parameters.Add("param1", eventMapInfo.Page ?? string.Empty);
                     parameters.Add("param2", eventMapInfo.ComponentRecordEvent ?? string.Empty);
@@ -1137,7 +1137,7 @@ namespace AppRefiner.Database
                 foreach (DataRow row in result.Rows)
                 {
                     EventMapSequence sequence;
-                    string procSeq = row["ptcs_procseq"].ToString() ?? string.Empty;
+                    string procSeq = row["PTCS_PROCSEQ"].ToString() ?? string.Empty;
                     
                     if (procSeq.Equals("PRE", StringComparison.OrdinalIgnoreCase))
                         sequence = EventMapSequence.Pre;
@@ -1162,7 +1162,7 @@ namespace AppRefiner.Database
                         segment = eventMapInfo.Segment ?? string.Empty;
                     }
 
-                    var packagePath = row["qualifypath"].ToString() ?? string.Empty;
+                    var packagePath = row["QUALIFYPATH"].ToString() ?? string.Empty;
                     if (packagePath == ":")
                     {
                         packagePath = string.Empty;
@@ -1175,9 +1175,9 @@ namespace AppRefiner.Database
                         SeqNumber = Convert.ToInt32(row["SEQNUM"]),
                         Component = component,
                         Segment = segment,
-                        PackageRoot = row["packageroot"].ToString() ?? string.Empty,
-                        PackagePath = row["qualifypath"].ToString() ?? string.Empty,
-                        ClassName = row["appclassid"].ToString() ?? string.Empty
+                        PackageRoot = row["PACKAGEROOT"].ToString() ?? string.Empty,
+                        PackagePath = row["QUALIFYPATH"].ToString() ?? string.Empty,
+                        ClassName = row["APPCLASSID"].ToString() ?? string.Empty
                     });
                 }
             }
