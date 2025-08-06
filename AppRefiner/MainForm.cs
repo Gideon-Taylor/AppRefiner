@@ -1134,17 +1134,24 @@ namespace AppRefiner
             ));
 
             // Better Find commands
-            /*AvailableCommands.Add(new Command(
-                "Editor: Better Find (Ctrl+Alt+F)",
+            AvailableCommands.Add(new Command(
+                "Editor: Better Find (Ctrl+J)",
                 "Open the Better Find dialog for advanced search and replace",
-                (progressDialog) =>
+                () =>
                 {
                     if (activeEditor != null)
-                        Task.Delay(100).ContinueWith(_ =>
-                        {
-                            // Execute via RefactorManager
-                            ScintillaManager.ShowBetterFindDialog(activeEditor);
-                        }, TaskScheduler.Default); // Use default scheduler
+                        ScintillaManager.ShowBetterFindDialog(activeEditor);
+                },
+                () => activeEditor != null // Enable condition
+            ));
+
+            AvailableCommands.Add(new Command(
+                "Editor: Better Find Replace (Ctrl+K)",
+                "Open the Better Find dialog in replace mode",
+                () =>
+                {
+                    if (activeEditor != null)
+                        ScintillaManager.ShowBetterFindDialog(activeEditor, enableReplaceMode: true);
                 },
                 () => activeEditor != null // Enable condition
             ));
@@ -1152,7 +1159,7 @@ namespace AppRefiner
             AvailableCommands.Add(new Command(
                 "Editor: Find Next (F3)",
                 "Find the next occurrence of the search term",
-                (progressDialog) =>
+                () =>
                 {
                     if (activeEditor != null)
                         ScintillaManager.FindNext(activeEditor);
@@ -1163,13 +1170,13 @@ namespace AppRefiner
             AvailableCommands.Add(new Command(
                 "Editor: Find Previous (Shift+F3)",
                 "Find the previous occurrence of the search term",
-                (progressDialog) =>
+                () =>
                 {
                     if (activeEditor != null)
                         ScintillaManager.FindPrevious(activeEditor);
                 },
                 () => activeEditor != null && activeEditor.SearchState.HasValidSearch // Enable condition
-            )); */
+            ));
 
             // Bookmark commands
             AvailableCommands.Add(new Command(
