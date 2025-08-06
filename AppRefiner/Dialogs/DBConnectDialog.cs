@@ -532,10 +532,10 @@ namespace AppRefiner.Dialogs
                     // Check if namespace is required but missing
                     if (readOnlyRadioButton.Checked && string.IsNullOrEmpty(namespaceTextBox.Text))
                         return;
-                    Task.Delay(700).ContinueWith(_ =>
+                    Task.Delay(1000).ContinueWith(_ =>
                     {
                         // Invoke the ConnectButton_Click method on the UI thread    
-                        this.BeginInvoke(new Action(() => ConnectButton_Click(null, EventArgs.Empty)));
+                        //this.BeginInvoke(new Action(() => ConnectButton_Click(null, EventArgs.Empty)));
                         isInitialLoad = false;
                     });
                 }

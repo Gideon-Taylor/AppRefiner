@@ -363,7 +363,7 @@ namespace AppRefiner
         }
 
         // This is called by the Command Palette
-        private async void ShowCommandPalette(object? sender, KeyPressedEventArgs? e) // Keep original args for now
+        private void ShowCommandPalette(object? sender, KeyPressedEventArgs? e) // Keep original args for now
         {
             if (activeEditor == null) return;
             var mainHandle = Process.GetProcessById((int)activeEditor.ProcessId).MainWindowHandle;
@@ -374,58 +374,29 @@ namespace AppRefiner
             // Show the dialog
             DialogResult result = palette.ShowDialog(handleWrapper);
 
-            // If a command was selected, execute it with progress dialog
+            // If a command was selected, execute it directly
             if (result == DialogResult.OK)
             {
-                CommandAction? selectedAction = palette.GetSelectedAction();
+                Action? selectedAction = palette.GetSelectedAction();
                 if (selectedAction != null)
                 {
-                    await ExecuteCommandWithProgressAsync(selectedAction, mainHandle);
-                }
-            }
-        }
-
-        private async Task ExecuteCommandWithProgressAsync(CommandAction commandAction, IntPtr parentHandle)
-        {
-            // Create progress dialog with parent handle
-            var progressDialog = new CommandProgressDialog(parentHandle);
-
-            try
-            {
-                // Show the dialog without blocking so we can execute the command
-                progressDialog.Show(new WindowWrapper(parentHandle));
-                progressDialog.BringToFront();
-                Application.DoEvents();
-
-                // Allow UI to update before starting command
-                await Task.Delay(100);
-
-                // Execute the command action directly on the UI thread
-                // Most AppRefiner commands need UI thread access anyway
-                try
-                {
-                    commandAction(progressDialog);
-                }
-                catch (Exception ex)
-                {
-                    // Handle any exceptions during command execution using AppRefiner pattern
-                    await Task.Delay(100).ContinueWith(_ =>
+                    try
                     {
-                        var handleWrapper = new WindowWrapper(parentHandle);
-                        new MessageBoxDialog($"Error executing command: {ex.Message}", "Command Error", MessageBoxButtons.OK, parentHandle).ShowDialog(handleWrapper);
-                    });
+                        selectedAction.Invoke();
+                    }
+                    catch (Exception ex)
+                    {
+                        // Handle any exceptions during command execution using AppRefiner pattern
+                        Task.Delay(100).ContinueWith(_ =>
+                        {
+                            var handleWrapper = new WindowWrapper(mainHandle);
+                            new MessageBoxDialog($"Error executing command: {ex.Message}", "Command Error", MessageBoxButtons.OK, mainHandle).ShowDialog(handleWrapper);
+                        });
+                    }
                 }
-
-                // Wait for a short delay to ensure progress is visible
-                await Task.Delay(200);
-            }
-            finally
-            {
-                // Close the progress dialog
-                progressDialog.Close();
-                progressDialog.Dispose();
             }
         }
+
 
         private void expandAllHandler(object? sender, KeyPressedEventArgs e)
         {
@@ -860,11 +831,10 @@ namespace AppRefiner
             AvailableCommands.Add(new Command(
                 "Editor: Lint Current Code (Ctrl+Alt+L)",
                 "Run linting rules against the current editor",
-                (progressDialog) =>
+                () =>
                 {
                     if (activeEditor == null) return;
                     // Delegate to button click handler which uses the manager
-                    progressDialog?.UpdateHeader("Running linters...");
                     linterManager?.ProcessLintersForActiveEditor(activeEditor, activeEditor.DataManager);
                 }
             ));
@@ -872,11 +842,10 @@ namespace AppRefiner
             AvailableCommands.Add(new Command(
                 "Editor: Dark Mode",
                 "Apply dark mode to the current editor",
-                (progressDialog) =>
+                () =>
                 {
                     if (activeEditor != null)
                     {
-                        progressDialog?.UpdateHeader("Applying dark mode...");
                         ScintillaManager.SetDarkMode(activeEditor);
                     }
                 }
@@ -1057,8 +1026,7 @@ namespace AppRefiner
                         ScintillaManager.ClearAnnotations(activeEditor);
                         // Reset styles
                         ScintillaManager.ResetStyles(activeEditor);
-                        // Update status
-                        lblStatus.Text = "Force refreshing editor...";
+
                         CheckForContentChanges(activeEditor);
                     }
                 }
@@ -1067,11 +1035,17 @@ namespace AppRefiner
             AvailableCommands.Add(new Command(
                 "Project: Lint Project",
                 "Run all linters on the entire project and generate a report",
-                (progressDialog) =>
+                () =>
                 {
-                    if (activeEditor != null)
-                    { // Pass active editor for context
-                        linterManager?.LintProject(activeEditor, progressDialog);
+                    if (activeEditor != null && linterManager != null)
+                    {
+                        var mainHandle = Process.GetProcessById((int)activeEditor.ProcessId).MainWindowHandle;
+                        
+                        this.Invoke(() =>
+                        {
+                            using var lintDialog = new Dialogs.LintProjectProgressDialog(linterManager, activeEditor, mainHandle);
+                            lintDialog.ShowDialog(new WindowWrapper(mainHandle));
+                        });
                     }
                 },
                 () => activeEditor != null && activeEditor.DataManager != null
@@ -1123,7 +1097,7 @@ namespace AppRefiner
             AvailableCommands.Add(new Command(
                 "Snapshot: Revert to Previous Version",
                 "View file history and revert to a previous snapshot",
-                (progressDialog) =>
+                () =>
                 {
                     try
                     {
@@ -1142,25 +1116,16 @@ namespace AppRefiner
                         // Get process handle for dialog ownership
                         var mainHandle = Process.GetProcessById((int)activeEditor.ProcessId).MainWindowHandle;
 
-                        // Show the Snapshot history dialog
-                        progressDialog?.UpdateHeader("Loading commit history...");
-
                         // Run on UI thread to show dialog
                         this.Invoke(() =>
                         {
                             using var historyDialog = new Dialogs.SnapshotHistoryDialog(snapshotManager, activeEditor, mainHandle);
-
-                            if (historyDialog.ShowDialog(new WindowWrapper(mainHandle)) == DialogResult.OK)
-                            {
-                                progressDialog?.UpdateHeader("Reverted to previous version");
-                                progressDialog?.UpdateProgress($"File reverted to version from {historyDialog.SelectedSnapshot?.CreatedAt.ToString("yyyy-MM-dd HH:mm:ss") ?? "unknown"}");
-                            }
+                            historyDialog.ShowDialog(new WindowWrapper(mainHandle));
                         });
                     }
                     catch (Exception ex)
                     {
-                        Debug.Log($"Error in while reverting: {ex.Message}");
-                        progressDialog?.UpdateProgress($"Error: {ex.Message}");
+                        Debug.Log($"Error while reverting: {ex.Message}");
                         MessageBox.Show($"Error: {ex.Message}", "Revert Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
                     }
                 },
@@ -1210,7 +1175,7 @@ namespace AppRefiner
             AvailableCommands.Add(new Command(
                 "Editor: Place Bookmark (Ctrl+B)",
                 "Place a bookmark at the current cursor position",
-                (progressDialog) =>
+                () =>
                 {
                     if (activeEditor != null)
                         ScintillaManager.PlaceBookmark(activeEditor);
@@ -1221,7 +1186,7 @@ namespace AppRefiner
             AvailableCommands.Add(new Command(
                 "Editor: Go to Previous Bookmark (Ctrl+-)",
                 "Navigate to the previous bookmark and remove it from the stack",
-                (progressDialog) =>
+                () =>
                 {
                     if (activeEditor != null)
                         ScintillaManager.GoToPreviousBookmark(activeEditor);

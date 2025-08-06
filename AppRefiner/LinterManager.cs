@@ -29,7 +29,10 @@ namespace AppRefiner
         
         // We might still need access to the general settings like LintReportPath
         // Pass it during construction or retrieve via a SettingsService later.
-        private string? lintReportPath; 
+        private string? lintReportPath;
+        
+        // Public property to expose LintReportPath
+        public string? LintReportPath => lintReportPath; 
 
         public LinterManager(MainForm form, DataGridView linterOptionsGrid, Label statusLabel, ProgressBar progBar, 
                              string? initialLintReportPath, SettingsService settings)
@@ -266,9 +269,12 @@ namespace AppRefiner
             ScintillaManager.ClearAnnotations(activeEditor);
         }
 
-        // --- Project Linting --- 
-        // Note: This requires significant state/dependencies (DB manager, active editor for context)
-        public void LintProject(ScintillaEditor editorContext, CommandProgressDialog? progressDialog)
+        // --- Project Linting with Callback Support ---
+        public void LintProject(ScintillaEditor editorContext,
+            Action<string>? updateHeader = null,
+            Action<string>? updateStatus = null,
+            Action<int, int>? updateProgress = null,
+            Func<bool>? shouldCancel = null)
         {
             if (editorContext?.DataManager == null)
             {
@@ -280,15 +286,15 @@ namespace AppRefiner
             string projectName = ScintillaManager.GetProjectName(editorContext);
             if (projectName == "Untitled" || string.IsNullOrEmpty(projectName))
             {
-                 ShowMessageBox(editorContext, string.IsNullOrEmpty(projectName) ? "Unable to determine the project name." : "Please open a project first.", 
-                                "Project Linting Error", MessageBoxButtons.OK);
+                ShowMessageBox(editorContext, string.IsNullOrEmpty(projectName) ? "Unable to determine the project name." : "Please open a project first.", 
+                               "Project Linting Error", MessageBoxButtons.OK);
                 return;
             }
             
             if (string.IsNullOrEmpty(lintReportPath) || !Directory.Exists(lintReportPath))
             {
-                 ShowMessageBox(editorContext, $"Lint report directory is not set or does not exist: {lintReportPath}", 
-                                "Lint Report Path Error", MessageBoxButtons.OK);
+                ShowMessageBox(editorContext, $"Lint report directory is not set or does not exist: {lintReportPath}", 
+                               "Lint Report Path Error", MessageBoxButtons.OK);
                 return;
             }
 
@@ -299,18 +305,25 @@ namespace AppRefiner
             var ppcProgsMeta = dataManager.GetPeopleCodeItemMetadataForProject(projectName);
             var activeProjectLinters = linterRules.Where(a => a.Active).ToList();
 
-            UpdateStatus($"Linting project - found {ppcProgsMeta.Count} items...", true);
+            updateStatus?.Invoke($"Found {ppcProgsMeta.Count} items to lint...");
+            updateHeader?.Invoke("Linting Project");
 
             List<(PeopleCodeItem Program, Report LintReport)> allReports = new();
             int processedCount = 0;
 
             foreach (var ppcProg in ppcProgsMeta)
             {
-                processedCount++;
-                if (processedCount % 10 == 0)
+                // Check for cancellation
+                if (shouldCancel?.Invoke() == true)
                 {
-                    UpdateStatus($"Linting project - processed {processedCount} of {ppcProgsMeta.Count} items...", true);
-                    progressDialog?.UpdateHeader($"Linting project - processed {processedCount} of {ppcProgsMeta.Count} items...");
+                    return;
+                }
+
+                processedCount++;
+                if (processedCount % 10 == 0 || processedCount == 1)
+                {
+                    updateStatus?.Invoke($"Processing {processedCount} of {ppcProgsMeta.Count} items...");
+                    updateProgress?.Invoke(processedCount, ppcProgsMeta.Count);
                     GC.Collect();
                 }
 
@@ -353,51 +366,48 @@ namespace AppRefiner
                 ppcProg.SetNameReferences(new List<NameReference>());
             }
 
-            UpdateStatus("Finalizing Report...", true);
-            progressDialog?.UpdateHeader("Finalizing Report...");
+            // Check for cancellation before finalizing
+            if (shouldCancel?.Invoke() == true)
+            {
+                return;
+            }
+
+            updateHeader?.Invoke("Finalizing Report");
+            updateStatus?.Invoke("Generating HTML report...");
 
             GenerateHtmlReport(editorContext, reportPath, projectName, allReports);
 
+            updateStatus?.Invoke("Complete!");
+            
+            // Show completion message
             FinalizeProjectLinting(editorContext, reportPath, allReports.Count);
         }
-        
-        private void UpdateStatus(string message, bool marquee)
-        {
-             mainForm.Invoke(() => {
-                  lblStatus.Text = message;
-                  progressBar.Style = marquee ? ProgressBarStyle.Marquee : ProgressBarStyle.Blocks;
-                  if(marquee) progressBar.MarqueeAnimationSpeed = 30;
-             });
-        }
-        
+
         private void FinalizeProjectLinting(ScintillaEditor editorContext, string reportPath, int issueCount)
         {
-             mainForm.Invoke(() => {
-                 lblStatus.Text = "Monitoring...";
-                 progressBar.Style = ProgressBarStyle.Blocks;
+            mainForm.Invoke(() => {
+                string message = issueCount > 0
+                  ? $"Project linting complete. {issueCount} issues found.\n\nWould you like to open the report?"
+                  : "Project linting complete. No issues found.\n\nWould you like to open the report?";
 
-                 string message = issueCount > 0
-                   ? $"Project linting complete. {issueCount} issues found.\n\nWould you like to open the report?"
-                   : "Project linting complete. No issues found.\n\nWould you like to open the report?";
-
-                 ShowMessageBox(editorContext, message, "Project Linting Complete", MessageBoxButtons.YesNo, (result) =>
-                 {
-                     if (result == DialogResult.Yes)
-                     {
-                         try
-                         {
-                             Process.Start(new ProcessStartInfo { FileName = reportPath, UseShellExecute = true });
-                         }
-                         catch (Exception ex)
-                         {
-                             ShowMessageBox(editorContext, $"Error opening report: {ex.Message}", "Error", MessageBoxButtons.OK);
-                         }
-                     }
-                 });
-             });
+                ShowMessageBox(editorContext, message, "Project Linting Complete", MessageBoxButtons.YesNo, (result) =>
+                {
+                    if (result == DialogResult.Yes)
+                    {
+                        try
+                        {
+                            Process.Start(new ProcessStartInfo { FileName = reportPath, UseShellExecute = true });
+                        }
+                        catch (Exception ex)
+                        {
+                            ShowMessageBox(editorContext, $"Error opening report: {ex.Message}", "Error", MessageBoxButtons.OK);
+                        }
+                    }
+                });
+            });
         }
         
-        private void GenerateHtmlReport(ScintillaEditor editorContext, string reportPath, string projectName,
+        public void GenerateHtmlReport(ScintillaEditor editorContext, string reportPath, string projectName,
             List<(PeopleCodeItem Program, Report LintReport)> reportData)
         {
             try
