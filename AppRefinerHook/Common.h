@@ -18,6 +18,10 @@
 #define WM_TOGGLE_AUTO_PAIRING (WM_USER + 1002)
 // Message to subclass a window
 #define WM_SUBCLASS_WINDOW (WM_USER + 1003)
+// Message to toggle main window shortcuts feature
+#define WM_TOGGLE_MAIN_WINDOW_SHORTCUTS (WM_USER + 1006)
+// Message to subclass main window
+#define WM_SUBCLASS_MAIN_WINDOW (WM_USER + 1005)
 
 /* TODO define messages with a mask to indicate "this is a scintilla event message" */
 #define WM_SCN_EVENT_MASK 0x7000
@@ -41,13 +45,17 @@
 
 // Global variables (defined in HookManager.cpp)
 extern HHOOK g_getMsgHook;
+extern HHOOK g_keyboardHook;
 extern HMODULE g_hModule;
 extern HMODULE g_dllSelfReference;
 extern bool g_enableAutoPairing;
+extern bool g_enableMainWindowShortcuts;
 extern DWORD g_lastClipboardSequence;
 extern DWORD g_lastSeenClipboardSequence;
 extern bool g_hasUnprocessedCopy;
+extern HWND g_callbackWindow;
 
 // Subclass IDs for our window subclassing
 const UINT_PTR SUBCLASS_ID = 1001;
 const UINT_PTR SCINTILLA_SUBCLASS_ID = 1002;
+const UINT_PTR MAIN_WINDOW_SUBCLASS_ID = 1003;

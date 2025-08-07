@@ -15,8 +15,11 @@ namespace AppRefiner.Events
         private const uint WM_TOGGLE_AUTO_PAIRING = WM_USER + 1002;
         private const uint WM_SUBCLASS_WINDOW = WM_USER + 1003;
         private const uint WM_REMOVE_HOOK = WM_USER + 1004;
+        private const uint WM_SUBCLASS_MAIN_WINDOW = WM_USER + 1005;
+        private const uint WM_TOGGLE_MAIN_WINDOW_SHORTCUTS = WM_USER + 1006;
 
         private static Dictionary<uint, IntPtr> _activeHooks = new Dictionary<uint, IntPtr>();
+        private static Dictionary<uint, IntPtr> _activeKeyboardHooks = new Dictionary<uint, IntPtr>();
 
         // Win32 API imports
         [DllImport("user32.dll")]
@@ -27,7 +30,13 @@ namespace AppRefiner.Events
         public static extern IntPtr SetHook(uint threadId);
 
         [DllImport("AppRefinerHook.dll", CallingConvention = CallingConvention.Cdecl)]
+        public static extern IntPtr SetKeyboardHook(uint threadId);
+
+        [DllImport("AppRefinerHook.dll", CallingConvention = CallingConvention.Cdecl)]
         public static extern bool Unhook();
+
+        [DllImport("AppRefinerHook.dll", CallingConvention = CallingConvention.Cdecl)]
+        public static extern bool UnhookKeyboard();
 
         [DllImport("AppRefinerHook.dll", CallingConvention = CallingConvention.Cdecl)]
         public static extern bool UnsubclassWindow(IntPtr hWnd);
@@ -78,7 +87,13 @@ namespace AppRefiner.Events
                 UnhookThread(hookPair.Key);
             }
             
+            foreach (var keyboardHookPair in _activeKeyboardHooks.ToList())
+            {
+                UnhookKeyboardForThread(keyboardHookPair.Key);
+            }
+            
             _activeHooks.Clear();
+            _activeKeyboardHooks.Clear();
         }
         
         // Method to send auto-pairing toggle to a specific thread
@@ -91,20 +106,94 @@ namespace AppRefiner.Events
             return false;
         }
 
-        // Method to unhook a specific thread
-        public static bool UnhookThread(uint threadId)
+        // Method to subclass main window
+        public static bool SubclassMainWindow(uint threadId, IntPtr mainWindow, IntPtr callbackWindow, bool shortcutsEnabled)
         {
-            if (_activeHooks.TryGetValue(threadId, out IntPtr hookId))
+            // Ensure we have a hook for this thread first
+            if (!_activeHooks.ContainsKey(threadId))
             {
-                bool result = Unhook();
+                // Set a new hook
+                IntPtr hookId = SetHook(threadId);
+                if (hookId == IntPtr.Zero)
+                {
+                    return false;
+                }
+                
+                // Store the hook ID
+                _activeHooks[threadId] = hookId;
+            }
+
+            // Also set up keyboard hook for better shortcut interception
+            if (!_activeKeyboardHooks.ContainsKey(threadId))
+            {
+                IntPtr keyboardHookId = SetKeyboardHook(threadId);
+                if (keyboardHookId != IntPtr.Zero)
+                {
+                    _activeKeyboardHooks[threadId] = keyboardHookId;
+                }
+            }
+
+            // Send the thread message to subclass the main window
+            bool result = PostThreadMessage(threadId, WM_SUBCLASS_MAIN_WINDOW, mainWindow, callbackWindow);
+
+            // Toggle main window shortcuts if subclassing was successful
+            if (result)
+            {
+                result = PostThreadMessage(threadId, WM_TOGGLE_MAIN_WINDOW_SHORTCUTS, shortcutsEnabled ? 1 : 0, IntPtr.Zero);
+            }
+
+            return result;
+        }
+
+        // Method to send main window shortcuts toggle to a specific thread
+        public static bool ToggleMainWindowShortcuts(uint threadId, bool enabled)
+        {
+            if (_activeHooks.ContainsKey(threadId))
+            {
+                return PostThreadMessage(threadId, WM_TOGGLE_MAIN_WINDOW_SHORTCUTS, enabled ? 1 : 0, IntPtr.Zero);
+            }
+            return false;
+        }
+
+        // Method to unhook keyboard hook for a specific thread
+        public static bool UnhookKeyboardForThread(uint threadId)
+        {
+            if (_activeKeyboardHooks.TryGetValue(threadId, out IntPtr keyboardHookId))
+            {
+                bool result = UnhookKeyboard();
                 if (result)
                 {
-                    _activeHooks.Remove(threadId);
+                    _activeKeyboardHooks.Remove(threadId);
                 }
                 return result;
             }
             
             return false;
+        }
+
+        // Method to unhook a specific thread
+        public static bool UnhookThread(uint threadId)
+        {
+            bool result = true;
+            
+            // Unhook keyboard hook first
+            if (_activeKeyboardHooks.ContainsKey(threadId))
+            {
+                result &= UnhookKeyboardForThread(threadId);
+            }
+            
+            // Unhook main hook
+            if (_activeHooks.TryGetValue(threadId, out IntPtr hookId))
+            {
+                bool unhookResult = Unhook();
+                if (unhookResult)
+                {
+                    _activeHooks.Remove(threadId);
+                }
+                result &= unhookResult;
+            }
+            
+            return result;
         }
     }
 }

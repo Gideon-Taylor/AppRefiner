@@ -4,6 +4,7 @@ using AppRefiner.Stylers;
 using SQL.Formatter;
 using SQL.Formatter.Core;
 using SQL.Formatter.Language;
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.IO.Hashing;
 using System.Runtime.InteropServices;
@@ -55,6 +56,9 @@ namespace AppRefiner
 
     public class ScintillaManager
     {
+        // Dialog tracking for singleton behavior
+        private static readonly ConcurrentDictionary<ScintillaEditor, Dialogs.BetterFindDialog> _activeDialogs = new();
+
         // Scintilla messages.
         private const int SCI_SETTEXT = 2181;
         private const int SCI_GETTEXT = 2182;
@@ -1975,6 +1979,34 @@ namespace AppRefiner
         /// <param name="enableReplaceMode">Whether to enable replace mode on startup</param>
         public static void ShowBetterFindDialog(ScintillaEditor editor, bool enableReplaceMode = false)
         {
+            // Check if dialog already exists for this editor
+            if (_activeDialogs.TryGetValue(editor, out Dialogs.BetterFindDialog existingDialog))
+            {
+                if (!existingDialog.IsDisposed && existingDialog.Visible)
+                {
+                    existingDialog.Invoke((MethodInvoker)delegate
+                    {
+                        // If dialog is already open, just bring it to front
+
+                        existingDialog.BringToFront();
+                        existingDialog.Focus();
+
+                        // If replace mode requested and current dialog is find-only, switch modes
+                        if (enableReplaceMode && !existingDialog.IsReplaceMode)
+                        {
+                            existingDialog.EnableReplaceMode();
+                        }
+                    });
+                    return;
+                }
+                else
+                {
+                    // Clean up stale reference
+                    _activeDialogs.TryRemove(editor, out _);
+                }
+            }
+
+            // Create new dialog
             Task.Delay(100).ContinueWith(_ =>
             {
                 try
@@ -1983,6 +2015,14 @@ namespace AppRefiner
                     var handleWrapper = new WindowWrapper(0);
                     
                     var dialog = new Dialogs.BetterFindDialog(editor, 0, enableReplaceMode);
+                    
+                    // Track this dialog
+                    _activeDialogs[editor] = dialog;
+
+                    // Auto-cleanup when dialog closes
+                    BetterFindDialog? v = null;
+                    dialog.FormClosed += (s, e) => _activeDialogs.TryRemove(editor, out v);
+                    
                     WindowHelper.CenterFormOnWindow(dialog, mainHandle);
 
                     // Make the dialog always on top
@@ -1993,12 +2033,13 @@ namespace AppRefiner
 
                     /* focus dialog window */
                     dialog.Focus();
-
-
                 }
                 catch (Exception ex)
                 {
                     Debug.LogError($"Error showing Better Find dialog: {ex.Message}");
+                    // Clean up tracking on error
+                    BetterFindDialog? v = null;
+                    _activeDialogs.TryRemove(editor,out v);
                 }
             }, TaskScheduler.Default);
         }
