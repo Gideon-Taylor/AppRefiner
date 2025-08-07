@@ -92,6 +92,10 @@ namespace AppRefiner
         private HashSet<ScintillaEditor> knownEditors = new HashSet<ScintillaEditor>();
         private HashSet<uint> processesToNotDBPrompt = new HashSet<uint>();
 
+        // Throttling for duplicate shortcut prevention
+        private DateTime _lastShortcutTime = DateTime.MinValue;
+        private const int SHORTCUT_THROTTLE_MS = 300; // Very short window to catch rapid duplicates
+
         // Fields for debouncing SAVEPOINTREACHED events
         private readonly object savepointLock = new object();
         private DateTime lastSavepointTime = DateTime.MinValue;
@@ -139,6 +143,7 @@ namespace AppRefiner
             optClassPath.Checked = generalSettings.ShowClassPath;
             optClassText.Checked = generalSettings.ShowClassText;
             chkRememberFolds.Checked = generalSettings.RememberFolds;
+            chkOverrideFindReplace.Checked = generalSettings.OverrideFindReplace;
 
             linterManager = new LinterManager(this, dataGridView1, lblStatus, progressBar1, lintReportPath, settingsService);
             linterManager.InitializeLinterOptions(); // Initialize linters via the manager
@@ -185,10 +190,10 @@ namespace AppRefiner
             applicationKeyboardService?.RegisterShortcut("ApplyTemplate", AppRefiner.ModifierKeys.Control | AppRefiner.ModifierKeys.Alt, Keys.T, ApplyTemplateCommand);
             applicationKeyboardService?.RegisterShortcut("SuperGoTo", AppRefiner.ModifierKeys.Control | AppRefiner.ModifierKeys.Alt, Keys.G, SuperGoToCommand); // Use the parameterless overload
             applicationKeyboardService?.RegisterShortcut("ApplyQuickFix", AppRefiner.ModifierKeys.Control, Keys.OemPeriod, ApplyQuickFixCommand); // Ctrl + .
-            applicationKeyboardService?.RegisterShortcut("BetterFind", AppRefiner.ModifierKeys.Control, Keys.J, showBetterFindHandler);
-            applicationKeyboardService?.RegisterShortcut("BetterFindReplace", AppRefiner.ModifierKeys.Control, Keys.K, showBetterFindReplaceHandler);
-            applicationKeyboardService?.RegisterShortcut("FindNext", AppRefiner.ModifierKeys.Control, Keys.F3, findNextHandler);
-            applicationKeyboardService?.RegisterShortcut("FindPrevious", AppRefiner.ModifierKeys.Shift, Keys.F3, findPreviousHandler);
+            applicationKeyboardService?.RegisterShortcut("BetterFind", AppRefiner.ModifierKeys.Control, Keys.F, showBetterFindHandler); // Ctrl + F
+            applicationKeyboardService?.RegisterShortcut("BetterFindReplace", AppRefiner.ModifierKeys.Control, Keys.H, showBetterFindReplaceHandler); // Ctrl + H
+            applicationKeyboardService?.RegisterShortcut("FindNext", AppRefiner.ModifierKeys.None, Keys.F3, findNextHandler); // F3
+            applicationKeyboardService?.RegisterShortcut("FindPrevious", AppRefiner.ModifierKeys.Shift, Keys.F3, findPreviousHandler); // Shift + F3
             applicationKeyboardService?.RegisterShortcut("PlaceBookmark", AppRefiner.ModifierKeys.Control, Keys.B, placeBookmarkHandler);
             applicationKeyboardService?.RegisterShortcut("GoToPreviousBookmark", AppRefiner.ModifierKeys.Control, Keys.OemMinus, goToPreviousBookmarkHandler);
 
@@ -219,6 +224,7 @@ namespace AppRefiner
             optClassPath.CheckedChanged += GeneralSetting_Changed;
             optClassText.CheckedChanged += GeneralSetting_Changed;
             chkRememberFolds.CheckedChanged += GeneralSetting_Changed;
+            chkOverrideFindReplace.CheckedChanged += GeneralSetting_Changed;
 
             // DataGridViews CellValueChanged events will also call SaveSettings
         }
@@ -250,7 +256,8 @@ namespace AppRefiner
                 CheckEventMapXrefs = chkEventMapXrefs.Checked,
                 ShowClassPath = optClassPath.Checked,
                 ShowClassText = optClassText.Checked,
-                RememberFolds = chkRememberFolds.Checked
+                RememberFolds = chkRememberFolds.Checked,
+                OverrideFindReplace = chkOverrideFindReplace.Checked
             };
             settingsService.SaveGeneralSettings(generalSettingsToSave);
 
@@ -282,6 +289,24 @@ namespace AppRefiner
             {
                 bool result = EventHookInstaller.SendAutoPairingToggle(threadId, enabled);
                 Debug.Log($"Sent auto-pairing toggle ({enabled}) to thread {threadId}: {result}");
+            }
+        }
+
+        // Method to notify all hooked editors of main window shortcuts setting changes
+        private void NotifyMainWindowShortcutsChange(bool enabled)
+        {
+            if (knownEditors == null) return;
+
+            // Get distinct thread IDs to avoid sending duplicate messages
+            var distinctThreadIds = knownEditors
+                .Where(editor => editor != null)
+                .Select(editor => editor.ThreadID)
+                .Distinct();
+
+            foreach (var threadId in distinctThreadIds)
+            {
+                bool result = EventHookInstaller.ToggleMainWindowShortcuts(threadId, enabled);
+                Debug.Log($"Sent main window shortcuts toggle ({enabled}) to thread {threadId}: {result}");
             }
         }
 
@@ -1040,7 +1065,7 @@ namespace AppRefiner
                     if (activeEditor != null && linterManager != null)
                     {
                         var mainHandle = Process.GetProcessById((int)activeEditor.ProcessId).MainWindowHandle;
-                        
+
                         this.Invoke(() =>
                         {
                             using var lintDialog = new Dialogs.LintProjectProgressDialog(linterManager, activeEditor, mainHandle);
@@ -1546,13 +1571,23 @@ namespace AppRefiner
             }
             else if (m.Msg == AR_KEY_COMBINATION)
             {
-                // Only process if we have an active editor and application keyboard service
-                if (activeEditor == null || !activeEditor.IsValid() || applicationKeyboardService == null) return;
+                // Only process if we have an active editor
+                if (activeEditor == null || !activeEditor.IsValid()) return;
 
-                Debug.Log($"Key combination detected: {m.WParam:X}");
+                // Simple throttling to prevent rapid duplicates
+                var now = DateTime.UtcNow;
+                if ((now - _lastShortcutTime).TotalMilliseconds < SHORTCUT_THROTTLE_MS)
+                {
+                    return; // Skip very rapid duplicates
+                }
+                _lastShortcutTime = now;
 
-                // Forward to application keyboard service for processing
-                applicationKeyboardService.ProcessKeyMessage(m.WParam.ToInt32());
+                Debug.Log($"Key combination detected: {m.WParam:X}, source: {m.LParam}");
+
+                if (applicationKeyboardService != null)
+                {
+                    applicationKeyboardService.ProcessKeyMessage(m.WParam.ToInt32());
+                }
             }
         }
 
@@ -1569,7 +1604,8 @@ namespace AppRefiner
                 var resolveImportsRefactor = new ResolveImports(activeEditor);
 
                 // Execute via the RefactorManager (showUserMessages: false for automatic execution)
-                Task.Delay(100).ContinueWith(_ => {
+                Task.Delay(100).ContinueWith(_ =>
+                {
                     refactorManager.ExecuteRefactor(resolveImportsRefactor, activeEditor, showUserMessages: false);
                 }, TaskScheduler.Default);
 
@@ -1580,6 +1616,7 @@ namespace AppRefiner
                 // Note: Intentionally not showing MessageBox for automatic execution to avoid interrupting user workflow
             }
         }
+
 
         private void UpdateSavedFoldsForEditor(ScintillaEditor? editor)
         {
@@ -1948,6 +1985,36 @@ namespace AppRefiner
                 Debug.Log($"Editor isn't subclassed: {editor.hWnd}");
                 bool success = EventHookInstaller.SubclassWindow(editor.ThreadID, WindowHelper.GetParentWindow(editor.hWnd), this.Handle, chkAutoPairing.Checked);
                 Debug.Log($"Window subclassing result: {success}");
+
+                // Check if this is a new thread we haven't seen before for main window subclassing
+                var existingThreads = knownEditors
+                    .Where(e => e != null && e.ThreadID != editor.ThreadID)
+                    .Select(e => e.ThreadID)
+                    .Distinct();
+
+                bool isNewThread = !existingThreads.Contains(editor.ThreadID);
+
+                if (success && isNewThread)
+                {
+                    // Get the main window for this thread and subclass it
+                    try
+                    {
+                        var process = System.Diagnostics.Process.GetProcessById((int)editor.ProcessId);
+                        var mainWindow = process.MainWindowHandle;
+
+                        if (mainWindow != IntPtr.Zero)
+                        {
+                            // For now, default main window shortcuts to true (users can disable via settings later)
+                            bool mainWindowSuccess = EventHookInstaller.SubclassMainWindow(editor.ThreadID, mainWindow, this.Handle, chkOverrideFindReplace.Checked);
+                            Debug.Log($"Main window subclassing result for thread {editor.ThreadID}: {mainWindowSuccess} (HWND: {mainWindow:X})");
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.Log($"Error subclassing main window for thread {editor.ThreadID}: {ex.Message}");
+                    }
+                }
+
                 ScintillaManager.SetMouseDwellTime(editor, 1000);
 
 
@@ -1957,7 +2024,8 @@ namespace AppRefiner
 
                     editor.ContentString = ScintillaManager.GetScintillaText(editor);
 
-                    if (chkRememberFolds.Checked) {
+                    if (chkRememberFolds.Checked)
+                    {
                         editor.CollapsedFoldPaths = FoldingManager.RetrievePersistedFolds(editor);
                     }
 
@@ -2017,7 +2085,9 @@ namespace AppRefiner
                     processDataManagers[activeEditor.ProcessId] = manager;
                     activeEditor.DataManager = manager;
                 }
-            } else {
+            }
+            else
+            {
                 processesToNotDBPrompt.Add(activeEditor.ProcessId);
             }
         }
@@ -2177,7 +2247,7 @@ namespace AppRefiner
                             {
                                 newlyFocusedEditor.ContentString = ScintillaManager.GetScintillaText(newlyFocusedEditor);
                                 newlyFocusedEditor.CollapsedFoldPaths.Clear();
-                                if(chkRememberFolds.Checked)
+                                if (chkRememberFolds.Checked)
                                 {
                                     newlyFocusedEditor.CollapsedFoldPaths = FoldingManager.RetrievePersistedFolds(newlyFocusedEditor);
                                 }
@@ -2350,6 +2420,11 @@ namespace AppRefiner
             linkDocs.LinkVisited = true;
         }
 
+        private void chkOverrideFindReplace_CheckedChanged(object sender, EventArgs e)
+        {
+            // Notify all hooked editors that the override find/replace setting has changed
+            NotifyMainWindowShortcutsChange(chkOverrideFindReplace.Checked);
+        }
     }
 }
 

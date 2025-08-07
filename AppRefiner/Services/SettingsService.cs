@@ -26,6 +26,7 @@ namespace AppRefiner
         public bool ShowClassText { get; set; }
 
         public bool RememberFolds { get; set; }
+        public bool OverrideFindReplace { get; set; }
     }
 
     public class SettingsService
@@ -58,6 +59,7 @@ namespace AppRefiner
                 settings.ShowClassText = Properties.Settings.Default.showClassText;
                 settings.TNS_ADMIN = Properties.Settings.Default.TNS_ADMIN;
                 settings.RememberFolds = Properties.Settings.Default.rememberFolds;
+                settings.OverrideFindReplace = Properties.Settings.Default.overrideFindReplace;
             }
             catch (Exception ex)
             {
@@ -85,6 +87,7 @@ namespace AppRefiner
             Properties.Settings.Default.showClassPath = settings.ShowClassPath;
             Properties.Settings.Default.showClassText = settings.ShowClassText;
             Properties.Settings.Default.rememberFolds = settings.RememberFolds;
+            Properties.Settings.Default.overrideFindReplace = settings.OverrideFindReplace;
         }
         
         public void SaveChanges()

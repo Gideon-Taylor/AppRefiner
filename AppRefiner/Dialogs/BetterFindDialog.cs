@@ -65,6 +65,23 @@ namespace AppRefiner.Dialogs
         // Replace mode state
         private bool replaceMode = false;
 
+        /// <summary>
+        /// Gets whether the dialog is currently in replace mode
+        /// </summary>
+        public bool IsReplaceMode => replaceMode;
+
+        /// <summary>
+        /// Enables replace mode for the dialog
+        /// </summary>
+        public void EnableReplaceMode()
+        {
+            if (!replaceMode)
+            {
+                enableReplaceCheckBox.Checked = true;
+                UpdateReplaceVisibility();
+            }
+        }
+
         // Timer to ensure always-on-top behavior persists
         private System.Windows.Forms.Timer alwaysOnTopTimer;
 
@@ -99,6 +116,9 @@ namespace AppRefiner.Dialogs
 
             // Create modal mouse handler
             //mouseHandler = new DialogHelper.ModalDialogMouseHandler(this, headerPanel, ownerHandle);
+
+            // Set Find Next as the default button for Enter key presses
+            this.AcceptButton = findNextButton;
 
             // Center on owner window
             if (ownerHandle != IntPtr.Zero)
@@ -1121,24 +1141,34 @@ namespace AppRefiner.Dialogs
                 }
                 e.Handled = true;
             }
-            else if (e.Control && e.KeyCode == Keys.Enter)
+            else if (e.KeyCode == Keys.Enter)
             {
-                if (replaceMode)
+                if (e.Control)
                 {
-                    if (e.Shift)
+                    // Ctrl+Enter: Replace/Replace All functionality
+                    if (replaceMode)
                     {
-                        ReplaceAllButton_Click(sender, e);
+                        if (e.Shift)
+                        {
+                            ReplaceAllButton_Click(sender, e);
+                        }
+                        else
+                        {
+                            ReplaceButton_Click(sender, e);
+                        }
                     }
                     else
                     {
-                        ReplaceButton_Click(sender, e);
+                        FindNextButton_Click(sender, e);
                     }
+                    e.Handled = true;
                 }
                 else
                 {
+                    // Plain Enter: Find Next (default button behavior)
                     FindNextButton_Click(sender, e);
+                    e.Handled = true;
                 }
-                e.Handled = true;
             }
         }
 
