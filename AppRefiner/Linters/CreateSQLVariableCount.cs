@@ -283,7 +283,7 @@ namespace AppRefiner.Linters
                 AddReport(
                     7,
                     "Found SQL using string concatenation.",
-                    Type,
+                    ReportType.Warning,
                     firstArg.Start.Line - 1,
                     (firstArg.Start.StartIndex, firstArg.Stop.StopIndex)
                 );
