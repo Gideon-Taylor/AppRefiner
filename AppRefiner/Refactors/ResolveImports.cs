@@ -1,7 +1,7 @@
 using Antlr4.Runtime;
 using System.Text;
 using static AppRefiner.PeopleCode.PeopleCodeParser;
-
+using AppRefiner.PeopleCode;
 namespace AppRefiner.Refactors
 {
     /// <summary>
@@ -265,7 +265,7 @@ namespace AppRefiner.Refactors
                     else
                     {
                         // Fall back to using InsertText if the cast fails
-                        InsertText(context.Start.StartIndex,
+                        InsertText(context.Start.ByteStartIndex(),
                             imports + Environment.NewLine + Environment.NewLine,
                             "Add missing imports");
                     }
@@ -273,7 +273,7 @@ namespace AppRefiner.Refactors
                 else
                 {
                     // Empty program, so just add the imports at the start
-                    InsertText(context.Start.StartIndex,
+                    InsertText(context.Start.ByteStartIndex(),
                         imports + Environment.NewLine + Environment.NewLine,
                         "Add missing imports");
                 }

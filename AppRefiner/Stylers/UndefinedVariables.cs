@@ -1,4 +1,5 @@
 using AppRefiner.Linters.Models;
+using AppRefiner.PeopleCode;
 using AppRefiner.Refactors;
 using System;
 using System.Collections.Generic;
@@ -87,14 +88,7 @@ namespace AppRefiner.Stylers
                 
                 string paramType = arg.typeT() != null ? arg.typeT().GetText() : "Any";
                 
-                // Register method parameter as a defined variable
-                AddLocalVariable(
-                    paramName,
-                    paramType,
-                    arg.USER_VARIABLE().Symbol.Line,
-                    arg.USER_VARIABLE().Symbol.StartIndex,
-                    arg.USER_VARIABLE().Symbol.StopIndex
-                );
+                AddLocalVariable(paramName, paramType, arg.USER_VARIABLE().Symbol.Line, arg.USER_VARIABLE().Symbol);
             }
         }
         
@@ -120,14 +114,7 @@ namespace AppRefiner.Stylers
             
             string paramType = arg.annotationType() != null ? arg.annotationType().GetText() : "Any";
             
-            // Register setter parameter as a defined variable in the current scope
-            AddLocalVariable(
-                paramName,
-                paramType,
-                arg.USER_VARIABLE().Symbol.Line,
-                arg.USER_VARIABLE().Symbol.StartIndex,
-                arg.USER_VARIABLE().Symbol.StopIndex
-            );
+            AddLocalVariable(paramName, paramType, arg.USER_VARIABLE().Symbol.Line, arg.USER_VARIABLE().Symbol);
         }
         
         // Handle function parameters to register them as defined variables
@@ -150,14 +137,7 @@ namespace AppRefiner.Stylers
                 
                 string paramType = arg.typeT() != null ? arg.typeT().GetText() : "Any";
                 
-                // Register function parameter as a defined variable in the current scope
-                AddLocalVariable(
-                    paramName,
-                    paramType,
-                    arg.USER_VARIABLE().Symbol.Line,
-                    arg.USER_VARIABLE().Symbol.StartIndex,
-                    arg.USER_VARIABLE().Symbol.StopIndex
-                );
+                AddLocalVariable(paramName, paramType, arg.USER_VARIABLE().Symbol.Line, arg.USER_VARIABLE().Symbol);
             }
         }
         
@@ -175,14 +155,7 @@ namespace AppRefiner.Stylers
             string varType = (context.EXCEPTION() != null) ? "Exception" : 
                               (context.appClassPath() != null) ? context.appClassPath().GetText() : "Exception";
             
-            // Register the catch variable
-            AddLocalVariable(
-                varName,
-                varType,
-                context.USER_VARIABLE().Symbol.Line,
-                context.USER_VARIABLE().Symbol.StartIndex,
-                context.USER_VARIABLE().Symbol.StopIndex
-            );
+            AddLocalVariable(varName, varType, context.USER_VARIABLE().Symbol.Line, context.USER_VARIABLE().Symbol);
         }
 
         // Override to check if a used variable is defined
@@ -209,16 +182,7 @@ namespace AppRefiner.Stylers
             // Check if this variable exists in any scope, as an instance variable, or as a class property
             if (!IsVariableDefined(varName) && !instanceVariables.Contains(varName) && !classProperties.Contains(varName))
             {
-                // Variable is undefined, mark it
-                Indicators?.Add(new Indicator
-                {
-                    Color = HIGHLIGHT_COLOR,
-                    Start = context.Start.StartIndex,
-                    Length = context.Stop.StopIndex - context.Start.StartIndex + 1,
-                    Tooltip = "Undefined variable",
-                    Type = IndicatorType.HIGHLIGHTER,
-                    QuickFixes = []
-                });
+                AddScopedIndicator(context, IndicatorType.HIGHLIGHTER, HIGHLIGHT_COLOR, "Undefined variable", []);
                 
                 // Add this variable to the current scope's marked variables
                 AddToCurrentScope(varName, true);
@@ -238,14 +202,7 @@ namespace AppRefiner.Stylers
             string varName = varNode.GetText();
             if (string.IsNullOrEmpty(varName)) return;
             
-            // Add to the current scope
-            AddLocalVariable(
-                varName,
-                "Constant",
-                varNode.Symbol.Line,
-                varNode.Symbol.StartIndex,
-                varNode.Symbol.StopIndex
-            );
+            AddLocalVariable(varName, "Constant", varNode.Symbol.Line, varNode.Symbol);
         }
 
         private bool IsSpecialVariable(string varName)

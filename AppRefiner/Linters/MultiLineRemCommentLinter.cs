@@ -38,7 +38,7 @@ namespace AppRefiner.Linters
                         "REM comment spans multiple lines, possible missing semicolon termination.",
                         Type,
                         comment.Line,
-                        (comment.StartIndex, comment.StopIndex)
+                        comment
                     );
                 }
             }

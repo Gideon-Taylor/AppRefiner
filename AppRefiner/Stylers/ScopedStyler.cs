@@ -1,5 +1,7 @@
+using Antlr4.Runtime;
 using Antlr4.Runtime.Misc;
 using AppRefiner.Linters.Models;
+using AppRefiner.PeopleCode;
 using static AppRefiner.PeopleCode.PeopleCodeParser;
 
 namespace AppRefiner.Stylers
@@ -16,14 +18,51 @@ namespace AppRefiner.Stylers
             variableScopeStack.Push(new Dictionary<string, VariableInfo>(StringComparer.InvariantCultureIgnoreCase));
         }
 
-        // Variable tracking methods
-        protected void AddLocalVariable(string name, string type, int line, int start, int stop)
+        protected void AddLocalVariable(string name, string type, int line, (int Start, int Stop) span)
         {
             var currentScope = variableScopeStack.Peek();
             if (!currentScope.ContainsKey(name))
             {
-                currentScope[name] = new VariableInfo(name, type, line, (start, stop));
+                currentScope[name] = new VariableInfo(name, type, line, span);
             }
+        }
+
+        // Helper method for token-based variable addition with automatic byte conversion
+        protected void AddLocalVariable(string name, string type, int line, IToken token)
+        {
+            AddLocalVariable(name, type, line,
+                (token.ByteStartIndex(), token.ByteStopIndex())
+            );
+        }
+
+        // Helper method for adding indicators using VariableInfo with byte spans
+        protected void AddScopedIndicator(VariableInfo varInfo, IndicatorType type, uint color, string? tooltip = null, List<(Type RefactorClass, string Description)>? quickFixes = null)
+        {
+            Indicators?.Add(new Indicator
+            {
+                Start = varInfo.Span.Start,
+                Length = varInfo.Span.Stop - varInfo.Span.Start + 1,
+                Type = type,
+                Color = color,
+                Tooltip = tooltip,
+                QuickFixes = quickFixes ?? new List<(Type RefactorClass, string Description)>()
+            });
+        }
+
+
+        // Helper method for adding indicators using context with automatic byte conversion
+        protected void AddScopedIndicator(ParserRuleContext context, IndicatorType type, uint color, string? tooltip = null, List<(Type RefactorClass, string Description)>? quickFixes = null)
+        {
+            var endToken = (context.Stop ?? context.Start);
+            Indicators?.Add(new Indicator
+            {
+                Start = context.Start.ByteStartIndex(),
+                Length = endToken.ByteStopIndex() - context.Start.ByteStartIndex() + 1,
+                Type = type,
+                Color = color,
+                Tooltip = tooltip,
+                QuickFixes = quickFixes ?? new List<(Type RefactorClass, string Description)>()
+            });
         }
 
         protected bool TryGetVariableInfo(string name, out VariableInfo? info)
@@ -111,8 +150,7 @@ namespace AppRefiner.Stylers
                     varName,
                     typeName,
                     varNode.Symbol.Line,
-                    varNode.Symbol.StartIndex,
-                    varNode.Symbol.StopIndex
+                    varNode.Symbol
                 );
                 OnVariableDeclared(variableScopeStack.Peek()[varName]);
             }
@@ -189,8 +227,7 @@ namespace AppRefiner.Stylers
                     varName,
                     typeName,
                     varNode.Symbol.Line,
-                    varNode.Symbol.StartIndex,
-                    varNode.Symbol.StopIndex
+                    varNode.Symbol
                 );
                 OnVariableDeclared(variableScopeStack.Peek()[varName]);
             }
@@ -209,8 +246,7 @@ namespace AppRefiner.Stylers
                 varName,
                 typeName,
                 varNode.Symbol.Line,
-                varNode.Symbol.StartIndex,
-                varNode.Symbol.StopIndex
+                varNode.Symbol
             );
             OnVariableDeclared(variableScopeStack.Peek()[varName]);
         }

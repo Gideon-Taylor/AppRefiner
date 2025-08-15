@@ -73,9 +73,11 @@ namespace AppRefiner.Refactors
         }
 
         /// <summary>
-        /// Applies this change to the given source code builder
+        /// Applies this change directly to the Scintilla editor using API calls
         /// </summary>
-        public abstract void Apply(StringBuilder source);
+        /// <param name="editor">The Scintilla editor to apply changes to</param>
+        /// <returns>True if the change was applied successfully, false otherwise</returns>
+        public abstract bool ApplyToScintilla(ScintillaEditor editor);
 
         /// <summary>
         /// Calculates how this change affects a cursor position
@@ -113,11 +115,11 @@ namespace AppRefiner.Refactors
         }
 
         /// <summary>
-        /// Applies the deletion to the source
+        /// Applies the deletion directly to the Scintilla editor
         /// </summary>
-        public override void Apply(StringBuilder source)
+        public override bool ApplyToScintilla(ScintillaEditor editor)
         {
-            source.Remove(StartIndex, DeleteLength);
+            return ScintillaManager.DeleteTextRange(editor, StartIndex, DeleteLength);
         }
 
         /// <summary>
@@ -168,11 +170,11 @@ namespace AppRefiner.Refactors
         }
 
         /// <summary>
-        /// Applies the insertion to the source
+        /// Applies the insertion directly to the Scintilla editor
         /// </summary>
-        public override void Apply(StringBuilder source)
+        public override bool ApplyToScintilla(ScintillaEditor editor)
         {
-            source.Insert(StartIndex, TextToInsert);
+            return ScintillaManager.InsertTextAtLocation(editor, StartIndex, TextToInsert);
         }
 
         /// <summary>
@@ -235,12 +237,11 @@ namespace AppRefiner.Refactors
         }
 
         /// <summary>
-        /// Applies the replacement to the source
+        /// Applies the replacement directly to the Scintilla editor
         /// </summary>
-        public override void Apply(StringBuilder source)
+        public override bool ApplyToScintilla(ScintillaEditor editor)
         {
-            source.Remove(StartIndex, OldLength);
-            source.Insert(StartIndex, NewText);
+            return ScintillaManager.ReplaceTextRange(editor, StartIndex, EndIndex, NewText);
         }
 
         /// <summary>
@@ -395,33 +396,6 @@ namespace AppRefiner.Refactors
         public RefactorResult GetResult() => failed ? RefactorResult.Failed(failureMessage ?? "Unknown error") : RefactorResult.Successful;
 
         /// <summary>
-        /// Gets the refactored source code with all changes applied
-        /// </summary>
-        public string? GetRefactoredCode()
-        {
-            if (failed) return null;
-
-            if (changes.Count == 0) return source;
-
-            // Sort changes from last to first to avoid index shifting
-            changes.Sort((a, b) => b.StartIndex.CompareTo(a.StartIndex));
-
-            var result = new StringBuilder(source);
-
-            // Process each change and update cursor position
-            foreach (var change in changes)
-            {
-                if (cursorPosition >= 0)
-                {
-                    cursorPosition = change.UpdateCursorPosition(cursorPosition);
-                }
-                change.Apply(result);
-            }
-
-            return result.ToString();
-        }
-
-        /// <summary>
         /// Gets the updated cursor position after refactoring
         /// </summary>
         /// <returns>The new cursor position, or -1 if no cursor position was provided</returns>
@@ -446,15 +420,14 @@ namespace AppRefiner.Refactors
             // Handle case where node has a Start but no Stop (empty node)
             if (context.Stop == null)
             {
-                // Treat as an insert operation at the start position
-                InsertText(context.Start.StartIndex, newText, description);
+                InsertText(context.Start.ByteStartIndex(), newText, description);
             }
             else
             {
                 // Normal case - replace the entire node
                 changes.Add(new ReplaceChange(
-                    context.Start.StartIndex,
-                    eatExtraForSemicolon? context.Stop.StopIndex + 1 : context.Stop.StopIndex,
+                    context.Start.ByteStartIndex(),
+                    eatExtraForSemicolon ? context.Stop.ByteStopIndex() + 1 : context.Stop.ByteStopIndex(),
                     newText,
                     description
                 ));
@@ -492,7 +465,7 @@ namespace AppRefiner.Refactors
         /// <param name="description">A description of what is being inserted</param>
         protected void InsertAfter(ParserRuleContext context, string textToInsert, string description)
         {
-            changes.Add(new InsertChange(context.Stop.StopIndex + 1, textToInsert, description));
+            changes.Add(new InsertChange(context.Stop.ByteStopIndex() + 1, textToInsert, description));
         }
 
         /// <summary>
@@ -503,7 +476,8 @@ namespace AppRefiner.Refactors
         /// <param name="description">A description of what is being inserted</param>
         protected void InsertBefore(ParserRuleContext context, string textToInsert, string description)
         {
-            changes.Add(new InsertChange(context.Start.StartIndex, textToInsert, description));
+            // Convert to byte index for Scintilla API
+            changes.Add(new InsertChange(context.Start.ByteStartIndex(), textToInsert, description));
         }
 
         /// <summary>
@@ -524,9 +498,11 @@ namespace AppRefiner.Refactors
         /// <param name="description">A description of what is being deleted</param>
         protected void DeleteNode(ParserRuleContext context, string description)
         {
+            // Convert tokens to byte indexes for Scintilla API
+            
             changes.Add(new DeleteChange(
-                context.Start.StartIndex,
-                context.Stop.StopIndex,
+                context.Start.ByteStartIndex(),
+                context.Stop.ByteStopIndex(),
                 description
             ));
         }
@@ -537,16 +513,16 @@ namespace AppRefiner.Refactors
         protected string? GetOriginalText(ParserRuleContext context, bool includeSemicolon = false)
         {
             bool needToCaptureSemicolon = false;
-            if (includeSemicolon && source != null && source.Length > context.Stop.StopIndex + 2)
+            if (includeSemicolon && source != null && source.Length > context.Stop.ByteStopIndex() + 2)
             {
-                needToCaptureSemicolon = source[context.Stop.StopIndex + 1] == ';';
+                needToCaptureSemicolon = source[context.Stop.ByteStopIndex() + 1] == ';';
             }
 
             return source == null
                 ? null
                 : source.Substring(
-                context.Start.StartIndex,
-                context.Stop.StopIndex - context.Start.StartIndex + 1 + (needToCaptureSemicolon ? 1 : 0)
+                context.Start.ByteStartIndex(),
+                context.Stop.ByteStopIndex() - context.Start.ByteStartIndex() + 1 + (needToCaptureSemicolon ? 1 : 0)
             );
         }
 

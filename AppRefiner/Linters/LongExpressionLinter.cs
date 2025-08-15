@@ -89,7 +89,7 @@ namespace AppRefiner.Linters
                     $"Expression is too long ({expressionText.Length} chars). Consider breaking it down into smaller parts.",
                     Type,
                     context.Start.Line - 1,
-                    (context.Start.StartIndex, context.Stop.StopIndex)
+                    context
                 );
                 return;
             }
@@ -103,7 +103,7 @@ namespace AppRefiner.Linters
                     $"Expression is too complex with {operatorCount} operators. Consider simplifying.",
                     Type,
                     context.Start.Line - 1,
-                    (context.Start.StartIndex, context.Stop.StopIndex)
+                    context
                 );
             }
         }

@@ -45,16 +45,12 @@ namespace AppRefiner.Stylers
                 literalExpr.literal()?.StringLiteral() != null) // Check if the literal is a StringLiteral
             {
                 // Found the pattern: Find(..., "string")
-                Indicators ??= []; // Ensure Indicators list is initialized
-                Indicators.Add(new Indicator
-                {
-                    Start = context.Start.StartIndex,
-                    Length = context.Stop.StopIndex - context.Start.StartIndex + 1,
-                    Color = LightGreen,
-                    Tooltip = "Parameters may be backwards for Find() function. Expected Find(&needle, &haystack).",
-                    Type = IndicatorType.SQUIGGLE,
-                    QuickFixes = []
-                });
+                AddIndicator(
+                    context, 
+                    IndicatorType.SQUIGGLE, 
+                    LightGreen,
+                    "Parameters may be backwards for Find() function. Expected Find(&needle, &haystack)."
+                );
             }
 
             // Call the correct base method

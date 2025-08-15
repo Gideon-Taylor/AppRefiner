@@ -146,11 +146,11 @@ namespace AppRefiner.Refactors
                 var firstChild = context.GetChild(0);
                 if (firstChild is ITerminalNode || firstChild is ParserRuleContext) // Check if there's anything to insert before
                 {
-                    var insertionPoint = context.Start.StartIndex;
+                    var insertionPoint = context.Start.ByteStartIndex();
                     if (firstChild is ParserRuleContext firstChildContext) {
-                         insertionPoint = firstChildContext.Start.StartIndex;
+                         insertionPoint = firstChildContext.Start.ByteStartIndex();
                     } else if (firstChild is ITerminalNode firstTerminalNode) {
-                         insertionPoint = firstTerminalNode.Symbol.StartIndex;
+                         insertionPoint = firstTerminalNode.Symbol.ByteStartIndex();
                     }
 
                     // Add standard spacing: imports block, blank line, then the rest
@@ -165,7 +165,7 @@ namespace AppRefiner.Refactors
                 }
                 else // Empty program? Insert at the very beginning.
                 {
-                    InsertText(context.Start?.StartIndex ?? 0,
+                    InsertText(context.Start?.ByteStartIndex() ?? 0,
                         newImportsBlockText + Environment.NewLine + Environment.NewLine,
                         $"Add import for {_appClassPathToAdd}");
                 }

@@ -1,5 +1,6 @@
 using Antlr4.Runtime.Misc;
 using AppRefiner.Linters.Models;
+using AppRefiner.PeopleCode;
 using AppRefiner.QuickFixes;
 using System;
 using System.Reflection;
@@ -45,7 +46,7 @@ namespace AppRefiner.Stylers
                         propAsVar,
                         "Property", // Type is just "Instance" for now
                         propID.Start.Line,
-                        (propID.Start.StartIndex, propID.Stop.StopIndex)
+                        (propID.Start.ByteStartIndex(), propID.Stop.ByteStopIndex())
                     );
                 }
             } else if (propDecl is PropertyDirectContext propDirect)
@@ -61,7 +62,7 @@ namespace AppRefiner.Stylers
                         propAsVar,
                         "Property", // Type is just "Instance" for now
                         propID.Start.Line,
-                        (propID.Start.StartIndex, propID.Stop.StopIndex)
+                        (propID.Start.ByteStartIndex(), propID.Stop.ByteStopIndex())
                     );
                 }
             }
@@ -91,7 +92,7 @@ namespace AppRefiner.Stylers
                             varName,
                             "Instance", // Type is just "Instance" for now
                             varNode.Symbol.Line,
-                            (varNode.Symbol.StartIndex, varNode.Symbol.StopIndex)
+                            (varNode.Symbol.ByteStartIndex(), varNode.Symbol.ByteStopIndex())
                         );
                     }
                 }
@@ -131,12 +132,10 @@ namespace AppRefiner.Stylers
             {
                 string varName = varNode.GetText();
                 var line = varNode.Symbol.Line;
-                var start = varNode.Symbol.StartIndex;
-                var stop = varNode.Symbol.StopIndex;
 
                 // Store the parameter for later association with method scope
                 pendingMethodParameters[currentMethodName].Add(
-                    new VariableInfo(varName, "Parameter", line, (start, stop))
+                    new VariableInfo(varName, "Parameter", line, (varNode.Symbol.ByteStartIndex(), varNode.Symbol.ByteStopIndex()))
                 );
             }
         }
@@ -157,8 +156,8 @@ namespace AppRefiner.Stylers
                     // Add each parameter to the current method scope
                     foreach (var paramInfo in parameters)
                     {
-                        // Use the existing AddLocalVariable method from ScopedStyler
-                        AddLocalVariable(paramInfo.Name, paramInfo.Type, paramInfo.Line, paramInfo.Span.Start, paramInfo.Span.Stop);
+                        // Use the existing AddLocalVariable method from ScopedStyler with dual indexing
+                        AddLocalVariable(paramInfo.Name, paramInfo.Type, paramInfo.Line, paramInfo.Span);
                     }
 
                     // Remove the entry as parameters are now associated with the scope
@@ -252,14 +251,7 @@ namespace AppRefiner.Stylers
             string varName = varNode.GetText();
             if (string.IsNullOrEmpty(varName)) return;
             
-            // Add to the current scope
-            AddLocalVariable(
-                varName,
-                "Constant",
-                varNode.Symbol.Line,
-                varNode.Symbol.StartIndex,
-                varNode.Symbol.StopIndex
-            );
+            AddLocalVariable(varName, "Constant", varNode.Symbol.Line, varNode.Symbol);
         }
 
 
@@ -273,11 +265,8 @@ namespace AppRefiner.Stylers
             {
                 string varName = varNode.GetText();
                 var line = varNode.Symbol.Line;
-                var start = varNode.Symbol.StartIndex;
-                var stop = varNode.Symbol.StopIndex;
 
-                // Add function parameter directly to the current scope
-                AddLocalVariable(varName, "Parameter", line, start, stop);
+                AddLocalVariable(varName, "Parameter", line, varNode.Symbol);
             }
         }
 
@@ -292,16 +281,9 @@ namespace AppRefiner.Stylers
                 
                 if (!variable.Used)
                 {
-                    // Add indicator for unused variables
-                    Indicators?.Add(new Indicator
-                    {
-                        Color = HIGHLIGHT_COLOR,
-                        Start = variable.Span.Start,
-                        Length = variable.Span.Stop - variable.Span.Start + 1,
-                        Tooltip = variable.Type == "Parameter" ? "Unused parameter" : "Unused variable", // Adjusted tooltip
-                        Type = IndicatorType.TEXTCOLOR,
-                        QuickFixes = [(typeof(DeleteUnusedVariableDeclaration), variable.Type == "Parameter" ? "Delete unused parameter" : "Delete unused variable declaration")]
-                    });
+                    AddScopedIndicator(variable, IndicatorType.TEXTCOLOR, HIGHLIGHT_COLOR,
+                        variable.Type == "Parameter" ? "Unused parameter" : "Unused variable",
+                        [(typeof(DeleteUnusedVariableDeclaration), variable.Type == "Parameter" ? "Delete unused parameter" : "Delete unused variable declaration")]);
                 }
             }
         }
@@ -315,15 +297,9 @@ namespace AppRefiner.Stylers
                 
                 if (!variable.Used)
                 {
-                    Indicators?.Add(new Indicator
-                    {
-                        Color = HIGHLIGHT_COLOR,
-                        Start = variable.Span.Start,
-                        Length = variable.Span.Stop - variable.Span.Start + 1,
-                        Tooltip = variable.Type == "Parameter" ? "Unused parameter" : "Unused variable", // Adjusted tooltip
-                        Type = IndicatorType.TEXTCOLOR,
-                        QuickFixes = [(typeof(DeleteUnusedVariableDeclaration),variable.Type == "Parameter" ? "Delete unused parameter" : "Delete unused variable declaration")]
-                    });
+                    AddScopedIndicator(variable, IndicatorType.TEXTCOLOR, HIGHLIGHT_COLOR,
+                        variable.Type == "Parameter" ? "Unused parameter" : "Unused variable",
+                        [(typeof(DeleteUnusedVariableDeclaration),variable.Type == "Parameter" ? "Delete unused parameter" : "Delete unused variable declaration")]);
                 }
             }
             
@@ -334,15 +310,9 @@ namespace AppRefiner.Stylers
                 
                 if (!variable.Used)
                 {
-                    Indicators?.Add(new Indicator
-                    {
-                        Color = HIGHLIGHT_COLOR,
-                        Start = variable.Span.Start,
-                        Length = variable.Span.Stop - variable.Span.Start + 1,
-                        Tooltip = "Unused instance variable",
-                        Type = IndicatorType.TEXTCOLOR,
-                        QuickFixes = [(typeof(DeleteUnusedVariableDeclaration),"Delete unused instance variable")]
-                    });
+                    AddScopedIndicator(variable, IndicatorType.TEXTCOLOR, HIGHLIGHT_COLOR,
+                        "Unused instance variable",
+                        [(typeof(DeleteUnusedVariableDeclaration),"Delete unused instance variable")]);
                 }
             }
         }

@@ -338,7 +338,7 @@ namespace AppRefiner.TooltipProviders
             try
             {
                 // Create a lexer, token stream, and parser for the parent class
-                var lexer = new PeopleCodeLexer(new AntlrInputStream(parentClassSource));
+                var lexer = new PeopleCodeLexer(new ByteTrackingCharStream(parentClassSource));
                 var tokenStream = new CommonTokenStream(lexer);
                 var parser = new PeopleCodeParser(tokenStream);
                 
@@ -496,8 +496,8 @@ namespace AppRefiner.TooltipProviders
                         continue;
                     
                     // Get tooltip position information
-                    int start = dotAccess.genericID().Start.StartIndex;
-                    int length = dotAccess.genericID().Stop.StopIndex - start + 1;
+                    int start = dotAccess.genericID().Start.ByteStartIndex();
+                    int length = dotAccess.genericID().Stop.ByteStopIndex() - start + 1;
                     
                     if (isThis)
                     {

@@ -643,7 +643,7 @@ namespace AppRefiner.TooltipProviders
             if (firstTokensOnLine.TryGetValue(LineNumber, out var firstToken))
             {
                 // Check if position is at or before the first non-whitespace token
-                return (position >= firstToken.StartIndex && position <= firstToken.StopIndex + 1);
+                return (position >= firstToken.ByteStartIndex() && position <= firstToken.ByteStopIndex() + 1);
             }
 
 

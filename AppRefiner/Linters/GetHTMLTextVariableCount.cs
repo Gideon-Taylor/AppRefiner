@@ -49,7 +49,7 @@ namespace AppRefiner.Linters
                     $"Invalid HTML definition: {htmlRef}",
                     ReportType.Error,
                     firstArg.Start.Line - 1,
-                    (firstArg.Start.StartIndex, firstArg.Stop.StopIndex)
+                    firstArg
                 );
                 return;
             }
@@ -65,7 +65,7 @@ namespace AppRefiner.Linters
                     $"GetHTMLText has too few bind parameters. Expected {bindCount}, got {providedBinds}.",
                     ReportType.Error,
                     context.Start.Line - 1,
-                    (context.Start.StartIndex, context.Stop.StopIndex)
+                    context
                 );
             }
             else if (providedBinds > bindCount && bindCount > 0)
@@ -75,7 +75,7 @@ namespace AppRefiner.Linters
                     $"GetHTMLText has more bind parameters than needed. Expected {bindCount}, got {providedBinds}.",
                     ReportType.Warning,
                     context.Start.Line - 1,
-                    (context.Start.StartIndex, context.Stop.StopIndex)
+                    context
                 );
             }
         }

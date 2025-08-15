@@ -1,4 +1,5 @@
-﻿using AppRefiner.Refactors;
+﻿using AppRefiner.PeopleCode;
+using AppRefiner.Refactors;
 using static AppRefiner.PeopleCode.PeopleCodeParser;
 
 namespace AppRefiner.Stylers
@@ -51,7 +52,7 @@ namespace AppRefiner.Stylers
             // Skip if we couldn't get a valid package name
             if (string.IsNullOrEmpty(packageName)) return;
 
-            var importInfo = new ImportInfo(packageName, context.Start.Line, context.Start.StartIndex, context.Stop.StopIndex);
+            var importInfo = new ImportInfo(packageName, context.Start.Line, context.Start.ByteStartIndex(), context.Stop.ByteStopIndex());
             importsUsed[packageName] = importInfo;
         }
 

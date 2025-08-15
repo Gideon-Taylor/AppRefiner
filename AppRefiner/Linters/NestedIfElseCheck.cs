@@ -53,7 +53,7 @@ namespace AppRefiner.Linters
                     $"Deeply nested If/Else blocks (max level {maxNestingLevelMap[context]}). Consider refactoring using Evaluate or early returns.",
                     Type,
                     context.Start.Line - 1,
-                    (context.Start.StartIndex, context.Stop.StopIndex)
+                    context
                 );
                 
                 // Mark this if statement as reported
@@ -90,7 +90,7 @@ namespace AppRefiner.Linters
                                 "Multiple IF-ELSE-IF chains detected. Consider using Evaluate statement for better readability.",
                                 ReportType.Info,
                                 outermost.Start.Line - 1,
-                                (outermost.Start.StartIndex, outermost.Stop.StopIndex)
+                                outermost
                             );
 
                             // Mark this if statement as reported

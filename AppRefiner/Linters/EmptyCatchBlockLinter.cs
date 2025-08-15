@@ -56,7 +56,7 @@ namespace AppRefiner.Linters
                     "Empty catch block silently swallows exceptions. Consider logging or rethrowing.",
                     Type,
                     context.Start.Line - 1,
-                    (context.Start.StartIndex, context.Stop.StopIndex + 1)
+                    context
                 );
             }
         }

@@ -1,4 +1,5 @@
 ﻿using AppRefiner.Database;
+using AppRefiner.PeopleCode;
 using SqlParser.Ast;
 using static AppRefiner.PeopleCode.PeopleCodeParser;
 
@@ -39,13 +40,13 @@ namespace AppRefiner.Linters
                                     $"Invalid SQL definition: {defName}",
                                     ReportType.Error,
                                     expr.Start.Line - 1,
-                                    (expr.Start.StartIndex, expr.Stop.StopIndex)
+                                    expr
                                 );
-                                return (null, expr.Start.StartIndex, expr.Stop.StopIndex);
+                                return (null, expr.Start.ByteStartIndex(), expr.Stop.ByteStopIndex());
                             }
-                            return (sqlText, expr.Start.StartIndex, expr.Stop.StopIndex);
+                            return (sqlText, expr.Start.ByteStartIndex(), expr.Stop.ByteStopIndex());
                         }
-                        return (null, expr.Start.StartIndex, expr.Stop.StopIndex);
+                        return (null, expr.Start.ByteStartIndex(), expr.Stop.ByteStopIndex());
                     }
                 }
             }
@@ -55,10 +56,10 @@ namespace AppRefiner.Linters
                 var sqlText = literalExpr.GetText();
                 // Remove quotes from SQL text
                 sqlText = sqlText.Substring(1, sqlText.Length - 2);
-                return (sqlText, expr.Start.StartIndex, expr.Stop.StopIndex);
+                return (sqlText, expr.Start.ByteStartIndex(), expr.Stop.ByteStopIndex());
             }
 
-            return (null, expr.Start.StartIndex, expr.Stop.StopIndex);
+            return (null, expr.Start.ByteStartIndex(), expr.Stop.ByteStopIndex());
         }
 
         private bool ContainsConcatenation(ExpressionContext expr)
@@ -110,7 +111,7 @@ namespace AppRefiner.Linters
                     "Found SQL using string concatenation.",
                     Type,
                     firstArg.Start.Line - 1,
-                    (firstArg.Start.StartIndex, firstArg.Stop.StopIndex)
+                    firstArg
                 );
             }
 
@@ -144,7 +145,7 @@ namespace AppRefiner.Linters
                         $"SQL has incorrect number of In/Out parameters. Expected {bindCount + outputCount}, got {totalInOutArgs}.",
                         ReportType.Error,
                         context.Start.Line - 1,
-                        (start, context.Stop.StopIndex)
+                        (start, context.Stop.ByteStopIndex())
                     );
                 }
             }

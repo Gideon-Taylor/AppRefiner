@@ -40,12 +40,12 @@ namespace AppRefiner.QuickFixes
             else if (declCtx is ClassDeclarationPlainContext plainCtx)
                 _currentClassName = plainCtx.genericID().GetText();
 
-            _classDeclarationEnd = declCtx.Stop.StopIndex;
+            _classDeclarationEnd = declCtx.Stop.ByteStopIndex();
 
             var classBody = context.classBody();
             if (classBody != null && classBody.classMember().Length > 0)
             {
-                _classBodyStart = classBody.classMember(0).Start.StartIndex;
+                _classBodyStart = classBody.classMember(0).Start.ByteStartIndex();
             }
             else
             {
@@ -226,7 +226,7 @@ namespace AppRefiner.QuickFixes
         private int FindActualEndWithSemicolons(ParserRuleContext context)
         {
             // Start with the context's stop position
-            int endPos = context.Stop.StopIndex;
+            int endPos = context.Stop.ByteStopIndex();
             
             // Find the end of the current line to handle comments and other content after semicolons
             if (Editor.ContentString != null)

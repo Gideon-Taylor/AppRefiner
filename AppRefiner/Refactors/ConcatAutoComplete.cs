@@ -1,5 +1,6 @@
 using Antlr4.Runtime;
 using System.Diagnostics;
+using AppRefiner.PeopleCode;
 using AppRefiner.Services; // For ScintillaEditor
 using static AppRefiner.PeopleCode.PeopleCodeParser; // For ConcatShortHandExprContext
 
@@ -85,9 +86,10 @@ namespace AppRefiner.Refactors
                 return;
             }
 
+            var operatorMatchIndex = System.Text.Encoding.UTF8.GetByteCount(originalText.Substring(0, operatorMatch.Index));
+
             // Calculate the positions
-            int lhsEndIndex = context.Start.StartIndex + lhsExprCtx.Stop.StopIndex - lhsExprCtx.Start.StartIndex + 1;
-            int operatorEndIndex = context.Start.StartIndex + operatorMatch.Index + operatorMatch.Length;
+            int operatorEndIndex =  operatorMatch.Index + operatorMatch.Length;
 
             // Replace only the "lhs +=" part with "lhs = lhs +"
             string newText = $"{lhsText} = {lhsText} {concatChar}";
@@ -96,11 +98,11 @@ namespace AppRefiner.Refactors
             Debug.Log($"  Original text: '{originalText}'");
             Debug.Log($"  LHS text: '{lhsText}'");
             Debug.Log($"  Operator: '{concatChar}='");
-            Debug.Log($"  Replacement range: {context.Start.StartIndex} to {operatorEndIndex - 1}");
+            Debug.Log($"  Replacement range: {context.Start.ByteStartIndex()} to {operatorEndIndex - 1}");
             Debug.Log($"  New text: '{newText}'");
 
             // Replace only the "lhs operator=" portion, leaving everything after untouched
-            ReplaceText(context.Start.StartIndex, operatorEndIndex - 1, newText, RefactorDescription);
+            ReplaceText(context.Start.ByteStartIndex(), operatorEndIndex - 1, newText, RefactorDescription);
             
             refactorApplied = true; // Mark as applied to prevent re-application.
         }

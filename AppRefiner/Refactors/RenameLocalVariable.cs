@@ -1,5 +1,6 @@
 using Antlr4.Runtime.Misc;
 using AppRefiner.Linters.Models;
+using AppRefiner.PeopleCode;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -321,7 +322,7 @@ namespace AppRefiner.Refactors
             base.EnterIdentUserVariable(context);
 
             string varName = context.GetText();
-            var span = (context.Start.StartIndex, context.Stop.StopIndex);
+            var span = (context.Start.ByteStartIndex(), context.Stop.ByteStopIndex());
 
             AddOccurrence(varName, span, true);
 
@@ -353,7 +354,7 @@ namespace AppRefiner.Refactors
                 if (parentContext is PrivateMethodHeaderContext)
                 {
                     // Store just the span of the method name, not the entire header
-                    var span = (genericIdNode.Start.StartIndex, genericIdNode.Stop.StopIndex);
+                    var span = (genericIdNode.Start.ByteStartIndex(), genericIdNode.Stop.ByteStopIndex());
                     privateMethods[methodName] = span;
                     
                     // Add to global scope for renaming
@@ -389,7 +390,7 @@ namespace AppRefiner.Refactors
             if (varNode != null)
             {
                 string varName = varNode.GetText();
-                var span = (varNode.Symbol.StartIndex, varNode.Symbol.StopIndex);
+                var span = (varNode.Symbol.ByteStartIndex(), varNode.Symbol.ByteStopIndex());
                 
                 // Store the parameter for later association with method scope
                 pendingMethodParameters[currentMethodName].Add((varName, span));
@@ -439,7 +440,7 @@ namespace AppRefiner.Refactors
                 if (privateMethods.ContainsKey(methodName))
                 {
                     // Store just the span of the method name, not the entire method
-                    var span = (genericIdNode.Start.StartIndex, genericIdNode.Stop.StopIndex);
+                    var span = (genericIdNode.Start.ByteStartIndex(), genericIdNode.Stop.ByteStopIndex());
                     
                     // Add to method implementations
                     if (!methodImplementations.ContainsKey(methodName))
@@ -492,7 +493,7 @@ namespace AppRefiner.Refactors
             if (varNode != null)
             {
                 string varName = varNode.GetText();
-                var span = (varNode.Symbol.StartIndex, varNode.Symbol.StopIndex);
+                var span = (varNode.Symbol.ByteStartIndex(), varNode.Symbol.ByteStopIndex());
                 
                 // Add to current scope (which should be the function scope)
                 var currentScope = GetCurrentScope();
@@ -524,7 +525,7 @@ namespace AppRefiner.Refactors
                 foreach (var varNode in instanceDecl.USER_VARIABLE())
                 {
                     string varName = varNode.GetText();
-                    var span = (varNode.Symbol.StartIndex, varNode.Symbol.StopIndex);
+                    var span = (varNode.Symbol.ByteStartIndex(), varNode.Symbol.ByteStopIndex());
                     
                     // Add to global scope (first scope in the stack)
                     var globalScope = scopeStack.Last();
@@ -557,7 +558,7 @@ namespace AppRefiner.Refactors
                 if (varNode != null)
                 {
                     string varName = varNode.GetText();
-                    var span = (varNode.Symbol.StartIndex, varNode.Symbol.StopIndex);
+                    var span = (varNode.Symbol.ByteStartIndex(), varNode.Symbol.ByteStopIndex());
                     
                     // Add to global scope (first scope in the stack)
                     var globalScope = scopeStack.Last();
@@ -587,7 +588,7 @@ namespace AppRefiner.Refactors
             if (varNode != null)
             {
                 string varName = varNode.GetText();
-                var span = (varNode.Symbol.StartIndex, varNode.Symbol.StopIndex);
+                var span = (varNode.Symbol.ByteStartIndex(), varNode.Symbol.ByteStopIndex());
                 
                 // Add to current scope
                 var currentScope = GetCurrentScope();
@@ -619,7 +620,7 @@ namespace AppRefiner.Refactors
                 if (varNode != null)
                 {
                     string varName = varNode.GetText();
-                    var span = (varNode.Symbol.StartIndex, varNode.Symbol.StopIndex);
+                    var span = (varNode.Symbol.ByteStartIndex(), varNode.Symbol.ByteStopIndex());
                     
                     // Add this parameter annotation to the current scope
                     AddOccurrence(varName, span, true);
@@ -657,7 +658,7 @@ namespace AppRefiner.Refactors
                         var genericIdNode = firstDotAccess.genericID();
                         if (genericIdNode != null)
                         {
-                            var span = (genericIdNode.Start.StartIndex, genericIdNode.Stop.StopIndex);
+                            var span = (genericIdNode.Start.ByteStartIndex(), genericIdNode.Stop.ByteStopIndex());
                             var globalScope = scopeStack.Last();
                             
                             // Handle method calls
@@ -734,7 +735,7 @@ namespace AppRefiner.Refactors
                     {
                         // This is a call to a private method without %THIS
                         // Get just the span of the method name, not the entire expression
-                        var span = (genericIdNode.Start.StartIndex, genericIdNode.Stop.StopIndex);
+                        var span = (genericIdNode.Start.ByteStartIndex(), genericIdNode.Stop.ByteStopIndex());
                         
                         // Track this method call
                         if (!methodCalls.ContainsKey(methodName))

@@ -361,8 +361,8 @@ namespace AppRefiner.TooltipProviders
                 
                 // Register tooltip for the property name in the declaration
                 // Use token indexes to register the tooltip
-                int start = context.genericID().Start.StartIndex;
-                int length = context.genericID().Stop.StopIndex - start + 1;
+                int start = context.genericID().Start.ByteStartIndex();
+                int length = context.genericID().Stop.ByteStopIndex() - start + 1;
                 RegisterTooltip(start, length, $"{varInfo}");
             }
         }
@@ -401,8 +401,8 @@ namespace AppRefiner.TooltipProviders
                 
                 // Register tooltip for the property name in the declaration
                 // Use token indexes to register the tooltip
-                int start = context.genericID().Start.StartIndex;
-                int length = context.genericID().Stop.StopIndex - start + 1;
+                int start = context.genericID().Start.ByteStartIndex();
+                int length = context.genericID().Stop.ByteStopIndex() - start + 1;
                 RegisterTooltip(start, length, $"{varInfo}");
             }
         }
@@ -513,8 +513,8 @@ namespace AppRefiner.TooltipProviders
                             variableData.TryGetValue(varKey, out var varInfo))
                         {
                             // Use token indexes to register the tooltip
-                            int start = dotAccess.genericID().Start.StartIndex;
-                            int length = dotAccess.genericID().Stop.StopIndex - start + 1;
+                            int start = dotAccess.genericID().Start.ByteStartIndex();
+                            int length = dotAccess.genericID().Stop.ByteStopIndex() - start + 1;
                             RegisterTooltip(start, length, $"{varInfo}");
                         }
                     }
@@ -536,8 +536,8 @@ namespace AppRefiner.TooltipProviders
                     variableData.TryGetValue(varKey, out var varInfo))
                 {
                     // Use token indexes to register the tooltip
-                    int start = context.genericID().Start.StartIndex;
-                    int length = context.genericID().Stop.StopIndex - start + 1;
+                    int start = context.genericID().Start.ByteStartIndex();
+                    int length = context.genericID().Stop.ByteStopIndex() - start + 1;
                     RegisterTooltip(start, length, $"{varInfo}");
                 }
             }

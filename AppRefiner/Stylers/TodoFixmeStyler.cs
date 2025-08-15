@@ -87,16 +87,12 @@ namespace AppRefiner.Stylers
                     var match = Regex.Match(cleanedComment, $@"^{marker}\s*:?\s*(.*)", RegexOptions.IgnoreCase);
                     string content = match.Success && match.Groups.Count > 1 ? match.Groups[1].Value.Trim() : "";
                     
-                    // Add an indicator for this comment
-                    Indicators?.Add(new Indicator
-                    {
-                        Start = comment.StartIndex,
-                        Length = comment.StopIndex - comment.StartIndex + 1,
-                        Color = color,
-                        Type = IndicatorType.HIGHLIGHTER,
-                        Tooltip = $"{marker}: {content}",
-                        QuickFixes = []
-                    });
+                    AddIndicator(
+                        comment, 
+                        IndicatorType.HIGHLIGHTER, 
+                        color,
+                        $"{marker}: {content}"
+                    );
                     
                     // Only process the first matching marker
                     break;

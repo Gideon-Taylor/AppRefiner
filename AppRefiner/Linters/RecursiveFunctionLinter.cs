@@ -51,7 +51,7 @@ namespace AppRefiner.Linters
                         "Potentially unsafe recursive function call. Ensure there is a proper termination condition.",
                         Type,
                         context.Start.Line - 1,
-                        (context.Start.StartIndex, context.Stop.StopIndex)
+                        context
                     );
                 }
             }

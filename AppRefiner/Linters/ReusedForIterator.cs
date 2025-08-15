@@ -34,7 +34,7 @@ namespace AppRefiner.Linters
                     $"Re-use of for loop iterator '{iterator}' in nested for loop.",
                     Type,
                     context.Start.Line - 1,
-                    (context.Start.StartIndex, context.Stop.StopIndex)
+                    context
                 );
             }
             else

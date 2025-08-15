@@ -67,15 +67,12 @@ namespace AppRefiner.Stylers
             // If the app class is invalid, highlight it with an error
             if (!isValid)
             {
-                Indicators?.Add(new Indicator
-                {
-                    Start = context.Start.StartIndex,
-                    Length = context.Stop.StopIndex - context.Start.StartIndex + 1,
-                    Color = ERROR_COLOR,
-                    Type = IndicatorType.SQUIGGLE,
-                    Tooltip = $"Invalid Application Class path: {appClassPath}",
-                    QuickFixes = []
-                });
+                AddIndicator(
+                    context, 
+                    IndicatorType.SQUIGGLE, 
+                    ERROR_COLOR,
+                    $"Invalid Application Class path: {appClassPath}"
+                );
             }
         }
     }

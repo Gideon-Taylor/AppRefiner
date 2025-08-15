@@ -66,13 +66,13 @@ namespace AppRefiner.QuickFixes
             else if (declCtx is ClassDeclarationPlainContext plainCtx)
                 _currentClassName = plainCtx.genericID().GetText();
                 
-            _classDeclarationEnd = declCtx.Stop.StopIndex; // End of END-CLASS
+            _classDeclarationEnd = declCtx.Stop.ByteStopIndex(); // End of END-CLASS
 
             // Find start of class body (first implementation) more reliably
             var classBody = context.classBody();
             if(classBody != null && classBody.classMember().Length > 0)
             {
-                _classBodyStart = classBody.classMember(0).Start.StartIndex;
+                _classBodyStart = classBody.classMember(0).Start.ByteStartIndex();
             }
             else
             {
@@ -87,34 +87,34 @@ namespace AppRefiner.QuickFixes
         // --- Track Start Indices --- 
         public override void EnterPublicHeader(PublicHeaderContext context)
         {
-            _publicHeaderStart = context.Start.StartIndex;
+            _publicHeaderStart = context.Start.ByteStartIndex();
             base.EnterPublicHeader(context);
         }
         public override void EnterProtectedHeader(ProtectedHeaderContext context)
         {
-             _protectedHeaderStart = context.Start.StartIndex;
+             _protectedHeaderStart = context.Start.ByteStartIndex();
             base.EnterProtectedHeader(context);
         }
          public override void EnterPrivateHeader(PrivateHeaderContext context)
         {
-             _privateHeaderStart = context.Start.StartIndex;
+             _privateHeaderStart = context.Start.ByteStartIndex();
             base.EnterPrivateHeader(context);
         }
 
         // --- Track End Indices --- 
         public override void ExitPublicHeader(PublicHeaderContext context)
         {
-            _publicHeaderEnd = context.Stop.StopIndex;
+            _publicHeaderEnd = context.Stop.ByteStopIndex();
             base.ExitPublicHeader(context);
         }
         public override void ExitProtectedHeader(ProtectedHeaderContext context)
         {
-            _protectedHeaderEnd = context.Stop.StopIndex;
+            _protectedHeaderEnd = context.Stop.ByteStopIndex();
             base.ExitProtectedHeader(context);
         }
         public override void ExitPrivateHeader(PrivateHeaderContext context)
         {
-            _privateHeaderEnd = context.Stop.StopIndex;
+            _privateHeaderEnd = context.Stop.ByteStopIndex();
             base.ExitPrivateHeader(context);
         }
 
@@ -133,7 +133,7 @@ namespace AppRefiner.QuickFixes
 
         public override void ExitMethodImplementation(MethodImplementationContext context)
         {
-            _lastMethodImplementationEnd = context.Stop.StopIndex;
+            _lastMethodImplementationEnd = context.Stop.ByteStopIndex();
             base.ExitMethodImplementation(context);
         }
         
@@ -318,7 +318,7 @@ namespace AppRefiner.QuickFixes
                     
                     if (classDeclCtx != null) {
                         // Insert right *before* the END-CLASS token starts
-                        insertPos = classDeclCtx.Stop.StartIndex; 
+                        insertPos = classDeclCtx.Stop.ByteStartIndex(); 
                         // Need newline *before* when inserting before END-CLASS
                         headerTextToInsert = Environment.NewLine + headerTextToInsert + Environment.NewLine; 
                     }
@@ -525,7 +525,7 @@ namespace AppRefiner.QuickFixes
                 }
                 
                 if (classDeclCtx != null) {
-                    insertPos = classDeclCtx.Stop.StartIndex; 
+                    insertPos = classDeclCtx.Stop.ByteStartIndex(); 
                     headerTextToInsert = headerTextToInsert + Environment.NewLine; 
                 }
             }

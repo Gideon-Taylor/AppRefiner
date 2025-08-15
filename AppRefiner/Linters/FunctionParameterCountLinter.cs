@@ -41,7 +41,7 @@ namespace AppRefiner.Linters
                     $"Method has {paramCount} parameters, which exceeds recommended maximum of {MaxMethodParameters}. Consider refactoring.",
                     Type,
                     context.Start.Line - 1,
-                    (context.Start.StartIndex, context.Stop.StopIndex)
+                    context
                 );
             }
         }
@@ -61,7 +61,7 @@ namespace AppRefiner.Linters
                     $"Function has {paramCount} parameters, which exceeds recommended maximum of {MaxFunctionParameters}. Consider using a compound parameter object.",
                     Type,
                     context.Start.Line - 1,
-                    (context.Start.StartIndex, context.Stop.StopIndex)
+                    context
                 );
             }
         }

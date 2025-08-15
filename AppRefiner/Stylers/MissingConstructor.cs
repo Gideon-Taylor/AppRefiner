@@ -80,17 +80,14 @@ namespace AppRefiner.Stylers
 
                 if (baseClassConstructor?.Parameters.Count > 0 && classNameContext != null)
                 {
-
-                    var indicator = new Indicator
-                    {
-                        Start = classNameContext.Start.StartIndex,
-                        Length = classNameContext.Stop.StopIndex - classNameContext.Start.StartIndex,
-                        Color = 0x0000FFFF, // Red color for missing constructor
-                        Tooltip = $"Class '{className}' is missing a constructor required by '{extendedClassName}'.",
-                        Type = IndicatorType.SQUIGGLE,
-                        QuickFixes = [(typeof(GenerateBaseConstructorRefactor), "Add missing constructor.")]
-                    };
-                    Indicators?.Add(indicator);
+                    AddIndicator(
+                        classNameContext.Start, 
+                        classNameContext.Stop, 
+                        IndicatorType.SQUIGGLE, 
+                        0x0000FFFF, // Red color for missing constructor
+                        $"Class '{className}' is missing a constructor required by '{extendedClassName}'.",
+                        [(typeof(GenerateBaseConstructorRefactor), "Add missing constructor.")]
+                    );
                 }
             }
 

@@ -332,7 +332,7 @@ namespace AppRefiner
                 if (string.IsNullOrEmpty(programText)) continue;
                 
                 // Parsing logic...
-                PeopleCodeLexer? lexer = new(new AntlrInputStream(programText));
+                PeopleCodeLexer? lexer = new(new ByteTrackingCharStream(programText));
                 var stream = new CommonTokenStream(lexer);
                 stream.Fill();
                 var comments = stream.GetTokens()
