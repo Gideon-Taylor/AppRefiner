@@ -1,5 +1,6 @@
 ﻿using Antlr4.Runtime.Misc;
 using AppRefiner.Linters.Models;
+using AppRefiner.PeopleCode;
 using static AppRefiner.PeopleCode.PeopleCodeParser;
 
 namespace AppRefiner.Linters
@@ -42,8 +43,7 @@ namespace AppRefiner.Linters
                     varName,
                     "object",
                     varNode.Symbol.Line,
-                    varNode.Symbol.StartIndex,
-                    varNode.Symbol.StopIndex
+                    varNode.Symbol
                 );
             }
         }
@@ -61,8 +61,7 @@ namespace AppRefiner.Linters
                 varName,
                 "object",
                 context.USER_VARIABLE().Symbol.Line,
-                context.USER_VARIABLE().Symbol.StartIndex,
-                context.USER_VARIABLE().Symbol.StopIndex
+                context
             );
 
             // Check if the assignment is a create expression
@@ -73,7 +72,7 @@ namespace AppRefiner.Linters
                     "Variable is declared as 'object' but assigned a specific type.",
                     ReportType.Warning,
                     context.Start.Line - 1,
-                    (context.Start.StartIndex, context.Stop.StopIndex)
+                    (context.Start.ByteStartIndex(), context.Stop.ByteStopIndex())
                 );
             }
         }
@@ -98,7 +97,7 @@ namespace AppRefiner.Linters
                             "Variable is declared as 'object' but assigned a specific type.",
                             ReportType.Warning,
                             context.Start.Line - 1,
-                            (context.Start.StartIndex, context.Stop.StopIndex)
+                            (context.Start.ByteStartIndex(), context.Stop.ByteStopIndex())
                         );
                     }
                 }

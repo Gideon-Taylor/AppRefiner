@@ -1,4 +1,6 @@
+using Antlr4.Runtime;
 using AppRefiner.Linters.Models;
+using AppRefiner.PeopleCode;
 using static AppRefiner.PeopleCode.PeopleCodeParser;
 
 namespace AppRefiner.Refactors
@@ -30,12 +32,13 @@ namespace AppRefiner.Refactors
         }
         
         // Variable tracking methods
-        protected void AddLocalVariable(string name, string type, int line, int start, int stop)
+        protected void AddLocalVariable(string name, string type, int line, IToken token)
         {
             var currentScope = variableScopeStack.Peek();
             if (!currentScope.ContainsKey(name))
             {
-                currentScope[name] = new VariableInfo(name, type, line, (start, stop));
+                // Create VariableInfo with both character and byte spans for consistency
+                currentScope[name] = new VariableInfo(name, type, line, (token.ByteStartIndex(), token.ByteStopIndex()));
             }
         }
 
@@ -177,8 +180,7 @@ namespace AppRefiner.Refactors
                     varName,
                     typeName,
                     varNode.Symbol.Line,
-                    varNode.Symbol.StartIndex,
-                    varNode.Symbol.StopIndex
+                    varNode.Symbol
                 );
                 OnVariableDeclared(variableScopeStack.Peek()[varName]);
             }
@@ -197,8 +199,7 @@ namespace AppRefiner.Refactors
                 varName,
                 typeName,
                 varNode.Symbol.Line,
-                varNode.Symbol.StartIndex,
-                varNode.Symbol.StopIndex
+                varNode.Symbol
             );
             OnVariableDeclared(variableScopeStack.Peek()[varName]);
         }
@@ -217,8 +218,7 @@ namespace AppRefiner.Refactors
                     varName,
                     "Constant",
                     varNode.Symbol.Line,
-                    varNode.Symbol.StartIndex,
-                    varNode.Symbol.StopIndex
+                    varNode.Symbol
                 );
                 OnVariableDeclared(variableScopeStack.Peek()[varName]);
             }

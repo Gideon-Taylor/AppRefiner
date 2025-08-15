@@ -42,11 +42,12 @@ namespace AppRefiner.Stylers
                     if (match.Success)
                     {
                         string suppressedRules = match.Groups[1].Value;
+
                         // This is a suppression comment, highlight it
                         Indicators.Add(new Indicator
                         {
-                            Start = comment.StartIndex,
-                            Length = comment.Text.Length,
+                            Start = comment.ByteStartIndex(),
+                            Length = comment.ByteStopIndex() - comment.ByteStartIndex() + 1,
                             Color = HILIGHT_COLOR,
                             Type = IndicatorType.HIGHLIGHTER,
                             Tooltip = $"Suppressed rules: {suppressedRules}",

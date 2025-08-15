@@ -14,6 +14,7 @@ using System.Reflection;
 using System.Text;
 using System.Windows.Forms;
 using static SqlParser.Ast.AlterRoleOperation;
+using Antlr4.Runtime;
 
 namespace AppRefiner.Refactors
 {
@@ -344,11 +345,11 @@ namespace AppRefiner.Refactors
                     }
                 }
 
-                // Apply the refactored code
-                var newText = refactorClass.GetRefactoredCode();
-                if (newText == null)
+                // Apply code changes directly to Scintilla
+                var changes = refactorClass.GetChanges();
+                if (changes.Count == 0)
                 {
-                     Debug.Log("Refactoring produced null text output.");
+                     Debug.Log("Refactoring produced no changes.");
                      // Optionally show an error, but maybe success was just no change needed
                      if (!string.IsNullOrEmpty(result.Message) && showUserMessages)
                      {
@@ -363,23 +364,31 @@ namespace AppRefiner.Refactors
                      return; 
                 }
 
-                // TODO: Integrate Scintilla undo transaction?
-                // ScintillaManager.BeginUndoAction(activeEditor);
-                ScintillaManager.SetScintillaText(activeEditor, newText);
-                // ScintillaManager.EndUndoAction(activeEditor);
+                // Begin undo action to group all changes
+                ScintillaManager.BeginUndoAction(activeEditor);
 
-                // Get and set the updated cursor position and scroll
-                int updatedCursorPosition = refactorClass.GetUpdatedCursorPosition();
-                if (updatedCursorPosition >= 0)
+                try
                 {
-                    ScintillaManager.SetCursorPositionWithoutScroll(activeEditor, updatedCursorPosition);
-                    ScintillaManager.SetFirstVisibleLine(activeEditor, currentFirstVisibleLine); // Restore original view
+                    // Sort changes from last to first to avoid index shifting issues
+                    var sortedChanges = changes.OrderByDescending(c => c.StartIndex).ToList();
+
+                    // Apply each change directly to Scintilla
+                    foreach (var change in sortedChanges)
+                    {
+                        if (!change.ApplyToScintilla(activeEditor))
+                        {
+                            Debug.Log($"Failed to apply change: {change.Description}");
+                        }
+                    }
                 }
-                else
+                finally
                 {
-                     // If no specific position, maybe just restore scroll?
-                      ScintillaManager.SetFirstVisibleLine(activeEditor, currentFirstVisibleLine);
+                    // Always end undo action, even if there were errors
+                    ScintillaManager.EndUndoAction(activeEditor);
                 }
+
+                // Restore original scroll position (cursor positioning is handled by Scintilla automatically)
+                ScintillaManager.SetFirstVisibleLine(activeEditor, currentFirstVisibleLine);
 
                 // Check for and execute follow-up refactor
                 Type? followUpType = refactorClass.FollowUpRefactorType;

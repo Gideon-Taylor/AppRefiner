@@ -83,7 +83,7 @@ namespace AppRefiner.TooltipProviders
                 if (token.Type == type)
                 {
                     // Make sure the position is within or adjacent to the token
-                    return (position >= token.StartIndex && position <= token.StopIndex + 1);
+                    return (position >= token.ByteStartIndex() && position <= token.ByteStopIndex() + 1);
                 }
             }
             
@@ -122,7 +122,7 @@ namespace AppRefiner.TooltipProviders
         /// <param name="tooltipText">Tooltip text to display</param>
         protected void RegisterTooltip(IToken token, string tooltipText)
         {
-            RegisterTooltip(token.StartIndex, token.StopIndex - token.StartIndex + 1, tooltipText);
+            RegisterTooltip(token.ByteStartIndex(), token.ByteStopIndex() - token.ByteStartIndex() + 1, tooltipText);
         }
 
         /// <summary>
@@ -135,8 +135,9 @@ namespace AppRefiner.TooltipProviders
             if (context == null || context.Start == null || string.IsNullOrEmpty(tooltipText))
                 return;
                 
-            int start = context.Start.StartIndex;
-            int stop = context.Stop?.StopIndex ?? context.Start.StopIndex;
+            var endToken = (context.Stop ?? context.Start);
+            int start = context.Start.ByteStartIndex();
+            int stop = endToken.ByteStopIndex();
             int length = stop - start + 1;
             
             RegisterTooltip(start, length, tooltipText);

@@ -2,7 +2,7 @@ using Antlr4.Runtime;
 using System.Diagnostics;
 using AppRefiner.Services; // For ScintillaEditor
 using static AppRefiner.PeopleCode.PeopleCodeParser; // For ANTLR parser contexts
-
+using AppRefiner.PeopleCode;
 namespace AppRefiner.Refactors
 {
     /// <summary>
@@ -53,8 +53,8 @@ namespace AppRefiner.Refactors
                     var args = simpleFunc.functionCallArguments();
                     if (simpleFunc.LPAREN() != null && simpleFunc.RPAREN() != null)
                     {
-                        msgboxStartPos = simpleFunc.genericID().Start.StartIndex;  // Position at start of "MsgBox"
-                        msgboxEndPos = simpleFunc.RPAREN().Symbol.StopIndex;      // Position of the closing parenthesis
+                        msgboxStartPos = simpleFunc.genericID().Start.ByteStartIndex();  // Position at start of "MsgBox"
+                        msgboxEndPos = simpleFunc.RPAREN().Symbol.ByteStopIndex();      // Position of the closing parenthesis
 
                         // Check if cursor is between the parentheses or right after "MsgBox"
                         return CurrentPosition >= msgboxStartPos && CurrentPosition <= msgboxEndPos + 1;

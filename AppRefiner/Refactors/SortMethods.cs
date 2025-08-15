@@ -1,4 +1,5 @@
 using Antlr4.Runtime.Misc;
+using AppRefiner.PeopleCode;
 using System;
 using System.Collections.Generic;
 using System.Drawing;
@@ -289,8 +290,8 @@ namespace AppRefiner.Refactors
                 // Add to method declarations
                 methodDeclarations.Add(new MethodInfo(
                     methodName,
-                    context.Start.StartIndex,
-                    context.Stop.StopIndex,
+                    context.Start.ByteStartIndex(),
+                    context.Stop.ByteStopIndex(),
                     GetOriginalText(context)!
                 ));
             }
@@ -319,8 +320,8 @@ namespace AppRefiner.Refactors
                     propertyDeclarations.Add(new PropertyInfo(
                         propertyName,
                         true,
-                        context.Start.StartIndex,
-                        context.Stop.StopIndex,
+                        context.Start.ByteStartIndex(),
+                        context.Stop.ByteStopIndex(),
                         GetOriginalText(context)!
                     ));
                 }
@@ -331,8 +332,8 @@ namespace AppRefiner.Refactors
                     propertyDeclarations.Add(new PropertyInfo(
                         propertyName,
                         false,
-                        context.Start.StartIndex,
-                        context.Stop.StopIndex,
+                        context.Start.ByteStartIndex(),
+                        context.Stop.ByteStopIndex(),
                         GetOriginalText(context)!
                     ));
                 }
@@ -354,8 +355,8 @@ namespace AppRefiner.Refactors
                 // Add to method implementations
                 methodImplementations.Add(new MethodInfo(
                     methodName,
-                    context.Start.StartIndex,
-                    context.Stop.StopIndex,
+                    context.Start.ByteStartIndex(),
+                    context.Stop.ByteStopIndex(),
                     GetOriginalText(context, true)!
                 ));
             }
@@ -377,8 +378,8 @@ namespace AppRefiner.Refactors
                 propertyImplementations.Add(new PropertyInfo(
                     propertyName,
                     true,
-                    context.Start.StartIndex,
-                    context.Stop.StopIndex,
+                    context.Start.ByteStartIndex(),
+                    context.Stop.ByteStopIndex(),
                     GetOriginalText(context, true)!
                 ));
             }
@@ -400,8 +401,8 @@ namespace AppRefiner.Refactors
                 propertyImplementations.Add(new PropertyInfo(
                     propertyName,
                     false,
-                    context.Start.StartIndex,
-                    context.Stop.StopIndex,
+                    context.Start.ByteStartIndex(),
+                    context.Stop.ByteStopIndex(),
                     GetOriginalText(context, true)!
                 ));
             }

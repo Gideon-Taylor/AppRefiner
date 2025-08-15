@@ -57,6 +57,47 @@ namespace AppRefiner.Linters
         }
 
         /// <summary>
+        /// Helper method to create a report using tokens with automatic byte-index conversion for Scintilla positioning.
+        /// </summary>
+        /// <param name="reportNumber">The report number</param>
+        /// <param name="message">The report message</param>
+        /// <param name="type">The report type</param>
+        /// <param name="line">The line number</param>
+        /// <param name="startToken">The start token (will be converted to byte indexes)</param>
+        /// <param name="endToken">The end token (will be converted to byte indexes)</param>
+        protected void AddReport(int reportNumber, string message, ReportType type, int line, IToken startToken, IToken endToken)
+        {
+            AddReport(reportNumber, message, type, line, (startToken.ByteStartIndex(), endToken.ByteStopIndex()));
+        }
+
+        /// <summary>
+        /// Helper method to create a report using tokens with automatic byte-index conversion for Scintilla positioning.
+        /// </summary>
+        /// <param name="reportNumber">The report number</param>
+        /// <param name="message">The report message</param>
+        /// <param name="type">The report type</param>
+        /// <param name="line">The line number</param>
+        /// <param name="startToken">The start token (will be converted to byte indexes)</param>
+        /// <param name="endToken">The end token (will be converted to byte indexes)</param>
+        protected void AddReport(int reportNumber, string message, ReportType type, int line, IToken token)
+        {
+            AddReport(reportNumber, message, type, line, (token.ByteStartIndex(), token.ByteStopIndex()));
+        }
+
+        /// <summary>
+        /// Helper method to create a report using a parser rule context with automatic byte-index conversion for Scintilla positioning.
+        /// </summary>
+        /// <param name="reportNumber">The report number</param>
+        /// <param name="message">The report message</param>
+        /// <param name="type">The report type</param>
+        /// <param name="line">The line number</param>
+        /// <param name="context">The parser rule context (tokens will be converted to byte indexes)</param>
+        protected void AddReport(int reportNumber, string message, ReportType type, int line, ParserRuleContext context)
+        {
+            AddReport(reportNumber, message, type, line, (context.Start.ByteStartIndex(), context.Stop.ByteStopIndex()));
+        }
+
+        /// <summary>
         /// Gets all configurable properties of the linter
         /// </summary>
         /// <returns>A list of PropertyInfo objects representing configurable properties</returns>

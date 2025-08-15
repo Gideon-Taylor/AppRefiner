@@ -40,32 +40,25 @@ namespace AppRefiner.Stylers
             // Check if the iterator is already in use
             if (forIterators.Contains(iterator))
             {
-                var startIndex = context.FOR().Symbol.StartIndex;
-                var endIndex = context.USER_VARIABLE().Symbol.StopIndex;
-
+                // Determine the end token based on expressions
+                var endToken = context.USER_VARIABLE().Symbol;
                 var expressions = context.expression();
                 if (expressions.Length > 0)
                 {
-                    endIndex = expressions[0].Stop.StartIndex;
+                    endToken = expressions[0].Stop;
                 }
                 if (expressions.Length > 1)
                 {
-                    endIndex = expressions[1].Stop.StartIndex;
+                    endToken = expressions[1].Stop;
                 }
 
-                if (Indicators != null)
-                {
-                    Indicators.Add(new Indicator
-                    {
-                        Start = startIndex,
-                        Length = endIndex - startIndex + 1,
-                        Color = ErrorColor,
-                        Tooltip = $"For loop re-uses iterator {iterator} which is used by an outer for loop.",
-                        Type = IndicatorType.SQUIGGLE,
-                        QuickFixes = []
-                    });
-                }
-
+                AddIndicator(
+                    context.FOR().Symbol, 
+                    endToken, 
+                    IndicatorType.SQUIGGLE, 
+                    ErrorColor,
+                    $"For loop re-uses iterator {iterator} which is used by an outer for loop."
+                );
             }
             else
             {

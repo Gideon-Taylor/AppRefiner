@@ -1,5 +1,6 @@
 using Antlr4.Runtime;
 using Antlr4.Runtime.Misc;
+using AppRefiner.PeopleCode;
 using System.Text;
 using System.Text.RegularExpressions;
 using static AppRefiner.PeopleCode.PeopleCodeParser;
@@ -84,7 +85,7 @@ namespace AppRefiner.Linters
             if (context.Stop != null)
             {
                 lastLine = context.Stop.Line;
-                lastSpan = (context.Stop.StartIndex, context.Stop.StopIndex);
+                lastSpan = (context.Stop.ByteStartIndex(), context.Stop.ByteStopIndex());
             }
             
             // Build a summary string
@@ -194,22 +195,22 @@ namespace AppRefiner.Linters
                     if (type.Equals("TODO", StringComparison.OrdinalIgnoreCase))
                     {
                         TodoCount++;
-                        _collectedComments.Add(("TODO", content, comment.Line, (comment.StartIndex, comment.StopIndex)));
+                        _collectedComments.Add(("TODO", content, comment.Line, (comment.ByteStartIndex(), comment.ByteStopIndex())));
                     }
                     else if (type.Equals("FIXME", StringComparison.OrdinalIgnoreCase))
                     {
                         FixmeCount++;
-                        _collectedComments.Add(("FIXME", content, comment.Line, (comment.StartIndex, comment.StopIndex)));
+                        _collectedComments.Add(("FIXME", content, comment.Line, (comment.ByteStartIndex(), comment.ByteStopIndex())));
                     }
                     else if (type.Equals("NOTE", StringComparison.OrdinalIgnoreCase))
                     {
                         NoteCount++;
-                        _collectedComments.Add(("NOTE", content, comment.Line, (comment.StartIndex, comment.StopIndex)));
+                        _collectedComments.Add(("NOTE", content, comment.Line, (comment.ByteStartIndex(), comment.ByteStopIndex())));
                     }
                     else
                     {
                         CustomCount++;
-                        _collectedComments.Add((type, content, comment.Line, (comment.StartIndex, comment.StopIndex)));
+                        _collectedComments.Add((type, content, comment.Line, (comment.ByteStartIndex(), comment.ByteStopIndex())));
                     }
                     
                     // Only process the first matching marker

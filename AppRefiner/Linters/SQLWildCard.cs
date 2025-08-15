@@ -45,7 +45,7 @@ namespace AppRefiner.Linters
                                 "SQL has a wildcard in select statement.",
                                 this.Type,
                                 firstArg.Start.Line - 1,
-                                (firstArg.Start.StartIndex, firstArg.Stop.StopIndex)
+                                firstArg
                             );
                         }
                     }

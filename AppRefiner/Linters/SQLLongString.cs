@@ -46,7 +46,7 @@ namespace AppRefiner.Linters
                                 $"Long literal SQL statements (length: {sqlText.Length}) should be SQL objects.",
                                 Type,
                                 firstArg.Start.Line - 1,
-                                (firstArg.Start.StartIndex, firstArg.Stop.StopIndex)
+                                firstArg
                             );
                         }
                     }

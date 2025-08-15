@@ -6,6 +6,7 @@ using System.Linq;
 using static AppRefiner.PeopleCode.PeopleCodeParser;
 using AppRefiner.Database;
 using AppRefiner.Services;
+using AppRefiner.PeopleCode;
 
 namespace AppRefiner.Refactors
 {
@@ -371,8 +372,8 @@ namespace AppRefiner.Refactors
                     var args = simpleFunc.functionCallArguments();
                     if (simpleFunc.LPAREN() != null && simpleFunc.RPAREN() != null)
                     {
-                        createStartPos = simpleFunc.genericID().Stop.StopIndex + 1;  // Position after "create"
-                        createEndPos = simpleFunc.RPAREN().Symbol.StartIndex;        // Position of the closing parenthesis
+                        createStartPos = simpleFunc.genericID().Stop.ByteStopIndex() + 1;  // Position after "create"
+                        createEndPos = simpleFunc.RPAREN().Symbol.ByteStartIndex();        // Position of the closing parenthesis
 
                         // Check if cursor is between the parentheses
                         return CurrentPosition > createStartPos && CurrentPosition <= createEndPos;

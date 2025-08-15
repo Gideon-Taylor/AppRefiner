@@ -2,6 +2,7 @@ using Antlr4.Runtime;
 using Antlr4.Runtime.Misc;
 using Antlr4.Runtime.Tree;
 using AppRefiner.Linters.Models;
+using AppRefiner.PeopleCode;
 using AppRefiner.Refactors;
 using System;
 using System.Collections.Generic;
@@ -57,7 +58,7 @@ namespace AppRefiner.QuickFixes
             var variables = context.USER_VARIABLE();
             foreach (var variable in variables)
             {
-                if (variable.Symbol.StartIndex <= CurrentPosition && CurrentPosition <= variable.Symbol.StopIndex + 1)
+                if (variable.Symbol.ByteStartIndex() <= CurrentPosition && CurrentPosition <= variable.Symbol.ByteStopIndex() + 1)
                 {
                     /* found the variable node we want to delete... */
                     var argIndex = Array.IndexOf(variables, variable);
@@ -72,13 +73,13 @@ namespace AppRefiner.QuickFixes
                     }
                     if (argIndex == totalArgs - 1)
                     {
-                        var commaToken = context.COMMA().Where(c => c.Symbol.StopIndex < CurrentPosition).Last();
-                        DeleteText(commaToken.Symbol.StartIndex, variable.Symbol.StopIndex, "Remove method argument");
+                        var commaToken = context.COMMA().Where(c => c.Symbol.ByteStopIndex() < CurrentPosition).Last();
+                        DeleteText(commaToken.Symbol.ByteStartIndex(), variable.Symbol.ByteStopIndex(), "Remove method argument");
                     }
                     else
                     {
-                        var commaToken = context.COMMA().Where(c => c.Symbol.StartIndex > CurrentPosition).First();
-                        DeleteText(variable.Symbol.StartIndex, commaToken.Symbol.StopIndex, "Remove method argument");
+                        var commaToken = context.COMMA().Where(c => c.Symbol.ByteStartIndex() > CurrentPosition).First();
+                        DeleteText(variable.Symbol.ByteStartIndex(), commaToken.Symbol.ByteStopIndex(), "Remove method argument");
                     }
                     break;
                 }
@@ -96,7 +97,7 @@ namespace AppRefiner.QuickFixes
                 var variables = instanceDecl.USER_VARIABLE();
                 foreach(var variable in variables)
                 {
-                    if (variable.Symbol.StartIndex <= CurrentPosition && CurrentPosition <= variable.Symbol.StopIndex + 1)
+                    if (variable.Symbol.ByteStartIndex() <= CurrentPosition && CurrentPosition <= variable.Symbol.ByteStopIndex() + 1)
                     {
                         /* found the variable node we want to delete... */
                         var argIndex = Array.IndexOf(variables, variable);
@@ -111,13 +112,13 @@ namespace AppRefiner.QuickFixes
                         }
                         if (argIndex == totalArgs - 1)
                         {
-                            var commaToken = instanceDecl.COMMA().Where(c => c.Symbol.StopIndex < CurrentPosition).Last();
-                            DeleteText(commaToken.Symbol.StartIndex, variable.Symbol.StopIndex, "Remove method argument");
+                            var commaToken = instanceDecl.COMMA().Where(c => c.Symbol.ByteStopIndex() < CurrentPosition).Last();
+                            DeleteText(commaToken.Symbol.ByteStartIndex(), variable.Symbol.ByteStopIndex(), "Remove method argument");
                         }
                         else
                         {
-                            var commaToken = instanceDecl.COMMA().Where(c => c.Symbol.StartIndex > CurrentPosition).First();
-                            DeleteText(variable.Symbol.StartIndex, commaToken.Symbol.StopIndex, "Remove method argument");
+                            var commaToken = instanceDecl.COMMA().Where(c => c.Symbol.ByteStartIndex() > CurrentPosition).First();
+                            DeleteText(variable.Symbol.ByteStartIndex(), commaToken.Symbol.ByteStopIndex(), "Remove method argument");
                         }
                         break;
                     }
@@ -134,7 +135,7 @@ namespace AppRefiner.QuickFixes
             foreach(var arg in arguments)
             {
                 var variableNode = arg.USER_VARIABLE();
-                if (variableNode.Symbol.StartIndex <= CurrentPosition && variableNode.Symbol.StopIndex >= CurrentPosition)
+                if (variableNode.Symbol.ByteStartIndex() <= CurrentPosition && variableNode.Symbol.ByteStopIndex() >= CurrentPosition)
                 {
                     /* found the variable node we want to delete... */
                     var argIndex = Array.IndexOf(arguments, arg);
@@ -142,17 +143,17 @@ namespace AppRefiner.QuickFixes
                     if (totalArgs == 1)
                     {
                         /* Delete whole line */
-                        DeleteText(arg.Start.StartIndex, arg.Stop.StopIndex, "Remove method argument");
+                        DeleteText(arg.Start.ByteStartIndex(), arg.Stop.ByteStopIndex(), "Remove method argument");
                         return;
                     }
                     if (argIndex == totalArgs - 1)
                     {
-                        var commaToken = context.COMMA().Where(c => c.Symbol.StopIndex < CurrentPosition).Last();
-                        DeleteText(commaToken.Symbol.StartIndex, arg.Stop.StopIndex, "Remove method argument");
+                        var commaToken = context.COMMA().Where(c => c.Symbol.ByteStopIndex() < CurrentPosition).Last();
+                        DeleteText(commaToken.Symbol.ByteStartIndex(), arg.Stop.ByteStopIndex(), "Remove method argument");
                     } else
                     {
-                        var commaToken = context.COMMA().Where(c => c.Symbol.StartIndex > CurrentPosition).First();
-                        DeleteText(variableNode.Symbol.StartIndex, commaToken.Symbol.StopIndex, "Remove method argument");
+                        var commaToken = context.COMMA().Where(c => c.Symbol.ByteStartIndex() > CurrentPosition).First();
+                        DeleteText(variableNode.Symbol.ByteStartIndex(), commaToken.Symbol.ByteStopIndex(), "Remove method argument");
                     }
                 }
             }
@@ -170,7 +171,7 @@ namespace AppRefiner.QuickFixes
             foreach (var arg in arguments)
             {
                 var variableNode = arg.USER_VARIABLE();
-                if (variableNode.Symbol.StartIndex <= CurrentPosition && variableNode.Symbol.StopIndex >= CurrentPosition)
+                if (variableNode.Symbol.ByteStartIndex() <= CurrentPosition && variableNode.Symbol.ByteStopIndex() >= CurrentPosition)
                 {
                     /* found the variable node we want to delete... */
                     var argIndex = Array.IndexOf(arguments, arg);
@@ -178,13 +179,13 @@ namespace AppRefiner.QuickFixes
 
                     if (argIndex == totalArgs - 1)
                     {
-                        var commaToken = context.COMMA().Where(c => c.Symbol.StopIndex < CurrentPosition).Last();
-                        DeleteText(commaToken.Symbol.StartIndex, arg.Stop.StopIndex, "Remove function argument");
+                        var commaToken = context.COMMA().Where(c => c.Symbol.ByteStopIndex() < CurrentPosition).Last();
+                        DeleteText(commaToken.Symbol.ByteStartIndex(), arg.Stop.ByteStopIndex(), "Remove function argument");
                     }
                     else
                     {
-                        var commaToken = context.COMMA().Where(c => c.Symbol.StartIndex > CurrentPosition).First();
-                        DeleteText(variableNode.Symbol.StartIndex, commaToken.Symbol.StopIndex, "Remove function argument");
+                        var commaToken = context.COMMA().Where(c => c.Symbol.ByteStartIndex() > CurrentPosition).First();
+                        DeleteText(variableNode.Symbol.ByteStartIndex(), commaToken.Symbol.ByteStopIndex(), "Remove function argument");
                     }
                 }
             }

@@ -47,13 +47,13 @@ namespace AppRefiner.QuickFixes
             else if (declCtx is ClassDeclarationPlainContext plainCtx)
                 _currentClassName = plainCtx.genericID().GetText();
                 
-            _classDeclarationEnd = declCtx.Stop.StopIndex + 1;
+            _classDeclarationEnd = declCtx.Stop.ByteStopIndex() + 1;
 
             // Find start of class body
             var classBody = context.classBody();
             if (classBody != null && classBody.classMember().Length > 0)
             {
-                _classBodyStart = classBody.classMember(0).Start.StartIndex;
+                _classBodyStart = classBody.classMember(0).Start.ByteStartIndex();
             }
             else
             {
@@ -67,19 +67,19 @@ namespace AppRefiner.QuickFixes
 
         public override void EnterPublicHeader(PublicHeaderContext context)
         {
-            _publicHeaderStart = context.Start.StartIndex;
+            _publicHeaderStart = context.Start.ByteStartIndex();
             base.EnterPublicHeader(context);
         }
 
         public override void ExitPublicHeader(PublicHeaderContext context)
         {
-            _publicHeaderEnd = context.Stop.StopIndex;
+            _publicHeaderEnd = context.Stop.ByteStopIndex();
             base.ExitPublicHeader(context);
         }
 
         public override void ExitMethodImplementation(MethodImplementationContext context)
         {
-            _lastMethodImplementationEnd = context.Stop.StopIndex;
+            _lastMethodImplementationEnd = context.Stop.ByteStopIndex();
             base.ExitMethodImplementation(context);
         }
 
@@ -206,7 +206,7 @@ namespace AppRefiner.QuickFixes
                 if (classDeclCtx != null)
                 {
                     // Insert right before the END-CLASS token
-                    insertPos = classDeclCtx.Stop.StartIndex;
+                    insertPos = classDeclCtx.Stop.ByteStartIndex();
 
 
                     headerTextToInsert = headerTextToInsert + Environment.NewLine;

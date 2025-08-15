@@ -160,7 +160,7 @@ namespace AppRefiner
                 propertyType,
                 GoToDefinitionType.Property,
                 currentScope,
-                context.Start.StartIndex,
+                context.Start.ByteStartIndex(),
                 context.Start.Line
             ));
         }
@@ -182,7 +182,7 @@ namespace AppRefiner
                 propertyType,
                 GoToDefinitionType.Property,
                 currentScope,
-                context.Start.StartIndex,
+                context.Start.ByteStartIndex(),
                 context.Start.Line
             ));
         }
@@ -208,7 +208,7 @@ namespace AppRefiner
                 returnType,
                 GoToDefinitionType.Method,
                 methodScope,
-                context.Start.StartIndex,
+                context.Start.ByteStartIndex(),
                 context.Start.Line
             ));
         }
@@ -240,7 +240,7 @@ namespace AppRefiner
                 propertyType,
                 GoToDefinitionType.Getter,
                 propertyScope,
-                context.Start.StartIndex,
+                context.Start.ByteStartIndex(),
                 context.Start.Line
             ));
         }
@@ -272,7 +272,7 @@ namespace AppRefiner
                 propertyType,
                 GoToDefinitionType.Setter,
                 propertyScope,
-                context.Start.StartIndex,
+                context.Start.ByteStartIndex(),
                 context.Start.Line
             ));
         }
@@ -297,7 +297,7 @@ namespace AppRefiner
                 returnType,
                 GoToDefinitionType.Function,
                 GoToDefinitionScope.Global, // Functions are always global scope
-                context.Start.StartIndex,
+                context.Start.ByteStartIndex(),
                 context.Start.Line
             ));
         }
@@ -322,7 +322,7 @@ namespace AppRefiner
                     propertyType,
                     GoToDefinitionType.Instance, // Use Instance instead of Property
                     GoToDefinitionScope.Private, // Instance variables are always private
-                    varNode.Symbol.StartIndex,
+                    varNode.Symbol.ByteStartIndex(),
                     varNode.Symbol.Line
                 ));
             }

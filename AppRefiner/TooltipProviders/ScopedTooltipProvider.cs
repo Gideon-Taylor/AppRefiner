@@ -4,6 +4,7 @@ using System.Linq;
 using Antlr4.Runtime;
 using Antlr4.Runtime.Misc;
 using AppRefiner.Linters.Models;
+using AppRefiner.PeopleCode;
 using static AppRefiner.PeopleCode.PeopleCodeParser;
 
 namespace AppRefiner.TooltipProviders
@@ -162,8 +163,8 @@ namespace AppRefiner.TooltipProviders
                     varName,
                     typeName,
                     varNode.Symbol.Line,
-                    varNode.Symbol.StartIndex,
-                    varNode.Symbol.StopIndex
+                    varNode.Symbol.ByteStartIndex(),
+                    varNode.Symbol.ByteStopIndex()
                 );
             }
         }
@@ -181,8 +182,8 @@ namespace AppRefiner.TooltipProviders
                 varName,
                 typeName,
                 varNode.Symbol.Line,
-                varNode.Symbol.StartIndex,
-                varNode.Symbol.StopIndex
+                varNode.Symbol.ByteStartIndex(),
+                varNode.Symbol.ByteStopIndex()
             );
         }
 
@@ -200,8 +201,8 @@ namespace AppRefiner.TooltipProviders
                     varName,
                     "Constant",
                     varNode.Symbol.Line,
-                    varNode.Symbol.StartIndex,
-                    varNode.Symbol.StopIndex
+                    varNode.Symbol.ByteStartIndex(),
+                    varNode.Symbol.ByteStopIndex()
                 );
             }
         }
@@ -229,8 +230,8 @@ namespace AppRefiner.TooltipProviders
                     varName,
                     typeName,
                     varNode.Symbol.Line,
-                    varNode.Symbol.StartIndex,
-                    varNode.Symbol.StopIndex
+                    varNode.Symbol.ByteStartIndex(),
+                    varNode.Symbol.ByteStopIndex()
                 );
             }
         }
@@ -250,8 +251,8 @@ namespace AppRefiner.TooltipProviders
                     varName,
                     typeName,
                     varNode.Symbol.Line,
-                    varNode.Symbol.StartIndex,
-                    varNode.Symbol.StopIndex
+                    varNode.Symbol.ByteStartIndex(),
+                    varNode.Symbol.ByteStopIndex()
                 );
             }
         }
@@ -271,8 +272,8 @@ namespace AppRefiner.TooltipProviders
                         varName,
                         typeName,
                         varNode.Symbol.Line,
-                        varNode.Symbol.StartIndex,
-                        varNode.Symbol.StopIndex
+                        varNode.Symbol.ByteStartIndex(),
+                        varNode.Symbol.ByteStopIndex()
                     );
                 }
             }

@@ -547,6 +547,90 @@ namespace AppRefiner
             return true;
         }
 
+        /// <summary>
+        /// Begins an undo action in the Scintilla editor
+        /// </summary>
+        /// <param name="editor">The editor to begin undo action in</param>
+        public static void BeginUndoAction(ScintillaEditor editor)
+        {
+            if (editor == null) return;
+            editor.SendMessage(SCI_BEGINUNDOACTION, IntPtr.Zero, IntPtr.Zero);
+        }
+
+        /// <summary>
+        /// Ends an undo action in the Scintilla editor
+        /// </summary>
+        /// <param name="editor">The editor to end undo action in</param>
+        public static void EndUndoAction(ScintillaEditor editor)
+        {
+            if (editor == null) return;
+            editor.SendMessage(SCI_ENDUNDOACTION, IntPtr.Zero, IntPtr.Zero);
+        }
+
+        /// <summary>
+        /// Deletes a range of text in the Scintilla editor using SCI_SETTARGETRANGE and SCI_REPLACETARGET
+        /// </summary>
+        /// <param name="editor">The editor to delete text from</param>
+        /// <param name="startPos">The starting position of the text to delete</param>
+        /// <param name="length">The length of text to delete</param>
+        /// <returns>True if the deletion was successful, false otherwise</returns>
+        public static bool DeleteTextRange(ScintillaEditor editor, int startPos, int length)
+        {
+            if (editor == null || length <= 0) return false;
+
+            // Set target range
+            editor.SendMessage(SCI_SETTARGETRANGE, startPos, startPos + length);
+
+            // Replace target with empty string (effectively deleting)
+            editor.SendMessage(SCI_REPLACETARGET, 0, IntPtr.Zero);
+
+            return true;
+        }
+
+        /// <summary>
+        /// Replaces a range of text in the Scintilla editor using SCI_SETTARGETRANGE and SCI_REPLACETARGET
+        /// </summary>
+        /// <param name="editor">The editor to replace text in</param>
+        /// <param name="startPos">The starting position of the text to replace</param>
+        /// <param name="endPos">The ending position of the text to replace (inclusive)</param>
+        /// <param name="newText">The new text to replace with</param>
+        /// <returns>True if the replacement was successful, false otherwise</returns>
+        public static bool ReplaceTextRange(ScintillaEditor editor, int startPos, int endPos, string newText)
+        {
+            if (editor == null) return false;
+
+            // Set target range
+            editor.SendMessage(SCI_SETTARGETRANGE, startPos, endPos + 1);
+
+            if (string.IsNullOrEmpty(newText))
+            {
+                // Replace with empty string (delete)
+                editor.SendMessage(SCI_REPLACETARGET, 0, IntPtr.Zero);
+                return true;
+            }
+
+            // Convert the new text into a byte array using the default encoding.
+            // We need to include an extra byte for the terminating null.
+            byte[] textBytes = Encoding.Default.GetBytes(newText);
+            int neededSize = textBytes.Length + 1; // +1 for the null terminator
+
+            var remoteBuffer = GetProcessBuffer(editor, (uint)neededSize);
+
+            // Create a buffer that includes a terminating null.
+            byte[] buffer = new byte[neededSize];
+            Buffer.BlockCopy(textBytes, 0, buffer, 0, textBytes.Length);
+            buffer[neededSize - 1] = 0;  // Ensure null termination.
+
+            // Write the text into the remote process's memory.
+            if (!WriteProcessMemory(editor.hProc, remoteBuffer, buffer, neededSize, out int bytesWritten) || bytesWritten != neededSize)
+                return false;
+
+            // Replace the target with the new text
+            editor.SendMessage(SCI_REPLACETARGET, textBytes.Length, remoteBuffer);
+
+            return true;
+        }
+
         public static void SetWindowProperty(ScintillaEditor editor, string propName, string propValue)
         {
             // Calculate combined buffer size: property name + null terminator + property value + null terminator.
@@ -2129,8 +2213,8 @@ namespace AppRefiner
             {
                 if (FoundRange.HasValue) return; // Already found a method
 
-                int startPos = context.Start.StartIndex;
-                int endPos = context.Stop.StopIndex + 1;
+                int startPos = context.Start.ByteStartIndex();
+                int endPos = context.Stop.ByteStopIndex() + 1;
 
                 if (startPos <= _targetPosition && _targetPosition <= endPos)
                 {
@@ -2142,8 +2226,8 @@ namespace AppRefiner
             {
                 if (FoundRange.HasValue) return; // Already found a method
 
-                int startPos = context.Start.StartIndex;
-                int endPos = context.Stop.StopIndex + 1;
+                int startPos = context.Start.ByteStartIndex();
+                int endPos = context.Stop.ByteStopIndex() + 1;
 
                 if (startPos <= _targetPosition && _targetPosition <= endPos)
                 {
@@ -2155,8 +2239,8 @@ namespace AppRefiner
             {
                 if (FoundRange.HasValue) return; // Already found a method
 
-                int startPos = context.Start.StartIndex;
-                int endPos = context.Stop.StopIndex + 1;
+                int startPos = context.Start.ByteStartIndex();
+                int endPos = context.Stop.ByteStopIndex() + 1;
 
                 if (startPos <= _targetPosition && _targetPosition <= endPos)
                 {
@@ -2168,8 +2252,8 @@ namespace AppRefiner
             {
                 if (FoundRange.HasValue) return; // Already found a method
 
-                int startPos = context.Start.StartIndex;
-                int endPos = context.Stop.StopIndex + 1;
+                int startPos = context.Start.ByteStartIndex();
+                int endPos = context.Stop.ByteStopIndex() + 1;
 
                 if (startPos <= _targetPosition && _targetPosition <= endPos)
                 {

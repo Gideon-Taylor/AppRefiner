@@ -17,7 +17,7 @@ namespace AppRefiner.PeopleCode
         public static PeopleCodeParser.ProgramContext Parse(string sourceText)
         {
             // Create the ANTLR stream and lexer
-            AntlrInputStream inputStream = new(sourceText);
+            ByteTrackingCharStream inputStream = new(sourceText);
             PeopleCodeLexer lexer = new(inputStream);
             
             // Reset lexer state if it holds any from previous runs (optional but good practice)

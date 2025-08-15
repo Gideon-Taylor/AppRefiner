@@ -75,16 +75,14 @@ namespace AppRefiner.Stylers
             // Check if the variable name is in our list of meaningless names
             if (meaninglessNames.Contains(cleanName))
             {
-                // Add an indicator for this meaningless variable name
-                Indicators?.Add(new Indicator
-                {
-                    Start = token.StartIndex,
-                    Length = token.StopIndex - token.StartIndex + 1,
-                    Color = HIGHLIGHT_COLOR,
-                    Tooltip = "Meaningless variable name",
-                    Type = IndicatorType.HIGHLIGHTER,
-                    QuickFixes = [(typeof(RenameLocalVariable),"Rename variable...")]
-                });
+                // Add byte-indexed indicator for this meaningless variable name
+                AddIndicator(
+                    token, 
+                    IndicatorType.HIGHLIGHTER, 
+                    HIGHLIGHT_COLOR,
+                    "Meaningless variable name",
+                    [(typeof(RenameLocalVariable), "Rename variable...")]
+                );
             }
         }
     }

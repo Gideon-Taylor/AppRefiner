@@ -30,7 +30,7 @@ namespace AppRefiner.Stylers
         {
             StartPosition = 0,
             EndPosition = 0
-        };
+        }
 
 
         public DeadCodeStyler()
@@ -45,15 +45,15 @@ namespace AppRefiner.Stylers
             _blockStack.Clear();
         }
         
-        // Helper method to mark a region of code as dead
-        private void MarkDeadCode(int start, int end)
+        // Helper method to mark a region of code as dead using byte indexes
+        private void MarkDeadCode(int byteStart, int byteEnd)
         {
-            if (end > start && Indicators != null)
+            if (byteEnd > byteStart && Indicators != null)
             {
                 Indicators.Add(new Indicator
                 {
-                    Start = start,
-                    Length = end - start + 1,
+                    Start = byteStart,
+                    Length = byteEnd - byteStart + 1,
                     Color = DEAD_CODE_COLOR,
                     Type = IndicatorType.TEXTCOLOR,
                     Tooltip = "Unreachable code (after return/exit/throw statement)",
@@ -75,8 +75,8 @@ namespace AppRefiner.Stylers
 
             _blockStack.Push(new BlockInfo
             {
-                StartPosition = statements.Start.StartIndex,
-                EndPosition = statements.Stop.StopIndex
+                StartPosition = statements.Start.ByteStartIndex(),
+                EndPosition = statements.Stop.ByteStopIndex()
             });
             
         }
@@ -97,8 +97,8 @@ namespace AppRefiner.Stylers
 
             _blockStack.Push(new BlockInfo
             {
-                StartPosition = statements.Start.StartIndex,
-                EndPosition = statements.Stop.StopIndex
+                StartPosition = statements.Start.ByteStartIndex(),
+                EndPosition = statements.Stop.ByteStopIndex()
             });
         }
         
@@ -118,8 +118,8 @@ namespace AppRefiner.Stylers
 
             _blockStack.Push(new BlockInfo
             {
-                StartPosition = statements.Start.StartIndex,
-                EndPosition = statements.Stop.StopIndex
+                StartPosition = statements.Start.ByteStartIndex(),
+                EndPosition = statements.Stop.ByteStopIndex()
             });
         }
         
@@ -139,8 +139,8 @@ namespace AppRefiner.Stylers
 
             _blockStack.Push(new BlockInfo
             {
-                StartPosition = statements.Start.StartIndex,
-                EndPosition = statements.Stop.StopIndex
+                StartPosition = statements.Start.ByteStartIndex(),
+                EndPosition = statements.Stop.ByteStopIndex()
             });
         }
         
@@ -160,8 +160,8 @@ namespace AppRefiner.Stylers
 
             _blockStack.Push(new BlockInfo
             {
-                StartPosition = statements.Start.StartIndex,
-                EndPosition = statements.Stop.StopIndex
+                StartPosition = statements.Start.ByteStartIndex(),
+                EndPosition = statements.Stop.ByteStopIndex()
             });
         }
         
@@ -181,8 +181,8 @@ namespace AppRefiner.Stylers
 
             _blockStack.Push(new BlockInfo
             {
-                StartPosition = statements.Start.StartIndex,
-                EndPosition = statements.Stop.StopIndex
+                StartPosition = statements.Start.ByteStartIndex(),
+                EndPosition = statements.Stop.ByteStopIndex()
             });
         }
 
@@ -203,8 +203,8 @@ namespace AppRefiner.Stylers
 
             _blockStack.Push(new BlockInfo
             {
-                StartPosition = statements.Start.StartIndex,
-                EndPosition = statements.Stop.StopIndex
+                StartPosition = statements.Start.ByteStartIndex(),
+                EndPosition = statements.Stop.ByteStopIndex()
             });
         }
         
@@ -225,8 +225,8 @@ namespace AppRefiner.Stylers
 
             _blockStack.Push(new BlockInfo
             {
-                StartPosition = statements.Start.StartIndex,
-                EndPosition = statements.Stop.StopIndex
+                StartPosition = statements.Start.ByteStartIndex(),
+                EndPosition = statements.Stop.ByteStopIndex()
             });
         }
         
@@ -247,8 +247,8 @@ namespace AppRefiner.Stylers
 
             _blockStack.Push(new BlockInfo
             {
-                StartPosition = statements.Start.StartIndex,
-                EndPosition = statements.Stop.StopIndex
+                StartPosition = statements.Start.ByteStartIndex(),
+                EndPosition = statements.Stop.ByteStopIndex()
             });
         }
         
@@ -266,10 +266,11 @@ namespace AppRefiner.Stylers
                 _blockStack.Push(skipBlock);
                 return;
             }
+
             _blockStack.Push(new BlockInfo
             {
-                StartPosition = statements.Start.StartIndex,
-                EndPosition = statements.Stop.StopIndex
+                StartPosition = statements.Start.ByteStartIndex(),
+                EndPosition = statements.Stop.ByteStopIndex()
             });
         }
 
@@ -286,10 +287,11 @@ namespace AppRefiner.Stylers
                 _blockStack.Push(skipBlock);
                 return;
             }
+
             _blockStack.Push(new BlockInfo
             {
-                StartPosition = statements.Start.StartIndex,
-                EndPosition = statements.Stop.StopIndex
+                StartPosition = statements.Start.ByteStartIndex(),
+                EndPosition = statements.Stop.ByteStopIndex()
             });
         }
 
@@ -309,15 +311,14 @@ namespace AppRefiner.Stylers
                 // If we haven't seen a return in this block yet, record the position of this one
                 if (!currentBlock.HasReturn)
                 {
-                    currentBlock.ReturnStatementEndPosition = context.Stop.StopIndex;
+                    currentBlock.ReturnStatementEndPosition = context.Stop.ByteStopIndex();
                 }
                 else
                 {
-                    if (context.Stop.StopIndex < currentBlock.ReturnStatementEndPosition)
+                    if (context.Stop.ByteStopIndex() < currentBlock.ReturnStatementEndPosition)
                     {
                         // If the return statement is before the throw/exit statements, we need to adjust the return statement position
-                        currentBlock.ReturnStatementEndPosition = context.Stop.StopIndex;
-
+                        currentBlock.ReturnStatementEndPosition = context.Stop.ByteStopIndex();
                     }
                 }
             }
@@ -331,14 +332,14 @@ namespace AppRefiner.Stylers
                 // If we haven't seen a return in this block yet, record the position of this one
                 if (!currentBlock.HasReturn)
                 {
-                    currentBlock.ReturnStatementEndPosition = context.Stop.StopIndex;
+                    currentBlock.ReturnStatementEndPosition = context.Stop.ByteStopIndex();
                 }
                 else
                 {
-                    if (context.Stop.StopIndex < currentBlock.ReturnStatementEndPosition)
+                    if (context.Stop.ByteStopIndex() < currentBlock.ReturnStatementEndPosition)
                     {
                         // If the exit statement is before the return/throw statements, we need to adjust the return statement position
-                        currentBlock.ReturnStatementEndPosition = context.Stop.StopIndex;
+                        currentBlock.ReturnStatementEndPosition = context.Stop.ByteStopIndex();
 
                     }
                 }
@@ -354,13 +355,13 @@ namespace AppRefiner.Stylers
                 // If we haven't seen a return in this block yet, record the position of this one
                 if (!currentBlock.HasReturn)
                 {
-                    currentBlock.ReturnStatementEndPosition = context.Stop.StopIndex;
+                    currentBlock.ReturnStatementEndPosition = context.Stop.ByteStopIndex();
                 } else
                 {
-                    if (context.Stop.StopIndex < currentBlock.ReturnStatementEndPosition)
+                    if (context.Stop.ByteStopIndex() < currentBlock.ReturnStatementEndPosition)
                     {
                         // If the throw statement is before the exit/return statement, we need to adjust the return statement position
-                        currentBlock.ReturnStatementEndPosition = context.Stop.StopIndex;
+                        currentBlock.ReturnStatementEndPosition = context.Stop.ByteStopIndex();
                     }
                 }
             }
@@ -373,15 +374,15 @@ namespace AppRefiner.Stylers
             {
                 var block = _blockStack.Pop();
                 
-                // If there was a return statement, highlight any code after it
-                if (block != null && block.HasReturn)
+                // If there was a return statement, highlight any code after it using byte positions
+                if (block != null && block.HasReturn && block.ReturnStatementEndPosition.HasValue)
                 {
-                    int deadCodeStart = block.ReturnStatementEndPosition!.Value + 1;
-                    int deadCodeEnd = block.EndPosition - 1; // Exclude the end token
+                    int deadCodeByteStart = block.ReturnStatementEndPosition.Value + 1;
+                    int deadCodeByteEnd = block.EndPosition - 1; // Exclude the end token
                     
-                    if (deadCodeEnd > deadCodeStart)
+                    if (deadCodeByteEnd > deadCodeByteStart)
                     {
-                        MarkDeadCode(deadCodeStart, deadCodeEnd);
+                        MarkDeadCode(deadCodeByteStart, deadCodeByteEnd);
                     }
                 }
             }

@@ -45,16 +45,14 @@ namespace AppRefiner.Stylers
             var expectedName = Editor.ClassPath.Split(":").LastOrDefault() ?? string.Empty;
             if (!string.Equals(className, expectedName, StringComparison.OrdinalIgnoreCase))
             {
-                var indicator = new Indicator
-                {
-                    Start = genericID.Start.StartIndex,
-                    Length = genericID.Stop.StopIndex - genericID.Start.StartIndex,
-                    Color = 0x0000FFFF, // Red color for mismatch
-                    Tooltip = $"Class name '{className}' does not match expected name '{expectedName}'.",
-                    Type = IndicatorType.SQUIGGLE,
-                    QuickFixes = [(typeof(CorrectClassName), "Correct class name.")]
-                };
-                Indicators?.Add(indicator);
+                AddIndicator(
+                    genericID.Start, 
+                    genericID.Stop, 
+                    IndicatorType.SQUIGGLE, 
+                    0x0000FFFF, // Red color for mismatch
+                    $"Class name '{className}' does not match expected name '{expectedName}'.",
+                    [(typeof(CorrectClassName), "Correct class name.")]
+                );
             }
 
         }

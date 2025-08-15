@@ -1,4 +1,6 @@
+using Antlr4.Runtime;
 using AppRefiner.Linters.Models;
+using AppRefiner.PeopleCode;
 using static AppRefiner.PeopleCode.PeopleCodeParser;
 
 namespace AppRefiner.Linters
@@ -21,13 +23,59 @@ namespace AppRefiner.Linters
         }
 
         // Variable tracking methods
-        protected void AddLocalVariable(string name, string type, int line, int start, int stop)
+        protected void AddLocalVariable(string name, string type, int line, (int Start, int Stop) span)
         {
             var currentScope = variableScopeStack.Peek();
             if (!currentScope.ContainsKey(name))
             {
-                currentScope[name] = new VariableInfo(name, type, line, (start, stop));
+                currentScope[name] = new VariableInfo(name, type, line, span);
             }
+        }
+
+        // Helper method for context-based variable addition with automatic byte conversion
+        protected void AddLocalVariable(string name, string type, int line, ParserRuleContext context)
+        {
+            AddLocalVariable(name, type, line, 
+                (context.Start.ByteStartIndex(), (context.Stop ?? context.Start).ByteStopIndex())
+            );
+        }
+
+        // Helper method for token-based variable addition with automatic byte conversion
+        protected void AddLocalVariable(string name, string type, int line, IToken token)
+        {
+            AddLocalVariable(name, type, line,
+                (token.ByteStartIndex(), token.ByteStopIndex())
+            );
+        }
+
+        // Helper method for adding reports using VariableInfo with byte spans
+        protected void AddScopedReport(int reportNumber, string message, ReportType type, int line, VariableInfo varInfo)
+        {
+            AddReport(reportNumber, message, type, line, varInfo.Span);
+        }
+
+        // Helper method for adding reports using character span with automatic byte conversion
+        protected void AddScopedReport(int reportNumber, string message, ReportType type, int line, (int Start, int Stop) span)
+        {
+            AddReport(reportNumber, message, type, line, span);
+        }
+
+        // Helper method for adding reports using context with automatic byte conversion
+        protected void AddScopedReport(int reportNumber, string message, ReportType type, int line, ParserRuleContext context)
+        {
+            AddReport(reportNumber, message, type, line, (context.Start.ByteStartIndex(), (context.Stop ?? context.Start).ByteStopIndex()));
+        }
+
+        // Helper method for adding reports using token pair with automatic byte conversion
+        protected void AddScopedReport(int reportNumber, string message, ReportType type, int line, IToken startToken, IToken stopToken)
+        {
+            AddReport(reportNumber, message, type, line, (startToken.ByteStartIndex(), stopToken.ByteStopIndex()));
+        }
+
+        // Helper method for adding reports using single token with automatic byte conversion
+        protected void AddScopedReport(int reportNumber, string message, ReportType type, int line, IToken token)
+        {
+            AddReport(reportNumber, message, type, line, (token.ByteStartIndex(), token.ByteStopIndex()));
         }
 
         protected bool TryGetVariableInfo(string name, out VariableInfo? info)
@@ -75,8 +123,7 @@ namespace AppRefiner.Linters
                     varName,
                     typeName,
                     varNode.Symbol.Line,
-                    varNode.Symbol.StartIndex,
-                    varNode.Symbol.StopIndex
+                    varNode.Symbol
                 );
                 OnVariableDeclared(variableScopeStack.Peek()[varName]);
             }
@@ -95,8 +142,7 @@ namespace AppRefiner.Linters
                 varName,
                 typeName,
                 varNode.Symbol.Line,
-                varNode.Symbol.StartIndex,
-                varNode.Symbol.StopIndex
+                varNode.Symbol
             );
             OnVariableDeclared(variableScopeStack.Peek()[varName]);
         }

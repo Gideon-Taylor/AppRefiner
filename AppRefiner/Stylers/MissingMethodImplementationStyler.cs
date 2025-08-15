@@ -97,16 +97,9 @@ namespace AppRefiner.Stylers
 
                     if (startToken != null && stopToken != null)
                     {
-                        var indicator = new Indicator
-                        {
-                            Start = startToken.StartIndex,
-                            Length = stopToken.StopIndex - startToken.StartIndex + 1,
-                            Color = WARNING_COLOR,
-                            Tooltip = $"Method '{methodInfo.Name}' is declared but not implemented.",
-                            Type = IndicatorType.SQUIGGLE,
-                            QuickFixes = [(typeof(ImplementMissingMethod), $"Implement method '{methodInfo.Name}'.")]
-                        };
-                        Indicators?.Add(indicator);
+                        AddIndicator(methodInfo.HeaderContext, IndicatorType.SQUIGGLE, WARNING_COLOR,
+                            $"Method '{methodInfo.Name}' is declared but not implemented.",
+                            [(typeof(ImplementMissingMethod), $"Implement method '{methodInfo.Name}'.")]);                        
                     }
                 }
             }

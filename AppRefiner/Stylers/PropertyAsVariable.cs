@@ -1,4 +1,5 @@
 ﻿using Antlr4.Runtime.Misc;
+using AppRefiner.PeopleCode;
 using static global::AppRefiner.PeopleCode.PeopleCodeParser;
 
 namespace AppRefiner.Stylers
@@ -77,18 +78,8 @@ namespace AppRefiner.Stylers
             string varName = userVariable.GetText().TrimStart('&');
             if (!inConstructor && publicProperties.Contains(varName))
             {
-                if (Indicators != null)
-                {
-                    Indicators.Add(new Indicator
-                    {
-                        Start = userVariable.Symbol.StartIndex,
-                        Length = userVariable.Symbol.Text.Length,
-                        Color = HIGHLIGHT_COLOR,
-                        Tooltip = "Property used as variable outside constructor",
-                        Type = IndicatorType.HIGHLIGHTER,
-                        QuickFixes = []
-                    });
-                }
+                AddIndicator(userVariable.Symbol, IndicatorType.HIGHLIGHTER, HIGHLIGHT_COLOR,
+                    "Property used as variable outside constructor", []);
             }
         }
 

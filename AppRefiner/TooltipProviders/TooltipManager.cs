@@ -218,7 +218,7 @@ namespace AppRefiner.TooltipProviders
             try
             {
                 // Create lexer and token stream
-                var lexer = new PeopleCodeLexer(new Antlr4.Runtime.AntlrInputStream(editor.ContentString));
+                var lexer = new PeopleCodeLexer(new ByteTrackingCharStream(editor.ContentString));
                 var tokenStream = new Antlr4.Runtime.CommonTokenStream(lexer);
                 
                 // Get all tokens including those on hidden channels
@@ -240,7 +240,7 @@ namespace AppRefiner.TooltipProviders
                     foreach (var token in tokens)
                     {
                         // Check if token contains or is adjacent to the position
-                        if (position >= token.StartIndex && position <= token.StopIndex + 1)
+                        if (position >= token.ByteStartIndex() && position <= token.ByteStopIndex() + 1)
                         {
                             if (provider.CanProvideTooltipForToken(token, position))
                             {

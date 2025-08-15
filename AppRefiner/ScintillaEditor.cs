@@ -318,7 +318,7 @@ namespace AppRefiner
             var currentStart = TotalParseTime.Elapsed;
             TotalParseTime.Start();
             // Create lexer and parser
-            PeopleCodeLexer lexer = new(new AntlrInputStream(ContentString));
+            PeopleCodeLexer lexer = new(new ByteTrackingCharStream(ContentString));
             tokenStream = new CommonTokenStream(lexer);
 
             // Get all tokens including those on hidden channels

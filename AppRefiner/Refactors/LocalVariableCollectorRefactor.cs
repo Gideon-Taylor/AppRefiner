@@ -1,6 +1,7 @@
 using Antlr4.Runtime.Misc;
 using AppRefiner.Dialogs;
 using AppRefiner.Linters.Models;
+using AppRefiner.PeopleCode;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -351,8 +352,8 @@ namespace AppRefiner.Refactors
 
         private void ProcessScope(Antlr4.Runtime.ParserRuleContext context, string scopeType)
         {
-            int contextStart = context.Start.StartIndex;
-            int contextEnd = context.Stop?.StopIndex ?? contextStart;
+            int contextStart = context.Start.ByteStartIndex();
+            int contextEnd = (context.Stop ?? context.Start).ByteStopIndex();
             
             // For "All Scopes" mode, process every scope we encounter
             // For "Current Scope Only" mode, only process if cursor is within this scope
@@ -415,19 +416,19 @@ namespace AppRefiner.Refactors
                     break;
             }
 
-            return context.Start.StartIndex;
+            return context.Start.ByteStartIndex();
         }
 
         private int FindMethodInsertionPoint(MethodContext methodCtx)
         {
             // Start after the method signature
-            int insertionPoint = methodCtx.Start.StartIndex;
+            int insertionPoint = methodCtx.Start.ByteStartIndex();
             
             // If there are method annotations, find the end of the last one
             var annotations = methodCtx.methodAnnotations();
             if (annotations != null && annotations.Stop != null)
             {
-                insertionPoint = annotations.Stop.StopIndex + 1;
+                insertionPoint = annotations.Stop.ByteStopIndex() + 1;
             }
             else
             {
@@ -436,7 +437,7 @@ namespace AppRefiner.Refactors
                 var methodHeader = methodCtx.genericID();
                 if (methodHeader != null)
                 {
-                    insertionPoint = FindFirstLineBreakAfter(methodHeader.Stop.StopIndex);
+                    insertionPoint = FindFirstLineBreakAfter(methodHeader.Stop.ByteStopIndex());
                 }
             }
             
@@ -446,7 +447,7 @@ namespace AppRefiner.Refactors
         private int FindGetterSetterInsertionPoint(Antlr4.Runtime.ParserRuleContext context)
         {
             // For getters and setters, find the first line break after the signature
-            return FindFirstLineBreakAfter(context.Start.StartIndex);
+            return FindFirstLineBreakAfter(context.Start.ByteStartIndex());
         }
 
         private int FindFirstLineBreakAfter(int startIndex)
@@ -487,16 +488,16 @@ namespace AppRefiner.Refactors
             var preambles = context.programPreambles();
             if (preambles != null && preambles.Stop != null)
             {
-                return preambles.Stop.StopIndex + 1;
+                return preambles.Stop.ByteStopIndex() + 1;
             }
 
             var imports = context.importsBlock();
             if (imports != null && imports.Stop != null)
             {
-                return imports.Stop.StopIndex + 1;
+                return imports.Stop.ByteStopIndex() + 1;
             }
 
-            return context.Start.StartIndex;
+            return context.Start.ByteStartIndex();
         }
 
         public override void EnterLocalVariableDefinition(LocalVariableDefinitionContext context)
@@ -516,8 +517,8 @@ namespace AppRefiner.Refactors
                     Type = typeName,
                     Context = context,
                     AssignmentExpression = null,
-                    StartIndex = context.Start.StartIndex,
-                    StopIndex = context.Stop?.StopIndex ?? context.Start.StartIndex
+                    StartIndex = context.Start.ByteStartIndex(),
+                    StopIndex = context.Stop?.ByteStopIndex() ?? context.Start.ByteStartIndex()
                 };
 
                 // Add to the appropriate scope(s)
@@ -544,8 +545,8 @@ namespace AppRefiner.Refactors
                 Type = typeName,
                 Context = context,
                 AssignmentExpression = assignmentExpr,
-                StartIndex = context.Start.StartIndex,
-                StopIndex = context.Stop?.StopIndex ?? context.Start.StartIndex
+                StartIndex = context.Start.ByteStartIndex(),
+                StopIndex = context.Stop?.ByteStopIndex() ?? context.Start.ByteStartIndex()
             };
 
             // Add to the appropriate scope(s)
@@ -724,7 +725,7 @@ namespace AppRefiner.Refactors
             
             // Sort contexts by position in reverse order to avoid index shifting
             var sortedContexts = variablesByContext
-                .OrderByDescending(g => g.Key.Start.StartIndex)
+                .OrderByDescending(g => g.Key.Start.ByteStartIndex())
                 .ToList();
 
             foreach (var contextGroup in sortedContexts)
@@ -758,8 +759,8 @@ namespace AppRefiner.Refactors
                     
                     if (source != null)
                     {
-                        var lineRange = FindEntireLineRange(source, firstVariable.Context.Start.StartIndex, 
-                                                          firstVariable.Context.Stop?.StopIndex ?? firstVariable.Context.Start.StartIndex);
+                        var lineRange = FindEntireLineRange(source, firstVariable.Context.Start.ByteStartIndex(), 
+                                                          firstVariable.Context.Stop?.ByteStopIndex() ?? firstVariable.Context.Start.ByteStartIndex());
                         DeleteText(
                             lineRange.Start,
                             lineRange.End,
@@ -770,10 +771,10 @@ namespace AppRefiner.Refactors
                     {
                         // Fallback: remove the entire context
                         var context = firstVariable.Context;
-                        int endIndex = context.Stop?.StopIndex ?? context.Start.StartIndex;
+                        int endIndex = context.Stop?.ByteStopIndex() ?? context.Start.ByteStartIndex();
                         
                         DeleteText(
-                            context.Start.StartIndex,
+                            context.Start.ByteStartIndex(),
                             endIndex,
                             $"Remove original declarations: {string.Join(", ", variablesWithoutAssignments.Select(v => v.Name))}"
                         );
@@ -826,8 +827,8 @@ namespace AppRefiner.Refactors
             if (expression is Antlr4.Runtime.ParserRuleContext ruleContext &&
                 ruleContext.Start != null && ruleContext.Stop != null)
             {
-                int startIndex = ruleContext.Start.StartIndex;
-                int stopIndex = ruleContext.Stop.StopIndex;
+                int startIndex = ruleContext.Start.ByteStartIndex();
+                int stopIndex = ruleContext.Stop.ByteStopIndex();
                 
                 if (startIndex >= 0 && stopIndex >= startIndex && stopIndex < source.Length)
                 {

@@ -7,6 +7,11 @@
 
 lexer grammar PeopleCodeLexer;
 
+options {
+        language = CSharp;
+        superClass = ByteTrackingLexerBase;
+}
+
 channels {
         API_COMMENTS,
         COMMENTS,
@@ -16,6 +21,7 @@ channels {
 
 @header {
 using System.Text.RegularExpressions;
+using AppRefiner.PeopleCode;
 }
 
 @members {

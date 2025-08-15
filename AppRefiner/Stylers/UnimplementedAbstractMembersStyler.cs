@@ -1,5 +1,6 @@
 using AppRefiner.Database;
 using AppRefiner.Ast;
+using AppRefiner.PeopleCode;
 using static AppRefiner.PeopleCode.PeopleCodeParser; // For context types
 using Antlr4.Runtime.Misc; // For NotNull
 using Antlr4.Runtime;
@@ -112,26 +113,6 @@ namespace AppRefiner.Stylers
                 // If we still don't have a target, we cannot add an indicator
                 if (finalTargetNode == null) return;
 
-                // Determine start and length
-                int startIndex, stopIndex, length;
-                if (finalTargetNode is ParserRuleContext ctxNode)
-                {
-                    startIndex = ctxNode.Start.StartIndex;
-                    stopIndex = ctxNode.Stop.StopIndex;
-                }
-                else if (finalTargetNode is ITerminalNode termNode)
-                {
-                    startIndex = termNode.Symbol.StartIndex;
-                    stopIndex = termNode.Symbol.StopIndex;
-                }
-                else
-                {
-                    return; // Cannot determine bounds
-                }
-
-                length = stopIndex - startIndex + 1;
-                if (length <= 0) return;
-
                 // Build the tooltip message
                 var tooltipBuilder = new StringBuilder("Missing implementations:");
                 foreach (var method in unimplementedMethods)
@@ -142,16 +123,17 @@ namespace AppRefiner.Stylers
                 {
                     tooltipBuilder.Append($"\n - Property: {prop.Name}");
                 }
-                // Add the indicator
-                Indicators?.Add(new Indicator
+
+                if (finalTargetNode is ParserRuleContext ctxNode)
                 {
-                    Start = startIndex,
-                    Length = length,
-                    Color = WARNING_COLOR,
-                    Type = IndicatorType.SQUIGGLE,
-                    Tooltip = tooltipBuilder.ToString(),
-                    QuickFixes = [(typeof(ImplementAbstractMembersRefactor),"Implement missing abstract members")]
-                });
+                    AddIndicator(ctxNode, IndicatorType.SQUIGGLE, WARNING_COLOR, tooltipBuilder.ToString(), 
+                        [(typeof(ImplementAbstractMembersRefactor),"Implement missing abstract members")]);
+                }
+                else if (finalTargetNode is ITerminalNode termNode)
+                {
+                    AddIndicator(termNode.Symbol, IndicatorType.SQUIGGLE, WARNING_COLOR, tooltipBuilder.ToString(),
+                        [(typeof(ImplementAbstractMembersRefactor),"Implement missing abstract members")]);
+                }
             }
             catch (Exception ex)
             {
