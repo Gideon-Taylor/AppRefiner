@@ -1,0 +1,312 @@
+using System.Collections.Immutable;
+
+namespace PeopleCodeParser.SelfHosted;
+
+/// <summary>
+/// Base class for all AST nodes in the self-hosted PeopleCode parser.
+/// Provides common functionality for source location tracking, parent-child relationships,
+/// and visitor pattern support.
+/// </summary>
+public abstract class AstNode
+{
+    private AstNode? _parent;
+    private readonly List<AstNode> _children = new();
+
+    /// <summary>
+    /// Source location of this node in the original text
+    /// </summary>
+    public SourceSpan SourceSpan { get; set; }
+
+    /// <summary>
+    /// Parent node in the AST tree, null for root nodes
+    /// </summary>
+    public AstNode? Parent
+    {
+        get => _parent;
+        set
+        {
+            if (_parent == value) return;
+            
+            // Remove from old parent
+            _parent?._children.Remove(this);
+            
+            // Set new parent
+            _parent = value;
+            
+            // Add to new parent
+            if (value != null && !value._children.Contains(this))
+            {
+                value._children.Add(this);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Child nodes in the AST tree (read-only)
+    /// </summary>
+    public IReadOnlyList<AstNode> Children => _children.AsReadOnly();
+
+    /// <summary>
+    /// Additional attributes that can be attached to nodes for semantic analysis
+    /// </summary>
+    public Dictionary<string, object> Attributes { get; } = new();
+
+    /// <summary>
+    /// Accept method for visitor pattern
+    /// </summary>
+    public abstract void Accept(IAstVisitor visitor);
+
+    /// <summary>
+    /// Accept method for visitor pattern with return value
+    /// </summary>
+    public abstract TResult Accept<TResult>(IAstVisitor<TResult> visitor);
+
+    /// <summary>
+    /// Add a child node to this node
+    /// </summary>
+    protected void AddChild(AstNode child)
+    {
+        if (child == null) return;
+        child.Parent = this;
+    }
+
+    /// <summary>
+    /// Add multiple child nodes to this node
+    /// </summary>
+    protected void AddChildren(params AstNode[] children)
+    {
+        foreach (var child in children)
+        {
+            AddChild(child);
+        }
+    }
+
+    /// <summary>
+    /// Add multiple child nodes to this node
+    /// </summary>
+    protected void AddChildren(IEnumerable<AstNode> children)
+    {
+        foreach (var child in children)
+        {
+            AddChild(child);
+        }
+    }
+
+    /// <summary>
+    /// Remove a child node from this node
+    /// </summary>
+    protected void RemoveChild(AstNode child)
+    {
+        if (child?.Parent == this)
+        {
+            child.Parent = null;
+        }
+    }
+
+    /// <summary>
+    /// Find the first ancestor of the specified type
+    /// </summary>
+    public T? FindAncestor<T>() where T : AstNode
+    {
+        var current = Parent;
+        while (current != null)
+        {
+            if (current is T ancestor)
+                return ancestor;
+            current = current.Parent;
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// Find all descendants of the specified type
+    /// </summary>
+    public IEnumerable<T> FindDescendants<T>() where T : AstNode
+    {
+        foreach (var child in Children)
+        {
+            if (child is T match)
+                yield return match;
+
+            foreach (var descendant in child.FindDescendants<T>())
+                yield return descendant;
+        }
+    }
+
+    /// <summary>
+    /// Get the root node of this AST
+    /// </summary>
+    public AstNode GetRoot()
+    {
+        var current = this;
+        while (current.Parent != null)
+        {
+            current = current.Parent;
+        }
+        return current;
+    }
+
+    /// <summary>
+    /// Get a string representation of this node for debugging
+    /// </summary>
+    public override string ToString()
+    {
+        var typeName = GetType().Name;
+        if (SourceSpan != default)
+        {
+            return $"{typeName} [{SourceSpan.Start}-{SourceSpan.End}]";
+        }
+        return typeName;
+    }
+}
+
+/// <summary>
+/// Represents a span in the source text with start and end positions
+/// </summary>
+public struct SourceSpan : IEquatable<SourceSpan>
+{
+    /// <summary>
+    /// Start position in the source text (inclusive)
+    /// </summary>
+    public SourcePosition Start { get; }
+
+    /// <summary>
+    /// End position in the source text (exclusive)
+    /// </summary>
+    public SourcePosition End { get; }
+
+    /// <summary>
+    /// Length of the span
+    /// </summary>
+    public int Length => End.Index - Start.Index;
+
+    /// <summary>
+    /// True if this is an empty span
+    /// </summary>
+    public bool IsEmpty => Length == 0;
+
+    public SourceSpan(SourcePosition start, SourcePosition end)
+    {
+        Start = start;
+        End = end;
+    }
+
+    public SourceSpan(int startIndex, int endIndex)
+    {
+        Start = new SourcePosition(startIndex);
+        End = new SourcePosition(endIndex);
+    }
+
+    public bool Equals(SourceSpan other)
+    {
+        return Start.Equals(other.Start) && End.Equals(other.End);
+    }
+
+    public override bool Equals(object? obj)
+    {
+        return obj is SourceSpan other && Equals(other);
+    }
+
+    public override int GetHashCode()
+    {
+        return HashCode.Combine(Start, End);
+    }
+
+    public static bool operator ==(SourceSpan left, SourceSpan right)
+    {
+        return left.Equals(right);
+    }
+
+    public static bool operator !=(SourceSpan left, SourceSpan right)
+    {
+        return !(left == right);
+    }
+
+    public override string ToString()
+    {
+        return $"[{Start}-{End}]";
+    }
+}
+
+/// <summary>
+/// Represents a position in the source text
+/// </summary>
+public struct SourcePosition : IEquatable<SourcePosition>, IComparable<SourcePosition>
+{
+    /// <summary>
+    /// Zero-based character index in the source text
+    /// </summary>
+    public int Index { get; }
+
+    /// <summary>
+    /// One-based line number
+    /// </summary>
+    public int Line { get; }
+
+    /// <summary>
+    /// One-based column number
+    /// </summary>
+    public int Column { get; }
+
+    public SourcePosition(int index, int line = 1, int column = 1)
+    {
+        Index = index;
+        Line = line;
+        Column = column;
+    }
+
+    public bool Equals(SourcePosition other)
+    {
+        return Index == other.Index && Line == other.Line && Column == other.Column;
+    }
+
+    public override bool Equals(object? obj)
+    {
+        return obj is SourcePosition other && Equals(other);
+    }
+
+    public override int GetHashCode()
+    {
+        return HashCode.Combine(Index, Line, Column);
+    }
+
+    public int CompareTo(SourcePosition other)
+    {
+        return Index.CompareTo(other.Index);
+    }
+
+    public static bool operator ==(SourcePosition left, SourcePosition right)
+    {
+        return left.Equals(right);
+    }
+
+    public static bool operator !=(SourcePosition left, SourcePosition right)
+    {
+        return !(left == right);
+    }
+
+    public static bool operator <(SourcePosition left, SourcePosition right)
+    {
+        return left.CompareTo(right) < 0;
+    }
+
+    public static bool operator <=(SourcePosition left, SourcePosition right)
+    {
+        return left.CompareTo(right) <= 0;
+    }
+
+    public static bool operator >(SourcePosition left, SourcePosition right)
+    {
+        return left.CompareTo(right) > 0;
+    }
+
+    public static bool operator >=(SourcePosition left, SourcePosition right)
+    {
+        return left.CompareTo(right) >= 0;
+    }
+
+    public override string ToString()
+    {
+        return $"{Line}:{Column}";
+    }
+}

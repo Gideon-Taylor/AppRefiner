@@ -1,0 +1,22 @@
+REM Simple PeopleCode program for testing;
+
+LOCAL string &userName = %USERID;
+LOCAL number &currentYear = Year(%DATE);
+LOCAL boolean &isValid = TRUE;
+
+IF &userName <> "" THEN
+    &isValid = TRUE;
+    
+    FOR &i = 1 TO 10
+        &currentYear = &currentYear + 1;
+        
+        IF &currentYear > 2030 THEN
+            WARNING "Year is beyond 2030: " | String(&currentYear);
+            BREAK;
+        END-IF;
+    END-FOR;
+    
+ELSE
+    ERROR "User name is empty";
+    &isValid = FALSE;
+END-IF;
