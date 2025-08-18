@@ -30,7 +30,7 @@ namespace AppRefiner.Stylers
         {
             StartPosition = 0,
             EndPosition = 0
-        }
+        };
 
 
         public DeadCodeStyler()
