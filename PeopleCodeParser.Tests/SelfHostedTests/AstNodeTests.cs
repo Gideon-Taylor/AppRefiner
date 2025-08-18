@@ -1,6 +1,6 @@
 using FluentAssertions;
 using Xunit;
-using AppRefiner.PeopleCode.SelfHosted;
+using PeopleCodeParser.SelfHosted.Nodes;
 
 namespace PeopleCodeParser.Tests.SelfHostedTests;
 

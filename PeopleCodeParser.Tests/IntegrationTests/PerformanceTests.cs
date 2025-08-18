@@ -2,7 +2,7 @@ using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Running;
 using FluentAssertions;
 using Xunit;
-using AppRefiner.PeopleCode;
+using PeopleCodeParser.SelfHosted;
 using System.Diagnostics;
 
 namespace PeopleCodeParser.Tests.IntegrationTests;

@@ -1,7 +1,8 @@
 using FluentAssertions;
 using Xunit;
-using AppRefiner.PeopleCode.SelfHosted;
-using SelfHostedLexer = AppRefiner.PeopleCode.SelfHosted.PeopleCodeLexer;
+using PeopleCodeParser.SelfHosted.Nodes;
+using SelfHostedLexer = PeopleCodeParser.SelfHosted.Lexing.PeopleCodeLexer;
+using PeopleCodeParser.SelfHosted.Lexing;
 
 namespace PeopleCodeParser.Tests.SelfHostedTests;
 
