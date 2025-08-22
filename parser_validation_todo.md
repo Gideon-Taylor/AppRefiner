@@ -14,9 +14,6 @@ This file contains a comprehensive list of all parser rules from PeopleCodeParse
 ### Class Structure
 
 ### Method Definitions
-- [ ] **methodHeader** - method signatures with arguments and return types
-- [ ] **methodArguments** - method parameter lists
-- [ ] **methodArgument** - individual method parameters with types and OUT modifier
 
 ### Type System
 - [ ] **simpleType** - built-in types and generic IDs

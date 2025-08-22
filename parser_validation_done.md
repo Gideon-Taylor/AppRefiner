@@ -22,3 +22,8 @@ This file contains a list of all parser rules from PeopleCodeParser.g4 that have
 - [x] **privateHeader** - private member container
 - [x] **nonPrivateMember** - public/protected methods and properties
 - [x] **privateMember** - private methods, properties, and constants
+
+### Method Definitions
+- [x] **methodHeader** - method signatures with arguments and return types
+- [x] **methodArguments** - method parameter lists
+- [x] **methodArgument** - individual method parameters with types and OUT modifier

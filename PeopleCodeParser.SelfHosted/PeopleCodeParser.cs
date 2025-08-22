@@ -1052,17 +1052,34 @@ public class PeopleCodeParser
         {
             EnterRule("methodArguments");
 
-            do
+            // Parse first parameter
+            var parameter = ParseMethodArgument();
+            if (parameter != null)
             {
-                var parameter = ParseMethodArgument();
+                methodNode.AddParameter(parameter);
+            }
+
+            // Parse additional parameters separated by commas
+            while (Match(TokenType.Comma))
+            {
+                // Check if this is a trailing comma (next token is right paren)
+                if (Check(TokenType.RightParen))
+                {
+                    // This is a trailing comma, which is allowed by the grammar
+                    break;
+                }
+
+                parameter = ParseMethodArgument();
                 if (parameter != null)
                 {
                     methodNode.AddParameter(parameter);
                 }
-            } while (Match(TokenType.Comma));
-
-            // Handle trailing comma (allowed in PeopleCode)
-            // Already consumed by the while loop condition
+                else
+                {
+                    // If parameter parsing failed, break to avoid infinite loop
+                    break;
+                }
+            }
         }
         finally
         {
