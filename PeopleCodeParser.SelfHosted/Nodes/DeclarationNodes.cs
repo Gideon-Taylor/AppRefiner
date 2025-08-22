@@ -72,9 +72,25 @@ public class MethodNode : DeclarationNode
     /// Documentation string (from DOC annotation)
     /// </summary>
     public string? Documentation { get; set; }
+    
+    /// <summary>
+    /// Implemented interfaces (from EXTENDS/IMPLEMENTS annotation)
+    /// </summary>
+    public List<TypeNode> ImplementedInterfaces { get; } = new();
+    
+    /// <summary>
+    /// Implemented method name (from EXTENDS/IMPLEMENTS annotation)
+    /// </summary>
+    public string? ImplementedMethodName { get; set; }
 
     public MethodNode(string name) : base(name)
     {
+    }
+    
+    public void AddImplementedInterface(TypeNode interfaceType)
+    {
+        ImplementedInterfaces.Add(interfaceType);
+        AddChild(interfaceType);
     }
 
     public void AddParameter(ParameterNode parameter)

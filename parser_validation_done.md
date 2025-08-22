@@ -96,3 +96,10 @@ This file contains a list of all parser rules from PeopleCodeParser.g4 that have
 - [x] **functionDefinition** - complete function implementations with optional DOC
 - [x] **functionArguments** - function definition parameter lists
 - [x] **functionArgument** - individual function parameters with optional types
+
+### Method Annotations
+- [x] **methodAnnotations** - method parameter, return, and extends annotations
+- [x] **methodParameterAnnotation** - method parameter type annotations
+- [x] **methodAnnotationArgument** - annotated method arguments with types
+- [x] **methodReturnAnnotation** - method return type annotations
+- [x] **methodExtendsAnnotation** - method extends/implements annotations

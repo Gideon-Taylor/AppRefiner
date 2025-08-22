@@ -2038,7 +2038,7 @@ public class PeopleCodeParser
     }
 
     /// <summary>
-    /// Parse method extends annotation (placeholder)
+    /// Parse method extends annotation: SLASH_PLUS EXTENDS DIV IMPLEMENTS appClassPath DOT genericID PLUS_SLASH
     /// </summary>
     private void ParseMethodExtendsAnnotation(MethodNode methodNode)
     {
@@ -2046,16 +2046,63 @@ public class PeopleCodeParser
         {
             EnterRule("methodExtendsAnnotation");
 
-            // Just skip the annotation for now
-            if (Match(TokenType.SlashPlus))
+            if (!Match(TokenType.SlashPlus))
             {
-                // Skip until we find the closing +/
-                while (!IsAtEnd && !Check(TokenType.PlusSlash))
-                {
-                    _position++;
-                }
-                Match(TokenType.PlusSlash);
+                return;
             }
+
+            if (!Match(TokenType.Extends))
+            {
+                // Not an extends annotation, back up
+                _position--;
+                return;
+            }
+
+            // Expect DIV (forward slash)
+            if (!Match(TokenType.Div))
+            {
+                ReportError("Expected '/' after 'EXTENDS' in method annotation");
+            }
+
+            // Expect IMPLEMENTS keyword
+            if (!Match(TokenType.Implements))
+            {
+                ReportError("Expected 'IMPLEMENTS' after 'EXTENDS/' in method annotation");
+            }
+
+            // Parse app class path
+            var appClassPath = ParseAppClassPath();
+            if (appClassPath == null)
+            {
+                ReportError("Expected app class path after 'IMPLEMENTS' in method annotation");
+            }
+            else
+            {
+                // Store the implemented interface in the method node
+                methodNode.AddImplementedInterface(appClassPath);
+            }
+
+            // Expect DOT
+            if (!Match(TokenType.Dot))
+            {
+                ReportError("Expected '.' after app class path in method annotation");
+            }
+
+            // Expect genericID (method name in interface)
+            if (Check(TokenType.GenericId) || Check(TokenType.GenericIdLimited))
+            {
+                string methodName = Current.Text;
+                _position++;
+                // Store the implemented method name in the method node
+                methodNode.ImplementedMethodName = methodName;
+            }
+            else
+            {
+                ReportError("Expected method name after '.' in method annotation");
+            }
+
+            // Expect closing annotation
+            Consume(TokenType.PlusSlash, "Expected '+/' to close method extends annotation");
         }
         finally
         {

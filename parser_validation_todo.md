@@ -49,11 +49,6 @@ This file contains a comprehensive list of all parser rules from PeopleCodeParse
 ### Function Definitions
 
 ### Method Annotations
-- [ ] **methodAnnotations** - method parameter, return, and extends annotations
-- [ ] **methodParameterAnnotation** - method parameter type annotations
-- [ ] **methodAnnotationArgument** - annotated method arguments with types
-- [ ] **methodReturnAnnotation** - method return type annotations
-- [ ] **methodExtendsAnnotation** - method extends/implements annotations
 
 ## Validation Strategy
 
