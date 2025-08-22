@@ -325,7 +325,8 @@ public static class TokenTypeExtensions
     /// </summary>
     public static bool IsLiteral(this TokenType type)
     {
-        return type >= TokenType.IntegerLiteral && type <= TokenType.BooleanLiteral;
+        return type == TokenType.Null || 
+               (type >= TokenType.IntegerLiteral && type <= TokenType.BooleanLiteral);
     }
 
     /// <summary>

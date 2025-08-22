@@ -233,6 +233,48 @@ public class PeopleCodeParser
     }
 
     /// <summary>
+    /// Synchronize to a specific token for targeted error recovery
+    /// </summary>
+    /// <param name="targetToken">The token to synchronize to</param>
+    /// <returns>True if the target token was found, false otherwise</returns>
+    private bool SynchronizeToToken(TokenType targetToken)
+    {
+        if (_errorRecoveryCount >= MaxErrorRecoveryAttempts)
+        {
+            ReportError("Too many parse errors, stopping recovery attempts");
+            return false;
+        }
+
+        _errorRecoveryCount++;
+
+        // Skip tokens until we find the target token
+        int tokensSkipped = 0;
+        while (!IsAtEnd && Current.Type != targetToken)
+        {
+            _position++;
+            tokensSkipped++;
+
+            // Prevent infinite loops
+            if (tokensSkipped > 50)
+            {
+                ReportError($"Recovery failed: could not find '{targetToken}' token");
+                return false;
+            }
+        }
+
+        if (Current.Type == targetToken)
+        {
+            if (tokensSkipped > 0)
+            {
+                ReportWarning($"Skipped {tokensSkipped} tokens to synchronize to '{targetToken}'");
+            }
+            return true;
+        }
+
+        return false; // End of input reached without finding target
+    }
+
+    /// <summary>
     /// Main entry point: Parse a complete PeopleCode program according to ANTLR grammar:
     /// program: appClass | importsBlock programPreambles? SEMI* statements? SEMI* EOF
     /// 
@@ -2969,13 +3011,34 @@ public class PeopleCodeParser
             if (condition == null)
             {
                 ReportError("Expected condition after 'IF'");
-                return null;
+                
+                // Error recovery: try to synchronize to THEN token
+                if (SynchronizeToToken(TokenType.Then))
+                {
+                    // Create a placeholder condition so we can continue parsing the THEN block
+                    condition = new LiteralNode(true, LiteralType.Boolean)
+                    {
+                        SourceSpan = Current.SourceSpan
+                    };
+                }
+                else
+                {
+                    // No THEN found, cannot recover
+                    return null;
+                }
             }
 
-                    if (!Match(TokenType.Then))
-        {
-            ReportError("Expected 'THEN' after IF condition");
-        }
+            if (!Match(TokenType.Then))
+            {
+                ReportError("Expected 'THEN' after IF condition");
+                
+                // Error recovery: try to synchronize to THEN token
+                if (!SynchronizeToToken(TokenType.Then))
+                {
+                    // No THEN found, but continue with what we have
+                    ReportError("Could not find 'THEN' token for error recovery");
+                }
+            }
 
         // Handle optional semicolons after THEN (SEMI*)
         while (Match(TokenType.Semicolon)) { }

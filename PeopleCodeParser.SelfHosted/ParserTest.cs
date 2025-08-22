@@ -241,4 +241,37 @@ END-METHOD;
 
         Console.WriteLine("Built-in object types integration test completed.\n");
     }
+
+    private static void TestNullLiteralBugFix()
+    {
+        Console.WriteLine("Testing NULL literal bug fix:");
+
+        // Test the specific problematic case that was failing
+        var problematicCode = @"
+If (&smallTalkCast = Null And
+      &skeletonCast = Null) Then
+End-If;
+";
+
+        Console.WriteLine("Testing problematic IF statement with NULL literals...");
+        TestProgram(problematicCode);
+
+        // Test NULL literal in other contexts
+        TestExpression("Null");
+        TestExpression("&var = Null");
+        TestExpression("Null = &var");
+        TestExpression("(&var = Null And &other <> Null)");
+
+        // Test error recovery - malformed expression followed by THEN
+        var errorRecoveryTest = @"
+If (&badExpression = && invalid tokens here) Then
+    &x = 1;
+End-If;
+";
+
+        Console.WriteLine("Testing error recovery in IF statements...");
+        TestProgram(errorRecoveryTest);
+
+        Console.WriteLine("NULL literal bug fix test completed.\n");
+    }
 }
