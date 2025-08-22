@@ -3851,23 +3851,28 @@ public class PeopleCodeParser
     /// </summary>
     private ExpressionNode? ParseNotExpression()
     {
-        if (Match(TokenType.Not))
+        if (Check(TokenType.Not))
         {
-            var opToken = Current;
-            _position--;  // Go back to the NOT token for source span
+            var notToken = Current;
+            _position++; // Advance past NOT token
             
             var operand = ParseAdditiveExpression();
             if (operand == null)
             {
                 ReportError("Expected expression after 'NOT'");
+                // Error recovery for NOT expressions - sync to appropriate expression boundaries
+                var syncTokens = new HashSet<TokenType> { 
+                    TokenType.Semicolon, TokenType.Then, TokenType.EndIf,
+                    TokenType.And, TokenType.Or, TokenType.RightParen,
+                    TokenType.RightBracket, TokenType.Comma
+                };
+                PanicRecover(syncTokens);
                 return null;
             }
             
-            _position++;  // Move past the NOT token
-            
             return new UnaryOperationNode(UnaryOperator.Not, operand)
             {
-                SourceSpan = new SourceSpan(opToken.SourceSpan.Start, operand.SourceSpan.End)
+                SourceSpan = new SourceSpan(notToken.SourceSpan.Start, operand.SourceSpan.End)
             };
         }
         
