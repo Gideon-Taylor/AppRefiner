@@ -3623,7 +3623,7 @@ public class PeopleCodeParser
     /// </summary>
     private ExpressionNode? ParseAssignmentExpression()
     {
-        var expr = ParseConcatenationExpression();
+        var expr = ParseOrExpression();
         if (expr == null) return null;
 
         if (Current.Type.IsAssignmentOperator())
@@ -3739,7 +3739,7 @@ public class PeopleCodeParser
     /// </summary>
     private ExpressionNode? ParseRelationalExpression()
     {
-        var left = ParseNotExpression();
+        var left = ParseTypeCastExpression();
         if (left == null) return null;
 
         while (Current.Type is TokenType.LessThan or TokenType.LessThanOrEqual or 
@@ -3755,7 +3755,7 @@ public class PeopleCodeParser
             };
             _position++;
 
-            var right = ParseNotExpression();
+            var right = ParseTypeCastExpression();
             if (right == null)
             {
                 ReportError("Expected expression after relational operator");
@@ -3772,16 +3772,65 @@ public class PeopleCodeParser
     }
 
     /// <summary>
+    /// Parse type cast expressions (expr AS Type)
+    /// </summary>
+    private ExpressionNode? ParseTypeCastExpression()
+    {
+        try
+        {
+            EnterRule("typeCastExpression");
+            
+            var expr = ParseConcatenationExpression();
+            if (expr == null) return null;
+            
+            // Handle type casting (expr AS Type) - PeopleCode only supports single casts, not chains
+            if (Match(TokenType.As))
+            {
+                var typeSpec = ParseTypeSpecifier();
+                if (typeSpec == null)
+                {
+                    ReportError("Expected type specifier after 'AS'");
+                    // Error recovery: try to sync to expression boundaries
+                    var syncTokens = new HashSet<TokenType> { 
+                        TokenType.Semicolon, TokenType.Comma, TokenType.RightParen, 
+                        TokenType.RightBracket, TokenType.Then, TokenType.EndIf,
+                        TokenType.And, TokenType.Or, TokenType.Equal, TokenType.NotEqual
+                    };
+                    PanicRecover(syncTokens);
+                    return expr;
+                }
+
+                expr = new TypeCastNode(expr, typeSpec)
+                {
+                    SourceSpan = new SourceSpan(expr.SourceSpan.Start, typeSpec.SourceSpan.End)
+                };
+            }
+
+            return expr;
+        }
+        catch (Exception ex)
+        {
+            ReportError($"Error parsing type cast expression: {ex.Message}");
+            // Return partial result for better recovery
+            return ParseConcatenationExpression();
+        }
+        finally
+        {
+            ExitRule();
+        }
+    }
+
+    /// <summary>
     /// Parse string concatenation expressions (|)
     /// </summary>
     private ExpressionNode? ParseConcatenationExpression()
     {
-        var left = ParseOrExpression();
+        var left = ParseNotExpression();
         if (left == null) return null;
 
         while (Match(TokenType.Pipe))
         {
-            var right = ParseOrExpression();
+            var right = ParseNotExpression();
             if (right == null)
             {
                 ReportError("Expected expression after '|'");
@@ -3949,22 +3998,6 @@ public class PeopleCodeParser
     {
         var expr = ParsePrimaryExpression();
         if (expr == null) return null;
-        
-        // Handle type casting (expr AS Type) - PeopleCode only supports single casts, not chains
-        if (Match(TokenType.As))
-        {
-            var typeSpec = ParseTypeSpecifier();
-            if (typeSpec == null)
-            {
-                ReportError("Expected type specifier after 'AS'");
-                return expr;
-            }
-
-            expr = new TypeCastNode(expr, typeSpec)
-            {
-                SourceSpan = new SourceSpan(expr.SourceSpan.Start, typeSpec.SourceSpan.End)
-            };
-        }
 
         while (true)
         {
