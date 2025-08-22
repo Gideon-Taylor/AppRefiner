@@ -1122,18 +1122,20 @@ public class PeopleCodeParser
             var paramName = Current.Text;
             _position++;
 
-            // Expect AS keyword
-            if (!Match(TokenType.As))
+            TypeNode? paramType = new BuiltInTypeNode(BuiltInType.Any)
             {
-                ReportError("Expected 'AS' after parameter name");
-            }
+                SourceSpan = Current.SourceSpan
+            }; // Default to ANY if no type specified
 
-            // Parse parameter type
-            var paramType = ParseTypeReference();
-            if (paramType == null)
+            // Optional AS typeT
+            if (Match(TokenType.As))
             {
-                ReportError("Expected parameter type after 'AS'");
-                return null;
+                // Parse parameter type
+                paramType = ParseTypeReference();
+                if (paramType == null)
+                {
+                    ReportError("Expected parameter type after 'AS'");
+                }
             }
 
             var parameter = new ParameterNode(paramName, paramType);
@@ -2466,6 +2468,20 @@ public class PeopleCodeParser
                     functionNode.SetReturnType(returnType);
                 }
             }
+            
+            // Optional documentation comment (DOC StringLiteral)
+            if (Match(TokenType.Doc))
+            {
+                if (Check(TokenType.StringLiteral))
+                {
+                    functionNode.Documentation = Current.Value?.ToString();
+                    _position++;
+                }
+                else
+                {
+                    ReportError("Expected string literal after 'DOC'");
+                }
+            }
 
             // Declaration or definition?
             if (Match(TokenType.Semicolon))
@@ -2473,11 +2489,13 @@ public class PeopleCodeParser
                 // Declaration only (no body)
                 return functionNode;
             }
+            
+            // Handle optional semicolons (SEMI*) before statements
+            while (Match(TokenType.Semicolon)) { }
 
             // Function definition body until END-FUNCTION
             var body = ParseStatementList(TokenType.EndFunction);
             Consume(TokenType.EndFunction, "Expected 'END-FUNCTION' after function body");
-            Match(TokenType.Semicolon); // optional semicolon after END-FUNCTION
 
             functionNode.SetBody(body);
             return functionNode;

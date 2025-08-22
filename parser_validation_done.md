@@ -90,3 +90,9 @@ This file contains a list of all parser rules from PeopleCodeParser.g4 that have
 - [x] **tryCatchBlock** - TRY-CATCH exception handling blocks
 - [x] **catchClauses** - multiple CATCH clauses in TRY blocks
 - [x] **catchClause** - individual CATCH clauses with exception types
+
+### Function Definitions
+- [x] **functionDefinitions** - multiple function definitions
+- [x] **functionDefinition** - complete function implementations with optional DOC
+- [x] **functionArguments** - function definition parameter lists
+- [x] **functionArgument** - individual function parameters with optional types

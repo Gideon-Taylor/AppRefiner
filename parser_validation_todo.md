@@ -47,10 +47,6 @@ This file contains a comprehensive list of all parser rules from PeopleCodeParse
 - [ ] **functionCallArguments** - function call parameter lists
 
 ### Function Definitions
-- [ ] **functionDefinitions** - multiple function definitions
-- [ ] **functionDefinition** - complete function implementations with optional DOC
-- [ ] **functionArguments** - function definition parameter lists
-- [ ] **functionArgument** - individual function parameters with optional types
 
 ### Method Annotations
 - [ ] **methodAnnotations** - method parameter, return, and extends annotations
