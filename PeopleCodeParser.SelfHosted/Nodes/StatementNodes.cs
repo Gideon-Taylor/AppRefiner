@@ -16,6 +16,19 @@ public abstract class StatementNode : AstNode
     /// True if this statement introduces a new scope
     /// </summary>
     public virtual bool IntroducesScope => false;
+    
+    /// <summary>
+    /// True if this statement had a semicolon in the source code
+    /// This is used for style checking, as PeopleCode allows but doesn't require
+    /// semicolons after statements (especially the last statement in a block)
+    /// </summary>
+    public bool HasSemicolon { get; set; } = false;
+    
+    /// <summary>
+    /// The sequential number of this statement in the program
+    /// This is useful for consumers of the library to track statement execution order
+    /// </summary>
+    public int StatementNumber { get; set; } = 0;
 }
 
 /// <summary>

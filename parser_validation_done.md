@@ -54,3 +54,15 @@ This file contains a list of all parser rules from PeopleCodeParser.g4 that have
 - [x] **dllArgument** - individual DLL parameters with modifiers
 - [x] **dllReturnType** - DLL function return type specifications
 - [x] **nonLocalVarDeclaration** - COMPONENT and GLOBAL variable declarations
+
+### Class Implementation
+- [x] **classBody** - class implementation body with members
+- [x] **classMember** - method, getter, and setter implementations
+- [x] **method** - method implementations with annotations and statements
+- [x] **getter** - property getter implementations
+- [x] **setter** - property setter implementations
+
+### Statements and Control Flow
+- [x] **statements** - sequences of executable statements
+- [x] **statementBlock** - scoped statement blocks
+- [x] **statement** - all statement types (assignment, control flow, declarations, etc.)

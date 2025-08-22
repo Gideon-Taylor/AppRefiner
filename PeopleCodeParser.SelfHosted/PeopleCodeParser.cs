@@ -14,6 +14,9 @@ public class PeopleCodeParser
     private int _position;
     private readonly List<ParseError> _errors = new();
     private readonly Stack<string> _ruleStack = new(); // For debugging and error context
+    
+    // Statement counter for tracking statement execution order
+    private int _statementCounter = 0;
 
     // Error recovery settings
     private const int MaxErrorRecoveryAttempts = 10;
@@ -242,6 +245,7 @@ public class PeopleCodeParser
         {
             EnterRule("program");
             _errorRecoveryCount = 0;
+            _statementCounter = 0; // Reset statement counter for a new program
 
             var program = new ProgramNode();
 
@@ -2778,7 +2782,7 @@ public class PeopleCodeParser
             EnterRule("statement");
 
             // Handle various statement types
-            return Current.Type switch
+            StatementNode? statement = Current.Type switch
             {
                 TokenType.If => ParseIfStatement(),
                 TokenType.For => ParseForStatement(),
@@ -2796,6 +2800,25 @@ public class PeopleCodeParser
                 TokenType.Local => ParseLocalVariableStatement(),
                 _ => ParseExpressionStatement()
             };
+            
+            // If we have a valid statement, assign a statement number and check for a semicolon
+            if (statement != null)
+            {
+                // Increment statement counter and assign to this statement
+                _statementCounter++;
+                statement.StatementNumber = _statementCounter;
+                
+                // Set the HasSemicolon flag if a semicolon is present
+                statement.HasSemicolon = Match(TokenType.Semicolon);
+                
+                // Consume any additional semicolons (allowed by the grammar)
+                while (Match(TokenType.Semicolon))
+                {
+                    // Each additional semicolon is just ignored
+                }
+            }
+            
+            return statement;
         }
         catch (Exception ex)
         {
@@ -3053,7 +3076,6 @@ public class PeopleCodeParser
             value = ParseExpression();
         }
 
-        Match(TokenType.Semicolon);
         return new ReturnStatementNode(value);
     }
 
@@ -3061,7 +3083,6 @@ public class PeopleCodeParser
     {
         if (!Match(TokenType.Break))
             return null;
-        Match(TokenType.Semicolon);
         return new BreakStatementNode();
     }
 
@@ -3069,7 +3090,6 @@ public class PeopleCodeParser
     {
         if (!Match(TokenType.Continue))
             return null;
-        Match(TokenType.Semicolon);
         return new ContinueStatementNode();
     }
 
@@ -3077,7 +3097,6 @@ public class PeopleCodeParser
     {
         if (!Match(TokenType.Exit))
             return null;
-        Match(TokenType.Semicolon);
         return new ExitStatementNode();
     }
 
@@ -3092,7 +3111,6 @@ public class PeopleCodeParser
             ReportError("Expected message after 'ERROR'");
             message = new LiteralNode("Error", LiteralType.String);
         }
-        Match(TokenType.Semicolon);
         return new ErrorStatementNode(message);
     }
 
@@ -3107,7 +3125,6 @@ public class PeopleCodeParser
             ReportError("Expected message after 'WARNING'");
             message = new LiteralNode("Warning", LiteralType.String);
         }
-        Match(TokenType.Semicolon);
         return new WarningStatementNode(message);
     }
 
@@ -3122,7 +3139,6 @@ public class PeopleCodeParser
             ReportError("Expected exception after 'THROW'");
             exception = new LiteralNode("Exception", LiteralType.String);
         }
-        Match(TokenType.Semicolon);
         return new ThrowStatementNode(exception);
     }
 
@@ -3170,7 +3186,6 @@ public class PeopleCodeParser
                     return null;
                 }
 
-                Match(TokenType.Semicolon); // Optional semicolon
                 return new LocalVariableDeclarationWithAssignmentNode(variableType, firstVariableName, initialValue);
             }
             else
@@ -3193,7 +3208,6 @@ public class PeopleCodeParser
                     }
                 }
 
-                Match(TokenType.Semicolon); // Optional semicolon
                 return new LocalVariableDeclarationNode(variableType, variableNames);
             }
         }
@@ -3218,7 +3232,6 @@ public class PeopleCodeParser
         if (expr == null)
             return null;
 
-        Match(TokenType.Semicolon); // Optional semicolon
         return new ExpressionStatementNode(expr);
     }
 

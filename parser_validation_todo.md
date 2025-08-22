@@ -24,16 +24,8 @@ This file contains a comprehensive list of all parser rules from PeopleCodeParse
 ### Function Declarations
 
 ### Class Implementation
-- [ ] **classBody** - class implementation body with members
-- [ ] **classMember** - method, getter, and setter implementations
-- [ ] **method** - method implementations with annotations and statements
-- [ ] **getter** - property getter implementations
-- [ ] **setter** - property setter implementations
 
 ### Statements and Control Flow
-- [ ] **statements** - sequences of executable statements
-- [ ] **statementBlock** - scoped statement blocks
-- [ ] **statement** - all statement types (assignment, control flow, declarations, etc.)
 
 ### Variable Declarations
 - [ ] **localVariableDeclaration** - local variable declarations and assignments
