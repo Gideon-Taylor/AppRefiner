@@ -2126,7 +2126,30 @@ public class PeopleCodeParser
             // SEMI*
             while (Match(TokenType.Semicolon)) { }
 
-            // Method headers terminated by at least one semicolon
+            // Parse class header (according to grammar)
+            // For interfaces, we'll only process method headers in the public section
+            ParseInterfaceHeader(iface);
+
+            Consume(TokenType.EndInterface, "Expected 'END-INTERFACE' to close interface");
+            return iface;
+        }
+        finally
+        {
+            ExitRule();
+        }
+    }
+    
+    /// <summary>
+    /// Parse interface header according to grammar (similar to classHeader but only allowing method headers)
+    /// </summary>
+    private void ParseInterfaceHeader(InterfaceNode interfaceNode)
+    {
+        try
+        {
+            EnterRule("interfaceHeader");
+            
+            // In interfaces, all methods are implicitly public
+            // Parse method headers until END-INTERFACE
             while (!IsAtEnd && !Check(TokenType.EndInterface))
             {
                 if (Check(TokenType.Method))
@@ -2134,8 +2157,11 @@ public class PeopleCodeParser
                     var methodHeader = ParseMethodHeader(VisibilityModifier.Public);
                     if (methodHeader is MethodNode methodNode)
                     {
-                        iface.AddMethod(methodNode);
+                        // All interface methods are abstract by definition
+                        methodNode.IsAbstract = true;
+                        interfaceNode.AddMethod(methodNode);
                     }
+                    
                     // Require at least one semicolon after header
                     if (!Match(TokenType.Semicolon))
                     {
@@ -2156,9 +2182,6 @@ public class PeopleCodeParser
                     while (Match(TokenType.Semicolon)) { }
                 }
             }
-
-            Consume(TokenType.EndInterface, "Expected 'END-INTERFACE' to close interface");
-            return iface;
         }
         finally
         {

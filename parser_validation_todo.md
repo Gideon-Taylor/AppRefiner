@@ -8,14 +8,8 @@ This file contains a comprehensive list of all parser rules from PeopleCodeParse
 
 
 ### Package and Class Paths
-- [ ] **appPackageAll** - wildcard package imports
-- [ ] **appPackagePath** - package path specifications
-- [ ] **appClassPath** - full class path specifications
 
 ### Class and Interface Declarations
-- [ ] **classDeclaration** - class declaration with extension/implementation/plain variants
-- [ ] **interfaceDeclaration** - interface declaration with extension/plain variants
-- [ ] **superclass** - superclass specifications (Exception, AppClass, SimpleType)
 
 ### Class Structure
 - [ ] **classHeader** - class visibility sections (public/protected/private)

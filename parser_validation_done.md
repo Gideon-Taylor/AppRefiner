@@ -1,33 +1,15 @@
-# Parser Validation Completed
+# Parser Validation Done List
 
-This file contains parser rules that have been validated against the ANTLR grammar and corrected in the C# self-hosted parser.
+This file contains a list of all parser rules from PeopleCodeParser.g4 that have been validated. Each rule has been tested to ensure proper parsing behavior, error handling, and AST generation.
 
-## Completed Rules
+## Validated Grammar Rules
 
-### Core Program Structure
-- [x] **importsBlock** - container for import declarations
-  - Behavior matches grammar: zero or more import declarations handled in program entry pre-pass.
-  - No code changes required beyond ensuring `importDeclaration` consumes SEMI+.
-  - Grammar Reference: importsBlock/importDeclaration lines 30-36.
-- [x] **importDeclaration** - individual import statements
-  - Adjusted to comply with grammar: supports METADATA or genericID start, requires at least one colon, and allows trailing '*' for package-all; consumes SEMI+.
-  - Files Modified: PeopleCodeParser.SelfHosted\PeopleCodeParser.cs (`ParseImport`)
-  - Grammar Reference: Lines 34-53 in PeopleCodeParser.g4
-- [x] **program** - main entry point for PeopleCode programs
-  - **Issue Found**: Parser didn't follow the strict grammar alternation between `appClass` OR `importsBlock programPreambles? SEMI* statements? SEMI* EOF`
-  - **Fix Applied**: Restructured ParseProgram() to properly handle the two distinct program formats according to ANTLR grammar
-  - **Grammar Reference**: Lines 20-23 in PeopleCodeParser.g4
-  - **Files Modified**: PeopleCodeParser.SelfHosted\PeopleCodeParser.cs:235-391
-  - **Date Completed**: 2023-06-12
-- [x] **appClass** - application class and interface programs
-  - **Issue Found**: The parser didn't properly handle interface programs as an alternative in the appClass rule
-  - **Fix Applied**: Modified ParseProgram to handle both class and interface declarations separately according to the grammar
-  - **Grammar Reference**: Lines 38-41 in PeopleCodeParser.g4
-  - **Files Modified**: PeopleCodeParser.SelfHosted\PeopleCodeParser.cs:232-280
-  - **Date Completed**: 2023-06-12
+### Package and Class Paths
+- [x] **appPackageAll** - wildcard package imports
+- [x] **appPackagePath** - package path specifications
+- [x] **appClassPath** - full class path specifications
 
-## Summary
-
-**Total Validated**: 4 rules
-**Issues Found and Fixed**: 2
-**Rules Passing**: 4
+### Class and Interface Declarations
+- [x] **classDeclaration** - class declaration with extension/implementation/plain variants
+- [x] **interfaceDeclaration** - interface declaration with extension/plain variants
+- [x] **superclass** - superclass specifications (Exception, AppClass, SimpleType)
