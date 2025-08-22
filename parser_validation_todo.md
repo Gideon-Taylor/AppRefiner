@@ -16,10 +16,6 @@ This file contains a comprehensive list of all parser rules from PeopleCodeParse
 ### Method Definitions
 
 ### Type System
-- [ ] **simpleType** - built-in types and generic IDs
-- [ ] **builtInType** - primitive PeopleCode types (ANY, BOOLEAN, DATE, etc.)
-- [ ] **typeT** - complete type specifications including arrays and exceptions
-- [ ] **annotationType** - method annotation types including Array2-Array9
 
 ### Property and Variable Declarations
 - [ ] **propertyDeclaration** - property declarations with GET/SET and modifiers

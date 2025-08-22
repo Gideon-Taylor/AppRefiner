@@ -27,3 +27,9 @@ This file contains a list of all parser rules from PeopleCodeParser.g4 that have
 - [x] **methodHeader** - method signatures with arguments and return types
 - [x] **methodArguments** - method parameter lists
 - [x] **methodArgument** - individual method parameters with types and OUT modifier
+
+### Type System
+- [x] **simpleType** - built-in types and generic IDs
+- [x] **builtInType** - primitive PeopleCode types (ANY, BOOLEAN, DATE, etc.)
+- [x] **typeT** - complete type specifications including arrays and exceptions
+- [x] **annotationType** - method annotation types including Array2-Array9
