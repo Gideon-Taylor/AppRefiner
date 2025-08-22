@@ -232,6 +232,9 @@ public class PeopleCodeParser
     /// <summary>
     /// Main entry point: Parse a complete PeopleCode program according to ANTLR grammar:
     /// program: appClass | importsBlock programPreambles? SEMI* statements? SEMI* EOF
+    /// 
+    /// Where appClass: importsBlock classDeclaration (SEMI+ classExternalDeclaration)* (SEMI* classBody)? SEMI* EOF  #AppClassProgram
+    ///              | importsBlock interfaceDeclaration SEMI* EOF                                                    #InterfaceProgram
     /// </summary>
     public ProgramNode ParseProgram()
     {
@@ -251,14 +254,28 @@ public class PeopleCodeParser
             }
 
             // Check if this is an appClass program or a regular program
-            if (Check(TokenType.Class, TokenType.Interface))
+            if (Check(TokenType.Class))
             {
-                // This is an appClass program
+                // This is an AppClassProgram
                 var appClass = ParseAppClass();
                 if (appClass != null)
                 {
                     program.SetAppClass(appClass);
                 }
+                return program;
+            }
+            else if (Check(TokenType.Interface))
+            {
+                // This is an InterfaceProgram
+                var interfaceNode = ParseInterface();
+                if (interfaceNode != null)
+                {
+                    program.SetInterface(interfaceNode);
+                }
+                
+                // Consume any trailing semicolons
+                while (Match(TokenType.Semicolon)) { }
+                
                 return program;
             }
 

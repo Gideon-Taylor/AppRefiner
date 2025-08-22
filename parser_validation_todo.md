@@ -5,7 +5,7 @@ This file contains a comprehensive list of all parser rules from PeopleCodeParse
 ## Grammar Rules to Validate
 
 ### Core Program Structure
-- [ ] **appClass** - application class and interface programs
+
 
 ### Package and Class Paths
 - [ ] **appPackageAll** - wildcard package imports
