@@ -437,7 +437,12 @@ public class PeopleCodeParser
                 ReportError("Expected package path after 'IMPORT'");
             }
 
-            Consume(TokenType.Semicolon, "Expected ';' after import declaration");
+            // Require at least one semicolon, allow additional semicolons (SEMI+ per grammar)
+            if (!Match(TokenType.Semicolon))
+            {
+                ReportError("Expected ';' after import declaration");
+            }
+            while (Match(TokenType.Semicolon)) { }
 
             if (pathParts.Count > 0)
             {

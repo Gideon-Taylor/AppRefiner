@@ -5,6 +5,10 @@ This file contains parser rules that have been validated against the ANTLR gramm
 ## Completed Rules
 
 ### Core Program Structure
+- [x] **importsBlock** - container for import declarations
+  - Behavior matches grammar: zero or more import declarations handled in program entry pre-pass.
+  - No code changes required beyond ensuring `importDeclaration` consumes SEMI+.
+  - Grammar Reference: importsBlock/importDeclaration lines 30-36.
 - [x] **program** - main entry point for PeopleCode programs
   - **Issue Found**: Parser didn't follow the strict grammar alternation between `appClass` OR `importsBlock programPreambles? SEMI* statements? SEMI* EOF`
   - **Fix Applied**: Restructured ParseProgram() to properly handle the two distinct program formats according to ANTLR grammar
