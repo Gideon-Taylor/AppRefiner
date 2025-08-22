@@ -13,3 +13,12 @@ This file contains a list of all parser rules from PeopleCodeParser.g4 that have
 - [x] **classDeclaration** - class declaration with extension/implementation/plain variants
 - [x] **interfaceDeclaration** - interface declaration with extension/plain variants
 - [x] **superclass** - superclass specifications (Exception, AppClass, SimpleType)
+
+### Class Structure
+- [x] **classHeader** - class visibility sections (public/protected/private)
+- [x] **nonPrivateHeader** - public and protected member containers
+- [x] **publicHeader** - public member container
+- [x] **protectedHeader** - protected member container
+- [x] **privateHeader** - private member container
+- [x] **nonPrivateMember** - public/protected methods and properties
+- [x] **privateMember** - private methods, properties, and constants

@@ -12,13 +12,6 @@ This file contains a comprehensive list of all parser rules from PeopleCodeParse
 ### Class and Interface Declarations
 
 ### Class Structure
-- [ ] **classHeader** - class visibility sections (public/protected/private)
-- [ ] **nonPrivateHeader** - public and protected member containers
-- [ ] **publicHeader** - public member container
-- [ ] **protectedHeader** - protected member container
-- [ ] **privateHeader** - private member container
-- [ ] **nonPrivateMember** - public/protected methods and properties
-- [ ] **privateMember** - private methods, properties, and constants
 
 ### Method Definitions
 - [ ] **methodHeader** - method signatures with arguments and return types

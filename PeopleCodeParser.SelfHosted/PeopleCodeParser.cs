@@ -702,21 +702,48 @@ public class PeopleCodeParser
                 {
                     AstNode? member = null;
 
+                    // Parse members based on visibility section according to grammar:
+                    // nonPrivateMember: methodHeader | propertyDeclaration
+                    // privateMember: methodHeader | instanceDeclaration | constantDeclaration
                     if (Check(TokenType.Method))
                     {
+                        // Method headers are allowed in all visibility sections
                         member = ParseMethodHeader(visibility);
                     }
                     else if (Check(TokenType.Property))
                     {
+                        // Property declarations are allowed in all visibility sections
                         member = ParsePropertyDeclaration();
                     }
-                    else if (Check(TokenType.Instance) && visibility == VisibilityModifier.Private)
+                    else if (Check(TokenType.Instance))
                     {
-                        member = ParseInstanceDeclaration();
+                        // Instance declarations are only allowed in private section
+                        if (visibility == VisibilityModifier.Private)
+                        {
+                            member = ParseInstanceDeclaration();
+                        }
+                        else
+                        {
+                            ReportError($"Instance declarations are only allowed in PRIVATE section, not in {visibility} section");
+                            // Skip this token to avoid infinite loop
+                            _position++;
+                            continue;
+                        }
                     }
-                    else if (Check(TokenType.Constant) && visibility == VisibilityModifier.Private)
+                    else if (Check(TokenType.Constant))
                     {
-                        member = ParseConstantDeclaration();
+                        // Constant declarations are only allowed in private section
+                        if (visibility == VisibilityModifier.Private)
+                        {
+                            member = ParseConstantDeclaration();
+                        }
+                        else
+                        {
+                            ReportError($"Constant declarations are only allowed in PRIVATE section, not in {visibility} section");
+                            // Skip this token to avoid infinite loop
+                            _position++;
+                            continue;
+                        }
                     }
                     else if (Check(TokenType.Semicolon))
                     {
