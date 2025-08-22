@@ -229,6 +229,15 @@ public class PeopleCodeLexer
             var token = NextToken();
             if (token != null)
             {
+                // For TokenizeAll(), flatten comment trivia as separate tokens (but not whitespace)
+                foreach (var trivia in token.LeadingTrivia)
+                {
+                    if (trivia.Type != TokenType.Whitespace)
+                    {
+                        tokens.Add(trivia);
+                    }
+                }
+                
                 tokens.Add(token);
             }
         }
@@ -244,15 +253,44 @@ public class PeopleCodeLexer
     /// </summary>
     public Token? NextToken()
     {
-        // Skip whitespace and collect it as trivia
+        // Collect leading trivia (whitespace and comments)
         var leadingTrivia = new List<Token>();
-        while (!IsAtEnd && char.IsWhiteSpace(CurrentChar))
+        
+        while (!IsAtEnd)
         {
-            leadingTrivia.Add(ScanWhitespace());
+            if (char.IsWhiteSpace(CurrentChar))
+            {
+                leadingTrivia.Add(ScanWhitespace());
+            }
+            else if (CurrentChar == '/' && PeekChar() == '*')
+            {
+                leadingTrivia.Add(ScanBlockComment());
+            }
+            else if (CurrentChar == '<' && PeekChar() == '*')
+            {
+                leadingTrivia.Add(ScanNestedComment());
+            }
+            else if (IsRemComment())
+            {
+                leadingTrivia.Add(ScanRemComment());
+            }
+            else
+            {
+                break; // Found non-trivia token
+            }
         }
 
         if (IsAtEnd)
         {
+            // If we have collected trivia but reached EOF, return the last non-whitespace trivia as a token
+            // This handles cases like standalone comments at the end of a file
+            for (int i = leadingTrivia.Count - 1; i >= 0; i--)
+            {
+                if (leadingTrivia[i].Type != TokenType.Whitespace)
+                {
+                    return leadingTrivia[i];
+                }
+            }
             return null;
         }
 
@@ -262,10 +300,8 @@ public class PeopleCodeLexer
         // Handle different character types
         Token? token = ch switch
         {
-            // Comments
-            '/' when PeekChar() == '*' => ScanBlockComment(),
+            // Special operators
             '/' when PeekChar() == '+' => ScanSlashPlus(),
-            '<' when PeekChar() == '*' => ScanNestedComment(),
             
             // Operators and punctuation
             '+' when PeekChar() == '/' => ScanPlusSlash(),
@@ -317,16 +353,13 @@ public class PeopleCodeLexer
             '%' => ScanSystemIdentifier(),
             '#' => ScanDirective(),
             
-            // REM comments (special case - check before generic letters)
-            'r' or 'R' when IsRemComment() => ScanRemComment(),
-            
-            // Letters and identifiers
+            // Letters and identifiers  
             _ when char.IsLetter(ch) || ch == '_' => ScanIdentifierOrKeyword(),
             
             _ => ScanInvalidCharacter()
         };
 
-        // Attach leading trivia
+        // Attach leading trivia to the token
         if (token != null)
         {
             foreach (var trivia in leadingTrivia)

@@ -73,7 +73,12 @@ public class ArrayTypeNode : TypeNode
     {
         get
         {
-            var arrayName = Dimensions == 1 ? "ARRAY" : $"ARRAY{Dimensions}";
+            var arrayName = "ARRAY";
+            for(var x = 2; x <= Dimensions; x++)
+            {
+                arrayName += " OF ARRAY";
+            }
+
             return ElementType != null ? $"{arrayName} OF {ElementType.TypeName}" : arrayName;
         }
     }
@@ -176,19 +181,148 @@ public class AppClassTypeNode : TypeNode
 }
 
 /// <summary>
-/// Built-in PeopleCode types
+/// Built-in PeopleCode types including primitive types and object types
 /// </summary>
 public enum BuiltInType
 {
+    // Primitive types
     Any,
     Boolean,
     Date,
     DateTime,
+    Exception,
     Float,
     Integer,
     Number,
     String,
-    Time
+    Time,
+    
+    // Core PeopleSoft objects
+    Field,
+    Record,
+    Page,
+    Component,
+    Menu,
+    MenuGroup,
+    
+    // Data and XML objects
+    XmlDoc,
+    XmlNode,
+    JsonObject,
+    JsonArray,
+    Rowset,
+    Row,
+    DataSource,
+    Query,
+    Tree,
+    TreeNode,
+    
+    // UI and graphics objects
+    Chart,
+    Image,
+    Grid,
+    GridColumn,
+    TreeControl,
+    PushButton,
+    CheckBox,
+    RadioButton,
+    DropDownList,
+    EditBox,
+    LongEditBox,
+    RichTextBox,
+    ScrollArea,
+    SubPage,
+    GroupBox,
+    Static,
+    Frame,
+    TabPage,
+    
+    // File and I/O objects
+    File,
+    FileLayout,
+    Message,
+    MsgGet,
+    MsgGetText,
+    
+    // Security and session objects
+    Session,
+    Request,
+    Response,
+    Portal,
+    Node,
+    ProcessRequest,
+    ContentReference,
+    Url,
+    
+    // Analytics and reporting objects
+    AnalyticGrid,
+    PivotGrid,
+    Cube,
+    Dimension,
+    
+    // Integration objects
+    SoapDoc,
+    HttpRequest,
+    HttpResponse,
+    FtpClient,
+    LdapEntry,
+    SmtpClient,
+    EmailMessage,
+    
+    // Workflow and approval objects
+    WorklistEntry,
+    ApprovalInstance,
+    WorkflowInstance,
+    
+    // Meta-data objects
+    MetaField,
+    MetaRecord,
+    MetaPage,
+    MetaComponent,
+    MetaMenu,
+    
+    // Array and collection objects
+    Array,
+    Collection,
+    Stack,
+    Queue,
+    Dictionary,
+    
+    // Database objects
+    DbField,
+    Sql,
+    GetLevel0,
+    CreateLevel0,
+    
+    // PeopleTools objects
+    ProcessScheduler,
+    Application,
+    PeopleCodeEvent,
+    Transform,
+    Channel,
+    Publication,
+    Subscription,
+    
+    // Financial objects (if using Financials)
+    Voucher,
+    Journal,
+    Ledger,
+    ChartField,
+    SetId,
+    
+    // HCM objects (if using HCM)
+    Job,
+    Position,
+    Employee,
+    Person,
+    Compensation,
+    
+    // Campus objects (if using Campus Solutions)
+    Student,
+    Course,
+    Class,
+    Term,
+    Institution
 }
 
 /// <summary>
@@ -201,18 +335,24 @@ public static class BuiltInTypeExtensions
     /// </summary>
     public static string ToKeyword(this BuiltInType type)
     {
+        // For built-in object types, just return the enum name as-is
+        // For primitive types, return the uppercase keyword
         return type switch
         {
+            // Primitive types (uppercase keywords)
             BuiltInType.Any => "ANY",
             BuiltInType.Boolean => "BOOLEAN",
             BuiltInType.Date => "DATE",
             BuiltInType.DateTime => "DATETIME",
+            BuiltInType.Exception => "EXCEPTION",
             BuiltInType.Float => "FLOAT",
             BuiltInType.Integer => "INTEGER",
             BuiltInType.Number => "NUMBER",
             BuiltInType.String => "STRING",
             BuiltInType.Time => "TIME",
-            _ => throw new ArgumentOutOfRangeException(nameof(type), type, null)
+            
+            // Object types (use enum name directly)
+            _ => type.ToString()
         };
     }
 
@@ -221,19 +361,53 @@ public static class BuiltInTypeExtensions
     /// </summary>
     public static BuiltInType? TryParseKeyword(string keyword)
     {
-        return keyword?.ToUpperInvariant() switch
+        if (string.IsNullOrWhiteSpace(keyword))
+            return null;
+
+        // First try primitive type keywords (case-insensitive)
+        var result = keyword.ToUpperInvariant() switch
         {
             "ANY" => BuiltInType.Any,
             "BOOLEAN" => BuiltInType.Boolean,
             "DATE" => BuiltInType.Date,
             "DATETIME" => BuiltInType.DateTime,
+            "EXCEPTION" => BuiltInType.Exception,
             "FLOAT" => BuiltInType.Float,
             "INTEGER" => BuiltInType.Integer,
             "NUMBER" => BuiltInType.Number,
             "STRING" => BuiltInType.String,
             "TIME" => BuiltInType.Time,
-            _ => null
+            _ => (BuiltInType?)null
         };
+        
+        if (result.HasValue)
+            return result;
+
+        // Try to parse as an object type enum value (case-insensitive)
+        if (Enum.TryParse<BuiltInType>(keyword, ignoreCase: true, out var objectType))
+        {
+            return objectType;
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// True if this type is a primitive built-in type (not an object type)
+    /// </summary>
+    public static bool IsPrimitiveType(this BuiltInType type)
+    {
+        return type is BuiltInType.Any or BuiltInType.Boolean or BuiltInType.Date or 
+               BuiltInType.DateTime or BuiltInType.Exception or BuiltInType.Float or 
+               BuiltInType.Integer or BuiltInType.Number or BuiltInType.String or BuiltInType.Time;
+    }
+
+    /// <summary>
+    /// True if this type is a built-in object type (not a primitive)
+    /// </summary>
+    public static bool IsObjectType(this BuiltInType type)
+    {
+        return !IsPrimitiveType(type);
     }
 
     /// <summary>
@@ -259,4 +433,30 @@ public static class BuiltInTypeExtensions
     {
         return type != BuiltInType.Boolean; // All types except boolean can be converted from string
     }
+
+    /// <summary>
+    /// True if this type represents an exception object
+    /// </summary>
+    public static bool IsException(this BuiltInType type)
+    {
+        return type is BuiltInType.Exception;
+    }
+
+    /// <summary>
+    /// True if this type can be used as a base class/interface
+    /// </summary>
+    public static bool CanBeBaseType(this BuiltInType type)
+    {
+        return type is BuiltInType.Exception or BuiltInType.Any;
+    }
+
+    /// <summary>
+    /// True if this type is nullable (can hold null values)
+    /// </summary>
+    public static bool IsNullable(this BuiltInType type)
+    {
+        // In PeopleCode, most types can be null, but primitives typically default to zero/empty
+        return type is not (BuiltInType.Integer or BuiltInType.Float or BuiltInType.Number or BuiltInType.Boolean);
+    }
 }
+

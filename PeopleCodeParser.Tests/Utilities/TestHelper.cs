@@ -1,6 +1,8 @@
 using FluentAssertions;
 using System.Diagnostics;
 using PeopleCodeParser.SelfHosted;
+using PeopleCodeParser.SelfHosted.Nodes;
+using PeopleCodeParser.SelfHosted.Lexing;
 
 namespace PeopleCodeParser.Tests.Utilities;
 
@@ -12,29 +14,49 @@ public static class TestHelper
     /// <summary>
     /// Parse source code and return the result, failing the test if parsing fails
     /// </summary>
-    public static AppRefiner.PeopleCode.PeopleCodeParser.ProgramContext ParseAndAssertSuccess(string sourceCode, string? context = null)
+    public static ProgramNode ParseAndAssertSuccess(string sourceCode, string? context = null)
     {
-        try
+        var lexer = new PeopleCodeLexer(sourceCode);
+        var tokens = lexer.TokenizeAll();
+        var parser = new PeopleCodeParser.SelfHosted.PeopleCodeParser(tokens);
+        var result = parser.ParseProgram();
+        
+        result.Should().NotBeNull(context ?? "Parse result should not be null");
+        
+        // Check for lexer errors first
+        if (lexer.Errors.Count > 0)
         {
-            var result = ProgramParser.Parse(sourceCode);
-            result.Should().NotBeNull(context ?? "Parse result should not be null");
-            return result;
+            var lexerErrors = string.Join("\n", lexer.Errors.Select(e => $"Line {e.Position.Line}: {e.Message}"));
+            throw new InvalidOperationException($"Lexing failed{(context != null ? $" ({context})" : "")} with errors:\n{lexerErrors}\nSource code:\n{sourceCode}");
         }
-        catch (Exception ex)
+        
+        // Check for parsing errors
+        if (parser.Errors.Count > 0)
         {
-            throw new InvalidOperationException($"Parsing failed{(context != null ? $" ({context})" : "")}: {ex.Message}\nSource code:\n{sourceCode}");
+            var errorMessages = string.Join("\n", parser.Errors.Select(e => $"Line {e.Location.Start.Line}: {e.Message}"));
+            throw new InvalidOperationException($"Parsing failed{(context != null ? $" ({context})" : "")} with errors:\n{errorMessages}\nSource code:\n{sourceCode}");
         }
+        
+        return result;
     }
 
     /// <summary>
     /// Parse source code and assert that it fails (for error testing)
     /// </summary>
-    public static void ParseAndExpectErrors(string sourceCode, string? context = null)
+    public static ProgramNode ParseAndExpectErrors(string sourceCode, string? context = null)
     {
-        // For now with ANTLR, we just ensure it doesn't crash
-        // Later with self-hosted parser, we'll check for specific error conditions
-        var action = () => ProgramParser.Parse(sourceCode);
-        action.Should().NotThrow(context ?? "Parser should not crash even on malformed input");
+        var lexer = new PeopleCodeLexer(sourceCode);
+        var tokens = lexer.TokenizeAll();
+        var parser = new PeopleCodeParser.SelfHosted.PeopleCodeParser(tokens);
+        var result = parser.ParseProgram();
+        
+        result.Should().NotBeNull(context ?? "Parser should not crash even on malformed input");
+        
+        // Either lexer or parser should have errors
+        var hasErrors = lexer.Errors.Count > 0 || parser.Errors.Count > 0;
+        hasErrors.Should().BeTrue(context ?? "Parser should report errors for malformed input");
+        
+        return result;
     }
 
     /// <summary>
@@ -43,12 +65,18 @@ public static class TestHelper
     public static TimeSpan MeasureParseTime(string sourceCode, int iterations = 1)
     {
         // Warm up
-        ProgramParser.Parse(sourceCode);
+        var warmupLexer = new PeopleCodeLexer(sourceCode);
+        var warmupTokens = warmupLexer.TokenizeAll();
+        var warmupParser = new PeopleCodeParser.SelfHosted.PeopleCodeParser(warmupTokens);
+        warmupParser.ParseProgram();
 
         var stopwatch = Stopwatch.StartNew();
         for (int i = 0; i < iterations; i++)
         {
-            ProgramParser.Parse(sourceCode);
+            var lexer = new PeopleCodeLexer(sourceCode);
+            var tokens = lexer.TokenizeAll();
+            var parser = new PeopleCodeParser.SelfHosted.PeopleCodeParser(tokens);
+            parser.ParseProgram();
         }
         stopwatch.Stop();
 
@@ -70,7 +98,10 @@ public static class TestHelper
         // Parse multiple times to get measurable memory usage
         for (int i = 0; i < iterations; i++)
         {
-            ProgramParser.Parse(sourceCode);
+            var lexer = new PeopleCodeLexer(sourceCode);
+            var tokens = lexer.TokenizeAll();
+            var parser = new PeopleCodeParser.SelfHosted.PeopleCodeParser(tokens);
+            parser.ParseProgram();
         }
 
         var finalMemory = GC.GetTotalMemory(false);

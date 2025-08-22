@@ -726,3 +726,205 @@ public class ExpressionStatementNode : StatementNode
         return Expression.ToString() + ";";
     }
 }
+
+/// <summary>
+/// Local variable declaration statement without assignment: LOCAL type &var1, &var2;
+/// </summary>
+public class LocalVariableDeclarationNode : StatementNode
+{
+    /// <summary>
+    /// Variable type
+    /// </summary>
+    public TypeNode Type { get; }
+
+    /// <summary>
+    /// Variable names
+    /// </summary>
+    public List<string> VariableNames { get; }
+
+    public override bool IntroducesScope => false; // Local variables don't introduce new scopes
+
+    public LocalVariableDeclarationNode(TypeNode type, IEnumerable<string> variableNames)
+    {
+        Type = type ?? throw new ArgumentNullException(nameof(type));
+        VariableNames = variableNames?.ToList() ?? throw new ArgumentNullException(nameof(variableNames));
+
+        if (VariableNames.Count == 0)
+            throw new ArgumentException("At least one variable name is required", nameof(variableNames));
+
+        AddChild(type);
+    }
+
+    public override void Accept(IAstVisitor visitor)
+    {
+        visitor.VisitLocalVariableDeclaration(this);
+    }
+
+    public override TResult Accept<TResult>(IAstVisitor<TResult> visitor)
+    {
+        return visitor.VisitLocalVariableDeclaration(this);
+    }
+
+    public override string ToString()
+    {
+        return $"LOCAL {Type} {string.Join(", ", VariableNames)}";
+    }
+}
+
+/// <summary>
+/// Local variable declaration with assignment: LOCAL type &var = expression;
+/// </summary>
+public class LocalVariableDeclarationWithAssignmentNode : StatementNode
+{
+    /// <summary>
+    /// Variable type
+    /// </summary>
+    public TypeNode Type { get; }
+
+    /// <summary>
+    /// Variable name
+    /// </summary>
+    public string VariableName { get; }
+
+    /// <summary>
+    /// Initial value expression
+    /// </summary>
+    public ExpressionNode InitialValue { get; }
+
+    public override bool IntroducesScope => false; // Local variables don't introduce new scopes
+
+    public LocalVariableDeclarationWithAssignmentNode(TypeNode type, string variableName, ExpressionNode initialValue)
+    {
+        Type = type ?? throw new ArgumentNullException(nameof(type));
+        VariableName = variableName ?? throw new ArgumentNullException(nameof(variableName));
+        InitialValue = initialValue ?? throw new ArgumentNullException(nameof(initialValue));
+
+        AddChild(type);
+        AddChild(initialValue);
+    }
+
+    public override void Accept(IAstVisitor visitor)
+    {
+        visitor.VisitLocalVariableDeclarationWithAssignment(this);
+    }
+
+    public override TResult Accept<TResult>(IAstVisitor<TResult> visitor)
+    {
+        return visitor.VisitLocalVariableDeclarationWithAssignment(this);
+    }
+
+    public override string ToString()
+    {
+        return $"LOCAL {Type} {VariableName} = {InitialValue}";
+    }
+}
+
+/// <summary>
+/// TRY statement node (alternative to TryCatchStatementNode for simpler naming)
+/// </summary>
+public class TryStatementNode : StatementNode
+{
+    /// <summary>
+    /// TRY block
+    /// </summary>
+    public BlockNode TryBlock { get; }
+
+    /// <summary>
+    /// CATCH clauses
+    /// </summary>
+    public List<CatchClauseNode> CatchClauses { get; } = new();
+
+    public override bool IntroducesScope => true;
+    public override bool CanTransferControl => 
+        TryBlock.CanTransferControl || 
+        CatchClauses.Any(c => c.Body.CanTransferControl);
+
+    public TryStatementNode(BlockNode tryBlock, IEnumerable<CatchClauseNode> catchClauses)
+    {
+        TryBlock = tryBlock ?? throw new ArgumentNullException(nameof(tryBlock));
+        
+        if (catchClauses != null)
+        {
+            CatchClauses.AddRange(catchClauses);
+        }
+
+        AddChild(tryBlock);
+        AddChildren(CatchClauses.Cast<AstNode>());
+    }
+
+    public override void Accept(IAstVisitor visitor)
+    {
+        visitor.VisitTryCatch(new TryCatchProxy(this));
+    }
+
+    public override TResult Accept<TResult>(IAstVisitor<TResult> visitor)
+    {
+        return visitor.VisitTryCatch(new TryCatchProxy(this));
+    }
+
+    public override string ToString()
+    {
+        return $"TRY-CATCH ({CatchClauses.Count} catch clauses)";
+    }
+}
+
+/// <summary>
+/// Proxy to bridge TryStatementNode to TryCatchStatementNode for visitor pattern
+/// </summary>
+internal class TryCatchProxy : TryCatchStatementNode
+{
+    public TryCatchProxy(TryStatementNode tryStatement) : base(tryStatement.TryBlock)
+    {
+        // Convert CatchClauseNode to CatchClause for compatibility
+        foreach (var clause in tryStatement.CatchClauses)
+        {
+            // For now, create a placeholder catch clause
+            // This is a simplification - in a full implementation you'd properly convert
+            var placeholderType = new BuiltInTypeNode(BuiltInType.Any);
+            var placeholderVariable = clause.ExceptionVariable?.Name ?? "e";
+            AddCatchClause(new CatchClause(placeholderType, placeholderVariable, clause.Body));
+        }
+    }
+}
+
+/// <summary>
+/// Simplified catch clause node
+/// </summary>
+public class CatchClauseNode : AstNode
+{
+    /// <summary>
+    /// Exception variable (optional)
+    /// </summary>
+    public IdentifierNode? ExceptionVariable { get; }
+
+    /// <summary>
+    /// Catch block body
+    /// </summary>
+    public BlockNode Body { get; }
+
+    public CatchClauseNode(IdentifierNode? exceptionVariable, BlockNode body)
+    {
+        ExceptionVariable = exceptionVariable;
+        Body = body ?? throw new ArgumentNullException(nameof(body));
+
+        if (exceptionVariable != null)
+            AddChild(exceptionVariable);
+        AddChild(body);
+    }
+
+    public override void Accept(IAstVisitor visitor)
+    {
+        visitor.VisitCatch(this);
+    }
+
+    public override TResult Accept<TResult>(IAstVisitor<TResult> visitor)
+    {
+        return visitor.VisitCatch(this);
+    }
+
+    public override string ToString()
+    {
+        var varStr = ExceptionVariable != null ? $" {ExceptionVariable.Name}" : "";
+        return $"CATCH{varStr}";
+    }
+}

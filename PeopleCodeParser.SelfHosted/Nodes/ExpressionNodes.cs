@@ -168,7 +168,7 @@ public class IdentifierNode : ExpressionNode
     /// </summary>
     public IdentifierType IdentifierType { get; }
 
-    public override bool IsLValue => IdentifierType is IdentifierType.UserVariable or IdentifierType.GenericId;
+    public override bool IsLValue => IdentifierType is IdentifierType.UserVariable or IdentifierType.Generic;
 
     public IdentifierNode(string name, IdentifierType identifierType)
     {
@@ -188,14 +188,7 @@ public class IdentifierNode : ExpressionNode
 
     public override string ToString()
     {
-        return IdentifierType switch
-        {
-            IdentifierType.UserVariable => $"&{Name}",
-            IdentifierType.SystemVariable => $"%{Name}",
-            IdentifierType.SystemConstant => $"%{Name}",
-            IdentifierType.Super => "%SUPER",
-            _ => Name
-        };
+        return Name;
     }
 }
 
@@ -545,7 +538,7 @@ public enum UnaryOperator
 {
     Negate,
     Not,
-    At
+    Reference
 }
 
 /// <summary>
@@ -553,7 +546,7 @@ public enum UnaryOperator
 /// </summary>
 public enum AssignmentOperator
 {
-    Simple,           // =
+    Assign,           // =
     AddAssign,        // +=
     SubtractAssign,   // -=
     ConcatenateAssign // |=
@@ -576,7 +569,7 @@ public enum LiteralType
 /// </summary>
 public enum IdentifierType
 {
-    GenericId,
+    Generic,
     UserVariable,
     SystemVariable,
     SystemConstant,
@@ -611,13 +604,13 @@ public static class OperatorExtensions
     {
         UnaryOperator.Negate => "-",
         UnaryOperator.Not => "NOT ",
-        UnaryOperator.At => "@",
+        UnaryOperator.Reference => "@",
         _ => throw new ArgumentOutOfRangeException(nameof(op))
     };
 
     public static string GetSymbol(this AssignmentOperator op) => op switch
     {
-        AssignmentOperator.Simple => "=",
+        AssignmentOperator.Assign => "=",
         AssignmentOperator.AddAssign => "+=",
         AssignmentOperator.SubtractAssign => "-=",
         AssignmentOperator.ConcatenateAssign => "|=",
@@ -643,4 +636,180 @@ public static class OperatorExtensions
         BinaryOperator.Power => true,
         _ => false
     };
+}
+
+/// <summary>
+/// Function call expression (Function(args) or obj.Method(args))
+/// </summary>
+public class FunctionCallNode : ExpressionNode
+{
+    /// <summary>
+    /// Function expression (identifier or member access)
+    /// </summary>
+    public ExpressionNode Function { get; }
+
+    /// <summary>
+    /// Function arguments
+    /// </summary>
+    public List<ExpressionNode> Arguments { get; }
+
+    public override bool HasSideEffects => true; // Function calls generally have side effects
+
+    public FunctionCallNode(ExpressionNode function, IEnumerable<ExpressionNode> arguments)
+    {
+        Function = function ?? throw new ArgumentNullException(nameof(function));
+        Arguments = arguments?.ToList() ?? new List<ExpressionNode>();
+
+        AddChild(function);
+        AddChildren(Arguments);
+    }
+
+    public override void Accept(IAstVisitor visitor)
+    {
+        visitor.VisitFunctionCall(this);
+    }
+
+    public override TResult Accept<TResult>(IAstVisitor<TResult> visitor)
+    {
+        return visitor.VisitFunctionCall(this);
+    }
+
+    public override string ToString()
+    {
+        var argsStr = string.Join(", ", Arguments);
+        return $"{Function}({argsStr})";
+    }
+}
+
+/// <summary>
+/// Member access expression (obj.member) - unified property and method access
+/// </summary>
+public class MemberAccessNode : ExpressionNode
+{
+    /// <summary>
+    /// Target object
+    /// </summary>
+    public ExpressionNode Target { get; }
+
+    /// <summary>
+    /// Member name
+    /// </summary>
+    public string MemberName { get; }
+
+    /// <summary>
+    /// True if this is dynamic member access (obj."string")
+    /// </summary>
+    public bool IsDynamic { get; }
+
+    public override bool IsLValue => true;
+    public override bool HasSideEffects => Target.HasSideEffects;
+
+    public MemberAccessNode(ExpressionNode target, string memberName, bool isDynamic = false)
+    {
+        Target = target ?? throw new ArgumentNullException(nameof(target));
+        MemberName = memberName ?? throw new ArgumentNullException(nameof(memberName));
+        IsDynamic = isDynamic;
+
+        AddChild(target);
+    }
+
+    public override void Accept(IAstVisitor visitor)
+    {
+        visitor.VisitMemberAccess(this);
+    }
+
+    public override TResult Accept<TResult>(IAstVisitor<TResult> visitor)
+    {
+        return visitor.VisitMemberAccess(this);
+    }
+
+    public override string ToString()
+    {
+        var memberStr = IsDynamic ? $"\"{MemberName}\"" : MemberName;
+        return $"{Target}.{memberStr}";
+    }
+}
+
+/// <summary>
+/// Array access with single index (array[index])
+/// </summary>
+public class ArrayIndexNode : ExpressionNode
+{
+    /// <summary>
+    /// Array expression
+    /// </summary>
+    public ExpressionNode Array { get; }
+
+    /// <summary>
+    /// Index expression
+    /// </summary>
+    public ExpressionNode Index { get; }
+
+    public override bool IsLValue => true;
+    public override bool HasSideEffects => Array.HasSideEffects || Index.HasSideEffects;
+
+    public ArrayIndexNode(ExpressionNode array, ExpressionNode index)
+    {
+        Array = array ?? throw new ArgumentNullException(nameof(array));
+        Index = index ?? throw new ArgumentNullException(nameof(index));
+
+        AddChildren(array, index);
+    }
+
+    public override void Accept(IAstVisitor visitor)
+    {
+        visitor.VisitArrayIndex(this);
+    }
+
+    public override TResult Accept<TResult>(IAstVisitor<TResult> visitor)
+    {
+        return visitor.VisitArrayIndex(this);
+    }
+
+    public override string ToString()
+    {
+        return $"{Array}[{Index}]";
+    }
+}
+
+/// <summary>
+/// Object creation with just type name (simplified version)
+/// </summary>
+public class SimpleObjectCreationNode : ExpressionNode
+{
+    /// <summary>
+    /// Type name being created
+    /// </summary>
+    public string TypeName { get; }
+
+    /// <summary>
+    /// Constructor arguments
+    /// </summary>
+    public List<ExpressionNode> Arguments { get; }
+
+    public override bool HasSideEffects => true; // Object creation has side effects
+
+    public SimpleObjectCreationNode(string typeName, IEnumerable<ExpressionNode> arguments)
+    {
+        TypeName = typeName ?? throw new ArgumentNullException(nameof(typeName));
+        Arguments = arguments?.ToList() ?? new List<ExpressionNode>();
+
+        AddChildren(Arguments);
+    }
+
+    public override void Accept(IAstVisitor visitor)
+    {
+        visitor.VisitSimpleObjectCreation(this);
+    }
+
+    public override TResult Accept<TResult>(IAstVisitor<TResult> visitor)
+    {
+        return visitor.VisitSimpleObjectCreation(this);
+    }
+
+    public override string ToString()
+    {
+        var argsStr = string.Join(", ", Arguments);
+        return $"CREATE {TypeName}({argsStr})";
+    }
 }

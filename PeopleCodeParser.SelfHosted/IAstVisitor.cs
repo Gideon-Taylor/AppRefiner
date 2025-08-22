@@ -54,6 +54,13 @@ public interface IAstVisitor
     void VisitTypeCast(TypeCastNode node);
     void VisitParenthesized(ParenthesizedExpressionNode node);
     void VisitAssignment(AssignmentNode node);
+    void VisitFunctionCall(FunctionCallNode node);
+    void VisitMemberAccess(MemberAccessNode node);
+    void VisitArrayIndex(ArrayIndexNode node);
+    void VisitSimpleObjectCreation(SimpleObjectCreationNode node);
+    void VisitLocalVariableDeclaration(LocalVariableDeclarationNode node);
+    void VisitLocalVariableDeclarationWithAssignment(LocalVariableDeclarationWithAssignmentNode node);
+    void VisitCatch(CatchClauseNode node);
 }
 
 /// <summary>
@@ -108,6 +115,13 @@ public interface IAstVisitor<out TResult>
     TResult VisitTypeCast(TypeCastNode node);
     TResult VisitParenthesized(ParenthesizedExpressionNode node);
     TResult VisitAssignment(AssignmentNode node);
+    TResult VisitFunctionCall(FunctionCallNode node);
+    TResult VisitMemberAccess(MemberAccessNode node);
+    TResult VisitArrayIndex(ArrayIndexNode node);
+    TResult VisitSimpleObjectCreation(SimpleObjectCreationNode node);
+    TResult VisitLocalVariableDeclaration(LocalVariableDeclarationNode node);
+    TResult VisitLocalVariableDeclarationWithAssignment(LocalVariableDeclarationWithAssignmentNode node);
+    TResult VisitCatch(CatchClauseNode node);
 }
 
 /// <summary>
@@ -162,6 +176,13 @@ public abstract class AstVisitorBase : IAstVisitor
     public virtual void VisitTypeCast(TypeCastNode node) => DefaultVisit(node);
     public virtual void VisitParenthesized(ParenthesizedExpressionNode node) => DefaultVisit(node);
     public virtual void VisitAssignment(AssignmentNode node) => DefaultVisit(node);
+    public virtual void VisitFunctionCall(FunctionCallNode node) => DefaultVisit(node);
+    public virtual void VisitMemberAccess(MemberAccessNode node) => DefaultVisit(node);
+    public virtual void VisitArrayIndex(ArrayIndexNode node) => DefaultVisit(node);
+    public virtual void VisitSimpleObjectCreation(SimpleObjectCreationNode node) => DefaultVisit(node);
+    public virtual void VisitLocalVariableDeclaration(LocalVariableDeclarationNode node) => DefaultVisit(node);
+    public virtual void VisitLocalVariableDeclarationWithAssignment(LocalVariableDeclarationWithAssignmentNode node) => DefaultVisit(node);
+    public virtual void VisitCatch(CatchClauseNode node) => DefaultVisit(node);
 }
 
 /// <summary>
@@ -212,4 +233,11 @@ public abstract class AstVisitorBase<TResult> : IAstVisitor<TResult>
     public virtual TResult VisitTypeCast(TypeCastNode node) => DefaultVisit(node);
     public virtual TResult VisitParenthesized(ParenthesizedExpressionNode node) => DefaultVisit(node);
     public virtual TResult VisitAssignment(AssignmentNode node) => DefaultVisit(node);
+    public virtual TResult VisitFunctionCall(FunctionCallNode node) => DefaultVisit(node);
+    public virtual TResult VisitMemberAccess(MemberAccessNode node) => DefaultVisit(node);
+    public virtual TResult VisitArrayIndex(ArrayIndexNode node) => DefaultVisit(node);
+    public virtual TResult VisitSimpleObjectCreation(SimpleObjectCreationNode node) => DefaultVisit(node);
+    public virtual TResult VisitLocalVariableDeclaration(LocalVariableDeclarationNode node) => DefaultVisit(node);
+    public virtual TResult VisitLocalVariableDeclarationWithAssignment(LocalVariableDeclarationWithAssignmentNode node) => DefaultVisit(node);
+    public virtual TResult VisitCatch(CatchClauseNode node) => DefaultVisit(node);
 }

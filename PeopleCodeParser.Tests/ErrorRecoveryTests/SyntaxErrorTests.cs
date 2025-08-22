@@ -1,6 +1,8 @@
 using FluentAssertions;
 using Xunit;
 using PeopleCodeParser.SelfHosted;
+using PeopleCodeParser.SelfHosted.Lexing;
+using PeopleCodeParser.Tests.Utilities;
 
 namespace PeopleCodeParser.Tests.ErrorRecoveryTests;
 
@@ -16,10 +18,15 @@ public class SyntaxErrorTests
     [InlineData("LOCAL string;", "Missing variable name")]
     public void Should_Handle_Variable_Declaration_Errors(string malformedCode, string description)
     {
-        // For now, we're just testing that the parser doesn't crash
-        // Later we'll test specific error recovery behavior
-        var action = () => ProgramParser.Parse(malformedCode);
-        action.Should().NotThrow($"Parser should not crash on: {description}");
+        // Test that the parser recovers gracefully and reports errors
+        var lexer = new PeopleCodeParser.SelfHosted.Lexing.PeopleCodeLexer(malformedCode);
+        var tokens = lexer.TokenizeAll();
+        var parser = new PeopleCodeParser.SelfHosted.PeopleCodeParser(tokens);
+        var result = parser.ParseProgram();
+        
+        result.Should().NotBeNull($"Parser should not crash on: {description}");
+        var hasErrors = lexer.Errors.Count > 0 || parser.Errors.Count > 0;
+        hasErrors.Should().BeTrue($"Parser should report errors for: {description}");
     }
 
     [Theory]
@@ -29,8 +36,14 @@ public class SyntaxErrorTests
     [InlineData("IF &condition THEN &x = 1; ELSE &y = 2;", "Missing END-IF after ELSE")]
     public void Should_Handle_Conditional_Statement_Errors(string malformedCode, string description)
     {
-        var action = () => ProgramParser.Parse(malformedCode);
-        action.Should().NotThrow($"Parser should not crash on: {description}");
+        var lexer = new PeopleCodeParser.SelfHosted.Lexing.PeopleCodeLexer(malformedCode);
+        var tokens = lexer.TokenizeAll();
+        var parser = new PeopleCodeParser.SelfHosted.PeopleCodeParser(tokens);
+        var result = parser.ParseProgram();
+        
+        result.Should().NotBeNull($"Parser should not crash on: {description}");
+        var hasErrors = lexer.Errors.Count > 0 || parser.Errors.Count > 0;
+        hasErrors.Should().BeTrue($"Parser should report errors for: {description}");
     }
 
     [Theory]
@@ -40,8 +53,14 @@ public class SyntaxErrorTests
     [InlineData("WHILE &sum = &sum + 1; END-WHILE;", "Missing condition")]
     public void Should_Handle_Loop_Statement_Errors(string malformedCode, string description)
     {
-        var action = () => ProgramParser.Parse(malformedCode);
-        action.Should().NotThrow($"Parser should not crash on: {description}");
+        var lexer = new PeopleCodeParser.SelfHosted.Lexing.PeopleCodeLexer(malformedCode);
+        var tokens = lexer.TokenizeAll();
+        var parser = new PeopleCodeParser.SelfHosted.PeopleCodeParser(tokens);
+        var result = parser.ParseProgram();
+        
+        result.Should().NotBeNull($"Parser should not crash on: {description}");
+        var hasErrors = lexer.Errors.Count > 0 || parser.Errors.Count > 0;
+        hasErrors.Should().BeTrue($"Parser should report errors for: {description}");
     }
 
     [Theory]
@@ -51,8 +70,14 @@ public class SyntaxErrorTests
     [InlineData("METHOD MyMethod(&param string) RETURNS string;", "Missing AS keyword")]
     public void Should_Handle_Method_Declaration_Errors(string malformedCode, string description)
     {
-        var action = () => ProgramParser.Parse(malformedCode);
-        action.Should().NotThrow($"Parser should not crash on: {description}");
+        var lexer = new PeopleCodeParser.SelfHosted.Lexing.PeopleCodeLexer(malformedCode);
+        var tokens = lexer.TokenizeAll();
+        var parser = new PeopleCodeParser.SelfHosted.PeopleCodeParser(tokens);
+        var result = parser.ParseProgram();
+        
+        result.Should().NotBeNull($"Parser should not crash on: {description}");
+        var hasErrors = lexer.Errors.Count > 0 || parser.Errors.Count > 0;
+        hasErrors.Should().BeTrue($"Parser should report errors for: {description}");
     }
 
     [Theory]
@@ -62,8 +87,14 @@ public class SyntaxErrorTests
     [InlineData("CLASS MyClass EXTENDS END-CLASS;", "Missing base class name")]
     public void Should_Handle_Class_Declaration_Errors(string malformedCode, string description)
     {
-        var action = () => ProgramParser.Parse(malformedCode);
-        action.Should().NotThrow($"Parser should not crash on: {description}");
+        var lexer = new PeopleCodeParser.SelfHosted.Lexing.PeopleCodeLexer(malformedCode);
+        var tokens = lexer.TokenizeAll();
+        var parser = new PeopleCodeParser.SelfHosted.PeopleCodeParser(tokens);
+        var result = parser.ParseProgram();
+        
+        result.Should().NotBeNull($"Parser should not crash on: {description}");
+        var hasErrors = lexer.Errors.Count > 0 || parser.Errors.Count > 0;
+        hasErrors.Should().BeTrue($"Parser should report errors for: {description}");
     }
 
     [Theory]
@@ -76,8 +107,14 @@ public class SyntaxErrorTests
     public void Should_Handle_Expression_Errors(string malformedExpression, string description)
     {
         var malformedCode = $"LOCAL any &result = {malformedExpression};";
-        var action = () => ProgramParser.Parse(malformedCode);
-        action.Should().NotThrow($"Parser should not crash on: {description}");
+        var lexer = new PeopleCodeParser.SelfHosted.Lexing.PeopleCodeLexer(malformedCode);
+        var tokens = lexer.TokenizeAll();
+        var parser = new PeopleCodeParser.SelfHosted.PeopleCodeParser(tokens);
+        var result = parser.ParseProgram();
+        
+        result.Should().NotBeNull($"Parser should not crash on: {description}");
+        var hasErrors = lexer.Errors.Count > 0 || parser.Errors.Count > 0;
+        hasErrors.Should().BeTrue($"Parser should report errors for: {description}");
     }
 
     [Theory]
@@ -89,8 +126,14 @@ public class SyntaxErrorTests
     public void Should_Handle_Literal_Errors(string malformedLiteral, string description)
     {
         var malformedCode = $"LOCAL any &result = {malformedLiteral};";
-        var action = () => ProgramParser.Parse(malformedCode);
-        action.Should().NotThrow($"Parser should not crash on: {description}");
+        var lexer = new PeopleCodeParser.SelfHosted.Lexing.PeopleCodeLexer(malformedCode);
+        var tokens = lexer.TokenizeAll();
+        var parser = new PeopleCodeParser.SelfHosted.PeopleCodeParser(tokens);
+        var result = parser.ParseProgram();
+        
+        result.Should().NotBeNull($"Parser should not crash on: {description}");
+        var hasErrors = lexer.Errors.Count > 0 || parser.Errors.Count > 0;
+        hasErrors.Should().BeTrue($"Parser should report errors for: {description}");
     }
 
     [Fact]
@@ -112,8 +155,15 @@ public class SyntaxErrorTests
                     END-WHILE;
         ";
 
-        var action = () => ProgramParser.Parse(malformedCode);
-        action.Should().NotThrow("Parser should not crash on complex malformed code");
+        var lexer = new PeopleCodeParser.SelfHosted.Lexing.PeopleCodeLexer(malformedCode);
+        var tokens = lexer.TokenizeAll();
+        var parser = new PeopleCodeParser.SelfHosted.PeopleCodeParser(tokens);
+        var result = parser.ParseProgram();
+        
+        result.Should().NotBeNull("Parser should not crash on complex malformed code");
+        var totalErrors = lexer.Errors.Count + parser.Errors.Count;
+        totalErrors.Should().BeGreaterThan(0, "Parser should report multiple errors for complex malformed code");
+        totalErrors.Should().BeGreaterThan(5, "Complex malformed code should generate multiple errors");
     }
 
     [Theory]
@@ -123,8 +173,14 @@ public class SyntaxErrorTests
     public void Should_Handle_Comment_Errors(string malformedComment, string description)
     {
         var malformedCode = $"{malformedComment}\nLOCAL string &var;";
-        var action = () => ProgramParser.Parse(malformedCode);
-        action.Should().NotThrow($"Parser should not crash on: {description}");
+        var lexer = new PeopleCodeParser.SelfHosted.Lexing.PeopleCodeLexer(malformedCode);
+        var tokens = lexer.TokenizeAll();
+        var parser = new PeopleCodeParser.SelfHosted.PeopleCodeParser(tokens);
+        var result = parser.ParseProgram();
+        
+        result.Should().NotBeNull($"Parser should not crash on: {description}");
+        var hasErrors = lexer.Errors.Count > 0 || parser.Errors.Count > 0;
+        hasErrors.Should().BeTrue($"Parser should report errors for: {description}");
     }
 
     [Fact]
@@ -137,7 +193,40 @@ public class SyntaxErrorTests
         LOCAL string &var2; // This should also parse fine after recovery
         ";
 
-        var action = () => ProgramParser.Parse(codeWithErrors);
-        action.Should().NotThrow("Parser should recover and continue parsing after errors");
+        var lexer = new PeopleCodeParser.SelfHosted.Lexing.PeopleCodeLexer(codeWithErrors);
+        var tokens = lexer.TokenizeAll();
+        var parser = new PeopleCodeParser.SelfHosted.PeopleCodeParser(tokens);
+        var result = parser.ParseProgram();
+        
+        result.Should().NotBeNull("Parser should recover and continue parsing after errors");
+        var hasErrors = lexer.Errors.Count > 0 || parser.Errors.Count > 0;
+        hasErrors.Should().BeTrue("Parser should report errors for invalid syntax");
+        
+        // The parser should have recovered and parsed some valid statements
+        result.MainBlock.Should().NotBeNull("Parser should construct partial AST even with errors");
+    }
+
+    [Fact]
+    public void Should_Provide_Meaningful_Error_Messages()
+    {
+        var malformedCode = "LOCAL string &var"; // Missing semicolon
+        var lexer = new PeopleCodeParser.SelfHosted.Lexing.PeopleCodeLexer(malformedCode);
+        var tokens = lexer.TokenizeAll();
+        var parser = new PeopleCodeParser.SelfHosted.PeopleCodeParser(tokens);
+        var result = parser.ParseProgram();
+        
+        result.Should().NotBeNull();
+        
+        var totalErrors = lexer.Errors.Count + parser.Errors.Count;
+        totalErrors.Should().BeGreaterThan(0, "Should have errors for malformed code");
+        
+        // Test error message quality from either lexer or parser
+        if (parser.Errors.Count > 0)
+        {
+            var error = parser.Errors.First();
+            error.Message.Should().NotBeNullOrEmpty("Error should have a meaningful message");
+            error.Location.Should().NotBeNull("Error should have source position information");
+            error.Location.Start.Line.Should().BeGreaterThan(0, "Error should have valid line number");
+        }
     }
 }

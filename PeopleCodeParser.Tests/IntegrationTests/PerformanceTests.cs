@@ -3,6 +3,7 @@ using BenchmarkDotNet.Running;
 using FluentAssertions;
 using Xunit;
 using PeopleCodeParser.SelfHosted;
+using PeopleCodeParser.SelfHosted.Lexing;
 using System.Diagnostics;
 
 namespace PeopleCodeParser.Tests.IntegrationTests;
@@ -66,21 +67,30 @@ public class PerformanceBenchmarks
     [Benchmark]
     public void ParseSimpleProgram()
     {
-        var result = ProgramParser.Parse(_simpleProgram);
+        var lexer = new PeopleCodeParser.SelfHosted.Lexing.PeopleCodeLexer(_simpleProgram);
+        var tokens = lexer.TokenizeAll();
+        var parser = new PeopleCodeParser.SelfHosted.PeopleCodeParser(tokens);
+        var result = parser.ParseProgram();
         if (result == null) throw new InvalidOperationException("Parse result was null");
     }
 
     [Benchmark]
     public void ParseComplexClass()
     {
-        var result = ProgramParser.Parse(_complexClass);
+        var lexer = new PeopleCodeParser.SelfHosted.Lexing.PeopleCodeLexer(_complexClass);
+        var tokens = lexer.TokenizeAll();
+        var parser = new PeopleCodeParser.SelfHosted.PeopleCodeParser(tokens);
+        var result = parser.ParseProgram();
         if (result == null) throw new InvalidOperationException("Parse result was null");
     }
 
     [Benchmark]
     public void ParseLargeProgram()
     {
-        var result = ProgramParser.Parse(_largeProgram);
+        var lexer = new PeopleCodeParser.SelfHosted.Lexing.PeopleCodeLexer(_largeProgram);
+        var tokens = lexer.TokenizeAll();
+        var parser = new PeopleCodeParser.SelfHosted.PeopleCodeParser(tokens);
+        var result = parser.ParseProgram();
         if (result == null) throw new InvalidOperationException("Parse result was null");
     }
 
@@ -204,7 +214,10 @@ public class PerformanceTests
         ";
 
         var stopwatch = Stopwatch.StartNew();
-        var result = ProgramParser.Parse(sourceCode);
+        var lexer = new PeopleCodeParser.SelfHosted.Lexing.PeopleCodeLexer(sourceCode);
+        var tokens = lexer.TokenizeAll();
+        var parser = new PeopleCodeParser.SelfHosted.PeopleCodeParser(tokens);
+        var result = parser.ParseProgram();
         stopwatch.Stop();
 
         result.Should().NotBeNull();
@@ -248,7 +261,10 @@ public class PerformanceTests
         ";
 
         var stopwatch = Stopwatch.StartNew();
-        var result = ProgramParser.Parse(sourceCode);
+        var lexer = new PeopleCodeParser.SelfHosted.Lexing.PeopleCodeLexer(sourceCode);
+        var tokens = lexer.TokenizeAll();
+        var parser = new PeopleCodeParser.SelfHosted.PeopleCodeParser(tokens);
+        var result = parser.ParseProgram();
         stopwatch.Stop();
 
         result.Should().NotBeNull();
@@ -270,7 +286,10 @@ public class PerformanceTests
         // Parse the same code multiple times
         for (int i = 0; i < 1000; i++)
         {
-            var result = ProgramParser.Parse(sourceCode);
+            var lexer = new PeopleCodeParser.SelfHosted.Lexing.PeopleCodeLexer(sourceCode);
+            var tokens = lexer.TokenizeAll();
+        var parser = new PeopleCodeParser.SelfHosted.PeopleCodeParser(tokens);
+        var result = parser.ParseProgram();
             result.Should().NotBeNull();
         }
 
@@ -306,7 +325,10 @@ public class PerformanceTests
             {
                 try
                 {
-                    var result = ProgramParser.Parse(sourceCode);
+                    var lexer = new PeopleCodeParser.SelfHosted.Lexing.PeopleCodeLexer(sourceCode);
+                    var tokens = lexer.TokenizeAll();
+        var parser = new PeopleCodeParser.SelfHosted.PeopleCodeParser(tokens);
+        var result = parser.ParseProgram();
                     results[index] = result != null;
                 }
                 catch

@@ -77,7 +77,7 @@ public class AstNodeTests
         var stmt1 = new ExpressionStatementNode(
             new AssignmentNode(
                 new IdentifierNode("x", IdentifierType.UserVariable),
-                AssignmentOperator.Simple,
+                AssignmentOperator.Assign,
                 new LiteralNode(1, LiteralType.Integer)
             )
         );
@@ -85,7 +85,7 @@ public class AstNodeTests
         var stmt2 = new ExpressionStatementNode(
             new AssignmentNode(
                 new IdentifierNode("x", IdentifierType.UserVariable),
-                AssignmentOperator.Simple,
+                AssignmentOperator.Assign,
                 new LiteralNode(2, LiteralType.Integer)
             )
         );

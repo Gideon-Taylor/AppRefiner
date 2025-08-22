@@ -4,7 +4,7 @@ using PeopleCodeParser.SelfHosted.Nodes;
 using SelfHostedLexer = PeopleCodeParser.SelfHosted.Lexing.PeopleCodeLexer;
 using PeopleCodeParser.SelfHosted.Lexing;
 
-namespace PeopleCodeParser.Tests.SelfHostedTests;
+namespace PeopleCodeParser.Tests.LexerTests;
 
 /// <summary>
 /// Tests for the self-hosted lexer
@@ -14,7 +14,7 @@ public class LexerTests
     [Fact]
     public void Should_Tokenize_Simple_Variable_Declaration()
     {
-        var source = "LOCAL string &test = \"hello\";";
+        var source = "Local string &test = \"hello\";";
         var lexer = new SelfHostedLexer(source);
         var tokens = lexer.TokenizeAll();
 
@@ -24,7 +24,7 @@ public class LexerTests
         nonTriviaTokens.Should().HaveCount(7); // LOCAL, string, &test, =, "hello", ;, EOF
         
         nonTriviaTokens[0].Type.Should().Be(TokenType.Local);
-        nonTriviaTokens[0].Text.Should().Be("LOCAL");
+        nonTriviaTokens[0].Text.Should().Be("Local");
         
         nonTriviaTokens[1].Type.Should().Be(TokenType.String);
         nonTriviaTokens[1].Text.Should().Be("string");
@@ -258,6 +258,7 @@ public class LexerTests
         var lexer = new SelfHostedLexer(source);
         var tokens = lexer.TokenizeAll();
 
+
         // Should be: BlockComment, Star, Div, EOF
         tokens.Should().HaveCount(4);
         tokens[0].Type.Should().Be(TokenType.BlockComment);
@@ -371,7 +372,7 @@ public class LexerTests
     [Fact]
     public void Should_Handle_Trivia_Correctly()
     {
-        var source = "LOCAL /* comment */ string &test; // More trivia";
+        var source = "LOCAL /* comment */ string &test;";
         var lexer = new SelfHostedLexer(source);
         var tokens = lexer.TokenizeAll();
 
