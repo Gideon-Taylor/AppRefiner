@@ -153,7 +153,6 @@ public enum TokenType
     Array8,
     Array9,
     As,
-    At,                   // @
     Boolean,
     Break,
     Catch,
@@ -245,7 +244,7 @@ public enum TokenType
     GreaterThan,          // >
     GreaterThanOrEqual,   // >=
     Pipe,                 // | (concatenation)
-    
+    At,                   // @
     // Assignment operators
     PlusEqual,            // +=
     MinusEqual,           // -=

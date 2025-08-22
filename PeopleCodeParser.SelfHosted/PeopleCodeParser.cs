@@ -482,38 +482,47 @@ public class PeopleCodeParser
             bool consumedColon = false;
 
             // First segment: METADATA or generic identifier
-            if (Check(TokenType.Metadata) || Check(TokenType.GenericId))
+            if (Check(TokenType.Metadata))
             {
                 pathParts.Add(Current.Text);
                 _position++;
-
-                // Parse subsequent segments separated by colons
-                while (Match(TokenType.Colon))
-                {
-                    consumedColon = true;
-
-                    if (Check(TokenType.GenericId))
-                    {
-                        pathParts.Add(Current.Text);
-                        _position++;
-                    }
-                    else if (Check(TokenType.Star))
-                    {
-                        // Wildcard import terminator (appPackageAll)
-                        pathParts.Add(Current.Text);
-                        _position++;
-                        break;
-                    }
-                    else
-                    {
-                        ReportError("Expected class name or '*' after ':'");
-                        break;
-                    }
-                }
             }
             else
             {
-                ReportError("Expected package path after 'IMPORT'");
+                var firstId = ParseGenericId();
+                if (firstId != null)
+                {
+                    pathParts.Add(firstId);
+                }
+                else
+                {
+                    ReportError("Expected package path after 'IMPORT'");
+                    return null;
+                }
+            }
+
+            // Parse subsequent segments separated by colons
+            while (Match(TokenType.Colon))
+            {
+                consumedColon = true;
+
+                var nextId = ParseGenericId();
+                if (nextId != null)
+                {
+                    pathParts.Add(nextId);
+                }
+                else if (Check(TokenType.Star))
+                {
+                    // Wildcard import terminator (appPackageAll)
+                    pathParts.Add(Current.Text);
+                    _position++;
+                    break;
+                }
+                else
+                {
+                    ReportError("Expected class name or '*' after ':'");
+                    break;
+                }
             }
 
             // Require at least one semicolon, allow additional semicolons (SEMI+ per grammar)
@@ -1610,6 +1619,7 @@ public class PeopleCodeParser
                 TokenType.Continue => true,
                 TokenType.Create => true,
                 TokenType.Date => true,
+                TokenType.Exception => true,
                 TokenType.Extends => true,
                 TokenType.Get => true,
                 TokenType.Import => true,
@@ -3811,8 +3821,8 @@ public class PeopleCodeParser
         catch (Exception ex)
         {
             ReportError($"Error parsing type cast expression: {ex.Message}");
-            // Return partial result for better recovery
-            return ParseConcatenationExpression();
+            // Return null to break recursion instead of calling ParseConcatenationExpression()
+            return null;
         }
         finally
         {
@@ -4024,36 +4034,51 @@ public class PeopleCodeParser
             }
             else if (Match(TokenType.LeftParen))
             {
-                // Check if this is an implicit subindex expression (expression(expression))
-                // or a function call (expression(args...))
-                
-                // Peek ahead to see if there's a single expression or an argument list
-                var startPos = _position;
-                var singleExpr = ParseExpression();
-                
-                // If we parsed a single expression and the next token is ')',
-                // this is an implicit subindex expression
-                if (singleExpr != null && Check(TokenType.RightParen))
+                // Check for empty function call first (no arguments)
+                if (Check(TokenType.RightParen))
                 {
-                    _position++; // Consume the ')'
-                    expr = new ArrayIndexNode(expr, singleExpr) // Reuse ArrayIndexNode for implicit subindex
-                    {
-                        SourceSpan = new SourceSpan(expr.SourceSpan.Start, Current.SourceSpan.End)
-                    };
-                }
-                else
-                {
-                    // Reset position and parse as a normal function call
-                    _position = startPos;
-                    
-                    // Function call
-                    var args = ParseArgumentList();
+                    // Empty function call like CreateArray()
+                    var args = new List<ExpressionNode>();
                     Consume(TokenType.RightParen, "Expected ')' after function arguments");
                     
                     expr = new FunctionCallNode(expr, args)
                     {
                         SourceSpan = new SourceSpan(expr.SourceSpan.Start, Current.SourceSpan.End)
                     };
+                }
+                else
+                {
+                    // Check if this is an implicit subindex expression (expression(expression))
+                    // or a function call (expression(args...))
+                    
+                    // Peek ahead to see if there's a single expression or an argument list
+                    var startPos = _position;
+                    var singleExpr = ParseExpression();
+                    
+                    // If we parsed a single expression and the next token is ')',
+                    // this is an implicit subindex expression
+                    if (singleExpr != null && Check(TokenType.RightParen))
+                    {
+                        _position++; // Consume the ')'
+                        expr = new ArrayIndexNode(expr, singleExpr) // Reuse ArrayIndexNode for implicit subindex
+                        {
+                            SourceSpan = new SourceSpan(expr.SourceSpan.Start, Current.SourceSpan.End)
+                        };
+                    }
+                    else
+                    {
+                        // Reset position and parse as a normal function call
+                        _position = startPos;
+                        
+                        // Function call
+                        var args = ParseArgumentList();
+                        Consume(TokenType.RightParen, "Expected ')' after function arguments");
+                        
+                        expr = new FunctionCallNode(expr, args)
+                        {
+                            SourceSpan = new SourceSpan(expr.SourceSpan.Start, Current.SourceSpan.End)
+                        };
+                    }
                 }
             }
             else if (Match(TokenType.Dot))
