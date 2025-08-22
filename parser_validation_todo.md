@@ -36,15 +36,6 @@ This file contains a comprehensive list of all parser rules from PeopleCodeParse
 ### Exception Handling
 
 ### Expressions
-- [ ] **expression** - all expression types with precedence and operators
-- [ ] **simpleFunctionCall** - function calls with arguments
-- [ ] **dotAccess** - member access with optional method calls
-- [ ] **allowableFunctionName** - keywords usable as function names
-- [ ] **genericID** - identifiers including keywords usable as IDs
-- [ ] **ident** - identifier types (SUPER, system variables/constants, user variables)
-- [ ] **expressionList** - comma-separated expression lists
-- [ ] **objectCreate** - CREATE object instantiation expressions
-- [ ] **functionCallArguments** - function call parameter lists
 
 ### Function Definitions
 

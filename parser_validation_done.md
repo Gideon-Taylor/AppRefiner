@@ -103,3 +103,14 @@ This file contains a list of all parser rules from PeopleCodeParser.g4 that have
 - [x] **methodAnnotationArgument** - annotated method arguments with types
 - [x] **methodReturnAnnotation** - method return type annotations
 - [x] **methodExtendsAnnotation** - method extends/implements annotations
+
+### Expressions
+- [x] **expression** - all expression types with precedence and operators
+- [x] **simpleFunctionCall** - function calls with arguments
+- [x] **dotAccess** - member access with optional method calls
+- [x] **allowableFunctionName** - keywords usable as function names
+- [x] **genericID** - identifiers including keywords usable as IDs
+- [x] **ident** - identifier types (SUPER, system variables/constants, user variables)
+- [x] **expressionList** - comma-separated expression lists
+- [x] **objectCreate** - CREATE object instantiation expressions
+- [x] **functionCallArguments** - function call parameter lists

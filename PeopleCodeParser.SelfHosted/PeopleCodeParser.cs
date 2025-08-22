@@ -3504,7 +3504,7 @@ public class PeopleCodeParser
     /// </summary>
     private ExpressionNode? ParseAssignmentExpression()
     {
-        var expr = ParseOrExpression();
+        var expr = ParseConcatenationExpression();
         if (expr == null) return null;
 
         if (Current.Type.IsAssignmentOperator())
@@ -3620,7 +3620,7 @@ public class PeopleCodeParser
     /// </summary>
     private ExpressionNode? ParseRelationalExpression()
     {
-        var left = ParseConcatenationExpression();
+        var left = ParseNotExpression();
         if (left == null) return null;
 
         while (Current.Type is TokenType.LessThan or TokenType.LessThanOrEqual or 
@@ -3636,7 +3636,7 @@ public class PeopleCodeParser
             };
             _position++;
 
-            var right = ParseConcatenationExpression();
+            var right = ParseNotExpression();
             if (right == null)
             {
                 ReportError("Expected expression after relational operator");
@@ -3657,12 +3657,12 @@ public class PeopleCodeParser
     /// </summary>
     private ExpressionNode? ParseConcatenationExpression()
     {
-        var left = ParseAdditiveExpression();
+        var left = ParseOrExpression();
         if (left == null) return null;
 
         while (Match(TokenType.Pipe))
         {
-            var right = ParseAdditiveExpression();
+            var right = ParseOrExpression();
             if (right == null)
             {
                 ReportError("Expected expression after '|'");
@@ -3676,6 +3676,34 @@ public class PeopleCodeParser
         }
 
         return left;
+    }
+    
+    /// <summary>
+    /// Parse NOT expressions (NOT expression)
+    /// </summary>
+    private ExpressionNode? ParseNotExpression()
+    {
+        if (Match(TokenType.Not))
+        {
+            var opToken = Current;
+            _position--;  // Go back to the NOT token for source span
+            
+            var operand = ParseAdditiveExpression();
+            if (operand == null)
+            {
+                ReportError("Expected expression after 'NOT'");
+                return null;
+            }
+            
+            _position++;  // Move past the NOT token
+            
+            return new UnaryOperationNode(UnaryOperator.Not, operand)
+            {
+                SourceSpan = new SourceSpan(opToken.SourceSpan.Start, operand.SourceSpan.End)
+            };
+        }
+        
+        return ParseAdditiveExpression();
     }
 
     /// <summary>
@@ -3764,16 +3792,15 @@ public class PeopleCodeParser
     }
 
     /// <summary>
-    /// Parse unary expressions (-, NOT, @)
+    /// Parse unary expressions (-, @)
     /// </summary>
     private ExpressionNode? ParseUnaryExpression()
     {
-        if (Current.Type is TokenType.Minus or TokenType.Not or TokenType.At)
+        if (Current.Type is TokenType.Minus or TokenType.At)
         {
             var op = Current.Type switch
             {
                 TokenType.Minus => UnaryOperator.Negate,
-                TokenType.Not => UnaryOperator.Not,
                 TokenType.At => UnaryOperator.Reference,
                 _ => throw new InvalidOperationException("Unexpected unary operator")
             };
@@ -3793,17 +3820,17 @@ public class PeopleCodeParser
             };
         }
 
-        return ParseCastExpression();
+        return ParsePrimaryExpression();
     }
 
     /// <summary>
-    /// Parse type cast expressions (expr AS Type)
+    /// Parse postfix expressions (function calls, array access, property access)
     /// </summary>
-    private ExpressionNode? ParseCastExpression()
+    private ExpressionNode? ParsePostfixExpression()
     {
-        var expr = ParsePostfixExpression();
+        var expr = ParsePrimaryExpression();
         if (expr == null) return null;
-
+        
         // Handle type casting (expr AS Type) - PeopleCode only supports single casts, not chains
         if (Match(TokenType.As))
         {
@@ -3820,31 +3847,9 @@ public class PeopleCodeParser
             };
         }
 
-        return expr;
-    }
-
-    /// <summary>
-    /// Parse postfix expressions (function calls, array access, property access)
-    /// </summary>
-    private ExpressionNode? ParsePostfixExpression()
-    {
-        var expr = ParsePrimaryExpression();
-        if (expr == null) return null;
-
         while (true)
         {
-            if (Match(TokenType.LeftParen))
-            {
-                // Function call
-                var args = ParseArgumentList();
-                Consume(TokenType.RightParen, "Expected ')' after function arguments");
-                
-                expr = new FunctionCallNode(expr, args)
-                {
-                    SourceSpan = new SourceSpan(expr.SourceSpan.Start, Current.SourceSpan.End)
-                };
-            }
-            else if (Match(TokenType.LeftBracket))
+            if (Match(TokenType.LeftBracket))
             {
                 // Array access
                 var index = ParseExpression();
@@ -3860,20 +3865,68 @@ public class PeopleCodeParser
                     SourceSpan = new SourceSpan(expr.SourceSpan.Start, Current.SourceSpan.End)
                 };
             }
-            else if (Match(TokenType.Dot))
+            else if (Match(TokenType.LeftParen))
             {
-                // Property/method access
-                if (Check(TokenType.GenericId))
+                // Check if this is an implicit subindex expression (expression(expression))
+                // or a function call (expression(args...))
+                
+                // Peek ahead to see if there's a single expression or an argument list
+                var startPos = _position;
+                var singleExpr = ParseExpression();
+                
+                // If we parsed a single expression and the next token is ')',
+                // this is an implicit subindex expression
+                if (singleExpr != null && Check(TokenType.RightParen))
                 {
-                    var member = Current.Text;
-                    var memberToken = Current;
-                    _position++;
-                    
-                    expr = new MemberAccessNode(expr, member)
+                    _position++; // Consume the ')'
+                    expr = new ArrayIndexNode(expr, singleExpr) // Reuse ArrayIndexNode for implicit subindex
                     {
-                        SourceSpan = new SourceSpan(expr.SourceSpan.Start, memberToken.SourceSpan.End)
+                        SourceSpan = new SourceSpan(expr.SourceSpan.Start, Current.SourceSpan.End)
                     };
                 }
+                else
+                {
+                    // Reset position and parse as a normal function call
+                    _position = startPos;
+                    
+                    // Function call
+                    var args = ParseArgumentList();
+                    Consume(TokenType.RightParen, "Expected ')' after function arguments");
+                    
+                    expr = new FunctionCallNode(expr, args)
+                    {
+                        SourceSpan = new SourceSpan(expr.SourceSpan.Start, Current.SourceSpan.End)
+                    };
+                }
+            }
+            else if (Match(TokenType.Dot))
+            {
+                                    // Property/method access
+                    if (Check(TokenType.GenericId))
+                    {
+                        var member = Current.Text;
+                        var memberToken = Current;
+                        _position++;
+                        
+                        // Create member access node
+                        expr = new MemberAccessNode(expr, member)
+                        {
+                            SourceSpan = new SourceSpan(expr.SourceSpan.Start, memberToken.SourceSpan.End)
+                        };
+                        
+                        // Check for method call after dot access
+                        if (Match(TokenType.LeftParen))
+                        {
+                            // Method call
+                            var args = ParseArgumentList();
+                            Consume(TokenType.RightParen, "Expected ')' after method arguments");
+                            
+                            expr = new FunctionCallNode(expr, args)
+                            {
+                                SourceSpan = new SourceSpan(expr.SourceSpan.Start, Current.SourceSpan.End)
+                            };
+                        }
+                    }
                 else if (Check(TokenType.StringLiteral))
                 {
                     // Dynamic member access with string
@@ -3947,12 +4000,18 @@ public class PeopleCodeParser
         {
             return ParseObjectCreation();
         }
-
-        // Type cast
-        if (Check(TokenType.As))
+        
+        // App class path (metadata expression)
+        if ((Check(TokenType.Metadata) || Check(TokenType.GenericId)) && Peek().Type == TokenType.Colon)
         {
-            return ParseTypeCast();
+            var appClassPath = ParseAppClassPath();
+            if (appClassPath != null)
+            {
+                return new MetadataExpressionNode(appClassPath);
+            }
         }
+
+        // Type cast is handled in ParseCastExpression()
 
         ReportError($"Unexpected token in expression: {Current.Type}");
         return null;
@@ -4095,16 +4154,7 @@ public class PeopleCodeParser
         return new ObjectCreationNode(appClassPath, args);
     }
 
-    /// <summary>
-    /// Parse type cast expressions (expression AS type)
-    /// </summary>
-    private TypeCastNode? ParseTypeCast()
-    {
-        // This should be called when we have an expression followed by AS
-        // For now, return null - not implemented
-        ReportError("Type cast parsing not yet implemented");
-        return null;
-    }
+    // Note: Type casting is handled in ParseCastExpression(), this method is not used
 
     /// <summary>
     /// Convert token type to assignment operator

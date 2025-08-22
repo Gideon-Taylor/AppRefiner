@@ -813,3 +813,35 @@ public class SimpleObjectCreationNode : ExpressionNode
         return $"CREATE {TypeName}({argsStr})";
     }
 }
+
+/// <summary>
+/// Represents a metadata expression (app class path used as an expression)
+/// </summary>
+public class MetadataExpressionNode : ExpressionNode
+{
+    /// <summary>
+    /// The app class type referenced in the metadata expression
+    /// </summary>
+    public AppClassTypeNode AppClassType { get; }
+
+    public MetadataExpressionNode(AppClassTypeNode appClassType)
+    {
+        AppClassType = appClassType ?? throw new ArgumentNullException(nameof(appClassType));
+        AddChild(appClassType);
+    }
+
+    public override void Accept(IAstVisitor visitor)
+    {
+        visitor.VisitMetadataExpression(this);
+    }
+
+    public override TResult Accept<TResult>(IAstVisitor<TResult> visitor)
+    {
+        return visitor.VisitMetadataExpression(this);
+    }
+
+    public override string ToString()
+    {
+        return AppClassType.ToString();
+    }
+}
