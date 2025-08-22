@@ -2589,15 +2589,30 @@ public class PeopleCodeParser
                 ReportError("Expected '=' after constant name");
             }
 
-            var valueExpr = ParseExpression();
-            if (valueExpr == null)
+            // According to grammar, constant values must be literals
+            if (!Current.Type.IsLiteral())
             {
-                ReportError("Expected expression for constant value");
+                ReportError("Expected literal value for constant (NULL, number, string, or boolean)");
+                // Try to parse expression anyway for error recovery
+                var valueExpr = ParseExpression();
+                if (valueExpr == null)
+                {
+                    return null;
+                }
+                Match(TokenType.Semicolon); // optional
+                return new ConstantNode(name, valueExpr);
+            }
+
+            // Parse literal value
+            var literalValue = ParseLiteral();
+            if (literalValue == null)
+            {
+                ReportError("Expected literal value for constant");
                 return null;
             }
 
             Match(TokenType.Semicolon); // optional
-            return new ConstantNode(name, valueExpr);
+            return new ConstantNode(name, literalValue);
         }
         finally
         {

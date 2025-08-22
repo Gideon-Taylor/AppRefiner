@@ -18,10 +18,6 @@ This file contains a comprehensive list of all parser rules from PeopleCodeParse
 ### Type System
 
 ### Property and Variable Declarations
-- [ ] **propertyDeclaration** - property declarations with GET/SET and modifiers
-- [ ] **instanceDeclaration** - instance variable declarations
-- [ ] **constantDeclaration** - constant variable declarations with literals
-- [ ] **literal** - literal values (NULL, decimals, integers, strings, booleans)
 
 ### External Declarations
 - [ ] **classExternalDeclaration** - external function and variable declarations

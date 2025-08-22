@@ -33,3 +33,9 @@ This file contains a list of all parser rules from PeopleCodeParser.g4 that have
 - [x] **builtInType** - primitive PeopleCode types (ANY, BOOLEAN, DATE, etc.)
 - [x] **typeT** - complete type specifications including arrays and exceptions
 - [x] **annotationType** - method annotation types including Array2-Array9
+
+### Property and Variable Declarations
+- [x] **propertyDeclaration** - property declarations with GET/SET and modifiers
+- [x] **instanceDeclaration** - instance variable declarations
+- [x] **constantDeclaration** - constant variable declarations with literals
+- [x] **literal** - literal values (NULL, decimals, integers, strings, booleans)
