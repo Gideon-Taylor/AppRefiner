@@ -20,9 +20,6 @@ This file contains a comprehensive list of all parser rules from PeopleCodeParse
 ### Property and Variable Declarations
 
 ### External Declarations
-- [ ] **classExternalDeclaration** - external function and variable declarations
-- [ ] **programPreambles** - multiple program preamble declarations
-- [ ] **programPreamble** - various declaration types at program start
 
 ### Function Declarations
 - [ ] **functionDeclaration** - PeopleCode and library function declarations

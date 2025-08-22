@@ -39,3 +39,8 @@ This file contains a list of all parser rules from PeopleCodeParser.g4 that have
 - [x] **instanceDeclaration** - instance variable declarations
 - [x] **constantDeclaration** - constant variable declarations with literals
 - [x] **literal** - literal values (NULL, decimals, integers, strings, booleans)
+
+### External Declarations
+- [x] **classExternalDeclaration** - external function and variable declarations
+- [x] **programPreambles** - multiple program preamble declarations
+- [x] **programPreamble** - various declaration types at program start

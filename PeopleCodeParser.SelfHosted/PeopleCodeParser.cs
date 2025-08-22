@@ -348,9 +348,20 @@ public class PeopleCodeParser
                 {
                     if (Check(TokenType.Function, TokenType.PeopleCode, TokenType.Library, TokenType.Declare))
                     {
+                        // This could be either a function declaration or a function definition
+                        // ParseFunction() handles both cases correctly
                         var function = ParseFunction();
                         if (function != null)
+                        {
                             program.AddFunction(function);
+                            
+                            // If this was a function definition (with body), we don't expect a semicolon
+                            // as ParseFunction() already consumed the optional semicolon after END-FUNCTION
+                            if (function.Body != null)
+                            {
+                                continue; // Skip the semicolon check for function definitions
+                            }
+                        }
                     }
                     else if (Check(TokenType.Global, TokenType.Component))
                     {
@@ -377,6 +388,7 @@ public class PeopleCodeParser
                     }
 
                     // Consume required semicolons after preamble item
+                    // (except for function definitions, which were handled above)
                     if (!Match(TokenType.Semicolon))
                     {
                         break; // No semicolon means we're done with preambles
