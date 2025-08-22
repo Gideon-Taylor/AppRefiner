@@ -47,7 +47,7 @@ public class PeopleCodeLexer
         { "DATE", TokenType.Date },
         { "DATETIME", TokenType.DateTime },
         { "DECLARE", TokenType.Declare },
-        { "DOC", TokenType.Abstract }, // DOC is treated as identifier in most contexts
+        { "DOC", TokenType.Doc },
         { "ELSE", TokenType.Else },
         { "ERROR", TokenType.Error },
         { "EVALUATE", TokenType.Evaluate },

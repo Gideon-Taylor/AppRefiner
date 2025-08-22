@@ -165,6 +165,7 @@ public enum TokenType
     Date,
     DateTime,
     Declare,
+    Doc,
     Else,
     Error,
     Evaluate,

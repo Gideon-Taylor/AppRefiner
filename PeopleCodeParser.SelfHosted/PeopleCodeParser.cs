@@ -1135,6 +1135,11 @@ public class PeopleCodeParser
                 if (paramType == null)
                 {
                     ReportError("Expected parameter type after 'AS'");
+                    // Use default ANY type if we couldn't parse the specified type
+                    paramType = new BuiltInTypeNode(BuiltInType.Any)
+                    {
+                        SourceSpan = Current.SourceSpan
+                    };
                 }
             }
 
@@ -1787,7 +1792,12 @@ public class PeopleCodeParser
             var propertyNode = new PropertyNode(propertyName, new BuiltInTypeNode(BuiltInType.Any));
 
             // Parse method return annotation (contains the actual property type)
-            ParseMethodReturnAnnotation(propertyNode);
+            // Try to parse a return annotation - it's fine if there isn't one
+            int startPosition = _position;
+            if (!ParseMethodReturnAnnotation(propertyNode))
+            {
+                _position = startPosition;
+            }
 
             // Optional semicolons
             while (Match(TokenType.Semicolon)) { }
@@ -1841,7 +1851,12 @@ public class PeopleCodeParser
             var propertyNode = new PropertyNode(propertyName, new BuiltInTypeNode(BuiltInType.Any));
 
             // Parse method parameter annotation (contains the property type)
-            ParseMethodParameterAnnotation(propertyNode);
+            // Try to parse a parameter annotation - it's fine if there isn't one
+            int startPosition = _position;
+            if (!ParseMethodParameterAnnotation(propertyNode))
+            {
+                _position = startPosition;
+            }
 
             // Optional semicolons
             while (Match(TokenType.Semicolon)) { }
@@ -1879,22 +1894,39 @@ public class PeopleCodeParser
         {
             EnterRule("methodAnnotations");
 
-            // Parse parameter annotations (/+ &param AS type +/)
+            // Parse all annotations (/+ ... +/)
             while (Check(TokenType.SlashPlus))
             {
-                ParseMethodParameterAnnotation(methodNode);
-            }
-
-            // Parse return annotation (/+ RETURNS type +/)
-            if (Check(TokenType.SlashPlus))
-            {
-                ParseMethodReturnAnnotation(methodNode);
-            }
-
-            // Parse extends annotation (/+ EXTENDS / IMPLEMENTS ... +/) - not implemented yet
-            if (Check(TokenType.SlashPlus))
-            {
-                ParseMethodExtendsAnnotation(methodNode);
+                int startPosition = _position;
+                
+                // Try to parse as a parameter annotation
+                if (ParseMethodParameterAnnotation(methodNode))
+                {
+                    continue;
+                }
+                
+                // Reset position and try to parse as a return annotation
+                _position = startPosition;
+                if (ParseMethodReturnAnnotation(methodNode))
+                {
+                    continue;
+                }
+                
+                // Reset position and try to parse as an extends annotation
+                _position = startPosition;
+                if (ParseMethodExtendsAnnotation(methodNode))
+                {
+                    continue;
+                }
+                
+                // If we get here, we couldn't parse the annotation, so skip it
+                Match(TokenType.SlashPlus);
+                while (!IsAtEnd && !Check(TokenType.PlusSlash))
+                {
+                    _position++;
+                }
+                Match(TokenType.PlusSlash);
+                ReportError("Unrecognized method annotation");
             }
         }
         finally
@@ -1906,7 +1938,8 @@ public class PeopleCodeParser
     /// <summary>
     /// Parse method parameter annotation: SLASH_PLUS methodAnnotationArgument COMMA? PLUS_SLASH
     /// </summary>
-    private void ParseMethodParameterAnnotation(MethodNode methodNode)
+    /// <returns>True if a parameter annotation was successfully parsed, false otherwise</returns>
+    private bool ParseMethodParameterAnnotation(MethodNode methodNode)
     {
         try
         {
@@ -1914,7 +1947,14 @@ public class PeopleCodeParser
 
             if (!Match(TokenType.SlashPlus))
             {
-                return;
+                return false;
+            }
+
+            // Check if this is a parameter annotation (starts with a user variable)
+            if (!Check(TokenType.UserVariable))
+            {
+                // Not a parameter annotation
+                return false;
             }
 
             // Parse parameter annotation
@@ -1929,6 +1969,7 @@ public class PeopleCodeParser
 
             // Expect closing annotation
             Consume(TokenType.PlusSlash, "Expected '+/' to close method parameter annotation");
+            return true;
         }
         finally
         {
@@ -1939,7 +1980,8 @@ public class PeopleCodeParser
     /// <summary>
     /// Parse method parameter annotation for property setter
     /// </summary>
-    private void ParseMethodParameterAnnotation(PropertyNode propertyNode)
+    /// <returns>True if a parameter annotation was successfully parsed, false otherwise</returns>
+    private bool ParseMethodParameterAnnotation(PropertyNode propertyNode)
     {
         try
         {
@@ -1947,7 +1989,14 @@ public class PeopleCodeParser
 
             if (!Match(TokenType.SlashPlus))
             {
-                return;
+                return false;
+            }
+
+            // Check if this is a parameter annotation (starts with a user variable)
+            if (!Check(TokenType.UserVariable))
+            {
+                // Not a parameter annotation
+                return false;
             }
 
             // Parse parameter - for setter this gives us the property type
@@ -1959,6 +2008,7 @@ public class PeopleCodeParser
 
             // Expect closing annotation
             Consume(TokenType.PlusSlash, "Expected '+/' to close method parameter annotation");
+            return true;
         }
         finally
         {
@@ -1969,7 +2019,8 @@ public class PeopleCodeParser
     /// <summary>
     /// Parse method return annotation: SLASH_PLUS RETURNS annotationType PLUS_SLASH
     /// </summary>
-    private void ParseMethodReturnAnnotation(MethodNode methodNode)
+    /// <returns>True if a return annotation was successfully parsed, false otherwise</returns>
+    private bool ParseMethodReturnAnnotation(MethodNode methodNode)
     {
         try
         {
@@ -1977,14 +2028,14 @@ public class PeopleCodeParser
 
             if (!Match(TokenType.SlashPlus))
             {
-                return;
+                return false;
             }
 
             if (!Match(TokenType.Returns))
             {
                 // Not a return annotation, back up
                 _position--;
-                return;
+                return false;
             }
 
             // Parse return type
@@ -1996,6 +2047,7 @@ public class PeopleCodeParser
 
             // Expect closing annotation
             Consume(TokenType.PlusSlash, "Expected '+/' to close method return annotation");
+            return true;
         }
         finally
         {
@@ -2006,7 +2058,8 @@ public class PeopleCodeParser
     /// <summary>
     /// Parse method return annotation for property getter
     /// </summary>
-    private void ParseMethodReturnAnnotation(PropertyNode propertyNode)
+    /// <returns>True if a return annotation was successfully parsed, false otherwise</returns>
+    private bool ParseMethodReturnAnnotation(PropertyNode propertyNode)
     {
         try
         {
@@ -2014,14 +2067,14 @@ public class PeopleCodeParser
 
             if (!Match(TokenType.SlashPlus))
             {
-                return;
+                return false;
             }
 
             if (!Match(TokenType.Returns))
             {
                 // Not a return annotation, back up
                 _position--;
-                return;
+                return false;
             }
 
             // Parse return type - this becomes the property type
@@ -2030,6 +2083,7 @@ public class PeopleCodeParser
 
             // Expect closing annotation
             Consume(TokenType.PlusSlash, "Expected '+/' to close method return annotation");
+            return true;
         }
         finally
         {
@@ -2040,7 +2094,8 @@ public class PeopleCodeParser
     /// <summary>
     /// Parse method extends annotation: SLASH_PLUS EXTENDS DIV IMPLEMENTS appClassPath DOT genericID PLUS_SLASH
     /// </summary>
-    private void ParseMethodExtendsAnnotation(MethodNode methodNode)
+    /// <returns>True if an extends annotation was successfully parsed, false otherwise</returns>
+    private bool ParseMethodExtendsAnnotation(MethodNode methodNode)
     {
         try
         {
@@ -2048,14 +2103,14 @@ public class PeopleCodeParser
 
             if (!Match(TokenType.SlashPlus))
             {
-                return;
+                return false;
             }
 
             if (!Match(TokenType.Extends))
             {
                 // Not an extends annotation, back up
                 _position--;
-                return;
+                return false;
             }
 
             // Expect DIV (forward slash)
@@ -2103,6 +2158,7 @@ public class PeopleCodeParser
 
             // Expect closing annotation
             Consume(TokenType.PlusSlash, "Expected '+/' to close method extends annotation");
+            return true;
         }
         finally
         {
@@ -3820,7 +3876,7 @@ public class PeopleCodeParser
             };
         }
 
-        return ParsePrimaryExpression();
+        return ParsePostfixExpression();
     }
 
     /// <summary>

@@ -490,7 +490,7 @@ public class ParameterNode : AstNode
     /// <summary>
     /// Parameter type
     /// </summary>
-    public TypeNode Type { get; }
+    public TypeNode Type { get; set; }
 
     /// <summary>
     /// True if parameter is passed by reference (OUT parameter)
