@@ -230,7 +230,8 @@ public class PeopleCodeParser
     }
 
     /// <summary>
-    /// Main entry point: Parse a complete PeopleCode program
+    /// Main entry point: Parse a complete PeopleCode program according to ANTLR grammar:
+    /// program: appClass | importsBlock programPreambles? SEMI* statements? SEMI* EOF
     /// </summary>
     public ProgramNode ParseProgram()
     {
@@ -240,8 +241,8 @@ public class PeopleCodeParser
             _errorRecoveryCount = 0;
 
             var program = new ProgramNode();
-            
-            // Parse imports first
+
+            // Parse imports block first
             while (Check(TokenType.Import) && !IsAtEnd)
             {
                 var import = ParseImport();
@@ -249,25 +250,86 @@ public class PeopleCodeParser
                     program.AddImport(import);
             }
 
-            // Parse program content
-            while (!IsAtEnd)
+            // Check if this is an appClass program or a regular program
+            if (Check(TokenType.Class, TokenType.Interface))
+            {
+                // This is an appClass program
+                var appClass = ParseAppClass();
+                if (appClass != null)
+                {
+                    program.SetAppClass(appClass);
+                }
+                return program;
+            }
+
+            // This is a regular program: programPreambles? SEMI* statements? SEMI* EOF
+            try
+            {
+                // Parse optional program preambles (functions, variables, constants)
+                ParseProgramPreambles(program);
+
+                // Parse optional semicolons
+                while (Match(TokenType.Semicolon)) { }
+
+                // Parse optional statements
+                if (!IsAtEnd && !Check(TokenType.EndOfFile))
+                {
+                    if (program.MainBlock == null)
+                        program.SetMainBlock(new BlockNode());
+
+                    while (!IsAtEnd && !Check(TokenType.EndOfFile))
+                    {
+                        var statement = ParseStatement();
+                        if (statement != null)
+                        {
+                            program.MainBlock?.AddStatement(statement);
+                        }
+                        else
+                        {
+                            // If we couldn't parse a statement, skip the current token to prevent infinite loop
+                            ReportError($"Unexpected token: {Current.Type}");
+                            _position++;
+                        }
+
+                        // Handle optional semicolons between statements
+                        while (Match(TokenType.Semicolon)) { }
+                    }
+                }
+
+                // Parse final optional semicolons before EOF
+                while (Match(TokenType.Semicolon)) { }
+
+                return program;
+            }
+            catch (Exception ex)
+            {
+                ReportError($"Unexpected error in program parsing: {ex.Message}");
+                PanicRecover(StatementSyncTokens.Union(BlockSyncTokens).ToHashSet());
+                return program;
+            }
+        }
+        finally
+        {
+            ExitRule();
+        }
+    }
+
+    /// <summary>
+    /// Parse program preambles according to ANTLR grammar:
+    /// programPreambles: programPreamble (SEMI+ programPreamble)*
+    /// </summary>
+    private void ParseProgramPreambles(ProgramNode program)
+    {
+        try
+        {
+            EnterRule("programPreambles");
+
+            // Check if we have any preamble constructs
+            while (!IsAtEnd && IsProgramPreambleToken())
             {
                 try
                 {
-                    // Try to parse different top-level constructs
-                    if (Check(TokenType.Class))
-                    {
-                        var appClass = ParseAppClass();
-                        if (appClass != null)
-                            program.SetAppClass(appClass);
-                    }
-                    else if (Check(TokenType.Interface))
-                    {
-                        var interfaceNode = ParseInterface();
-                        if (interfaceNode != null)
-                            program.SetInterface(interfaceNode);
-                    }
-                    else if (Check(TokenType.Function, TokenType.PeopleCode, TokenType.Library))
+                    if (Check(TokenType.Function, TokenType.PeopleCode, TokenType.Library, TokenType.Declare))
                     {
                         var function = ParseFunction();
                         if (function != null)
@@ -285,36 +347,47 @@ public class PeopleCodeParser
                         if (constant != null)
                             program.AddConstant(constant);
                     }
+                    else if (Check(TokenType.Local))
+                    {
+                        // Local variable definition as preamble
+                        var localVar = ParseVariableDeclaration();
+                        if (localVar != null)
+                            program.AddVariable(localVar);
+                    }
                     else
                     {
-                        // Assume this is a statement in the main program block
-                        if (program.MainBlock == null)
-                            program.SetMainBlock(new BlockNode());
-
-                        var statement = ParseStatement();
-                        if (statement != null)
-                            program.MainBlock?.AddStatement(statement);
-                        else
-                        {
-                            // If we couldn't parse a statement, skip the current token to prevent infinite loop
-                            ReportError($"Unexpected token: {Current.Type}");
-                            _position++;
-                        }
+                        break; // No more preamble items
                     }
+
+                    // Consume required semicolons after preamble item
+                    if (!Match(TokenType.Semicolon))
+                    {
+                        break; // No semicolon means we're done with preambles
+                    }
+                    
+                    // Consume any additional semicolons
+                    while (Match(TokenType.Semicolon)) { }
                 }
                 catch (Exception ex)
                 {
-                    ReportError($"Unexpected error: {ex.Message}");
-                    PanicRecover(StatementSyncTokens.Union(BlockSyncTokens).ToHashSet());
+                    ReportError($"Error parsing program preamble: {ex.Message}");
+                    PanicRecover(StatementSyncTokens);
                 }
             }
-
-            return program;
         }
         finally
         {
             ExitRule();
         }
+    }
+
+    /// <summary>
+    /// Check if current token can start a program preamble
+    /// </summary>
+    private bool IsProgramPreambleToken()
+    {
+        return Check(TokenType.Function, TokenType.PeopleCode, TokenType.Library, TokenType.Declare,
+                    TokenType.Global, TokenType.Component, TokenType.Constant, TokenType.Local);
     }
 
     /// <summary>
@@ -2526,7 +2599,7 @@ public class PeopleCodeParser
     }
 
     /// <summary>
-    /// Parse FOR statement: FOR var = start TO end [STEP step] statements END-FOR;
+    /// Parse FOR statement: FOR USER_VARIABLE EQ expression TO expression (STEP expression)? SEMI* statementBlock? END_FOR
     /// </summary>
     private ForStatementNode? ParseForStatement()
     {
@@ -2537,12 +2610,16 @@ public class PeopleCodeParser
             if (!Match(TokenType.For))
                 return null;
 
-            var variable = ParseExpression();
-            if (variable == null)
+            // Parse USER_VARIABLE (not expression)
+            if (!Check(TokenType.UserVariable))
             {
-                ReportError("Expected variable after 'FOR'");
+                ReportError("Expected user variable after 'FOR'");
                 return null;
             }
+            
+            var variableToken = Current;
+            var variableName = variableToken.Value?.ToString() ?? "";
+            _position++; // Consume the user variable token
 
             if (!Match(TokenType.Equal))
             {
@@ -2578,13 +2655,18 @@ public class PeopleCodeParser
                 }
             }
 
-            var body = ParseStatementList(TokenType.EndFor);
+            // Handle optional semicolons (SEMI*)
+            while (Match(TokenType.Semicolon)) { }
+
+            // Parse optional statementBlock
+            var body = new BlockNode();
+            if (!Check(TokenType.EndFor))
+            {
+                body = ParseStatementList(TokenType.EndFor);
+            }
 
             Consume(TokenType.EndFor, "Expected 'END-FOR' after FOR statement");
-            Match(TokenType.Semicolon); // Optional semicolon
 
-            // Extract variable name from expression (simplified)
-            var variableName = variable?.ToString() ?? "unknown";
             var forNode = new ForStatementNode(variableName, start, end, body);
             if (step != null)
                 forNode.SetStepValue(step);
@@ -3459,6 +3541,17 @@ public class PeopleCodeParser
             return ParseIdentifier();
         }
 
+        // Built-in function keywords that are callable like identifiers
+        if (IsBuiltinFunctionKeyword(Current.Type))
+        {
+            var token = Current;
+            _position++;
+            return new IdentifierNode(token.Text, IdentifierType.Generic)
+            {
+                SourceSpan = token.SourceSpan
+            };
+        }
+
         // Parenthesized expression
         if (Match(TokenType.LeftParen))
         {
@@ -3486,6 +3579,19 @@ public class PeopleCodeParser
 
         ReportError($"Unexpected token in expression: {Current.Type}");
         return null;
+    }
+
+    // Keywords that are built-in functions usable as identifiers in expressions
+    private static bool IsBuiltinFunctionKeyword(TokenType type)
+    {
+        return type == TokenType.Value
+            || type == TokenType.Date
+            || type == TokenType.DateTime
+            || type == TokenType.Time
+            || type == TokenType.Number
+            || type == TokenType.String
+            || type == TokenType.Integer
+            || type == TokenType.Float;
     }
 
     /// <summary>
