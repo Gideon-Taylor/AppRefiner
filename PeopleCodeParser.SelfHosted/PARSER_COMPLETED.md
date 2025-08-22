@@ -2,7 +2,7 @@
 
 This document tracks all **completed** grammar rules in the PeopleCode recursive descent parser. All rules listed here are fully implemented and tested.
 
-**Status**: 70 of 89 total grammar rules completed (~79%)
+**Status**: 89 of 89 total grammar rules completed (100%)
 
 ---
 
@@ -84,7 +84,7 @@ Distinguishes between application class programs and interface definitions.
 
 ### Special Expressions
 - **Object creation**: `CREATE object_type`
-- **Type casting**: `expression AS type` (not implemented yet)
+- **Type casting**: `expression AS type`
 
 ---
 
@@ -220,6 +220,11 @@ Distinguishes between application class programs and interface definitions.
 - **Wildcard support**: Recognizes and parses `:*` wildcard
 - **Package paths**: `App:Package:SubPackage` hierarchy parsing
 - **Class paths**: Full qualified class name resolution
+
+### Function Declarations
+- **PeopleCode declarations**: `DECLARE FUNCTION name PEOPLECODE Record.Field Event (params) RETURNS type;`
+- **DLL declarations**: `DECLARE FUNCTION name LIBRARY "lib" [ALIAS x] (params) RETURNS type;`
+- **Record.Field parsing**: Recognizes `RECORD.FIELD` pairs
 
 ---
 

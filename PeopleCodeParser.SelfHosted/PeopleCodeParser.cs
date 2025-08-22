@@ -1986,55 +1986,456 @@ public class PeopleCodeParser
     }
 
     /// <summary>
-    /// Parse placeholder for interface (not implemented yet)
+    /// Parse interface declaration:
+    /// INTERFACE Name (EXTENDS appClassPath)? SEMI* (methodHeader SEMI+)* END-INTERFACE
+    /// Only method headers are allowed; no bodies.
     /// </summary>
     private InterfaceNode? ParseInterface()
     {
-        ReportError("Interface parsing not yet implemented");
-        // Skip to next sync point
-        while (!IsAtEnd && !Check(TokenType.EndInterface))
+        try
+        {
+            EnterRule("interfaceDeclaration");
+
+            if (!Match(TokenType.Interface))
+                return null;
+
+            if (!(Check(TokenType.GenericId) || Check(TokenType.GenericIdLimited)))
+            {
+                ReportError("Expected interface name after 'INTERFACE'");
+                return null;
+            }
+
+            var name = Current.Text;
             _position++;
-        Match(TokenType.EndInterface);
-        return null;
+            var iface = new InterfaceNode(name);
+
+            // Optional EXTENDS base interface
+            if (Match(TokenType.Extends))
+            {
+                var baseType = ParseAppClassPath() ?? ParseSimpleType();
+                if (baseType != null)
+                {
+                    iface.SetBaseInterface(baseType);
+                }
+                else
+                {
+                    ReportError("Expected base interface type after 'EXTENDS'");
+                }
+            }
+
+            // SEMI*
+            while (Match(TokenType.Semicolon)) { }
+
+            // Method headers terminated by at least one semicolon
+            while (!IsAtEnd && !Check(TokenType.EndInterface))
+            {
+                if (Check(TokenType.Method))
+                {
+                    var methodHeader = ParseMethodHeader(VisibilityModifier.Public);
+                    if (methodHeader is MethodNode methodNode)
+                    {
+                        iface.AddMethod(methodNode);
+                    }
+                    // Require at least one semicolon after header
+                    if (!Match(TokenType.Semicolon))
+                    {
+                        ReportError("Expected ';' after interface method header");
+                    }
+                    while (Match(TokenType.Semicolon)) { }
+                }
+                else if (Match(TokenType.Semicolon))
+                {
+                    // Allow stray semicolons
+                }
+                else
+                {
+                    // Unexpected token; sync to next semicolon or END-INTERFACE
+                    ReportError($"Unexpected token in INTERFACE: {Current.Type}");
+                    while (!IsAtEnd && !Check(TokenType.Semicolon) && !Check(TokenType.EndInterface))
+                        _position++;
+                    while (Match(TokenType.Semicolon)) { }
+                }
+            }
+
+            Consume(TokenType.EndInterface, "Expected 'END-INTERFACE' to close interface");
+            return iface;
+        }
+        finally
+        {
+            ExitRule();
+        }
     }
 
     /// <summary>
-    /// Parse placeholder for function (not implemented yet)
+    /// Parse function declaration or definition.
+    /// Supports PeopleCode user-defined functions:
+    ///   FUNCTION name (params?) [RETURNS type]? ;                // declaration
+    ///   FUNCTION name (params?) [RETURNS type]? statements END-FUNCTION ; // definition
+    ///
+    /// DLL/Library declarations via DECLARE FUNCTION are not implemented yet.
     /// </summary>
     private FunctionNode? ParseFunction()
     {
-        ReportError("Function parsing not yet implemented");
-        // Skip to next sync point
-        while (!IsAtEnd && !Check(TokenType.EndFunction))
+        try
+        {
+            EnterRule("function");
+
+            // Handle optional prefixes (e.g., PEOPLECODE) before FUNCTION if present
+            if (Match(TokenType.PeopleCode))
+            {
+                // Accept and continue; next should be FUNCTION
+            }
+
+            if (Match(TokenType.Declare))
+            {
+                // DECLARE FUNCTION variant (PEOPLECODE or LIBRARY)
+                Consume(TokenType.Function, "Expected 'FUNCTION' after 'DECLARE'");
+
+                if (!(Check(TokenType.GenericId) || Check(TokenType.GenericIdLimited)))
+                {
+                    ReportError("Expected function name after 'DECLARE FUNCTION'");
+                    return null;
+                }
+
+                var declName = Current.Text;
+                _position++;
+                var declNode = new FunctionNode(declName, FunctionType.UserDefined);
+
+                if (Match(TokenType.PeopleCode))
+                {
+                    // DECLARE FUNCTION name PEOPLECODE Record.Field RecordEvent (params?) RETURNS type ;
+                    if (!TryParseRecordField(out var rec, out var fld))
+                    {
+                        ReportError("Expected Record.Field after 'PEOPLECODE'");
+                    }
+                    else
+                    {
+                        declNode.RecordName = rec;
+                        declNode.FieldName = fld;
+                    }
+
+                    // Record event token (FIELDCHANGE, FIELDEDIT, etc.)
+                    if (Check(TokenType.RecordEvent))
+                    {
+                        declNode.RecordEvent = Current.Text;
+                        _position++;
+                    }
+                    else
+                    {
+                        ReportError("Expected record event after Record.Field in PEOPLECODE declaration");
+                    }
+
+                    // Optional parameter list
+                    if (Match(TokenType.LeftParen))
+                    {
+                        if (!Check(TokenType.RightParen))
+                        {
+                            do
+                            {
+                                var param = ParseMethodArgument();
+                                if (param != null) declNode.AddParameter(param);
+                                else
+                                {
+                                    while (!IsAtEnd && !(Check(TokenType.Comma) || Check(TokenType.RightParen)))
+                                        _position++;
+                                }
+                            } while (Match(TokenType.Comma));
+                        }
+                        Consume(TokenType.RightParen, "Expected ')' after parameters");
+                    }
+
+                    if (Match(TokenType.Returns))
+                    {
+                        var r = ParseTypeReference();
+                        if (r != null) declNode.SetReturnType(r);
+                        else ReportError("Expected return type after 'RETURNS'");
+                    }
+
+                    Match(TokenType.Semicolon);
+                    declNode = new FunctionNode(declName, FunctionType.PeopleCode)
+                    {
+                        RecordName = declNode.RecordName,
+                        FieldName = declNode.FieldName,
+                        RecordEvent = declNode.RecordEvent,
+                        ReturnType = declNode.ReturnType
+                    };
+                    foreach (var p in declNode.Parameters.ToList()) { /* already attached */ }
+                    return declNode;
+                }
+                else if (Match(TokenType.Library))
+                {
+                    // DECLARE FUNCTION name LIBRARY "lib" [ALIAS "alias"] (params?) RETURNS type ;
+                    if (!Check(TokenType.StringLiteral))
+                    {
+                        ReportError("Expected library name string after 'LIBRARY'");
+                    }
+                    else
+                    {
+                        declNode.LibraryName = Current.Value?.ToString();
+                        _position++;
+                    }
+
+                    if (Match(TokenType.Alias))
+                    {
+                        if (Check(TokenType.StringLiteral) || Check(TokenType.GenericId))
+                        {
+                            declNode.AliasName = Current.Text;
+                            _position++;
+                        }
+                        else
+                        {
+                            ReportError("Expected alias name after 'ALIAS'");
+                        }
+                    }
+
+                    if (Match(TokenType.LeftParen))
+                    {
+                        if (!Check(TokenType.RightParen))
+                        {
+                            do
+                            {
+                                var param = ParseMethodArgument();
+                                if (param != null) declNode.AddParameter(param);
+                                else
+                                {
+                                    while (!IsAtEnd && !(Check(TokenType.Comma) || Check(TokenType.RightParen)))
+                                        _position++;
+                                }
+                            } while (Match(TokenType.Comma));
+                        }
+                        Consume(TokenType.RightParen, "Expected ')' after parameters");
+                    }
+
+                    if (Match(TokenType.Returns))
+                    {
+                        var r = ParseTypeReference();
+                        if (r != null) declNode.SetReturnType(r);
+                        else ReportError("Expected return type after 'RETURNS'");
+                    }
+
+                    Match(TokenType.Semicolon);
+                    declNode = new FunctionNode(declName, FunctionType.Library)
+                    {
+                        LibraryName = declNode.LibraryName,
+                        AliasName = declNode.AliasName,
+                        ReturnType = declNode.ReturnType
+                    };
+                    foreach (var p in declNode.Parameters.ToList()) { /* already attached */ }
+                    return declNode;
+                }
+                else
+                {
+                    ReportError("Expected PEOPLECODE or LIBRARY after 'DECLARE FUNCTION name'");
+                    while (!IsAtEnd && !Check(TokenType.Semicolon)) _position++;
+                    Match(TokenType.Semicolon);
+                    return null;
+                }
+            }
+
+            if (!Match(TokenType.Function))
+                return null;
+
+            // Parse function name (allow generic identifiers)
+            if (!(Check(TokenType.GenericId) || Check(TokenType.GenericIdLimited)))
+            {
+                ReportError("Expected function name after 'FUNCTION'");
+                return null;
+            }
+
+            var functionName = Current.Text;
             _position++;
-        Match(TokenType.EndFunction);
-        return null;
+
+            var functionNode = new FunctionNode(functionName, FunctionType.UserDefined);
+
+            // Parameters
+            if (Match(TokenType.LeftParen))
+            {
+                // Empty parameter list is allowed
+                if (!Check(TokenType.RightParen))
+                {
+                    do
+                    {
+                        var param = ParseMethodArgument();
+                        if (param != null)
+                        {
+                            functionNode.AddParameter(param);
+                        }
+                        else
+                        {
+                            // Parameter parse failed: attempt to recover by skipping to ',' or ')'
+                            while (!IsAtEnd && !(Check(TokenType.Comma) || Check(TokenType.RightParen)))
+                                _position++;
+                        }
+                    }
+                    while (Match(TokenType.Comma));
+                }
+
+                Consume(TokenType.RightParen, "Expected ')' after function parameters");
+            }
+
+            // Optional RETURNS type
+            if (Match(TokenType.Returns))
+            {
+                var returnType = ParseTypeReference();
+                if (returnType == null)
+                {
+                    ReportError("Expected return type after 'RETURNS'");
+                }
+                else
+                {
+                    functionNode.SetReturnType(returnType);
+                }
+            }
+
+            // Declaration or definition?
+            if (Match(TokenType.Semicolon))
+            {
+                // Declaration only (no body)
+                return functionNode;
+            }
+
+            // Function definition body until END-FUNCTION
+            var body = ParseStatementList(TokenType.EndFunction);
+            Consume(TokenType.EndFunction, "Expected 'END-FUNCTION' after function body");
+            Match(TokenType.Semicolon); // optional semicolon after END-FUNCTION
+
+            functionNode.SetBody(body);
+            return functionNode;
+        }
+        catch (Exception ex)
+        {
+            ReportError($"Error parsing function: {ex.Message}");
+            // Attempt to recover by skipping to END-FUNCTION or semicolon
+            while (!IsAtEnd && !(Check(TokenType.EndFunction) || Check(TokenType.Semicolon)))
+                _position++;
+            if (Check(TokenType.EndFunction))
+            {
+                _position++; // consume END-FUNCTION
+                Match(TokenType.Semicolon);
+            }
+            else if (Check(TokenType.Semicolon))
+            {
+                _position++;
+            }
+            return null;
+        }
+        finally
+        {
+            ExitRule();
+        }
     }
 
     /// <summary>
-    /// Parse placeholder for variable declaration (not implemented yet)
+    /// Parse Record.Field pair
+    /// </summary>
+    private bool TryParseRecordField(out string recordName, out string fieldName)
+    {
+        recordName = ""; fieldName = "";
+        if (!(Check(TokenType.GenericId) || Check(TokenType.GenericIdLimited))) return false;
+        recordName = Current.Text;
+        _position++;
+        if (!Match(TokenType.Dot)) return false;
+        if (!(Check(TokenType.GenericId) || Check(TokenType.GenericIdLimited))) return false;
+        fieldName = Current.Text;
+        _position++;
+        return true;
+    }
+
+    /// <summary>
+    /// Parse non-local variable declaration: (GLOBAL|COMPONENT) typeT USER_VARIABLE (COMMA USER_VARIABLE)* COMMA? SEMI?
     /// </summary>
     private VariableNode? ParseVariableDeclaration()
     {
-        ReportError("Variable declaration parsing not yet implemented");
-        // Skip to semicolon
-        while (!IsAtEnd && !Check(TokenType.Semicolon))
+        try
+        {
+            EnterRule("nonLocalVarDeclaration");
+
+            VariableScope scope;
+            if (Match(TokenType.Global)) scope = VariableScope.Global;
+            else if (Match(TokenType.Component)) scope = VariableScope.Component;
+            else return null;
+
+            var varType = ParseTypeReference();
+            if (varType == null)
+            {
+                ReportError("Expected variable type after scope");
+                return null;
+            }
+
+            if (!Check(TokenType.UserVariable))
+            {
+                ReportError("Expected variable name (&variable)");
+                return null;
+            }
+
+            var firstName = Current.Text;
             _position++;
-        Match(TokenType.Semicolon);
-        return null;
+
+            var variable = new VariableNode(firstName, varType, scope);
+
+            // Additional names
+            while (Match(TokenType.Comma))
+            {
+                if (Check(TokenType.UserVariable))
+                {
+                    variable.AddName(Current.Text);
+                    _position++;
+                }
+                else
+                {
+                    break; // tolerate trailing comma
+                }
+            }
+
+            Match(TokenType.Semicolon); // optional
+            return variable;
+        }
+        finally
+        {
+            ExitRule();
+        }
     }
 
     /// <summary>
-    /// Parse placeholder for constant declaration (not implemented yet)
+    /// Parse constant declaration: CONSTANT USER_VARIABLE EQ expression SEMI?
     /// </summary>
     private ConstantNode? ParseConstantDeclaration()
     {
-        ReportError("Constant declaration parsing not yet implemented");
-        // Skip to semicolon
-        while (!IsAtEnd && !Check(TokenType.Semicolon))
+        try
+        {
+            EnterRule("constantDeclaration");
+
+            if (!Match(TokenType.Constant))
+                return null;
+
+            if (!Check(TokenType.UserVariable))
+            {
+                ReportError("Expected constant name (&NAME) after 'CONSTANT'");
+                return null;
+            }
+
+            var name = Current.Text;
             _position++;
-        Match(TokenType.Semicolon);
-        return null;
+
+            if (!Match(TokenType.Equal))
+            {
+                ReportError("Expected '=' after constant name");
+            }
+
+            var valueExpr = ParseExpression();
+            if (valueExpr == null)
+            {
+                ReportError("Expected expression for constant value");
+                return null;
+            }
+
+            Match(TokenType.Semicolon); // optional
+            return new ConstantNode(name, valueExpr);
+        }
+        finally
+        {
+            ExitRule();
+        }
     }
 
     /// <summary>
@@ -2507,16 +2908,113 @@ public class PeopleCodeParser
     }
 
     /// <summary>
-    /// Parse placeholder for EVALUATE statement
+    /// Parse EVALUATE statement with WHEN/WHEN-OTHER clauses.
+    /// Grammar (per ANTLR):
+    /// EVALUATE expression SEMI* whenClauses? whenOther? END_EVALUATE
+    /// whenClauses: whenClause (SEMI* whenClause)*
+    /// whenClause: WHEN comparisonOperator? expression SEMI* statementBlock?
+    /// whenOther: WHEN_OTHER SEMI* statementBlock?
     /// </summary>
     private StatementNode? ParseEvaluateStatement()
     {
-        ReportError("EVALUATE statement parsing not yet implemented");
-        // Skip to END-EVALUATE
-        while (!IsAtEnd && !Check(TokenType.EndEvaluate))
-            _position++;
-        Match(TokenType.EndEvaluate);
-        return null;
+        try
+        {
+            EnterRule("evaluate-statement");
+
+            if (!Match(TokenType.Evaluate))
+                return null;
+
+            var evalExpr = ParseExpression();
+            if (evalExpr == null)
+            {
+                ReportError("Expected expression after 'EVALUATE'");
+                evalExpr = new LiteralNode("0", LiteralType.Integer);
+            }
+
+            var evalNode = new EvaluateStatementNode(evalExpr);
+
+            // EVALUATE expression SEMI*
+            while (Match(TokenType.Semicolon)) { }
+
+            // whenClauses? whenOther?
+            while (!IsAtEnd && !Check(TokenType.EndEvaluate))
+            {
+                // Allow SEMI* between clauses
+                while (Match(TokenType.Semicolon)) { }
+
+                if (Match(TokenType.When))
+                {
+                    // Optional comparison operator
+                    BinaryOperator? op = null;
+                    if (Check(TokenType.Equal) || Check(TokenType.NotEqual) ||
+                        Check(TokenType.LessThan) || Check(TokenType.LessThanOrEqual) ||
+                        Check(TokenType.GreaterThan) || Check(TokenType.GreaterThanOrEqual))
+                    {
+                        var opToken = Current.Type;
+                        _position++;
+                        op = opToken switch
+                        {
+                            TokenType.Equal => BinaryOperator.Equal,
+                            TokenType.NotEqual => BinaryOperator.NotEqual,
+                            TokenType.LessThan => BinaryOperator.LessThan,
+                            TokenType.LessThanOrEqual => BinaryOperator.LessThanOrEqual,
+                            TokenType.GreaterThan => BinaryOperator.GreaterThan,
+                            TokenType.GreaterThanOrEqual => BinaryOperator.GreaterThanOrEqual,
+                            _ => null
+                        };
+                    }
+
+                    // Required single expression
+                    var condition = ParseExpression();
+                    if (condition == null)
+                    {
+                        ReportError("Expected condition expression after 'WHEN'");
+                        // Sync to next clause boundary
+                        while (!IsAtEnd && !(Check(TokenType.When) || Check(TokenType.WhenOther) || Check(TokenType.EndEvaluate)))
+                            _position++;
+                        continue;
+                    }
+
+                    // SEMI*
+                    while (Match(TokenType.Semicolon)) { }
+
+                    // Optional statementBlock? until WHEN/WHEN_OTHER/END_EVALUATE
+                    var body = ParseStatementList(TokenType.When, TokenType.WhenOther, TokenType.EndEvaluate);
+                    evalNode.AddWhenClause(new WhenClause(condition, body, op));
+                }
+                else if (Match(TokenType.WhenOther))
+                {
+                    // SEMI*
+                    while (Match(TokenType.Semicolon)) { }
+
+                    var otherBody = ParseStatementList(TokenType.EndEvaluate);
+                    evalNode.SetWhenOtherBlock(otherBody);
+                }
+                else
+                {
+                    // Unexpected token; sync to next boundary
+                    ReportError($"Unexpected token in EVALUATE: {Current.Type}");
+                    while (!IsAtEnd && !(Check(TokenType.When) || Check(TokenType.WhenOther) || Check(TokenType.EndEvaluate)))
+                        _position++;
+                }
+            }
+
+            Consume(TokenType.EndEvaluate, "Expected 'END-EVALUATE' to close EVALUATE");
+            Match(TokenType.Semicolon);
+            return evalNode;
+        }
+        catch (Exception ex)
+        {
+            ReportError($"Error parsing EVALUATE statement: {ex.Message}");
+            while (!IsAtEnd && !Check(TokenType.EndEvaluate))
+                _position++;
+            Match(TokenType.EndEvaluate);
+            return null;
+        }
+        finally
+        {
+            ExitRule();
+        }
     }
 
     // ===== EXPRESSION PARSING =====
