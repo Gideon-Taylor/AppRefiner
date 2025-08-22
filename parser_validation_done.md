@@ -66,3 +66,15 @@ This file contains a list of all parser rules from PeopleCodeParser.g4 that have
 - [x] **statements** - sequences of executable statements
 - [x] **statementBlock** - scoped statement blocks
 - [x] **statement** - all statement types (assignment, control flow, declarations, etc.)
+
+### Variable Declarations
+- [x] **localVariableDeclaration** - local variable declarations and assignments
+- [x] **localVariableDefinition** - local variable type definitions
+- [x] **localVariableDeclAssignment** - local variable declaration with assignment
+
+### Control Flow Statements
+- [x] **ifStatement** - IF-THEN-ELSE conditional statements
+- [x] **elseStatement** - ELSE clause of IF statements
+- [x] **forStatement** - FOR loops with optional STEP clause
+- [x] **whileStatement** - WHILE loop statements
+- [x] **repeatStatement** - REPEAT-UNTIL loop statements

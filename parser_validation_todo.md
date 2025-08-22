@@ -28,16 +28,8 @@ This file contains a comprehensive list of all parser rules from PeopleCodeParse
 ### Statements and Control Flow
 
 ### Variable Declarations
-- [ ] **localVariableDeclaration** - local variable declarations and assignments
-- [ ] **localVariableDefinition** - local variable type definitions
-- [ ] **localVariableDeclAssignment** - local variable declaration with assignment
 
 ### Control Flow Statements
-- [ ] **ifStatement** - IF-THEN-ELSE conditional statements
-- [ ] **elseStatement** - ELSE clause of IF statements
-- [ ] **forStatement** - FOR loops with optional STEP clause
-- [ ] **whileStatement** - WHILE loop statements
-- [ ] **repeatStatement** - REPEAT-UNTIL loop statements
 
 ### Evaluate (Switch) Statements
 - [ ] **evaluateStatement** - EVALUATE switch statements

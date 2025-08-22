@@ -2851,21 +2851,26 @@ public class PeopleCodeParser
                 return null;
             }
 
-            if (!Match(TokenType.Then))
-            {
-                ReportError("Expected 'THEN' after IF condition");
-            }
+                    if (!Match(TokenType.Then))
+        {
+            ReportError("Expected 'THEN' after IF condition");
+        }
 
-            var thenStatements = ParseStatementList(TokenType.EndIf, TokenType.Else);
+        // Handle optional semicolons after THEN (SEMI*)
+        while (Match(TokenType.Semicolon)) { }
+
+        var thenStatements = ParseStatementList(TokenType.EndIf, TokenType.Else);
             
             BlockNode? elseStatements = null;
-            if (Match(TokenType.Else))
-            {
-                elseStatements = ParseStatementList(TokenType.EndIf);
-            }
+                    if (Match(TokenType.Else))
+        {
+            // Handle optional semicolons after ELSE (SEMI*)
+            while (Match(TokenType.Semicolon)) { }
+            
+            elseStatements = ParseStatementList(TokenType.EndIf);
+        }
 
-            Consume(TokenType.EndIf, "Expected 'END-IF' after IF statement");
-            Match(TokenType.Semicolon); // Optional semicolon
+                    Consume(TokenType.EndIf, "Expected 'END-IF' after IF statement");
 
             var ifNode = new IfStatementNode(condition, thenStatements);
             if (elseStatements != null)
@@ -2970,17 +2975,19 @@ public class PeopleCodeParser
             if (!Match(TokenType.While))
                 return null;
 
-            var condition = ParseExpression();
-            if (condition == null)
-            {
-                ReportError("Expected condition after 'WHILE'");
-                return null;
-            }
+                    var condition = ParseExpression();
+        if (condition == null)
+        {
+            ReportError("Expected condition after 'WHILE'");
+            return null;
+        }
 
-            var body = ParseStatementList(TokenType.EndWhile);
+        // Handle optional semicolons after condition (SEMI*)
+        while (Match(TokenType.Semicolon)) { }
 
-            Consume(TokenType.EndWhile, "Expected 'END-WHILE' after WHILE statement");
-            Match(TokenType.Semicolon); // Optional semicolon
+        var body = ParseStatementList(TokenType.EndWhile);
+
+                    Consume(TokenType.EndWhile, "Expected 'END-WHILE' after WHILE statement");
 
             return new WhileStatementNode(condition, body);
         }
@@ -2999,10 +3006,13 @@ public class PeopleCodeParser
         {
             EnterRule("repeat-statement");
 
-            if (!Match(TokenType.Repeat))
-                return null;
+                    if (!Match(TokenType.Repeat))
+            return null;
 
-            var body = ParseStatementList(TokenType.Until);
+        // Handle optional semicolons after REPEAT (SEMI*)
+        while (Match(TokenType.Semicolon)) { }
+
+        var body = ParseStatementList(TokenType.Until);
 
             Consume(TokenType.Until, "Expected 'UNTIL' after REPEAT statements");
 
@@ -3011,11 +3021,9 @@ public class PeopleCodeParser
             {
                 ReportError("Expected condition after 'UNTIL'");
                 return null;
-            }
+                    }
 
-            Match(TokenType.Semicolon); // Optional semicolon
-
-            return new RepeatStatementNode(body, condition);
+        return new RepeatStatementNode(body, condition);
         }
         finally
         {
