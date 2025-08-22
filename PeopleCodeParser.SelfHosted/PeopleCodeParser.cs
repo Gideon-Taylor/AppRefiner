@@ -2356,40 +2356,37 @@ public class PeopleCodeParser
 
                     if (Match(TokenType.Alias))
                     {
-                        if (Check(TokenType.StringLiteral) || Check(TokenType.GenericId))
+                        // According to grammar, alias should only be a string literal
+                        if (Check(TokenType.StringLiteral))
                         {
-                            declNode.AliasName = Current.Text;
+                            declNode.AliasName = Current.Value?.ToString();
                             _position++;
                         }
                         else
                         {
-                            ReportError("Expected alias name after 'ALIAS'");
+                            ReportError("Expected string literal after 'ALIAS'");
                         }
                     }
 
                     if (Match(TokenType.LeftParen))
                     {
-                        if (!Check(TokenType.RightParen))
-                        {
-                            do
-                            {
-                                var param = ParseMethodArgument();
-                                if (param != null) declNode.AddParameter(param);
-                                else
-                                {
-                                    while (!IsAtEnd && !(Check(TokenType.Comma) || Check(TokenType.RightParen)))
-                                        _position++;
-                                }
-                            } while (Match(TokenType.Comma));
-                        }
+                        // Parse DLL arguments according to grammar
+                        ParseDllArguments(declNode);
                         Consume(TokenType.RightParen, "Expected ')' after parameters");
                     }
 
                     if (Match(TokenType.Returns))
                     {
-                        var r = ParseTypeReference();
-                        if (r != null) declNode.SetReturnType(r);
-                        else ReportError("Expected return type after 'RETURNS'");
+                        // Parse DLL return type according to grammar
+                        var returnType = ParseDllReturnType();
+                        if (returnType != null)
+                        {
+                            declNode.SetReturnType(returnType);
+                        }
+                        else
+                        {
+                            ReportError("Expected return type after 'RETURNS'");
+                        }
                     }
 
                     Match(TokenType.Semicolon);
@@ -2505,6 +2502,139 @@ public class PeopleCodeParser
     }
 
     /// <summary>
+    /// Parse DLL arguments according to grammar: dllArgument (COMMA dllArgument)*
+    /// </summary>
+    private void ParseDllArguments(FunctionNode functionNode)
+    {
+        try
+        {
+            EnterRule("dllArguments");
+
+            if (Check(TokenType.RightParen))
+            {
+                // Empty argument list
+                return;
+            }
+
+            do
+            {
+                var param = ParseDllArgument();
+                if (param != null)
+                {
+                    functionNode.AddParameter(param);
+                }
+                else
+                {
+                    // Skip to next comma or closing parenthesis
+                    while (!IsAtEnd && !(Check(TokenType.Comma) || Check(TokenType.RightParen)))
+                        _position++;
+                }
+            } while (Match(TokenType.Comma));
+        }
+        finally
+        {
+            ExitRule();
+        }
+    }
+
+    /// <summary>
+    /// Parse DLL argument according to grammar: genericID (REF | VALUE)? (AS builtInType)?
+    /// </summary>
+    private ParameterNode? ParseDllArgument()
+    {
+        try
+        {
+            EnterRule("dllArgument");
+
+            // Parse parameter name (must be a generic ID)
+            if (!(Check(TokenType.GenericId) || Check(TokenType.GenericIdLimited)))
+            {
+                ReportError("Expected parameter name in DLL argument");
+                return null;
+            }
+
+            var paramName = Current.Text;
+            _position++;
+
+            // Create parameter with default type (Any)
+            var parameter = new ParameterNode(paramName, new BuiltInTypeNode(BuiltInType.Any));
+
+            // Parse optional REF or VALUE modifier
+            if (Match(TokenType.Ref))
+            {
+                parameter.IsOut = true; // Use IsOut for REF parameters
+            }
+            else if (Match(TokenType.Value))
+            {
+                parameter.IsOut = false; // Explicitly mark as not out for VALUE parameters
+            }
+
+            // Parse optional AS builtInType
+            if (Match(TokenType.As))
+            {
+                var builtInType = TryParseBuiltInType();
+                if (builtInType != null)
+                {
+                    parameter.Type = builtInType;
+                }
+                else
+                {
+                    ReportError("Expected built-in type after 'AS' in DLL argument");
+                }
+            }
+
+            return parameter;
+        }
+        finally
+        {
+            ExitRule();
+        }
+    }
+
+    /// <summary>
+    /// Parse DLL return type according to grammar:
+    /// dllReturnType: genericID AS builtInType | builtInType
+    /// </summary>
+    private TypeNode? ParseDllReturnType()
+    {
+        try
+        {
+            EnterRule("dllReturnType");
+
+            // Check for first variant: genericID AS builtInType
+            if ((Check(TokenType.GenericId) || Check(TokenType.GenericIdLimited)) && Peek().Type == TokenType.As)
+            {
+                // Consume the generic ID (return value name)
+                _position++;
+
+                // Consume the AS keyword
+                Match(TokenType.As);
+
+                // Parse built-in type
+                var builtInType = TryParseBuiltInType();
+                if (builtInType != null)
+                {
+                    return builtInType;
+                }
+                else
+                {
+                    ReportError("Expected built-in type after 'AS' in DLL return type");
+                    return null;
+                }
+            }
+            // Check for second variant: builtInType
+            else
+            {
+                return TryParseBuiltInType();
+            }
+        }
+        finally
+        {
+            ExitRule();
+        }
+    }
+
+    /// <summary>
     /// Parse Record.Field pair
     /// </summary>
     private bool TryParseRecordField(out string recordName, out string fieldName)
@@ -2521,7 +2651,9 @@ public class PeopleCodeParser
     }
 
     /// <summary>
-    /// Parse non-local variable declaration: (GLOBAL|COMPONENT) typeT USER_VARIABLE (COMMA USER_VARIABLE)* COMMA? SEMI?
+    /// Parse non-local variable declaration according to grammar:
+    /// nonLocalVarDeclaration: (COMPONENT | GLOBAL) typeT USER_VARIABLE (COMMA USER_VARIABLE)* COMMA?
+    ///                       | (COMPONENT | GLOBAL) typeT  // compiles yet is meaningless
     /// </summary>
     private VariableNode? ParseVariableDeclaration()
     {
@@ -2541,10 +2673,14 @@ public class PeopleCodeParser
                 return null;
             }
 
+            // According to grammar, variable names are optional (though meaningless without them)
             if (!Check(TokenType.UserVariable))
             {
-                ReportError("Expected variable name (&variable)");
-                return null;
+                // This is the second variant: (COMPONENT | GLOBAL) typeT
+                // Create a variable node with empty name for AST consistency
+                var emptyVariable = new VariableNode("", varType, scope);
+                Match(TokenType.Semicolon); // optional
+                return emptyVariable;
             }
 
             var firstName = Current.Text;

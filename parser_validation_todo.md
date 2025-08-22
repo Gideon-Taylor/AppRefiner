@@ -22,14 +22,6 @@ This file contains a comprehensive list of all parser rules from PeopleCodeParse
 ### External Declarations
 
 ### Function Declarations
-- [ ] **functionDeclaration** - PeopleCode and library function declarations
-- [ ] **functionDeclarationPCode** - PeopleCode function declarations
-- [ ] **recordField** - record field references (record.field)
-- [ ] **functionDeclarationDLL** - external DLL function declarations
-- [ ] **dllArguments** - DLL function parameter lists
-- [ ] **dllArgument** - individual DLL parameters with modifiers
-- [ ] **dllReturnType** - DLL function return type specifications
-- [ ] **nonLocalVarDeclaration** - COMPONENT and GLOBAL variable declarations
 
 ### Class Implementation
 - [ ] **classBody** - class implementation body with members

@@ -44,3 +44,13 @@ This file contains a list of all parser rules from PeopleCodeParser.g4 that have
 - [x] **classExternalDeclaration** - external function and variable declarations
 - [x] **programPreambles** - multiple program preamble declarations
 - [x] **programPreamble** - various declaration types at program start
+
+### Function Declarations
+- [x] **functionDeclaration** - PeopleCode and library function declarations
+- [x] **functionDeclarationPCode** - PeopleCode function declarations
+- [x] **recordField** - record field references (record.field)
+- [x] **functionDeclarationDLL** - external DLL function declarations
+- [x] **dllArguments** - DLL function parameter lists
+- [x] **dllArgument** - individual DLL parameters with modifiers
+- [x] **dllReturnType** - DLL function return type specifications
+- [x] **nonLocalVarDeclaration** - COMPONENT and GLOBAL variable declarations
