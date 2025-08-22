@@ -32,11 +32,6 @@ This file contains a comprehensive list of all parser rules from PeopleCodeParse
 ### Control Flow Statements
 
 ### Evaluate (Switch) Statements
-- [ ] **evaluateStatement** - EVALUATE switch statements
-- [ ] **whenClauses** - multiple WHEN clauses in EVALUATE
-- [ ] **whenClause** - individual WHEN cases with optional comparison operators
-- [ ] **whenOther** - WHEN-OTHER default case in EVALUATE
-- [ ] **comparisonOperator** - comparison operators (LE, GE, NEQ, LT, GT, EQ)
 
 ### Exception Handling
 - [ ] **tryCatchBlock** - TRY-CATCH exception handling blocks

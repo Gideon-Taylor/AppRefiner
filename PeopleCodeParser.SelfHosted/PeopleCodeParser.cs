@@ -3359,9 +3359,8 @@ public class PeopleCodeParser
                 }
             }
 
-            Consume(TokenType.EndEvaluate, "Expected 'END-EVALUATE' to close EVALUATE");
-            Match(TokenType.Semicolon);
-            return evalNode;
+                    Consume(TokenType.EndEvaluate, "Expected 'END-EVALUATE' to close EVALUATE");
+        return evalNode;
         }
         catch (Exception ex)
         {

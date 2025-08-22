@@ -78,3 +78,10 @@ This file contains a list of all parser rules from PeopleCodeParser.g4 that have
 - [x] **forStatement** - FOR loops with optional STEP clause
 - [x] **whileStatement** - WHILE loop statements
 - [x] **repeatStatement** - REPEAT-UNTIL loop statements
+
+### Evaluate (Switch) Statements
+- [x] **evaluateStatement** - EVALUATE switch statements
+- [x] **whenClauses** - multiple WHEN clauses in EVALUATE
+- [x] **whenClause** - individual WHEN cases with optional comparison operators
+- [x] **whenOther** - WHEN-OTHER default case in EVALUATE
+- [x] **comparisonOperator** - comparison operators (LE, GE, NEQ, LT, GT, EQ)
