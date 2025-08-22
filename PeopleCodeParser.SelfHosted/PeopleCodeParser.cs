@@ -404,15 +404,19 @@ public class PeopleCodeParser
 
             // Parse import path (expecting package:path format)
             var pathParts = new List<string>();
-            
-            if (Check(TokenType.GenericId))
+            bool consumedColon = false;
+
+            // First segment: METADATA or generic identifier
+            if (Check(TokenType.Metadata) || Check(TokenType.GenericId))
             {
                 pathParts.Add(Current.Text);
                 _position++;
 
-                // Parse path segments separated by colons
+                // Parse subsequent segments separated by colons
                 while (Match(TokenType.Colon))
                 {
+                    consumedColon = true;
+
                     if (Check(TokenType.GenericId))
                     {
                         pathParts.Add(Current.Text);
@@ -420,7 +424,7 @@ public class PeopleCodeParser
                     }
                     else if (Check(TokenType.Star))
                     {
-                        // Wildcard import
+                        // Wildcard import terminator (appPackageAll)
                         pathParts.Add(Current.Text);
                         _position++;
                         break;
@@ -444,7 +448,8 @@ public class PeopleCodeParser
             }
             while (Match(TokenType.Semicolon)) { }
 
-            if (pathParts.Count > 0)
+            // Grammar requires at least one colon and at least two parts (package:class or package:*)
+            if (consumedColon && pathParts.Count >= 2)
             {
                 return new ImportNode(string.Join(":", pathParts));
             }

@@ -9,6 +9,10 @@ This file contains parser rules that have been validated against the ANTLR gramm
   - Behavior matches grammar: zero or more import declarations handled in program entry pre-pass.
   - No code changes required beyond ensuring `importDeclaration` consumes SEMI+.
   - Grammar Reference: importsBlock/importDeclaration lines 30-36.
+- [x] **importDeclaration** - individual import statements
+  - Adjusted to comply with grammar: supports METADATA or genericID start, requires at least one colon, and allows trailing '*' for package-all; consumes SEMI+.
+  - Files Modified: PeopleCodeParser.SelfHosted\PeopleCodeParser.cs (`ParseImport`)
+  - Grammar Reference: Lines 34-53 in PeopleCodeParser.g4
 - [x] **program** - main entry point for PeopleCode programs
   - **Issue Found**: Parser didn't follow the strict grammar alternation between `appClass` OR `importsBlock programPreambles? SEMI* statements? SEMI* EOF`
   - **Fix Applied**: Restructured ParseProgram() to properly handle the two distinct program formats according to ANTLR grammar

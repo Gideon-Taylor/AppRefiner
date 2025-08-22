@@ -5,7 +5,6 @@ This file contains a comprehensive list of all parser rules from PeopleCodeParse
 ## Grammar Rules to Validate
 
 ### Core Program Structure
-- [ ] **importDeclaration** - individual import statements
 - [ ] **appClass** - application class and interface programs
 
 ### Package and Class Paths
