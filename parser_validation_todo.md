@@ -34,9 +34,6 @@ This file contains a comprehensive list of all parser rules from PeopleCodeParse
 ### Evaluate (Switch) Statements
 
 ### Exception Handling
-- [ ] **tryCatchBlock** - TRY-CATCH exception handling blocks
-- [ ] **catchClauses** - multiple CATCH clauses in TRY blocks
-- [ ] **catchClause** - individual CATCH clauses with exception types
 
 ### Expressions
 - [ ] **expression** - all expression types with precedence and operators

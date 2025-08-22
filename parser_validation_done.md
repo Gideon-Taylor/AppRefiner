@@ -85,3 +85,8 @@ This file contains a list of all parser rules from PeopleCodeParser.g4 that have
 - [x] **whenClause** - individual WHEN cases with optional comparison operators
 - [x] **whenOther** - WHEN-OTHER default case in EVALUATE
 - [x] **comparisonOperator** - comparison operators (LE, GE, NEQ, LT, GT, EQ)
+
+### Exception Handling
+- [x] **tryCatchBlock** - TRY-CATCH exception handling blocks
+- [x] **catchClauses** - multiple CATCH clauses in TRY blocks
+- [x] **catchClause** - individual CATCH clauses with exception types

@@ -901,27 +901,35 @@ internal class TryCatchProxy : TryCatchStatementNode
 }
 
 /// <summary>
-/// Simplified catch clause node
+/// Catch clause node for exception handling
 /// </summary>
 public class CatchClauseNode : AstNode
 {
     /// <summary>
-    /// Exception variable (optional)
+    /// Exception variable
     /// </summary>
     public IdentifierNode? ExceptionVariable { get; }
+
+    /// <summary>
+    /// Exception type (EXCEPTION or appClassPath)
+    /// </summary>
+    public TypeNode? ExceptionType { get; }
 
     /// <summary>
     /// Catch block body
     /// </summary>
     public BlockNode Body { get; }
 
-    public CatchClauseNode(IdentifierNode? exceptionVariable, BlockNode body)
+    public CatchClauseNode(IdentifierNode? exceptionVariable, BlockNode body, TypeNode? exceptionType = null)
     {
         ExceptionVariable = exceptionVariable;
+        ExceptionType = exceptionType;
         Body = body ?? throw new ArgumentNullException(nameof(body));
 
         if (exceptionVariable != null)
             AddChild(exceptionVariable);
+        if (exceptionType != null)
+            AddChild(exceptionType);
         AddChild(body);
     }
 
@@ -937,7 +945,8 @@ public class CatchClauseNode : AstNode
 
     public override string ToString()
     {
+        var typeStr = ExceptionType != null ? $" {ExceptionType}" : "";
         var varStr = ExceptionVariable != null ? $" {ExceptionVariable.Name}" : "";
-        return $"CATCH{varStr}";
+        return $"CATCH{typeStr}{varStr}";
     }
 }

@@ -3042,25 +3042,60 @@ public class PeopleCodeParser
 
             if (!Match(TokenType.Try))
                 return null;
+                
+            // Handle optional semicolons after TRY (SEMI*)
+            while (Match(TokenType.Semicolon)) { }
 
             var tryBlock = ParseStatementList(TokenType.Catch, TokenType.EndTry);
 
             List<CatchClauseNode> catchClauses = new();
             while (Match(TokenType.Catch))
             {
-                IdentifierNode? exceptionVariable = null;
-                if (Check(TokenType.GenericId))
+                // According to grammar: CATCH (EXCEPTION | appClassPath) USER_VARIABLE SEMI* statementBlock?
+                TypeNode? exceptionType = null;
+                
+                // Parse exception type (EXCEPTION or appClassPath)
+                if (Match(TokenType.Exception))
                 {
-                    exceptionVariable = new IdentifierNode(Current.Text, IdentifierType.Generic);
-                    _position++;
+                    exceptionType = new BuiltInTypeNode(BuiltInType.Exception);
                 }
-
-                var catchBlock = ParseStatementList(TokenType.Catch, TokenType.EndTry);
-                catchClauses.Add(new CatchClauseNode(exceptionVariable, catchBlock));
+                else
+                {
+                    // Try to parse as app class path
+                    exceptionType = ParseAppClassPath();
+                    
+                    // If not an app class path, report error
+                    if (exceptionType == null)
+                    {
+                        ReportError("Expected 'EXCEPTION' or app class path after 'CATCH'");
+                    }
+                }
+                
+                // Parse user variable
+                if (!Check(TokenType.UserVariable))
+                {
+                    ReportError("Expected user variable after exception type in CATCH clause");
+                }
+                else
+                {
+                    var exceptionVariable = new IdentifierNode(Current.Text, IdentifierType.UserVariable);
+                    _position++;
+                    
+                    // Handle optional semicolons (SEMI*)
+                    while (Match(TokenType.Semicolon)) { }
+                    
+                    var catchBlock = ParseStatementList(TokenType.Catch, TokenType.EndTry);
+                    catchClauses.Add(new CatchClauseNode(exceptionVariable, catchBlock, exceptionType));
+                }
+                
+                // Handle optional semicolons between catch clauses (SEMI*)
+                while (Match(TokenType.Semicolon)) { }
             }
+            
+            // Handle optional semicolons before END-TRY (SEMI*)
+            while (Match(TokenType.Semicolon)) { }
 
             Consume(TokenType.EndTry, "Expected 'END-TRY' after TRY statement");
-            Match(TokenType.Semicolon); // Optional semicolon
 
             return new TryStatementNode(tryBlock, catchClauses);
         }
