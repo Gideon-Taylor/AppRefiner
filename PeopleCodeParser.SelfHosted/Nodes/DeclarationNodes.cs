@@ -13,6 +13,13 @@ public abstract class DeclarationNode : AstNode
     public string Name { get; }
 
     /// <summary>
+    /// True if this Declaration had a semicolon in the source code
+    /// This is used for style checking, as PeopleCode allows but doesn't require
+    /// semicolons after the final declaration in a block
+    /// </summary>
+    public bool HasSemicolon { get; set; } = false;
+
+    /// <summary>
     /// Visibility modifier
     /// </summary>
     public VisibilityModifier Visibility { get; set; } = VisibilityModifier.Public;
@@ -168,6 +175,16 @@ public class PropertyNode : DeclarationNode
     /// True if property is abstract
     /// </summary>
     public bool IsAbstract { get; set; }
+
+    /// <summary>
+    /// Class or Interface this property implements
+    /// </summary>
+    public TypeNode ImplementedInterface { get; set; }
+
+    /// <summary>
+    /// Gets or sets the name of the implemented property.
+    /// </summary>
+    public string ImplementedPropertyName { get; set; }
 
     /// <summary>
     /// Property getter body (for implementations)

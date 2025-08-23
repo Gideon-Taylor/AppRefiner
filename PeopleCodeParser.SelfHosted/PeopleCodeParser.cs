@@ -75,6 +75,12 @@ public class PeopleCodeParser
                            Token.CreateEof(new SourcePosition(_tokens.LastOrDefault()?.SourceSpan.End.Index ?? 0));
 
     /// <summary>
+    /// Previous token that was processed
+    /// </summary>
+    private Token Previous => _position > 0 && _position - 1 < _tokens.Count ? _tokens[_position - 1] : 
+                           Token.CreateEof(new SourcePosition(0));
+
+    /// <summary>
     /// Look ahead at the next token without consuming it
     /// </summary>
     private Token Peek(int offset = 1) => 
@@ -812,12 +818,6 @@ public class PeopleCodeParser
                             continue;
                         }
                     }
-                    else if (Check(TokenType.Semicolon))
-                    {
-                        // Skip semicolons
-                        while (Match(TokenType.Semicolon)) { }
-                        continue;
-                    }
                     else
                     {
                         // Unknown member type or reached end of section
@@ -829,12 +829,12 @@ public class PeopleCodeParser
                         classNode.AddMember(member, visibility);
                     }
 
-                    // Consume required semicolons after member
-                    if (!Match(TokenType.Semicolon))
+                    if (Match(TokenType.Semicolon) && member is DeclarationNode d)
                     {
-                        ReportError("Expected ';' after class member");
+                        d.HasSemicolon = true;
                     }
-                    // Consume any additional semicolons
+
+                    // Consume any semicolons
                     while (Match(TokenType.Semicolon)) { }
                 }
                 catch (Exception ex)
@@ -1632,6 +1632,7 @@ public class PeopleCodeParser
                 TokenType.Property => true,
                 TokenType.ReadOnly => true,
                 TokenType.Set => true,
+                TokenType.Step => true,
                 TokenType.String => true,
                 TokenType.Throw => true,
                 TokenType.Time => true,
@@ -1639,6 +1640,7 @@ public class PeopleCodeParser
                 TokenType.Value => true,
                 TokenType.GenericId => true,
                 TokenType.GenericIdLimited => true,
+                TokenType.Number => true,
                 _ when Current.Type.IsIdentifier() => true,
                 _ => false
             })
@@ -1851,6 +1853,13 @@ public class PeopleCodeParser
                 _position = startPosition;
             }
 
+            startPosition = _position;
+            if (!ParsePropertyExtendsAnnotation(propertyNode))
+            {
+                _position = startPosition;
+            }
+
+
             // Optional semicolons
             while (Match(TokenType.Semicolon)) { }
 
@@ -1906,6 +1915,12 @@ public class PeopleCodeParser
             // Try to parse a parameter annotation - it's fine if there isn't one
             int startPosition = _position;
             if (!ParseMethodParameterAnnotation(propertyNode))
+            {
+                _position = startPosition;
+            }
+
+            startPosition = _position;
+            if (!ParsePropertyExtendsAnnotation(propertyNode))
             {
                 _position = startPosition;
             }
@@ -1980,6 +1995,9 @@ public class PeopleCodeParser
                 Match(TokenType.PlusSlash);
                 ReportError("Unrecognized method annotation");
             }
+
+            /* for some reason PeopleCode allows a trailing ; after the annotations */
+            while(Match(TokenType.Semicolon)) { }
         }
         finally
         {
@@ -2196,10 +2214,10 @@ public class PeopleCodeParser
             }
 
             // Expect genericID (method name in interface)
-            if (Check(TokenType.GenericId) || Check(TokenType.GenericIdLimited))
+            var firstId = ParseGenericId();
+            if (firstId != null)
             {
                 string methodName = Current.Text;
-                _position++;
                 // Store the implemented method name in the method node
                 methodNode.ImplementedMethodName = methodName;
             }
@@ -2210,6 +2228,81 @@ public class PeopleCodeParser
 
             // Expect closing annotation
             Consume(TokenType.PlusSlash, "Expected '+/' to close method extends annotation");
+            return true;
+        }
+        finally
+        {
+            ExitRule();
+        }
+    }
+
+    /// <summary>
+    /// Parse method extends annotation: SLASH_PLUS EXTENDS DIV IMPLEMENTS appClassPath DOT genericID PLUS_SLASH
+    /// </summary>
+    /// <returns>True if an extends annotation was successfully parsed, false otherwise</returns>
+    private bool ParsePropertyExtendsAnnotation(PropertyNode propertyNode)
+    {
+        try
+        {
+            EnterRule("propertyExtendsAnnotations");
+
+            if (!Match(TokenType.SlashPlus))
+            {
+                return false;
+            }
+
+            if (!Match(TokenType.Extends))
+            {
+                // Not an extends annotation, back up
+                _position--;
+                return false;
+            }
+
+            // Expect DIV (forward slash)
+            if (!Match(TokenType.Div))
+            {
+                ReportError("Expected '/' after 'EXTENDS' in method annotation");
+            }
+
+            // Expect IMPLEMENTS keyword
+            if (!Match(TokenType.Implements))
+            {
+                ReportError("Expected 'IMPLEMENTS' after 'EXTENDS/' in method annotation");
+            }
+
+            // Parse app class path
+            var appClassPath = ParseAppClassPath();
+            if (appClassPath == null)
+            {
+                ReportError("Expected app class path after 'IMPLEMENTS' in method annotation");
+            }
+            else
+            {
+                // Store the implemented interface in the method node
+                propertyNode.ImplementedInterface = appClassPath;
+            }
+
+            // Expect DOT
+            if (!Match(TokenType.Dot))
+            {
+                ReportError("Expected '.' after app class path in method annotation");
+            }
+
+            var firstId = ParseGenericId();
+            if (firstId != null)
+            {
+                string propertyName = Current.Text;
+                // Store the implemented method name in the property node
+                propertyNode.ImplementedPropertyName = propertyName;
+            }
+            else
+            {
+                ReportError("Expected method name after '.' in method annotation");
+            }
+
+            // Expect closing annotation
+            Consume(TokenType.PlusSlash, "Expected '+/' to close method extends annotation");
+
             return true;
         }
         finally
@@ -2936,7 +3029,6 @@ public class PeopleCodeParser
                 return null;
             }
 
-            Match(TokenType.Semicolon); // optional
             return new ConstantNode(name, literalValue);
         }
         finally
@@ -4083,40 +4175,39 @@ public class PeopleCodeParser
             }
             else if (Match(TokenType.Dot))
             {
-                                    // Property/method access
-                    if (Check(TokenType.GenericId))
+                // Property/method access
+                var member = ParseGenericId();
+                if (member != null)
+                {
+                    var memberToken = Previous; // Previous token after ParseGenericId consumed it
+                    
+                    // Create member access node
+                    expr = new MemberAccessNode(expr, member)
                     {
-                        var member = Current.Text;
-                        var memberToken = Current;
-                        _position++;
+                        SourceSpan = new SourceSpan(expr.SourceSpan.Start, memberToken.SourceSpan.End)
+                    };
+                    
+                    // Check for method call after dot access
+                    if (Match(TokenType.LeftParen))
+                    {
+                        // Method call
+                        var args = ParseArgumentList();
+                        Consume(TokenType.RightParen, "Expected ')' after method arguments");
                         
-                        // Create member access node
-                        expr = new MemberAccessNode(expr, member)
+                        expr = new FunctionCallNode(expr, args)
                         {
-                            SourceSpan = new SourceSpan(expr.SourceSpan.Start, memberToken.SourceSpan.End)
+                            SourceSpan = new SourceSpan(expr.SourceSpan.Start, Current.SourceSpan.End)
                         };
-                        
-                        // Check for method call after dot access
-                        if (Match(TokenType.LeftParen))
-                        {
-                            // Method call
-                            var args = ParseArgumentList();
-                            Consume(TokenType.RightParen, "Expected ')' after method arguments");
-                            
-                            expr = new FunctionCallNode(expr, args)
-                            {
-                                SourceSpan = new SourceSpan(expr.SourceSpan.Start, Current.SourceSpan.End)
-                            };
-                        }
                     }
+                }
                 else if (Check(TokenType.StringLiteral))
                 {
                     // Dynamic member access with string
-                    var member = Current.Value?.ToString() ?? "";
+                    var stringMember = Current.Value?.ToString() ?? "";
                     var memberToken = Current;
                     _position++;
                     
-                    expr = new MemberAccessNode(expr, member, isDynamic: true)
+                    expr = new MemberAccessNode(expr, stringMember, isDynamic: true)
                     {
                         SourceSpan = new SourceSpan(expr.SourceSpan.Start, memberToken.SourceSpan.End)
                     };
@@ -4149,6 +4240,12 @@ public class PeopleCodeParser
 
         // Identifiers
         if (Current.Type.IsIdentifier())
+        {
+            return ParseIdentifier();
+        }
+
+        // Special case for %Super (TokenType.Super)
+        if (Current.Type == TokenType.Super)
         {
             return ParseIdentifier();
         }
@@ -4209,7 +4306,8 @@ public class PeopleCodeParser
             || type == TokenType.Number
             || type == TokenType.String
             || type == TokenType.Integer
-            || type == TokenType.Float;
+            || type == TokenType.Float
+            || type == TokenType.Component;
     }
 
     /// <summary>
@@ -4226,10 +4324,36 @@ public class PeopleCodeParser
 
         do
         {
-            var arg = ParseExpression();
-            if (arg != null)
+            /* Special case for class constants in the form ClassName:Constant
+             * which are parsed as metadata expressions, not identifiers or literals.
+             * So we check for that pattern here.
+             */
+
+            if (((Check(TokenType.GenericId) || Check(TokenType.GenericIdLimited)) && Peek().Type == TokenType.Colon))
             {
-                args.Add(arg);
+                var className = Current.Text;
+                var startSpan = Current.SourceSpan;
+                _position += 2; // Skip ClassName and Colon
+
+                if (!(Check(TokenType.GenericId) || Check(TokenType.GenericIdLimited)))
+                {
+                    ReportError("Expected constant name after ':' in class constant");
+                }
+                var constantName = Current.Text;
+                var endSpan = Current.SourceSpan;
+                _position++;
+                args.Add(new ClassConstantNode(className, constantName)
+                {
+                    SourceSpan = new SourceSpan(startSpan.Start, endSpan.End)
+                });
+            }
+            else
+            {
+                var arg = ParseExpression();
+                if (arg != null)
+                {
+                    args.Add(arg);
+                }
             }
         } while (Match(TokenType.Comma));
 

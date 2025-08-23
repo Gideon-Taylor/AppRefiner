@@ -62,6 +62,7 @@ public interface IAstVisitor
     void VisitLocalVariableDeclarationWithAssignment(LocalVariableDeclarationWithAssignmentNode node);
     void VisitCatch(CatchClauseNode node);
     void VisitMetadataExpression(MetadataExpressionNode node);
+    void VisitClassConstant(ClassConstantNode classConstantNode);
 }
 
 /// <summary>
@@ -124,6 +125,7 @@ public interface IAstVisitor<out TResult>
     TResult VisitLocalVariableDeclarationWithAssignment(LocalVariableDeclarationWithAssignmentNode node);
     TResult VisitCatch(CatchClauseNode node);
     TResult VisitMetadataExpression(MetadataExpressionNode node);
+    TResult VisitClassConstant(ClassConstantNode classConstantNode);
 }
 
 /// <summary>
@@ -186,6 +188,7 @@ public abstract class AstVisitorBase : IAstVisitor
     public virtual void VisitLocalVariableDeclarationWithAssignment(LocalVariableDeclarationWithAssignmentNode node) => DefaultVisit(node);
     public virtual void VisitCatch(CatchClauseNode node) => DefaultVisit(node);
     public virtual void VisitMetadataExpression(MetadataExpressionNode node) => DefaultVisit(node);
+    public virtual void VisitClassConstant(ClassConstantNode classConstantNode) => DefaultVisit(classConstantNode);
 }
 
 /// <summary>
@@ -244,4 +247,6 @@ public abstract class AstVisitorBase<TResult> : IAstVisitor<TResult>
     public virtual TResult VisitLocalVariableDeclarationWithAssignment(LocalVariableDeclarationWithAssignmentNode node) => DefaultVisit(node);
     public virtual TResult VisitCatch(CatchClauseNode node) => DefaultVisit(node);
     public virtual TResult VisitMetadataExpression(MetadataExpressionNode node) => DefaultVisit(node);
+
+    public virtual TResult VisitClassConstant(ClassConstantNode classConstantNode) => DefaultVisit(classConstantNode);
 }

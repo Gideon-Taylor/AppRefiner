@@ -1,0 +1,92 @@
+import FUNCLIB_ARRAY;
+import FUNCLIB_STRING;
+
+class TestClass extends %ApplicationClass
+   
+   property string TestProperty get set;
+   property number MaxValue readonly;
+   
+   method TestClass();
+   method ProcessData(&data as array of string) returns boolean;
+   method CalculateTotal(&values as array of number) returns number;
+   
+end-class;
+
+method TestClass
+   %Super = create %ApplicationClass();
+   %This.MaxValue = 1000;
+end-method;
+
+method ProcessData
+   /+ &data as array of string +/
+   /+ Returns boolean +/
+   
+   Local string &item;
+   Local number &counter = 0;
+   Local boolean &result = True;
+   
+   try
+      If &data.Len > 0 then
+         For &counter = 1 to &data.Len
+            &item = &data[&counter];
+            
+            If Len(&item) > 0 then
+               /* Process the item */
+               &item = Upper(&item);
+               &data[&counter] = &item;
+            Else
+               &result = False;
+               break;
+            End-if;
+         End-for;
+      Else
+         &result = False;
+      End-if;
+      
+   catch Exception &ex
+      MessageBox(0, "", 0, "Error processing data: " | &ex.ToString());
+      &result = False;
+   end-try;
+   
+   Return &result;
+end-method;
+
+method CalculateTotal
+   /+ &values as array of number +/
+   /+ Returns number +/
+   
+   Local number &total = 0;
+   Local number &i;
+   
+   If &values.Len > 0 then
+      For &i = 1 to &values.Len
+         If &values[&i] > 0 then
+            &total = &total + &values[&i];
+         End-if;
+      End-for;
+   End-if;
+   
+   If &total > %This.MaxValue then
+      &total = %This.MaxValue;
+   End-if;
+   
+   Return &total;
+end-method;
+
+/* Function to test basic PeopleCode functionality */
+Function TestFunction(&input as string) Returns string
+   Local string &output;
+   
+   Evaluate &input
+   When "UPPER"
+      &output = "Converting to uppercase";
+      break;
+   When "LOWER"  
+      &output = "Converting to lowercase";
+      break;
+   When-other
+      &output = "Unknown operation";
+   End-evaluate;
+   
+   Return &output;
+End-Function;

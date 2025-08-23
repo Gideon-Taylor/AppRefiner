@@ -23,6 +23,30 @@ public abstract class ExpressionNode : AstNode
     public virtual bool HasSideEffects => false;
 }
 
+public class ClassConstantNode : ExpressionNode
+{
+    public string ClassName { get; }
+    public string ConstantName { get; }
+    public override bool HasSideEffects => false;
+    public override bool IsLValue => false;
+
+    public ClassConstantNode(string className, string constantName)
+    {
+        ClassName = className ?? throw new ArgumentNullException(nameof(className));
+        ConstantName = constantName ?? throw new ArgumentNullException(nameof(constantName));
+    }
+
+    public override void Accept(IAstVisitor visitor)
+    {
+        visitor.VisitClassConstant(this);
+    }
+
+    public override TResult Accept<TResult>(IAstVisitor<TResult> visitor)
+    {
+        return visitor.VisitClassConstant(this);
+    }
+}
+
 /// <summary>
 /// Binary operation expression (a + b, a AND b, etc.)
 /// </summary>
