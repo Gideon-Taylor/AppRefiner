@@ -406,13 +406,7 @@ public class PeopleCodeParser
                         if (function != null)
                         {
                             program.AddFunction(function);
-                            
-                            // If this was a function definition (with body), we don't expect a semicolon
-                            // as ParseFunction() already consumed the optional semicolon after END-FUNCTION
-                            if (function.Body != null)
-                            {
-                                continue; // Skip the semicolon check for function definitions
-                            }
+                            continue; // Skip the semicolon check for function definitions
                         }
                     }
                     else if (Check(TokenType.Global, TokenType.Component))
@@ -420,6 +414,18 @@ public class PeopleCodeParser
                         var variable = ParseVariableDeclaration();
                         if (variable != null)
                             program.AddVariable(variable);
+
+                    } else if (Check(TokenType.Local))
+                    {
+                        var startPosition = _position;
+                        var variable = ParseVariableDeclaration();
+                        if (variable != null)
+                            program.AddVariable(variable);
+                        else
+                        {
+                            _position = startPosition; // Reset position if parsing failed
+                            break;
+                        }
                     }
                     else if (Check(TokenType.Constant))
                     {
@@ -427,25 +433,11 @@ public class PeopleCodeParser
                         if (constant != null)
                             program.AddConstant(constant);
                     }
-                    else if (Check(TokenType.Local))
-                    {
-                        // Local variable definition as preamble
-                        var localVar = ParseVariableDeclaration();
-                        if (localVar != null)
-                            program.AddVariable(localVar);
-                    }
                     else
                     {
                         break; // No more preamble items
                     }
 
-                    // Consume required semicolons after preamble item
-                    // (except for function definitions, which were handled above)
-                    if (!Match(TokenType.Semicolon))
-                    {
-                        break; // No semicolon means we're done with preambles
-                    }
-                    
                     // Consume any additional semicolons
                     while (Match(TokenType.Semicolon)) { }
                 }
@@ -2731,19 +2723,14 @@ public class PeopleCodeParser
                 }
             }
 
-            // Declaration or definition?
-            if (Match(TokenType.Semicolon))
-            {
-                // Declaration only (no body)
-                return functionNode;
-            }
-            
-            // Handle optional semicolons (SEMI*) before statements
+            // Handle semicolons (SEMI*) 
             while (Match(TokenType.Semicolon)) { }
 
             // Function definition body until END-FUNCTION
             var body = ParseStatementList(TokenType.EndFunction);
             Consume(TokenType.EndFunction, "Expected 'END-FUNCTION' after function body");
+
+            while (Match(TokenType.Semicolon)) { }
 
             functionNode.SetBody(body);
             return functionNode;
@@ -2934,6 +2921,7 @@ public class PeopleCodeParser
             VariableScope scope;
             if (Match(TokenType.Global)) scope = VariableScope.Global;
             else if (Match(TokenType.Component)) scope = VariableScope.Component;
+            else if (Match(TokenType.Local)) scope = VariableScope.Local;
             else return null;
 
             var varType = ParseTypeReference();
@@ -2970,6 +2958,12 @@ public class PeopleCodeParser
                 {
                     break; // tolerate trailing comma
                 }
+            }
+
+            if (Check(TokenType.Equal))
+            {
+                /* This isn't a declaration that belongs in the preamble */
+                return null;
             }
 
             Match(TokenType.Semicolon); // optional
