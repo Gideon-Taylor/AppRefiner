@@ -374,6 +374,11 @@ public class InterfaceNode : AstNode
     /// </summary>
     public List<MethodNode> Methods { get; } = new();
 
+    /// <summary>
+    /// Gets the collection of property nodes associated with the current object.
+    /// </summary>
+    public List<PropertyNode> Properties { get; } = new();
+
     public InterfaceNode(string name)
     {
         Name = name ?? throw new ArgumentNullException(nameof(name));
@@ -395,6 +400,11 @@ public class InterfaceNode : AstNode
         AddChild(method);
     }
 
+    public void AddProperty(PropertyNode property)
+    {
+        Properties.Add(property);
+        AddChild(property);
+    }
     public override void Accept(IAstVisitor visitor)
     {
         visitor.VisitInterface(this);

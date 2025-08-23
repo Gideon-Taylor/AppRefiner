@@ -761,48 +761,6 @@ public class MemberAccessNode : ExpressionNode
 }
 
 /// <summary>
-/// Array access with single index (array[index])
-/// </summary>
-public class ArrayIndexNode : ExpressionNode
-{
-    /// <summary>
-    /// Array expression
-    /// </summary>
-    public ExpressionNode Array { get; }
-
-    /// <summary>
-    /// Index expression
-    /// </summary>
-    public ExpressionNode Index { get; }
-
-    public override bool IsLValue => true;
-    public override bool HasSideEffects => Array.HasSideEffects || Index.HasSideEffects;
-
-    public ArrayIndexNode(ExpressionNode array, ExpressionNode index)
-    {
-        Array = array ?? throw new ArgumentNullException(nameof(array));
-        Index = index ?? throw new ArgumentNullException(nameof(index));
-
-        AddChildren(array, index);
-    }
-
-    public override void Accept(IAstVisitor visitor)
-    {
-        visitor.VisitArrayIndex(this);
-    }
-
-    public override TResult Accept<TResult>(IAstVisitor<TResult> visitor)
-    {
-        return visitor.VisitArrayIndex(this);
-    }
-
-    public override string ToString()
-    {
-        return $"{Array}[{Index}]";
-    }
-}
-
-/// <summary>
 /// Object creation with just type name (simplified version)
 /// </summary>
 public class SimpleObjectCreationNode : ExpressionNode

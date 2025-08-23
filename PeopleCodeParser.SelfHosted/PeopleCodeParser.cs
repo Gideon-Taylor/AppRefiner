@@ -2472,6 +2472,15 @@ public class PeopleCodeParser
                     }
                     while (Match(TokenType.Semicolon)) { }
                 }
+                else if (Check(TokenType.Property))
+                {
+                    // Property declarations are allowed in all visibility sections
+                    var propertyDeclaration = ParsePropertyDeclaration();
+                    if (propertyDeclaration is PropertyNode propertyNode)
+                    {
+                        interfaceNode.AddProperty(propertyNode);
+                    }
+                }
                 else if (Match(TokenType.Semicolon))
                 {
                     // Allow stray semicolons
@@ -4119,16 +4128,11 @@ public class PeopleCodeParser
         {
             if (Match(TokenType.LeftBracket))
             {
-                // Array access
-                var index = ParseExpression();
-                if (index == null)
-                {
-                    ReportError("Expected expression for array index");
-                }
-                
+                // Array access - supports both single index and comma-separated indices
+                var indices = ParseArrayIndices();
                 Consume(TokenType.RightBracket, "Expected ']' after array index");
                 
-                expr = new ArrayIndexNode(expr, index!)
+                expr = new ArrayAccessNode(expr, indices)
                 {
                     SourceSpan = new SourceSpan(expr.SourceSpan.Start, Current.SourceSpan.End)
                 };
@@ -4161,7 +4165,7 @@ public class PeopleCodeParser
                     if (singleExpr != null && Check(TokenType.RightParen))
                     {
                         _position++; // Consume the ')'
-                        expr = new ArrayIndexNode(expr, singleExpr) // Reuse ArrayIndexNode for implicit subindex
+                        expr = new ArrayAccessNode(expr, new List<ExpressionNode> { singleExpr }) // Use ArrayAccessNode for implicit subindex
                         {
                             SourceSpan = new SourceSpan(expr.SourceSpan.Start, Current.SourceSpan.End)
                         };
@@ -4367,6 +4371,44 @@ public class PeopleCodeParser
         } while (Match(TokenType.Comma));
 
         return args;
+    }
+
+    /// <summary>
+    /// Parse array indices (comma-separated list of expressions inside brackets)
+    /// </summary>
+    private List<ExpressionNode> ParseArrayIndices()
+    {
+        EnterRule("arrayIndices");
+        try
+        {
+            var indices = new List<ExpressionNode>();
+
+            do
+            {
+                var index = ParseExpression();
+                if (index == null)
+                {
+                    ReportError("Expected expression for array index");
+                    // Add dummy index for error recovery
+                    indices.Add(new LiteralNode(0, LiteralType.Integer));
+                    break;
+                }
+                indices.Add(index);
+            } while (Match(TokenType.Comma));
+
+            if (indices.Count == 0)
+            {
+                ReportError("Expected at least one array index");
+                // Add dummy index for recovery
+                indices.Add(new LiteralNode(0, LiteralType.Integer));
+            }
+
+            return indices;
+        }
+        finally
+        {
+            ExitRule();
+        }
     }
 
     /// <summary>
