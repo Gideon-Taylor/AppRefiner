@@ -415,8 +415,32 @@ public class PeopleCodeLexer
         return Token.CreateOperator(TokenType.PlusSlash, "+/", CreateSpan(start));
     }
 
+    private bool IsInCommentContext()
+    {
+        // Check if we're at the start of a line or after a semicolon
+        if (_position == 0) return true;
+        
+        // Look backward for context
+        for (int i = _position - 1; i >= 0; i--)
+        {
+            var ch = _source[i];
+            if (ch == '\n' || ch == '\r')
+                return true; // Start of line
+            if (ch == ';')
+                return true; // After statement separator
+            if (!char.IsWhiteSpace(ch))
+                return false; // Found non-whitespace, non-separator
+        }
+        
+        return true; // Beginning of file
+    }
+
     private bool IsRemComment()
     {
+        // First, check if we're in a context where REM comments are valid
+        if (!IsInCommentContext())
+            return false;
+            
         // Check if this looks like "REM" or "REMARK"
         if (_position + 2 < _source.Length)
         {

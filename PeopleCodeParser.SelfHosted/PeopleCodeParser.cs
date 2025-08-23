@@ -999,22 +999,13 @@ public class PeopleCodeParser
         {
             EnterRule("typeSpecifier");
 
-            // First try to parse as app class path (qualified name with colons)
-            var appClassType = ParseAppClassPath();
-            if (appClassType != null)
+            var type = ParseTypeReference();
+            if (type == null)
             {
-                return appClassType;
+                ReportError("Expected type name after 'AS'");
+                return null;
             }
-
-            // If not an app class path, try to parse as simple type (built-in or unqualified class name)
-            var simpleType = ParseSimpleType();
-            if (simpleType != null)
-            {
-                return simpleType;
-            }
-
-            ReportError("Expected type name after 'AS'");
-            return null;
+            return type;
         }
         catch (Exception ex)
         {
@@ -2188,16 +2179,16 @@ public class PeopleCodeParser
                 ReportError("Expected 'IMPLEMENTS' after 'EXTENDS/' in method annotation");
             }
 
-            // Parse app class path
-            var appClassPath = ParseAppClassPath();
-            if (appClassPath == null)
+            // Parse class type (app class path or built-in class)
+            var classType = ParseAppClassPath() ?? ParseSimpleType();
+            if (classType == null)
             {
-                ReportError("Expected app class path after 'IMPLEMENTS' in method annotation");
+                ReportError("Expected class name after 'IMPLEMENTS' in method annotation");
             }
             else
             {
                 // Store the implemented interface in the method node
-                methodNode.AddImplementedInterface(appClassPath);
+                methodNode.AddImplementedInterface(classType);
             }
 
             // Expect DOT
@@ -2263,16 +2254,16 @@ public class PeopleCodeParser
                 ReportError("Expected 'IMPLEMENTS' after 'EXTENDS/' in method annotation");
             }
 
-            // Parse app class path
-            var appClassPath = ParseAppClassPath();
-            if (appClassPath == null)
+            // Parse class type (app class path or built-in class)
+            var classType = ParseAppClassPath() ?? ParseSimpleType();
+            if (classType == null)
             {
-                ReportError("Expected app class path after 'IMPLEMENTS' in method annotation");
+                ReportError("Expected class name after 'IMPLEMENTS' in method annotation");
             }
             else
             {
                 // Store the implemented interface in the method node
-                propertyNode.ImplementedInterface = appClassPath;
+                propertyNode.ImplementedInterface = classType;
             }
 
             // Expect DOT
