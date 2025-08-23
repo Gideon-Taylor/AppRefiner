@@ -425,7 +425,7 @@ public class PeopleCodeLexer
             {
                 // Must be followed by space, end of input, or 'A' (for REMARK)
                 var next = _position + 3 < _source.Length ? _source[_position + 3] : '\0';
-                return next == '\0' || char.IsWhiteSpace(next) || char.ToUpperInvariant(next) == 'A';
+                return next == '\0' || char.IsWhiteSpace(next) || char.ToUpperInvariant(next) == 'A' || char.IsSymbol(next) || char.IsPunctuation(next);
             }
         }
         // Also check for "REMARK"

@@ -1608,6 +1608,7 @@ public class PeopleCodeParser
             {
                 TokenType.Catch => true,
                 TokenType.Class => true,
+                TokenType.Component => true,
                 TokenType.Continue => true,
                 TokenType.Create => true,
                 TokenType.Date => true,
@@ -3766,7 +3767,7 @@ public class PeopleCodeParser
                 break;
             }
 
-            left = new BinaryOperationNode(left, BinaryOperator.Or, right)
+            left = new BinaryOperationNode(left, BinaryOperator.Or, false, right)
             {
                 SourceSpan = new SourceSpan(left.SourceSpan.Start, right.SourceSpan.End)
             };
@@ -3792,7 +3793,7 @@ public class PeopleCodeParser
                 break;
             }
 
-            left = new BinaryOperationNode(left, BinaryOperator.And, right)
+            left = new BinaryOperationNode(left, BinaryOperator.And, false, right)
             {
                 SourceSpan = new SourceSpan(left.SourceSpan.Start, right.SourceSpan.End)
             };
@@ -3809,6 +3810,13 @@ public class PeopleCodeParser
         var left = ParseRelationalExpression();
         if (left == null) return null;
 
+        bool notFlag = false;
+        if (Check(TokenType.Not))
+        {
+            notFlag = true;
+            _position++;
+        }
+
         while (Current.Type is TokenType.Equal or TokenType.NotEqual)
         {
             var op = Current.Type == TokenType.Equal ? BinaryOperator.Equal : BinaryOperator.NotEqual;
@@ -3821,7 +3829,7 @@ public class PeopleCodeParser
                 break;
             }
 
-            left = new BinaryOperationNode(left, op, right)
+            left = new BinaryOperationNode(left, op, notFlag, right)
             {
                 SourceSpan = new SourceSpan(left.SourceSpan.Start, right.SourceSpan.End)
             };
@@ -3837,6 +3845,13 @@ public class PeopleCodeParser
     {
         var left = ParseTypeCastExpression();
         if (left == null) return null;
+
+        bool notFlag = false;
+        if (Check(TokenType.Not))
+        {
+            notFlag = true;
+            _position++;
+        }
 
         while (Current.Type is TokenType.LessThan or TokenType.LessThanOrEqual or 
                                TokenType.GreaterThan or TokenType.GreaterThanOrEqual)
@@ -3858,7 +3873,7 @@ public class PeopleCodeParser
                 break;
             }
 
-            left = new BinaryOperationNode(left, op, right)
+            left = new BinaryOperationNode(left, op, notFlag, right)
             {
                 SourceSpan = new SourceSpan(left.SourceSpan.Start, right.SourceSpan.End)
             };
@@ -3933,7 +3948,7 @@ public class PeopleCodeParser
                 break;
             }
 
-            left = new BinaryOperationNode(left, BinaryOperator.Concatenate, right)
+            left = new BinaryOperationNode(left, BinaryOperator.Concatenate, false, right)
             {
                 SourceSpan = new SourceSpan(left.SourceSpan.Start, right.SourceSpan.End)
             };
@@ -3995,7 +4010,7 @@ public class PeopleCodeParser
                 break;
             }
 
-            left = new BinaryOperationNode(left, op, right)
+            left = new BinaryOperationNode(left, op, false, right)
             {
                 SourceSpan = new SourceSpan(left.SourceSpan.Start, right.SourceSpan.End)
             };
@@ -4024,7 +4039,7 @@ public class PeopleCodeParser
                 break;
             }
 
-            left = new BinaryOperationNode(left, op, right)
+            left = new BinaryOperationNode(left, op, false, right)
             {
                 SourceSpan = new SourceSpan(left.SourceSpan.Start, right.SourceSpan.End)
             };
@@ -4051,7 +4066,7 @@ public class PeopleCodeParser
                 return left;
             }
 
-            return new BinaryOperationNode(left, BinaryOperator.Power, right)
+            return new BinaryOperationNode(left, BinaryOperator.Power, false, right)
             {
                 SourceSpan = new SourceSpan(left.SourceSpan.Start, right.SourceSpan.End)
             };

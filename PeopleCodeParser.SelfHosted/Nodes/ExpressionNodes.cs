@@ -63,16 +63,22 @@ public class BinaryOperationNode : ExpressionNode
     public BinaryOperator Operator { get; }
 
     /// <summary>
+    /// Indicates if the operator is negated (e.g., NOT =, NOT >, etc.)
+    /// </summary>
+    public bool NotFlag { get; }
+
+    /// <summary>
     /// Right operand
     /// </summary>
     public ExpressionNode Right { get; }
 
     public override bool HasSideEffects => Left.HasSideEffects || Right.HasSideEffects;
 
-    public BinaryOperationNode(ExpressionNode left, BinaryOperator op, ExpressionNode right)
+    public BinaryOperationNode(ExpressionNode left, BinaryOperator op, bool notFlag, ExpressionNode right)
     {
         Left = left ?? throw new ArgumentNullException(nameof(left));
         Operator = op;
+        NotFlag = notFlag;
         Right = right ?? throw new ArgumentNullException(nameof(right));
 
         AddChildren(left, right);

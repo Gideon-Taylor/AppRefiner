@@ -10,7 +10,7 @@ class Program
     {
         try
         {
-            //SingleFileTest.RunTest(@"C:\Users\tslat\Downloads\idadev1-master\PeopleCode\Records\IS_AW_LAY_SVW\IS_AW_LAY_ID\SearchInit.pcode");
+            //SingleFileTest.RunTest(@"C:\temp\IH91U019\PeopleCode\Application Packages\ADSM\ADSCompareValue.pcode");
 
             ConsoleLogger.WriteHeader("PeopleCode Parser Comparison Tool");
             
