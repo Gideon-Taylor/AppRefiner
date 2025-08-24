@@ -328,6 +328,7 @@ public class PeopleCodeLexer
             
             '!' when PeekChar() == '=' => ScanTwoCharOperator(TokenType.NotEqual),
             
+            '|' when PeekChar() == '|' => ScanTwoCharOperator(TokenType.DirectiveOr),
             '|' when PeekChar() == '=' => ScanTwoCharOperator(TokenType.PipeEqual),
             '|' => ScanSingleCharOperator(TokenType.Pipe),
             
@@ -349,6 +350,7 @@ public class PeopleCodeLexer
             _ when char.IsDigit(ch) => ScanNumber(),
             
             // Identifiers, keywords, and variables
+            '&' when PeekChar() == '&' => ScanTwoCharOperator(TokenType.DirectiveAnd),
             '&' => ScanUserVariable(),
             '%' => ScanSystemIdentifier(),
             '#' => ScanDirective(),
@@ -711,7 +713,7 @@ public class PeopleCodeLexer
         sb.Append('#');
 
         // Scan the directive keyword
-        while (!IsAtEnd && char.IsLetter(CurrentChar))
+        while (!IsAtEnd && (char.IsLetter(CurrentChar) || CurrentChar == '-'))
         {
             sb.Append(Advance());
         }
@@ -721,8 +723,9 @@ public class PeopleCodeLexer
         {
             "#IF" => TokenType.DirectiveIf,
             "#ELSE" => TokenType.DirectiveElse,
-            "#ENDIF" => TokenType.DirectiveEndIf,
+            "#END-IF" => TokenType.DirectiveEndIf,
             "#THEN" => TokenType.DirectiveThen,
+            "#TOOLSREL" => TokenType.DirectiveToolsRel,
             _ => TokenType.DirectiveAtom
         };
 

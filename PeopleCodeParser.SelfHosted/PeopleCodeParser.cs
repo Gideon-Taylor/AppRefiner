@@ -22,6 +22,9 @@ public class PeopleCodeParser
     private const int MaxErrorRecoveryAttempts = 10;
     private int _errorRecoveryCount = 0;
 
+    // Compiler directive support - defaults to 99.99.99 for "newest version" policy
+    private ToolsVersion _toolsRelease = new ToolsVersion("99.99.99");
+
     // Synchronization tokens for error recovery
     private static readonly HashSet<TokenType> StatementSyncTokens = new()
     {
@@ -56,10 +59,57 @@ public class PeopleCodeParser
         TokenType.EndInterface
     };
 
-    public PeopleCodeParser(IEnumerable<Token> tokens)
+    // Store original tokens for directive reprocessing
+    private readonly List<Token> _originalTokens;
+    
+    public PeopleCodeParser(IEnumerable<Token> tokens, string? toolsRelease = null)
     {
-        _tokens = tokens?.Where(t => !t.Type.IsTrivia()).ToList() 
-                 ?? throw new ArgumentNullException(nameof(tokens));
+        _originalTokens = tokens?.ToList() ?? throw new ArgumentNullException(nameof(tokens));
+        _tokens = new();
+        if (toolsRelease is not null)
+        {
+            _toolsRelease = new ToolsVersion(toolsRelease);
+        }
+        PreProcessDirectives();
+    }
+    
+    /// <summary>
+    /// Check if a token type is directive-specific and should not reach main parsing
+    /// </summary>
+    private static bool IsDirectiveSpecificToken(TokenType type)
+    {
+        return type is 
+            TokenType.DirectiveIf or 
+            TokenType.DirectiveElse or 
+            TokenType.DirectiveEndIf or 
+            TokenType.DirectiveThen or 
+            TokenType.DirectiveToolsRel or 
+            TokenType.DirectiveAnd or 
+            TokenType.DirectiveOr or 
+            TokenType.DirectiveAtom;
+    }
+    
+    /// <summary>
+    /// Reprocess directives with the current ToolsRelease setting
+    /// </summary>
+    private void PreProcessDirectives()
+    {
+        // Clear existing errors from previous preprocessing
+        _errors.RemoveAll(e => e.Message.Contains("directive") || e.Message.Contains("Directive"));
+        
+        // Pass 1: Process directives with all tokens (including trivia)
+        var preprocessor = new DirectivePreprocessor(_originalTokens, _toolsRelease);
+        var processedTokens = preprocessor.ProcessDirectives();
+        
+        // Add any preprocessing errors to our error list
+        foreach (var error in preprocessor.Errors)
+        {
+            _errors.Add(new ParseError(error, new SourceSpan(new SourcePosition(0), new SourcePosition(0)), ParseErrorSeverity.Error, "Directive preprocessing"));
+        }
+        processedTokens = processedTokens?.Where(t => !t.Type.IsTrivia()).ToList() ?? throw new ArgumentException(nameof(processedTokens)) ;
+        // Update tokens list
+        _tokens.Clear();
+        _tokens.AddRange(processedTokens);
         _position = 0;
     }
 
@@ -289,6 +339,8 @@ public class PeopleCodeParser
     /// </summary>
     public ProgramNode ParseProgram()
     {
+        // Initialize with preprocessed tokens
+
         try
         {
             EnterRule("program");
@@ -1597,12 +1649,15 @@ public class PeopleCodeParser
             // In PeopleCode, many keywords can be used as identifiers in certain contexts
             if (Current.Type switch
             {
+                TokenType.Boolean => true,
                 TokenType.Catch => true,
                 TokenType.Class => true,
                 TokenType.Component => true,
+                TokenType.Constant => true,  // Add missing CONSTANT keyword
                 TokenType.Continue => true,
                 TokenType.Create => true,
                 TokenType.Date => true,
+                TokenType.DateTime => true,
                 TokenType.Exception => true,
                 TokenType.Extends => true,
                 TokenType.Get => true,
@@ -1611,6 +1666,7 @@ public class PeopleCodeParser
                 TokenType.Integer => true,
                 TokenType.Interface => true,
                 TokenType.Method => true,
+                TokenType.Number => true,
                 TokenType.Out => true,
                 TokenType.Private => true,
                 TokenType.Property => true,
@@ -1624,7 +1680,6 @@ public class PeopleCodeParser
                 TokenType.Value => true,
                 TokenType.GenericId => true,
                 TokenType.GenericIdLimited => true,
-                TokenType.Number => true,
                 _ when Current.Type.IsIdentifier() => true,
                 _ => false
             })
@@ -4569,7 +4624,28 @@ public class PeopleCodeParser
             PrintAstStructureRecursive(node.Children[i], result, childPrefix, isLastChild, useTreeCharacters);
         }
     }
+
+    // ===== COMPILER DIRECTIVE PARSING =====
+
+
+    /// <summary>
+    /// Set the PeopleTools version for directive evaluation
+    /// </summary>
+    /// <param name="version">Version string in format "major.minor[.patch]" or null to unset</param>
+    public void SetToolsRelease(string? version)
+    {
+        _toolsRelease = string.IsNullOrEmpty(version) ? new ToolsVersion("99.99.99") : new ToolsVersion(version);
+        
+        // Reprocess directives with the new ToolsRelease setting
+        PreProcessDirectives();
+    }
+    
+    /// <summary>
+    /// Get the current PeopleTools version configuration
+    /// </summary>
+    public ToolsVersion? ToolsRelease => _toolsRelease;
 }
+
 
 /// <summary>
 /// Represents a parse error

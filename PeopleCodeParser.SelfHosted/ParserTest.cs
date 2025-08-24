@@ -1,5 +1,6 @@
 using PeopleCodeParser.SelfHosted.Lexing;
 using PeopleCodeParser.SelfHosted.Nodes;
+using PeopleCodeParser.SelfHosted.Test;
 
 namespace PeopleCodeParser.SelfHosted;
 
@@ -34,6 +35,9 @@ public static class ParserTest
         TestBuiltInObjectTypes();*/
 
         TestProgram(File.ReadAllText(@"C:\Users\tslat\Downloads\TopicSkill.ppc"));
+
+        // Test compiler directives
+        DirectiveTest.RunTests();
 
         Console.WriteLine("Basic parser test completed.");
     }

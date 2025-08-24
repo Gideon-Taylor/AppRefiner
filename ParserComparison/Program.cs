@@ -1,6 +1,7 @@
 using ParserComparison.Models;
 using ParserComparison.Tests;
 using ParserComparison.Utils;
+using SharpCompress.Common;
 
 namespace ParserComparison;
 
@@ -10,8 +11,16 @@ class Program
     {
         try
         {
-            //SingleFileTest.RunTest(@"C:\temp\IH91U019\PeopleCode\Application Packages\ADSM\ADSCompareValue.pcode");
-
+            BulkDirectoryTest.RunTest(new TestConfiguration
+            {
+                DirectoryPath = @"C:\Users\tslat\repos\GitHub\AppRefiner\ParserComparison\bin\Release\net8.0\failed",
+                VerboseOutput = true,
+                StopOnFirstError = true,
+                MaxFiles = 10000,
+                IncludeMemoryAnalysis = true,
+                ProgressInterval = 1000
+            });
+            //var result = SingleFileTest.RunTest(@"C:\Users\tslat\repos\GitHub\AppRefiner\ParserComparison\bin\Release\net8.0\failed\Activate.pcode");
             ConsoleLogger.WriteHeader("PeopleCode Parser Comparison Tool");
             
             var config = ParseArguments(args);
@@ -28,7 +37,14 @@ class Program
             }
             else if (!string.IsNullOrEmpty(config.DirectoryPath))
             {
-                RunBulkDirectoryTest(config);
+                if (config.SelfHostedOnlyMode)
+                {
+                    RunSelfHostedOnlyBulkTest(config);
+                }
+                else
+                {
+                    RunBulkDirectoryTest(config);
+                }
             }
             else
             {
@@ -83,6 +99,20 @@ class Program
                     config.IncludeMemoryAnalysis = false;
                     break;
                 
+                case "--progress-interval":
+                    if (i + 1 < args.Length && int.TryParse(args[++i], out int interval) && interval > 0)
+                        config.ProgressInterval = interval;
+                    break;
+                
+                case "--self-hosted-only":
+                    config.SelfHostedOnlyMode = true;
+                    break;
+                
+                case "--failed-dir":
+                    if (i + 1 < args.Length)
+                        config.FailedFilesDirectory = args[++i];
+                    break;
+                
                 case "-h":
                 case "--help":
                     return null;
@@ -113,6 +143,17 @@ class Program
         }
     }
 
+    private static void RunSelfHostedOnlyBulkTest(TestConfiguration config)
+    {
+        var results = SelfHostedOnlyBulkTest.RunTest(config);
+        
+        var failures = results.Where(r => !r.SelfHostedResult.Success).ToList();
+        if (failures.Any())
+        {
+            Environment.ExitCode = 1;
+        }
+    }
+
     private static void ShowUsage()
     {
         Console.WriteLine("Usage:");
@@ -126,11 +167,15 @@ class Program
         Console.WriteLine("  --continue-on-error       Continue parsing even if self-hosted parser fails");
         Console.WriteLine("  --max-files <n>           Limit number of files to process in bulk test");
         Console.WriteLine("  --no-memory               Skip memory usage analysis");
+        Console.WriteLine("  --progress-interval <n>   Show status every n files (default: 1000)");
+        Console.WriteLine("  --self-hosted-only        Run only self-hosted parser and copy failed files");
+        Console.WriteLine("  --failed-dir <path>       Directory for failed files (default: 'failed')");
         Console.WriteLine("  -h, --help                Show this help message");
         Console.WriteLine();
         Console.WriteLine("Examples:");
         Console.WriteLine("  ParserComparison -f \"C:\\code\\sample.pcode\"");
         Console.WriteLine("  ParserComparison -d \"C:\\PeopleCode\\\" -v");
         Console.WriteLine("  ParserComparison -d \"C:\\PeopleCode\\\" --max-files 100 --continue-on-error");
+        Console.WriteLine("  ParserComparison -d \"C:\\PeopleCode\\\" --self-hosted-only --failed-dir errors");
     }
 }

@@ -45,12 +45,6 @@ public class BulkDirectoryTest
 
                 /* For now, we are going to strip out any directive peoplecode */
 
-                // Regex pattern to match #If to #End-If blocks
-                string pattern = @"#If\b.*?#End-If;?";
-
-                // Remove the conditional compilation blocks
-                sourceCode = Regex.Replace(sourceCode, pattern, "", RegexOptions.Singleline | RegexOptions.IgnoreCase);
-
                 var fileSize = sourceCode.Length;
 
                 var antlrResult = antlrParser.Parse(sourceCode, filePath);
@@ -71,6 +65,12 @@ public class BulkDirectoryTest
                 };
 
                 results.Add(comparison);
+
+                // Show periodic status update
+                if ((i + 1) % config.ProgressInterval == 0)
+                {
+                    ConsoleLogger.WritePeriodicStatus(results, i + 1, pcodeFiles.Count);
+                }
 
                 // Stop on first self-hosted parser failure if configured
                 if (config.StopOnFirstError && !selfHostedResult.Success)

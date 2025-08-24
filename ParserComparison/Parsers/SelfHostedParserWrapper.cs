@@ -30,7 +30,7 @@ public class SelfHostedParserWrapper : IParser
 
             // Parsing phase
             var parserStopwatch = Stopwatch.StartNew();
-            var parser = new PeopleCodeParser.SelfHosted.PeopleCodeParser(tokens);
+            var parser = new PeopleCodeParser.SelfHosted.PeopleCodeParser(tokens,"8.61");
             var parseTree = parser.ParseProgram();
             parserStopwatch.Stop();
 

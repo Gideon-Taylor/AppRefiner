@@ -295,6 +295,9 @@ public enum TokenType
     DirectiveElse,        // #ELSE
     DirectiveEndIf,       // #END IF
     DirectiveThen,        // #THEN
+    DirectiveToolsRel,    // #TOOLSREL
+    DirectiveAnd,         // && (directive logical AND)
+    DirectiveOr,          // || (directive logical OR)
     DirectiveAtom         // Other directive content
 }
 
@@ -316,7 +319,9 @@ public static class TokenTypeExtensions
     /// </summary>
     public static bool IsOperator(this TokenType type)
     {
-        return type >= TokenType.Plus && type <= TokenType.PlusSlash;
+        return (type >= TokenType.Plus && type <= TokenType.PlusSlash) ||
+               type == TokenType.DirectiveAnd ||
+               type == TokenType.DirectiveOr;
     }
 
     /// <summary>
@@ -508,6 +513,10 @@ public static class TokenTypeExtensions
             TokenType.Colon => ":",
             TokenType.SlashPlus => "/+",
             TokenType.PlusSlash => "+/",
+
+            // Directive operators
+            TokenType.DirectiveAnd => "&&",
+            TokenType.DirectiveOr => "||",
 
             // Special
             TokenType.EndOfFile => "<EOF>",

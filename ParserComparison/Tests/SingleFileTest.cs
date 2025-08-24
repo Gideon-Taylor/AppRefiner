@@ -17,13 +17,6 @@ public class SingleFileTest
         }
 
         var sourceCode = File.ReadAllText(filePath);
-
-        // Regex pattern to match #If to #End-If blocks
-        string pattern = @"#If\b.*?#End-If;?";
-
-        // Remove the conditional compilation blocks
-        sourceCode = Regex.Replace(sourceCode, pattern, "", RegexOptions.Singleline | RegexOptions.IgnoreCase);
-
         var fileSize = sourceCode.Length;
 
         Console.WriteLine($"File size: {fileSize:N0} characters");
