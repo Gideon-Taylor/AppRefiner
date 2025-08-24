@@ -3014,16 +3014,20 @@ public class PeopleCodeParser
             }
 
             var firstName = Current.Text;
+            var firstNameToken = Current;
             _position++;
 
             var variable = new VariableNode(firstName, varType, scope);
+            variable.UpdateVariableNode(firstName, firstNameToken);
 
             // Additional names
             while (Match(TokenType.Comma))
             {
                 if (Check(TokenType.UserVariable))
                 {
-                    variable.AddName(Current.Text);
+                    var additionalName = Current.Text;
+                    var additionalNameToken = Current;
+                    variable.AddNameWithToken(additionalName, additionalNameToken);
                     _position++;
                 }
                 else
@@ -3606,6 +3610,7 @@ public class PeopleCodeParser
             }
 
             var firstVariableName = Current.Text;
+            var firstVarToken = Current;
             _position++;
 
             // Check if this is assignment or definition
@@ -3619,19 +3624,26 @@ public class PeopleCodeParser
                     return null;
                 }
 
-                return new LocalVariableDeclarationWithAssignmentNode(variableType, firstVariableName, initialValue);
+                var node = new LocalVariableDeclarationWithAssignmentNode(variableType, firstVariableName, initialValue);
+                node.SetVariableNameWithToken(firstVariableName, firstVarToken);
+                return node;
             }
             else
             {
                 // This is localVariableDefinition: LOCAL type &var1, &var2, ...
-                var variableNames = new List<string> { firstVariableName };
+                var node = new LocalVariableDeclarationNode(variableType, new List<string> { firstVariableName });
+                
+                // Add the first variable name with its token
+                node.AddVariableNameWithToken(firstVariableName, firstVarToken);
 
                 // Parse additional variable names separated by commas
                 while (Match(TokenType.Comma))
                 {
                     if (Check(TokenType.UserVariable))
                     {
-                        variableNames.Add(Current.Text);
+                        var additionalName = Current.Text;
+                        var additionalToken = Current;
+                        node.AddVariableNameWithToken(additionalName, additionalToken);
                         _position++;
                     }
                     else
@@ -3641,7 +3653,7 @@ public class PeopleCodeParser
                     }
                 }
 
-                return new LocalVariableDeclarationNode(variableType, variableNames);
+                return node;
             }
         }
         catch (Exception ex)

@@ -754,6 +754,11 @@ public class LocalVariableDeclarationNode : StatementNode
     /// Variable names
     /// </summary>
     public List<string> VariableNames { get; }
+    
+    /// <summary>
+    /// Variable name information including tokens
+    /// </summary>
+    public List<VariableNameInfo> VariableNameInfos { get; } = new();
 
     public override bool IntroducesScope => false; // Local variables don't introduce new scopes
 
@@ -798,6 +803,11 @@ public class LocalVariableDeclarationWithAssignmentNode : StatementNode
     /// Variable name
     /// </summary>
     public string VariableName { get; }
+    
+    /// <summary>
+    /// Variable name information including token
+    /// </summary>
+    public VariableNameInfo? VariableNameInfo { get; set; }
 
     /// <summary>
     /// Initial value expression

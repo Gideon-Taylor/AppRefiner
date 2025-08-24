@@ -292,6 +292,11 @@ public class VariableNode : DeclarationNode
     /// Additional variable names (for multi-variable declarations like LOCAL string &a, &b, &c)
     /// </summary>
     public List<string> AdditionalNames { get; } = new();
+    
+    /// <summary>
+    /// Variable name information including tokens (main name + additional names)
+    /// </summary>
+    public List<VariableNameInfo> NameInfos { get; } = new();
 
     public VariableNode(string name, TypeNode type, VariableScope scope) : base(name)
     {
