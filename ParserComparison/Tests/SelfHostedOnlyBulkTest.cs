@@ -64,12 +64,6 @@ public class SelfHostedOnlyBulkTest
 
                 /* For now, we are going to strip out any directive peoplecode */
 
-                // Regex pattern to match #If to #End-If blocks
-                string pattern = @"#If\b.*?#End-If;?";
-
-                // Remove the conditional compilation blocks
-                sourceCode = Regex.Replace(sourceCode, pattern, "", RegexOptions.Singleline | RegexOptions.IgnoreCase);
-
                 var fileSize = sourceCode.Length;
                 var selfHostedResult = selfHostedParser.Parse(sourceCode, filePath);
 

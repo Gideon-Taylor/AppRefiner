@@ -11,16 +11,8 @@ class Program
     {
         try
         {
-            BulkDirectoryTest.RunTest(new TestConfiguration
-            {
-                DirectoryPath = @"C:\Users\tslat\repos\GitHub\AppRefiner\ParserComparison\bin\Release\net8.0\failed",
-                VerboseOutput = true,
-                StopOnFirstError = true,
-                MaxFiles = 10000,
-                IncludeMemoryAnalysis = true,
-                ProgressInterval = 1000
-            });
-            //var result = SingleFileTest.RunTest(@"C:\Users\tslat\repos\GitHub\AppRefiner\ParserComparison\bin\Release\net8.0\failed\Activate.pcode");
+
+            var result = SingleFileTest.RunTest(@"C:\Users\tslat\repos\GitHub\AppRefiner\ParserComparison\bin\Release\net8.0\failed\ADSCompareDiffObject.pcode");
             ConsoleLogger.WriteHeader("PeopleCode Parser Comparison Tool");
             
             var config = ParseArguments(args);

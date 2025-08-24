@@ -30,6 +30,7 @@ public class PeopleCodeParser
     {
         TokenType.Semicolon,
         TokenType.If,
+        TokenType.Else,
         TokenType.For,
         TokenType.While,
         TokenType.Repeat,
@@ -39,6 +40,8 @@ public class PeopleCodeParser
         TokenType.Continue,
         TokenType.Exit,
         TokenType.Evaluate,
+        TokenType.When,
+        TokenType.WhenOther,
         TokenType.Local,
         TokenType.Global,
         TokenType.Component,
@@ -340,14 +343,14 @@ public class PeopleCodeParser
     public ProgramNode ParseProgram()
     {
         // Initialize with preprocessed tokens
-
+        var program = new ProgramNode();
         try
         {
             EnterRule("program");
             _errorRecoveryCount = 0;
             _statementCounter = 0; // Reset statement counter for a new program
 
-            var program = new ProgramNode();
+            
 
             // Parse imports block first
             while (Check(TokenType.Import) && !IsAtEnd)
@@ -431,6 +434,11 @@ public class PeopleCodeParser
         }
         finally
         {
+            if (Current.Type != TokenType.EndOfFile)
+            {
+                ReportError("Finished parsing program but not at end of file. Got: " + Current.Type + " == " + Current.Text);
+                Console.WriteLine(this.PrintAstStructure(program));
+            }
             ExitRule();
         }
     }
@@ -2745,7 +2753,7 @@ public class PeopleCodeParser
                                 _position++;
                         }
                     }
-                    while (Match(TokenType.Comma));
+                    while (Match(TokenType.Comma) && !Check(TokenType.RightParen)); // Allow trailing comma
                 }
 
                 Consume(TokenType.RightParen, "Expected ')' after function parameters");
@@ -2836,12 +2844,11 @@ public class PeopleCodeParser
                 {
                     functionNode.AddParameter(param);
                 }
-                else
-                {
-                    // Skip to next comma or closing parenthesis
-                    while (!IsAtEnd && !(Check(TokenType.Comma) || Check(TokenType.RightParen)))
-                        _position++;
-                }
+
+                // Skip to next comma or closing parenthesis
+                while (!IsAtEnd && !(Check(TokenType.Comma) || Check(TokenType.RightParen)))
+                    _position++;
+
             } while (Match(TokenType.Comma));
         }
         finally
@@ -2859,15 +2866,15 @@ public class PeopleCodeParser
         {
             EnterRule("dllArgument");
 
+            var paramName = ParseGenericId();
+
             // Parse parameter name (must be a generic ID)
-            if (!(Check(TokenType.GenericId) || Check(TokenType.GenericIdLimited)))
+            if (paramName == null)
             {
                 ReportError("Expected parameter name in DLL argument");
                 return null;
             }
 
-            var paramName = Current.Text;
-            _position++;
 
             // Create parameter with default type (Any)
             var parameter = new ParameterNode(paramName, new BuiltInTypeNode(BuiltInType.Any));
@@ -4287,6 +4294,70 @@ public class PeopleCodeParser
     }
 
     /// <summary>
+    /// Check if current position has a colon-separated identifier pattern (Class:Constant)
+    /// </summary>
+    private bool IsColonSeparatedIdentifier()
+    {
+        // Must be: Identifier : Identifier
+        if (!(Current.Type.IsIdentifier() && Peek().Type == TokenType.Colon))
+            return false;
+
+        // Check if the token after the colon is an identifier
+        if (_position + 2 >= _tokens.Count)
+            return false;
+
+        var afterColon = _tokens[_position + 2];
+        return afterColon.Type.IsIdentifier();
+    }
+
+    /// <summary>
+    /// Parse class constant expression (ClassName:ConstantName)
+    /// </summary>
+    private ClassConstantNode? ParseClassConstant()
+    {
+        try
+        {
+            EnterRule("classConstant");
+            
+            var startSpan = Current.SourceSpan;
+            
+            // Parse class name
+            var className = ParseGenericId();
+            if (className == null)
+            {
+                ReportError("Expected class name in class constant");
+                return null;
+            }
+            
+            // Consume colon
+            if (!Match(TokenType.Colon))
+            {
+                ReportError("Expected ':' after class name in class constant");
+                return null;
+            }
+            
+            // Parse constant name
+            var constantName = ParseGenericId();
+            if (constantName == null)
+            {
+                ReportError("Expected constant name after ':' in class constant");
+                return null;
+            }
+            
+            var endSpan = Previous.SourceSpan;
+            
+            return new ClassConstantNode(className, constantName)
+            {
+                SourceSpan = new SourceSpan(startSpan.Start, endSpan.End)
+            };
+        }
+        finally
+        {
+            ExitRule();
+        }
+    }
+
+    /// <summary>
     /// Parse primary expressions (literals, identifiers, parenthesized expressions)
     /// </summary>
     private ExpressionNode? ParsePrimaryExpression()
@@ -4295,6 +4366,12 @@ public class PeopleCodeParser
         if (Current.Type.IsLiteral())
         {
             return ParseLiteral();
+        }
+
+        // Class constants (ClassName:ConstantName) - must come before regular identifiers
+        if (IsColonSeparatedIdentifier())
+        {
+            return ParseClassConstant();
         }
 
         // Identifiers
@@ -4383,36 +4460,10 @@ public class PeopleCodeParser
 
         do
         {
-            /* Special case for class constants in the form ClassName:Constant
-             * which are parsed as metadata expressions, not identifiers or literals.
-             * So we check for that pattern here.
-             */
-
-            if (((Check(TokenType.GenericId) || Check(TokenType.GenericIdLimited)) && Peek().Type == TokenType.Colon))
+            var arg = ParseExpression();
+            if (arg != null)
             {
-                var className = Current.Text;
-                var startSpan = Current.SourceSpan;
-                _position += 2; // Skip ClassName and Colon
-
-                if (!(Check(TokenType.GenericId) || Check(TokenType.GenericIdLimited)))
-                {
-                    ReportError("Expected constant name after ':' in class constant");
-                }
-                var constantName = Current.Text;
-                var endSpan = Current.SourceSpan;
-                _position++;
-                args.Add(new ClassConstantNode(className, constantName)
-                {
-                    SourceSpan = new SourceSpan(startSpan.Start, endSpan.End)
-                });
-            }
-            else
-            {
-                var arg = ParseExpression();
-                if (arg != null)
-                {
-                    args.Add(arg);
-                }
+                args.Add(arg);
             }
         } while (Match(TokenType.Comma));
 

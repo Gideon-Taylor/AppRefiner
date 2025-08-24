@@ -33,7 +33,6 @@ public class SelfHostedParserWrapper : IParser
             var parser = new PeopleCodeParser.SelfHosted.PeopleCodeParser(tokens,"8.61");
             var parseTree = parser.ParseProgram();
             parserStopwatch.Stop();
-
             var totalStopwatch = monitor.StopMonitoring();
 
             result.Success = parseTree != null && !parser.Errors.Any();
