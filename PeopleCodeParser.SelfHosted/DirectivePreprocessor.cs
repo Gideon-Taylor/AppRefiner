@@ -91,7 +91,14 @@ internal class DirectivePreprocessor
             // Extract condition tokens until #Then
             var conditionTokens = ExtractConditionTokens(position, out int conditionEndPos);
             position = conditionEndPos + 1; // Skip #Then token
-            
+
+            /* optional for there to be 0 or more ; after #Then */
+            while (position < _originalTokens.Count && _originalTokens[position].Type == TokenType.Semicolon)
+            {
+                position++;
+            }
+
+
             // Parse and evaluate condition
             bool conditionResult = EvaluateDirectiveCondition(conditionTokens);
             
@@ -154,7 +161,15 @@ internal class DirectivePreprocessor
         }
         
         directiveStack.Pop();
-        return position + 1; // Skip #End-If token
+
+        /* Skip any trailing semicolons after #End-If */
+        position++; // Skip #End-If token
+        while (position < _originalTokens.Count && _originalTokens[position].Type == TokenType.Semicolon)
+        {
+            position++;
+        }
+
+        return position; // Skip #End-If token
     }
     
     /// <summary>

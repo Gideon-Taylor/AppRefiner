@@ -365,10 +365,10 @@ public class PeopleCodeLexer
             '&' when PeekChar() == '&' => ScanTwoCharOperator(TokenType.DirectiveAnd),
             '&' => ScanUserVariable(),
             '%' => ScanSystemIdentifier(),
-            '#' => ScanDirective(),
+            '#' when IsDirectiveStart() => ScanDirective(),
             
             // Letters and identifiers  
-            _ when char.IsLetter(ch) || ch == '_' => ScanIdentifierOrKeyword(),
+            _ when char.IsLetter(ch) || ch == '_' || ch == '$' || ch == '#' => ScanIdentifierOrKeyword(),
             
             _ => ScanInvalidCharacter()
         };
@@ -836,6 +836,20 @@ public class PeopleCodeLexer
     private bool IsIdentifierChar(char ch)
     {
         return char.IsLetterOrDigit(ch) || ch == '_' || ch == '#' || ch == '$' || ch == '@';
+    }
+
+    private bool IsDirectiveStart()
+    {
+        if (CurrentChar != '#') return false;
+        
+        // Check for known directive patterns
+        if (MatchText("#IF")) return true;
+        if (MatchText("#ELSE")) return true;
+        if (MatchText("#THEN")) return true;
+        if (MatchText("#END-IF")) return true;
+        if (MatchText("#TOOLSREL")) return true;
+        
+        return false;
     }
 
     private bool MatchText(string text)

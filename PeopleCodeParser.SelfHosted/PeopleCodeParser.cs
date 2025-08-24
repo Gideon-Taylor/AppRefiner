@@ -2457,14 +2457,12 @@ public class PeopleCodeParser
             if (!Match(TokenType.Interface))
                 return null;
 
-            if (!(Check(TokenType.GenericId) || Check(TokenType.GenericIdLimited)))
+            var name = ParseGenericId();
+            if (name == null)
             {
                 ReportError("Expected interface name after 'INTERFACE'");
                 return null;
             }
-
-            var name = Current.Text;
-            _position++;
             var iface = new InterfaceNode(name);
 
             // Optional EXTENDS base interface
@@ -2519,12 +2517,7 @@ public class PeopleCodeParser
                         methodNode.IsAbstract = true;
                         interfaceNode.AddMethod(methodNode);
                     }
-                    
-                    // Require at least one semicolon after header
-                    if (!Match(TokenType.Semicolon))
-                    {
-                        ReportError("Expected ';' after interface method header");
-                    }
+
                     while (Match(TokenType.Semicolon)) { }
                 }
                 else if (Check(TokenType.Property))
@@ -2583,14 +2576,12 @@ public class PeopleCodeParser
                 // DECLARE FUNCTION variant (PEOPLECODE or LIBRARY)
                 Consume(TokenType.Function, "Expected 'FUNCTION' after 'DECLARE'");
 
-                if (!(Check(TokenType.GenericId) || Check(TokenType.GenericIdLimited)))
+                var declName = ParseGenericId();
+                if (declName == null)
                 {
                     ReportError("Expected function name after 'DECLARE FUNCTION'");
                     return null;
                 }
-
-                var declName = Current.Text;
-                _position++;
                 var declNode = new FunctionNode(declName, FunctionType.UserDefined);
 
                 if (Match(TokenType.PeopleCode))
@@ -2725,14 +2716,12 @@ public class PeopleCodeParser
                 return null;
 
             // Parse function name (allow generic identifiers)
-            if (!(Check(TokenType.GenericId) || Check(TokenType.GenericIdLimited)))
+            var functionName = ParseGenericId();
+            if (functionName == null)
             {
                 ReportError("Expected function name after 'FUNCTION'");
                 return null;
             }
-
-            var functionName = Current.Text;
-            _position++;
 
             var functionNode = new FunctionNode(functionName, FunctionType.UserDefined);
 
@@ -2969,13 +2958,19 @@ public class PeopleCodeParser
     private bool TryParseRecordField(out string recordName, out string fieldName)
     {
         recordName = ""; fieldName = "";
-        if (!(Check(TokenType.GenericId) || Check(TokenType.GenericIdLimited))) return false;
-        recordName = Current.Text;
-        _position++;
+        
+        // Parse record name using ParseGenericId to allow keywords like STEP
+        var tempRecordName = ParseGenericId();
+        if (tempRecordName == null) return false;
+        recordName = tempRecordName;
+        
         if (!Match(TokenType.Dot)) return false;
-        if (!(Check(TokenType.GenericId) || Check(TokenType.GenericIdLimited))) return false;
-        fieldName = Current.Text;
-        _position++;
+        
+        // Parse field name using ParseGenericId to allow keywords like STEP
+        var tempFieldName = ParseGenericId();
+        if (tempFieldName == null) return false;
+        fieldName = tempFieldName;
+        
         return true;
     }
 
