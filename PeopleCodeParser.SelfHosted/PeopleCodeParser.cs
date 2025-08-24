@@ -363,12 +363,26 @@ public class PeopleCodeParser
             // Check if this is an appClass program or a regular program
             if (Check(TokenType.Class))
             {
-                // This is an AppClassProgram
-                var appClass = ParseAppClass();
+                // This is an AppClassProgram - use two-phase parsing
+                // Phase 1: Parse class header only
+                var appClass = ParseClassHeader();
                 if (appClass != null)
                 {
                     program.SetAppClass(appClass);
                 }
+                
+                // Phase 2: Parse preambles (external declarations) at program level
+                ParseProgramPreambles(program);
+                
+                // Phase 3: Parse class body if app class exists
+                if (program.AppClass != null && !IsAtEnd && !Check(TokenType.EndOfFile))
+                {
+                    ParseClassBody(program.AppClass);
+                }
+                
+                // Consume any trailing semicolons
+                while (Match(TokenType.Semicolon)) { }
+                
                 return program;
             }
             else if (Check(TokenType.Interface))
@@ -437,7 +451,7 @@ public class PeopleCodeParser
             if (Current.Type != TokenType.EndOfFile)
             {
                 ReportError("Finished parsing program but not at end of file. Got: " + Current.Type + " == " + Current.Text);
-                Console.WriteLine(this.PrintAstStructure(program));
+                //Console.WriteLine(this.PrintAstStructure(program));
             }
             ExitRule();
         }
@@ -610,101 +624,18 @@ public class PeopleCodeParser
         }
     }
 
-    /// <summary>
-    /// Parse application class definition according to ANTLR grammar:
-    /// appClass: importsBlock classDeclaration (SEMI+ classExternalDeclaration)* (SEMI* classBody)? SEMI* EOF
-    /// </summary>
-    private AppClassNode? ParseAppClass()
-    {
-        try
-        {
-            EnterRule("appClass");
-
-            if (!Check(TokenType.Class))
-            {
-                ReportError("Expected 'CLASS' keyword");
-                return null;
-            }
-
-            // Parse the class declaration (CLASS name [EXTENDS|IMPLEMENTS] ... END-CLASS)
-            var classDeclaration = ParseClassDeclaration();
-            if (classDeclaration == null)
-                return null;
-
-            // Parse external declarations (functions and variables between class and body)
-            while (!IsAtEnd && Check(TokenType.Semicolon))
-            {
-                // Consume semicolons
-                while (Match(TokenType.Semicolon)) { }
-
-                // Check for external declarations
-                if (Check(TokenType.Function, TokenType.Declare))
-                {
-                    var function = ParseFunction();
-                    if (function != null)
-                    {
-                        classDeclaration.AddMember(function, VisibilityModifier.Public);
-                    }
-                }
-                else if (Check(TokenType.Component, TokenType.Global))
-                {
-                    var variable = ParseVariableDeclaration();
-                    if (variable != null)
-                    {
-                        classDeclaration.AddMember(variable, VisibilityModifier.Public);
-                    }
-                }
-                else
-                {
-                    break; // No more external declarations
-                }
-            }
-
-            // Parse class body (method implementations)
-            // Optional semicolons before class body
-            while (Match(TokenType.Semicolon)) { }
-
-            if (!IsAtEnd && !Check(TokenType.EndOfFile))
-            {
-                var classBody = ParseClassBody();
-                if (classBody != null)
-                {
-                    // Add method implementations to the class
-                    foreach (var member in classBody)
-                    {
-                        classDeclaration.AddMember(member, VisibilityModifier.Public);
-                    }
-                }
-            }
-
-            // Consume any trailing semicolons
-            while (Match(TokenType.Semicolon)) { }
-
-            return classDeclaration;
-        }
-        catch (Exception ex)
-        {
-            ReportError($"Error parsing application class: {ex.Message}");
-            PanicRecover(BlockSyncTokens);
-            return null;
-        }
-        finally
-        {
-            ExitRule();
-        }
-    }
 
     /// <summary>
-    /// Parse class declaration according to ANTLR grammar:
+    /// Parse class header according to ANTLR grammar (Phase 1 of app class parsing):
     /// classDeclaration: CLASS genericID EXTENDS superclass SEMI* classHeader END_CLASS        #ClassDeclarationExtension
     ///                 | CLASS genericID IMPLEMENTS appClassPath SEMI* classHeader END_CLASS   #ClassDeclarationImplementation  
     ///                 | CLASS genericID SEMI* classHeader END_CLASS                           #ClassDeclarationPlain
     /// </summary>
-    private AppClassNode? ParseClassDeclaration()
+    private AppClassNode? ParseClassHeader()
     {
         try
         {
-            EnterRule("classDeclaration");
+            EnterRule("classHeader");
 
             if (!Match(TokenType.Class))
             {
@@ -757,11 +688,14 @@ public class PeopleCodeParser
             // Expect END-CLASS
             Consume(TokenType.EndClass, "Expected 'END-CLASS' after class definition");
 
+            // Optional semicolons before class header
+            while (Match(TokenType.Semicolon)) { }
+
             return classNode;
         }
         catch (Exception ex)
         {
-            ReportError($"Error parsing class declaration: {ex.Message}");
+            ReportError($"Error parsing class header: {ex.Message}");
             PanicRecover(new HashSet<TokenType> { TokenType.EndClass });
             return null;
         }
@@ -1761,6 +1695,64 @@ public class PeopleCodeParser
         {
             ReportError($"Error parsing class body: {ex.Message}");
             return null;
+        }
+        finally
+        {
+            ExitRule();
+        }
+    }
+
+    /// <summary>
+    /// Parse class body and add members to existing app class (Phase 2 of app class parsing)
+    /// </summary>
+    private void ParseClassBody(AppClassNode appClass)
+    {
+        try
+        {
+            EnterRule("classBody");
+
+            // Parse first class member
+            var firstMember = ParseClassMember();
+            if (firstMember != null)
+            {
+                appClass.AddMember(firstMember, VisibilityModifier.Public);
+            }
+
+            // Parse additional members separated by semicolons
+            while (!IsAtEnd && Check(TokenType.Semicolon))
+            {
+                // Consume required semicolons
+                if (!Match(TokenType.Semicolon))
+                {
+                    ReportError("Expected ';' between class members");
+                }
+                
+                // Consume any additional semicolons
+                while (Match(TokenType.Semicolon)) { }
+
+                // Check for end of class body
+                if (IsAtEnd || Check(TokenType.EndOfFile))
+                {
+                    break;
+                }
+
+                // Parse next member
+                var member = ParseClassMember();
+                if (member != null)
+                {
+                    appClass.AddMember(member, VisibilityModifier.Public);
+                }
+                else
+                {
+                    // No more members or reached end
+                    break;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            ReportError($"Error parsing class body: {ex.Message}");
+            PanicRecover(BlockSyncTokens);
         }
         finally
         {
