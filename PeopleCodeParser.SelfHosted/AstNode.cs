@@ -234,9 +234,14 @@ public struct SourceSpan : IEquatable<SourceSpan>
     public SourcePosition End { get; }
 
     /// <summary>
-    /// Length of the span
+    /// Length of the span in characters
     /// </summary>
     public int Length => End.Index - Start.Index;
+
+    /// <summary>
+    /// Length of the span in UTF-8 bytes (for Scintilla editor integration)
+    /// </summary>
+    public int ByteLength => End.ByteIndex - Start.ByteIndex;
 
     /// <summary>
     /// True if this is an empty span
@@ -253,6 +258,12 @@ public struct SourceSpan : IEquatable<SourceSpan>
     {
         Start = new SourcePosition(startIndex);
         End = new SourcePosition(endIndex);
+    }
+
+    public SourceSpan(int startIndex, int startByteIndex, int endIndex, int endByteIndex, int startLine = 1, int startColumn = 1, int endLine = 1, int endColumn = 1)
+    {
+        Start = new SourcePosition(startIndex, startByteIndex, startLine, startColumn);
+        End = new SourcePosition(endIndex, endByteIndex, endLine, endColumn);
     }
 
     public bool Equals(SourceSpan other)
@@ -297,6 +308,11 @@ public struct SourcePosition : IEquatable<SourcePosition>, IComparable<SourcePos
     public int Index { get; }
 
     /// <summary>
+    /// Zero-based UTF-8 byte index in the source text (for Scintilla editor integration)
+    /// </summary>
+    public int ByteIndex { get; }
+
+    /// <summary>
     /// One-based line number
     /// </summary>
     public int Line { get; }
@@ -309,13 +325,22 @@ public struct SourcePosition : IEquatable<SourcePosition>, IComparable<SourcePos
     public SourcePosition(int index, int line = 1, int column = 1)
     {
         Index = index;
+        ByteIndex = index; // Default to character index for compatibility
+        Line = line;
+        Column = column;
+    }
+
+    public SourcePosition(int index, int byteIndex, int line = 1, int column = 1)
+    {
+        Index = index;
+        ByteIndex = byteIndex;
         Line = line;
         Column = column;
     }
 
     public bool Equals(SourcePosition other)
     {
-        return Index == other.Index && Line == other.Line && Column == other.Column;
+        return Index == other.Index && ByteIndex == other.ByteIndex && Line == other.Line && Column == other.Column;
     }
 
     public override bool Equals(object? obj)
@@ -325,7 +350,7 @@ public struct SourcePosition : IEquatable<SourcePosition>, IComparable<SourcePos
 
     public override int GetHashCode()
     {
-        return HashCode.Combine(Index, Line, Column);
+        return HashCode.Combine(Index, ByteIndex, Line, Column);
     }
 
     public int CompareTo(SourcePosition other)
@@ -366,5 +391,27 @@ public struct SourcePosition : IEquatable<SourcePosition>, IComparable<SourcePos
     public override string ToString()
     {
         return $"{Line}:{Column}";
+    }
+}
+
+/// <summary>
+/// Extension methods for Scintilla editor integration
+/// </summary>
+public static class SourcePositionExtensions
+{
+    /// <summary>
+    /// Get Scintilla-compatible byte position
+    /// </summary>
+    public static int ToScintillaPosition(this SourcePosition pos)
+    {
+        return pos.ByteIndex;
+    }
+    
+    /// <summary>
+    /// Get Scintilla-compatible byte range
+    /// </summary>
+    public static (int start, int end) ToScintillaRange(this SourceSpan span)
+    {
+        return (span.Start.ByteIndex, span.End.ByteIndex);
     }
 }

@@ -11,6 +11,7 @@ namespace PeopleCodeParser.SelfHosted.Lexing;
 public class PeopleCodeLexer
 {
     private readonly string _source;
+    private readonly int[] _charToByteIndex;
     private int _position;
     private int _line = 1;
     private int _column = 1;
@@ -146,6 +147,17 @@ public class PeopleCodeLexer
     public PeopleCodeLexer(string source)
     {
         _source = source ?? throw new ArgumentNullException(nameof(source));
+        
+        // Pre-compute character position to byte position mapping for efficient lookup
+        _charToByteIndex = new int[source.Length + 1];
+        int bytePos = 0;
+        for (int charPos = 0; charPos < source.Length; charPos++)
+        {
+            _charToByteIndex[charPos] = bytePos;
+            bytePos += Encoding.UTF8.GetByteCount(source, charPos, 1);
+        }
+        _charToByteIndex[source.Length] = bytePos; // End position
+        
         _position = 0;
         _line = 1;
         _column = 1;
@@ -199,7 +211,7 @@ public class PeopleCodeLexer
     /// <summary>
     /// Get current source position
     /// </summary>
-    private SourcePosition CurrentPosition => new(_position, _line, _column);
+    private SourcePosition CurrentPosition => new(_position, _charToByteIndex[_position], _line, _column);
 
     /// <summary>
     /// Create a source span from start position to current position
