@@ -12,7 +12,7 @@ class Program
         try
         {
 
-            var result = SingleFileTest.RunTest(@"C:\Users\tslat\repos\GitHub\AppRefiner\ParserComparison\bin\Release\net8.0\failed\ADSCompareDiffObject.pcode");
+            var result = SingleFileTest.RunTest(@"C:\temp\test.pcode");
             ConsoleLogger.WriteHeader("PeopleCode Parser Comparison Tool");
             
             var config = ParseArguments(args);
@@ -32,6 +32,10 @@ class Program
                 if (config.SelfHostedOnlyMode)
                 {
                     RunSelfHostedOnlyBulkTest(config);
+                }
+                else if (config.AntlrOnlyMode)
+                {
+                    RunAntlrOnlyBulkTest(config);
                 }
                 else
                 {
@@ -100,6 +104,10 @@ class Program
                     config.SelfHostedOnlyMode = true;
                     break;
                 
+                case "--antlr-only":
+                    config.AntlrOnlyMode = true;
+                    break;
+                
                 case "--failed-dir":
                     if (i + 1 < args.Length)
                         config.FailedFilesDirectory = args[++i];
@@ -146,6 +154,17 @@ class Program
         }
     }
 
+    private static void RunAntlrOnlyBulkTest(TestConfiguration config)
+    {
+        var results = AntlrOnlyBulkTest.RunTest(config);
+        
+        var failures = results.Where(r => !r.AntlrResult.Success).ToList();
+        if (failures.Any())
+        {
+            Environment.ExitCode = 1;
+        }
+    }
+
     private static void ShowUsage()
     {
         Console.WriteLine("Usage:");
@@ -161,6 +180,7 @@ class Program
         Console.WriteLine("  --no-memory               Skip memory usage analysis");
         Console.WriteLine("  --progress-interval <n>   Show status every n files (default: 1000)");
         Console.WriteLine("  --self-hosted-only        Run only self-hosted parser and copy failed files");
+        Console.WriteLine("  --antlr-only              Run only ANTLR parser and copy failed files");
         Console.WriteLine("  --failed-dir <path>       Directory for failed files (default: 'failed')");
         Console.WriteLine("  -h, --help                Show this help message");
         Console.WriteLine();
@@ -169,5 +189,6 @@ class Program
         Console.WriteLine("  ParserComparison -d \"C:\\PeopleCode\\\" -v");
         Console.WriteLine("  ParserComparison -d \"C:\\PeopleCode\\\" --max-files 100 --continue-on-error");
         Console.WriteLine("  ParserComparison -d \"C:\\PeopleCode\\\" --self-hosted-only --failed-dir errors");
+        Console.WriteLine("  ParserComparison -d \"C:\\PeopleCode\\\" --antlr-only --failed-dir errors");
     }
 }

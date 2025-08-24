@@ -350,6 +350,15 @@ public static class TokenTypeExtensions
     }
 
     /// <summary>
+    /// True if this token type is a comment
+    /// </summary>
+    public static bool IsCommentType(this TokenType type)
+    {
+        return type is TokenType.LineComment or TokenType.BlockComment or 
+               TokenType.NestedComment or TokenType.ApiComment;
+    }
+
+    /// <summary>
     /// True if this is an assignment operator
     /// </summary>
     public static bool IsAssignmentOperator(this TokenType type)

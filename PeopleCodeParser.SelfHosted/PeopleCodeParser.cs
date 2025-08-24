@@ -858,9 +858,11 @@ public class PeopleCodeParser
             if (Match(TokenType.Exception))
             {
                 // Special built-in exception type
+                var token = Previous;
                 return new BuiltInTypeNode(BuiltInType.Exception)
                 {
-                    SourceSpan = Current.SourceSpan
+                    FirstToken = token,
+                    LastToken = token
                 };
             }
             else if (Current.Type.IsIdentifier() || Check(TokenType.GenericId))
@@ -921,7 +923,8 @@ public class PeopleCodeParser
                 // Could be a simple class name without package
                 return new AppClassTypeNode(typeName)
                 {
-                    SourceSpan = token.SourceSpan
+                    FirstToken = token,
+                    LastToken = token
                 };
             }
 
@@ -961,7 +964,8 @@ public class PeopleCodeParser
             _position++;
             return new BuiltInTypeNode(builtInType.Value)
             {
-                SourceSpan = token.SourceSpan
+                FirstToken = token,
+                LastToken = token
             };
         }
 
@@ -975,7 +979,8 @@ public class PeopleCodeParser
                 _position++;
                 return new BuiltInTypeNode(parsedType.Value)
                 {
-                    SourceSpan = token.SourceSpan
+                    FirstToken = token,
+                    LastToken = token
                 };
             }
         }
@@ -1152,7 +1157,8 @@ public class PeopleCodeParser
 
             TypeNode? paramType = new BuiltInTypeNode(BuiltInType.Any)
             {
-                SourceSpan = Current.SourceSpan
+                FirstToken = Current,
+                LastToken = Current
             }; // Default to ANY if no type specified
 
             // Optional AS typeT
@@ -1166,7 +1172,8 @@ public class PeopleCodeParser
                     // Use default ANY type if we couldn't parse the specified type
                     paramType = new BuiltInTypeNode(BuiltInType.Any)
                     {
-                        SourceSpan = Current.SourceSpan
+                        FirstToken = Current,
+                        LastToken = Current
                     };
                 }
             }
@@ -1350,9 +1357,11 @@ public class PeopleCodeParser
             // Check for EXCEPTION type
             if (Match(TokenType.Exception))
             {
+                var token = Previous;
                 return new BuiltInTypeNode(BuiltInType.Exception)
                 {
-                    SourceSpan = Current.SourceSpan
+                    FirstToken = token,
+                    LastToken = token
                 };
             }
 
@@ -1427,8 +1436,8 @@ public class PeopleCodeParser
             }
 
             var arrayNode = new ArrayTypeNode(dimensions, elementType);
-            arrayNode.SourceSpan = new SourceSpan(startToken.SourceSpan.Start, 
-                                                 elementType?.SourceSpan.End ?? Current.SourceSpan.End);
+            arrayNode.FirstToken = startToken;
+            arrayNode.LastToken = elementType?.LastToken ?? Previous;
             return arrayNode;
         }
         catch (Exception ex)
@@ -1494,8 +1503,8 @@ public class PeopleCodeParser
             }
 
             var arrayNode = new ArrayTypeNode(dimensions, elementType);
-            arrayNode.SourceSpan = new SourceSpan(startToken.SourceSpan.Start, 
-                                                 elementType?.SourceSpan.End ?? Current.SourceSpan.End);
+            arrayNode.FirstToken = startToken;
+            arrayNode.LastToken = elementType?.LastToken ?? Previous;
             return arrayNode;
         }
         catch (Exception ex)
@@ -2560,6 +2569,8 @@ public class PeopleCodeParser
         try
         {
             EnterRule("function");
+            
+            var firstToken = Current; // Capture the very first token
 
             // Handle optional prefixes (e.g., PEOPLECODE) before FUNCTION if present
             if (Match(TokenType.PeopleCode))
@@ -2785,10 +2796,16 @@ public class PeopleCodeParser
             // Function definition body until END-FUNCTION
             var body = ParseStatementList(TokenType.EndFunction);
             Consume(TokenType.EndFunction, "Expected 'END-FUNCTION' after function body");
+            var lastToken = Previous; // Capture the END-FUNCTION token
 
-            while (Match(TokenType.Semicolon)) { }
+            while (Match(TokenType.Semicolon)) 
+            {
+                lastToken = Previous; // Update to semicolon if present
+            }
 
             functionNode.SetBody(body);
+            functionNode.FirstToken = firstToken;
+            functionNode.LastToken = lastToken;
             return functionNode;
         }
         catch (Exception ex)
@@ -3169,7 +3186,8 @@ public class PeopleCodeParser
                     // Create a placeholder condition so we can continue parsing the THEN block
                     condition = new LiteralNode(true, LiteralType.Boolean)
                     {
-                        SourceSpan = Current.SourceSpan
+                        FirstToken = Current,
+                        LastToken = Current
                     };
                 }
                 else
@@ -3459,29 +3477,53 @@ public class PeopleCodeParser
 
     private StatementNode? ParseBreakStatement()
     {
-        if (!Match(TokenType.Break))
+        if (!Check(TokenType.Break))
             return null;
-        return new BreakStatementNode();
+        
+        var token = Current;
+        _position++;
+        return new BreakStatementNode()
+        {
+            FirstToken = token,
+            LastToken = token
+        };
     }
 
     private StatementNode? ParseContinueStatement()
     {
-        if (!Match(TokenType.Continue))
+        if (!Check(TokenType.Continue))
             return null;
-        return new ContinueStatementNode();
+        
+        var token = Current;
+        _position++;
+        return new ContinueStatementNode()
+        {
+            FirstToken = token,
+            LastToken = token
+        };
     }
 
     private StatementNode? ParseExitStatement()
     {
-        if (!Match(TokenType.Exit))
+        if (!Check(TokenType.Exit))
             return null;
-        return new ExitStatementNode();
+        
+        var token = Current;
+        _position++;
+        return new ExitStatementNode()
+        {
+            FirstToken = token,
+            LastToken = token
+        };
     }
 
     private StatementNode? ParseErrorStatement()
     {
-        if (!Match(TokenType.Error))
+        if (!Check(TokenType.Error))
             return null;
+
+        var firstToken = Current;
+        _position++;
 
         var message = ParseExpression();
         if (message == null)
@@ -3489,13 +3531,21 @@ public class PeopleCodeParser
             ReportError("Expected message after 'ERROR'");
             message = new LiteralNode("Error", LiteralType.String);
         }
-        return new ErrorStatementNode(message);
+
+        return new ErrorStatementNode(message)
+        {
+            FirstToken = firstToken,
+            LastToken = message.LastToken ?? firstToken
+        };
     }
 
     private StatementNode? ParseWarningStatement()
     {
-        if (!Match(TokenType.Warning))
+        if (!Check(TokenType.Warning))
             return null;
+
+        var firstToken = Current;
+        _position++;
 
         var message = ParseExpression();
         if (message == null)
@@ -3503,7 +3553,12 @@ public class PeopleCodeParser
             ReportError("Expected message after 'WARNING'");
             message = new LiteralNode("Warning", LiteralType.String);
         }
-        return new WarningStatementNode(message);
+
+        return new WarningStatementNode(message)
+        {
+            FirstToken = firstToken,
+            LastToken = message.LastToken ?? firstToken
+        };
     }
 
     private StatementNode? ParseThrowStatement()
@@ -3797,7 +3852,8 @@ public class PeopleCodeParser
 
             return new AssignmentNode(expr, op, right)
             {
-                SourceSpan = new SourceSpan(expr.SourceSpan.Start, right.SourceSpan.End)
+                FirstToken = expr.FirstToken,
+                LastToken = right.LastToken
             };
         }
 
@@ -3823,7 +3879,8 @@ public class PeopleCodeParser
 
             left = new BinaryOperationNode(left, BinaryOperator.Or, false, right)
             {
-                SourceSpan = new SourceSpan(left.SourceSpan.Start, right.SourceSpan.End)
+                FirstToken = left.FirstToken,
+                LastToken = right.LastToken
             };
         }
 
@@ -3849,7 +3906,8 @@ public class PeopleCodeParser
 
             left = new BinaryOperationNode(left, BinaryOperator.And, false, right)
             {
-                SourceSpan = new SourceSpan(left.SourceSpan.Start, right.SourceSpan.End)
+                FirstToken = left.FirstToken,
+                LastToken = right.LastToken
             };
         }
 
@@ -3885,7 +3943,8 @@ public class PeopleCodeParser
 
             left = new BinaryOperationNode(left, op, notFlag, right)
             {
-                SourceSpan = new SourceSpan(left.SourceSpan.Start, right.SourceSpan.End)
+                FirstToken = left.FirstToken,
+                LastToken = right.LastToken
             };
         }
 
@@ -3929,7 +3988,8 @@ public class PeopleCodeParser
 
             left = new BinaryOperationNode(left, op, notFlag, right)
             {
-                SourceSpan = new SourceSpan(left.SourceSpan.Start, right.SourceSpan.End)
+                FirstToken = left.FirstToken,
+                LastToken = right.LastToken
             };
         }
 
@@ -3967,7 +4027,8 @@ public class PeopleCodeParser
 
                 expr = new TypeCastNode(expr, typeSpec)
                 {
-                    SourceSpan = new SourceSpan(expr.SourceSpan.Start, typeSpec.SourceSpan.End)
+                    FirstToken = expr.FirstToken,
+                    LastToken = typeSpec.LastToken
                 };
             }
 
@@ -4004,7 +4065,8 @@ public class PeopleCodeParser
 
             left = new BinaryOperationNode(left, BinaryOperator.Concatenate, false, right)
             {
-                SourceSpan = new SourceSpan(left.SourceSpan.Start, right.SourceSpan.End)
+                FirstToken = left.FirstToken,
+                LastToken = right.LastToken
             };
         }
 
@@ -4037,7 +4099,8 @@ public class PeopleCodeParser
             
             return new UnaryOperationNode(UnaryOperator.Not, operand)
             {
-                SourceSpan = new SourceSpan(notToken.SourceSpan.Start, operand.SourceSpan.End)
+                FirstToken = notToken,
+                LastToken = operand.LastToken
             };
         }
         
@@ -4066,7 +4129,8 @@ public class PeopleCodeParser
 
             left = new BinaryOperationNode(left, op, false, right)
             {
-                SourceSpan = new SourceSpan(left.SourceSpan.Start, right.SourceSpan.End)
+                FirstToken = left.FirstToken,
+                LastToken = right.LastToken
             };
         }
 
@@ -4095,7 +4159,8 @@ public class PeopleCodeParser
 
             left = new BinaryOperationNode(left, op, false, right)
             {
-                SourceSpan = new SourceSpan(left.SourceSpan.Start, right.SourceSpan.End)
+                FirstToken = left.FirstToken,
+                LastToken = right.LastToken
             };
         }
 
@@ -4122,7 +4187,8 @@ public class PeopleCodeParser
 
             return new BinaryOperationNode(left, BinaryOperator.Power, false, right)
             {
-                SourceSpan = new SourceSpan(left.SourceSpan.Start, right.SourceSpan.End)
+                FirstToken = left.FirstToken,
+                LastToken = right.LastToken
             };
         }
 
@@ -4154,7 +4220,8 @@ public class PeopleCodeParser
 
             return new UnaryOperationNode(op, operand)
             {
-                SourceSpan = new SourceSpan(opToken.SourceSpan.Start, operand.SourceSpan.End)
+                FirstToken = opToken,
+                LastToken = operand.LastToken
             };
         }
 
@@ -4179,7 +4246,8 @@ public class PeopleCodeParser
                 
                 expr = new ArrayAccessNode(expr, indices)
                 {
-                    SourceSpan = new SourceSpan(expr.SourceSpan.Start, Current.SourceSpan.End)
+                    FirstToken = expr.FirstToken,
+                    LastToken = Previous
                 };
             }
             else if (Match(TokenType.LeftParen))
@@ -4193,7 +4261,8 @@ public class PeopleCodeParser
                     
                     expr = new FunctionCallNode(expr, args)
                     {
-                        SourceSpan = new SourceSpan(expr.SourceSpan.Start, Current.SourceSpan.End)
+                        FirstToken = expr.FirstToken,
+                        LastToken = Previous
                     };
                 }
                 else
@@ -4212,7 +4281,8 @@ public class PeopleCodeParser
                         _position++; // Consume the ')'
                         expr = new ArrayAccessNode(expr, new List<ExpressionNode> { singleExpr }) // Use ArrayAccessNode for implicit subindex
                         {
-                            SourceSpan = new SourceSpan(expr.SourceSpan.Start, Current.SourceSpan.End)
+                            FirstToken = expr.FirstToken,
+                        LastToken = Previous
                         };
                     }
                     else
@@ -4226,7 +4296,8 @@ public class PeopleCodeParser
                         
                         expr = new FunctionCallNode(expr, args)
                         {
-                            SourceSpan = new SourceSpan(expr.SourceSpan.Start, Current.SourceSpan.End)
+                            FirstToken = expr.FirstToken,
+                        LastToken = Previous
                         };
                     }
                 }
@@ -4242,7 +4313,8 @@ public class PeopleCodeParser
                     // Create member access node
                     expr = new MemberAccessNode(expr, member)
                     {
-                        SourceSpan = new SourceSpan(expr.SourceSpan.Start, memberToken.SourceSpan.End)
+                        FirstToken = expr.FirstToken,
+                        LastToken = memberToken
                     };
                     
                     // Check for method call after dot access
@@ -4254,7 +4326,8 @@ public class PeopleCodeParser
                         
                         expr = new FunctionCallNode(expr, args)
                         {
-                            SourceSpan = new SourceSpan(expr.SourceSpan.Start, Current.SourceSpan.End)
+                            FirstToken = expr.FirstToken,
+                        LastToken = Previous
                         };
                     }
                 }
@@ -4267,7 +4340,8 @@ public class PeopleCodeParser
                     
                     expr = new MemberAccessNode(expr, stringMember, isDynamic: true)
                     {
-                        SourceSpan = new SourceSpan(expr.SourceSpan.Start, memberToken.SourceSpan.End)
+                        FirstToken = expr.FirstToken,
+                        LastToken = memberToken
                     };
                 }
                 else
@@ -4311,7 +4385,7 @@ public class PeopleCodeParser
         {
             EnterRule("classConstant");
             
-            var startSpan = Current.SourceSpan;
+            var startToken = Current;
             
             // Parse class name
             var className = ParseGenericId();
@@ -4336,11 +4410,12 @@ public class PeopleCodeParser
                 return null;
             }
             
-            var endSpan = Previous.SourceSpan;
+            var endToken = Previous;
             
             return new ClassConstantNode(className, constantName)
             {
-                SourceSpan = new SourceSpan(startSpan.Start, endSpan.End)
+                FirstToken = startToken,
+                LastToken = endToken
             };
         }
         finally
@@ -4385,7 +4460,8 @@ public class PeopleCodeParser
             _position++;
             return new IdentifierNode(token.Text, IdentifierType.Generic)
             {
-                SourceSpan = token.SourceSpan
+                FirstToken = token,
+                LastToken = token
             };
         }
 
@@ -4516,23 +4592,28 @@ public class PeopleCodeParser
             {
                 TokenType.IntegerLiteral => new LiteralNode(token.Value!, LiteralType.Integer)
                 {
-                    SourceSpan = token.SourceSpan
+                    FirstToken = token,
+                    LastToken = token
                 },
                 TokenType.DecimalLiteral => new LiteralNode(token.Value!, LiteralType.Decimal)
                 {
-                    SourceSpan = token.SourceSpan
+                    FirstToken = token,
+                    LastToken = token
                 },
                 TokenType.StringLiteral => new LiteralNode(token.Value!, LiteralType.String)
                 {
-                    SourceSpan = token.SourceSpan
+                    FirstToken = token,
+                    LastToken = token
                 },
                 TokenType.BooleanLiteral => new LiteralNode(token.Value!, LiteralType.Boolean)
                 {
-                    SourceSpan = token.SourceSpan
+                    FirstToken = token,
+                    LastToken = token
                 },
                 TokenType.Null => new LiteralNode(null!, LiteralType.Null)
                 {
-                    SourceSpan = token.SourceSpan
+                    FirstToken = token,
+                    LastToken = token
                 },
                 _ => throw new InvalidOperationException($"Unexpected literal type: {token.Type}")
             };
@@ -4568,7 +4649,8 @@ public class PeopleCodeParser
 
             return new IdentifierNode(token.Text, identifierType)
             {
-                SourceSpan = token.SourceSpan
+                FirstToken = token,
+                LastToken = token
             };
         }
         finally

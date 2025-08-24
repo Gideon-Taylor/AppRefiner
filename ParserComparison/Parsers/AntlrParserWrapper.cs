@@ -42,9 +42,8 @@ public class AntlrParserWrapper : IParser
             // Reset parser state (optional but good practice)
             parser.Reset();
 
-            // Set a custom error handler if needed (optional)
-            // parser.RemoveErrorListeners(); 
-            // parser.AddErrorListener(new YourCustomErrorListener());
+            // Remove error listeners to suppress console output
+            parser.RemoveErrorListeners();
             bool errorDuringParse = false;
             AppRefiner.PeopleCode.PeopleCodeParser.ProgramContext? parseTree = null;
             try

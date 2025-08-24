@@ -253,4 +253,97 @@ public static class ConsoleLogger
             }
         }
     }
+
+    public static void WriteAntlrOnlyPeriodicStatus(List<AntlrOnlyResult> results, int currentIndex, int totalFiles, int failedCount)
+    {
+        Console.WriteLine(); // Clear the progress line
+        Console.WriteLine();
+        
+        var processedFiles = results.Count;
+        var successCount = results.Count(r => r.AntlrResult.Success);
+        var percentage = (double)currentIndex / totalFiles * 100;
+        
+        Console.WriteLine($"--- ANTLR Only Progress Update ({currentIndex:N0}/{totalFiles:N0} - {percentage:F1}%) ---");
+        Console.WriteLine($"Files Processed: {processedFiles:N0}");
+        Console.WriteLine($"ANTLR Success Rate: {successCount:N0}/{processedFiles:N0} ({(processedFiles > 0 ? (double)successCount/processedFiles*100 : 0):F1}%)");
+        Console.WriteLine($"Failed Files Copied: {failedCount:N0}");
+        
+        var successful = results.Where(r => r.AntlrResult.Success).ToList();
+        if (successful.Any())
+        {
+            var avgTotalTime = successful.Average(r => r.AntlrResult.TotalDuration.TotalMilliseconds);
+            var avgMemory = successful.Average(r => r.AntlrResult.MemoryUsed / 1024.0);
+            
+            Console.WriteLine($"Average Parse Time: {avgTotalTime:F2}ms");
+            Console.WriteLine($"Average Memory Usage: {avgMemory:F1}KB");
+        }
+        
+        // Show latest failure if any
+        var latestFailure = results.LastOrDefault(r => !r.AntlrResult.Success);
+        if (latestFailure != null)
+        {
+            Console.WriteLine($"Latest Parser Failure: {Path.GetFileName(latestFailure.FilePath)}");
+            Console.WriteLine($"  Error: {latestFailure.AntlrResult.ErrorMessage}");
+        }
+        
+        Console.WriteLine(new string('-', 60));
+        Console.WriteLine();
+    }
+
+    public static void WriteAntlrOnlyResults(List<AntlrOnlyResult> results, string failedDir, int failedCount)
+    {
+        var totalFiles = results.Count;
+        var successCount = results.Count(r => r.AntlrResult.Success);
+        
+        Console.WriteLine("ANTLR Only Parsing Results:");
+        Console.WriteLine($"  Total Files: {totalFiles:N0}");
+        Console.WriteLine($"  Success Rate: {successCount:N0}/{totalFiles:N0} ({(totalFiles > 0 ? (double)successCount/totalFiles*100 : 0):F1}%)");
+        Console.WriteLine($"  Failed Files: {failedCount:N0}");
+        Console.WriteLine($"  Failed Files Directory: {failedDir}");
+        
+        var successful = results.Where(r => r.AntlrResult.Success).ToList();
+        if (successful.Any())
+        {
+            var totalParseTime = successful.Sum(r => r.AntlrResult.TotalDuration.TotalMilliseconds);
+            var avgParseTime = successful.Average(r => r.AntlrResult.TotalDuration.TotalMilliseconds);
+            var totalMemory = successful.Sum(r => r.AntlrResult.MemoryUsed / 1024.0);
+            var avgMemory = successful.Average(r => r.AntlrResult.MemoryUsed / 1024.0);
+            var totalFileSize = successful.Sum(r => r.FileSize);
+            
+            Console.WriteLine();
+            Console.WriteLine("Performance Summary (successful parses only):");
+            Console.WriteLine($"  Total Parse Time: {totalParseTime:F0}ms ({totalParseTime/1000:F1}s)");
+            Console.WriteLine($"  Average Parse Time: {avgParseTime:F2}ms");
+            Console.WriteLine($"  Total Memory Used: {totalMemory:F0}KB ({totalMemory/1024:F1}MB)");
+            Console.WriteLine($"  Average Memory Usage: {avgMemory:F1}KB");
+            Console.WriteLine($"  Total Source Code: {FormatFileSize(totalFileSize)}");
+            Console.WriteLine($"  Parse Speed: {totalFileSize/totalParseTime*1000:F0} bytes/second");
+
+            if (successful.Any(r => r.AntlrResult.NodeCount.HasValue))
+            {
+                var withNodeCounts = successful.Where(r => r.AntlrResult.NodeCount.HasValue).ToList();
+                var totalNodes = withNodeCounts.Sum(r => r.AntlrResult.NodeCount!.Value);
+                var avgNodes = withNodeCounts.Average(r => r.AntlrResult.NodeCount!.Value);
+                Console.WriteLine($"  Total AST Nodes: {totalNodes:N0}");
+                Console.WriteLine($"  Average AST Nodes: {avgNodes:F0}");
+            }
+        }
+        
+        // Show first few failures
+        var failures = results.Where(r => !r.AntlrResult.Success).Take(5).ToList();
+        if (failures.Any())
+        {
+            Console.WriteLine();
+            Console.WriteLine("Sample Parse Failures:");
+            foreach (var failure in failures)
+            {
+                Console.WriteLine($"  {Path.GetFileName(failure.FilePath)}: {failure.AntlrResult.ErrorMessage}");
+            }
+            
+            if (failedCount > 5)
+            {
+                Console.WriteLine($"  ... and {failedCount - 5} more failures (see failed directory for all files)");
+            }
+        }
+    }
 }

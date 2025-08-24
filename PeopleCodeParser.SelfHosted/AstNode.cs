@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using PeopleCodeParser.SelfHosted.Lexing;
 
 namespace PeopleCodeParser.SelfHosted;
 
@@ -13,9 +14,40 @@ public abstract class AstNode
     private readonly List<AstNode> _children = new();
 
     /// <summary>
-    /// Source location of this node in the original text
+    /// First token that this AST node was constructed from
     /// </summary>
-    public SourceSpan SourceSpan { get; set; }
+    public Token? FirstToken { get; set; }
+
+    /// <summary>
+    /// Last token that this AST node was constructed from
+    /// </summary>
+    public Token? LastToken { get; set; }
+
+    /// <summary>
+    /// Explicit SourceSpan (for backward compatibility during transition)
+    /// </summary>
+    private SourceSpan _explicitSourceSpan;
+
+    /// <summary>
+    /// Source location of this node in the original text (calculated from tokens or explicit)
+    /// </summary>
+    public SourceSpan SourceSpan
+    {
+        get
+        {
+            // Prefer calculated span from tokens
+            if (FirstToken != null && LastToken != null)
+            {
+                return new SourceSpan(FirstToken.SourceSpan.Start, LastToken.SourceSpan.End);
+            }
+            // Fall back to explicit span (for backward compatibility)
+            return _explicitSourceSpan;
+        }
+        set
+        {
+            _explicitSourceSpan = value;
+        }
+    }
 
     /// <summary>
     /// Parent node in the AST tree, null for root nodes
@@ -144,6 +176,32 @@ public abstract class AstNode
             current = current.Parent;
         }
         return current;
+    }
+
+    /// <summary>
+    /// Get all leading comments (from trivia on the first token)
+    /// </summary>
+    public IEnumerable<Token> GetLeadingComments()
+    {
+        return FirstToken?.LeadingTrivia
+            .Where(token => token.Type.IsCommentType()) ?? Enumerable.Empty<Token>();
+    }
+
+    /// <summary>
+    /// Get all trailing comments (from trivia on the last token)
+    /// </summary>
+    public IEnumerable<Token> GetTrailingComments()
+    {
+        return LastToken?.TrailingTrivia
+            .Where(token => token.Type.IsCommentType()) ?? Enumerable.Empty<Token>();
+    }
+
+    /// <summary>
+    /// Get all comments associated with this node (both leading and trailing)
+    /// </summary>
+    public IEnumerable<Token> GetAllComments()
+    {
+        return GetLeadingComments().Concat(GetTrailingComments());
     }
 
     /// <summary>
