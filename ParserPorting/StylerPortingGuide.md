@@ -397,7 +397,7 @@ A successful port should achieve:
 
 ## 🚀 **REAL-WORLD PORTING RESULTS**
 
-*Based on successful ports: PropertyAsVariable, TodoFixmeStyler, UndefinedVariables, DeadCodeStyler, FindFunctionParameterStyler*
+*Based on successful ports: PropertyAsVariable, TodoFixmeStyler, UndefinedVariables, DeadCodeStyler, FindFunctionParameterStyler, SQLVariableCountStyler*
 
 ### **Dramatic Code Reduction Achieved**
 
@@ -408,6 +408,7 @@ A successful port should achieve:
 | **UndefinedVariables** | ~227 lines | ~190 lines | **16% reduction** | Leveraged automatic scope management |
 | **DeadCodeStyler** | ~390 lines | ~160 lines | **59% reduction** | Eliminated complex block stack management |
 | **FindFunctionParameterStyler** | ~60 lines | ~70 lines | Similar size | Eliminated complex context navigation |
+| **SQLVariableCountStyler** | ~95 lines | ~150 lines + **Shared Logic** | **Zero duplication** | Extracted 1000+ lines to reusable validators |
 
 ### **Architecture Patterns That Consistently Work**
 
@@ -510,6 +511,59 @@ private static bool IsFunctionOfInterest(FunctionCallNode node)
 }
 ```
 **Used by**: FindFunctionParameterStyler
+
+#### **5. Shared Validation Pattern**
+```csharp
+public class ComplexStyler : ScopedStyler
+{
+    private readonly DomainValidator validator;
+    private readonly ValidationContext context;
+    
+    public ComplexStyler()
+    {
+        context = new ValidationContext();
+        validator = new DomainValidator(context);
+    }
+    
+    public override void VisitProgram(ProgramNode node)
+    {
+        // Set up shared context
+        context.DataManager = DataManager;
+        validator.Reset();
+        Reset();
+        base.VisitProgram(node);
+    }
+    
+    public override void VisitTargetNode(TargetNode node)
+    {
+        // Delegate complex validation to shared validator
+        var reports = validator.ValidateTargetOperation(node);
+        ProcessReports(reports);
+        base.VisitTargetNode(node);
+    }
+    
+    private void ProcessReports(IEnumerable<Report> reports)
+    {
+        foreach (var report in reports.Where(r => r.Type != ReportType.Info))
+        {
+            uint color = report.Type switch
+            {
+                ReportType.Error => ErrorColor,
+                ReportType.Warning => WarningColor,
+                _ => DefaultColor
+            };
+            
+            AddIndicator(
+                new SourceSpan(report.Span.Start, report.Span.Stop - report.Span.Start + 1),
+                Indicator.IndicatorType.SQUIGGLE,
+                color,
+                report.Message
+            );
+        }
+    }
+}
+```
+**Used by**: SQLVariableCountStyler (delegates to SQLVariableValidator and SQLExecValidator)
 
 ---
 
@@ -693,4 +747,228 @@ When extending shared infrastructure (like VariableUsageTracker):
 
 ---
 
-*Last Updated: 2025-01-25 - Based on successful porting of 5 production stylers*
+---
+
+## 🔗 **SHARED VALIDATION ARCHITECTURE**
+
+### **When Complex Logic Needs to Be Reused**
+
+For stylers that delegate to complex validation logic (especially those that will also need linter equivalents), use a **shared validation architecture** to eliminate code duplication:
+
+```
+ParserPorting/
+  Shared/
+    [Domain]/
+      [DomainName]Validator.cs       // Core validation logic
+      [DomainName]Context.cs         // Shared context/helpers
+      Models/
+        [DomainName]Info.cs          // Data models
+```
+
+### **SQLVariableCountStyler: Shared Architecture Example**
+
+**Problem**: SQLVariableCountStyler delegated to two separate linters (`CreateSQLVariableCount` and `SQLExecVariableCount`) with complex SQL parsing and validation logic that would need to be duplicated when porting linters.
+
+**Solution**: Extract shared validation logic that works with AST nodes instead of ANTLR contexts:
+
+```csharp
+// Shared validator accepts AST nodes, returns Reports
+public class SQLVariableValidator
+{
+    public List<Report> ValidateVariableDeclaration(LocalVariableDeclarationNode node);
+    public List<Report> ValidateCreateSQL(FunctionCallNode node);
+    public List<Report> ValidateSQLMethodCall(MemberAccessNode memberAccess, FunctionCallNode call);
+}
+
+// Styler uses shared validator
+public class SQLVariableCountStyler : ScopedStyler
+{
+    private readonly SQLVariableValidator createSqlValidator;
+    
+    public override void VisitFunctionCall(FunctionCallNode node)
+    {
+        var reports = createSqlValidator.ValidateCreateSQL(node);
+        ProcessReports(reports); // Convert Reports to Indicators
+        base.VisitFunctionCall(node);
+    }
+    
+    private void ProcessReports(IEnumerable<Report> reports)
+    {
+        foreach (var report in reports.Where(r => r.Type != ReportType.Info))
+        {
+            AddIndicator(
+                new SourceSpan(report.Span.Start, report.Span.Stop - report.Span.Start + 1),
+                Indicator.IndicatorType.SQUIGGLE,
+                GetColorForReportType(report.Type),
+                report.Message
+            );
+        }
+    }
+}
+
+// Future linter uses same shared validator
+public class CreateSQLVariableCount : ScopedLintRule<SQLStatementInfo>
+{
+    private readonly SQLVariableValidator validator;
+    
+    public override void VisitFunctionCall(FunctionCallNode node)
+    {
+        var reports = validator.ValidateCreateSQL(node);
+        Reports.AddRange(reports); // Direct Report usage
+    }
+}
+```
+
+### **Benefits of Shared Architecture**
+1. **Zero Code Duplication**: Single implementation of complex validation logic
+2. **Consistent Behavior**: Identical results between styler and linter
+3. **Easier Maintenance**: Bug fixes only needed in shared classes
+4. **Future-Proof**: Ready foundation for linter porting phase
+5. **AST Advantages**: Clean, strongly-typed AST navigation vs ANTLR contexts
+
+### **Shared Architecture Implementation Checklist**
+- [ ] Extract core validation logic to `ParserPorting/Shared/[Domain]/`
+- [ ] Convert ANTLR context parameters to AST node parameters
+- [ ] Return `List<Report>` objects for both styler and linter consumption
+- [ ] Use `SourceSpan` instead of ANTLR token positions
+- [ ] Create shared context/helper classes for common operations
+- [ ] Port data models to use self-hosted parser types (e.g., `SourceSpan`)
+
+### **Key Mappings for SQL Validation**
+| ANTLR Pattern | Self-Hosted Pattern | Shared Validator Method |
+|---------------|---------------------|------------------------|
+| `EnterLocalVariableDefinition` | `VisitLocalVariableDeclaration` | `ValidateVariableDeclaration()` |
+| `EnterSimpleFunctionCall` | `VisitFunctionCall` | `ValidateCreateSQL()` / `ValidateSQLExec()` |
+| `EnterDotAccess` | `VisitMemberAccess` + context | `ValidateSQLMethodCall()` |
+| Token byte positions | `SourceSpan.Start.Index` | Native span support |
+| Manual SQL text extraction | `SQLValidationContext.GetSqlText()` | Shared helper method |
+
+---
+
+## 🔧 **ADVANCED ANTLR → SELF-HOSTED PATTERNS**
+
+### **Complex State Management Conversion**
+
+**ANTLR Pattern (Manual Tracking):**
+```csharp
+private readonly Dictionary<string, SQLStatementInfo> trackedVariables = new();
+private bool inPublicSection = false;
+
+public override void EnterLocalVariableDefinition(LocalVariableDefinitionContext context)
+{
+    // Manual context navigation and state tracking
+    if (IsTypeSQL(context.typeT()))
+    {
+        foreach (var varNode in context.USER_VARIABLE())
+        {
+            var varName = varNode.GetText();
+            var sqlInfo = new SQLStatementInfo(/*...*/);
+            trackedVariables[varName] = sqlInfo;
+        }
+    }
+}
+```
+
+**Self-Hosted Pattern (Direct AST Access):**
+```csharp
+private readonly Dictionary<string, SQLStatementInfo> trackedVariables = new();
+
+public override void VisitLocalVariableDeclaration(LocalVariableDeclarationNode node)
+{
+    // Direct type checking with built-in type system
+    if (node.Type is BuiltInTypeNode builtIn && builtIn.Type == BuiltInType.Sql)
+    {
+        // Direct access to variable information with precise spans
+        foreach (var varInfo in node.VariableNameInfos)
+        {
+            var sqlInfo = new SQLStatementInfo(
+                sqlText: "",
+                bindCount: 0,
+                outputColumnCount: 0,
+                line: varInfo.SourceSpan?.Start.Line ?? node.SourceSpan.Start.Line,
+                span: varInfo.SourceSpan ?? node.SourceSpan,
+                varName: varInfo.Name
+            );
+            trackedVariables[varInfo.Name] = sqlInfo;
+        }
+    }
+    base.VisitLocalVariableDeclaration(node);
+}
+```
+
+### **Method Call Pattern Analysis**
+
+**ANTLR Pattern (Context Drilling):**
+```csharp
+public override void EnterDotAccess(DotAccessContext context)
+{
+    var functionName = context.genericID().GetText();
+    if (functionName.Equals("Execute", StringComparison.OrdinalIgnoreCase))
+    {
+        // Complex parent navigation to find target object
+        var expr = context.Parent as DotAccessExprContext;
+        if (expr?.expression() is IdentifierExprContext idExpr)
+        {
+            var varName = idExpr.ident().GetText();
+            // Validate method call...
+        }
+    }
+}
+```
+
+**Self-Hosted Pattern (Type-Safe Navigation):**
+```csharp
+public override void VisitMemberAccess(MemberAccessNode node)
+{
+    // Check if this is part of a method call
+    if (node.Parent is FunctionCallNode functionCall && functionCall.Function == node)
+    {
+        if (node.MemberName.Equals("Execute", StringComparison.OrdinalIgnoreCase))
+        {
+            // Direct, type-safe access to target
+            if (node.Target is IdentifierNode varId)
+            {
+                var varName = varId.Name;
+                // Validate method call with shared validator
+                var reports = validator.ValidateSQLMethodCall(node, functionCall);
+                ProcessReports(reports);
+            }
+        }
+    }
+    base.VisitMemberAccess(node);
+}
+```
+
+### **Source Position Precision Improvements**
+
+**ANTLR Challenges:**
+- Token symbol byte positions not always accurate
+- Manual calculation of span lengths
+- Complex token navigation for nested expressions
+
+**Self-Hosted Solutions:**
+- `SourceSpan` provides precise `Start` and `End` positions
+- `SourcePosition` includes `Index`, `ByteIndex`, `Line`, and `Column`
+- Every AST node has automatic span calculation
+- `VariableNameInfo.SourceSpan` for individual variable highlighting
+
+```csharp
+// Precise span highlighting for individual elements
+foreach (var varInfo in node.VariableNameInfos)
+{
+    if (ShouldHighlight(varInfo.Name))
+    {
+        // Highlight just the variable name, not the entire declaration
+        AddIndicator(
+            varInfo.SourceSpan ?? node.SourceSpan,
+            Indicator.IndicatorType.HIGHLIGHTER,
+            HIGHLIGHT_COLOR,
+            $"Issue with variable {varInfo.Name}"
+        );
+    }
+}
+```
+
+---
+
+*Last Updated: 2025-01-25 - Based on successful porting of 6 production stylers including complex shared architecture patterns*

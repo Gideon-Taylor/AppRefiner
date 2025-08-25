@@ -65,7 +65,7 @@ public class PropertyAsVariable : ScopedStyler
                 var currentMethod = GetCurrentScopeInfo();
                 if (currentMethod != null && !IsInConstructor(currentMethod))
                 {
-                    AddIndicator(node.SourceSpan, Indicator.IndicatorType.HIGHLIGHTER, HIGHLIGHT_COLOR,
+                    AddIndicator(node.SourceSpan, Indicator.IndicatorType.BACKGROUND, HIGHLIGHT_COLOR,
                         "Property used as variable outside constructor");
                 }
             }

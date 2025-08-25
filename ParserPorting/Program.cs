@@ -37,7 +37,8 @@ var stylers = new List<IStyler>
     new ReusedForIterator(),
     new ClassNameMismatch(),
     new LinterSuppressionStyler(),
-    new InvalidAppClass()
+    new InvalidAppClass(),
+    new SQLVariableCountStyler()
 };
 
 // Set DataManager on stylers that need it and run them
@@ -86,6 +87,14 @@ foreach (var styler in stylers)
             case InvalidAppClass invalidAppClass:
                 invalidAppClass.VisitProgram(program);
                 Console.WriteLine($"InvalidAppClass found {invalidAppClass.Indicators.Count} indicators");
+                break;
+            case SQLVariableCountStyler sqlStyler:
+                sqlStyler.VisitProgram(program);
+                Console.WriteLine($"SQLVariableCountStyler found {sqlStyler.Indicators.Count} indicators");
+                foreach (var indicator in sqlStyler.Indicators)
+                {
+                    Console.WriteLine($"  SQL Issue: {indicator.Tooltip} at position {indicator.Start}-{indicator.Start + indicator.Length}");
+                }
                 break;
             default:
                 // Generic handling for other styler types

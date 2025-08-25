@@ -246,9 +246,13 @@ public abstract class ScopedAstVisitor<T> : AstVisitorBase
     public override void VisitMethod(MethodNode node)
     {
         EnterScope(ScopeType.Method, node.Name);
-        
-        AddMethodParameters(node);
-        
+
+        foreach (var parameter in node.Parameters)
+        {
+            var typeName = AstTypeExtractor.GetTypeFromNode(parameter.Type);
+            RegisterVariable(parameter.Name, typeName, parameter.SourceSpan, VariableType.Parameter);
+        }
+
         base.VisitMethod(node);
         
         ExitScope();
@@ -354,18 +358,6 @@ public abstract class ScopedAstVisitor<T> : AstVisitorBase
     #endregion
 
     #region Helper Methods
-
-    /// <summary>
-    /// Adds method parameters to the current scope
-    /// </summary>
-    private void AddMethodParameters(MethodNode method)
-    {
-        foreach (var parameter in method.Parameters)
-        {
-            var typeName = AstTypeExtractor.GetTypeFromNode(parameter.Type);
-            RegisterVariable(parameter.Name, typeName, parameter.SourceSpan, VariableType.Parameter);
-        }
-    }
 
     /// <summary>
     /// Adds function parameters to the current scope
