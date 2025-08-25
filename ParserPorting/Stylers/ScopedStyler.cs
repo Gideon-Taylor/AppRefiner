@@ -1,4 +1,6 @@
-﻿using PeopleCodeParser.SelfHosted;
+﻿using AppRefiner;
+using AppRefiner.Database;
+using PeopleCodeParser.SelfHosted;
 using PeopleCodeParser.SelfHosted.Visitors;
 using System;
 using System.Collections.Generic;
@@ -11,6 +13,21 @@ namespace ParserPorting.Stylers
     public class ScopedStyler : ScopedAstVisitor<object>, IStyler
     {
         public List<Indicator> Indicators { get; } = [];
+
+        /// <summary>
+        /// Specifies whether this styler requires a database connection
+        /// </summary>
+        public virtual DataManagerRequirement DatabaseRequirement { get; } = DataManagerRequirement.NotRequired;
+        
+        /// <summary>
+        /// The database manager instance, if available
+        /// </summary>
+        public IDataManager? DataManager { get; set; }
+        
+        /// <summary>
+        /// The ScintillaEditor instance, if available
+        /// </summary>
+        public ScintillaEditor? Editor { get; set; }
 
         public void AddIndicator(SourceSpan span, Indicator.IndicatorType type, uint color, string? tooltip = null)
         {

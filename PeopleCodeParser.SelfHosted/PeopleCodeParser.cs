@@ -349,6 +349,9 @@ public class PeopleCodeParser
             EnterRule("program");
             _errorRecoveryCount = 0;
             _statementCounter = 0; // Reset statement counter for a new program
+            
+            // Collect all comments from the token stream
+            CollectComments(program);
 
             
 
@@ -4914,6 +4917,40 @@ public class PeopleCodeParser
     /// Get the current PeopleTools version configuration
     /// </summary>
     public ToolsVersion? ToolsRelease => _toolsRelease;
+    
+    /// <summary>
+    /// Collects all comments from the token stream and adds them to the program node
+    /// </summary>
+    private void CollectComments(ProgramNode program)
+    {
+        // Traverse all tokens and collect comments from both the main tokens and their trivia
+        foreach (var token in _tokens)
+        {
+            // Check if the token itself is a comment
+            if (token.Type.IsCommentType())
+            {
+                program.AddComment(token);
+            }
+            
+            // Check leading trivia for comments
+            foreach (var leadingTrivia in token.LeadingTrivia)
+            {
+                if (leadingTrivia.Type.IsCommentType())
+                {
+                    program.AddComment(leadingTrivia);
+                }
+            }
+            
+            // Check trailing trivia for comments
+            foreach (var trailingTrivia in token.TrailingTrivia)
+            {
+                if (trailingTrivia.Type.IsCommentType())
+                {
+                    program.AddComment(trailingTrivia);
+                }
+            }
+        }
+    }
 }
 
 

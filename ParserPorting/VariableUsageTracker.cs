@@ -1,4 +1,5 @@
 using PeopleCodeParser.SelfHosted.Visitors.Models;
+using PeopleCodeParser.SelfHosted;
 
 namespace PeopleCodeParser.SelfHosted.Visitors;
 
@@ -38,6 +39,9 @@ public class VariableUsageTracker : IVariableUsageTracker
 
     private readonly Dictionary<VariableKey, (VariableInfo Variable, bool Used)> usageMap = new();
     private readonly Dictionary<ScopeInfo, List<VariableKey>> scopeToVariablesMap = new();
+    
+    // Track undefined variable references
+    private readonly List<(string Name, SourceSpan Location, ScopeInfo Scope)> undefinedReferences = new();
 
     /// <summary>
     /// Registers a variable in the specified scope
@@ -114,6 +118,31 @@ public class VariableUsageTracker : IVariableUsageTracker
     {
         usageMap.Clear();
         scopeToVariablesMap.Clear();
+        undefinedReferences.Clear();
+    }
+
+    /// <summary>
+    /// Checks if a variable is defined in any accessible scope
+    /// </summary>
+    public bool IsVariableDefined(string name, ScopeInfo currentScope)
+    {
+        return FindVariableKey(name, currentScope) != null;
+    }
+
+    /// <summary>
+    /// Tracks a reference to an undefined variable
+    /// </summary>
+    public void TrackUndefinedReference(string name, SourceSpan location, ScopeInfo scope)
+    {
+        undefinedReferences.Add((name, location, scope));
+    }
+
+    /// <summary>
+    /// Gets all tracked undefined variable references
+    /// </summary>
+    public IEnumerable<(string Name, SourceSpan Location, ScopeInfo Scope)> GetUndefinedReferences()
+    {
+        return undefinedReferences.ToList();
     }
 
     /// <summary>

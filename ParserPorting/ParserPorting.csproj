@@ -9,6 +9,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\PeopleCodeParser.SelfHosted\PeopleCodeParser.SelfHosted.csproj" />
+    <ProjectReference Include="..\AppRefiner\AppRefiner.csproj" />
   </ItemGroup>
 
 </Project>

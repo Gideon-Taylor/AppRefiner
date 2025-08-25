@@ -1,4 +1,5 @@
 using PeopleCodeParser.SelfHosted.Visitors.Models;
+using PeopleCodeParser.SelfHosted;
 
 namespace PeopleCodeParser.SelfHosted.Visitors;
 
@@ -47,4 +48,26 @@ public interface IVariableUsageTracker
     /// Resets the tracker to its initial state
     /// </summary>
     void Reset();
+    
+    /// <summary>
+    /// Checks if a variable is defined in any accessible scope
+    /// </summary>
+    /// <param name="name">The variable name to check</param>
+    /// <param name="currentScope">The current scope to start searching from</param>
+    /// <returns>True if the variable is defined in any accessible scope, false otherwise</returns>
+    bool IsVariableDefined(string name, ScopeInfo currentScope);
+    
+    /// <summary>
+    /// Tracks a reference to an undefined variable
+    /// </summary>
+    /// <param name="name">The undefined variable name</param>
+    /// <param name="location">The source location where the undefined variable was referenced</param>
+    /// <param name="scope">The scope where the undefined reference occurred</param>
+    void TrackUndefinedReference(string name, SourceSpan location, ScopeInfo scope);
+    
+    /// <summary>
+    /// Gets all tracked undefined variable references
+    /// </summary>
+    /// <returns>A collection of undefined variable references with their locations and scopes</returns>
+    IEnumerable<(string Name, SourceSpan Location, ScopeInfo Scope)> GetUndefinedReferences();
 }

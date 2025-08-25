@@ -1,4 +1,5 @@
 using PeopleCodeParser.SelfHosted.Visitors;
+using PeopleCodeParser.SelfHosted.Lexing;
 
 namespace PeopleCodeParser.SelfHosted.Nodes;
 
@@ -43,6 +44,11 @@ public class ProgramNode : AstNode
     public BlockNode? MainBlock { get; set; }
 
     /// <summary>
+    /// All comments found in the program (both line and block comments)
+    /// </summary>
+    public List<Lexing.Token> Comments { get; } = new();
+
+    /// <summary>
     /// True if this program defines an application class
     /// </summary>
     public bool IsClassProgram => AppClass != null;
@@ -79,6 +85,14 @@ public class ProgramNode : AstNode
     {
         Constants.Add(constant);
         AddChild(constant);
+    }
+
+    public void AddComment(Lexing.Token comment)
+    {
+        if (comment.Type.IsCommentType())
+        {
+            Comments.Add(comment);
+        }
     }
 
     public void SetAppClass(AppClassNode appClass)

@@ -6,7 +6,7 @@ using PeopleCodeParser.SelfHosted.Visitors;
 using PeopleCodeParser.SelfHosted.Visitors.Models;
 using PeopleCodeParser.SelfHosted.Visitors.Utilities;
 
-namespace ParserPorting.Stylers;
+namespace ParserPorting.Stylers.Impl;
 
 /// <summary>
 /// Visitor that identifies unused variables, parameters, and instance variables in PeopleCode.
