@@ -1,4 +1,4 @@
-using PeopleCodeParser.SelfHosted;
+using PeopleCodeParser.SelfHosted.Visitors;
 
 namespace PeopleCodeParser.SelfHosted.Nodes;
 

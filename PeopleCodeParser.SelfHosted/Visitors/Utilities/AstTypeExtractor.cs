@@ -1,6 +1,6 @@
 using PeopleCodeParser.SelfHosted.Nodes;
 
-namespace PeopleCodeParser.SelfHosted.Scoped.Utilities;
+namespace PeopleCodeParser.SelfHosted.Visitors.Utilities;
 
 public static class AstTypeExtractor
 {

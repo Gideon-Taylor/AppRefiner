@@ -1,7 +1,7 @@
 using ParserComparison.Models;
 using ParserComparison.Tests;
 using ParserComparison.Utils;
-using PeopleCodeParser.SelfHosted.Scoped.Examples;
+using PeopleCodeParser.SelfHosted.Visitors.Examples;
 using SharpCompress.Common;
 
 namespace ParserComparison;

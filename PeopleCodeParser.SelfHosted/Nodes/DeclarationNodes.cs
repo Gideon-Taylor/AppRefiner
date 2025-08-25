@@ -1,4 +1,4 @@
-using PeopleCodeParser.SelfHosted;
+using PeopleCodeParser.SelfHosted.Visitors;
 
 namespace PeopleCodeParser.SelfHosted.Nodes;
 
@@ -337,7 +337,7 @@ public class VariableNode : DeclarationNode
 
     public override string ToString()
     {
-        var names = string.Join(", ", AllNames.Select(n => $"&{n}"));
+        var names = string.Join(", ", AllNames.Select(n => $"{n}"));
         var init = InitialValue != null ? $" = {InitialValue}" : "";
         return $"{Scope} {Type} {names}{init}";
     }

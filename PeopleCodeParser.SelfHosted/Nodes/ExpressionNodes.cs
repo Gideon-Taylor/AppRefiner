@@ -1,4 +1,4 @@
-using PeopleCodeParser.SelfHosted;
+using PeopleCodeParser.SelfHosted.Visitors;
 
 namespace PeopleCodeParser.SelfHosted.Nodes;
 
@@ -757,48 +757,6 @@ public class MemberAccessNode : ExpressionNode
     {
         var memberStr = IsDynamic ? $"\"{MemberName}\"" : MemberName;
         return $"{Target}.{memberStr}";
-    }
-}
-
-/// <summary>
-/// Object creation with just type name (simplified version)
-/// </summary>
-public class SimpleObjectCreationNode : ExpressionNode
-{
-    /// <summary>
-    /// Type name being created
-    /// </summary>
-    public string TypeName { get; }
-
-    /// <summary>
-    /// Constructor arguments
-    /// </summary>
-    public List<ExpressionNode> Arguments { get; }
-
-    public override bool HasSideEffects => true; // Object creation has side effects
-
-    public SimpleObjectCreationNode(string typeName, IEnumerable<ExpressionNode> arguments)
-    {
-        TypeName = typeName ?? throw new ArgumentNullException(nameof(typeName));
-        Arguments = arguments?.ToList() ?? new List<ExpressionNode>();
-
-        AddChildren(Arguments);
-    }
-
-    public override void Accept(IAstVisitor visitor)
-    {
-        visitor.VisitSimpleObjectCreation(this);
-    }
-
-    public override TResult Accept<TResult>(IAstVisitor<TResult> visitor)
-    {
-        return visitor.VisitSimpleObjectCreation(this);
-    }
-
-    public override string ToString()
-    {
-        var argsStr = string.Join(", ", Arguments);
-        return $"CREATE {TypeName}({argsStr})";
     }
 }
 

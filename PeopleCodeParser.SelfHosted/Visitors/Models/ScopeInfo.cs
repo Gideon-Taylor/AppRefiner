@@ -1,4 +1,4 @@
-namespace PeopleCodeParser.SelfHosted.Scoped.Models;
+namespace PeopleCodeParser.SelfHosted.Visitors.Models;
 
 public enum ScopeType
 {

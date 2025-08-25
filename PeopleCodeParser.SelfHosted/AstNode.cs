@@ -1,5 +1,6 @@
 using System.Collections.Immutable;
 using PeopleCodeParser.SelfHosted.Lexing;
+using PeopleCodeParser.SelfHosted.Visitors;
 
 namespace PeopleCodeParser.SelfHosted;
 

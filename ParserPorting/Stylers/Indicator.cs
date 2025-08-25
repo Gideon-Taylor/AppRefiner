@@ -1,6 +1,6 @@
 using System;
 
-namespace PeopleCodeParser.SelfHosted.Scoped.Models;
+namespace ParserPorting.Stylers;
 
 /// <summary>
 /// Represents a visual indicator that can be applied to code in an editor.

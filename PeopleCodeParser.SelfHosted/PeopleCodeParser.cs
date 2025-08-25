@@ -548,7 +548,7 @@ public class PeopleCodeParser
 
             if (!Match(TokenType.Import))
                 return null;
-
+            var firstToken = Previous;
             // Parse import path (expecting package:path format)
             var pathParts = new List<string>();
             bool consumedColon = false;
@@ -607,7 +607,9 @@ public class PeopleCodeParser
             // Grammar requires at least one colon and at least two parts (package:class or package:*)
             if (consumedColon && pathParts.Count >= 2)
             {
-                return new ImportNode(string.Join(":", pathParts));
+                var lastToken = Previous;
+
+                return new ImportNode(string.Join(":", pathParts)) { FirstToken = firstToken, LastToken = lastToken };
             }
 
             return null;
@@ -1205,6 +1207,8 @@ public class PeopleCodeParser
         {
             EnterRule("propertyDeclaration");
 
+            // Capture the first token for positioning
+            var firstToken = Current;
             if (!Match(TokenType.Property))
             {
                 ReportError("Expected 'PROPERTY' keyword");
@@ -1228,15 +1232,18 @@ public class PeopleCodeParser
             }
 
             var propertyNode = new PropertyNode(propertyName, propertyType);
+            var lastToken = Previous; // Start with the property name as the last token
 
             // Parse property modifiers
             if (Match(TokenType.Get))
             {
                 propertyNode.HasGet = true;
+                lastToken = Previous; // Update last token
                 
                 if (Match(TokenType.Set))
                 {
                     propertyNode.HasSet = true;
+                    lastToken = Previous; // Update last token
                 }
                 else
                 {
@@ -1249,14 +1256,20 @@ public class PeopleCodeParser
                 if (Match(TokenType.Abstract))
                 {
                     propertyNode.IsAbstract = true;
+                    lastToken = Previous; // Update last token
                 }
 
                 if (Match(TokenType.ReadOnly))
                 {
                     propertyNode.IsReadOnly = true;
                     propertyNode.HasSet = false;
+                    lastToken = Previous; // Update last token
                 }
             }
+
+            // Set the token positioning information for accurate SourceSpan calculation
+            propertyNode.FirstToken = firstToken;
+            propertyNode.LastToken = lastToken;
 
             return propertyNode;
         }
@@ -1282,6 +1295,8 @@ public class PeopleCodeParser
         {
             EnterRule("instanceDeclaration");
 
+            // Capture the first token for positioning
+            var firstToken = Current;
             if (!Match(TokenType.Instance))
             {
                 ReportError("Expected 'INSTANCE' keyword");
@@ -1304,16 +1319,22 @@ public class PeopleCodeParser
             }
 
             var firstVarName = Current.Text;
+            var firstVarToken = Current;
+            var lastToken = Current; // Track the last token for positioning
             _position++;
 
             var variableNode = new VariableNode(firstVarName, variableType, VariableScope.Instance);
+            variableNode.UpdateVariableNode(firstVarName, firstVarToken);
 
             // Parse additional variable names separated by commas
             while (Match(TokenType.Comma))
             {
                 if (Check(TokenType.UserVariable))
                 {
-                    variableNode.AddName(Current.Text);
+                    var additionalName = Current.Text;
+                    var additionalToken = Current;
+                    variableNode.AddNameWithToken(additionalName, additionalToken);
+                    lastToken = Current; // Update last token as we parse more variables
                     _position++;
                 }
                 else
@@ -1321,6 +1342,10 @@ public class PeopleCodeParser
                     break; // Trailing comma is allowed
                 }
             }
+
+            // Set the token positioning information for accurate SourceSpan calculation
+            variableNode.FirstToken = firstToken;
+            variableNode.LastToken = lastToken;
 
             return variableNode;
         }
@@ -1719,12 +1744,26 @@ public class PeopleCodeParser
         try
         {
             EnterRule("classBody");
+            
+            // Create lookup tables for method and property unification
+            var methodDeclarations = new Dictionary<string, MethodNode>(StringComparer.OrdinalIgnoreCase);
+            var propertyDeclarations = new Dictionary<string, PropertyNode>(StringComparer.OrdinalIgnoreCase);
+            
+            // Populate lookup tables from existing declarations in the class
+            foreach (var method in appClass.Methods)
+            {
+                methodDeclarations[method.Name] = method;
+            }
+            foreach (var property in appClass.Properties)
+            {
+                propertyDeclarations[property.Name] = property;
+            }
 
             // Parse first class member
             var firstMember = ParseClassMember();
             if (firstMember != null)
             {
-                appClass.AddMember(firstMember, VisibilityModifier.Public);
+                UnifyClassMember(firstMember, appClass, methodDeclarations, propertyDeclarations);
             }
 
             // Parse additional members separated by semicolons
@@ -1749,7 +1788,7 @@ public class PeopleCodeParser
                 var member = ParseClassMember();
                 if (member != null)
                 {
-                    appClass.AddMember(member, VisibilityModifier.Public);
+                    UnifyClassMember(member, appClass, methodDeclarations, propertyDeclarations);
                 }
                 else
                 {
@@ -1757,6 +1796,9 @@ public class PeopleCodeParser
                     break;
                 }
             }
+            
+            // After parsing all implementations, check for orphaned declarations
+            ValidateMethodDeclarationImplementationPairs(appClass, methodDeclarations, propertyDeclarations);
         }
         catch (Exception ex)
         {
@@ -1766,6 +1808,90 @@ public class PeopleCodeParser
         finally
         {
             ExitRule();
+        }
+    }
+
+    /// <summary>
+    /// Unify class member with existing declarations (for method/property implementation unification)
+    /// </summary>
+    private void UnifyClassMember(AstNode member, AppClassNode appClass, Dictionary<string, MethodNode> methodDeclarations, Dictionary<string, PropertyNode> propertyDeclarations)
+    {
+        switch (member)
+        {
+            case MethodNode implementationMethod:
+                // Try to find matching method declaration
+                if (methodDeclarations.TryGetValue(implementationMethod.Name, out var declarationMethod))
+                {
+                    // Unify: attach body from implementation to existing declaration
+                    if (implementationMethod.Body != null)
+                        declarationMethod.SetBody(implementationMethod.Body);
+                    
+                    // Copy any annotations from implementation
+                    if (!string.IsNullOrEmpty(implementationMethod.Documentation))
+                        declarationMethod.Documentation = implementationMethod.Documentation;
+                    
+                    // The unified method is already in appClass.Methods, so we're done
+                }
+                else
+                {
+                    // Implementation without declaration - report error and add as-is
+                    ReportError($"Method implementation '{implementationMethod.Name}' has no matching declaration");
+                    appClass.AddMember(implementationMethod, VisibilityModifier.Public);
+                }
+                break;
+                
+            case PropertyNode implementationProperty:
+                // Handle property getter/setter implementations
+                if (propertyDeclarations.TryGetValue(implementationProperty.Name, out var declarationProperty))
+                {
+                    // Unify: attach getter/setter body to existing declaration
+                    if (implementationProperty.IsGetter && implementationProperty.GetterBody != null)
+                        declarationProperty.SetGetterBody(implementationProperty.GetterBody);
+                    else if (implementationProperty.IsSetter && implementationProperty.SetterBody != null)
+                        declarationProperty.SetSetterBody(implementationProperty.SetterBody);
+                    
+                    // The unified property is already in appClass.Properties, so we're done
+                }
+                else
+                {
+                    // Implementation without declaration - report error and add as-is
+                    string implType = implementationProperty.IsGetter ? "getter" : "setter";
+                    ReportError($"Property {implType} implementation '{implementationProperty.Name}' has no matching declaration");
+                    appClass.AddMember(implementationProperty, VisibilityModifier.Public);
+                }
+                break;
+                
+            default:
+                // Other member types (shouldn't happen in class body, but handle gracefully)
+                appClass.AddMember(member, VisibilityModifier.Public);
+                break;
+        }
+    }
+    
+    /// <summary>
+    /// Validate that all method/property declarations have matching implementations
+    /// </summary>
+    private void ValidateMethodDeclarationImplementationPairs(AppClassNode appClass, Dictionary<string, MethodNode> methodDeclarations, Dictionary<string, PropertyNode> propertyDeclarations)
+    {
+        // Check for method declarations without implementations
+        foreach (var method in appClass.Methods.Where(m => m.IsDeclaration))
+        {
+            ReportError($"Method declaration '{method.Name}' has no matching implementation");
+        }
+        
+        // Check for property declarations without getter/setter implementations (if required)
+        foreach (var property in appClass.Properties.Where(p => !p.IsImplementation && !p.IsReadOnly))
+        {
+            if (property.HasGet && property.GetterBody == null)
+            {
+                // Note: Not all properties require explicit getter implementations
+                // This could be a warning rather than an error depending on PeopleCode semantics
+            }
+            if (property.HasSet && property.SetterBody == null)
+            {
+                // Note: Not all properties require explicit setter implementations
+                // This could be a warning rather than an error depending on PeopleCode semantics
+            }
         }
     }
 
@@ -2985,6 +3111,8 @@ public class PeopleCodeParser
         {
             EnterRule("nonLocalVarDeclaration");
 
+            // Capture the first token for positioning
+            var firstToken = Current;
             VariableScope scope;
             if (Match(TokenType.Global)) scope = VariableScope.Global;
             else if (Match(TokenType.Component)) scope = VariableScope.Component;
@@ -3004,12 +3132,17 @@ public class PeopleCodeParser
                 // This is the second variant: (COMPONENT | GLOBAL) typeT
                 // Create a variable node with empty name for AST consistency
                 var emptyVariable = new VariableNode("", varType, scope);
+                // Set token positioning for empty variable
+                emptyVariable.FirstToken = firstToken;
+                emptyVariable.LastToken = Previous; // Last token consumed was the type
+                
                 Match(TokenType.Semicolon); // optional
                 return emptyVariable;
             }
 
             var firstName = Current.Text;
             var firstNameToken = Current;
+            var lastToken = Current; // Track the last token for positioning
             _position++;
 
             var variable = new VariableNode(firstName, varType, scope);
@@ -3023,6 +3156,7 @@ public class PeopleCodeParser
                     var additionalName = Current.Text;
                     var additionalNameToken = Current;
                     variable.AddNameWithToken(additionalName, additionalNameToken);
+                    lastToken = Current; // Update last token as we parse more variables
                     _position++;
                 }
                 else
@@ -3036,6 +3170,10 @@ public class PeopleCodeParser
                 /* This isn't a declaration that belongs in the preamble */
                 return null;
             }
+
+            // Set the token positioning information for accurate SourceSpan calculation
+            variable.FirstToken = firstToken;
+            variable.LastToken = lastToken;
 
             Match(TokenType.Semicolon); // optional
             return variable;
