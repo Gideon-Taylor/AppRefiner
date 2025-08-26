@@ -1046,7 +1046,7 @@ public class PeopleCodeParser
                 return null;
             }
 
-            var methodNode = new MethodNode(methodName) { Visibility = visibility };
+            var methodNode = new MethodNode(methodName, Previous) { Visibility = visibility };
 
             // Parse parameter list
             if (!Match(TokenType.LeftParen))
@@ -1185,7 +1185,7 @@ public class PeopleCodeParser
                 }
             }
 
-            var parameter = new ParameterNode(paramName, paramType) { FirstToken = nameToken, LastToken = nameToken };
+            var parameter = new ParameterNode(paramName, nameToken, paramType);
 
             // Parse optional OUT modifier
             if (Match(TokenType.Out))
@@ -1236,7 +1236,7 @@ public class PeopleCodeParser
                 return null;
             }
 
-            var propertyNode = new PropertyNode(propertyName, propertyType);
+            var propertyNode = new PropertyNode(propertyName, Previous, propertyType);
             var lastToken = Previous; // Start with the property name as the last token
 
             // Parse property modifiers
@@ -1328,7 +1328,7 @@ public class PeopleCodeParser
             var lastToken = Current; // Track the last token for positioning
             _position++;
 
-            var variableNode = new VariableNode(firstVarName, variableType, VariableScope.Instance);
+            var variableNode = new VariableNode(firstVarName, firstVarToken, variableType, VariableScope.Instance);
             variableNode.UpdateVariableNode(firstVarName, firstVarToken);
 
             // Parse additional variable names separated by commas
@@ -1965,7 +1965,7 @@ public class PeopleCodeParser
                 return null;
             }
 
-            var methodNode = new MethodNode(methodName);
+            var methodNode = new MethodNode(methodName, Previous);
 
             // Optional semicolons
             while (Match(TokenType.Semicolon)) { }
@@ -2026,7 +2026,7 @@ public class PeopleCodeParser
             }
 
             // Create property node with unknown type for now (will be inferred)
-            var propertyNode = new PropertyNode(propertyName, new BuiltInTypeNode(BuiltInType.Any));
+            var propertyNode = new PropertyNode(propertyName, Previous, new BuiltInTypeNode(BuiltInType.Any));
 
             // Parse method return annotation (contains the actual property type)
             // Try to parse a return annotation - it's fine if there isn't one
@@ -2092,7 +2092,7 @@ public class PeopleCodeParser
             }
 
             // Create property node with unknown type for now
-            var propertyNode = new PropertyNode(propertyName, new BuiltInTypeNode(BuiltInType.Any));
+            var propertyNode = new PropertyNode(propertyName, Previous, new BuiltInTypeNode(BuiltInType.Any));
 
             // Parse method parameter annotation (contains the property type)
             // Try to parse a parameter annotation - it's fine if there isn't one
@@ -2511,6 +2511,7 @@ public class PeopleCodeParser
             }
 
             var paramName = Current.Text;
+            var nameToken = Current;
             _position++;
 
             // Expect AS keyword
@@ -2527,7 +2528,7 @@ public class PeopleCodeParser
                 return null;
             }
 
-            var parameter = new ParameterNode(paramName, paramType);
+            var parameter = new ParameterNode(paramName, nameToken, paramType);
 
             // Parse optional OUT modifier
             if (Match(TokenType.Out))
@@ -2712,12 +2713,13 @@ public class PeopleCodeParser
                 Consume(TokenType.Function, "Expected 'FUNCTION' after 'DECLARE'");
 
                 var declName = ParseGenericId();
+                var declNameToken = Previous;
                 if (declName == null)
                 {
                     ReportError("Expected function name after 'DECLARE FUNCTION'");
                     return null;
                 }
-                var declNode = new FunctionNode(declName, FunctionType.UserDefined);
+                var declNode = new FunctionNode(declName, Previous, FunctionType.UserDefined);
 
                 if (Match(TokenType.PeopleCode))
                 {
@@ -2770,7 +2772,7 @@ public class PeopleCodeParser
                     }
 
                     Match(TokenType.Semicolon);
-                    declNode = new FunctionNode(declName, FunctionType.PeopleCode)
+                    declNode = new FunctionNode(declName, declNameToken, FunctionType.PeopleCode)
                     {
                         RecordName = declNode.RecordName,
                         FieldName = declNode.FieldName,
@@ -2829,7 +2831,7 @@ public class PeopleCodeParser
                     }
 
                     Match(TokenType.Semicolon);
-                    declNode = new FunctionNode(declName, FunctionType.Library)
+                    declNode = new FunctionNode(declName, declNameToken, FunctionType.Library)
                     {
                         LibraryName = declNode.LibraryName,
                         AliasName = declNode.AliasName,
@@ -2858,7 +2860,7 @@ public class PeopleCodeParser
                 return null;
             }
 
-            var functionNode = new FunctionNode(functionName, FunctionType.UserDefined);
+            var functionNode = new FunctionNode(functionName, Previous, FunctionType.UserDefined);
 
             // Parameters
             if (Match(TokenType.LeftParen))
@@ -3000,7 +3002,7 @@ public class PeopleCodeParser
             EnterRule("dllArgument");
 
             var paramName = ParseGenericId();
-
+            var nameToken = Previous;
             // Parse parameter name (must be a generic ID)
             if (paramName == null)
             {
@@ -3010,7 +3012,7 @@ public class PeopleCodeParser
 
 
             // Create parameter with default type (Any)
-            var parameter = new ParameterNode(paramName, new BuiltInTypeNode(BuiltInType.Any));
+            var parameter = new ParameterNode(paramName, nameToken, new BuiltInTypeNode(BuiltInType.Any));
 
             // Parse optional REF or VALUE modifier
             if (Match(TokenType.Ref))
@@ -3140,7 +3142,7 @@ public class PeopleCodeParser
             {
                 // This is the second variant: (COMPONENT | GLOBAL) typeT
                 // Create a variable node with empty name for AST consistency
-                var emptyVariable = new VariableNode("", varType, scope);
+                var emptyVariable = new VariableNode("", Peek(), varType, scope);
                 // Set token positioning for empty variable
                 emptyVariable.FirstToken = firstToken;
                 emptyVariable.LastToken = Previous; // Last token consumed was the type
@@ -3154,7 +3156,7 @@ public class PeopleCodeParser
             var lastToken = Current; // Track the last token for positioning
             _position++;
 
-            var variable = new VariableNode(firstName, varType, scope);
+            var variable = new VariableNode(firstName, firstNameToken, varType, scope);
             variable.UpdateVariableNode(firstName, firstNameToken);
 
             // Additional names
@@ -3212,6 +3214,7 @@ public class PeopleCodeParser
             }
 
             var name = Current.Text;
+            var nameToken = Current;
             _position++;
 
             if (!Match(TokenType.Equal))
@@ -3230,7 +3233,7 @@ public class PeopleCodeParser
                     return null;
                 }
                 Match(TokenType.Semicolon); // optional
-                return new ConstantNode(name, valueExpr);
+                return new ConstantNode(name, nameToken, valueExpr);
             }
 
             // Parse literal value
@@ -3241,7 +3244,7 @@ public class PeopleCodeParser
                 return null;
             }
 
-            return new ConstantNode(name, literalValue);
+            return new ConstantNode(name, nameToken, literalValue);
         }
         finally
         {
@@ -3773,11 +3776,8 @@ public class PeopleCodeParser
             else
             {
                 // This is localVariableDefinition: LOCAL type &var1, &var2, ...
-                var node = new LocalVariableDeclarationNode(variableType, new List<string> { firstVariableName });
+                var node = new LocalVariableDeclarationNode(variableType, new List<(string,Token)> { (firstVariableName, firstVarToken) });
                 
-                // Add the first variable name with its token
-                node.AddVariableNameWithToken(firstVariableName, firstVarToken);
-
                 // Parse additional variable names separated by commas
                 while (Match(TokenType.Comma))
                 {

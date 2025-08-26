@@ -1,3 +1,4 @@
+using PeopleCodeParser.SelfHosted.Lexing;
 using PeopleCodeParser.SelfHosted.Visitors;
 
 namespace PeopleCodeParser.SelfHosted.Nodes;
@@ -762,11 +763,11 @@ public class LocalVariableDeclarationNode : StatementNode
 
     public override bool IntroducesScope => false; // Local variables don't introduce new scopes
 
-    public LocalVariableDeclarationNode(TypeNode type, IEnumerable<string> variableNames)
+    public LocalVariableDeclarationNode(TypeNode type, IEnumerable<(string,Token)> variableNames)
     {
         Type = type ?? throw new ArgumentNullException(nameof(type));
-        VariableNames = variableNames?.ToList() ?? throw new ArgumentNullException(nameof(variableNames));
-
+        VariableNames = variableNames?.Select(v => v.Item1).ToList() ?? throw new ArgumentNullException(nameof(variableNames));
+        VariableNameInfos.AddRange(variableNames.Select(v => new VariableNameInfo(v.Item1, v.Item2)));
         if (VariableNames.Count == 0)
             throw new ArgumentException("At least one variable name is required", nameof(variableNames));
 
@@ -802,12 +803,12 @@ public class LocalVariableDeclarationWithAssignmentNode : StatementNode
     /// <summary>
     /// Variable name
     /// </summary>
-    public string VariableName { get; }
-    
+    public string VariableName => VariableNameInfo.Name;
+
     /// <summary>
     /// Variable name information including token
     /// </summary>
-    public VariableNameInfo? VariableNameInfo { get; set; }
+    public VariableNameInfo VariableNameInfo { get; set; }
 
     /// <summary>
     /// Initial value expression
@@ -816,10 +817,10 @@ public class LocalVariableDeclarationWithAssignmentNode : StatementNode
 
     public override bool IntroducesScope => false; // Local variables don't introduce new scopes
 
-    public LocalVariableDeclarationWithAssignmentNode(TypeNode type, string variableName, ExpressionNode initialValue)
+    public LocalVariableDeclarationWithAssignmentNode(TypeNode type, VariableNameInfo nameInfo, ExpressionNode initialValue)
     {
         Type = type ?? throw new ArgumentNullException(nameof(type));
-        VariableName = variableName ?? throw new ArgumentNullException(nameof(variableName));
+        VariableNameInfo = nameInfo;
         InitialValue = initialValue ?? throw new ArgumentNullException(nameof(initialValue));
 
         AddChild(type);

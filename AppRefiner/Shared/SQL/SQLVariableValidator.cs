@@ -44,7 +44,7 @@ namespace AppRefiner.Shared.SQL
             foreach (var varInfo in node.VariableNameInfos)
             {
                 var varName = varInfo.Name;
-                var span = varInfo.SourceSpan ?? node.SourceSpan;
+                var span = varInfo.SourceSpan;
                 
                 var defaultInfo = new SQLStatementInfo(
                     sqlText: "",

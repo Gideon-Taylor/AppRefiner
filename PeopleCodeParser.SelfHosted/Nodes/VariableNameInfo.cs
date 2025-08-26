@@ -29,7 +29,7 @@ public class VariableNameInfo
     /// <summary>
     /// Gets the source span for this variable name
     /// </summary>
-    public SourceSpan? SourceSpan => Token?.SourceSpan;
+    public SourceSpan SourceSpan => Token?.SourceSpan ?? default;
     
     /// <summary>
     /// Implicit conversion from string to VariableNameInfo

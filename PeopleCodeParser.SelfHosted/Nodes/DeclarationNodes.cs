@@ -1,3 +1,4 @@
+using PeopleCodeParser.SelfHosted.Lexing;
 using PeopleCodeParser.SelfHosted.Visitors;
 
 namespace PeopleCodeParser.SelfHosted.Nodes;
@@ -12,6 +13,8 @@ public abstract class DeclarationNode : AstNode
     /// </summary>
     public string Name { get; }
 
+    public Token NameToken{ get; }
+
     /// <summary>
     /// True if this Declaration had a semicolon in the source code
     /// This is used for style checking, as PeopleCode allows but doesn't require
@@ -24,9 +27,10 @@ public abstract class DeclarationNode : AstNode
     /// </summary>
     public VisibilityModifier Visibility { get; set; } = VisibilityModifier.Public;
 
-    protected DeclarationNode(string name)
+    protected DeclarationNode(string name, Token nameToken)
     {
         Name = name ?? throw new ArgumentNullException(nameof(name));
+        NameToken = nameToken;
     }
 }
 
@@ -90,7 +94,7 @@ public class MethodNode : DeclarationNode
     /// </summary>
     public string? ImplementedMethodName { get; set; }
 
-    public MethodNode(string name) : base(name)
+    public MethodNode(string name, Token nameToken) : base(name, nameToken)
     {
     }
     
@@ -216,7 +220,7 @@ public class PropertyNode : DeclarationNode
     /// </summary>
     public string? ClassName { get; set; }
 
-    public PropertyNode(string name, TypeNode type) : base(name)
+    public PropertyNode(string name, Token nameToken, TypeNode type) : base(name, nameToken)
     {
         Type = type ?? throw new ArgumentNullException(nameof(type));
         AddChild(type);
@@ -298,7 +302,7 @@ public class VariableNode : DeclarationNode
     /// </summary>
     public List<VariableNameInfo> NameInfos { get; } = new();
 
-    public VariableNode(string name, TypeNode type, VariableScope scope) : base(name)
+    public VariableNode(string name, Token nameToken, TypeNode type, VariableScope scope) : base(name, nameToken)
     {
         Type = type ?? throw new ArgumentNullException(nameof(type));
         Scope = scope;
@@ -353,7 +357,8 @@ public class ConstantNode : DeclarationNode
     /// </summary>
     public ExpressionNode Value { get; }
 
-    public ConstantNode(string name, ExpressionNode value) : base(name)
+
+    public ConstantNode(string name, Token nameToken, ExpressionNode value) : base(name, nameToken)
     {
         Value = value ?? throw new ArgumentNullException(nameof(value));
         AddChild(value);
@@ -442,7 +447,7 @@ public class FunctionNode : DeclarationNode
     /// </summary>
     public string? AliasName { get; set; }
 
-    public FunctionNode(string name, FunctionType functionType) : base(name)
+    public FunctionNode(string name, Token nameToken, FunctionType functionType) : base(name, nameToken)
     {
         FunctionType = functionType;
     }
@@ -509,7 +514,7 @@ public class ParameterNode : AstNode
     /// </summary>
     public string Name { get; }
 
-    public SourceSpan NameSpan { get; set; }
+    public Token NameToken { get; }
 
     /// <summary>
     /// Parameter type
@@ -526,10 +531,11 @@ public class ParameterNode : AstNode
     /// </summary>
     public ParameterMode Mode { get; set; } = ParameterMode.Value;
 
-    public ParameterNode(string name, TypeNode type)
+    public ParameterNode(string name, Token nameToken, TypeNode type)
     {
         Name = name ?? throw new ArgumentNullException(nameof(name));
         Type = type ?? throw new ArgumentNullException(nameof(type));
+        NameToken = nameToken;
         AddChild(type);
     }
 

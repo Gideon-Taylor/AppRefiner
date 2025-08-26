@@ -143,7 +143,7 @@ public class UnusedVariables : ScopedStyler
         foreach (var (variable, scope) in usageTracker.GetUnusedVariables())
         {
             string tooltip = GetTooltipForVariable(variable, scope);
-            AddIndicator(variable.Span, IndicatorType.TEXTCOLOR, HIGHLIGHT_COLOR, tooltip);
+            AddIndicator(variable.VariableNameInfo.SourceSpan, IndicatorType.TEXTCOLOR, HIGHLIGHT_COLOR, tooltip);
         }
     }
 

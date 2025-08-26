@@ -136,31 +136,17 @@ public abstract class ScopedAstVisitor<T> : AstVisitorBase
     #endregion
 
     #region Variable Management
-
-    /// <summary>
-    /// Registers a variable in the current scope
-    /// </summary>
-    protected void RegisterVariable(string name, string typeName, int line, (int Start, int Stop) span, VariableType variableType = VariableType.Local)
-    {
-        var currentScope = GetCurrentVariableScope();
-        if (!currentScope.ContainsKey(name))
-        {
-            var variableInfo = new VariableInfo(name, typeName, line, span, variableType);
-            currentScope[name] = variableInfo;
-            OnVariableDeclared(variableInfo, GetCurrentScopeInfo());
-        }
-    }
     
     /// <summary>
-    /// Registers a variable in the current scope using a SourceSpan
+    /// Registers a variable in the current scope using VariableNameInfo to preserve rich source information
     /// </summary>
-    protected void RegisterVariable(string name, string typeName, SourceSpan sourceSpan, VariableType variableType = VariableType.Local)
+    protected void RegisterVariable(VariableNameInfo variableNameInfo, string typeName, VariableType variableType = VariableType.Local)
     {
         var currentScope = GetCurrentVariableScope();
-        if (!currentScope.ContainsKey(name))
+        if (!currentScope.ContainsKey(variableNameInfo.Name))
         {
-            var variableInfo = new VariableInfo(name, typeName, sourceSpan, variableType);
-            currentScope[name] = variableInfo;
+            var variableInfo = new VariableInfo(variableNameInfo, typeName, variableType);
+            currentScope[variableNameInfo.Name] = variableInfo;
             OnVariableDeclared(variableInfo, GetCurrentScopeInfo());
         }
     }
@@ -221,9 +207,10 @@ public abstract class ScopedAstVisitor<T> : AstVisitorBase
         {
             var nameInfo = node.NameInfos.FirstOrDefault(ni => 
                 ni.Name.Equals(variableName, StringComparison.OrdinalIgnoreCase));
-            var sourceSpan = nameInfo?.SourceSpan ?? node.SourceSpan;
-            
-            RegisterVariable(variableName, typeName, sourceSpan, variableType);
+            if (nameInfo != null)
+            {
+                RegisterVariable(nameInfo, typeName, variableType);
+            }
         }
         
         // Handle all names in NameInfos
@@ -232,8 +219,7 @@ public abstract class ScopedAstVisitor<T> : AstVisitorBase
             if (string.IsNullOrEmpty(variableName) || 
                 !nameInfo.Name.Equals(variableName, StringComparison.OrdinalIgnoreCase))
             {
-                var sourceSpan = nameInfo.SourceSpan ?? node.SourceSpan;
-                RegisterVariable(nameInfo.Name, typeName, sourceSpan, variableType);
+                RegisterVariable(nameInfo, typeName, variableType);
             }
         }
         
@@ -250,7 +236,10 @@ public abstract class ScopedAstVisitor<T> : AstVisitorBase
         foreach (var parameter in node.Parameters)
         {
             var typeName = AstTypeExtractor.GetTypeFromNode(parameter.Type);
-            RegisterVariable(parameter.Name, typeName, parameter.SourceSpan, VariableType.Parameter);
+
+            VariableNameInfo nameInfo = new(parameter.Name, parameter.NameToken);
+
+            RegisterVariable(nameInfo, typeName, VariableType.Parameter);
         }
 
         base.VisitMethod(node);
@@ -279,7 +268,8 @@ public abstract class ScopedAstVisitor<T> : AstVisitorBase
     {
         // Add property to the current scope before entering the property's scope
         var propertyName = node.Name;
-        RegisterVariable(propertyName, "Property", node.SourceSpan, VariableType.Property);
+        var nameInfo = new VariableNameInfo(propertyName, node.NameToken);
+        RegisterVariable(nameInfo, "Property", VariableType.Property);
         
         // Enter property scope
         EnterScope(ScopeType.Property, node.Name);
@@ -311,14 +301,7 @@ public abstract class ScopedAstVisitor<T> : AstVisitorBase
         {
             var variableName = node.VariableNames[i];
             
-            // Get precise source span for this variable name if available
-            var sourceSpan = node.SourceSpan;
-            if (i < node.VariableNameInfos.Count && node.VariableNameInfos[i].SourceSpan.HasValue)
-            {
-                sourceSpan = node.VariableNameInfos[i].SourceSpan!.Value;
-            }
-            
-            RegisterVariable(variableName, typeName, sourceSpan, VariableType.Local);
+            RegisterVariable(node.VariableNameInfos[i], typeName, VariableType.Local);
         }
         
         base.VisitLocalVariableDeclaration(node);
@@ -333,12 +316,10 @@ public abstract class ScopedAstVisitor<T> : AstVisitorBase
         
         // Get precise source span for the variable name if available
         var sourceSpan = node.SourceSpan;
-        if (node.VariableNameInfo?.SourceSpan.HasValue == true)
-        {
-            sourceSpan = node.VariableNameInfo.SourceSpan.Value;
-        }
+
         
-        RegisterVariable(node.VariableName, typeName, sourceSpan, VariableType.Local);
+
+        RegisterVariable(node.VariableNameInfo, typeName, VariableType.Local);
         
         base.VisitLocalVariableDeclarationWithAssignment(node);
     }
@@ -349,8 +330,10 @@ public abstract class ScopedAstVisitor<T> : AstVisitorBase
     public override void VisitConstant(ConstantNode node)
     {
         var typeName = AstTypeExtractor.GetDefaultTypeForExpression(node.Value);
-        
-        RegisterVariable(node.Name, $"Constant({typeName})", node.SourceSpan, VariableType.Constant);
+
+        VariableNameInfo nameInfo = new(node.Name, node.FirstToken);
+
+        RegisterVariable(nameInfo, $"Constant({typeName})", VariableType.Constant);
         
         base.VisitConstant(node);
     }
@@ -367,7 +350,8 @@ public abstract class ScopedAstVisitor<T> : AstVisitorBase
         foreach (var parameter in function.Parameters)
         {
             var typeName = AstTypeExtractor.GetTypeFromNode(parameter.Type);
-            RegisterVariable(parameter.Name, typeName, parameter.SourceSpan, VariableType.Parameter);
+            var variableNameInfo = new VariableNameInfo(parameter.Name, parameter.FirstToken);
+            RegisterVariable(variableNameInfo, typeName, VariableType.Parameter);
         }
     }
     
