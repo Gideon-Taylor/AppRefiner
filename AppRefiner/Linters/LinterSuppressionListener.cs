@@ -156,7 +156,7 @@ namespace AppRefiner.Linters
                     continue;
 
                 // Skip insignificant tokens like semicolons
-                if (token.Type == PeopleCodeParser.SEMI)
+                if (token.Type == PeopleCode.PeopleCodeParser.SEMI)
                     continue;
 
                 // Found the next code token
@@ -177,9 +177,9 @@ namespace AppRefiner.Linters
             for (int i = 0; i < _tokenStream.Size; i++)
             {
                 var token = _tokenStream.Get(i);
-                if (token.Type == PeopleCodeParser.IMPORT ||
-                    token.Type == PeopleCodeParser.CLASS ||
-                    token.Type == PeopleCodeParser.INTERFACE)
+                if (token.Type == PeopleCode.PeopleCodeParser.IMPORT ||
+                    token.Type == PeopleCode.PeopleCodeParser.CLASS ||
+                    token.Type == PeopleCode.PeopleCodeParser.INTERFACE)
                 {
                     importsLineStart = token.Line;
                     break;
@@ -223,42 +223,42 @@ namespace AppRefiner.Linters
 
         #region Method/Function Scope Handling
 
-        public override void EnterMethod([NotNull] PeopleCodeParser.MethodContext context)
+        public override void EnterMethod([NotNull] PeopleCode.PeopleCodeParser.MethodContext context)
         {
             ProcessScopeEntrySuppressions(context.Start.Line);
         }
 
-        public override void ExitMethod([NotNull] PeopleCodeParser.MethodContext context)
+        public override void ExitMethod([NotNull] PeopleCode.PeopleCodeParser.MethodContext context)
         {
             PopScopeSuppressions();
         }
 
-        public override void EnterFunctionDefinition([NotNull] PeopleCodeParser.FunctionDefinitionContext context)
+        public override void EnterFunctionDefinition([NotNull] PeopleCode.PeopleCodeParser.FunctionDefinitionContext context)
         {
             ProcessScopeEntrySuppressions(context.Start.Line);
         }
 
-        public override void ExitFunctionDefinition([NotNull] PeopleCodeParser.FunctionDefinitionContext context)
+        public override void ExitFunctionDefinition([NotNull] PeopleCode.PeopleCodeParser.FunctionDefinitionContext context)
         {
             PopScopeSuppressions();
         }
 
-        public override void EnterGetter([NotNull] PeopleCodeParser.GetterContext context)
+        public override void EnterGetter([NotNull] PeopleCode.PeopleCodeParser.GetterContext context)
         {
             ProcessScopeEntrySuppressions(context.Start.Line);
         }
 
-        public override void ExitGetter([NotNull] PeopleCodeParser.GetterContext context)
+        public override void ExitGetter([NotNull] PeopleCode.PeopleCodeParser.GetterContext context)
         {
             PopScopeSuppressions();
         }
 
-        public override void EnterSetter([NotNull] PeopleCodeParser.SetterContext context)
+        public override void EnterSetter([NotNull] PeopleCode.PeopleCodeParser.SetterContext context)
         {
             ProcessScopeEntrySuppressions(context.Start.Line);
         }
 
-        public override void ExitSetter([NotNull] PeopleCodeParser.SetterContext context)
+        public override void ExitSetter([NotNull] PeopleCode.PeopleCodeParser.SetterContext context)
         {
             PopScopeSuppressions();
         }
@@ -267,62 +267,62 @@ namespace AppRefiner.Linters
 
         #region Statement Block Scope Handling
 
-        public override void EnterIfStatement([NotNull] PeopleCodeParser.IfStatementContext context)
+        public override void EnterIfStatement([NotNull] PeopleCode.PeopleCodeParser.IfStatementContext context)
         {
             ProcessScopeEntrySuppressions(context.Start.Line);
         }
 
-        public override void ExitIfStatement([NotNull] PeopleCodeParser.IfStatementContext context)
+        public override void ExitIfStatement([NotNull] PeopleCode.PeopleCodeParser.IfStatementContext context)
         {
             PopScopeSuppressions();
         }
 
-        public override void EnterForStatement([NotNull] PeopleCodeParser.ForStatementContext context)
+        public override void EnterForStatement([NotNull] PeopleCode.PeopleCodeParser.ForStatementContext context)
         {
             ProcessScopeEntrySuppressions(context.Start.Line);
         }
 
-        public override void ExitForStatement([NotNull] PeopleCodeParser.ForStatementContext context)
+        public override void ExitForStatement([NotNull] PeopleCode.PeopleCodeParser.ForStatementContext context)
         {
             PopScopeSuppressions();
         }
 
-        public override void EnterWhileStatement([NotNull] PeopleCodeParser.WhileStatementContext context)
+        public override void EnterWhileStatement([NotNull] PeopleCode.PeopleCodeParser.WhileStatementContext context)
         {
             ProcessScopeEntrySuppressions(context.Start.Line);
         }
 
-        public override void ExitWhileStatement([NotNull] PeopleCodeParser.WhileStatementContext context)
+        public override void ExitWhileStatement([NotNull] PeopleCode.PeopleCodeParser.WhileStatementContext context)
         {
             PopScopeSuppressions();
         }
 
-        public override void EnterRepeatStatement([NotNull] PeopleCodeParser.RepeatStatementContext context)
+        public override void EnterRepeatStatement([NotNull] PeopleCode.PeopleCodeParser.RepeatStatementContext context)
         {
             ProcessScopeEntrySuppressions(context.Start.Line);
         }
 
-        public override void ExitRepeatStatement([NotNull] PeopleCodeParser.RepeatStatementContext context)
+        public override void ExitRepeatStatement([NotNull] PeopleCode.PeopleCodeParser.RepeatStatementContext context)
         {
             PopScopeSuppressions();
         }
 
-        public override void EnterEvaluateStatement([NotNull] PeopleCodeParser.EvaluateStatementContext context)
+        public override void EnterEvaluateStatement([NotNull] PeopleCode.PeopleCodeParser.EvaluateStatementContext context)
         {
             ProcessScopeEntrySuppressions(context.Start.Line);
         }
 
-        public override void ExitEvaluateStatement([NotNull] PeopleCodeParser.EvaluateStatementContext context)
+        public override void ExitEvaluateStatement([NotNull] PeopleCode.PeopleCodeParser.EvaluateStatementContext context)
         {
             PopScopeSuppressions();
         }
 
-        public override void EnterTryCatchBlock([NotNull] PeopleCodeParser.TryCatchBlockContext context)
+        public override void EnterTryCatchBlock([NotNull] PeopleCode.PeopleCodeParser.TryCatchBlockContext context)
         {
             ProcessScopeEntrySuppressions(context.Start.Line);
         }
 
-        public override void ExitTryCatchBlock([NotNull] PeopleCodeParser.TryCatchBlockContext context)
+        public override void ExitTryCatchBlock([NotNull] PeopleCode.PeopleCodeParser.TryCatchBlockContext context)
         {
             PopScopeSuppressions();
         }
@@ -349,7 +349,7 @@ namespace AppRefiner.Linters
                     var token = _tokenStream.Get(i);
                     if (token.Line > comment.Line && token.Line < scopeStartLine &&
                         token.Channel == Lexer.DefaultTokenChannel &&
-                        token.Type != PeopleCodeParser.SEMI)
+                        token.Type != PeopleCode.PeopleCodeParser.SEMI)
                     {
                         foundGap = true;
                         break;

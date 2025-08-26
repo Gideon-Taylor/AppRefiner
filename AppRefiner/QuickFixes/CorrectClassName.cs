@@ -24,7 +24,7 @@ namespace AppRefiner.QuickFixes
         public new static bool RegisterKeyboardShortcut => false;
         public new static bool IsHidden => true;
 
-        public override void EnterClassDeclarationExtension([NotNull] PeopleCodeParser.ClassDeclarationExtensionContext context)
+        public override void EnterClassDeclarationExtension([NotNull] PeopleCode.PeopleCodeParser.ClassDeclarationExtensionContext context)
         {
             currentClassName = context.genericID().GetText();
             if (!string.Equals(currentClassName, expectedName, StringComparison.OrdinalIgnoreCase))
@@ -35,7 +35,7 @@ namespace AppRefiner.QuickFixes
             }
         }
 
-        public override void EnterClassDeclarationImplementation([NotNull] PeopleCodeParser.ClassDeclarationImplementationContext context)
+        public override void EnterClassDeclarationImplementation([NotNull] PeopleCode.PeopleCodeParser.ClassDeclarationImplementationContext context)
         {
             currentClassName = context.genericID().GetText();
             if (!string.Equals(currentClassName, expectedName, StringComparison.OrdinalIgnoreCase))
@@ -46,7 +46,7 @@ namespace AppRefiner.QuickFixes
             }
         }
 
-        public override void EnterClassDeclarationPlain([NotNull] PeopleCodeParser.ClassDeclarationPlainContext context)
+        public override void EnterClassDeclarationPlain([NotNull] PeopleCode.PeopleCodeParser.ClassDeclarationPlainContext context)
         {
             currentClassName = context.genericID().GetText();
             if (!string.Equals(currentClassName, expectedName, StringComparison.OrdinalIgnoreCase))
@@ -57,7 +57,7 @@ namespace AppRefiner.QuickFixes
             }
         }
 
-        public override void EnterMethodHeader([NotNull] PeopleCodeParser.MethodHeaderContext context)
+        public override void EnterMethodHeader([NotNull] PeopleCode.PeopleCodeParser.MethodHeaderContext context)
         {
             var methodName = context.genericID().GetText();
             if (methodName.Equals(currentClassName) && neededToReplace)
@@ -68,7 +68,7 @@ namespace AppRefiner.QuickFixes
 
         }
 
-        public override void EnterMethod([NotNull] PeopleCodeParser.MethodContext context)
+        public override void EnterMethod([NotNull] PeopleCode.PeopleCodeParser.MethodContext context)
         {
             var methodName = context.genericID().GetText();
             if (methodName.Equals(currentClassName) && neededToReplace)

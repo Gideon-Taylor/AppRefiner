@@ -28,6 +28,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\PeopleCodeParser\PeopleCodeParser.csproj" />
+    <ProjectReference Include="..\PeopleCodeParser.SelfHosted\PeopleCodeParser.SelfHosted.csproj" />
   </ItemGroup>
 
   <ItemGroup>

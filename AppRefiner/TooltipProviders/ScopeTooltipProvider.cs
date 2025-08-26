@@ -111,7 +111,7 @@ namespace AppRefiner.TooltipProviders
         /// <summary>
         /// Handles function definitions
         /// </summary>
-        public override void EnterFunctionDefinition([NotNull] PeopleCodeParser.FunctionDefinitionContext context)
+        public override void EnterFunctionDefinition([NotNull] PeopleCode.PeopleCodeParser.FunctionDefinitionContext context)
         {
             ProcessScope(context, "function");
         }
@@ -119,7 +119,7 @@ namespace AppRefiner.TooltipProviders
         /// <summary>
         /// Handle class method declarations to capture parameter signatures
         /// </summary>
-        public override void EnterMethodHeader([NotNull] PeopleCodeParser.MethodHeaderContext context)
+        public override void EnterMethodHeader([NotNull] PeopleCode.PeopleCodeParser.MethodHeaderContext context)
         {
             if (context == null || context.Start == null)
                 return;
@@ -136,7 +136,7 @@ namespace AppRefiner.TooltipProviders
 
             string declarationLine = context.GetText();
 
-            if (context.methodArguments() is PeopleCodeParser.MethodArgumentsContext argsContext)
+            if (context.methodArguments() is PeopleCode.PeopleCodeParser.MethodArgumentsContext argsContext)
             {
                 var parameters = new List<string>();
 
@@ -144,7 +144,7 @@ namespace AppRefiner.TooltipProviders
                 {
                     // Extract parameter name and type
                     string paramName = arg.USER_VARIABLE().GetText();
-                    if (arg.typeT() is PeopleCodeParser.ArrayTypeContext array)
+                    if (arg.typeT() is PeopleCode.PeopleCodeParser.ArrayTypeContext array)
                     {
                         var arrayDim = array.ARRAY().Count();
                         parameters.Add($"{paramName} as Array{arrayDim} of {array.typeT().GetText()}");
@@ -171,17 +171,17 @@ namespace AppRefiner.TooltipProviders
         /// <summary>
         /// Handles method implementations
         /// </summary>
-        public override void EnterMethod([NotNull] PeopleCodeParser.MethodContext context)
+        public override void EnterMethod([NotNull] PeopleCode.PeopleCodeParser.MethodContext context)
         {
             ProcessScope(context, "method");
         }
 
-        public override void EnterGetter([NotNull] PeopleCodeParser.GetterContext context)
+        public override void EnterGetter([NotNull] PeopleCode.PeopleCodeParser.GetterContext context)
         {
             ProcessScope(context, "get");
         }
 
-        public override void EnterSetter([NotNull] PeopleCodeParser.SetterContext context)
+        public override void EnterSetter([NotNull] PeopleCode.PeopleCodeParser.SetterContext context)
         {
             ProcessScope(context, "set");
         }
@@ -189,7 +189,7 @@ namespace AppRefiner.TooltipProviders
         /// <summary>
         /// Handles if statements
         /// </summary>
-        public override void EnterIfStatement([NotNull] PeopleCodeParser.IfStatementContext context)
+        public override void EnterIfStatement([NotNull] PeopleCode.PeopleCodeParser.IfStatementContext context)
         {
             // Skip if this scope starts after our target line
             if (context.Start.Line > LineNumber)
@@ -261,7 +261,7 @@ namespace AppRefiner.TooltipProviders
         /// <summary>
         /// Handles for statements
         /// </summary>
-        public override void EnterForStatement([NotNull] PeopleCodeParser.ForStatementContext context)
+        public override void EnterForStatement([NotNull] PeopleCode.PeopleCodeParser.ForStatementContext context)
         {
             ProcessScope(context, "For");
         }
@@ -269,7 +269,7 @@ namespace AppRefiner.TooltipProviders
         /// <summary>
         /// Handles while statements
         /// </summary>
-        public override void EnterWhileStatement([NotNull] PeopleCodeParser.WhileStatementContext context)
+        public override void EnterWhileStatement([NotNull] PeopleCode.PeopleCodeParser.WhileStatementContext context)
         {
             ProcessScope(context, "While");
         }
@@ -277,7 +277,7 @@ namespace AppRefiner.TooltipProviders
         /// <summary>
         /// Handles evaluate statements
         /// </summary>
-        public override void EnterEvaluateStatement([NotNull] PeopleCodeParser.EvaluateStatementContext context)
+        public override void EnterEvaluateStatement([NotNull] PeopleCode.PeopleCodeParser.EvaluateStatementContext context)
         {
             // Skip if this scope starts after our target line
             if (context.Start.Line > LineNumber)
@@ -290,7 +290,7 @@ namespace AppRefiner.TooltipProviders
             {
                 foreach (var child in context.children)
                 {
-                    if (child is PeopleCodeParser.WhenClauseContext whenClause && whenClause.Start != null && whenClause.Stop != null)
+                    if (child is PeopleCode.PeopleCodeParser.WhenClauseContext whenClause && whenClause.Start != null && whenClause.Stop != null)
                     {
                         // Only process if our line is within this When clause
                         if (whenClause.Start.Line <= LineNumber && LineNumber <= whenClause.Stop.Line)
@@ -358,19 +358,19 @@ namespace AppRefiner.TooltipProviders
             if (context == null || context.Start == null)
                 return string.Empty;
 
-            if (context is PeopleCodeParser.GetterContext getterContext)
+            if (context is PeopleCode.PeopleCodeParser.GetterContext getterContext)
             {
                 // Getter implementation - use the first line of the context
                 return $"get {getterContext.genericID().GetText()}";
             }
-            else if (context is PeopleCodeParser.SetterContext setterContext)
+            else if (context is PeopleCode.PeopleCodeParser.SetterContext setterContext)
             {
                 // Setter implementation - use the first line of the context
                 return $"set {setterContext.genericID().GetText()}";
             }
 
             // Handle different context types to capture the complete header
-            if (context is PeopleCodeParser.IfStatementContext ifContext)
+            if (context is PeopleCode.PeopleCodeParser.IfStatementContext ifContext)
             {
                 var expression = ifContext.expression();
 
@@ -382,7 +382,7 @@ namespace AppRefiner.TooltipProviders
 
                 return $"{ifContext.IF().GetText()} {expressionText}";
             }
-            else if (context is PeopleCodeParser.ForStatementContext forContext)
+            else if (context is PeopleCode.PeopleCodeParser.ForStatementContext forContext)
             {
                 // For statements include the variable, range, and step
                 /* FOR USER_VARIABLE EQ expression TO expression (STEP expression)? SEMI* statementBlock? END_FOR*/
@@ -396,7 +396,7 @@ namespace AppRefiner.TooltipProviders
                 var forText = $"{forContext.FOR().GetText()} {variable} {forContext.EQ().GetText()} {range} {to} {stepText}".Trim();
                 return forText;
             }
-            else if (context is PeopleCodeParser.WhileStatementContext whileContext)
+            else if (context is PeopleCode.PeopleCodeParser.WhileStatementContext whileContext)
             {
                 var expressionLines = whileContext.expression().GetText().Split(new[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries)
                     .Select(line => line.Trim())
@@ -405,12 +405,12 @@ namespace AppRefiner.TooltipProviders
                 var expressionText = string.Join(" ", expressionLines);
                 return $"{whileContext.WHILE().GetText()} {expressionText}";
             }
-            else if (context is PeopleCodeParser.EvaluateStatementContext evalContext)
+            else if (context is PeopleCode.PeopleCodeParser.EvaluateStatementContext evalContext)
             {
                 // For Evaluate statements, we assume they're always one line
                 return $"{evalContext.EVALUATE().GetText()} {evalContext.expression().GetText()}";
             }
-            else if (context is PeopleCodeParser.MethodContext methodContext)
+            else if (context is PeopleCode.PeopleCodeParser.MethodContext methodContext)
             {
                 // Get the first line of the method declaration (the METHOD keyword line)
                 int lineIndex = context.Start.Line - 1;
@@ -440,7 +440,7 @@ namespace AppRefiner.TooltipProviders
                 return methodLine;
 
             }
-            else if (context is PeopleCodeParser.FunctionDefinitionContext funcContext)
+            else if (context is PeopleCode.PeopleCodeParser.FunctionDefinitionContext funcContext)
             {
                 // Get the first line of the function declaration (the FUNCTION keyword line)
                 int lineIndex = context.Start.Line - 1;
@@ -448,14 +448,14 @@ namespace AppRefiner.TooltipProviders
                     return string.Empty;
                 var functionLine = $"{funcContext.FUNCTION().GetText()} {funcContext.allowableFunctionName().GetText()}";
 
-                if (funcContext.functionArguments() is PeopleCodeParser.FunctionArgumentsContext argsContext)
+                if (funcContext.functionArguments() is PeopleCode.PeopleCodeParser.FunctionArgumentsContext argsContext)
                 {
                     var parameters = new List<string>();
                     foreach (var arg in argsContext.functionArgument())
                     {
                         // Extract parameter name and type
                         string paramName = arg.USER_VARIABLE().GetText();
-                        if (arg.typeT() is PeopleCodeParser.ArrayTypeContext array)
+                        if (arg.typeT() is PeopleCode.PeopleCodeParser.ArrayTypeContext array)
                         {
                             var arrayDim = array.ARRAY().Count();
                             parameters.Add($"{paramName} as Array{arrayDim} of {array.typeT().GetText().Trim()}");

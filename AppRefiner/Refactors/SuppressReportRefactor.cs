@@ -244,112 +244,112 @@ namespace AppRefiner.Refactors
             return false;
         }
 
-        public override void EnterMethod([NotNull] PeopleCodeParser.MethodContext context)
+        public override void EnterMethod([NotNull] PeopleCode.PeopleCodeParser.MethodContext context)
         {
             ProcessScopeEntry(context, ScopeType.METHOD);
         }
 
-        public override void ExitMethod([NotNull] PeopleCodeParser.MethodContext context)
+        public override void ExitMethod([NotNull] PeopleCode.PeopleCodeParser.MethodContext context)
         {
             ProcessScopeExit(context);
         }
 
-        public override void EnterFunctionDefinition([NotNull] PeopleCodeParser.FunctionDefinitionContext context)
+        public override void EnterFunctionDefinition([NotNull] PeopleCode.PeopleCodeParser.FunctionDefinitionContext context)
         {
             ProcessScopeEntry(context, ScopeType.FUNCTION);
         }
 
-        public override void ExitFunctionDefinition([NotNull] PeopleCodeParser.FunctionDefinitionContext context)
+        public override void ExitFunctionDefinition([NotNull] PeopleCode.PeopleCodeParser.FunctionDefinitionContext context)
         {
             ProcessScopeExit(context);
         }
 
-        public override void EnterGetter([NotNull] PeopleCodeParser.GetterContext context)
+        public override void EnterGetter([NotNull] PeopleCode.PeopleCodeParser.GetterContext context)
         {
             ProcessScopeEntry(context, ScopeType.FUNCTION);
         }
 
-        public override void ExitGetter([NotNull] PeopleCodeParser.GetterContext context)
+        public override void ExitGetter([NotNull] PeopleCode.PeopleCodeParser.GetterContext context)
         {
             ProcessScopeExit(context);
         }
 
-        public override void EnterSetter([NotNull] PeopleCodeParser.SetterContext context)
+        public override void EnterSetter([NotNull] PeopleCode.PeopleCodeParser.SetterContext context)
         {
             ProcessScopeEntry(context, ScopeType.FUNCTION);
         }
 
-        public override void ExitSetter([NotNull] PeopleCodeParser.SetterContext context)
+        public override void ExitSetter([NotNull] PeopleCode.PeopleCodeParser.SetterContext context)
         {
             ProcessScopeExit(context);
         }
 
-        public override void EnterImportsBlock([NotNull] PeopleCodeParser.ImportsBlockContext context)
+        public override void EnterImportsBlock([NotNull] PeopleCode.PeopleCodeParser.ImportsBlockContext context)
         {
             ProcessScopeEntry(context, ScopeType.GLOBAL);
         }
 
-        public override void EnterIfStatement([NotNull] PeopleCodeParser.IfStatementContext context)
+        public override void EnterIfStatement([NotNull] PeopleCode.PeopleCodeParser.IfStatementContext context)
         {
             ProcessScopeEntry(context, ScopeType.BLOCK);
         }
 
-        public override void ExitIfStatement([NotNull] PeopleCodeParser.IfStatementContext context)
+        public override void ExitIfStatement([NotNull] PeopleCode.PeopleCodeParser.IfStatementContext context)
         {
             ProcessScopeExit(context);
         }
 
-        public override void EnterForStatement([NotNull] PeopleCodeParser.ForStatementContext context)
+        public override void EnterForStatement([NotNull] PeopleCode.PeopleCodeParser.ForStatementContext context)
         {
             ProcessScopeEntry(context, ScopeType.BLOCK);
         }
 
-        public override void ExitForStatement([NotNull] PeopleCodeParser.ForStatementContext context)
+        public override void ExitForStatement([NotNull] PeopleCode.PeopleCodeParser.ForStatementContext context)
         {
             ProcessScopeExit(context);
         }
 
-        public override void EnterWhileStatement([NotNull] PeopleCodeParser.WhileStatementContext context)
+        public override void EnterWhileStatement([NotNull] PeopleCode.PeopleCodeParser.WhileStatementContext context)
         {
             ProcessScopeEntry(context, ScopeType.BLOCK);
         }
 
-        public override void ExitWhileStatement([NotNull] PeopleCodeParser.WhileStatementContext context)
+        public override void ExitWhileStatement([NotNull] PeopleCode.PeopleCodeParser.WhileStatementContext context)
         {
             ProcessScopeExit(context);
         }
 
-        public override void EnterRepeatStatement([NotNull] PeopleCodeParser.RepeatStatementContext context)
+        public override void EnterRepeatStatement([NotNull] PeopleCode.PeopleCodeParser.RepeatStatementContext context)
         {
             ProcessScopeEntry(context, ScopeType.BLOCK);
         }
 
-        public override void ExitRepeatStatement([NotNull] PeopleCodeParser.RepeatStatementContext context)
+        public override void ExitRepeatStatement([NotNull] PeopleCode.PeopleCodeParser.RepeatStatementContext context)
         {
             ProcessScopeExit(context);
         }
 
-        public override void EnterEvaluateStatement([NotNull] PeopleCodeParser.EvaluateStatementContext context)
+        public override void EnterEvaluateStatement([NotNull] PeopleCode.PeopleCodeParser.EvaluateStatementContext context)
         {
             ProcessScopeEntry(context, ScopeType.BLOCK);
         }
 
-        public override void ExitEvaluateStatement([NotNull] PeopleCodeParser.EvaluateStatementContext context)
+        public override void ExitEvaluateStatement([NotNull] PeopleCode.PeopleCodeParser.EvaluateStatementContext context)
         {
             ProcessScopeExit(context);
         }
 
-        public override void EnterTryCatchBlock([NotNull] PeopleCodeParser.TryCatchBlockContext context)
+        public override void EnterTryCatchBlock([NotNull] PeopleCode.PeopleCodeParser.TryCatchBlockContext context)
         {
             ProcessScopeEntry(context, ScopeType.BLOCK);
         }
 
-        public override void ExitTryCatchBlock([NotNull] PeopleCodeParser.TryCatchBlockContext context)
+        public override void ExitTryCatchBlock([NotNull] PeopleCode.PeopleCodeParser.TryCatchBlockContext context)
         {
             ProcessScopeExit(context);
         }
 
-        public override void ExitProgram([NotNull] PeopleCodeParser.ProgramContext context)
+        public override void ExitProgram([NotNull] PeopleCode.PeopleCodeParser.ProgramContext context)
         {
             base.ExitProgram(context);
 

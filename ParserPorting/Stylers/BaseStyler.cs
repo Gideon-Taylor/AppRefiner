@@ -16,6 +16,16 @@ namespace ParserPorting.Stylers
         public List<Indicator> Indicators { get; } = new();
 
         /// <summary>
+        /// Whether this styler is currently active/enabled
+        /// </summary>
+        public bool Active { get; set; } = false;
+        
+        /// <summary>
+        /// Description of what this styler does
+        /// </summary>
+        public string Description { get; set; } = "Description not set";
+
+        /// <summary>
         /// Specifies whether this styler requires a database connection
         /// </summary>
         public virtual DataManagerRequirement DatabaseRequirement { get; } = DataManagerRequirement.NotRequired;

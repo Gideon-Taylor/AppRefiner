@@ -19,6 +19,17 @@ namespace AppRefiner
         }
 
         /// <summary>
+        /// Opens the indicator debug panel
+        /// </summary>
+        /// <param name="parentHandle">Handle to the parent window</param>
+        /// <param name="mainForm">Reference to main form for accessing active editor</param>
+        /// <returns>The indicator debug panel instance</returns>
+        public static IndicatorDebugPanel ShowIndicatorPanel(IntPtr parentHandle, MainForm mainForm)
+        {
+            return DebugDialog.ShowIndicatorPanel(parentHandle, mainForm);
+        }
+
+        /// <summary>
         /// Logs an informational message
         /// </summary>
         /// <param name="message">The message to log</param>

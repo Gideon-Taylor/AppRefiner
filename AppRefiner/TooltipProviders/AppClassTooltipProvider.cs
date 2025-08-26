@@ -37,7 +37,7 @@ namespace AppRefiner.TooltipProviders
             base.Reset();
         }
 
-        public override void EnterProgram([NotNull] PeopleCodeParser.ProgramContext context)
+        public override void EnterProgram([NotNull] PeopleCode.PeopleCodeParser.ProgramContext context)
         {
             _astService = new AstService(DataManager);
             base.EnterProgram(context);
@@ -66,7 +66,7 @@ namespace AppRefiner.TooltipProviders
         /// Called when the parser enters an appClassPath rule.
         /// Generates a tooltip with class member information.
         /// </summary>
-        public override void EnterAppClassPath(PeopleCodeParser.AppClassPathContext context)
+        public override void EnterAppClassPath(PeopleCode.PeopleCodeParser.AppClassPathContext context)
         {
             base.EnterAppClassPath(context);
 

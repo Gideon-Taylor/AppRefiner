@@ -1,59 +1,73 @@
-using Antlr4.Runtime.Misc;
-using AppRefiner.PeopleCode;
+using PeopleCodeParser.SelfHosted.Nodes;
 using System.Text.RegularExpressions;
+using AppRefiner.PeopleCode;
+using System.Linq;
 
-namespace AppRefiner.Stylers
+namespace AppRefiner.Stylers;
+
+/// <summary>
+/// Visitor that highlights linter suppression comments.
+/// This is a self-hosted equivalent to the AppRefiner's LinterSuppressionStyler.
+/// </summary>
+public class LinterSuppressionStyler : BaseStyler
 {
-    public class LinterSuppressionStyler : BaseStyler
+    private const uint HIGHLIGHT_COLOR = 0x50CB5040; // Highlight color for suppression comments
+    private readonly Regex suppressionPattern = new(@"#AppRefiner\s+suppress\s+\((.*?)\)", RegexOptions.Compiled);
+
+    public override string Description => "Highlights linter suppression comments";
+
+    /// <summary>
+    /// Processes the entire program and looks for suppression comments
+    /// </summary>
+    public override void VisitProgram(ProgramNode node)
     {
-        private const uint HILIGHT_COLOR = 0x50CB5040;
-        private readonly Regex suppressionPattern = new(@"#AppRefiner\s+suppress\s+\((.*?)\)", RegexOptions.Compiled);
+        Reset();
+        
+        // Visit the program first
+        base.VisitProgram(node);
+        
+        // After visiting the AST, process comments from the ProgramNode
+        ProcessComments(node);
+    }
 
-        public LinterSuppressionStyler()
+    /// <summary>
+    /// Processes comments from the ProgramNode to find suppression directives
+    /// </summary>
+    private void ProcessComments(ProgramNode programNode)
+    {
+        if (programNode.Comments == null)
+            return;
+
+        foreach (var comment in programNode.Comments)
         {
-            Description = "Highlights linter suppression comments";
-            Active = true;
-        }
+            string text = comment.Text;
 
-        public override void Reset()
-        {
-            // Nothing to reset
-        }
-
-        public override void ExitProgram([NotNull] PeopleCodeParser.ProgramContext context)
-        {
-            base.ExitProgram(context);
-            ProcessComments();
-        }
-
-        public void ProcessComments()
-        {
-            if (Comments == null || Indicators == null)
-                return;
-
-            foreach (var comment in Comments)
+            // Check if this is a block comment containing suppression directive
+            if (text.StartsWith("/*") && text.EndsWith("*/"))
             {
-                string text = comment.Text;
-
-                // Check if this is a block comment
-                if (text.StartsWith("/*") && text.EndsWith("*/"))
+                var match = suppressionPattern.Match(text);
+                if (match.Success)
                 {
-                    var match = suppressionPattern.Match(text);
-                    if (match.Success)
-                    {
-                        string suppressedRules = match.Groups[1].Value;
+                    string suppressedRules = match.Groups[1].Value;
 
-                        // This is a suppression comment, highlight it
-                        Indicators.Add(new Indicator
-                        {
-                            Start = comment.ByteStartIndex(),
-                            Length = comment.ByteStopIndex() - comment.ByteStartIndex() + 1,
-                            Color = HILIGHT_COLOR,
-                            Type = IndicatorType.HIGHLIGHTER,
-                            Tooltip = $"Suppressed rules: {suppressedRules}",
-                            QuickFixes = []
-                        });
-                    }
+                    // Create indicator for the suppression comment
+                    string tooltip = $"Suppressed rules: {suppressedRules}";
+                    
+                    AddIndicator(comment.SourceSpan, IndicatorType.BACKGROUND, HIGHLIGHT_COLOR, tooltip);
+                }
+            }
+            // Also check line comments (though less common for suppression)
+            else if (text.StartsWith("//"))
+            {
+                var match = suppressionPattern.Match(text);
+                if (match.Success)
+                {
+                    string suppressedRules = match.Groups[1].Value;
+
+                    // Create indicator for the suppression comment
+                    string tooltip = $"Suppressed rules: {suppressedRules}";
+                    
+                    AddIndicator(comment.SourceSpan, IndicatorType.BACKGROUND, HIGHLIGHT_COLOR, tooltip);
                 }
             }
         }

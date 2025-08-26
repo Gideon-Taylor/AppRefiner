@@ -509,6 +509,8 @@ public class ParameterNode : AstNode
     /// </summary>
     public string Name { get; }
 
+    public SourceSpan NameSpan { get; set; }
+
     /// <summary>
     /// Parameter type
     /// </summary>

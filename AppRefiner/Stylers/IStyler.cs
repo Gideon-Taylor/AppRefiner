@@ -6,13 +6,13 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace ParserPorting.Stylers
+namespace AppRefiner.Stylers
 {
     public interface IStyler
     {
         public List<Indicator> Indicators { get; }
 
-        protected void AddIndicator((int Start, int Stop) span, Indicator.IndicatorType type, uint color, string? tooltip = null);
+        protected void AddIndicator((int Start, int Stop) span, IndicatorType type, uint color, string? tooltip = null);
 
         public void Reset();
 
@@ -24,7 +24,7 @@ namespace ParserPorting.Stylers
         /// <summary>
         /// Description of what this styler does
         /// </summary>
-        string Description { get; set; }
+        public string Description { get; set; }
 
         /// <summary>
         /// Specifies whether this styler requires a database connection

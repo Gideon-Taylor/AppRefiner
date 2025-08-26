@@ -338,7 +338,7 @@ namespace AppRefiner
                 var comments = stream.GetTokens()
                     .Where(token => token.Channel == PeopleCodeLexer.COMMENTS || token.Channel == PeopleCodeLexer.API_COMMENTS)
                     .ToList();
-                PeopleCodeParser? parser = new(stream);
+                PeopleCode.PeopleCodeParser? parser = new(stream);
                 var program = parser.program();
                 parser.Interpreter.ClearDFA();
 

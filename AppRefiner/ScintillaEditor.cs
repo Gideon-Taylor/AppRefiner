@@ -3,6 +3,9 @@ using AppRefiner.Database;
 using AppRefiner.Linters;
 using AppRefiner.PeopleCode;
 using AppRefiner.Stylers;
+using PeopleCodeParser.SelfHosted;
+using PeopleCodeParser.SelfHosted.Lexing;
+using PeopleCodeParser.SelfHosted.Nodes;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -11,6 +14,8 @@ using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading.Tasks;
 using static System.Windows.Forms.VisualStyles.VisualStyleElement.Window;
+using AntlrPeopleCodeParser = AppRefiner.PeopleCode.PeopleCodeParser;
+using SelfHostedLexer = PeopleCodeParser.SelfHosted.Lexing.PeopleCodeLexer;
 
 namespace AppRefiner
 {
@@ -230,14 +235,19 @@ namespace AppRefiner
 
         // Content hash for caching purposes
         private int contentHash;
-        // Cached parsed program
-        private PeopleCodeParser.ProgramContext? parsedProgram;
-        // Cached token stream
+        // Cached parsed program (ANTLR)
+        private AntlrPeopleCodeParser.ProgramContext? parsedProgram;
+        // Cached token stream (ANTLR)
         private CommonTokenStream? tokenStream;
-        // Collection of comments from the token stream
+        // Collection of comments from the token stream (ANTLR)
         private List<IToken>? comments;
         // Tracks whether the last parse operation was successful (no syntax errors)
         private bool parseSuccessful = true;
+
+        // Self-hosted parser cached fields
+        private int selfHostedContentHash;
+        private ProgramNode? selfHostedParsedProgram;
+        private bool selfHostedParseSuccessful = true;
 
         public string? ContentString = null;
         public bool AnnotationsInitialized { get; set; } = false;
@@ -299,7 +309,7 @@ namespace AppRefiner
         /// </summary>
         /// <param name="forceReparse">Force a new parse regardless of content hash</param>
         /// <returns>A tuple containing the parsed program, token stream, and comments</returns>
-        public (PeopleCodeParser.ProgramContext Program, CommonTokenStream TokenStream, List<IToken> Comments) GetParsedProgram(bool forceReparse = false)
+        public (AntlrPeopleCodeParser.ProgramContext Program, CommonTokenStream TokenStream, List<IToken> Comments) GetParsedProgram(bool forceReparse = false)
         {
             // Ensure we have the current content
             ContentString = ScintillaManager.GetScintillaText(this);
@@ -329,7 +339,7 @@ namespace AppRefiner
                 .Where(token => token.Channel == PeopleCodeLexer.COMMENTS || token.Channel == PeopleCodeLexer.API_COMMENTS)
                 .ToList();
 
-            PeopleCodeParser parser = new(tokenStream);
+            AntlrPeopleCodeParser parser = new(tokenStream);
             parsedProgram = parser.program();
 
             // Check if parsing was successful (no syntax errors)
@@ -350,6 +360,63 @@ namespace AppRefiner
             contentHash = newHash;
 
             return (parsedProgram, tokenStream, comments);
+        }
+
+        /// <summary>
+        /// Gets the self-hosted parsed program, with caching support.
+        /// </summary>
+        /// <param name="forceReparse">Force a new parse regardless of content hash</param>
+        /// <returns>The parsed program node, or null if parsing failed</returns>
+        public ProgramNode? GetSelfHostedParsedProgram(bool forceReparse = false)
+        {
+            // Ensure we have the current content
+            ContentString = ScintillaManager.GetScintillaText(this);
+
+            // Calculate hash of current content
+            int newHash = ContentString?.GetHashCode() ?? 0;
+            Debug.Log($"Self-hosted parser - New content hash: {newHash}");
+            
+            // If content hasn't changed and we have a cached parse tree, return it
+            if (!forceReparse && newHash == selfHostedContentHash && selfHostedParsedProgram != null)
+            {
+                return selfHostedParsedProgram;
+            }
+
+            // Content has changed or we don't have a cached parse tree, parse it
+            var currentStart = TotalParseTime.Elapsed;
+            TotalParseTime.Start();
+
+            try
+            {
+                // Use the self-hosted parser
+
+
+
+                SelfHostedLexer selfHostedLexer = new SelfHostedLexer(ContentString ?? string.Empty);
+                var tokens = selfHostedLexer.TokenizeAll();
+                /* TODO: data manager support for getting current tools release */
+                var parser = new PeopleCodeParser.SelfHosted.PeopleCodeParser(tokens,"8.61");
+                selfHostedParsedProgram = parser.ParseProgram();
+                selfHostedParseSuccessful = true;
+                selfHostedContentHash = newHash;
+                
+                Debug.Log("Self-hosted parse completed successfully");
+            }
+            catch (Exception ex)
+            {
+                Debug.LogException(ex, "Error during self-hosted parse");
+                selfHostedParseSuccessful = false;
+                selfHostedParsedProgram = null;
+            }
+
+            TotalParseTime.Stop();
+            Debug.Log($"Self-hosted parse time: {TotalParseTime.Elapsed - currentStart}");
+            Debug.Log($"Total parse time: {TotalParseTime.Elapsed}");
+
+            // Clean up resources
+            GC.Collect();
+
+            return selfHostedParsedProgram;
         }
 
         /// <summary>

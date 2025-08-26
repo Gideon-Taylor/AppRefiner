@@ -78,7 +78,7 @@ namespace AppRefiner.TooltipProviders
         /// <summary>
         /// Override to process dot access expressions that might be Record.Name patterns
         /// </summary>
-        public override void EnterDotAccessExpr([NotNull] PeopleCodeParser.DotAccessExprContext context)
+        public override void EnterDotAccessExpr([NotNull] PeopleCode.PeopleCodeParser.DotAccessExprContext context)
         {
             // Make sure we have DataManager available
             if (DataManager == null || !DataManager.IsConnected)
@@ -86,8 +86,8 @@ namespace AppRefiner.TooltipProviders
             
 
             // Skip if this isn't a RECORD.Name pattern
-            if (context.expression() is PeopleCodeParser.IdentifierExprContext identExpr &&
-                identExpr.ident() is PeopleCodeParser.IdentGenericIDContext genericIdent &&
+            if (context.expression() is PeopleCode.PeopleCodeParser.IdentifierExprContext identExpr &&
+                identExpr.ident() is PeopleCode.PeopleCodeParser.IdentGenericIDContext genericIdent &&
                 genericIdent.genericID().GetText().Equals("RECORD", StringComparison.OrdinalIgnoreCase))
             {
                 // Find the record name (the right side of the dot)

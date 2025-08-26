@@ -1225,6 +1225,26 @@ namespace AppRefiner
                 },
                 () => activeEditor != null && activeEditor.BookmarkStack.Count > 0 // Enable condition
             ));
+
+            // Debug commands
+            AvailableCommands.Add(new Command(
+                "Debug: Open Debug Console",
+                "Open the debug console to view application logs",
+                () =>
+                {
+                    Debug.ShowDebugDialog(Handle);
+                }
+            ));
+
+            AvailableCommands.Add(new Command(
+                "Debug: Open Indicator Panel",
+                "Open the indicator debug panel to view applied styler indicators",
+                () =>
+                {
+                    Debug.ShowIndicatorPanel(Handle, this);
+                },
+                () => activeEditor != null // Enable condition
+            ));
         }
 
         private void btnPlugins_Click(object sender, EventArgs e)
@@ -1758,7 +1778,8 @@ namespace AppRefiner
         private void btnDebugLog_Click(object sender, EventArgs e)
         {
             Debug.Log("Displaying debug dialog...");
-            Debug.ShowDebugDialog(Handle);
+            //Debug.ShowDebugDialog(Handle);
+            Debug.ShowIndicatorPanel(Handle, this);
         }
 
 

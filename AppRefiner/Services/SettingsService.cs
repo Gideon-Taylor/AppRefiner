@@ -163,7 +163,7 @@ namespace AppRefiner
 
         // --- Styler States --- 
 
-        public void LoadStylerStates(IEnumerable<BaseStyler> stylers, DataGridView dataGridView)
+        public void LoadStylerStates(IEnumerable<IStyler> stylers, DataGridView dataGridView)
         {
             try
             {
@@ -181,7 +181,7 @@ namespace AppRefiner
                         styler.Active = state.Active;
                         // Update corresponding grid row
                         var row = dataGridView.Rows.Cast<DataGridViewRow>()
-                            .FirstOrDefault(r => r.Tag is BaseStyler s && s == styler);
+                            .FirstOrDefault(r => r.Tag is IStyler s && s == styler);
                         if (row != null)
                         {
                             row.Cells[0].Value = state.Active;
@@ -199,7 +199,7 @@ namespace AppRefiner
             }
         }
 
-        public void SaveStylerStates(IEnumerable<BaseStyler> stylers)
+        public void SaveStylerStates(IEnumerable<IStyler> stylers)
         {
             try
             {

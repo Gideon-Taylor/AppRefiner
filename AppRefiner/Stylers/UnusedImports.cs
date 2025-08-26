@@ -1,119 +1,111 @@
-﻿using AppRefiner.PeopleCode;
-using AppRefiner.Refactors;
-using static AppRefiner.PeopleCode.PeopleCodeParser;
+﻿using PeopleCodeParser.SelfHosted.Nodes;
+using PeopleCodeParser.SelfHosted.Visitors;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
 
 namespace AppRefiner.Stylers
 {
-    public class UnusedImportsListener : BaseStyler
+
+
+    public class UnusedImports : BaseStyler
     {
-        private const uint HIGHLIGHT_COLOR = 0x73737380; // Light gray text (no alpha)
-        class ImportInfo
+        private class ImportInfo
         {
-            public string Name { get; }
-            public bool Used { get; set; }
+            public ImportNode Node;
+            public bool Used;
+        }
 
-            public int Line { get; }
-            public int StartIndex { get; }
-            public int StopIndex { get; }
+        Dictionary<string, ImportInfo> importUseMap = new();
 
-            public ImportInfo(string name, int line, int start, int stop)
+        public override string Description => "Highlights unused import statements";
+
+        private void MarkAppClassTypeAsUsed(AppClassTypeNode appClassType)
+        {
+            if (importUseMap.TryGetValue(appClassType.QualifiedName, out ImportInfo fullImport))
             {
-                Name = name;
-                Used = false;
-                Line = line;
-                StartIndex = start;
-                StopIndex = stop;
+                fullImport.Used = true;
+            }
+
+            var packagePath = string.Join(":", appClassType.PackagePath);
+            if (importUseMap.TryGetValue(packagePath, out ImportInfo wildcardImport))
+            {
+                wildcardImport.Used = true;
             }
         }
 
-        // A stack of scopes. Each scope maps a variable name to its information.
-        Dictionary<string, ImportInfo> importsUsed = new();
-        private bool trackUsage = false;
 
-        public UnusedImportsListener()
+        public override void VisitProgram(ProgramNode node)
         {
-            // Start with a global scope.
-            Description = "Grays out unused imports.";
-            Active = true;
-        }
-
-        public override void EnterImportDeclaration(ImportDeclarationContext context)
-        {
-            if (context == null) return;
-            
-            var appPackageAll = context.appPackageAll();
-            var appClassPath = context.appClassPath();
-            
-            // Ensure that at least one of the paths is valid
-            if (appPackageAll == null && appClassPath == null) return;
-            
-            string packageName = appPackageAll != null ? appPackageAll.GetText()?.TrimEnd('*') : appClassPath?.GetText();
-            
-            // Skip if we couldn't get a valid package name
-            if (string.IsNullOrEmpty(packageName)) return;
-
-            var importInfo = new ImportInfo(packageName, context.Start.Line, context.Start.ByteStartIndex(), context.Stop.ByteStopIndex());
-            importsUsed[packageName] = importInfo;
-        }
-
-        public override void EnterAppClassPath(AppClassPathContext context)
-        {
-            if (!trackUsage || context == null) return;
-
-            string packageName = context.GetText();
-            if (string.IsNullOrEmpty(packageName)) return;
-            
-            if (importsUsed.ContainsKey(packageName))
+            importUseMap.Clear();
+            base.VisitProgram(node);
+            foreach (var import in importUseMap.Values)
             {
-                /* Explicit import found */
-                importsUsed[packageName].Used = true;
-            }
-            else
-            {
-                /* Class wasn't covered by an explicit import, check if it's covered by a wildcard import */
-                int lastColonIndex = packageName.LastIndexOf(':');
-                if (lastColonIndex < 0) return;
-                
-                string subPackage = packageName.Substring(0, lastColonIndex + 1);
-                if (string.IsNullOrEmpty(subPackage)) return;
-                
-                if (importsUsed.ContainsKey(subPackage))
+                if (import.Used == false)
                 {
-                    importsUsed[subPackage].Used = true;
+                    AddIndicator(import.Node.SourceSpan, IndicatorType.TEXTCOLOR, 0xFF808080, $"Unused import");
                 }
             }
         }
 
-        public override void ExitImportsBlock(ImportsBlockContext context)
+        public override void VisitImport(ImportNode node)
         {
-            trackUsage = true;
-        }
-
-        public override void ExitProgram(ProgramContext context)
-        {
-            foreach (var import in importsUsed)
+            var packageKey = node.FullPath.Replace(":*", "");
+            if (importUseMap.ContainsKey(packageKey) == false)
             {
-                if (import.Key == null || import.Value == null) continue;
-                
-                if (!import.Value.Used)
-                {
-                    Indicators?.Add(new Indicator
-                    {
-                        Start = import.Value.StartIndex,
-                        Length = import.Value.StopIndex - import.Value.StartIndex + 1,
-                        Color = HIGHLIGHT_COLOR,
-                        Tooltip = "Unused import",
-                        Type = IndicatorType.TEXTCOLOR,
-                        QuickFixes = [(typeof(ResolveImports),"Resolve Imports")]
-                    });
-                }
+                importUseMap[packageKey] = new() { Node = node, Used = false };
+            } else
+            {
+                /* duplicate import */
+                AddIndicator(node.SourceSpan, IndicatorType.TEXTCOLOR, 0xFFFFA500, "Duplicate import");
             }
         }
 
-        public override void Reset()
+        public override void VisitObjectCreation(ObjectCreationNode node)
         {
-            importsUsed.Clear();
-            trackUsage = false;
+            if (node.Type is AppClassTypeNode appClassType)
+            {
+                MarkAppClassTypeAsUsed(appClassType);
+            }
+            base.VisitObjectCreation(node);
+        }
+
+        public override void VisitLocalVariableDeclaration(LocalVariableDeclarationNode node)
+        {
+            if (node.Type is AppClassTypeNode appClassType)
+            {
+                MarkAppClassTypeAsUsed(appClassType);
+            }
+            base.VisitLocalVariableDeclaration(node);
+        }
+
+        public override void VisitLocalVariableDeclarationWithAssignment(LocalVariableDeclarationWithAssignmentNode node)
+        {
+            if (node.Type is AppClassTypeNode appClassType)
+            {
+                MarkAppClassTypeAsUsed(appClassType);
+            }
+            base.VisitLocalVariableDeclarationWithAssignment(node);
+        }
+
+        public override void VisitTypeCast(TypeCastNode node)
+        {
+            if (node.TargetType is AppClassTypeNode appClassType)
+            {
+                MarkAppClassTypeAsUsed(appClassType);
+            }
+            base.VisitTypeCast(node);
+        }
+
+        public override void VisitVariable(VariableNode node)
+        {
+            if (node.Type is AppClassTypeNode appClassType)
+            {
+                MarkAppClassTypeAsUsed(appClassType);
+            }
+            base.VisitVariable(node);
         }
     }
 }

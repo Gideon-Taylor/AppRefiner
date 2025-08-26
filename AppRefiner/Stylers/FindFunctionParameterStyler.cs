@@ -1,60 +1,80 @@
-using Antlr4.Runtime.Tree;
-using AppRefiner.PeopleCode;
+using System;
 using System.Linq;
-using static AppRefiner.PeopleCode.PeopleCodeParser; // Import context types directly
+using PeopleCodeParser.SelfHosted.Nodes;
 
-namespace AppRefiner.Stylers
+namespace AppRefiner.Stylers;
+
+/// <summary>
+/// Identifies calls to the Find() function where the second parameter is a string literal,
+/// as the parameters might be reversed from the expected (field, value).
+/// This is a self-hosted equivalent to the ANTLR-based FindFunctionParameterStyler.
+/// </summary>
+public class FindFunctionParameterStyler : BaseStyler
 {
+    // Light Green color for the squiggle indicator (ARGB format)
+    private const uint LIGHT_GREEN_COLOR = 0x32FF32FF;
+
+    public override string Description => "Find() function parameters may be reversed";
+
     /// <summary>
-    /// Identifies calls to the Find() function where the second parameter is a string literal,
-    /// as the parameters might be reversed from the expected (field, value).
+    /// Processes the entire program to find Find() function calls
     /// </summary>
-    public class FindFunctionParameterStyler : BaseStyler
+    public override void VisitProgram(ProgramNode node)
     {
-        // Light Green color for the squiggle indicator (ARGB)
-        private const uint LightGreen = 0x32FF32FF;
-
-        public FindFunctionParameterStyler()
-        {
-            Description = "Find() function calls where the second parameter is a string literal (parameters might be reversed)";
-            Active = true; // Assuming it should be active by default
-        }
-
-        public override void EnterSimpleFunctionCall(SimpleFunctionCallContext context)
-        {
-            // Check if the function name is "Find" (case-insensitive)
-            // Function name is under genericID in simpleFunctionCall rule
-            string functionName = context.genericID().GetText();
-            if (!string.Equals(functionName, "Find", StringComparison.OrdinalIgnoreCase))
-            {
-                return;
-            }
-
-            // Access arguments via functionCallArguments -> expression
-            var args = context.functionCallArguments()?.expression();
-            if (args == null || args.Length < 2)
-            {
-                // Need at least two arguments
-                return;
-            }
-
-            // Check if the second argument is a string literal expression
-            var secondArg = args[1];
-            // Check if the expression context is a LiteralExprContext
-            if (secondArg is LiteralExprContext literalExpr &&
-                literalExpr.literal()?.StringLiteral() != null) // Check if the literal is a StringLiteral
-            {
-                // Found the pattern: Find(..., "string")
-                AddIndicator(
-                    context, 
-                    IndicatorType.SQUIGGLE, 
-                    LightGreen,
-                    "Parameters may be backwards for Find() function. Expected Find(&needle, &haystack)."
-                );
-            }
-
-            // Call the correct base method
-            base.EnterSimpleFunctionCall(context);
-        }
+        Reset();
+        base.VisitProgram(node);
     }
-} 
+
+    /// <summary>
+    /// Processes function calls to detect Find() with potentially reversed parameters
+    /// </summary>
+    public override void VisitFunctionCall(FunctionCallNode node)
+    {
+        // Check if this is a call to the Find() function
+        if (IsFindFunction(node))
+        {
+            // Validate parameter count (need at least 2 arguments)
+            if (node.Arguments.Count >= 2)
+            {
+                // Check if the second argument is a string literal
+                var secondArg = node.Arguments[1];
+                if (IsStringLiteral(secondArg))
+                {
+                    // Found the pattern: Find(..., "string") - parameters might be reversed
+                    AddIndicator(
+                        node.SourceSpan,
+                        IndicatorType.SQUIGGLE,
+                        LIGHT_GREEN_COLOR,
+                        "Parameters may be backwards for Find() function. Expected Find(&needle, &haystack)."
+                    );
+                }
+            }
+        }
+
+        // Continue visiting child nodes
+        base.VisitFunctionCall(node);
+    }
+
+    /// <summary>
+    /// Determines if a function call node represents a call to the Find() function
+    /// </summary>
+    private static bool IsFindFunction(FunctionCallNode node)
+    {
+        // The function name should be an identifier
+        if (node.Function is IdentifierNode identifier)
+        {
+            return string.Equals(identifier.Name, "Find", StringComparison.OrdinalIgnoreCase);
+        }
+        
+        return false;
+    }
+
+    /// <summary>
+    /// Determines if an expression node is a string literal
+    /// </summary>
+    private static bool IsStringLiteral(ExpressionNode expression)
+    {
+        return expression is LiteralNode literal && 
+               literal.LiteralType == LiteralType.String;
+    }
+}

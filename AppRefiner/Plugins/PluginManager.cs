@@ -92,9 +92,9 @@ namespace AppRefiner.Plugins
             {
                 try
                 {
-                    // Find all non-abstract types that inherit from BaseStyler
+                    // Find all non-abstract types that implement IStyler
                     var types = assembly.GetTypes()
-                        .Where(t => typeof(BaseStyler).IsAssignableFrom(t) && !t.IsAbstract);
+                        .Where(t => typeof(IStyler).IsAssignableFrom(t) && !t.IsAbstract && !t.IsInterface);
                     
                     stylerTypes.AddRange(types);
                 }

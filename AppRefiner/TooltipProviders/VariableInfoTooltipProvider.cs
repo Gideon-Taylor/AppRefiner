@@ -205,7 +205,7 @@ namespace AppRefiner.TooltipProviders
         /// <summary>
         /// Captures access modifier for public section
         /// </summary>
-        public override void EnterPublicHeader([NotNull] PeopleCodeParser.PublicHeaderContext context)
+        public override void EnterPublicHeader([NotNull] PeopleCode.PeopleCodeParser.PublicHeaderContext context)
         {
             currentAccessModifier = "Public";
         }
@@ -213,7 +213,7 @@ namespace AppRefiner.TooltipProviders
         /// <summary>
         /// Captures access modifier for protected section
         /// </summary>
-        public override void EnterProtectedHeader([NotNull] PeopleCodeParser.ProtectedHeaderContext context)
+        public override void EnterProtectedHeader([NotNull] PeopleCode.PeopleCodeParser.ProtectedHeaderContext context)
         {
             currentAccessModifier = "Protected";
         }
@@ -221,7 +221,7 @@ namespace AppRefiner.TooltipProviders
         /// <summary>
         /// Captures access modifier for private section
         /// </summary>
-        public override void EnterPrivateHeader([NotNull] PeopleCodeParser.PrivateHeaderContext context)
+        public override void EnterPrivateHeader([NotNull] PeopleCode.PeopleCodeParser.PrivateHeaderContext context)
         {
             currentAccessModifier = "Private";
         }
@@ -229,7 +229,7 @@ namespace AppRefiner.TooltipProviders
         /// <summary>
         /// Handles local variable definitions
         /// </summary>
-        public override void EnterLocalVariableDefinition([NotNull] PeopleCodeParser.LocalVariableDefinitionContext context)
+        public override void EnterLocalVariableDefinition([NotNull] PeopleCode.PeopleCodeParser.LocalVariableDefinitionContext context)
         {
             if (context.typeT() != null && context.USER_VARIABLE() != null)
             {
@@ -255,7 +255,7 @@ namespace AppRefiner.TooltipProviders
         /// <summary>
         /// Handles local variable declarations with assignment
         /// </summary>
-        public override void EnterLocalVariableDeclAssignment([NotNull] PeopleCodeParser.LocalVariableDeclAssignmentContext context)
+        public override void EnterLocalVariableDeclAssignment([NotNull] PeopleCode.PeopleCodeParser.LocalVariableDeclAssignmentContext context)
         {
             if (context.typeT() != null && context.USER_VARIABLE() != null && context.expression() != null)
             {
@@ -279,7 +279,7 @@ namespace AppRefiner.TooltipProviders
         /// <summary>
         /// Handles instance variable declarations
         /// </summary>
-        public override void EnterInstanceDecl([NotNull] PeopleCodeParser.InstanceDeclContext context)
+        public override void EnterInstanceDecl([NotNull] PeopleCode.PeopleCodeParser.InstanceDeclContext context)
         {
             if (context.typeT() != null && context.USER_VARIABLE() != null)
             {
@@ -306,7 +306,7 @@ namespace AppRefiner.TooltipProviders
         /// <summary>
         /// Handles constant declarations
         /// </summary>
-        public override void EnterConstantDeclaration([NotNull] PeopleCodeParser.ConstantDeclarationContext context)
+        public override void EnterConstantDeclaration([NotNull] PeopleCode.PeopleCodeParser.ConstantDeclarationContext context)
         {
             if (context.USER_VARIABLE() != null && context.literal() != null)
             {
@@ -330,7 +330,7 @@ namespace AppRefiner.TooltipProviders
         /// <summary>
         /// Handles properties with get/set
         /// </summary>
-        public override void EnterPropertyGetSet([NotNull] PeopleCodeParser.PropertyGetSetContext context)
+        public override void EnterPropertyGetSet([NotNull] PeopleCode.PeopleCodeParser.PropertyGetSetContext context)
         {
             if (context.genericID() != null && context.typeT() != null)
             {
@@ -370,7 +370,7 @@ namespace AppRefiner.TooltipProviders
         /// <summary>
         /// Handles properties with direct access
         /// </summary>
-        public override void EnterPropertyDirect([NotNull] PeopleCodeParser.PropertyDirectContext context)
+        public override void EnterPropertyDirect([NotNull] PeopleCode.PeopleCodeParser.PropertyDirectContext context)
         {
             if (context.genericID() != null && context.typeT() != null)
             {
@@ -410,7 +410,7 @@ namespace AppRefiner.TooltipProviders
         /// <summary>
         /// Handles global variable declarations
         /// </summary>
-        public override void EnterNonLocalVarDeclaration([NotNull] PeopleCodeParser.NonLocalVarDeclarationContext context)
+        public override void EnterNonLocalVarDeclaration([NotNull] PeopleCode.PeopleCodeParser.NonLocalVarDeclarationContext context)
         {
             if (context.typeT() != null && context.USER_VARIABLE() != null)
             {
@@ -437,7 +437,7 @@ namespace AppRefiner.TooltipProviders
         /// <summary>
         /// Handles method arguments for extracted type information
         /// </summary>
-        public override void EnterMethodArgument([NotNull] PeopleCodeParser.MethodArgumentContext context)
+        public override void EnterMethodArgument([NotNull] PeopleCode.PeopleCodeParser.MethodArgumentContext context)
         {
             if (context.USER_VARIABLE() != null && context.typeT() != null)
             {
@@ -461,7 +461,7 @@ namespace AppRefiner.TooltipProviders
         /// <summary>
         /// Handles function arguments
         /// </summary>
-        public override void EnterFunctionArgument([NotNull] PeopleCodeParser.FunctionArgumentContext context)
+        public override void EnterFunctionArgument([NotNull] PeopleCode.PeopleCodeParser.FunctionArgumentContext context)
         {
             if (context.USER_VARIABLE() != null)
             {
@@ -483,7 +483,7 @@ namespace AppRefiner.TooltipProviders
         /// <summary>
         /// Handles user variable references in expressions
         /// </summary>
-        public override void EnterIdentUserVariable([NotNull] PeopleCodeParser.IdentUserVariableContext context)
+        public override void EnterIdentUserVariable([NotNull] PeopleCode.PeopleCodeParser.IdentUserVariableContext context)
         {
             var variableName = context.USER_VARIABLE().GetText();
             
@@ -497,7 +497,7 @@ namespace AppRefiner.TooltipProviders
         /// <summary>
         /// Handles dot access expressions like %This.PropertyName
         /// </summary>
-        public override void EnterDotAccessExpr([NotNull] PeopleCodeParser.DotAccessExprContext context)
+        public override void EnterDotAccessExpr([NotNull] PeopleCode.PeopleCodeParser.DotAccessExprContext context)
         {
             var dotAccessList = context.dotAccess();
             if (dotAccessList != null && dotAccessList.Length > 0)
@@ -525,7 +525,7 @@ namespace AppRefiner.TooltipProviders
         /// <summary>
         /// Process generic ID tokens which might be property references
         /// </summary>
-        public override void EnterIdentGenericID([NotNull] PeopleCodeParser.IdentGenericIDContext context)
+        public override void EnterIdentGenericID([NotNull] PeopleCode.PeopleCodeParser.IdentGenericIDContext context)
         {
             if (context.genericID() != null)
             {

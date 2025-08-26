@@ -21,7 +21,7 @@ namespace AppRefiner.Linters
             Active = true;
         }
 
-        public override void EnterForStatement([NotNull] PeopleCodeParser.ForStatementContext context)
+        public override void EnterForStatement([NotNull] PeopleCode.PeopleCodeParser.ForStatementContext context)
         {
             // Get the iterator variable from the for statement
             var iterator = context.USER_VARIABLE().GetText();
@@ -43,7 +43,7 @@ namespace AppRefiner.Linters
                 forIterators.Push(iterator);
             }
         }
-        public override void ExitForStatement([NotNull] PeopleCodeParser.ForStatementContext context)
+        public override void ExitForStatement([NotNull] PeopleCode.PeopleCodeParser.ForStatementContext context)
         {
             // Pop the iterator off the stack when exiting the for statement
             var iterator = context.USER_VARIABLE().GetText();

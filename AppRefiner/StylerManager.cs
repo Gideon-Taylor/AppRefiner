@@ -3,6 +3,7 @@ using AppRefiner.Database.Models; // Assuming BaseStyler might need this
 using AppRefiner.PeopleCode;
 using AppRefiner.Plugins;
 using Antlr4.Runtime.Tree;
+using PeopleCodeParser.SelfHosted;
 using System;
 using System.Collections.Generic;
 using System.Drawing;
@@ -10,7 +11,8 @@ using System.IO;
 using System.Linq;
 using System.Reflection; // Added for Assembly.GetExecutingAssembly
 using System.Windows.Forms;
-using System.Text.Json; // For settings serialization
+using System.Text.Json;
+using PeopleCodeParser.SelfHosted.Visitors; // For settings serialization
 
 namespace AppRefiner.Stylers
 {
@@ -19,7 +21,7 @@ namespace AppRefiner.Stylers
     /// </summary>
     public class StylerManager
     {
-        private readonly List<BaseStyler> stylers = new();
+        private readonly List<IStyler> stylers = new();
         private readonly DataGridView stylerGrid; // DataGridView for styler options
         private readonly MainForm mainForm; // Needed for Invoke potentially, though aiming to minimize direct use
         private readonly SettingsService settingsService; // Added SettingsService
@@ -31,7 +33,7 @@ namespace AppRefiner.Stylers
             settingsService = settings; // Store SettingsService
         }
 
-        public IEnumerable<BaseStyler> StylerRules => stylers;
+        public IEnumerable<IStyler> StylerRules => stylers;
 
         /// <summary>
         /// Discovers stylers, populates the grid, and loads saved states.
@@ -44,7 +46,7 @@ namespace AppRefiner.Stylers
             // Discover core stylers from the main assembly
             var executingAssembly = Assembly.GetExecutingAssembly();
             var coreStylerTypes = executingAssembly.GetTypes()
-                .Where(p => typeof(BaseStyler).IsAssignableFrom(p) && !p.IsAbstract);
+                .Where(p => typeof(IStyler).IsAssignableFrom(p) && !p.IsAbstract && !p.IsInterface);
 
             // Discover stylers from plugins
             var pluginStylers = PluginManager.DiscoverStylerTypes();
@@ -56,7 +58,7 @@ namespace AppRefiner.Stylers
             {
                 try
                 {
-                    BaseStyler? styler = (BaseStyler?)Activator.CreateInstance(type);
+                    IStyler? styler = (IStyler?)Activator.CreateInstance(type);
                     if (styler != null)
                     {
                         int rowIndex = stylerGrid.Rows.Add(styler.Active, styler.Description);
@@ -88,32 +90,36 @@ namespace AppRefiner.Stylers
 
             var editorDataManager = editor?.DataManager;
 
-            var (program, stream, comments) = editor.GetParsedProgram();
+            // Get the self-hosted parsed program
+            var program = editor?.GetSelfHostedParsedProgram();
+            if (program == null)
+            {
+                return; // Unable to parse
+            }
 
             // Get active stylers, filtering by database requirement
             var activeStylers = stylers.Where(a => a.Active && (a.DatabaseRequirement != DataManagerRequirement.Required || editorDataManager != null));
 
-            MultiParseTreeWalker walker = new();
             List<Indicator> newIndicators = new();
 
             foreach (var styler in activeStylers)
             {
-                styler.Reset(); // Reset internal state before processing
-                styler.DataManager = editorDataManager;
-                styler.Indicators = newIndicators; // Styler adds indicators to this list
-                styler.Comments = comments;
-                styler.Editor = editor;
-                walker.AddListener(styler);
-            }
-
-            try
-            {
-                walker.Walk(program);
-            }
-            catch (Exception ex)
-            {
-                Debug.LogException(ex, "Error during styler walk");
-                // Potentially clear indicators or handle error state?
+                try
+                {
+                    styler.Reset(); // Reset internal state before processing
+                    styler.DataManager = editorDataManager;
+                    styler.Editor = editor;
+                    
+                    // Visit the program using the styler
+                    program.Accept((IAstVisitor)styler);
+                    
+                    // Collect indicators from this styler
+                    newIndicators.AddRange(styler.Indicators);
+                }
+                catch (Exception ex)
+                {
+                    Debug.LogException(ex, $"Error processing styler {styler.GetType().Name}");
+                }
             }
             
             // Now apply the collected indicators, comparing against existing ones
@@ -210,7 +216,7 @@ namespace AppRefiner.Stylers
         {
             if (e.RowIndex >= 0 && e.ColumnIndex == 0) // Assuming column 0 is the 'Active' checkbox
             {
-                if (stylerGrid.Rows[e.RowIndex].Tag is BaseStyler styler)
+                if (stylerGrid.Rows[e.RowIndex].Tag is IStyler styler)
                 {
                     // Ensure the value is a boolean before casting
                     if (stylerGrid.Rows[e.RowIndex].Cells[0].Value is bool isActive)

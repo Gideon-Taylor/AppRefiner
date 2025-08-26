@@ -89,7 +89,7 @@ namespace AppRefiner.Services
             try
             {
                 // Use the reusable parser
-                PeopleCodeParser.ProgramContext programContext = ProgramParser.Parse(sourceCode);
+                PeopleCode.PeopleCodeParser.ProgramContext programContext = ProgramParser.Parse(sourceCode);
                 
                 // Define resolvers that call back into this service's public methods
                 Func<string, IDataManager, AppClass?> appClassResolver = (path, dm) => GetAppClassAst(path);

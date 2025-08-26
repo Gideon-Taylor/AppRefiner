@@ -215,7 +215,7 @@ namespace AppRefiner.TooltipProviders
         /// <summary>
         /// Captures access modifier for public section
         /// </summary>
-        public override void EnterPublicHeader([NotNull] PeopleCodeParser.PublicHeaderContext context)
+        public override void EnterPublicHeader([NotNull] PeopleCode.PeopleCodeParser.PublicHeaderContext context)
         {
             currentAccessModifier = "Public";
         }
@@ -223,7 +223,7 @@ namespace AppRefiner.TooltipProviders
         /// <summary>
         /// Captures access modifier for protected section
         /// </summary>
-        public override void EnterProtectedHeader([NotNull] PeopleCodeParser.ProtectedHeaderContext context)
+        public override void EnterProtectedHeader([NotNull] PeopleCode.PeopleCodeParser.ProtectedHeaderContext context)
         {
             currentAccessModifier = "Protected";
         }
@@ -231,7 +231,7 @@ namespace AppRefiner.TooltipProviders
         /// <summary>
         /// Captures access modifier for private section
         /// </summary>
-        public override void EnterPrivateHeader([NotNull] PeopleCodeParser.PrivateHeaderContext context)
+        public override void EnterPrivateHeader([NotNull] PeopleCode.PeopleCodeParser.PrivateHeaderContext context)
         {
             currentAccessModifier = "Private";
         }
@@ -239,9 +239,9 @@ namespace AppRefiner.TooltipProviders
         /// <summary>
         /// Captures the superclass name if present
         /// </summary>
-        public override void EnterClassDeclarationExtension([NotNull] PeopleCodeParser.ClassDeclarationExtensionContext context)
+        public override void EnterClassDeclarationExtension([NotNull] PeopleCode.PeopleCodeParser.ClassDeclarationExtensionContext context)
         {
-            if (context.superclass() is PeopleCodeParser.AppClassSuperClassContext appClassContext)
+            if (context.superclass() is PeopleCode.PeopleCodeParser.AppClassSuperClassContext appClassContext)
             {
                 superClassName = appClassContext.appClassPath().GetText();
             }
@@ -250,7 +250,7 @@ namespace AppRefiner.TooltipProviders
         /// <summary>
         /// Process method headers to capture method information
         /// </summary>
-        public override void EnterMethodHeader([NotNull] PeopleCodeParser.MethodHeaderContext context)
+        public override void EnterMethodHeader([NotNull] PeopleCode.PeopleCodeParser.MethodHeaderContext context)
         {
             if (context.genericID() != null)
             {
@@ -340,7 +340,7 @@ namespace AppRefiner.TooltipProviders
                 // Create a lexer, token stream, and parser for the parent class
                 var lexer = new PeopleCodeLexer(new ByteTrackingCharStream(parentClassSource));
                 var tokenStream = new CommonTokenStream(lexer);
-                var parser = new PeopleCodeParser(tokenStream);
+                var parser = new PeopleCode.PeopleCodeParser(tokenStream);
                 
                 // Parse the program
                 var program = parser.program();
@@ -394,32 +394,32 @@ namespace AppRefiner.TooltipProviders
             private string currentAccessModifier = string.Empty;
             
             // Track inheritance
-            public override void EnterClassDeclarationExtension([NotNull] PeopleCodeParser.ClassDeclarationExtensionContext context)
+            public override void EnterClassDeclarationExtension([NotNull] PeopleCode.PeopleCodeParser.ClassDeclarationExtensionContext context)
             {
-                if (context.superclass() is PeopleCodeParser.AppClassSuperClassContext appClassContext)
+                if (context.superclass() is PeopleCode.PeopleCodeParser.AppClassSuperClassContext appClassContext)
                 {
                     SuperClassName = appClassContext.appClassPath().GetText();
                 }
             }
             
             // Track access modifiers
-            public override void EnterPublicHeader([NotNull] PeopleCodeParser.PublicHeaderContext context)
+            public override void EnterPublicHeader([NotNull] PeopleCode.PeopleCodeParser.PublicHeaderContext context)
             {
                 currentAccessModifier = "Public";
             }
             
-            public override void EnterProtectedHeader([NotNull] PeopleCodeParser.ProtectedHeaderContext context)
+            public override void EnterProtectedHeader([NotNull] PeopleCode.PeopleCodeParser.ProtectedHeaderContext context)
             {
                 currentAccessModifier = "Protected";
             }
             
-            public override void EnterPrivateHeader([NotNull] PeopleCodeParser.PrivateHeaderContext context)
+            public override void EnterPrivateHeader([NotNull] PeopleCode.PeopleCodeParser.PrivateHeaderContext context)
             {
                 currentAccessModifier = "Private";
             }
             
             // Extract method definitions
-            public override void EnterMethodHeader([NotNull] PeopleCodeParser.MethodHeaderContext context)
+            public override void EnterMethodHeader([NotNull] PeopleCode.PeopleCodeParser.MethodHeaderContext context)
             {
                 if (context.genericID() != null)
                 {
@@ -465,7 +465,7 @@ namespace AppRefiner.TooltipProviders
         /// <summary>
         /// Handles dot access expressions like %This.MethodName() or &variable.MethodName() to display parameter information
         /// </summary>
-        public override void EnterDotAccessExpr([NotNull] PeopleCodeParser.DotAccessExprContext context)
+        public override void EnterDotAccessExpr([NotNull] PeopleCode.PeopleCodeParser.DotAccessExprContext context)
         {
             var expr = context.expression();
             if (expr == null)

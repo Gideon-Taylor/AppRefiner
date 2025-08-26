@@ -133,7 +133,8 @@ namespace AppRefiner
         /// <summary>
         /// Process method headers to capture scope information
         /// </summary>
-        public override void EnterMethodHeader(PeopleCodeParser.MethodHeaderContext context)
+        
+        public override void EnterMethodHeader(PeopleCode.PeopleCodeParser.MethodHeaderContext context)
         {
             if (context.genericID() != null)
             {
@@ -146,7 +147,7 @@ namespace AppRefiner
         /// <summary>
         /// Process property declarations in headers to capture scope information
         /// </summary>
-        public override void EnterPropertyGetSet(PeopleCodeParser.PropertyGetSetContext context)
+        public override void EnterPropertyGetSet(PeopleCode.PeopleCodeParser.PropertyGetSetContext context)
         {
             var propertyName = context.genericID().GetText();
             var propertyType = GetTypeString(context.typeT());
@@ -168,7 +169,7 @@ namespace AppRefiner
         /// <summary>
         /// Process property declarations in headers to capture scope information
         /// </summary>
-        public override void EnterPropertyDirect(PeopleCodeParser.PropertyDirectContext context)
+        public override void EnterPropertyDirect(PeopleCode.PeopleCodeParser.PropertyDirectContext context)
         {
             var propertyName = context.genericID().GetText();
             var propertyType = GetTypeString(context.typeT());
@@ -191,7 +192,7 @@ namespace AppRefiner
         /// Visit Method implementations
         /// </summary>
         /// <param name="context">The method context</param>
-        public override void EnterMethod(PeopleCodeParser.MethodContext context)
+        public override void EnterMethod(PeopleCode.PeopleCodeParser.MethodContext context)
         {
             var methodName = context.genericID().GetText();
             var returnType = "void"; // Default to void
@@ -217,7 +218,7 @@ namespace AppRefiner
         /// Visit Property getter implementations
         /// </summary>
         /// <param name="context">The getter context</param>
-        public override void EnterGetter(PeopleCodeParser.GetterContext context)
+        public override void EnterGetter(PeopleCode.PeopleCodeParser.GetterContext context)
         {
             var propertyName = context.genericID().GetText();
             
@@ -249,7 +250,7 @@ namespace AppRefiner
         /// Visit Property setter implementations
         /// </summary>
         /// <param name="context">The setter context</param>
-        public override void EnterSetter(PeopleCodeParser.SetterContext context)
+        public override void EnterSetter(PeopleCode.PeopleCodeParser.SetterContext context)
         {
             var propertyName = context.genericID().GetText();
             
@@ -281,7 +282,7 @@ namespace AppRefiner
         /// Visit Function definitions
         /// </summary>
         /// <param name="context">The function definition context</param>
-        public override void EnterFunctionDefinition(PeopleCodeParser.FunctionDefinitionContext context)
+        public override void EnterFunctionDefinition(PeopleCode.PeopleCodeParser.FunctionDefinitionContext context)
         {
             var functionName = context.allowableFunctionName().GetText();
             var returnType = "void"; // Default to void
@@ -305,7 +306,7 @@ namespace AppRefiner
         /// <summary>
         /// Visit instance declarations (private variables)
         /// </summary>
-        public override void EnterInstanceDecl(PeopleCodeParser.InstanceDeclContext context)
+        public override void EnterInstanceDecl(PeopleCode.PeopleCodeParser.InstanceDeclContext context)
         {
             var propertyType = GetTypeString(context.typeT());
 
@@ -331,7 +332,7 @@ namespace AppRefiner
         /// <summary>
         /// Enter public header section
         /// </summary>
-        public override void EnterPublicHeader(PeopleCodeParser.PublicHeaderContext context)
+        public override void EnterPublicHeader(PeopleCode.PeopleCodeParser.PublicHeaderContext context)
         {
             currentScope = GoToDefinitionScope.Public;
         }
@@ -339,7 +340,7 @@ namespace AppRefiner
         /// <summary>
         /// Enter protected header section
         /// </summary>
-        public override void EnterProtectedHeader(PeopleCodeParser.ProtectedHeaderContext context)
+        public override void EnterProtectedHeader(PeopleCode.PeopleCodeParser.ProtectedHeaderContext context)
         {
             currentScope = GoToDefinitionScope.Protected;
         }
@@ -347,7 +348,7 @@ namespace AppRefiner
         /// <summary>
         /// Enter private header section
         /// </summary>
-        public override void EnterPrivateHeader(PeopleCodeParser.PrivateHeaderContext context)
+        public override void EnterPrivateHeader(PeopleCode.PeopleCodeParser.PrivateHeaderContext context)
         {
             currentScope = GoToDefinitionScope.Private;
         }
@@ -355,27 +356,27 @@ namespace AppRefiner
         /// <summary>
         /// Helper method to extract type information from type context
         /// </summary>
-        private string GetTypeString(PeopleCodeParser.TypeTContext typeContext)
+        private string GetTypeString(PeopleCode.PeopleCodeParser.TypeTContext typeContext)
         {
             if (typeContext == null)
                 return "any";
 
-            if (typeContext is PeopleCodeParser.ArrayTypeContext arrayType)
+            if (typeContext is PeopleCode.PeopleCodeParser.ArrayTypeContext arrayType)
             {
                 var baseType = arrayType.typeT() != null
                     ? GetTypeString(arrayType.typeT())
                     : "any";
                 return $"Array of {baseType}";
             }
-            else if (typeContext is PeopleCodeParser.BaseExceptionTypeContext)
+            else if (typeContext is PeopleCode.PeopleCodeParser.BaseExceptionTypeContext)
             {
                 return "Exception";
             }
-            else if (typeContext is PeopleCodeParser.AppClassTypeContext appClass)
+            else if (typeContext is PeopleCode.PeopleCodeParser.AppClassTypeContext appClass)
             {
                 return appClass.appClassPath().GetText();
             }
-            else if (typeContext is PeopleCodeParser.SimpleTypeTypeContext simpleType)
+            else if (typeContext is PeopleCode.PeopleCodeParser.SimpleTypeTypeContext simpleType)
             {
                 return simpleType.simpleType().GetText();
             }

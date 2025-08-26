@@ -1158,6 +1158,7 @@ public class PeopleCodeParser
             }
 
             var paramName = Current.Text;
+            var nameToken = Current;
             _position++;
 
             TypeNode? paramType = new BuiltInTypeNode(BuiltInType.Any)
@@ -1169,6 +1170,7 @@ public class PeopleCodeParser
             // Optional AS typeT
             if (Match(TokenType.As))
             {
+                var startToken = Current;
                 // Parse parameter type
                 paramType = ParseTypeReference();
                 if (paramType == null)
@@ -1177,13 +1179,13 @@ public class PeopleCodeParser
                     // Use default ANY type if we couldn't parse the specified type
                     paramType = new BuiltInTypeNode(BuiltInType.Any)
                     {
-                        FirstToken = Current,
-                        LastToken = Current
+                        FirstToken = startToken,
+                        LastToken = Previous
                     };
                 }
             }
 
-            var parameter = new ParameterNode(paramName, paramType);
+            var parameter = new ParameterNode(paramName, paramType) { FirstToken = nameToken, LastToken = nameToken };
 
             // Parse optional OUT modifier
             if (Match(TokenType.Out))
@@ -1976,9 +1978,13 @@ public class PeopleCodeParser
             {
                 var body = ParseStatementList(TokenType.EndMethod);
                 methodNode.SetBody(body);
+            } else
+            {
+                /* Create an empty body node */
+                methodNode.SetBody(new BlockNode());
             }
 
-            // Expect END-METHOD
+                // Expect END-METHOD
             Consume(TokenType.EndMethod, "Expected 'END-METHOD' after method implementation");
 
             return methodNode;

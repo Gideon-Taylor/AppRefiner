@@ -2209,7 +2209,7 @@ namespace AppRefiner
                 _targetPosition = targetPosition;
             }
 
-            public override void EnterMethod(PeopleCodeParser.MethodContext context)
+            public override void EnterMethod(PeopleCode.PeopleCodeParser.MethodContext context)
             {
                 if (FoundRange.HasValue) return; // Already found a method
 
@@ -2222,7 +2222,7 @@ namespace AppRefiner
                 }
             }
 
-            public override void EnterFunctionDefinition(PeopleCodeParser.FunctionDefinitionContext context)
+            public override void EnterFunctionDefinition(PeopleCode.PeopleCodeParser.FunctionDefinitionContext context)
             {
                 if (FoundRange.HasValue) return; // Already found a method
 
@@ -2235,7 +2235,7 @@ namespace AppRefiner
                 }
             }
 
-            public override void EnterGetter(PeopleCodeParser.GetterContext context)
+            public override void EnterGetter(PeopleCode.PeopleCodeParser.GetterContext context)
             {
                 if (FoundRange.HasValue) return; // Already found a method
 
@@ -2248,7 +2248,7 @@ namespace AppRefiner
                 }
             }
 
-            public override void EnterSetter(PeopleCodeParser.SetterContext context)
+            public override void EnterSetter(PeopleCode.PeopleCodeParser.SetterContext context)
             {
                 if (FoundRange.HasValue) return; // Already found a method
 
