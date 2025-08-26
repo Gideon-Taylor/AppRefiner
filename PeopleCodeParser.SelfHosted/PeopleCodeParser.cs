@@ -641,7 +641,7 @@ public class PeopleCodeParser
         try
         {
             EnterRule("classHeader");
-
+            var startToken = Current;
             if (!Match(TokenType.Class))
             {
                 ReportError("Expected 'CLASS' keyword");
@@ -650,13 +650,14 @@ public class PeopleCodeParser
 
             // Parse class name
             var className = ParseGenericId();
+            var nameToken = Previous;
             if (className == null)
             {
                 ReportError("Expected class name after 'CLASS'");
                 return null;
             }
 
-            var classNode = new AppClassNode(className);
+            var classNode = new AppClassNode(className,nameToken);
 
             // Check for EXTENDS or IMPLEMENTS clause
             if (Match(TokenType.Extends))
@@ -695,7 +696,8 @@ public class PeopleCodeParser
 
             // Optional semicolons before class header
             while (Match(TokenType.Semicolon)) { }
-
+            classNode.FirstToken = startToken;
+            classNode.LastToken = Previous;
             return classNode;
         }
         catch (Exception ex)
@@ -1588,7 +1590,7 @@ public class PeopleCodeParser
             while (Match(TokenType.Colon))
             {
                 var nextId = ParseGenericId();
-                endToken = Current; // Update end token to last parsed identifier
+                endToken = Previous; // Update end token to last parsed identifier
                 if (nextId != null)
                 {
                     pathParts.Add(nextId);
@@ -1610,7 +1612,7 @@ public class PeopleCodeParser
             var className = pathParts[^1];
             var packagePath = pathParts.Take(pathParts.Count - 1);
 
-            return new AppClassTypeNode(packagePath, className);
+            return new AppClassTypeNode(packagePath, className) { FirstToken = startToken, LastToken = endToken };
         }
         finally
         {
@@ -3260,7 +3262,7 @@ public class PeopleCodeParser
         try
         {
             EnterRule("statement");
-
+            var startToken = Current; // Capture the starting token 
             // Handle various statement types
             StatementNode? statement = Current.Type switch
             {
@@ -3284,6 +3286,7 @@ public class PeopleCodeParser
             // If we have a valid statement, assign a statement number and check for a semicolon
             if (statement != null)
             {
+                
                 // Increment statement counter and assign to this statement
                 _statementCounter++;
                 statement.StatementNumber = _statementCounter;
@@ -3296,6 +3299,9 @@ public class PeopleCodeParser
                 {
                     // Each additional semicolon is just ignored
                 }
+                var endToken = statement.LastToken ?? Previous;
+                statement.FirstToken = startToken;
+                statement.LastToken = endToken;
             }
             
             return statement;
@@ -3454,7 +3460,7 @@ public class PeopleCodeParser
 
             Consume(TokenType.EndFor, "Expected 'END-FOR' after FOR statement");
 
-            var forNode = new ForStatementNode(variableName, start, end, body);
+            var forNode = new ForStatementNode(variableName, variableToken, start, end, body);
             if (step != null)
                 forNode.SetStepValue(step);
             return forNode;
@@ -4421,39 +4427,16 @@ public class PeopleCodeParser
                 }
                 else
                 {
-                    // Check if this is an implicit subindex expression (expression(expression))
-                    // or a function call (expression(args...))
+                    // Function call - PeopleCode doesn't have implicit subindex expressions
+                    // Array access uses [] brackets, function calls use () parentheses
+                    var args = ParseArgumentList();
+                    Consume(TokenType.RightParen, "Expected ')' after function arguments");
                     
-                    // Peek ahead to see if there's a single expression or an argument list
-                    var startPos = _position;
-                    var singleExpr = ParseExpression();
-                    
-                    // If we parsed a single expression and the next token is ')',
-                    // this is an implicit subindex expression
-                    if (singleExpr != null && Check(TokenType.RightParen))
+                    expr = new FunctionCallNode(expr, args)
                     {
-                        _position++; // Consume the ')'
-                        expr = new ArrayAccessNode(expr, new List<ExpressionNode> { singleExpr }) // Use ArrayAccessNode for implicit subindex
-                        {
-                            FirstToken = expr.FirstToken,
+                        FirstToken = expr.FirstToken,
                         LastToken = Previous
-                        };
-                    }
-                    else
-                    {
-                        // Reset position and parse as a normal function call
-                        _position = startPos;
-                        
-                        // Function call
-                        var args = ParseArgumentList();
-                        Consume(TokenType.RightParen, "Expected ')' after function arguments");
-                        
-                        expr = new FunctionCallNode(expr, args)
-                        {
-                            FirstToken = expr.FirstToken,
-                        LastToken = Previous
-                        };
-                    }
+                    };
                 }
             }
             else if (Match(TokenType.Dot))

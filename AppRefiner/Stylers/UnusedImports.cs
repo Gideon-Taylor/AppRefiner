@@ -20,7 +20,7 @@ namespace AppRefiner.Stylers
 
         Dictionary<string, ImportInfo> importUseMap = new();
 
-        public override string Description => "Highlights unused import statements";
+        public override string Description => "Unused imports";
 
         private void MarkAppClassTypeAsUsed(AppClassTypeNode appClassType)
         {

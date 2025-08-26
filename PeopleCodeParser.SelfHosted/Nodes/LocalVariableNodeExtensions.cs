@@ -24,3 +24,4 @@ public static class LocalVariableNodeExtensions
         node.VariableNameInfo = new VariableNameInfo(name, token);
     }
 }
+

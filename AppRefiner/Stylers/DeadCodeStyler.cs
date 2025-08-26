@@ -1,3 +1,4 @@
+using PeopleCodeParser.SelfHosted;
 using PeopleCodeParser.SelfHosted.Nodes;
 
 namespace AppRefiner.Stylers;
@@ -11,7 +12,7 @@ public class DeadCodeStyler : BaseStyler
     // Semi-transparent gray color for dead code highlighting (BGRA format)
     private const uint DEAD_CODE_COLOR = 0x73737380;
 
-    public override string Description => "Highlights unreachable code";
+    public override string Description => "Dead code";
 
     /// <summary>
     /// Processes the entire program and detects dead code
@@ -27,6 +28,10 @@ public class DeadCodeStyler : BaseStyler
     /// </summary>
     public override void VisitMethod(MethodNode node)
     {
+        if (node.Name == "FieldValueInRecord")
+        {
+            int debug = 0;
+        }
         // Check method body for dead code
         if (node.Body != null)
         {
@@ -174,7 +179,7 @@ public class DeadCodeStyler : BaseStyler
                 statement.Accept(this);
                 
                 // Check if this statement can transfer control (return, exit, throw, etc.)
-                if (statement.CanTransferControl)
+                if (statement.DoesTransferControl)
                 {
                     foundControlTransfer = true;
                 }
@@ -192,9 +197,18 @@ public class DeadCodeStyler : BaseStyler
     /// </summary>
     private void MarkDeadCode(StatementNode statement)
     {
+        var firstComment = statement.GetLeadingComments().FirstOrDefault();
+
+        SourceSpan targetSpan = statement.SourceSpan;
+
+        if (firstComment != null)
+        {
+            targetSpan = new SourceSpan(firstComment.SourceSpan.Start, targetSpan.End);
+        }
+
         // Use the statement's source span for precise highlighting
-        AddIndicator(statement.SourceSpan, IndicatorType.TEXTCOLOR, DEAD_CODE_COLOR,
-            "Unreachable code (after return/exit/throw statement)");
+        AddIndicator(targetSpan, IndicatorType.TEXTCOLOR, DEAD_CODE_COLOR,
+        "Unreachable code (after return/exit/throw statement)");
         
         // Also continue visiting the statement to handle nested blocks that might also have dead code
         statement.Accept(this);

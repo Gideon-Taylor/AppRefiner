@@ -116,7 +116,7 @@ namespace AppRefiner.Shared.SQL
                     Message = "Found SQL using string concatenation.",
                     Type = ReportType.Warning,
                     Line = firstArg.SourceSpan.Start.Line,
-                    Span = (firstArg.SourceSpan.Start.Index, firstArg.SourceSpan.End.Index)
+                    Span = (firstArg.SourceSpan.Start.ByteIndex, firstArg.SourceSpan.End.ByteIndex)
                 });
             }
 
@@ -195,7 +195,7 @@ namespace AppRefiner.Shared.SQL
                         Message = $"Cannot validate SQL.{methodName} - SQL text is empty or could not be resolved.",
                         Type = ReportType.Info,
                         Line = functionCall.SourceSpan.Start.Line,
-                        Span = (functionCall.SourceSpan.Start.Index, functionCall.SourceSpan.End.Index)
+                        Span = (functionCall.SourceSpan.Start.ByteIndex, functionCall.SourceSpan.End.ByteIndex)
                     });
                     return reports;
                 }
@@ -209,7 +209,7 @@ namespace AppRefiner.Shared.SQL
                         Message = $"SQL.{methodName} has incorrect number of bind parameters. Expected {sqlInfo.BindCount}, got {argCount}.",
                         Type = ReportType.Error,
                         Line = functionCall.SourceSpan.Start.Line,
-                        Span = (functionCall.SourceSpan.Start.Index, functionCall.SourceSpan.End.Index)
+                        Span = (functionCall.SourceSpan.Start.ByteIndex, functionCall.SourceSpan.End.ByteIndex)
                     });
                 }
             }
@@ -271,7 +271,7 @@ namespace AppRefiner.Shared.SQL
                         Message = "Cannot validate SQL using certain MetaSQL constructs like %Insert, %Update, %SelectAll etc.",
                         Type = ReportType.Info,
                         Line = context.SourceSpan.Start.Line,
-                        Span = (args.FirstOrDefault()?.SourceSpan.Start.Index ?? context.SourceSpan.Start.Index, context.SourceSpan.End.Index)
+                        Span = (args.FirstOrDefault()?.SourceSpan.Start.ByteIndex ?? context.SourceSpan.Start.ByteIndex, context.SourceSpan.End.ByteIndex)
                     });
                     return reports;
                 }
@@ -318,7 +318,7 @@ namespace AppRefiner.Shared.SQL
                             Message = $"SQL statement has incorrect number of input parameters. Expected {bindCount}, got {totalInOutArgs}.",
                             Type = ReportType.Error,
                             Line = context.SourceSpan.Start.Line,
-                            Span = (args.FirstOrDefault()?.SourceSpan.Start.Index ?? context.SourceSpan.Start.Index, context.SourceSpan.End.Index)
+                            Span = (args.FirstOrDefault()?.SourceSpan.Start.ByteIndex ?? context.SourceSpan.Start.ByteIndex, context.SourceSpan.End.ByteIndex)
                         });
                     }
                     return reports;
@@ -334,7 +334,7 @@ namespace AppRefiner.Shared.SQL
                             Message = $"SQL statement has incorrect number of input parameters. Expected {bindCount}, got {totalInOutArgs}.",
                             Type = ReportType.Error,
                             Line = context.SourceSpan.Start.Line,
-                            Span = (args.FirstOrDefault()?.SourceSpan.Start.Index ?? context.SourceSpan.Start.Index, context.SourceSpan.End.Index)
+                            Span = (args.FirstOrDefault()?.SourceSpan.Start.ByteIndex ?? context.SourceSpan.Start.ByteIndex, context.SourceSpan.End.ByteIndex)
                         });
                     }
                     return reports;
@@ -348,7 +348,7 @@ namespace AppRefiner.Shared.SQL
                         Message = $"SQL statement has incorrect number of In/Out parameters. Expected {bindCount + sqlInfo.OutputColumnCount}, got {totalInOutArgs}.",
                         Type = ReportType.Error,
                         Line = context.SourceSpan.Start.Line,
-                        Span = (args.FirstOrDefault()?.SourceSpan.Start.Index ?? context.SourceSpan.Start.Index, context.SourceSpan.End.Index)
+                        Span = (args.FirstOrDefault()?.SourceSpan.Start.ByteIndex ?? context.SourceSpan.Start.ByteIndex, context.SourceSpan.End.ByteIndex)
                     });
                 }
             }
@@ -381,7 +381,7 @@ namespace AppRefiner.Shared.SQL
                         Message = "Found SQL using string concatenation.",
                         Type = ReportType.Warning,
                         Line = firstArg.SourceSpan.Start.Line,
-                        Span = (firstArg.SourceSpan.Start.Index, firstArg.SourceSpan.End.Index)
+                        Span = (firstArg.SourceSpan.Start.ByteIndex, firstArg.SourceSpan.End.ByteIndex)
                     });
                 }
 
@@ -406,7 +406,7 @@ namespace AppRefiner.Shared.SQL
                     Message = "Cannot validate SQL.Open - SQL text is empty or could not be resolved.",
                     Type = ReportType.Info,
                     Line = functionCall.SourceSpan.Start.Line,
-                    Span = (functionCall.SourceSpan.Start.Index, functionCall.SourceSpan.End.Index)
+                    Span = (functionCall.SourceSpan.Start.ByteIndex, functionCall.SourceSpan.End.ByteIndex)
                 });
             }
             else if (sqlInfo.HasValidSqlText)
@@ -431,7 +431,7 @@ namespace AppRefiner.Shared.SQL
                     Message = "Cannot validate SQL.Fetch - SQL text is empty or could not be resolved.",
                     Type = ReportType.Info,
                     Line = functionCall.SourceSpan.Start.Line,
-                    Span = (functionCall.SourceSpan.Start.Index, functionCall.SourceSpan.End.Index)
+                    Span = (functionCall.SourceSpan.Start.ByteIndex, functionCall.SourceSpan.End.ByteIndex)
                 });
                 return reports;
             }
@@ -444,7 +444,7 @@ namespace AppRefiner.Shared.SQL
                     Message = "SQL.Fetch called before bind values were provided. Make sure to call Open/Execute before Fetch.",
                     Type = ReportType.Error,
                     Line = functionCall.SourceSpan.Start.Line,
-                    Span = (functionCall.SourceSpan.Start.Index, functionCall.SourceSpan.End.Index)
+                    Span = (functionCall.SourceSpan.Start.ByteIndex, functionCall.SourceSpan.End.ByteIndex)
                 });
             }
 
@@ -457,7 +457,7 @@ namespace AppRefiner.Shared.SQL
                     Message = "SQL.Fetch requires at least one output parameter.",
                     Type = ReportType.Error,
                     Line = functionCall.SourceSpan.Start.Line,
-                    Span = (functionCall.SourceSpan.Start.Index, functionCall.SourceSpan.End.Index)
+                    Span = (functionCall.SourceSpan.Start.ByteIndex, functionCall.SourceSpan.End.ByteIndex)
                 });
                 return reports;
             }
@@ -479,7 +479,7 @@ namespace AppRefiner.Shared.SQL
                         Message = $"SQL.Fetch parameter may not be an array or record which is needed to handle {sqlInfo.OutputColumnCount} output columns.",
                         Type = ReportType.Warning,
                         Line = functionCall.SourceSpan.Start.Line,
-                        Span = (functionCall.SourceSpan.Start.Index, functionCall.SourceSpan.End.Index)
+                        Span = (functionCall.SourceSpan.Start.ByteIndex, functionCall.SourceSpan.End.ByteIndex)
                     });
                 }
             }
@@ -494,7 +494,7 @@ namespace AppRefiner.Shared.SQL
                         Message = $"SQL.Fetch has incorrect number of output parameters. Expected {sqlInfo.OutputColumnCount}, got {args.Count}.",
                         Type = ReportType.Error,
                         Line = functionCall.SourceSpan.Start.Line,
-                        Span = (functionCall.SourceSpan.Start.Index, functionCall.SourceSpan.End.Index)
+                        Span = (functionCall.SourceSpan.Start.ByteIndex, functionCall.SourceSpan.End.ByteIndex)
                     });
                 }
             }

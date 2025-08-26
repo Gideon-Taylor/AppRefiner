@@ -54,7 +54,7 @@ namespace AppRefiner.Shared.SQL
                     Message = "Found SQL using string concatenation.",
                     Type = ReportType.Warning,
                     Line = firstArg.SourceSpan.Start.Line,
-                    Span = (firstArg.SourceSpan.Start.Index, firstArg.SourceSpan.End.Index)
+                    Span = (firstArg.SourceSpan.Start.ByteIndex, firstArg.SourceSpan.End.ByteIndex)
                 });
             }
 
@@ -78,7 +78,11 @@ namespace AppRefiner.Shared.SQL
                 // Count the binds
                 var bindCount = SQLHelper.GetBindCount(statement);
                 var totalInOutArgs = node.Arguments.Count - 1; // Exclude the SQL string itself
-
+                var endIndex = sqlSpan.End.ByteIndex;
+                if (node.Arguments.Count > 0)
+                {
+                    endIndex = node.Arguments.Last().SourceSpan.End.ByteIndex;
+                }
                 if (totalInOutArgs != (outputCount + bindCount))
                 {
                     // Report that there are an incorrect number of In/Out parameters and how many there should be
@@ -88,7 +92,7 @@ namespace AppRefiner.Shared.SQL
                         Message = $"SQL has incorrect number of In/Out parameters. Expected {bindCount + outputCount}, got {totalInOutArgs}.",
                         Type = ReportType.Error,
                         Line = node.SourceSpan.Start.Line,
-                        Span = (sqlSpan.Start.Index, node.SourceSpan.End.Index)
+                        Span = (sqlSpan.Start.ByteIndex, endIndex)
                     });
                 }
             }

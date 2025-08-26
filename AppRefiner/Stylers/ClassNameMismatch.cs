@@ -13,7 +13,7 @@ public class ClassNameMismatch : BaseStyler
 {
     private const uint ERROR_COLOR = 0x0000FFFF; // Red color for class name mismatch
 
-    public override string Description => "Class name doesn't match file path";
+    public override string Description => "Class name mismatch";
 
     /// <summary>
     /// Processes the entire program and resets state
@@ -47,7 +47,7 @@ public class ClassNameMismatch : BaseStyler
         if (!string.Equals(className, expectedName, StringComparison.OrdinalIgnoreCase))
         {
             string tooltip = $"Class name '{className}' does not match expected name '{expectedName}'.";
-            AddIndicator(node.SourceSpan, IndicatorType.SQUIGGLE, ERROR_COLOR, tooltip);
+            AddIndicator(node.NameToken.SourceSpan, IndicatorType.SQUIGGLE, ERROR_COLOR, tooltip);
         }
 
         base.VisitAppClass(node);

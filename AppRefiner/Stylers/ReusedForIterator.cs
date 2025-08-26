@@ -11,10 +11,10 @@ namespace AppRefiner.Stylers;
 /// </summary>
 public class ReusedForIterator : BaseStyler
 {
-    private const uint ERROR_COLOR = 0x0000FFFF; // Red color for errors
+    private const uint ERROR_COLOR = 0x0000FF85; // Red color for errors
     private readonly Stack<string> forIterators = new Stack<string>();
 
-    public override string Description => "Reused iterator variables in nested for loops";
+    public override string Description => "Reused for iterators";
 
     #region AST Visitor Overrides
 
@@ -40,8 +40,8 @@ public class ReusedForIterator : BaseStyler
         {
             // Report the re-use of the iterator
             AddIndicator(
-                node.SourceSpan,
-                IndicatorType.SQUIGGLE,
+                node.IteratorToken.SourceSpan,
+                IndicatorType.HIGHLIGHTER,
                 ERROR_COLOR,
                 $"Re-use of for loop iterator '{iterator}' in nested for loop."
             );

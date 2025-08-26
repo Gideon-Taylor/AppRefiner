@@ -14,7 +14,7 @@ public class LinterSuppressionStyler : BaseStyler
     private const uint HIGHLIGHT_COLOR = 0x50CB5040; // Highlight color for suppression comments
     private readonly Regex suppressionPattern = new(@"#AppRefiner\s+suppress\s+\((.*?)\)", RegexOptions.Compiled);
 
-    public override string Description => "Highlights linter suppression comments";
+    public override string Description => "Linter suppressions";
 
     /// <summary>
     /// Processes the entire program and looks for suppression comments
@@ -53,7 +53,7 @@ public class LinterSuppressionStyler : BaseStyler
                     // Create indicator for the suppression comment
                     string tooltip = $"Suppressed rules: {suppressedRules}";
                     
-                    AddIndicator(comment.SourceSpan, IndicatorType.BACKGROUND, HIGHLIGHT_COLOR, tooltip);
+                    AddIndicator(comment.SourceSpan, IndicatorType.HIGHLIGHTER, HIGHLIGHT_COLOR, tooltip);
                 }
             }
             // Also check line comments (though less common for suppression)
@@ -67,7 +67,7 @@ public class LinterSuppressionStyler : BaseStyler
                     // Create indicator for the suppression comment
                     string tooltip = $"Suppressed rules: {suppressedRules}";
                     
-                    AddIndicator(comment.SourceSpan, IndicatorType.BACKGROUND, HIGHLIGHT_COLOR, tooltip);
+                    AddIndicator(comment.SourceSpan, IndicatorType.HIGHLIGHTER, HIGHLIGHT_COLOR, tooltip);
                 }
             }
         }

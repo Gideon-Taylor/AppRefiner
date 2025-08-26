@@ -239,6 +239,8 @@ public class AppClassNode : AstNode
     /// </summary>
     public string Name { get; }
 
+    public Token NameToken { get; }
+
     /// <summary>
     /// Base class type (for EXTENDS clause), null if no base class
     /// </summary>
@@ -294,9 +296,10 @@ public class AppClassNode : AstNode
         { VisibilityModifier.Private, new List<AstNode>() }
     };
 
-    public AppClassNode(string name)
+    public AppClassNode(string name, Token nameToken)
     {
         Name = name ?? throw new ArgumentNullException(nameof(name));
+        NameToken = nameToken;
     }
 
     public void SetBaseClass(TypeNode baseClass)

@@ -42,11 +42,6 @@ namespace AppRefiner.Shared.SQL
             else if (expr is LiteralNode literal && literal.LiteralType == LiteralType.String)
             {
                 var sqlText = literal.Value?.ToString();
-                // Remove quotes from SQL text
-                if (!string.IsNullOrEmpty(sqlText) && sqlText.Length >= 2)
-                {
-                    sqlText = sqlText.Substring(1, sqlText.Length - 2);
-                }
                 return (sqlText, expr.SourceSpan);
             }
 

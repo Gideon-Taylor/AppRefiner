@@ -49,7 +49,7 @@ namespace AppRefiner.Stylers
             Indicators.Add(new Indicator
             {
                 Start = span.Start,
-                Length = span.Stop - span.Start + 1,
+                Length = span.Stop - span.Start,
                 Type = type,
                 Color = color,
                 Tooltip = tooltip

@@ -20,7 +20,7 @@ public class MeaninglessVariableNameStyler : ScopedStyler
         "arr", "array", "lst", "list", "val", "value", "res", "result", "ret", "return"
     };
 
-    public override string Description => "Highlights meaningless variable names";
+    public override string Description => "Meaningless variable names";
 
     #region AST Visitor Overrides
 
@@ -61,7 +61,7 @@ public class MeaninglessVariableNameStyler : ScopedStyler
     /// </summary>
     public override void VisitVariable(VariableNode node)
     {
-        CheckVariableName(node.Name, node.SourceSpan);
+        CheckVariableName(node.Name, node.NameToken.SourceSpan);
         base.VisitVariable(node);
     }
 
@@ -98,7 +98,7 @@ public class MeaninglessVariableNameStyler : ScopedStyler
             // Note: In the simplified model, we don't have QuickFixes support yet
             AddIndicator(
                 span,
-                IndicatorType.BACKGROUND,
+                IndicatorType.HIGHLIGHTER,
                 HIGHLIGHT_COLOR,
                 "Meaningless variable name"
             );

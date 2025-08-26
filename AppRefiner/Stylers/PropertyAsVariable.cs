@@ -16,7 +16,7 @@ public class PropertyAsVariable : ScopedStyler
     private readonly HashSet<string> publicProperties = new();
     private string? currentClassName;
 
-    public override string Description => "Properties used as variables outside constructors";
+    public override string Description => "Property as variable";
 
     #region AST Visitor Overrides
 
@@ -67,7 +67,7 @@ public class PropertyAsVariable : ScopedStyler
                 var currentMethod = GetCurrentScopeInfo();
                 if (currentMethod != null && !IsInConstructor(currentMethod))
                 {
-                    AddIndicator(node.SourceSpan, IndicatorType.BACKGROUND, HIGHLIGHT_COLOR,
+                    AddIndicator(node.SourceSpan, IndicatorType.HIGHLIGHTER, HIGHLIGHT_COLOR,
                         "Property used as variable outside constructor");
                 }
             }

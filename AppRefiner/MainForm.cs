@@ -91,6 +91,8 @@ namespace AppRefiner
         // Fields for editor management
         private HashSet<ScintillaEditor> knownEditors = new HashSet<ScintillaEditor>();
         private HashSet<uint> processesToNotDBPrompt = new HashSet<uint>();
+        private Dictionary<ScintillaEditor, DateTime> lastStylerProcessingTime = new Dictionary<ScintillaEditor, DateTime>();
+        private const int STYLER_PROCESSING_DEBOUNCE_MS = 100; // Prevent duplicate processing within 100ms
 
         // Throttling for duplicate shortcut prevention
         private DateTime _lastShortcutTime = DateTime.MinValue;
@@ -469,6 +471,9 @@ namespace AppRefiner
             // Dispose the savepoint debounce timer if it exists
             savepointDebounceTimer?.Dispose();
             savepointDebounceTimer = null;
+
+            // Clear the styler processing time dictionary
+            lastStylerProcessingTime.Clear();
 
             SaveSettings();
         }
@@ -1379,10 +1384,16 @@ namespace AppRefiner
                 ScintillaManager.SetDarkMode(editor);
             }
 
-            // Process stylers for PeopleCode
+            // Process stylers for PeopleCode with debouncing to prevent double execution
             if (editor.Type == EditorType.PeopleCode)
             {
-                stylerManager?.ProcessStylersForEditor(editor);
+                var now = DateTime.UtcNow;
+                if (!lastStylerProcessingTime.TryGetValue(editor, out var lastProcessed) || 
+                    (now - lastProcessed).TotalMilliseconds > STYLER_PROCESSING_DEBOUNCE_MS)
+                {
+                    lastStylerProcessingTime[editor] = now;
+                    stylerManager?.ProcessStylersForEditor(editor);
+                }
             }
 
             FoldingManager.ProcessFolding(editor);
@@ -2288,7 +2299,7 @@ namespace AppRefiner
                             }
                             else
                             {
-                                // Editor already known and initialized, just check content
+                                // Editor already known and initialized, check content on focus
                                 CheckForContentChanges(newlyFocusedEditor);
                             }
                         }

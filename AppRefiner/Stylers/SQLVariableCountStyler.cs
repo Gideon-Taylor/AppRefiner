@@ -13,7 +13,7 @@ namespace AppRefiner.Stylers;
 /// Highlights potential issues with SQL variable counts (CreateSQL/SQLExec) using shared validation logic.
 /// Ported from ANTLR-based SQLVariableCountStyler to work with self-hosted parser AST.
 /// </summary>
-public class SQLVariableCountStyler : ScopedStyler
+public class SQLVariableCountStyler : ScopedStyler, IStyler
 {
     // Corrected BGRA format colors
     private const uint ErrorColor = 0x0000FFFF;   // Opaque Red
@@ -31,7 +31,7 @@ public class SQLVariableCountStyler : ScopedStyler
         sqlExecValidator = new SQLExecValidator(validationContext);
     }
 
-    public override string Description => "SQL variable count validation";
+    public override string Description => "SQL variable count";
 
     public override DataManagerRequirement DatabaseRequirement => DataManagerRequirement.Optional;
 
@@ -95,6 +95,11 @@ public class SQLVariableCountStyler : ScopedStyler
         base.VisitFunctionCall(node);
     }
 
+    public override void VisitExpressionStatement(ExpressionStatementNode node)
+    {
+        base.VisitExpressionStatement(node);
+    }
+
     public override void VisitMemberAccess(MemberAccessNode node)
     {
         // Check if this member access is followed by a function call (method call pattern)
@@ -129,7 +134,7 @@ public class SQLVariableCountStyler : ScopedStyler
             };
 
             AddIndicator(
-                new SourceSpan(report.Span.Start, report.Span.Stop - report.Span.Start + 1),
+                new SourceSpan(report.Span.Start, report.Span.Stop),
                 IndicatorType.SQUIGGLE,
                 color,
                 report.Message

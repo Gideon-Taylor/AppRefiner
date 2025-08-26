@@ -14,7 +14,7 @@ public class FindFunctionParameterStyler : BaseStyler
     // Light Green color for the squiggle indicator (ARGB format)
     private const uint LIGHT_GREEN_COLOR = 0x32FF32FF;
 
-    public override string Description => "Find() function parameters may be reversed";
+    public override string Description => "Find() parameter order";
 
     /// <summary>
     /// Processes the entire program to find Find() function calls

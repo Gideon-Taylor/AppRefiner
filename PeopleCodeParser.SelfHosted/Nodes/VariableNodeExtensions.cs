@@ -32,3 +32,4 @@ public static class VariableNodeExtensions
         node.AdditionalNames.Add(name);
     }
 }
+

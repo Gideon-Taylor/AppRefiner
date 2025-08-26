@@ -13,7 +13,7 @@ namespace AppRefiner.Stylers
     {
         private const uint WARNING_COLOR = 0xFF00A5FF; // Orange (BGRA) for missing implementation warning
 
-        public override string Description => "Methods declared but not implemented";
+        public override string Description => "Missing method implementations";
 
         /// <summary>
         /// This styler doesn't require database access - works purely with AST
@@ -42,7 +42,7 @@ namespace AppRefiner.Stylers
             foreach (var method in unimplementedMethods)
             {
                 string tooltip = $"Method '{method.Name}' is declared but not implemented.";
-                AddIndicator(method.SourceSpan, IndicatorType.SQUIGGLE, WARNING_COLOR, tooltip);
+                AddIndicator(method.NameToken.SourceSpan, IndicatorType.SQUIGGLE, WARNING_COLOR, tooltip);
             }
 
             base.VisitAppClass(node);

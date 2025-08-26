@@ -12,9 +12,7 @@ namespace AppRefiner.Stylers
     {
         HIGHLIGHTER,
         SQUIGGLE,
-        TEXTCOLOR,
-        BACKGROUND,
-        OUTLINE
+        TEXTCOLOR
         // Future indicator types can be added here
     }
 
@@ -25,7 +23,11 @@ namespace AppRefiner.Stylers
         public uint Color { get; set; }
         public string? Tooltip { get; set; }
         public IndicatorType Type { get; set; }
-        public List<(Type RefactorClass, string Description)> QuickFixes { get; set; }
+        public List<(Type RefactorClass, string Description)> QuickFixes = new();
+
+        public Indicator()
+        {
+        }
     }
 
     // New self-hosted parser-based styler base class
@@ -70,7 +72,7 @@ namespace AppRefiner.Stylers
                 Indicators.Add(new Indicator
                 {
                     Start = span.Start,
-                    Length = span.Stop - span.Start + 1,
+                    Length = span.Stop - span.Start,
                     Type = type,
                     Color = color,
                     Tooltip = tooltip

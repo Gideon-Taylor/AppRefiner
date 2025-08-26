@@ -11,7 +11,13 @@ public abstract class StatementNode : AstNode
     /// <summary>
     /// True if this statement can transfer control (RETURN, BREAK, etc.)
     /// </summary>
-    public virtual bool CanTransferControl => false;
+    public virtual bool CanTransferControl => DoesTransferControl;
+
+    /// <summary>
+    /// True if this statement definitely transfers control, making subsequent statements unreachable
+    /// Used for dead code detection - only true for statements that unconditionally transfer control
+    /// </summary>
+    public virtual bool DoesTransferControl => false;
 
     /// <summary>
     /// True if this statement introduces a new scope
@@ -148,7 +154,7 @@ public class ForStatementNode : StatementNode
     /// Loop variable name
     /// </summary>
     public string Variable { get; }
-
+    public Token IteratorToken { get; }
     /// <summary>
     /// Starting value expression
     /// </summary>
@@ -172,13 +178,13 @@ public class ForStatementNode : StatementNode
     public override bool IntroducesScope => true;
     public override bool CanTransferControl => Body.CanTransferControl;
 
-    public ForStatementNode(string variable, ExpressionNode fromValue, ExpressionNode toValue, BlockNode body)
+    public ForStatementNode(string variable, Token iteratorToken, ExpressionNode fromValue, ExpressionNode toValue, BlockNode body)
     {
         Variable = variable ?? throw new ArgumentNullException(nameof(variable));
         FromValue = fromValue ?? throw new ArgumentNullException(nameof(fromValue));
         ToValue = toValue ?? throw new ArgumentNullException(nameof(toValue));
         Body = body ?? throw new ArgumentNullException(nameof(body));
-
+        IteratorToken = iteratorToken;
         AddChildren(fromValue, toValue, body);
     }
 
@@ -481,7 +487,7 @@ public class ReturnStatementNode : StatementNode
     /// </summary>
     public ExpressionNode? Value { get; set; }
 
-    public override bool CanTransferControl => true;
+    public override bool DoesTransferControl => true;
 
     public ReturnStatementNode(ExpressionNode? value = null)
     {
@@ -526,7 +532,7 @@ public class ThrowStatementNode : StatementNode
     /// </summary>
     public ExpressionNode Exception { get; }
 
-    public override bool CanTransferControl => true;
+    public override bool DoesTransferControl => true;
 
     public ThrowStatementNode(ExpressionNode exception)
     {
@@ -555,7 +561,7 @@ public class ThrowStatementNode : StatementNode
 /// </summary>
 public class BreakStatementNode : StatementNode
 {
-    public override bool CanTransferControl => true;
+    public override bool DoesTransferControl => true;
 
     public override void Accept(IAstVisitor visitor)
     {
@@ -578,7 +584,7 @@ public class BreakStatementNode : StatementNode
 /// </summary>
 public class ContinueStatementNode : StatementNode
 {
-    public override bool CanTransferControl => true;
+    public override bool DoesTransferControl => true;
 
     public override void Accept(IAstVisitor visitor)
     {
@@ -606,7 +612,7 @@ public class ExitStatementNode : StatementNode
     /// </summary>
     public ExpressionNode? ExitCode { get; set; }
 
-    public override bool CanTransferControl => true;
+    public override bool DoesTransferControl => true;
 
     public ExitStatementNode(ExpressionNode? exitCode = null)
     {
@@ -651,7 +657,7 @@ public class ErrorStatementNode : StatementNode
     /// </summary>
     public ExpressionNode Message { get; }
 
-    public override bool CanTransferControl => true;
+    public override bool DoesTransferControl => true;
 
     public ErrorStatementNode(ExpressionNode message)
     {

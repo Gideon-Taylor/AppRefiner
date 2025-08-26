@@ -18,7 +18,7 @@ public class MissingConstructor : BaseStyler
 {
     private const uint ERROR_COLOR = 0x0000FFFF; // Red color for missing constructor errors
 
-    public override string Description => "Classes missing required constructors";
+    public override string Description => "Missing constructors";
 
     /// <summary>
     /// This styler requires a database connection to check base class constructors
@@ -139,7 +139,7 @@ public class MissingConstructor : BaseStyler
             if (baseClassConstructor?.Parameters.Count > 0)
             {
                 string tooltip = $"Class '{classNode.Name}' is missing a constructor required by '{classNode.BaseClass.TypeName}'.";
-                AddIndicator(classNode.SourceSpan, IndicatorType.SQUIGGLE, ERROR_COLOR, tooltip);
+                AddIndicator(classNode.NameToken.SourceSpan, IndicatorType.SQUIGGLE, ERROR_COLOR, tooltip);
             }
         }
         catch (Exception)

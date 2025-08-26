@@ -23,7 +23,7 @@ public class UnusedVariables : ScopedStyler
         usageTracker = new VariableUsageTracker();
     }
 
-    public override string Description => "Highlights unused variables and parameters";
+    public override string Description => "Unused variables";
 
 
     #region AST Visitor Overrides

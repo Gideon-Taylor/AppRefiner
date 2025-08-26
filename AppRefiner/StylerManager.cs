@@ -46,7 +46,8 @@ namespace AppRefiner.Stylers
             // Discover core stylers from the main assembly
             var executingAssembly = Assembly.GetExecutingAssembly();
             var coreStylerTypes = executingAssembly.GetTypes()
-                .Where(p => typeof(IStyler).IsAssignableFrom(p) && !p.IsAbstract && !p.IsInterface);
+                .Where(p => typeof(IStyler).IsAssignableFrom(p) && !p.IsAbstract && !p.IsInterface 
+                    && p.Name != "BaseStyler" && p.Name != "ScopedStyler");
 
             // Discover stylers from plugins
             var pluginStylers = PluginManager.DiscoverStylerTypes();
@@ -97,8 +98,11 @@ namespace AppRefiner.Stylers
                 return; // Unable to parse
             }
 
-            // Get active stylers, filtering by database requirement
-            var activeStylers = stylers.Where(a => a.Active && (a.DatabaseRequirement != DataManagerRequirement.Required || editorDataManager != null));
+            // Get active stylers, filtering by database requirement and excluding base classes
+            var activeStylers = stylers.Where(a => a.Active 
+                && (a.DatabaseRequirement != DataManagerRequirement.Required || editorDataManager != null)
+                && a.GetType() != typeof(BaseStyler) 
+                && a.GetType() != typeof(ScopedStyler));
 
             List<Indicator> newIndicators = new();
 

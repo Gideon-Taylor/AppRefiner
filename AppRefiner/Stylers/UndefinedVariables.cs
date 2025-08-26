@@ -24,7 +24,7 @@ public class UndefinedVariables : ScopedStyler
         usageTracker = new VariableUsageTracker();
     }
 
-    public override string Description => "Highlights undefined variables";
+    public override string Description => "Undefined variables";
 
     #region AST Visitor Overrides
 
@@ -176,7 +176,7 @@ public class UndefinedVariables : ScopedStyler
         foreach (var (name, location, scope) in usageTracker.GetUndefinedReferences())
         {
             string tooltip = $"Undefined variable: {name}";
-            AddIndicator(location, IndicatorType.BACKGROUND, HIGHLIGHT_COLOR, tooltip);
+            AddIndicator(location, IndicatorType.HIGHLIGHTER, HIGHLIGHT_COLOR, tooltip);
         }
     }
 

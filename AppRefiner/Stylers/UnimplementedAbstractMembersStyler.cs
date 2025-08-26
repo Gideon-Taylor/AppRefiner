@@ -18,7 +18,7 @@ namespace AppRefiner.Stylers
     {
         private const uint WARNING_COLOR = 0xFF00A5FF; // Orange (BGRA) for unimplemented members warning
 
-        public override string Description => "Classes missing abstract member implementations";
+        public override string Description => "Missing abstract implementations";
 
         /// <summary>
         /// Specifies that this styler requires a database connection to resolve class hierarchies.

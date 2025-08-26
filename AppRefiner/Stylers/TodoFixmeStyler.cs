@@ -33,7 +33,7 @@ public class TodoFixmeStyler : BaseStyler
         };
     }
 
-    public override string Description => "Highlights TODO, FIXME, NOTE comment markers";
+    public override string Description => "TODO/FIXME comments";
 
     /// <summary>
     /// Adds a custom comment marker to be highlighted
@@ -107,7 +107,7 @@ public class TodoFixmeStyler : BaseStyler
                 
                 AddIndicator(
                     comment.SourceSpan, 
-                    IndicatorType.BACKGROUND, 
+                    IndicatorType.HIGHLIGHTER, 
                     color,
                     $"{marker}: {content}"
                 );

@@ -15,7 +15,7 @@ public class InvalidAppClass : BaseStyler
     // Dictionary cache to store app class path validity status (true = valid, false = invalid)
     private static Dictionary<string, bool> AppClassValidity = new();
 
-    public override string Description => "Highlights invalid application class references";
+    public override string Description => "Invalid app classes";
 
     /// <summary>
     /// This styler requires a database connection to validate app class references
