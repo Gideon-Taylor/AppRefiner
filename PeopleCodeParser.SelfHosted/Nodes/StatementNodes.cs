@@ -397,9 +397,9 @@ public class WhenClause
 }
 
 /// <summary>
-/// TRY-CATCH statement
+/// TRY statement
 /// </summary>
-public class TryCatchStatementNode : StatementNode
+public class TryStatementNode : StatementNode
 {
     /// <summary>
     /// TRY block
@@ -409,73 +409,49 @@ public class TryCatchStatementNode : StatementNode
     /// <summary>
     /// CATCH clauses
     /// </summary>
-    public List<CatchClause> CatchClauses { get; } = new();
+    public List<CatchStatementNode> CatchClauses { get; } = new();
 
     public override bool IntroducesScope => true;
     public override bool CanTransferControl => 
         TryBlock.CanTransferControl || 
-        CatchClauses.Any(c => c.Body.CanTransferControl);
+        CatchClauses.Any(c => c.CanTransferControl);
 
-    public TryCatchStatementNode(BlockNode tryBlock)
+    public TryStatementNode(BlockNode tryBlock, IEnumerable<CatchStatementNode>? catchClauses = null)
     {
         TryBlock = tryBlock ?? throw new ArgumentNullException(nameof(tryBlock));
         AddChild(tryBlock);
+        
+        if (catchClauses != null)
+        {
+            foreach (var catchClause in catchClauses)
+            {
+                AddCatchClause(catchClause);
+            }
+        }
     }
 
-    public void AddCatchClause(CatchClause catchClause)
+    public void AddCatchClause(CatchStatementNode catchClause)
     {
         CatchClauses.Add(catchClause);
-        AddChildren(catchClause.ExceptionType, catchClause.Body);
+        AddChild(catchClause);
     }
 
     public override void Accept(IAstVisitor visitor)
     {
-        visitor.VisitTryCatch(this);
+        visitor.VisitTry(this);
     }
 
     public override TResult Accept<TResult>(IAstVisitor<TResult> visitor)
     {
-        return visitor.VisitTryCatch(this);
+        return visitor.VisitTry(this);
     }
 
     public override string ToString()
     {
-        return $"TRY-CATCH ({CatchClauses.Count} catch clauses)";
+        return $"TRY ({CatchClauses.Count} catch clauses)";
     }
 }
 
-/// <summary>
-/// Represents a CATCH clause in a TRY-CATCH statement
-/// </summary>
-public class CatchClause
-{
-    /// <summary>
-    /// Exception type to catch
-    /// </summary>
-    public TypeNode ExceptionType { get; }
-
-    /// <summary>
-    /// Exception variable name
-    /// </summary>
-    public string VariableName { get; }
-
-    /// <summary>
-    /// Catch block body
-    /// </summary>
-    public BlockNode Body { get; }
-
-    public CatchClause(TypeNode exceptionType, string variableName, BlockNode body)
-    {
-        ExceptionType = exceptionType ?? throw new ArgumentNullException(nameof(exceptionType));
-        VariableName = variableName ?? throw new ArgumentNullException(nameof(variableName));
-        Body = body ?? throw new ArgumentNullException(nameof(body));
-    }
-
-    public override string ToString()
-    {
-        return $"CATCH {ExceptionType} {VariableName}";
-    }
-}
 
 /// <summary>
 /// RETURN statement
@@ -849,78 +825,11 @@ public class LocalVariableDeclarationWithAssignmentNode : StatementNode
     }
 }
 
-/// <summary>
-/// TRY statement node (alternative to TryCatchStatementNode for simpler naming)
-/// </summary>
-public class TryStatementNode : StatementNode
-{
-    /// <summary>
-    /// TRY block
-    /// </summary>
-    public BlockNode TryBlock { get; }
-
-    /// <summary>
-    /// CATCH clauses
-    /// </summary>
-    public List<CatchClauseNode> CatchClauses { get; } = new();
-
-    public override bool IntroducesScope => true;
-    public override bool CanTransferControl => 
-        TryBlock.CanTransferControl || 
-        CatchClauses.Any(c => c.Body.CanTransferControl);
-
-    public TryStatementNode(BlockNode tryBlock, IEnumerable<CatchClauseNode> catchClauses)
-    {
-        TryBlock = tryBlock ?? throw new ArgumentNullException(nameof(tryBlock));
-        
-        if (catchClauses != null)
-        {
-            CatchClauses.AddRange(catchClauses);
-        }
-
-        AddChild(tryBlock);
-        AddChildren(CatchClauses.Cast<AstNode>());
-    }
-
-    public override void Accept(IAstVisitor visitor)
-    {
-        visitor.VisitTryCatch(new TryCatchProxy(this));
-    }
-
-    public override TResult Accept<TResult>(IAstVisitor<TResult> visitor)
-    {
-        return visitor.VisitTryCatch(new TryCatchProxy(this));
-    }
-
-    public override string ToString()
-    {
-        return $"TRY-CATCH ({CatchClauses.Count} catch clauses)";
-    }
-}
 
 /// <summary>
-/// Proxy to bridge TryStatementNode to TryCatchStatementNode for visitor pattern
+/// CATCH statement for exception handling
 /// </summary>
-internal class TryCatchProxy : TryCatchStatementNode
-{
-    public TryCatchProxy(TryStatementNode tryStatement) : base(tryStatement.TryBlock)
-    {
-        // Convert CatchClauseNode to CatchClause for compatibility
-        foreach (var clause in tryStatement.CatchClauses)
-        {
-            // For now, create a placeholder catch clause
-            // This is a simplification - in a full implementation you'd properly convert
-            var placeholderType = new BuiltInTypeNode(BuiltInType.Any);
-            var placeholderVariable = clause.ExceptionVariable?.Name ?? "e";
-            AddCatchClause(new CatchClause(placeholderType, placeholderVariable, clause.Body));
-        }
-    }
-}
-
-/// <summary>
-/// Catch clause node for exception handling
-/// </summary>
-public class CatchClauseNode : AstNode
+public class CatchStatementNode : StatementNode
 {
     /// <summary>
     /// Exception variable
@@ -937,7 +846,10 @@ public class CatchClauseNode : AstNode
     /// </summary>
     public BlockNode Body { get; }
 
-    public CatchClauseNode(IdentifierNode? exceptionVariable, BlockNode body, TypeNode? exceptionType = null)
+    public override bool IntroducesScope => true;
+    public override bool CanTransferControl => Body.CanTransferControl;
+
+    public CatchStatementNode(IdentifierNode? exceptionVariable, BlockNode body, TypeNode? exceptionType = null)
     {
         ExceptionVariable = exceptionVariable;
         ExceptionType = exceptionType;

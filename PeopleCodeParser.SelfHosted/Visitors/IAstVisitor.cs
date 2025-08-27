@@ -32,7 +32,7 @@ public interface IAstVisitor
     void VisitWhile(WhileStatementNode node);
     void VisitRepeat(RepeatStatementNode node);
     void VisitEvaluate(EvaluateStatementNode node);
-    void VisitTryCatch(TryCatchStatementNode node);
+    void VisitTry(TryStatementNode node);
     void VisitReturn(ReturnStatementNode node);
     void VisitThrow(ThrowStatementNode node);
     void VisitBreak(BreakStatementNode node);
@@ -58,7 +58,7 @@ public interface IAstVisitor
     void VisitMemberAccess(MemberAccessNode node);
     void VisitLocalVariableDeclaration(LocalVariableDeclarationNode node);
     void VisitLocalVariableDeclarationWithAssignment(LocalVariableDeclarationWithAssignmentNode node);
-    void VisitCatch(CatchClauseNode node);
+    void VisitCatch(CatchStatementNode node);
     void VisitMetadataExpression(MetadataExpressionNode node);
     void VisitClassConstant(ClassConstantNode classConstantNode);
 }
@@ -93,7 +93,7 @@ public interface IAstVisitor<out TResult>
     TResult VisitWhile(WhileStatementNode node);
     TResult VisitRepeat(RepeatStatementNode node);
     TResult VisitEvaluate(EvaluateStatementNode node);
-    TResult VisitTryCatch(TryCatchStatementNode node);
+    TResult VisitTry(TryStatementNode node);
     TResult VisitReturn(ReturnStatementNode node);
     TResult VisitThrow(ThrowStatementNode node);
     TResult VisitBreak(BreakStatementNode node);
@@ -119,7 +119,7 @@ public interface IAstVisitor<out TResult>
     TResult VisitMemberAccess(MemberAccessNode node);
     TResult VisitLocalVariableDeclaration(LocalVariableDeclarationNode node);
     TResult VisitLocalVariableDeclarationWithAssignment(LocalVariableDeclarationWithAssignmentNode node);
-    TResult VisitCatch(CatchClauseNode node);
+    TResult VisitCatch(CatchStatementNode node);
     TResult VisitMetadataExpression(MetadataExpressionNode node);
     TResult VisitClassConstant(ClassConstantNode classConstantNode);
 }
@@ -436,7 +436,7 @@ public abstract class AstVisitorBase : IAstVisitor
             node.WhenOtherBlock.Accept(this);
         }
     }
-    public virtual void VisitTryCatch(TryCatchStatementNode node)
+    public virtual void VisitTry(TryStatementNode node)
     {
         // Visit try block first
         node.TryBlock.Accept(this);
@@ -444,11 +444,7 @@ public abstract class AstVisitorBase : IAstVisitor
         // Visit catch clauses
         foreach (var catchClause in node.CatchClauses)
         {
-            // Visit exception type
-            catchClause.ExceptionType.Accept(this);
-            
-            // Visit catch block
-            catchClause.Body.Accept(this);
+            catchClause.Accept(this);
         }
     }
     public virtual void VisitReturn(ReturnStatementNode node)
@@ -593,7 +589,7 @@ public abstract class AstVisitorBase : IAstVisitor
         // Visit initial value
         node.InitialValue.Accept(this);
     }
-    public virtual void VisitCatch(CatchClauseNode node)
+    public virtual void VisitCatch(CatchStatementNode node)
     {
         // Visit exception variable if present
         if (node.ExceptionVariable != null)

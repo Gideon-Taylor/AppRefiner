@@ -145,21 +145,16 @@ public class DeadCodeStyler : BaseStyler
         base.VisitEvaluate(node);
     }
 
-    /// <summary>
-    /// Processes try-catch blocks for dead code
-    /// </summary>
-    public override void VisitTryCatch(TryCatchStatementNode node)
+    public override void VisitTry(TryStatementNode node)
     {
-        // Check try block for dead code
         ProcessBlock(node.TryBlock);
-        
-        // Check each catch clause body for dead code
-        foreach (var catchClause in node.CatchClauses)
-        {
-            ProcessBlock(catchClause.Body);
-        }
-        
-        base.VisitTryCatch(node);
+        base.VisitTry(node);
+    }
+
+    public override void VisitCatch(CatchStatementNode node)
+    {
+        ProcessBlock(node.Body);
+        base.VisitCatch(node);
     }
 
     /// <summary>

@@ -39,6 +39,10 @@ public abstract class DeclarationNode : AstNode
 /// </summary>
 public class MethodNode : DeclarationNode
 {
+    /* Stores the source span for the method header since the base AstNode.SourceSpan
+     * covers the method implementation */
+    public SourceSpan HeaderSpan { get; set; }
+
     /// <summary>
     /// Method parameters
     /// </summary>
