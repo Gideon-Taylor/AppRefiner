@@ -1,9 +1,10 @@
-using Antlr4.Runtime.Tree;
 using AppRefiner.Dialogs;
 using AppRefiner.Events; // For ModifierKeys
-using AppRefiner.PeopleCode;
 using AppRefiner.Plugins;
 using AppRefiner.Refactors;
+using PeopleCodeParser.SelfHosted.Nodes;
+using PeopleCodeParser.SelfHosted.Visitors;
+using System.Collections;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -13,8 +14,6 @@ using System.Linq;
 using System.Reflection;
 using System.Text;
 using System.Windows.Forms;
-using static SqlParser.Ast.AlterRoleOperation;
-using Antlr4.Runtime;
 
 namespace AppRefiner.Refactors
 {
@@ -96,10 +95,11 @@ namespace AppRefiner.Refactors
             // Discover types (similar to MainForm.DiscoverRefactorTypes)
             var refactorTypes = AppDomain.CurrentDomain.GetAssemblies()
                 .SelectMany(s => s.GetTypes())
-                .Where(p => typeof(BaseRefactor).IsAssignableFrom(p) &&
+                .Where(p => typeof(IRefactor).IsAssignableFrom(p) &&
                               !p.IsAbstract &&
                               p != typeof(BaseRefactor) &&
-                              !p.IsGenericTypeDefinition); // Avoid ScopedRefactor<>
+                              p != typeof(ScopedRefactor) &&
+                              !p.IsGenericTypeDefinition);
 
             // Add plugin refactors
             var pluginRefactors = PluginManager.DiscoverRefactorTypes();
@@ -163,7 +163,7 @@ namespace AppRefiner.Refactors
                 int rowIndex = refactorGrid.Rows.Add(refactorInfo.Description, String.IsNullOrEmpty(refactorInfo.ShortcutText) ? "Cmd Palette" : refactorInfo.ShortcutText);
                 refactorGrid.Rows[rowIndex].Tag = refactorInfo;
 
-                var configurableProperties = BaseRefactor.GetConfigurableProperties(refactorInfo.RefactorType);
+                var configurableProperties = refactorInfo.RefactorType.GetConfigurableProperties();
                 DataGridViewButtonCell buttonCell = (DataGridViewButtonCell)refactorGrid.Rows[rowIndex].Cells[2];
 
                 if (configurableProperties.Count > 0)
@@ -242,7 +242,7 @@ namespace AppRefiner.Refactors
         /// </summary>
         /// <param name="refactorClass">The instantiated refactor class to execute.</param>
         /// <param name="activeEditor">The editor to apply the refactoring to.</param>
-        public void ExecuteRefactor(BaseRefactor refactorClass, ScintillaEditor? activeEditor, bool showUserMessages = true)
+        public void ExecuteRefactor(IRefactor refactorClass, ScintillaEditor? activeEditor, bool showUserMessages = true)
         {
             if (activeEditor == null || !activeEditor.IsValid())
             {
@@ -287,10 +287,10 @@ namespace AppRefiner.Refactors
                     }
                 }
 
-                var (program, stream, _) = activeEditor.GetParsedProgram(true); // Force refresh
+                var (program, tokens) = activeEditor.GetSelfHostedParsedProgramWithTokens(true); // Force refresh
 
                 // Check if parsing was successful and if this refactor can run on incomplete parses
-                if (!activeEditor.IsParseSuccessful && !refactorClass.RunOnIncompleteParse)
+                if (program == null || (!activeEditor.IsSelfHostedParseSuccessful && !refactorClass.RunOnIncompleteParse))
                 {
                     Debug.Log($"Skipping refactor '{refactorClass.GetType().Name}' due to parse errors and RunOnIncompleteParse=false");
                     if (showUserMessages)
@@ -308,14 +308,31 @@ namespace AppRefiner.Refactors
                 }
 
                 // Initialize the refactor
-                refactorClass.Initialize(activeEditor.ContentString, stream, currentCursorPosition);
+                refactorClass.Initialize(activeEditor.ContentString, currentCursorPosition);
 
                 // NEW: Apply configuration just-in-time before visitor runs
                 RefactorConfigManager.ApplyConfigurationToInstance(refactorClass);
 
-                // Run the refactor visitor
-                ParseTreeWalker walker = new();
-                walker.Walk(refactorClass, program);
+                // Run the refactor visitor using AST visitor pattern
+                if (refactorClass is IAstVisitor visitor)
+                {
+                    program.Accept(visitor);
+                }
+                else
+                {
+                    Debug.Log($"Refactor {refactorClass.GetType().Name} does not implement IAstVisitor");
+                    if (showUserMessages)
+                    {
+                        Task.Delay(100).ContinueWith(_ =>
+                        {
+                            var mainHandle = Process.GetProcessById((int)activeEditor.ProcessId).MainWindowHandle;
+                            var handleWrapper = new WindowWrapper(mainHandle);
+                            new MessageBoxDialog($"The refactor {refactorClass.GetType().Name} cannot be executed because it does not implement IAstVisitor.", 
+                                "Refactor Error", MessageBoxButtons.OK, mainHandle).ShowDialog(handleWrapper);
+                        });
+                    }
+                    return;
+                }
 
                 // Check result
                 var result = refactorClass.GetResult();
@@ -345,20 +362,20 @@ namespace AppRefiner.Refactors
                     }
                 }
 
-                // Apply code changes directly to Scintilla
-                var changes = refactorClass.GetChanges();
-                if (changes.Count == 0)
+                // Apply refactoring changes
+                var refactorResult = refactorClass.ApplyRefactoring();
+                if (!refactorResult.Success)
                 {
                      Debug.Log("Refactoring produced no changes.");
                      // Optionally show an error, but maybe success was just no change needed
-                     if (!string.IsNullOrEmpty(result.Message) && showUserMessages)
+                     if (!string.IsNullOrEmpty(refactorResult.Message) && showUserMessages)
                      {
                           // Show success message if provided
                           Task.Delay(100).ContinueWith(_ =>
                           {
                               var mainHandle = Process.GetProcessById((int)activeEditor.ProcessId).MainWindowHandle;
                               var handleWrapper = new WindowWrapper(mainHandle);
-                              new MessageBoxDialog(result.Message, "Refactoring Note", MessageBoxButtons.OK, mainHandle).ShowDialog(handleWrapper);
+                              new MessageBoxDialog(refactorResult.Message, "Refactoring Note", MessageBoxButtons.OK, mainHandle).ShowDialog(handleWrapper);
                           });
                      }
                      return; 
@@ -369,17 +386,7 @@ namespace AppRefiner.Refactors
 
                 try
                 {
-                    // Sort changes from last to first to avoid index shifting issues
-                    var sortedChanges = changes.OrderByDescending(c => c.StartIndex).ToList();
-
-                    // Apply each change directly to Scintilla
-                    foreach (var change in sortedChanges)
-                    {
-                        if (!change.ApplyToScintilla(activeEditor))
-                        {
-                            Debug.Log($"Failed to apply change: {change.Description}");
-                        }
-                    }
+                                    // Changes are applied by the refactor itself
                 }
                 finally
                 {
@@ -398,7 +405,7 @@ namespace AppRefiner.Refactors
                     try
                     {
                         // Instantiate the follow-up refactor
-                        if (Activator.CreateInstance(followUpType, activeEditor) is BaseRefactor followUpRefactor)
+                        if (Activator.CreateInstance(followUpType, activeEditor) is IRefactor followUpRefactor)
                         {
                             // Execute it immediately
                             ExecuteRefactor(followUpRefactor, activeEditor); // Recursive call

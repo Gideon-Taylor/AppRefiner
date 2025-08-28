@@ -1,6 +1,4 @@
 using PeopleCodeParser.SelfHosted;
-using PeopleCodeParser.SelfHosted.Nodes;
-using PeopleCodeParser.SelfHosted.Visitors;
 using AppRefiner.Services;
 using System.Windows.Forms;
 using System.Diagnostics;
@@ -8,13 +6,10 @@ using System.Diagnostics;
 namespace AppRefiner.Refactors
 {
     /// <summary>
-    /// Base class for implementing PeopleCode refactoring operations using the self-hosted parser
-    /// without scope tracking. Use this for simple refactors that don't need variable tracking.
+    /// Abstract base class providing common functionality for all refactors
     /// </summary>
-    public abstract class BaseRefactor : AstVisitorBase, IRefactor
+    public abstract class RefactorBase : IRefactor
     {
-        #region Static Properties
-
         /// <summary>
         /// Gets the display name for this refactor
         /// </summary>
@@ -24,6 +19,16 @@ namespace AppRefiner.Refactors
         /// Gets the description for this refactor
         /// </summary>
         public static string RefactorDescription => "Base refactoring operation";
+
+        /// <summary>
+        /// Gets whether this refactor requires a user input dialog
+        /// </summary>
+        public virtual bool RequiresUserInputDialog => false;
+
+        /// <summary>
+        /// Gets whether this refactor should defer showing the dialog until after the visitor has run
+        /// </summary>
+        public virtual bool DeferDialogUntilAfterVisitor => false;
 
         /// <summary>
         /// Gets whether this refactor should have a keyboard shortcut registered
@@ -44,20 +49,6 @@ namespace AppRefiner.Refactors
         /// Gets the keyboard shortcut key for this refactor
         /// </summary>
         public static Keys ShortcutKey => Keys.None;
-
-        #endregion
-
-        #region IRefactor Properties
-
-        /// <summary>
-        /// Gets whether this refactor requires a user input dialog
-        /// </summary>
-        public virtual bool RequiresUserInputDialog => false;
-
-        /// <summary>
-        /// Gets whether this refactor should defer showing the dialog until after the visitor has run
-        /// </summary>
-        public virtual bool DeferDialogUntilAfterVisitor => false;
 
         /// <summary>
         /// Gets the type of a refactor that should be run immediately after this one completes successfully.
@@ -92,29 +83,21 @@ namespace AppRefiner.Refactors
         /// </summary>
         protected int CurrentCursorPosition => CurrentPosition;
 
-        #endregion
-
-        #region Private Fields
-
         private string? source;
         private int cursorPosition = -1;
         private bool failed;
         private string? failureMessage;
         private readonly List<TextEdit> edits = new();
 
-        #endregion
-
         /// <summary>
         /// Creates a new refactor instance
         /// </summary>
-        protected BaseRefactor(ScintillaEditor editor)
+        protected RefactorBase(ScintillaEditor editor)
         {
             Editor = editor;
             CurrentPosition = ScintillaManager.GetCursorPosition(editor);
             LineNumber = ScintillaManager.GetCurrentLineNumber(editor);
         }
-
-        #region IRefactor Implementation
 
         /// <summary>
         /// Gets the main window handle for the editor
@@ -169,7 +152,7 @@ namespace AppRefiner.Refactors
                 return RefactorResult.Failed($"Error applying edits: {ex.Message}");
             }
         }
-
+        
         /// <summary>
         /// Gets the result of the refactoring operation
         /// </summary>
@@ -182,10 +165,6 @@ namespace AppRefiner.Refactors
             
             return edits.Count > 0 ? RefactorResult.Successful : RefactorResult.Failed("No changes to apply");
         }
-
-        #endregion
-
-        #region Text Editing Methods
 
         /// <summary>
         /// Applies the collected edits to the document
@@ -257,61 +236,9 @@ namespace AppRefiner.Refactors
             failureMessage = message;
         }
 
-        #endregion
-
         /// <summary>
         /// Gets the list of edits for testing
         /// </summary>
         internal List<TextEdit> GetEdits() => edits;
-        
-        #region Backward Compatibility Methods
-        
-        /// <summary>
-        /// Gets the original text of a node (for backward compatibility)
-        /// </summary>
-        protected string? GetOriginalText(AstNode node, bool includeChildren = true)
-        {
-            if (node == null) return null;
-            
-            var span = node.SourceSpan;
-            if (!span.IsValid) return null;
-            
-            int startIndex = span.Start.ByteIndex;
-            int endIndex = span.End.ByteIndex;
-            
-            if (startIndex < 0 || endIndex < startIndex || endIndex >= source?.Length) return null;
-            
-            return source?.Substring(startIndex, endIndex - startIndex);
-        }
-        
-        /// <summary>
-        /// Replaces a node with new text (for backward compatibility)
-        /// </summary>
-        protected void ReplaceNode(AstNode node, string newText, string description)
-        {
-            if (node == null) return;
-            
-            var span = node.SourceSpan;
-            if (!span.IsValid) return;
-            
-            EditText(span, newText, description);
-        }
-        
-        /// <summary>
-        /// Deletes a node (for backward compatibility)
-        /// </summary>
-        protected void DeleteNode(AstNode node, string description)
-        {
-            if (node == null) return;
-            
-            var span = node.SourceSpan;
-            if (!span.IsValid) return;
-            
-            DeleteText(span, description);
-        }
-        
-        #endregion
-        
-
     }
 }

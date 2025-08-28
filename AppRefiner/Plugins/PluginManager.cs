@@ -124,7 +124,7 @@ namespace AppRefiner.Plugins
                     var types = assembly.GetTypes()
                         .Where(t => typeof(Refactors.BaseRefactor).IsAssignableFrom(t) && 
                                !t.IsAbstract && 
-                               t != typeof(Refactors.ScopedRefactor<>));
+                               t != typeof(Refactors.ScopedRefactor));
                     
                     refactorTypes.AddRange(types);
                 }
@@ -187,7 +187,7 @@ namespace AppRefiner.Plugins
                     var refactorCount = assembly.GetTypes()
                         .Count(t => typeof(Refactors.BaseRefactor).IsAssignableFrom(t) && 
                                !t.IsAbstract && 
-                               t != typeof(Refactors.ScopedRefactor<>));
+                               t != typeof(Refactors.ScopedRefactor));
                                
                     var tooltipProviderCount = assembly.GetTypes()
                         .Count(t => typeof(ITooltipProvider).IsAssignableFrom(t) && !t.IsAbstract && !t.IsInterface);

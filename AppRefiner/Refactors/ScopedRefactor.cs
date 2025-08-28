@@ -1,288 +1,335 @@
-using Antlr4.Runtime;
-using AppRefiner.Linters.Models;
-using AppRefiner.PeopleCode;
-using static AppRefiner.PeopleCode.PeopleCodeParser;
+using PeopleCodeParser.SelfHosted;
+using PeopleCodeParser.SelfHosted.Nodes;
+using PeopleCodeParser.SelfHosted.Visitors;
+using PeopleCodeParser.SelfHosted.Visitors.Models;
+using AppRefiner.Services;
+using System.Windows.Forms;
+using System.Diagnostics;
 
 namespace AppRefiner.Refactors
 {
-    public abstract class ScopedRefactor<T> : BaseRefactor
+    /// <summary>
+    /// Base class for implementing PeopleCode refactoring operations that need scope and variable tracking.
+    /// This class leverages the ScopedAstVisitor from the SelfHosted parser to provide automatic scope management.
+    /// </summary>
+    public abstract class ScopedRefactor : ScopedAstVisitor<object>, IRefactor
     {
-        /// <summary>
-        /// Gets the display name of this refactoring operation
-        /// </summary>
-        public new static string RefactorName => "Scoped Refactor";
+        #region Static Properties
 
         /// <summary>
-        /// Gets the description of this refactoring operation
+        /// Gets the display name for this refactor
         /// </summary>
-        public new static string RefactorDescription => "Refactoring operation with scope tracking";
-
-        protected readonly Stack<Dictionary<string, T>> scopeStack = new();
-        protected readonly Stack<Dictionary<string, VariableInfo>> variableScopeStack = new();
+        public static string RefactorName => "Scoped Refactor";
 
         /// <summary>
-        /// Initializes a new instance of the <see cref="ScopedRefactor{T}"/> class
+        /// Gets the description for this refactor
         /// </summary>
-        /// <param name="editor">The Scintilla editor instance</param>
-        protected ScopedRefactor(ScintillaEditor editor) : base(editor)
+        public static string RefactorDescription => "Scope-aware refactoring operation";
+
+        /// <summary>
+        /// Gets whether this refactor should have a keyboard shortcut registered
+        /// </summary>
+        public static bool RegisterKeyboardShortcut => false;
+
+        /// <summary>
+        /// Gets whether this refactor should be hidden from refactor lists and discovery
+        /// </summary>
+        public static bool IsHidden => false;
+
+        /// <summary>
+        /// Gets the keyboard shortcut modifier keys for this refactor
+        /// </summary>
+        public static ModifierKeys ShortcutModifiers => ModifierKeys.Control;
+
+        /// <summary>
+        /// Gets the keyboard shortcut key for this refactor
+        /// </summary>
+        public static Keys ShortcutKey => Keys.None;
+
+        #endregion
+
+        #region IRefactor Properties
+
+        /// <summary>
+        /// Gets whether this refactor requires a user input dialog
+        /// </summary>
+        public virtual bool RequiresUserInputDialog => false;
+
+        /// <summary>
+        /// Gets whether this refactor should defer showing the dialog until after the visitor has run
+        /// </summary>
+        public virtual bool DeferDialogUntilAfterVisitor => false;
+
+        /// <summary>
+        /// Gets the type of a refactor that should be run immediately after this one completes successfully.
+        /// Returns null if no follow-up refactor is needed.
+        /// </summary>
+        public virtual Type? FollowUpRefactorType => null;
+
+        /// <summary>
+        /// Gets whether this refactor should run even when the parser has syntax errors.
+        /// Defaults to true for backward compatibility, but refactors that modify imports or 
+        /// other structure-sensitive elements should set this to false.
+        /// </summary>
+        public virtual bool RunOnIncompleteParse => true;
+
+        /// <summary>
+        /// Gets the ScintillaEditor instance
+        /// </summary>
+        public ScintillaEditor Editor { get; }
+
+        /// <summary>
+        /// Gets the current cursor position
+        /// </summary>
+        public int CurrentPosition { get; }
+
+        /// <summary>
+        /// Gets the current line number
+        /// </summary>
+        public int LineNumber { get; }
+
+        /// <summary>
+        /// Gets the current cursor position (alias for CurrentPosition)
+        /// </summary>
+        protected int CurrentCursorPosition => CurrentPosition;
+        
+        /// <summary>
+        /// Gets the current scope
+        /// </summary>
+        protected PeopleCodeParser.SelfHosted.Visitors.Models.ScopeInfo? CurrentScope => scopeInfoStack.Count > 0 ? scopeInfoStack.Peek() : null;
+
+        #endregion
+
+        #region Private Fields
+
+        private string? source;
+        private int cursorPosition = -1;
+        private bool failed;
+        private string? failureMessage;
+        private readonly List<TextEdit> edits = new();
+
+        #endregion
+
+        /// <summary>
+        /// Creates a new refactor instance
+        /// </summary>
+        protected ScopedRefactor(ScintillaEditor editor)
         {
-            // Start with a global scope
-            scopeStack.Push([]);
-            variableScopeStack.Push([]);
+            Editor = editor;
+            CurrentPosition = ScintillaManager.GetCursorPosition(editor);
+            LineNumber = ScintillaManager.GetCurrentLineNumber(editor);
+        }
+
+        #region IRefactor Implementation
+
+        /// <summary>
+        /// Gets the main window handle for the editor
+        /// </summary>
+        public IntPtr GetEditorMainWindowHandle()
+        {
+            return Process.GetProcessById((int)Editor.ProcessId).MainWindowHandle;
+        }
+
+        /// <summary>
+        /// Initializes the refactor with the source code and cursor position
+        /// </summary>
+        public virtual void Initialize(string source, int cursorPosition)
+        {
+            this.source = source;
+            this.cursorPosition = cursorPosition;
+            failed = false;
+            failureMessage = null;
+            edits.Clear();
+        }
+
+        /// <summary>
+        /// Shows the refactor dialog (if required)
+        /// </summary>
+        public virtual bool ShowRefactorDialog()
+        {
+            return true;
+        }
+
+        /// <summary>
+        /// Applies the refactoring changes to the document
+        /// </summary>
+        public virtual RefactorResult ApplyRefactoring()
+        {
+            if (failed)
+            {
+                return RefactorResult.Failed(failureMessage ?? "Unknown error");
+            }
+
+            if (edits.Count == 0)
+            {
+                return RefactorResult.Failed("No changes to apply");
+            }
+
+            try
+            {
+                ApplyEdits();
+                return RefactorResult.Successful;
+            }
+            catch (Exception ex)
+            {
+                return RefactorResult.Failed($"Error applying edits: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Gets the result of the refactoring operation
+        /// </summary>
+        public virtual RefactorResult GetResult()
+        {
+            if (failed)
+            {
+                return RefactorResult.Failed(failureMessage ?? "Unknown error");
+            }
+            
+            return edits.Count > 0 ? RefactorResult.Successful : RefactorResult.Failed("No changes to apply");
+        }
+
+        #endregion
+
+        #region Text Editing Methods
+
+        /// <summary>
+        /// Applies the collected edits to the document
+        /// </summary>
+        protected virtual void ApplyEdits()
+        {
+            // Apply edits in reverse order to avoid position shifting
+            var sortedEdits = edits.OrderByDescending(e => e.StartIndex).ToList();
+            foreach (var edit in sortedEdits)
+            {
+                ScintillaManager.ReplaceTextRange(Editor, edit.StartIndex, edit.EndIndex, edit.NewText);
+            }
+        }
+
+        /// <summary>
+        /// Adds a text edit to replace text at the given position
+        /// </summary>
+        protected void EditText(int startIndex, int endIndex, string newText, string description)
+        {
+            edits.Add(new TextEdit(startIndex, endIndex, newText, description));
+        }
+
+        /// <summary>
+        /// Adds a text edit to replace text at the given source span
+        /// </summary>
+        protected void EditText(SourceSpan span, string newText, string description)
+        {
+            edits.Add(new TextEdit(span, newText, description));
+        }
+
+        /// <summary>
+        /// Adds a text edit to insert text at the given position
+        /// </summary>
+        protected void InsertText(int position, string text, string description)
+        {
+            edits.Add(new TextEdit(position, position, text, description));
+        }
+
+        /// <summary>
+        /// Adds a text edit to insert text at the given source position
+        /// </summary>
+        protected void InsertText(SourcePosition position, string text, string description)
+        {
+            edits.Add(new TextEdit(position.ByteIndex, position.ByteIndex, text, description));
+        }
+
+        /// <summary>
+        /// Adds a text edit to delete text at the given position range
+        /// </summary>
+        protected void DeleteText(int startIndex, int endIndex, string description)
+        {
+            edits.Add(new TextEdit(startIndex, endIndex, "", description));
+        }
+
+        /// <summary>
+        /// Adds a text edit to delete text at the given source span
+        /// </summary>
+        protected void DeleteText(SourceSpan span, string description)
+        {
+            edits.Add(new TextEdit(span, "", description));
+        }
+
+        /// <summary>
+        /// Marks the refactor as failed with the specified message
+        /// </summary>
+        protected void SetFailure(string message)
+        {
+            failed = true;
+            failureMessage = message;
+        }
+
+        #endregion
+
+        #region Helper Methods for Variable References
+
+        /// <summary>
+        /// Checks if a position is within a source span
+        /// </summary>
+        protected bool IsPositionInSpan(int position, SourceSpan span)
+        {
+            return position >= span.Start.ByteIndex && position <= span.End.ByteIndex;
+        }
+
+        /// <summary>
+        /// Checks if a node contains the current cursor position
+        /// </summary>
+        protected bool NodeContainsCursor(AstNode node)
+        {
+            return node.SourceSpan.ContainsPosition(CurrentPosition);
+        }
+
+        /// <summary>
+        /// Finds all occurrences of a variable in the current scope
+        /// </summary>
+        protected List<SourceSpan> FindVariableOccurrencesInScope(string variableName)
+        {
+            var occurrences = new List<SourceSpan>();
+            
+            // Try to find the variable in any accessible scope
+            if (TryFindVariable(variableName, out var variableInfo))
+            {
+                // Add the declaration occurrence
+                if (variableInfo.VariableNameInfo.Token != null)
+                {
+                    occurrences.Add(variableInfo.VariableNameInfo.Token.SourceSpan);
+                }
+                
+                // Add any tracked usages (needs to be implemented in the specific refactor)
+            }
+            
+            return occurrences;
+        }
+
+        #endregion
+
+        /// <summary>
+        /// Gets the list of edits for testing
+        /// </summary>
+        internal List<TextEdit> GetEdits() => edits;
+        
+        #region Backward Compatibility Methods
+        
+        /// <summary>
+        /// Gets all scopes containing a specific position (for backward compatibility)
+        /// </summary>
+        protected List<PeopleCodeParser.SelfHosted.Visitors.Models.ScopeInfo> GetScopesContaining(int position)
+        {
+            var result = new List<PeopleCodeParser.SelfHosted.Visitors.Models.ScopeInfo>();
+            
+            // Add all scopes in the stack that might contain the position
+            foreach (var scope in scopeInfoStack)
+            {
+                result.Add(scope);
+            }
+            
+            return result;
         }
         
-        // Variable tracking methods
-        protected void AddLocalVariable(string name, string type, int line, IToken token)
-        {
-            var currentScope = variableScopeStack.Peek();
-            if (!currentScope.ContainsKey(name))
-            {
-                // Create VariableInfo with both character and byte spans for consistency
-                currentScope[name] = new VariableInfo(name, type, line, (token.ByteStartIndex(), token.ByteStopIndex()));
-            }
-        }
-
-        protected bool TryGetVariableInfo(string name, out VariableInfo? info)
-        {
-            info = null;
-            foreach (var scope in variableScopeStack)
-            {
-                if (scope.TryGetValue(name, out info))
-                {
-                    return true;
-                }
-            }
-            return false;
-        }
-
-        protected IEnumerable<VariableInfo> GetVariablesInCurrentScope()
-        {
-            return variableScopeStack.Peek().Values;
-        }
-
-        protected void MarkVariableAsUsed(string name)
-        {
-            foreach (var scope in variableScopeStack)
-            {
-                if (scope.TryGetValue(name, out var info))
-                {
-                    info.Used = true;
-                    break;
-                }
-            }
-        }
-
-        // Scope management methods
-        protected Dictionary<string, T> GetCurrentScope() => scopeStack.Peek();
-
-        protected void AddToCurrentScope(string key, T value)
-        {
-            var currentScope = GetCurrentScope();
-            if (!currentScope.ContainsKey(key))
-            {
-                currentScope[key] = value;
-            }
-        }
-
-        protected void ReplaceInFoundScope(string key, T newValue)
-        {
-            foreach (var scope in scopeStack)
-            {
-                if (scope.ContainsKey(key))
-                {
-                    scope[key] = newValue;
-                    return;
-                }
-            }
-        }
-
-        protected bool TryFindInScopes(string key, out T? value)
-        {
-            value = default;
-            foreach (var scope in scopeStack)
-            {
-                if (scope.TryGetValue(key, out value))
-                {
-                    return true;
-                }
-            }
-            return false;
-        }
-
-        // Parser overrides for scope management
-        public override void EnterMethod(MethodContext context)
-        {
-            scopeStack.Push(new Dictionary<string, T>());
-            variableScopeStack.Push(new Dictionary<string, VariableInfo>());
-            OnEnterScope();
-        }
-
-        public override void ExitMethod(MethodContext context)
-        {
-            var scope = scopeStack.Pop();
-            var varScope = variableScopeStack.Pop();
-            OnExitScope(scope, varScope);
-        }
-
-        public override void EnterFunctionDefinition(FunctionDefinitionContext context)
-        {
-            scopeStack.Push(new Dictionary<string, T>());
-            variableScopeStack.Push(new Dictionary<string, VariableInfo>());
-            OnEnterScope();
-        }
-
-        public override void ExitFunctionDefinition(FunctionDefinitionContext context)
-        {
-            var scope = scopeStack.Pop();
-            var varScope = variableScopeStack.Pop();
-            OnExitScope(scope, varScope);
-        }
-
-        public override void EnterGetter(GetterContext context)
-        {
-            scopeStack.Push(new Dictionary<string, T>());
-            variableScopeStack.Push(new Dictionary<string, VariableInfo>());
-            OnEnterScope();
-        }
-
-        public override void ExitGetter(GetterContext context)
-        {
-            var scope = scopeStack.Pop();
-            var varScope = variableScopeStack.Pop();
-            OnExitScope(scope, varScope);
-        }
-
-        public override void EnterSetter(SetterContext context)
-        {
-            scopeStack.Push(new Dictionary<string, T>());
-            variableScopeStack.Push(new Dictionary<string, VariableInfo>());
-            OnEnterScope();
-        }
-
-        public override void ExitSetter(SetterContext context)
-        {
-            var scope = scopeStack.Pop();
-            var varScope = variableScopeStack.Pop();
-            OnExitScope(scope, varScope);
-        }
-
-        public override void EnterLocalVariableDefinition(LocalVariableDefinitionContext context)
-        {
-            // Extract type information from the type context
-            var typeContext = context.typeT();
-            string typeName = ScopedRefactor<T>.GetTypeFromContext(typeContext);
-
-            // Process each variable declaration in the list
-            foreach (var varNode in context.USER_VARIABLE())
-            {
-                string varName = varNode.GetText();
-                AddLocalVariable(
-                    varName,
-                    typeName,
-                    varNode.Symbol.Line,
-                    varNode.Symbol
-                );
-                OnVariableDeclared(variableScopeStack.Peek()[varName]);
-            }
-        }
-
-        public override void EnterLocalVariableDeclAssignment(LocalVariableDeclAssignmentContext context)
-        {
-            // Extract type information from the type context
-            var typeContext = context.typeT();
-            string typeName = ScopedRefactor<T>.GetTypeFromContext(typeContext);
-
-            // Process the single variable declaration
-            var varNode = context.USER_VARIABLE();
-            string varName = varNode.GetText();
-            AddLocalVariable(
-                varName,
-                typeName,
-                varNode.Symbol.Line,
-                varNode.Symbol
-            );
-            OnVariableDeclared(variableScopeStack.Peek()[varName]);
-        }
-
-        public override void EnterConstantDeclaration(ConstantDeclarationContext context)
-        {
-            // Extract variable information
-            var varNode = context.USER_VARIABLE();
-            if (varNode != null)
-            {
-                string varName = varNode.GetText();
-                
-                // Constants are implicitly typed based on their literal value
-                // For simplicity, we'll just use "Constant" as the type
-                AddLocalVariable(
-                    varName,
-                    "Constant",
-                    varNode.Symbol.Line,
-                    varNode.Symbol
-                );
-                OnVariableDeclared(variableScopeStack.Peek()[varName]);
-            }
-        }
-
-        public override void EnterIdentUserVariable(IdentUserVariableContext context)
-        {
-            string varName = context.GetText();
-            if (TryGetVariableInfo(varName, out var info) && info != null)
-            {
-                info.Used = true;
-                OnVariableUsed(info);
-            }
-        }
-
-        // Reset method to clear scope stacks
-        public void Reset()
-        {
-            while (scopeStack.Count > 0)
-            {
-                var dict = scopeStack.Pop();
-                dict.Clear();
-            }
-
-            while (variableScopeStack.Count > 0)
-            {
-                var dict = variableScopeStack.Pop();
-                dict.Clear();
-            }
-
-            scopeStack.Push(new Dictionary<string, T>());
-            variableScopeStack.Push(new Dictionary<string, VariableInfo>());
-        }
-
-        // Helper method to extract type information from the type context
-        public static string GetTypeFromContext(TypeTContext typeContext)
-        {
-            if (typeContext is ArrayTypeContext arrayType)
-            {
-                var baseType = arrayType.typeT() != null
-                    ? ScopedRefactor<T>.GetTypeFromContext(arrayType.typeT())
-                    : "Any";
-                return $"Array of {baseType}";
-            }
-            else if (typeContext is BaseExceptionTypeContext)
-            {
-                return "Exception";
-            }
-            else if (typeContext is AppClassTypeContext appClass)
-            {
-                return appClass.appClassPath().GetText();
-            }
-            else if (typeContext is SimpleTypeTypeContext simpleType)
-            {
-                return simpleType.simpleType().GetText();
-            }
-
-            return "Any"; // Default type if none specified
-        }
-
-        // Virtual methods for derived classes to handle scope and variable changes
-        protected virtual void OnVariableDeclared(VariableInfo varInfo) { }
-        protected virtual void OnVariableUsed(VariableInfo varInfo) { }
-        protected virtual void OnEnterScope() { }
-        protected virtual void OnExitScope(Dictionary<string, T> scope, Dictionary<string, VariableInfo> variableScope) { }
+        #endregion
     }
 }

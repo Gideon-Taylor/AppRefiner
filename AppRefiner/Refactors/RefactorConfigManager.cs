@@ -86,15 +86,12 @@ namespace AppRefiner.Refactors
         /// Applies stored configuration to a refactor instance
         /// </summary>
         /// <param name="instance">The refactor instance to configure</param>
-        public static void ApplyConfigurationToInstance(BaseRefactor instance)
+        public static void ApplyConfigurationToInstance(IRefactor instance)
         {
             if (instance == null) return;
 
-            string typeName = instance.GetType().FullName ?? string.Empty;
-            if (!string.IsNullOrEmpty(typeName) && RefactorConfigs.TryGetValue(typeName, out string? config))
-            {
-                instance.ApplyRefactorConfig(config);
-            }
+            // Configuration is not currently supported with the new refactor architecture
+            // This method is kept for compatibility
         }
 
         /// <summary>
@@ -148,7 +145,7 @@ namespace AppRefiner.Refactors
         /// <returns>True if the refactor has configurable properties</returns>
         public static bool HasConfigurableProperties(Type refactorType)
         {
-            return BaseRefactor.GetConfigurableProperties(refactorType).Count > 0;
+            return refactorType.GetConfigurableProperties().Count > 0;
         }
 
         /// <summary>
@@ -165,7 +162,7 @@ namespace AppRefiner.Refactors
             }
 
             // Create default configuration
-            var defaultConfig = BaseRefactor.GetDefaultRefactorConfig(refactorType);
+            var defaultConfig = "{}";
             UpdateRefactorConfig(refactorType, defaultConfig);
             return defaultConfig;
         }

@@ -247,6 +247,7 @@ namespace AppRefiner
         // Self-hosted parser cached fields
         private int selfHostedContentHash;
         private ProgramNode? selfHostedParsedProgram;
+        private List<Token>? selfHostedTokens;
         private bool selfHostedParseSuccessful = true;
 
         public string? ContentString = null;
@@ -262,6 +263,11 @@ namespace AppRefiner
         /// Gets whether the last parse operation was successful (no syntax errors)
         /// </summary>
         public bool IsParseSuccessful => parseSuccessful;
+
+        /// <summary>
+        /// Gets whether the last self-hosted parse operation was successful (no syntax errors)
+        /// </summary>
+        public bool IsSelfHostedParseSuccessful => selfHostedParseSuccessful;
 
         // Relative path to the file in the Snapshot database
         public string? RelativePath { get; set; }
@@ -417,6 +423,61 @@ namespace AppRefiner
             GC.Collect();
 
             return selfHostedParsedProgram;
+        }
+
+        /// <summary>
+        /// Gets the self-hosted parsed program along with tokens, for refactoring operations
+        /// </summary>
+        /// <param name="forceReparse">Force a new parse regardless of content hash</param>
+        /// <returns>A tuple containing the program node and token stream, or null if parsing failed</returns>
+        public (ProgramNode? Program, List<Token>? Tokens) GetSelfHostedParsedProgramWithTokens(bool forceReparse = false)
+        {
+            // Ensure we have the current content
+            ContentString = ScintillaManager.GetScintillaText(this);
+
+            // Calculate hash of current content
+            int newHash = ContentString?.GetHashCode() ?? 0;
+            Debug.Log($"Self-hosted parser (with tokens) - New content hash: {newHash}");
+            
+            // If content hasn't changed and we have a cached parse tree, return it
+            if (!forceReparse && newHash == selfHostedContentHash && selfHostedParsedProgram != null && selfHostedTokens != null)
+            {
+                return (selfHostedParsedProgram, selfHostedTokens);
+            }
+
+            // Content has changed or we don't have a cached parse tree, parse it
+            var currentStart = TotalParseTime.Elapsed;
+            TotalParseTime.Start();
+
+            try
+            {
+                // Use the self-hosted parser
+                SelfHostedLexer selfHostedLexer = new SelfHostedLexer(ContentString ?? string.Empty);
+                var tokens = selfHostedLexer.TokenizeAll();
+                /* TODO: data manager support for getting current tools release */
+                var parser = new PeopleCodeParser.SelfHosted.PeopleCodeParser(tokens,"8.61");
+                selfHostedParsedProgram = parser.ParseProgram();
+                selfHostedTokens = tokens;
+                selfHostedParseSuccessful = true;
+                selfHostedContentHash = newHash;
+
+                Debug.Log($"Self-hosted parser (with tokens) - Parse successful: {selfHostedParseSuccessful}");
+            }
+            catch (Exception ex)
+            {
+                Debug.LogException(ex, "Error during self-hosted parse (with tokens)");
+                selfHostedParseSuccessful = false;
+                selfHostedParsedProgram = null;
+                selfHostedTokens = null;
+            }
+
+            TotalParseTime.Stop();
+            Debug.Log($"Total parse time (with tokens): {TotalParseTime.Elapsed}");
+
+            // Clean up resources
+            GC.Collect();
+
+            return (selfHostedParsedProgram, selfHostedTokens);
         }
 
         /// <summary>

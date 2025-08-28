@@ -338,7 +338,7 @@ namespace AppRefiner
         /// <param name="position">The current cursor position where the pattern was completed.</param>
         /// <param name="autoPairingEnabled">Whether auto-pairing is enabled in the editor settings.</param>
         /// <returns>A CreateAutoComplete refactor instance to be processed.</returns>
-        public BaseRefactor? PrepareCreateAutoCompleteRefactor(ScintillaEditor editor, int position, bool autoPairingEnabled)
+        public IRefactor? PrepareCreateAutoCompleteRefactor(ScintillaEditor editor, int position, bool autoPairingEnabled)
         {
             if (editor == null || !editor.IsValid()) return null;
 
@@ -348,7 +348,7 @@ namespace AppRefiner
         }
 
 
-        public BaseRefactor? PrepareConcatAutoCompleteRefactor(ScintillaEditor editor) {
+        public IRefactor? PrepareConcatAutoCompleteRefactor(ScintillaEditor editor) {
             if (editor == null || !editor.IsValid()) return null;
 
             // Return the refactor instance for MainForm to process

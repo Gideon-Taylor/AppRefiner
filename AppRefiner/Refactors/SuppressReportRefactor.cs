@@ -1,11 +1,9 @@
-using Antlr4.Runtime;
-using Antlr4.Runtime.Misc;
-using AppRefiner.PeopleCode;
-using System;
-using System.Collections.Generic;
+using PeopleCodeParser.SelfHosted.Nodes;
+using PeopleCodeParser.SelfHosted;
+using PeopleCodeParser.SelfHosted.Visitors;
+using PeopleCodeParser.SelfHosted.Visitors.Models;
+using AppRefiner.Services;
 using System.Drawing;
-using System.Linq;
-using System.Runtime.InteropServices;
 using System.Windows.Forms;
 
 namespace AppRefiner.Refactors
@@ -16,10 +14,9 @@ namespace AppRefiner.Refactors
     }
 
     /// <summary>
-    /// Creates a new instance of the SuppressReportRefactor class
+    /// Creates a new instance of the SuppressReportRefactor class using the self-hosted parser
     /// </summary>
-    /// <param name="editor">The ScintillaEditor instance to use for this refactor</param>
-    public class SuppressReportRefactor(ScintillaEditor editor) : BaseRefactor(editor)
+    public class SuppressReportRefactor : ScopedRefactor
     {
         /// <summary>
         /// Gets the display name of this refactoring operation
@@ -33,16 +30,16 @@ namespace AppRefiner.Refactors
 
         private SuppressReportMode type = SuppressReportMode.LINE;
         private bool changeGenerated = false;
-        private enum ScopeType
-        {
-            BLOCK, METHOD, FUNCTION, GLOBAL
-        }
-        private readonly Stack<(ParserRuleContext Context, ScopeType Type)> scopeStack = new();
+        private readonly Stack<(AstNode Node, ScopeType Type)> contextStack = new();
 
         /// <summary>
         /// Indicates that this refactor requires a user input dialog
         /// </summary>
         public override bool RequiresUserInputDialog => true;
+
+        public SuppressReportRefactor(AppRefiner.ScintillaEditor editor) : base(editor)
+        {
+        }
 
         /// <summary>
         /// Dialog form for selecting suppress report mode
@@ -225,7 +222,6 @@ namespace AppRefiner.Refactors
         /// <summary>
         /// Shows the dialog to get the suppression mode from the user
         /// </summary>
-        /// <returns>True if the user confirmed, false if canceled</returns>
         public override bool ShowRefactorDialog()
         {
             using var dialog = new SuppressReportDialog(type);
@@ -244,127 +240,40 @@ namespace AppRefiner.Refactors
             return false;
         }
 
-        public override void EnterMethod([NotNull] PeopleCode.PeopleCodeParser.MethodContext context)
+        protected override void OnEnterScope(PeopleCodeParser.SelfHosted.Visitors.Models.ScopeInfo scopeInfo)
         {
-            ProcessScopeEntry(context, ScopeType.METHOD);
+            // Track scope contexts for suppression insertion
+            contextStack.Push((null, scopeInfo.Type));
         }
 
-        public override void ExitMethod([NotNull] PeopleCode.PeopleCodeParser.MethodContext context)
+        protected override void OnExitScope(PeopleCodeParser.SelfHosted.Visitors.Models.ScopeInfo scopeInfo, Dictionary<string, VariableInfo> variableScope, Dictionary<string, object> customData)
         {
-            ProcessScopeExit(context);
-        }
-
-        public override void EnterFunctionDefinition([NotNull] PeopleCode.PeopleCodeParser.FunctionDefinitionContext context)
-        {
-            ProcessScopeEntry(context, ScopeType.FUNCTION);
-        }
-
-        public override void ExitFunctionDefinition([NotNull] PeopleCode.PeopleCodeParser.FunctionDefinitionContext context)
-        {
-            ProcessScopeExit(context);
-        }
-
-        public override void EnterGetter([NotNull] PeopleCode.PeopleCodeParser.GetterContext context)
-        {
-            ProcessScopeEntry(context, ScopeType.FUNCTION);
-        }
-
-        public override void ExitGetter([NotNull] PeopleCode.PeopleCodeParser.GetterContext context)
-        {
-            ProcessScopeExit(context);
-        }
-
-        public override void EnterSetter([NotNull] PeopleCode.PeopleCodeParser.SetterContext context)
-        {
-            ProcessScopeEntry(context, ScopeType.FUNCTION);
-        }
-
-        public override void ExitSetter([NotNull] PeopleCode.PeopleCodeParser.SetterContext context)
-        {
-            ProcessScopeExit(context);
-        }
-
-        public override void EnterImportsBlock([NotNull] PeopleCode.PeopleCodeParser.ImportsBlockContext context)
-        {
-            ProcessScopeEntry(context, ScopeType.GLOBAL);
-        }
-
-        public override void EnterIfStatement([NotNull] PeopleCode.PeopleCodeParser.IfStatementContext context)
-        {
-            ProcessScopeEntry(context, ScopeType.BLOCK);
-        }
-
-        public override void ExitIfStatement([NotNull] PeopleCode.PeopleCodeParser.IfStatementContext context)
-        {
-            ProcessScopeExit(context);
-        }
-
-        public override void EnterForStatement([NotNull] PeopleCode.PeopleCodeParser.ForStatementContext context)
-        {
-            ProcessScopeEntry(context, ScopeType.BLOCK);
-        }
-
-        public override void ExitForStatement([NotNull] PeopleCode.PeopleCodeParser.ForStatementContext context)
-        {
-            ProcessScopeExit(context);
-        }
-
-        public override void EnterWhileStatement([NotNull] PeopleCode.PeopleCodeParser.WhileStatementContext context)
-        {
-            ProcessScopeEntry(context, ScopeType.BLOCK);
-        }
-
-        public override void ExitWhileStatement([NotNull] PeopleCode.PeopleCodeParser.WhileStatementContext context)
-        {
-            ProcessScopeExit(context);
-        }
-
-        public override void EnterRepeatStatement([NotNull] PeopleCode.PeopleCodeParser.RepeatStatementContext context)
-        {
-            ProcessScopeEntry(context, ScopeType.BLOCK);
-        }
-
-        public override void ExitRepeatStatement([NotNull] PeopleCode.PeopleCodeParser.RepeatStatementContext context)
-        {
-            ProcessScopeExit(context);
-        }
-
-        public override void EnterEvaluateStatement([NotNull] PeopleCode.PeopleCodeParser.EvaluateStatementContext context)
-        {
-            ProcessScopeEntry(context, ScopeType.BLOCK);
-        }
-
-        public override void ExitEvaluateStatement([NotNull] PeopleCode.PeopleCodeParser.EvaluateStatementContext context)
-        {
-            ProcessScopeExit(context);
-        }
-
-        public override void EnterTryCatchBlock([NotNull] PeopleCode.PeopleCodeParser.TryCatchBlockContext context)
-        {
-            ProcessScopeEntry(context, ScopeType.BLOCK);
-        }
-
-        public override void ExitTryCatchBlock([NotNull] PeopleCode.PeopleCodeParser.TryCatchBlockContext context)
-        {
-            ProcessScopeExit(context);
-        }
-
-        public override void ExitProgram([NotNull] PeopleCode.PeopleCodeParser.ProgramContext context)
-        {
-            base.ExitProgram(context);
-
-            GenerateChange();
+            // Check if current cursor position is within this scope
+            if (scopeInfo.Parent?.Name != null)
+            {
+                var lineStart = ScintillaManager.GetLineStartIndex(Editor, LineNumber - 1);
+                var lineEnd = ScintillaManager.GetLineStartIndex(Editor, LineNumber);
+                
+                // Since we don't have direct access to the node's span, we'll use line number
+                if (LineNumber >= 0)
+                {
+                    GenerateChange();
+                }
+                else if (contextStack.Count > 0)
+                {
+                    contextStack.Pop();
+                }
+            }
         }
 
         private void GenerateChange()
         {
             if (changeGenerated) return;
 
-
             if (Editor.LineToReports.TryGetValue(LineNumber, out var reports))
             {
                 var newSuppressLine = $"/* #AppRefiner suppress ({string.Join(",", reports.Select(r => r.GetFullId()))}) */\r\n";
-                ParserRuleContext? contextToInsertBefore = null;
+                AstNode? nodeToInsertBefore = null;
 
                 if (type == SuppressReportMode.LINE)
                 {
@@ -379,50 +288,53 @@ namespace AppRefiner.Refactors
                 }
                 else if (type == SuppressReportMode.NEAREST_BLOCK)
                 {
-                    contextToInsertBefore = scopeStack.Pop().Context;
+                    if (contextStack.Count > 0)
+                    {
+                        nodeToInsertBefore = contextStack.Pop().Node;
+                    }
                 }
                 else if (type == SuppressReportMode.METHOD_OR_FUNC)
                 {
-                    /* pop until we find a scope type method or func or run out */
-                    /* if we run out, SetFailure "unable to find method or function" */
-                    while (scopeStack.Count > 0)
+                    // Pop until we find a method or function scope
+                    while (contextStack.Count > 0)
                     {
-                        var scope = scopeStack.Pop();
-                        if (scope.Type == ScopeType.METHOD || scope.Type == ScopeType.FUNCTION)
+                        var (node, scopeType) = contextStack.Pop();
+                        if (scopeType == ScopeType.Method || scopeType == ScopeType.Function)
                         {
-                            contextToInsertBefore = scope.Context;
+                            nodeToInsertBefore = node;
                             break;
                         }
                     }
-                    if (contextToInsertBefore == null)
+                    if (nodeToInsertBefore == null)
                     {
                         SetFailure("Unable to find method or function scope.");
                         return;
                     }
-
                 }
                 else if (type == SuppressReportMode.GLOBAL)
                 {
-                    /* Pop until we find the global scope */
-                    while (scopeStack.Count > 0)
+                    // Pop until we find the global scope
+                    while (contextStack.Count > 0)
                     {
-                        var scope = scopeStack.Pop();
-                        if (scope.Type == ScopeType.GLOBAL)
+                        var (node, scopeType) = contextStack.Pop();
+                        if (scopeType == ScopeType.Global)
                         {
-                            contextToInsertBefore = scope.Context;
+                            nodeToInsertBefore = node;
                             break;
                         }
                     }
-                    if (contextToInsertBefore == null)
+                    if (nodeToInsertBefore == null)
                     {
                         SetFailure("Unable to find global scope start.");
                         return;
                     }
                 }
 
-                if (contextToInsertBefore != null)
+                if (nodeToInsertBefore?.SourceSpan.IsValid == true)
                 {
-                    var insertPos = ScintillaManager.GetLineStartIndex(Editor, contextToInsertBefore.Start.Line - 1 > 0 ? contextToInsertBefore.Start.Line - 1 : 1);
+                    var span = nodeToInsertBefore.SourceSpan;
+                    var lineNumber = ScintillaManager.GetLineFromPosition(Editor, span.Start.Index);
+                    var insertPos = ScintillaManager.GetLineStartIndex(Editor, lineNumber > 0 ? lineNumber - 1 : 1);
                     InsertText(insertPos, newSuppressLine, "Suppress report");
                     changeGenerated = true;
                 }
@@ -430,32 +342,11 @@ namespace AppRefiner.Refactors
                 {
                     SetFailure("Unable to find line to insert suppress report.");
                 }
-
             }
             else
             {
                 SetFailure("No report found at cursor position. Please place cursor on a line with a report.");
             }
         }
-
-        private void ProcessScopeEntry(ParserRuleContext context, ScopeType type)
-        {
-            // Push the suppression set onto the stack
-            scopeStack.Push((context, type));
-        }
-
-        private void ProcessScopeExit(ParserRuleContext context)
-        {
-            if (context.Start.Line <= LineNumber + 1 && context.Stop.Line >= LineNumber + 1)
-            {
-                GenerateChange();
-            }
-            else
-            {
-                if (scopeStack.Count > 0)
-                    scopeStack.Pop();
-            }
-        }
-
     }
 }

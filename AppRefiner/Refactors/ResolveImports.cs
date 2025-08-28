@@ -1,13 +1,16 @@
-using Antlr4.Runtime;
+using PeopleCodeParser.SelfHosted.Nodes;
+using PeopleCodeParser.SelfHosted;
+using AppRefiner.Services;
+using AppRefiner;
 using System.Text;
-using static AppRefiner.PeopleCode.PeopleCodeParser;
-using AppRefiner.PeopleCode;
+using System.Windows.Forms;
+
 namespace AppRefiner.Refactors
 {
     /// <summary>
     /// Refactoring operation that resolves all class references in the code and creates explicit imports for each one
     /// </summary>
-    public class ResolveImports(ScintillaEditor editor) : BaseRefactor(editor)
+    public class ResolveImports : BaseRefactor
     {
         public new static string RefactorName => "Resolve Imports";
         public new static string RefactorDescription => "Resolves all class references in the code and creates explicit imports for each one";
@@ -24,16 +27,13 @@ namespace AppRefiner.Refactors
         public bool PreserveWildcardImports { get; set; } = false;
         
         // Tracks unique application class paths used in the code
-        private readonly HashSet<string> usedClassPaths = [];
+        private readonly HashSet<string> usedClassPaths = new();
 
         // Tracks existing import paths in their original order
-        private readonly List<string> existingImportPaths = [];
+        private readonly List<string> existingImportPaths = new();
 
-        // The imports block if found
-        private ImportsBlockContext? importsBlockContext;
-
-        // Whether we're tracking class references after the imports block
-        private bool trackingReferences = false;
+        // The program node
+        private ProgramNode? programNode;
 
         /// <summary>
         /// Gets whether this refactor should register a keyboard shortcut
@@ -43,7 +43,7 @@ namespace AppRefiner.Refactors
         /// <summary>
         /// Gets the modifier keys for the keyboard shortcut
         /// </summary>
-        public new static ModifierKeys ShortcutModifiers => ModifierKeys.Control | ModifierKeys.Shift;
+        public new static AppRefiner.ModifierKeys ShortcutModifiers => AppRefiner.ModifierKeys.Control | AppRefiner.ModifierKeys.Shift;
 
         /// <summary>
         /// Gets the key for the keyboard shortcut
@@ -56,68 +56,56 @@ namespace AppRefiner.Refactors
         /// </summary>
         public override bool RunOnIncompleteParse => false;
 
-        /// <summary>
-        /// When entering an app class path, record it as used if we're in tracking mode
-        /// </summary>
-        public override void EnterAppClassPath(AppClassPathContext context)
+        public ResolveImports(AppRefiner.ScintillaEditor editor) : base(editor)
         {
-            if (!trackingReferences) return;
-
-            string classPath = context.GetText();
-            // Only add if it's a fully qualified class path
-            if (classPath.Contains(":"))
-            {
-                usedClassPaths.Add(classPath);
-            }
         }
 
-        /// <summary>
-        /// When we find the imports block, store it and start tracking class references
-        /// </summary>
-        public override void ExitImportsBlock(ImportsBlockContext context)
+        public override void VisitProgram(ProgramNode node)
         {
-            importsBlockContext = context;
-            
+            programNode = node;
+            usedClassPaths.Clear();
+            existingImportPaths.Clear();
+
             // Capture existing imports in their original order
-            if (context.importDeclaration() != null)
+            foreach (var import in node.Imports)
             {
-                foreach (var importDecl in context.importDeclaration())
-                {
-                    var appClassPath = importDecl.appClassPath();
-                    if (appClassPath != null)
-                    {
-                        string importPath = appClassPath.GetText();
-                        existingImportPaths.Add(importPath);
-                    }
-
-                    var appPackageAll = importDecl.appPackageAll();
-                    if (appPackageAll != null)
-                    {
-                        string importPath = appPackageAll.GetText();
-                        existingImportPaths.Add(importPath);
-                    }
-                }
+                existingImportPaths.Add(import.FullPath);
             }
-            
-            trackingReferences = true;
+
+            base.VisitProgram(node);
+
+            // After visiting all nodes, generate the new imports
+            GenerateResolvedImports();
         }
 
-        /// <summary>
-        /// When entering the program, start tracking if no imports block was found
-        /// </summary>
-        public override void EnterProgram(ProgramContext context)
+        public override void VisitAppClassType(AppClassTypeNode node)
         {
-            
-            if (context.importsBlock == null)
+            // Record app class type usage
+            if (!string.IsNullOrEmpty(node.ClassName) && node.ClassName.Contains(":"))
             {
-                trackingReferences = true;
+                usedClassPaths.Add(node.ClassName);
             }
+
+            base.VisitAppClassType(node);
+        }
+
+        public override void VisitObjectCreation(ObjectCreationNode node)
+        {
+            // Record object creation with app class types
+            if (node.Type is AppClassTypeNode appClassType && 
+                !string.IsNullOrEmpty(appClassType.ClassName) && 
+                appClassType.ClassName.Contains(":"))
+            {
+                usedClassPaths.Add(appClassType.ClassName);
+            }
+
+            base.VisitObjectCreation(node);
         }
 
         /// <summary>
-        /// When we finish the program, generate the new imports block
+        /// Generates the resolved imports based on used class paths
         /// </summary>
-        public override void ExitProgram(ProgramContext context)
+        private void GenerateResolvedImports()
         {
             // Skip if no class references were found
             if (usedClassPaths.Count == 0) return;
@@ -197,6 +185,7 @@ namespace AppRefiner.Refactors
             {
                 // Keep import if it's a wildcard that covers used classes, or if it's a used explicit class
                 bool shouldKeep = false;
+
                 if (IsWildcardImport(import))
                 {
                     shouldKeep = HasUsedClassesInPackage(GetWildcardPackage(import));
@@ -230,53 +219,52 @@ namespace AppRefiner.Refactors
             // Trim trailing newlines to prevent accumulation of blank lines
             string imports = newImports.ToString().TrimEnd();
 
-            if (importsBlockContext?.importDeclaration().Length == 0)
+            if (programNode?.Imports.Count == 0)
             {
                 imports += "\r\n\r\n";
             }
 
-            if (importsBlockContext != null)
+            if (programNode?.Imports.Count > 0)
             {
                 // Replace the existing imports block
-                ReplaceNode(importsBlockContext, imports, "Resolve imports");
+                var firstImport = programNode.Imports.First();
+                var lastImport = programNode.Imports.Last();
+                
+                if (firstImport.SourceSpan.IsValid && lastImport.SourceSpan.IsValid)
+                {
+                    EditText(firstImport.SourceSpan.Start.Index, lastImport.SourceSpan.End.Index, imports, "Resolve imports");
+                }
             }
             else
             {
                 // No existing imports block, so add one at the beginning of the program
-                var firstChild = context.GetChild(0);
-                if (firstChild != null)
+                var insertionPoint = 0;
+                
+                // Find the best insertion point
+                if (programNode?.AppClass?.SourceSpan.IsValid == true)
                 {
-                    // Check if firstChild is a parser rule context
-                    if (firstChild is ParserRuleContext firstChildContext)
-                    {
-                        // Add exactly two newlines after imports (consistent spacing)
-                        string insertText = imports + Environment.NewLine + Environment.NewLine;
-                        
-                        // Check if the first node already contains imports to avoid adding excessive spacing
-                        string? firstNodeText = GetOriginalText(firstChildContext);
-                        if (firstNodeText != null && firstNodeText.TrimStart().StartsWith("import "))
-                        {
-                            // If first node already has imports, don't add extra newlines
-                            insertText = imports + Environment.NewLine;
-                        }
-                        
-                        InsertBefore(firstChildContext, insertText, "Add missing imports");
-                    }
-                    else
-                    {
-                        // Fall back to using InsertText if the cast fails
-                        InsertText(context.Start.ByteStartIndex(),
-                            imports + Environment.NewLine + Environment.NewLine,
-                            "Add missing imports");
-                    }
+                    insertionPoint = programNode.AppClass.SourceSpan.Start.Index;
                 }
-                else
+                else if (programNode?.Interface?.SourceSpan.IsValid == true)
                 {
-                    // Empty program, so just add the imports at the start
-                    InsertText(context.Start.ByteStartIndex(),
-                        imports + Environment.NewLine + Environment.NewLine,
-                        "Add missing imports");
+                    insertionPoint = programNode.Interface.SourceSpan.Start.Index;
                 }
+                else if (programNode?.Functions.Count > 0 && programNode.Functions[0].SourceSpan.IsValid)
+                {
+                    insertionPoint = programNode.Functions[0].SourceSpan.Start.Index;
+                }
+                else if (programNode?.Variables.Count > 0 && programNode.Variables[0].SourceSpan.IsValid)
+                {
+                    insertionPoint = programNode.Variables[0].SourceSpan.Start.Index;
+                }
+                else if (programNode?.MainBlock?.SourceSpan.IsValid == true)
+                {
+                    insertionPoint = programNode.MainBlock.SourceSpan.Start.Index;
+                }
+
+                // Add exactly two newlines after imports (consistent spacing)
+                string insertText = imports + Environment.NewLine + Environment.NewLine;
+                InsertText(insertionPoint, insertText, "Add missing imports");
             }
         }
 

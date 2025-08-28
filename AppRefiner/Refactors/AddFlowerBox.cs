@@ -1,15 +1,13 @@
-using static AppRefiner.PeopleCode.PeopleCodeParser;
+using PeopleCodeParser.SelfHosted.Nodes;
+using PeopleCodeParser.SelfHosted;
+using AppRefiner.Services;
 
 namespace AppRefiner.Refactors
 {
     /// <summary>
-    /// Adds a flower box header to the current file
+    /// Adds a flower box header to the current file using the self-hosted parser
     /// </summary>
-    /// <remarks>
-    /// Initializes a new instance of the <see cref="AddFlowerBox"/> class
-    /// </remarks>
-    /// <param name="editor">The Scintilla editor instance</param>
-    public class AddFlowerBox(ScintillaEditor editor) : BaseRefactor(editor)
+    public class AddFlowerBox : BaseRefactor
     {
         /// <summary>
         /// Gets the display name for this refactor
@@ -20,6 +18,10 @@ namespace AppRefiner.Refactors
         /// Gets the description for this refactor
         /// </summary>
         public new static string RefactorDescription => "Add a flower box header to the current file";
+
+        public AddFlowerBox(AppRefiner.ScintillaEditor editor) : base(editor)
+        {
+        }
 
         private string GenerateFlowerBoxHeader()
         {
@@ -33,10 +35,11 @@ namespace AppRefiner.Refactors
  ======================================================================================= */
 ";
         }
-        public override void EnterProgram(ProgramContext context)
+
+        public override void VisitProgram(ProgramNode node)
         {
-            base.EnterProgram(context);
-            InsertText(0, GenerateFlowerBoxHeader(), "Add flower box");
+            base.VisitProgram(node);
+            InsertText(new SourcePosition(0, 1, 0), GenerateFlowerBoxHeader(), "Add flower box");
         }
     }
 }

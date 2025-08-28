@@ -23,7 +23,7 @@ namespace AppRefiner.Refactors
             _refactorType = refactorType;
             
             // Get refactor name for dialog title
-            string refactorName = BaseRefactor.GetStaticStringProperty(_refactorType, "RefactorName") ?? _refactorType.Name;
+            string refactorName = _refactorType.Name;
             Text = $"Configure {refactorName} Refactor";
             
             // Load current configuration
@@ -70,7 +70,7 @@ namespace AppRefiner.Refactors
 
         private void InitializePropertyControls()
         {
-            var properties = BaseRefactor.GetConfigurableProperties(_refactorType);
+            var properties = _refactorType.GetConfigurableProperties();
             
             if (properties.Count == 0)
             {
@@ -273,7 +273,7 @@ namespace AppRefiner.Refactors
             {
                 // Build configuration from controls
                 var config = new Dictionary<string, object?>();
-                var properties = BaseRefactor.GetConfigurableProperties(_refactorType);
+                var properties = _refactorType.GetConfigurableProperties();
 
                 foreach (var property in properties)
                 {

@@ -1,12 +1,9 @@
-using Antlr4.Runtime.Misc;
-using AppRefiner.PeopleCode;
-using System;
-using System.Collections.Generic;
+using PeopleCodeParser.SelfHosted.Nodes;
+using PeopleCodeParser.SelfHosted;
+using AppRefiner.Services;
+using AppRefiner;
 using System.Drawing;
-using System.Linq;
-using System.Runtime.InteropServices;
 using System.Windows.Forms;
-using static AppRefiner.PeopleCode.PeopleCodeParser;
 
 namespace AppRefiner.Refactors
 {
@@ -33,7 +30,7 @@ namespace AppRefiner.Refactors
         /// <summary>
         /// Gets the keyboard shortcut modifier keys for this refactor
         /// </summary>
-        public new static ModifierKeys ShortcutModifiers => ModifierKeys.Control | ModifierKeys.Shift;
+        public new static AppRefiner.ModifierKeys ShortcutModifiers => AppRefiner.ModifierKeys.Control | AppRefiner.ModifierKeys.Shift;
 
         /// <summary>
         /// Gets the keyboard shortcut key for this refactor
@@ -67,12 +64,8 @@ namespace AppRefiner.Refactors
         
         // Flag to indicate if implementations are already in the correct order
         private bool implementationsInOrder = true;
-        
-        /// <summary>
-        /// Initializes a new instance of the <see cref="SortMethods"/> class
-        /// </summary>
-        /// <param name="editor">The Scintilla editor instance</param>
-        public SortMethods(ScintillaEditor editor) : base(editor)
+
+        public SortMethods(AppRefiner.ScintillaEditor editor) : base(editor)
         {
         }
 
@@ -117,7 +110,7 @@ namespace AppRefiner.Refactors
                 OriginalText = originalText;
             }
         }
-        
+
         /// <summary>
         /// Dialog form for confirming method sorting
         /// </summary>
@@ -224,7 +217,6 @@ namespace AppRefiner.Refactors
         /// <summary>
         /// Shows the dialog to confirm sorting methods
         /// </summary>
-        /// <returns>True if the user confirmed, false if canceled</returns>
         public override bool ShowRefactorDialog()
         {
             if (!isClassProgram)
@@ -267,574 +259,148 @@ namespace AppRefiner.Refactors
             return false;
         }
 
-        /// <summary>
-        /// Detect if we're in a class program
-        /// </summary>
-        public override void EnterAppClassProgram([NotNull] AppClassProgramContext context)
+        public override void VisitAppClass(AppClassNode node)
         {
             isClassProgram = true;
+            
+            // Track method declarations
+            foreach (var method in node.Methods)
+            {
+                if (method.SourceSpan.IsValid)
+                {
+                    var originalText = GetOriginalText(method);
+                    if (!string.IsNullOrEmpty(originalText))
+                    {
+                        methodDeclarations.Add(new MethodInfo(
+                            method.Name,
+                            method.SourceSpan.Start.Index,
+                            method.SourceSpan.End.Index,
+                            originalText
+                        ));
+                    }
+                }
+            }
+
+            // Track property declarations
+            foreach (var property in node.Properties)
+            {
+                if (property.SourceSpan.IsValid)
+                {
+                    var originalText = GetOriginalText(property);
+                    if (!string.IsNullOrEmpty(originalText))
+                    {
+                        // Add getter
+                        propertyDeclarations.Add(new PropertyInfo(
+                            property.Name,
+                            true,
+                            property.SourceSpan.Start.Index,
+                            property.SourceSpan.End.Index,
+                            originalText
+                        ));
+
+                        // Add setter if it exists
+                        if (property.HasSetter)
+                        {
+                            propertyDeclarations.Add(new PropertyInfo(
+                                property.Name,
+                                false,
+                                property.SourceSpan.Start.Index,
+                                property.SourceSpan.End.Index,
+                                originalText
+                            ));
+                        }
+                    }
+                }
+            }
+
+            // Track method implementations
+            foreach (var method in node.MethodImplementations)
+            {
+                if (method.SourceSpan.IsValid)
+                {
+                    var originalText = GetOriginalText(method);
+                    if (!string.IsNullOrEmpty(originalText))
+                    {
+                        methodImplementations.Add(new MethodInfo(
+                            method.Name,
+                            method.SourceSpan.Start.Index,
+                            method.SourceSpan.End.Index,
+                            originalText
+                        ));
+                    }
+                }
+            }
+
+            // Check if implementations are in correct order
+            CheckImplementationOrder();
+
+            base.VisitAppClass(node);
         }
 
         /// <summary>
-        /// Track method header declarations in the class header
+        /// Checks if the implementations are already in the correct order
         /// </summary>
-        public override void EnterMethodHeader([NotNull] MethodHeaderContext context)
-        {            
-            if (!isClassProgram) return;
-            
-            var genericIdNode = context.genericID();
-            if (genericIdNode != null)
-            {
-                string methodName = genericIdNode.GetText();
-                
-                // Add to method declarations
-                methodDeclarations.Add(new MethodInfo(
-                    methodName,
-                    context.Start.ByteStartIndex(),
-                    context.Stop.ByteStopIndex(),
-                    GetOriginalText(context)!
-                ));
-            }
-        }
-        
-        /// <summary>
-        /// Track property declarations in the class header
-        /// </summary>
-        public override void EnterPropertyGetSet([NotNull] PropertyGetSetContext context)
+        private void CheckImplementationOrder()
         {
-            
-            if (!isClassProgram) return;
-            
-            var genericIdNode = context.genericID();
-            if (genericIdNode != null)
+            // Simple check: if method implementations are in the same order as declarations
+            if (methodImplementations.Count != methodDeclarations.Count)
             {
-                string propertyName = genericIdNode.GetText();
-                
-                // Check if this property has GET and/or SET
-                bool hasGetter = true;
-                bool hasSetter = context.SET() != null;
-                
-                // Add getter if present
-                if (hasGetter)
+                implementationsInOrder = false;
+                return;
+            }
+
+            for (int i = 0; i < methodDeclarations.Count; i++)
+            {
+                if (i >= methodImplementations.Count || 
+                    !methodDeclarations[i].Name.Equals(methodImplementations[i].Name, StringComparison.OrdinalIgnoreCase))
                 {
-                    propertyDeclarations.Add(new PropertyInfo(
-                        propertyName,
-                        true,
-                        context.Start.ByteStartIndex(),
-                        context.Stop.ByteStopIndex(),
-                        GetOriginalText(context)!
-                    ));
-                }
-                
-                // Add setter if present
-                if (hasSetter)
-                {
-                    propertyDeclarations.Add(new PropertyInfo(
-                        propertyName,
-                        false,
-                        context.Start.ByteStartIndex(),
-                        context.Stop.ByteStopIndex(),
-                        GetOriginalText(context)!
-                    ));
+                    implementationsInOrder = false;
+                    return;
                 }
             }
         }
-        
+
         /// <summary>
-        /// Track method implementations in the class body
-        /// </summary>
-        public override void EnterMethod([NotNull] MethodContext context)
-        {            
-            if (!isClassProgram) return;
-            
-            var genericIdNode = context.genericID();
-            if (genericIdNode != null)
-            {
-                string methodName = genericIdNode.GetText();
-                
-                // Add to method implementations
-                methodImplementations.Add(new MethodInfo(
-                    methodName,
-                    context.Start.ByteStartIndex(),
-                    context.Stop.ByteStopIndex(),
-                    GetOriginalText(context, true)!
-                ));
-            }
-        }
-        
-        /// <summary>
-        /// Track getter implementations in the class body
-        /// </summary>
-        public override void EnterGetter([NotNull] GetterContext context)
-        {            
-            if (!isClassProgram) return;
-            
-            var genericIdNode = context.genericID();
-            if (genericIdNode != null)
-            {
-                string propertyName = genericIdNode.GetText();
-                
-                // Add to property implementations
-                propertyImplementations.Add(new PropertyInfo(
-                    propertyName,
-                    true,
-                    context.Start.ByteStartIndex(),
-                    context.Stop.ByteStopIndex(),
-                    GetOriginalText(context, true)!
-                ));
-            }
-        }
-        
-        /// <summary>
-        /// Track setter implementations in the class body
-        /// </summary>
-        public override void EnterSetter([NotNull] SetterContext context)
-        {            
-            if (!isClassProgram) return;
-            
-            var genericIdNode = context.genericID();
-            if (genericIdNode != null)
-            {
-                string propertyName = genericIdNode.GetText();
-                
-                // Add to property implementations
-                propertyImplementations.Add(new PropertyInfo(
-                    propertyName,
-                    false,
-                    context.Start.ByteStartIndex(),
-                    context.Stop.ByteStopIndex(),
-                    GetOriginalText(context, true)!
-                ));
-            }
-        }
-        
-        /// <summary>
-        /// Generate the refactoring changes when we reach the end of the program
-        /// </summary>
-        public override void ExitProgram([NotNull] ProgramContext context)
-        {            
-            if (!isClassProgram || 
-                methodDeclarations.Count == 0 && propertyDeclarations.Count == 0 ||
-                methodImplementations.Count == 0 && propertyImplementations.Count == 0)
-            {
-                return; // Will be handled in ShowRefactorDialog
-            }
-            
-            // Create a combined list of all declarations in the order they appear in the class header
-            var orderedDeclarations = new List<(string Name, bool IsMethod, bool IsGetter)>();
-            
-            foreach (var methodDecl in methodDeclarations)
-            {
-                orderedDeclarations.Add((methodDecl.Name, true, false));
-            }
-            
-            foreach (var propertyDecl in propertyDeclarations)
-            {
-                orderedDeclarations.Add((propertyDecl.Name, false, propertyDecl.IsGetter));
-            }
-            
-            // Create a map of method and property implementations
-            var methodMap = methodImplementations.ToDictionary(m => m.Name, m => m);
-            var getterMap = propertyImplementations.Where(p => p.IsGetter).ToDictionary(p => p.Name, p => p);
-            var setterMap = propertyImplementations.Where(p => !p.IsGetter).ToDictionary(p => p.Name, p => p);
-            
-            // Sort implementations by their order in the class header
-            var sortedImplementations = new List<(int StartIndex, int EndIndex, string Text)>();
-            
-            foreach (var decl in orderedDeclarations)
-            {
-                if (decl.IsMethod)
-                {
-                    if (methodMap.TryGetValue(decl.Name, out var methodImpl))
-                    {
-                        sortedImplementations.Add((methodImpl.StartIndex, methodImpl.EndIndex, methodImpl.OriginalText));
-                        methodMap.Remove(decl.Name);
-                    }
-                }
-                else if (decl.IsGetter)
-                {
-                    if (getterMap.TryGetValue(decl.Name, out var getterImpl))
-                    {
-                        sortedImplementations.Add((getterImpl.StartIndex, getterImpl.EndIndex, getterImpl.OriginalText));
-                        getterMap.Remove(decl.Name);
-                    }
-                }
-                else
-                {
-                    if (setterMap.TryGetValue(decl.Name, out var setterImpl))
-                    {
-                        sortedImplementations.Add((setterImpl.StartIndex, setterImpl.EndIndex, setterImpl.OriginalText));
-                        setterMap.Remove(decl.Name);
-                    }
-                }
-            }
-            
-            // Add any remaining implementations that weren't in the class header
-            foreach (var methodImpl in methodMap.Values)
-            {
-                sortedImplementations.Add((methodImpl.StartIndex, methodImpl.EndIndex, methodImpl.OriginalText));
-            }
-            
-            foreach (var getterImpl in getterMap.Values)
-            {
-                sortedImplementations.Add((getterImpl.StartIndex, getterImpl.EndIndex, getterImpl.OriginalText));
-            }
-            
-            foreach (var setterImpl in setterMap.Values)
-            {
-                sortedImplementations.Add((setterImpl.StartIndex, setterImpl.EndIndex, setterImpl.OriginalText));
-            }
-            
-            // Sort by original position
-            sortedImplementations.Sort((a, b) => a.StartIndex.CompareTo(b.StartIndex));
-            
-            // If implementations are already in the correct order, no changes needed
-            implementationsInOrder = true;
-            for (int i = 0; i < sortedImplementations.Count; i++)
-            {
-                var impl = sortedImplementations[i];
-                if (i < orderedDeclarations.Count)
-                {
-                    var decl = orderedDeclarations[i];
-                    
-                    string implName = "";
-                    bool implIsMethod = false;
-                    bool implIsGetter = false;
-                    
-                    // Determine the name and type of the implementation
-                    if (methodImplementations.Any(m => m.StartIndex == impl.StartIndex))
-                    {
-                        var methodImpl = methodImplementations.First(m => m.StartIndex == impl.StartIndex);
-                        implName = methodImpl.Name;
-                        implIsMethod = true;
-                    }
-                    else if (propertyImplementations.Any(p => p.StartIndex == impl.StartIndex))
-                    {
-                        var propImpl = propertyImplementations.First(p => p.StartIndex == impl.StartIndex);
-                        implName = propImpl.Name;
-                        implIsMethod = false;
-                        implIsGetter = propImpl.IsGetter;
-                    }
-                    
-                    // Check if this implementation matches the declaration at the same position
-                    if (implName != decl.Name || implIsMethod != decl.IsMethod || (!implIsMethod && implIsGetter != decl.IsGetter))
-                    {
-                        implementationsInOrder = false;
-                        break;
-                    }
-                }
-            }
-        }
-        
-        /// <summary>
-        /// Apply the refactoring changes
+        /// Applies the method sorting changes
         /// </summary>
         private void ApplyChanges()
         {
-            // Get the source code from the editor
-            if (Editor == null)
+            // Create sorted implementation text based on declaration order
+            var sortedImplementations = new List<string>();
+            
+            // Sort methods first
+            foreach (var declaration in methodDeclarations)
             {
-                SetFailure("Could not apply changes, editor was null.");
-                return;
+                var implementation = methodImplementations.FirstOrDefault(impl => 
+                    impl.Name.Equals(declaration.Name, StringComparison.OrdinalIgnoreCase));
+                if (implementation != null)
+                {
+                    sortedImplementations.Add(implementation.OriginalText);
+                }
             }
             
-            string source = Editor.ContentString!;
+            // Then sort properties
+            foreach (var declaration in propertyDeclarations)
+            {
+                var implementation = propertyImplementations.FirstOrDefault(impl => 
+                    impl.Name.Equals(declaration.Name, StringComparison.OrdinalIgnoreCase) && 
+                    impl.IsGetter == declaration.IsGetter);
+                if (implementation != null)
+                {
+                    sortedImplementations.Add(implementation.OriginalText);
+                }
+            }
 
-            // Create a combined list of all declarations in the order they appear in the class header
-            var orderedDeclarations = new List<(string Name, bool IsMethod, bool IsGetter)>();
-            
-            foreach (var methodDecl in methodDeclarations)
+            if (sortedImplementations.Count > 0 && methodImplementations.Count > 0)
             {
-                orderedDeclarations.Add((methodDecl.Name, true, false));
-            }
-            
-            foreach (var propertyDecl in propertyDeclarations)
-            {
-                orderedDeclarations.Add((propertyDecl.Name, false, propertyDecl.IsGetter));
-            }
-            
-            // Extract leading comments for each method and property implementation
-            ExtractLeadingComments(source);
-            
-            // Generate the new implementation order based on the class header order
-            var newImplementations = new List<(int StartIndex, int EndIndex, string Text, string LeadingComments)>();
-            
-            // First add implementations that match declarations in the class header
-            foreach (var decl in orderedDeclarations)
-            {
-                if (decl.IsMethod)
-                {
-                    var methodImpl = methodImplementations.FirstOrDefault(m => m.Name == decl.Name);
-                    if (methodImpl != null)
-                    {
-                        newImplementations.Add((methodImpl.StartIndex, methodImpl.EndIndex, methodImpl.OriginalText, methodImpl.LeadingComments));
-                    }
-                }
-                else if (decl.IsGetter)
-                {
-                    var getterImpl = propertyImplementations.FirstOrDefault(p => p.Name == decl.Name && p.IsGetter);
-                    if (getterImpl != null)
-                    {
-                        newImplementations.Add((getterImpl.StartIndex, getterImpl.EndIndex, getterImpl.OriginalText, getterImpl.LeadingComments));
-                    }
-                }
-                else
-                {
-                    var setterImpl = propertyImplementations.FirstOrDefault(p => p.Name == decl.Name && !p.IsGetter);
-                    if (setterImpl != null)
-                    {
-                        newImplementations.Add((setterImpl.StartIndex, setterImpl.EndIndex, setterImpl.OriginalText, setterImpl.LeadingComments));
-                    }
-                }
-            }
-            
-            // Then add any implementations that weren't in the class header
-            foreach (var methodImpl in methodImplementations)
-            {
-                if (!orderedDeclarations.Any(d => d.IsMethod && d.Name == methodImpl.Name))
-                {
-                    newImplementations.Add((methodImpl.StartIndex, methodImpl.EndIndex, methodImpl.OriginalText, methodImpl.LeadingComments));
-                }
-            }
-            
-            foreach (var propImpl in propertyImplementations)
-            {
-                if (!orderedDeclarations.Any(d => !d.IsMethod && d.Name == propImpl.Name && d.IsGetter == propImpl.IsGetter))
-                {
-                    newImplementations.Add((propImpl.StartIndex, propImpl.EndIndex, propImpl.OriginalText, propImpl.LeadingComments));
-                }
-            }
-            
-            // Get original implementations in the order they appear
-            var sortedImplementations = new List<(int StartIndex, int EndIndex, string Text, string LeadingComments)>();
-            
-            foreach (var methodImpl in methodImplementations)
-            {
-                sortedImplementations.Add((methodImpl.StartIndex, methodImpl.EndIndex, methodImpl.OriginalText, methodImpl.LeadingComments));
-            }
-            
-            foreach (var propImpl in propertyImplementations)
-            {
-                sortedImplementations.Add((propImpl.StartIndex, propImpl.EndIndex, propImpl.OriginalText, propImpl.LeadingComments));
-            }
-            
-            // Sort by original position
-            sortedImplementations.Sort((a, b) => a.StartIndex.CompareTo(b.StartIndex));
-            
-            // Find the class body start and end
-            var classBodyStart = int.MaxValue;
-            var classBodyEnd = int.MinValue;
-            
-            foreach (var impl in sortedImplementations)
-            {
-                classBodyStart = Math.Min(classBodyStart, impl.StartIndex - impl.LeadingComments.Length);
-                classBodyEnd = Math.Max(classBodyEnd, impl.EndIndex);
-            }
-            
-            if (classBodyStart == int.MaxValue || classBodyEnd == int.MinValue)
-            {
-                SetFailure("Could not determine class body boundaries.");
-                return;
-            }
-            
-            // Build the new class body content
-            var newClassBodyContent = new System.Text.StringBuilder();
-            
-            // Add the first implementation with any leading whitespace/semicolons
-            if (newImplementations.Count > 0)
-            {
-                var firstImpl = sortedImplementations[0];
-                var firstNewImpl = newImplementations[0];
+                // Replace the entire implementation section
+                var firstImpl = methodImplementations.First();
+                var lastImpl = methodImplementations.Last();
                 
-                // Preserve any leading whitespace or semicolons before the first implementation
-                // but exclude the leading comments that we'll add with each method
-                var leadingText = source[classBodyStart..(firstImpl.StartIndex - firstImpl.LeadingComments.Length)];
-                newClassBodyContent.Append(leadingText);
+                string newImplementationsText = string.Join(Environment.NewLine + Environment.NewLine, sortedImplementations);
                 
-                // Add the first implementation with its leading comments
-                newClassBodyContent.Append(firstNewImpl.LeadingComments);
-                newClassBodyContent.Append(firstNewImpl.Text);
-                
-                // Add the rest of the implementations with appropriate separators
-                for (int i = 1; i < newImplementations.Count; i++)
-                {
-                    var prevImpl = sortedImplementations[i - 1];
-                    var currImpl = sortedImplementations[i];
-                    var newImpl = newImplementations[i];
-                    
-                    // Add a consistent separator between implementations (double newline)
-                    // We don't use the original separator since we want to ensure proper spacing
-                    newClassBodyContent.Append("\n\n");
-                    
-                    // Add the implementation with its leading comments
-                    newClassBodyContent.Append(newImpl.LeadingComments);
-                    newClassBodyContent.Append(newImpl.Text);
-                }
-                
-                // Preserve any trailing content after the last implementation
-                var lastImpl = sortedImplementations[sortedImplementations.Count - 1];
-                /* check if there is trailing text before appending it */
-                if (lastImpl.EndIndex + 1 < classBodyEnd)
-                {
-                    var trailingText = source[(lastImpl.EndIndex + 1)..classBodyEnd];
-                    newClassBodyContent.Append(trailingText);
-                }
-                
-                // Replace the entire class body with the new content
-                ReplaceText(
-                    classBodyStart,
-                    classBodyEnd,
-                    newClassBodyContent.ToString(),
-                    "Reordered method and property implementations to match class declaration order"
-                );
+                EditText(firstImpl.StartIndex, lastImpl.EndIndex, newImplementationsText, "Sort methods and properties");
             }
-        }
-        
-        /// <summary>
-        /// Extracts leading comments for each method and property implementation
-        /// </summary>
-        /// <param name="source">The source code</param>
-        private void ExtractLeadingComments(string source)
-        {
-            // Process method implementations
-            foreach (var methodImpl in methodImplementations)
-            {
-                int commentStart = FindCommentStart(source, methodImpl.StartIndex);
-                if (commentStart < methodImpl.StartIndex)
-                {
-                    methodImpl.LeadingComments = source[commentStart..methodImpl.StartIndex];
-                }
-            }
-            
-            // Process property implementations
-            foreach (var propImpl in propertyImplementations)
-            {
-                int commentStart = FindCommentStart(source, propImpl.StartIndex);
-                if (commentStart < propImpl.StartIndex)
-                {
-                    propImpl.LeadingComments = source[commentStart..propImpl.StartIndex];
-                }
-            }
-        }
-        
-        /// <summary>
-        /// Finds the start index of comments that precede a method or property
-        /// </summary>
-        /// <param name="source">The source code</param>
-        /// <param name="methodStart">The start index of the method or property</param>
-        /// <returns>The start index of the comments</returns>
-        private int FindCommentStart(string source, int methodStart)
-        {
-            // Start from the method start and go backwards
-            int pos = methodStart - 1;
-            
-            // Skip whitespace immediately before the method
-            while (pos >= 0 && char.IsWhiteSpace(source[pos]))
-            {
-                pos--;
-            }
-            
-            // If we didn't find any non-whitespace, there's no comment
-            if (pos < 0 || !IsCommentChar(source[pos]))
-            {
-                return methodStart;
-            }
-            
-            // We found a comment character, now find the start of the comment block
-            int commentEnd = pos + 1;
-            
-            // Handle block comments /* ... */
-            if (pos >= 1 && source[pos] == '/' && source[pos - 1] == '*')
-            {
-                // Find the start of the block comment
-                while (pos >= 1 && !(source[pos] == '*' && source[pos - 1] == '/'))
-                {
-                    pos--;
-                }
-                
-                if (pos >= 1)
-                {
-                    // Include the /* at the start
-                    pos -= 1;
-                }
-            }
-            // Handle line comments //
-            else if (source[pos] == '/' && pos >= 1 && source[pos - 1] == '/')
-            {
-                // Find the start of the line
-                while (pos >= 0 && source[pos] != '\n')
-                {
-                    pos--;
-                }
-                
-                // Move past the newline
-                pos++;
-            }
-            
-            // Find the start of the entire comment block (including multiple comment lines)
-            int commentBlockStart = pos;
-            
-            // Go backwards to find any preceding comments or blank lines that should be included
-            pos--;
-            while (pos >= 0)
-            {
-                // Skip whitespace
-                while (pos >= 0 && char.IsWhiteSpace(source[pos]))
-                {
-                    pos--;
-                }
-                
-                // If we hit non-whitespace that's not a comment, we're done
-                if (pos < 0 || !IsCommentChar(source[pos]))
-                {
-                    break;
-                }
-                
-                // We found another comment, find its start
-                if (pos >= 1 && source[pos] == '/' && source[pos - 1] == '*')
-                {
-                    // Find the start of the block comment
-                    while (pos >= 1 && !(source[pos] == '*' && source[pos - 1] == '/'))
-                    {
-                        pos--;
-                    }
-                    
-                    if (pos >= 1)
-                    {
-                        // Include the /* at the start
-                        pos -= 1;
-                    }
-                }
-                else if (source[pos] == '/' && pos >= 1 && source[pos - 1] == '/')
-                {
-                    // Find the start of the line
-                    while (pos >= 0 && source[pos] != '\n')
-                    {
-                        pos--;
-                    }
-                    
-                    // Move past the newline
-                    pos++;
-                }
-                
-                // Update the comment block start
-                commentBlockStart = pos;
-                
-                // Move to the character before this comment
-                pos--;
-            }
-            
-            return commentBlockStart;
-        }
-        
-        /// <summary>
-        /// Determines if a character is part of a comment
-        /// </summary>
-        /// <param name="c">The character to check</param>
-        /// <returns>True if the character is part of a comment</returns>
-        private bool IsCommentChar(char c)
-        {
-            return c == '/' || c == '*';
         }
     }
 }
