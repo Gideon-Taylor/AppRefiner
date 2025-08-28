@@ -175,6 +175,11 @@ public class PropertyNode : DeclarationNode
     public bool HasSet { get; set; } = true;
 
     /// <summary>
+    /// True if property has a setter (compatibility property)
+    /// </summary>
+    public bool HasSetter => HasSet;
+
+    /// <summary>
     /// True if property is read-only
     /// </summary>
     public bool IsReadOnly { get; set; }
