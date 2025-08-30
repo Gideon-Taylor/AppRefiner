@@ -10,7 +10,7 @@ using static AppRefiner.PeopleCode.PeopleCodeParser;
 namespace AppRefiner.Stylers
 {
     // New self-hosted parser-based scoped styler
-    public class ScopedStyler : ScopedAstVisitor<object>, IStyler
+    public class ScopedStyler : EnhancedScopedAstVisitor<object>, IStyler
     {
         public List<Indicator> Indicators { get; } = [];
 

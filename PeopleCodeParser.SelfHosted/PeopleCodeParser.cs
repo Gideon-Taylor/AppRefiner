@@ -1,6 +1,7 @@
 using PeopleCodeParser.SelfHosted.Lexing;
 using PeopleCodeParser.SelfHosted.Nodes;
 using System.Diagnostics;
+using System.Numerics;
 
 namespace PeopleCodeParser.SelfHosted;
 
@@ -64,7 +65,7 @@ public class PeopleCodeParser
 
     // Store original tokens for directive reprocessing
     private readonly List<Token> _originalTokens;
-    
+    private List<SourceSpan> _skippedDirectiveSpans = new();
     public PeopleCodeParser(IEnumerable<Token> tokens, string? toolsRelease = null)
     {
         _originalTokens = tokens?.ToList() ?? throw new ArgumentNullException(nameof(tokens));
@@ -73,29 +74,13 @@ public class PeopleCodeParser
         {
             _toolsRelease = new ToolsVersion(toolsRelease);
         }
-        PreProcessDirectives();
-    }
-    
-    /// <summary>
-    /// Check if a token type is directive-specific and should not reach main parsing
-    /// </summary>
-    private static bool IsDirectiveSpecificToken(TokenType type)
-    {
-        return type is 
-            TokenType.DirectiveIf or 
-            TokenType.DirectiveElse or 
-            TokenType.DirectiveEndIf or 
-            TokenType.DirectiveThen or 
-            TokenType.DirectiveToolsRel or 
-            TokenType.DirectiveAnd or 
-            TokenType.DirectiveOr or 
-            TokenType.DirectiveAtom;
+        _skippedDirectiveSpans = PreProcessDirectives();
     }
     
     /// <summary>
     /// Reprocess directives with the current ToolsRelease setting
     /// </summary>
-    private void PreProcessDirectives()
+    private List<SourceSpan> PreProcessDirectives()
     {
         // Clear existing errors from previous preprocessing
         _errors.RemoveAll(e => e.Message.Contains("directive") || e.Message.Contains("Directive"));
@@ -114,6 +99,8 @@ public class PeopleCodeParser
         _tokens.Clear();
         _tokens.AddRange(processedTokens);
         _position = 0;
+
+        return preprocessor.SkippedSpans;
     }
 
     /// <summary>
@@ -233,21 +220,63 @@ public class PeopleCodeParser
     }
 
     /// <summary>
-    /// Report a parse error
+    /// Report a parse error at current token position (for immediate context errors)
     /// </summary>
-    private void ReportError(string message, SourceSpan? location = null)
+    private void ReportError(string message)
     {
-        location ??= Current.SourceSpan;
         var context = _ruleStack.Count > 0 ? string.Join(" -> ", _ruleStack.Reverse()) : "unknown";
         
         _errors.Add(new ParseError(
             message,
-            location.Value,
+            Current.SourceSpan,
+            ParseErrorSeverity.Error,
+            context
+        ));
+
+        Debug.WriteLine($"Parse Error at {Current.SourceSpan}: {message} (Context: {context})");
+    }
+
+    /// <summary>
+    /// Report a parse error highlighting a specific token (for structural errors)
+    /// </summary>
+    private void ReportError(string message, Token highlightToken)
+    {
+        var context = _ruleStack.Count > 0 ? string.Join(" -> ", _ruleStack.Reverse()) : "unknown";
+        
+        _errors.Add(new ParseError(
+            message,
+            highlightToken.SourceSpan,
+            ParseErrorSeverity.Error,
+            context
+        ));
+
+        Debug.WriteLine($"Parse Error at {highlightToken.SourceSpan}: {message} (Context: {context})");
+    }
+
+    /// <summary>
+    /// Report a parse error with explicit span (for range-based errors)
+    /// </summary>
+    private void ReportError(string message, SourceSpan location)
+    {
+        var context = _ruleStack.Count > 0 ? string.Join(" -> ", _ruleStack.Reverse()) : "unknown";
+        
+        _errors.Add(new ParseError(
+            message,
+            location,
             ParseErrorSeverity.Error,
             context
         ));
 
         Debug.WriteLine($"Parse Error at {location}: {message} (Context: {context})");
+    }
+
+    /// <summary>
+    /// Report a parse error highlighting a token range (for construct-based errors)
+    /// </summary>
+    private void ReportError(string message, Token startToken, Token endToken)
+    {
+        var span = new SourceSpan(startToken.SourceSpan.Start, endToken.SourceSpan.End);
+        ReportError(message, span);
     }
 
     /// <summary>
@@ -360,6 +389,50 @@ public class PeopleCodeParser
     }
 
     /// <summary>
+    /// Smart recovery that attempts to find the next valid statement boundary
+    /// Does NOT generate additional error messages - assumes parsing errors were already reported
+    /// </summary>
+    /// <returns>True if a statement boundary was found, false if recovery failed</returns>
+    private bool SmartStatementRecover()
+    {
+        if (_errorRecoveryCount >= MaxErrorRecoveryAttempts)
+        {
+            ReportError("Too many parse errors, stopping recovery attempts");
+            return false;
+        }
+        
+
+        _errorRecoveryCount++;
+        
+        int tokensSkipped = 0;
+        
+        // Skip tokens until we find a statement synchronization point
+        while (!IsAtEnd && !StatementSyncTokens.Contains(Current.Type))
+        {
+            _position++;
+            tokensSkipped++;
+
+            // Prevent infinite loops
+            if (tokensSkipped > 100)
+            {
+                ReportError("Recovery failed: skipped too many tokens without finding statement boundary");
+                return false;
+            }
+        }
+
+        if (!IsAtEnd && StatementSyncTokens.Contains(Current.Type))
+        {
+            if (tokensSkipped > 0)
+            {
+                ReportWarning($"Skipped {tokensSkipped} tokens to recover at '{Current.Type}' statement boundary");
+            }
+            return true;
+        }
+
+        return false; // End of input reached
+    }
+
+    /// <summary>
     /// Main entry point: Parse a complete PeopleCode program according to ANTLR grammar:
     /// program: appClass | importsBlock programPreambles? SEMI* statements? SEMI* EOF
     /// 
@@ -370,6 +443,7 @@ public class PeopleCodeParser
     {
         // Initialize with preprocessed tokens
         var program = new ProgramNode();
+        program.SkippedDirectiveSpans = _skippedDirectiveSpans;
         try
         {
             EnterRule("program");
@@ -484,6 +558,12 @@ public class PeopleCodeParser
                 //Console.WriteLine(this.PrintAstStructure(program));
             }
             ExitRule();
+
+            foreach(var error in _errors)
+            {
+
+            }
+
         }
     }
 
@@ -564,7 +644,7 @@ public class PeopleCodeParser
     private bool IsProgramPreambleToken()
     {
         return Check(TokenType.Function, TokenType.PeopleCode, TokenType.Library, TokenType.Declare,
-                    TokenType.Global, TokenType.Component, TokenType.Constant, TokenType.Local);
+                    TokenType.Global, TokenType.Component, TokenType.Constant);
     }
 
     /// <summary>
@@ -1865,7 +1945,10 @@ public class PeopleCodeParser
                 {
                     // Unify: attach body from implementation to existing declaration
                     if (implementationMethod.Body != null)
+                    {
                         declarationMethod.SetBody(implementationMethod.Body);
+                        declarationMethod.ParameterAnnotations = implementationMethod.ParameterAnnotations;
+                    }
                     
                     // Copy any annotations from implementation
                     if (!string.IsNullOrEmpty(implementationMethod.Documentation))
@@ -2250,7 +2333,7 @@ public class PeopleCodeParser
             var parameter = ParseMethodAnnotationArgument();
             if (parameter != null)
             {
-                methodNode.AddParameter(parameter);
+                methodNode.AddParameterAnnotation(parameter);
             }
 
             // Optional comma
@@ -2538,7 +2621,7 @@ public class PeopleCodeParser
         try
         {
             EnterRule("methodAnnotationArgument");
-
+            var startToken = Current;
             // Parse parameter name
             if (!Check(TokenType.UserVariable))
             {
@@ -2564,13 +2647,19 @@ public class PeopleCodeParser
                 return null;
             }
 
-            var parameter = new ParameterNode(paramName, nameToken, paramType);
-
+            bool isOut = false;
             // Parse optional OUT modifier
             if (Match(TokenType.Out))
             {
-                parameter.IsOut = true;
+                isOut = true;
             }
+
+            var endToken = Previous;
+            var parameter = new ParameterNode(paramName, nameToken, paramType) { 
+                FirstToken = startToken, 
+                LastToken = endToken, 
+                IsOut = isOut
+            };
 
             return parameter;
         }
@@ -3390,6 +3479,7 @@ public class PeopleCodeParser
         try
         {
             EnterRule("if-statement");
+            var ifToken = Current; // Capture IF token for structural error reporting
 
             if (!Match(TokenType.If))
                 return null;
@@ -3411,7 +3501,8 @@ public class PeopleCodeParser
                 }
                 else
                 {
-                    // No THEN found, cannot recover
+                    // No THEN found, cannot recover - highlight the IF token
+                    ReportError("IF statement is missing 'THEN' - cannot recover", ifToken);
                     return null;
                 }
             }
@@ -3423,8 +3514,8 @@ public class PeopleCodeParser
                 // Error recovery: try to synchronize to THEN token
                 if (!SynchronizeToToken(TokenType.Then))
                 {
-                    // No THEN found, but continue with what we have
-                    ReportError("Could not find 'THEN' token for error recovery");
+                    // No THEN found - highlight the IF token for structure error
+                    ReportError("IF statement is missing 'THEN' token", ifToken);
                 }
             }
 
@@ -3442,7 +3533,13 @@ public class PeopleCodeParser
             elseStatements = ParseStatementList(TokenType.EndIf);
         }
 
-                    Consume(TokenType.EndIf, "Expected 'END-IF' after IF statement");
+        // Use custom logic instead of Consume to highlight IF token for missing END-IF
+        if (!Match(TokenType.EndIf))
+        {
+            ReportError("IF statement is missing 'END-IF'", ifToken);
+            // Use smart recovery to find next statement boundary, not just END-IF
+            SmartStatementRecover();
+        }
 
             var ifNode = new IfStatementNode(condition, thenStatements);
             if (elseStatements != null)
@@ -3463,6 +3560,7 @@ public class PeopleCodeParser
         try
         {
             EnterRule("for-statement");
+            var forToken = Current; // Capture FOR token for structural error reporting
 
             if (!Match(TokenType.For))
                 return null;
@@ -3522,7 +3620,13 @@ public class PeopleCodeParser
                 body = ParseStatementList(TokenType.EndFor);
             }
 
-            Consume(TokenType.EndFor, "Expected 'END-FOR' after FOR statement");
+            // Use custom logic instead of Consume to highlight FOR token for missing END-FOR
+            if (!Match(TokenType.EndFor))
+            {
+                ReportError("FOR statement is missing 'END-FOR'", forToken);
+                // Use smart recovery to find next statement boundary, not just END-FOR
+                SmartStatementRecover();
+            }
 
             var forNode = new ForStatementNode(variableName, variableToken, start, end, body);
             if (step != null)
@@ -3543,6 +3647,7 @@ public class PeopleCodeParser
         try
         {
             EnterRule("while-statement");
+            var whileToken = Current; // Capture WHILE token for structural error reporting
 
             if (!Match(TokenType.While))
                 return null;
@@ -3559,7 +3664,13 @@ public class PeopleCodeParser
 
         var body = ParseStatementList(TokenType.EndWhile);
 
-                    Consume(TokenType.EndWhile, "Expected 'END-WHILE' after WHILE statement");
+        // Use custom logic instead of Consume to highlight WHILE token for missing END-WHILE
+        if (!Match(TokenType.EndWhile))
+        {
+            ReportError("WHILE statement is missing 'END-WHILE'", whileToken);
+            // Use smart recovery to find next statement boundary, not just END-WHILE
+            SmartStatementRecover();
+        }
 
             return new WhileStatementNode(condition, body);
         }
@@ -3675,7 +3786,13 @@ public class PeopleCodeParser
             // Handle optional semicolons before END-TRY (SEMI*)
             while (Match(TokenType.Semicolon)) { }
 
-            Consume(TokenType.EndTry, "Expected 'END-TRY' after TRY statement");
+            // Use custom logic instead of Consume to highlight TRY token for missing END-TRY
+            if (!Match(TokenType.EndTry))
+            {
+                ReportError("TRY statement is missing 'END-TRY'", tryStartToken);
+                // Use smart recovery to find next statement boundary, not just END-TRY
+                SmartStatementRecover();
+            }
 
             while (Match(TokenType.Semicolon)) { }
 
@@ -3819,6 +3936,7 @@ public class PeopleCodeParser
         try
         {
             EnterRule("localVariableDeclaration");
+            var localToken = Current; // Capture LOCAL token for range-based error reporting
 
             if (!Match(TokenType.Local))
                 return null;
@@ -3834,7 +3952,8 @@ public class PeopleCodeParser
             // Parse first variable name (required)
             if (!Check(TokenType.UserVariable))
             {
-                ReportError("Expected variable name (&variable) after type");
+                // Highlight from LOCAL token to end of type for incomplete declaration
+                ReportError("Expected variable name (&variable) after type", localToken, Previous);
                 return null;
             }
 
@@ -3915,6 +4034,7 @@ public class PeopleCodeParser
         var firstToken = Current;
         while (!IsAtEnd && !endTokens.Contains(Current.Type))
         {
+            var statementStartToken = Current; // Capture the token where the statement attempt begins
             var statement = ParseStatement();
             if (statement != null)
             {
@@ -3922,8 +4042,18 @@ public class PeopleCodeParser
             }
             else
             {
-                // Recovery: skip problematic token
-                _position++;
+                // Smart recovery: try to synchronize to next statement boundary
+                // Note: ParseStatement() should have already reported specific parsing errors
+                if (SmartStatementRecover())
+                {
+                    // Successfully found a statement boundary, continue parsing from here
+                    continue;
+                }
+                else
+                {
+                    // Recovery failed, advance one token to prevent infinite loop
+                    _position++;
+                }
             }
         }
         block.FirstToken = firstToken;
@@ -3944,6 +4074,7 @@ public class PeopleCodeParser
         try
         {
             EnterRule("evaluate-statement");
+            var evaluateToken = Current; // Capture EVALUATE token for structural error reporting
 
             if (!Match(TokenType.Evaluate))
                 return null;
@@ -4023,7 +4154,13 @@ public class PeopleCodeParser
                 }
             }
 
-                    Consume(TokenType.EndEvaluate, "Expected 'END-EVALUATE' to close EVALUATE");
+            // Use custom logic instead of Consume to highlight EVALUATE token for missing END-EVALUATE
+            if (!Match(TokenType.EndEvaluate))
+            {
+                ReportError("EVALUATE statement is missing 'END-EVALUATE'", evaluateToken);
+                // Use smart recovery to find next statement boundary, not just END-EVALUATE
+                SmartStatementRecover();
+            }
         return evalNode;
         }
         catch (Exception ex)
@@ -5003,7 +5140,7 @@ public class PeopleCodeParser
         _toolsRelease = string.IsNullOrEmpty(version) ? new ToolsVersion("99.99.99") : new ToolsVersion(version);
         
         // Reprocess directives with the new ToolsRelease setting
-        PreProcessDirectives();
+        _skippedDirectiveSpans = PreProcessDirectives();
     }
     
     /// <summary>

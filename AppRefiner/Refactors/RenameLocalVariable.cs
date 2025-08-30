@@ -5,13 +5,14 @@ using PeopleCodeParser.SelfHosted.Visitors.Models;
 using AppRefiner.Services;
 using System.Drawing;
 using System.Windows.Forms;
+using PeopleCodeParser.SelfHosted.Lexing;
 
 namespace AppRefiner.Refactors
 {
     /// <summary>
     /// Renames a local variable, parameter, private instance variable, private method, or private constant and all its references
     /// </summary>
-    public class RenameLocalVariable : ScopedRefactor
+    public class RenameLocalVariable(AppRefiner.ScintillaEditor editor) : ScopedRefactor(editor)
     {
         /// <summary>
         /// Gets the display name of this refactoring operation
@@ -24,17 +25,8 @@ namespace AppRefiner.Refactors
         public new static string RefactorDescription => "Rename a local variable, parameter, private instance variable, private method, or private constant and all its references";
 
         private string? newVariableName;
-        private string? variableToRename;
-        private bool isInstanceVariable = false;
-        private bool isParameter = false;
-        private bool isConstant = false;
-        private bool isPrivateMethod = false;
-        
-            // Store discovered variable information for post-traversal use
-    private List<SourceSpan>? storedVariableReferences;
-    private PeopleCodeParser.SelfHosted.Visitors.Models.ScopeInfo? storedTargetScope;
-    private VariableType discoveredVariableType;
-    private PeopleCodeParser.SelfHosted.Visitors.Models.ScopeInfo? lastExitedScope;
+        private EnhancedVariableInfo? variableToRename;
+        private ScopeContext? targetScope;
 
         /// <summary>
         /// Indicates that this refactor requires a user input dialog
@@ -73,10 +65,6 @@ namespace AppRefiner.Refactors
             PrivateMethod
         }
 
-        public RenameLocalVariable(AppRefiner.ScintillaEditor editor) : base(editor)
-        {
-        }
-
         /// <summary>
         /// Dialog form for renaming variables
         /// </summary>
@@ -90,17 +78,19 @@ namespace AppRefiner.Refactors
             private Label headerLabel = new();
 
             public string NewVariableName { get; private set; }
-            private readonly RenameTokenType tokenType;
+            private readonly VariableKind variableKind;
 
-            public RenameVariableDialog(string initialName = "", RenameTokenType tokenType = RenameTokenType.LocalVariable)
+            public RenameVariableDialog(string initialName = "", VariableKind varKind = VariableKind.Local)
             {
-                NewVariableName = initialName;
-                this.tokenType = tokenType;
+                NewVariableName = initialName.StartsWith('&') ? initialName.Substring(1) : initialName;
+                this.variableKind = varKind;
+
+
+
                 InitializeComponent();
-                
-                // For methods, don't add the & prefix
-                txtNewName.Text = tokenType == RenameTokenType.PrivateMethod ? initialName : initialName.TrimStart('&');
-                
+
+                txtNewName.Text = NewVariableName;
+
                 // Set focus to the text box
                 this.ActiveControl = txtNewName;
                 txtNewName.SelectAll();
@@ -109,20 +99,20 @@ namespace AppRefiner.Refactors
             private void InitializeComponent()
             {
                 this.SuspendLayout();
-                
+
                 // headerPanel
                 this.headerPanel.BackColor = Color.FromArgb(50, 50, 60);
                 this.headerPanel.Dock = DockStyle.Top;
                 this.headerPanel.Height = 30;
                 this.headerPanel.Controls.Add(this.headerLabel);
-                
+
                 // headerLabel
                 this.headerLabel.Text = GetHeaderText();
                 this.headerLabel.ForeColor = Color.White;
                 this.headerLabel.Font = new Font("Segoe UI", 9F, FontStyle.Regular, GraphicsUnit.Point);
                 this.headerLabel.Dock = DockStyle.Fill;
                 this.headerLabel.TextAlign = ContentAlignment.MiddleCenter;
-                
+
                 // lblPrompt
                 this.lblPrompt.AutoSize = true;
                 this.lblPrompt.Location = new System.Drawing.Point(12, 40);
@@ -130,7 +120,7 @@ namespace AppRefiner.Refactors
                 this.lblPrompt.Size = new System.Drawing.Size(116, 15);
                 this.lblPrompt.TabIndex = 0;
                 this.lblPrompt.Text = GetPromptText();
-                
+
                 // txtNewName
                 this.txtNewName.BorderStyle = BorderStyle.FixedSingle;
                 this.txtNewName.Location = new System.Drawing.Point(12, 60);
@@ -139,7 +129,7 @@ namespace AppRefiner.Refactors
                 this.txtNewName.TabIndex = 1;
                 this.txtNewName.Font = new Font("Segoe UI", 11F, FontStyle.Regular, GraphicsUnit.Point);
                 this.txtNewName.KeyDown += TxtNewName_KeyDown;
-                
+
                 // btnOk
                 this.btnOk.DialogResult = DialogResult.OK;
                 this.btnOk.Location = new System.Drawing.Point(116, 95);
@@ -149,7 +139,7 @@ namespace AppRefiner.Refactors
                 this.btnOk.Text = "&OK";
                 this.btnOk.UseVisualStyleBackColor = true;
                 this.btnOk.Click += BtnOk_Click;
-                
+
                 // btnCancel
                 this.btnCancel.DialogResult = DialogResult.Cancel;
                 this.btnCancel.Location = new System.Drawing.Point(197, 95);
@@ -158,7 +148,7 @@ namespace AppRefiner.Refactors
                 this.btnCancel.TabIndex = 3;
                 this.btnCancel.Text = "&Cancel";
                 this.btnCancel.UseVisualStyleBackColor = true;
-                
+
                 // RenameVariableDialog
                 this.AcceptButton = this.btnOk;
                 this.CancelButton = this.btnCancel;
@@ -181,24 +171,20 @@ namespace AppRefiner.Refactors
 
             private string GetHeaderText()
             {
-                return tokenType switch
+                return variableKind switch
                 {
-                    RenameTokenType.InstanceVariable => "Rename Instance Variable",
-                    RenameTokenType.Parameter => "Rename Parameter",
-                    RenameTokenType.Constant => "Rename Constant",
-                    RenameTokenType.PrivateMethod => "Rename Private Method",
+                    VariableKind.Instance => "Rename Instance Variable",
+                    VariableKind.Parameter => "Rename Parameter",
                     _ => "Rename Variable"
                 };
             }
 
             private string GetPromptText()
             {
-                return tokenType switch
+                return variableKind switch
                 {
-                    RenameTokenType.InstanceVariable => "Enter new instance variable name:",
-                    RenameTokenType.Parameter => "Enter new parameter name:",
-                    RenameTokenType.Constant => "Enter new constant name:",
-                    RenameTokenType.PrivateMethod => "Enter new method name:",
+                    VariableKind.Instance => "Enter new instance variable name:",
+                    VariableKind.Parameter => "Enter new parameter name:",
                     _ => "Enter new variable name:"
                 };
             }
@@ -206,12 +192,9 @@ namespace AppRefiner.Refactors
             private void BtnOk_Click(object? sender, EventArgs e)
             {
                 NewVariableName = txtNewName.Text.Trim();
-                
-                if (tokenType != RenameTokenType.PrivateMethod && !NewVariableName.StartsWith("&"))
-                {
+                if (!NewVariableName.StartsWith("&") && variableKind != VariableKind.Property)
                     NewVariableName = "&" + NewVariableName;
-                }
-                
+
                 DialogResult = DialogResult.OK;
             }
 
@@ -240,14 +223,13 @@ namespace AppRefiner.Refactors
         /// </summary>
         public override bool ShowRefactorDialog()
         {
-            if (string.IsNullOrEmpty(variableToRename))
+            if (variableToRename is null)
             {
                 SetFailure("No variable, parameter, or method found at cursor position.");
                 return false;
             }
 
-            var tokenType = DetermineTokenType();
-            using var dialog = new RenameVariableDialog(variableToRename, tokenType);
+            using var dialog = new RenameVariableDialog(variableToRename.Name, variableToRename.Kind);
             var wrapper = new WindowWrapper(GetEditorMainWindowHandle());
             DialogResult result = dialog.ShowDialog(wrapper);
 
@@ -261,166 +243,61 @@ namespace AppRefiner.Refactors
             return false;
         }
 
-        private RenameTokenType DetermineTokenType()
-        {
-            if (isPrivateMethod) return RenameTokenType.PrivateMethod;
-            if (isInstanceVariable) return RenameTokenType.InstanceVariable;
-            if (isParameter) return RenameTokenType.Parameter;
-            if (isConstant) return RenameTokenType.Constant;
-            return RenameTokenType.LocalVariable;
-        }
-
-            /// <summary>
-    /// Checks if the cursor position is on any variable identifier in the given scope
-    /// and stores the variable information for later use
-    /// </summary>
-    private void CheckForTargetVariableInScope(PeopleCodeParser.SelfHosted.Visitors.Models.ScopeInfo scope)
-    {
-        // Skip if we already found our target variable
-        if (variableToRename != null)
-            return;
-
-        // Check all variables in the current scope
-        var currentVariableScope = GetCurrentVariableScope();
-        foreach (var variableEntry in currentVariableScope)
-        {
-            string variableName = variableEntry.Key;
-            var variableInfo = variableEntry.Value;
-
-            // Check if cursor is on the variable's declaration
-            if (variableInfo.VariableNameInfo.Token != null &&
-                variableInfo.VariableNameInfo.Token.SourceSpan.ContainsPosition(CurrentPosition))
-            {
-                // Found our target variable!
-                variableToRename = variableName;
-                storedVariableReferences = new List<SourceSpan>();
-                storedVariableReferences.Add(variableInfo.VariableNameInfo.Token.SourceSpan);
-                storedTargetScope = scope;
-                discoveredVariableType = variableInfo.VariableType;
-                
-                // Determine variable type based on scope
-                DetermineIdentifierTypeFromScope(scope, variableInfo.VariableType);
-                return;
-            }
-        }
-        }
-
-            /// <summary>
-    /// Determines the type of identifier based on the scope hierarchy and variable type
-    /// </summary>
-    private void DetermineIdentifierTypeFromScope(PeopleCodeParser.SelfHosted.Visitors.Models.ScopeInfo scope, VariableType variableType)
-    {
-        // Reset flags
-        isInstanceVariable = false;
-        isParameter = false;
-        isConstant = false;
-        isPrivateMethod = false;
-
-        // Set flags based on variable type
-        switch (variableType)
-        {
-            case VariableType.Instance:
-                isInstanceVariable = true;
-                break;
-            case VariableType.Parameter:
-                isParameter = true;
-                break;
-            case VariableType.Constant:
-                isConstant = true;
-                break;
-            case VariableType.Local:
-            case VariableType.Global:
-            case VariableType.Property:
-                // These are handled by default
-                break;
-        }
-        }
-
-        /// <summary>
-        /// Override VisitFunction to use post-traversal discovery
-        /// </summary>
-        public override void VisitFunction(FunctionNode node)
-        {
-            // Let the base class handle scope entry and complete traversal
-            base.VisitFunction(node);
-            
-            // After traversal, check if cursor is on any identifier in this scope
-            if (lastExitedScope != null && variableToRename == null)
-            {
-                CheckForTargetVariableInScope(lastExitedScope);
-            }
-        }
-
-            protected override void OnExitScope(PeopleCodeParser.SelfHosted.Visitors.Models.ScopeInfo scopeInfo, Dictionary<string, VariableInfo> variableScope, Dictionary<string, object> customData)
-    {
-        lastExitedScope = scopeInfo;
-    }
-
-        /// <summary>
-        /// Override VisitMethod to use post-traversal discovery
-        /// </summary>
-        public override void VisitMethod(MethodNode node)
-        {
-            // Let the base class handle scope entry and complete traversal
-            base.VisitMethod(node);
-            
-            // After traversal, check if cursor is on any identifier in this scope
-            if (CurrentScope != null && variableToRename == null)
-            {
-                CheckForTargetVariableInScope(CurrentScope);
-            }
-        }
-
-        /// <summary>
-        /// Override VisitProgram to handle global scope variables
-        /// </summary>
         public override void VisitProgram(ProgramNode node)
         {
-            // Let the base class handle scope entry and complete traversal
             base.VisitProgram(node);
-            
-            // After traversal, check if cursor is on any identifier in this scope
-            if (CurrentScope != null && variableToRename == null)
-            {
-                CheckForTargetVariableInScope(CurrentScope);
-            }
         }
+        protected override void OnExitGlobalScope(ScopeContext scope, ProgramNode node, Dictionary<string, object> customData)
+        {
+            
+            foreach (var testScope in GetAllScopes())
+            {
+                foreach(var variable in GetVariablesInScope(testScope))
+                {
+                    if (variable.References.Any(r => r.SourceSpan.ContainsPosition(CurrentPosition)))
+                    {
+                        variableToRename = variable;
+                        targetScope = testScope;
+                        return;
+                    }
+                }
+            }
+
+        }
+
 
         /// <summary>
-        /// Override VisitBlock to handle block-level variables
+        /// Handles function calls and tracks variable usage in member access scenarios
         /// </summary>
-        public override void VisitBlock(BlockNode node)
-        {
-            // Let the base class handle scope entry and complete traversal
-            base.VisitBlock(node);
-            
-            // After traversal, check if cursor is on any identifier in this scope
-            if (CurrentScope != null && variableToRename == null)
-            {
-                CheckForTargetVariableInScope(CurrentScope);
-            }
-        }
+       
 
+        /// <summary>
+        /// Resets the refactor state for a new analysis
+        /// </summary>
+        protected override void OnReset()
+        {
+            variableToRename = null;
+            newVariableName = null;
+            targetScope = null;
+        }
 
         private void GenerateRenameChanges()
         {
-            if (string.IsNullOrEmpty(variableToRename) || string.IsNullOrEmpty(newVariableName))
+            if (variableToRename == null || targetScope == null || string.IsNullOrWhiteSpace(newVariableName))
             {
+                SetFailure("No variable, or parameter found at cursor position.");
                 return;
             }
 
-            // Use the stored references instead of trying to find them again
-            // (since scopes have been exited by the time this method runs)
-            if (storedVariableReferences != null)
+            // Sort by position in reverse order to maintain accuracy when making replacements
+            var targetReferences = GetVariableReferences(variableToRename.Name, targetScope);
+           
+            //targetReferences = targetReferences.OrderByDescending(r => r.Start.ByteIndex).ToList();
+            foreach (var varRef in targetReferences)
             {
-                            // Sort by position in reverse order to maintain accuracy when making replacements
-            var sortedReferences = storedVariableReferences.OrderByDescending(r => r.Start.ByteIndex).ToList();
-            
-            foreach (var span in sortedReferences)
-            {
-                EditText(span.Start.ByteIndex, span.End.ByteIndex, 
-                         newVariableName, $"Rename {variableToRename} to {newVariableName}");
-            }
+                // start and end are inclusive, so subtract 1 from the end, because SourceSpan has the upper bound as exclusive
+                EditText(varRef.SourceSpan.Start.ByteIndex, varRef.SourceSpan.End.ByteIndex - 1,
+                            newVariableName ?? variableToRename.Name, $"Rename {variableToRename} to {newVariableName}");
             }
         }
     }

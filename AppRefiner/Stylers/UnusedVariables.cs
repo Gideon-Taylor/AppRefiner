@@ -16,11 +16,9 @@ namespace AppRefiner.Stylers;
 public class UnusedVariables : ScopedStyler
 {
     private const uint HIGHLIGHT_COLOR = 0x73737380; // Light gray text (no alpha)
-    private readonly IVariableUsageTracker usageTracker;
 
     public UnusedVariables()
     {
-        usageTracker = new VariableUsageTracker();
     }
 
     public override string Description => "Unused variables";
@@ -42,95 +40,13 @@ public class UnusedVariables : ScopedStyler
         GenerateIndicatorsForUnusedVariables();
     }
 
-    /// <summary>
-    /// Handles member access expressions, particularly for %This references
-    /// </summary>
-    public override void VisitMemberAccess(MemberAccessNode node)
-    {
-        // Check for %This dot access to properties and instance variables
-        var target = node.Target;
-        if (target is IdentifierNode identNode && identNode.Name.Equals("%THIS", StringComparison.OrdinalIgnoreCase))
-        {
-            var memberName = node.MemberName;
-            
-            // Mark the property as used
-            usageTracker.MarkAsUsed(memberName, GetCurrentScopeInfo());
-            
-            // Also check for instance variable with & prefix
-            string varNameWithPrefix = $"&{memberName}";
-            usageTracker.MarkAsUsed(varNameWithPrefix, GetCurrentScopeInfo());
-        }
-        
-        base.VisitMemberAccess(node);
-    }
 
-    /// <summary>
-    /// Handles FOR statements and marks iterator variables as used
-    /// </summary>
-    public override void VisitFor(ForStatementNode node)
-    {
-        // Mark the iterator variable as used
-        string iteratorName = node.Variable;
-        usageTracker.MarkAsUsed(iteratorName, GetCurrentScopeInfo());
-        
-        // Also check with/without & prefix
-        if (iteratorName.StartsWith("&"))
-        {
-            var nameWithoutPrefix = iteratorName.Substring(1);
-            usageTracker.MarkAsUsed(nameWithoutPrefix, GetCurrentScopeInfo());
-        }
-        else
-        {
-            var nameWithPrefix = $"&{iteratorName}";
-            usageTracker.MarkAsUsed(nameWithPrefix, GetCurrentScopeInfo());
-        }
-        
-        base.VisitFor(node);
-    }
 
-    /// <summary>
-    /// Handles identifier references and marks variables as used
-    /// </summary>
-    public override void VisitIdentifier(IdentifierNode node)
-    {
-        // Mark the variable as used
-        usageTracker.MarkAsUsed(node.Name, GetCurrentScopeInfo());
-        
-        // If this is a property accessed with & prefix, also mark the property as used
-        if (node.Name.StartsWith("&"))
-        {
-            var propertyName = node.Name.Substring(1); // Remove the & prefix
-            usageTracker.MarkAsUsed(propertyName, GetCurrentScopeInfo());
-        }
-        
-        base.VisitIdentifier(node);
-    }
-
-    public override void VisitFunctionCall(FunctionCallNode node)
-    {
-        if (node.Function is MemberAccessNode member && member.Target is IdentifierNode ident)
-        {
-            if (ident.Name.StartsWith('&'))
-            {
-                usageTracker.MarkAsUsed(ident.Name, GetCurrentScopeInfo());
-            }
-        }
-        base.VisitFunctionCall(node);
-    }
 
     #endregion
 
     #region Event Handlers
-
-    /// <summary>
-    /// Called when a variable is declared in any scope
-    /// </summary>
-    protected override void OnVariableDeclared(VariableInfo varInfo, ScopeInfo scope)
-    {
-        // Register the variable with the usage tracker
-        usageTracker.RegisterVariable(varInfo, scope);
-    }
-
+    // Variable declaration is now handled automatically by base class
     #endregion
 
     #region Helper Methods
@@ -140,30 +56,31 @@ public class UnusedVariables : ScopedStyler
     /// </summary>
     private void GenerateIndicatorsForUnusedVariables()
     {
-        foreach (var (variable, scope) in usageTracker.GetUnusedVariables())
+
+        foreach (var variable in GetUnusedVariables())
         {
-            string tooltip = GetTooltipForVariable(variable, scope);
+            string tooltip = GetTooltipForVariable(variable);
             AddIndicator(variable.VariableNameInfo.SourceSpan, IndicatorType.TEXTCOLOR, HIGHLIGHT_COLOR, tooltip);
-        }
+        }        
     }
 
     /// <summary>
     /// Gets an appropriate tooltip for a variable based on its type and scope
     /// </summary>
-    private string GetTooltipForVariable(VariableInfo variable, ScopeInfo scope)
+    private string GetTooltipForVariable(EnhancedVariableInfo variable)
     {
-        switch (variable.VariableType)
+        switch (variable.Kind)
         {
-            case VariableType.Parameter:
+            case VariableKind.Parameter:
                 return $"Unused parameter: {variable.Name}";
-            case VariableType.Instance:
+            case VariableKind.Instance:
                 return $"Unused instance variable: {variable.Name}";
-            case VariableType.Property:
+            case VariableKind.Property:
                 return $"Unused property: {variable.Name}";
-            case VariableType.Global:
+            case VariableKind.Global:
                 return $"Unused global variable: {variable.Name}";
             default:
-                var scopePrefix = GetTooltipPrefixForScope(scope);
+                var scopePrefix = GetTooltipPrefixForScope(variable.DeclarationScope);
                 return $"{scopePrefix}: {variable.Name}";
         }
     }
@@ -171,15 +88,16 @@ public class UnusedVariables : ScopedStyler
     /// <summary>
     /// Gets the appropriate tooltip prefix based on the scope type
     /// </summary>
-    private string GetTooltipPrefixForScope(ScopeInfo scopeInfo)
+    private string GetTooltipPrefixForScope(ScopeContext scopeInfo)
     {
+        
         return scopeInfo.Type switch
         {
-            ScopeType.Method => "Unused method variable",
-            ScopeType.Function => "Unused function variable",
-            ScopeType.Property => "Unused property variable",
-            ScopeType.Getter => "Unused getter variable",
-            ScopeType.Setter => "Unused setter variable",
+            EnhancedScopeType.Method => "Unused method variable",
+            EnhancedScopeType.Function => "Unused function variable",
+            EnhancedScopeType.Property => "Unused property variable",
+            //EnhancedScopeType.Getter => "Unused getter variable",
+            //EnhancedScopeType.Setter => "Unused setter variable",
             _ => "Unused local variable"
         };
     }
@@ -193,8 +111,7 @@ public class UnusedVariables : ScopedStyler
     /// </summary>
     protected override void OnReset()
     {
-
-        usageTracker.Reset();
+        // Base class handles VariableTracker.Reset() automatically
     }
 
     #endregion

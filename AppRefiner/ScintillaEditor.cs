@@ -309,6 +309,8 @@ namespace AppRefiner
 
         public List<List<int>> CollapsedFoldPaths { get; set; } = [];
 
+        public IReadOnlyList<ParseError> ParserErrors { get; set; } = [];
+
         /// <summary>
         /// Gets or creates a parsed program tree for the current editor content.
         /// Uses caching to avoid re-parsing unchanged content.
@@ -403,6 +405,7 @@ namespace AppRefiner
                 /* TODO: data manager support for getting current tools release */
                 var parser = new PeopleCodeParser.SelfHosted.PeopleCodeParser(tokens,"8.61");
                 selfHostedParsedProgram = parser.ParseProgram();
+                this.ParserErrors = parser.Errors;
                 selfHostedParseSuccessful = true;
                 selfHostedContentHash = newHash;
                 
@@ -457,6 +460,7 @@ namespace AppRefiner
                 /* TODO: data manager support for getting current tools release */
                 var parser = new PeopleCodeParser.SelfHosted.PeopleCodeParser(tokens,"8.61");
                 selfHostedParsedProgram = parser.ParseProgram();
+                this.ParserErrors = parser.Errors;
                 selfHostedTokens = tokens;
                 selfHostedParseSuccessful = true;
                 selfHostedContentHash = newHash;

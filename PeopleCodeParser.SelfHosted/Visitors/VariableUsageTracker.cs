@@ -8,7 +8,7 @@ namespace PeopleCodeParser.SelfHosted.Visitors;
 /// </summary>
 public class VariableUsageTracker : IVariableUsageTracker
 {
-    private class VariableKey
+    public class VariableKey
     {
         public string Name { get; }
         public ScopeInfo Scope { get; }
@@ -37,7 +37,7 @@ public class VariableUsageTracker : IVariableUsageTracker
         }
     }
 
-    private readonly Dictionary<VariableKey, (VariableInfo Variable, bool Used)> usageMap = new();
+    private readonly Dictionary<VariableKey, (VariableInfo Variable, bool Used, List<SourceSpan> References)> usageMap = new();
     private readonly Dictionary<ScopeInfo, List<VariableKey>> scopeToVariablesMap = new();
     
     // Track undefined variable references
@@ -49,14 +49,14 @@ public class VariableUsageTracker : IVariableUsageTracker
     public void RegisterVariable(VariableInfo variable, ScopeInfo scope)
     {
         var key = new VariableKey(variable.Name, scope);
-        usageMap[key] = (variable, false);
+        usageMap[key] = (variable, false, [variable.VariableNameInfo.SourceSpan]);
         
         if (!scopeToVariablesMap.TryGetValue(scope, out var variables))
         {
             variables = new List<VariableKey>();
             scopeToVariablesMap[scope] = variables;
         }
-        
+
         variables.Add(key);
     }
 
@@ -65,13 +65,29 @@ public class VariableUsageTracker : IVariableUsageTracker
     /// </summary>
     public bool MarkAsUsed(string name, ScopeInfo currentScope)
     {
+        // Use the location-aware version with default SourceSpan for backward compatibility
+        return MarkAsUsedWithLocation(name, default(SourceSpan), currentScope);
+    }
+
+    /// <summary>
+    /// Marks a variable as used by name with location tracking, searching in the current scope and parent scopes
+    /// </summary>
+    public bool MarkAsUsedWithLocation(string name, SourceSpan location, ScopeInfo currentScope)
+    {
         // First try to find in current scope
         var key = FindVariableKey(name, currentScope);
         if (key != null)
         {
             if (usageMap.TryGetValue(key, out var entry))
             {
-                usageMap[key] = (entry.Variable, true);
+                // Add the location to references if it's not default
+                var references = entry.References;
+                if (location != default(SourceSpan))
+                {
+                    references.Add(location);
+                }
+                
+                usageMap[key] = (entry.Variable, true, references);
                 return true;
             }
         }
@@ -143,6 +159,37 @@ public class VariableUsageTracker : IVariableUsageTracker
     public IEnumerable<(string Name, SourceSpan Location, ScopeInfo Scope)> GetUndefinedReferences()
     {
         return undefinedReferences.ToList();
+    }
+
+    /// <summary>
+    /// Gets all reference locations for a variable by name in the specified scope
+    /// </summary>
+    public IEnumerable<SourceSpan> GetVariableReferences(string name, ScopeInfo scope)
+    {
+        var key = new VariableKey(name, scope);
+        if (usageMap.TryGetValue(key, out var entry))
+        {
+            return entry.References.ToList();
+        }
+        
+        return Enumerable.Empty<SourceSpan>();
+    }
+
+    /// <summary>
+    /// Gets all reference locations for a variable in the specified scope
+    /// </summary>
+    public IEnumerable<SourceSpan> GetVariableReferences(VariableInfo variable, ScopeInfo scope)
+    {
+        return GetVariableReferences(variable.Name, scope);
+    }
+
+    public IEnumerable<VariableInfo> GetAllVariablesInScope(ScopeInfo scope)
+    {
+        if (scopeToVariablesMap.TryGetValue(scope, out var variables))
+        {
+            return variables.Select(key => usageMap[key].Variable);
+        }
+        return Enumerable.Empty<VariableInfo>();
     }
 
     /// <summary>

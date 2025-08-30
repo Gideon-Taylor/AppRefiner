@@ -918,7 +918,7 @@ namespace AppRefiner
                                 try
                                 {
                                     // Create an instance of the refactor
-                                    var refactor = (BaseRefactor?)Activator.CreateInstance(
+                                    var refactor = (IRefactor?)Activator.CreateInstance(
                                             currentRefactorInfo.RefactorType,
                                             [activeEditor] // Assuming constructor takes ScintillaEditor
                                 );
@@ -954,9 +954,9 @@ namespace AppRefiner
                     if (activeEditor != null)
                     {
                         // Instantiate the specific refactor
-                        var suppressRefactor = new SuppressReportRefactor(activeEditor);
+                        /* var suppressRefactor = new SuppressReportRefactor(activeEditor);
                         // Execute via the manager
-                        refactorManager?.ExecuteRefactor(suppressRefactor, activeEditor);
+                        refactorManager?.ExecuteRefactor(suppressRefactor, activeEditor);*/
                     }
                 }
             ));
@@ -1292,7 +1292,7 @@ namespace AppRefiner
 
                             try
                             {
-                                var newRefactor = (BaseRefactor?)Activator.CreateInstance(
+                                var newRefactor = (IRefactor?)Activator.CreateInstance(
                                     currentRefactorInfo.RefactorType,
                                     [activeEditor] // Assuming constructor takes ScintillaEditor
                                 );
@@ -1598,7 +1598,8 @@ namespace AppRefiner
                 Debug.Log($"Text pasted detected at position: {m.WParam}, length: {m.LParam}");
 
                 // Trigger ResolveImports refactor automatically
-                TriggerResolveImportsRefactor();
+                // Disabling this because it really messes up the "undo" where the user expects to just undo the paste
+                // TriggerResolveImportsRefactor();
             }
             else if (m.Msg == AR_KEY_COMBINATION)
             {

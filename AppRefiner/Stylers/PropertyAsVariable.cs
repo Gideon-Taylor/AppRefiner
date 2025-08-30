@@ -59,20 +59,26 @@ public class PropertyAsVariable : ScopedStyler
         {
             // Extract property name by removing the & prefix
             string varName = node.Name.TrimStart('&');
-            
+            var scope = GetCurrentScope();
             // Check if this variable name matches a public/protected property
-            if (publicProperties.Contains(varName))
+            if (GetVariablesInScope(scope).Any(v => v.Name.Equals(varName, StringComparison.OrdinalIgnoreCase) &&
+                                                     v.Kind == VariableKind.Property))
             {
                 // Only highlight if we're not in a constructor
-                var currentMethod = GetCurrentScopeInfo();
-                if (currentMethod != null && !IsInConstructor(currentMethod))
+
+                while (scope.Type != EnhancedScopeType.Method && scope.Parent != null)
+                {
+                    scope = scope.Parent;
+                }
+
+                if (scope.SourceNode is MethodNode method && !method.IsConstructor)
                 {
                     AddIndicator(node.SourceSpan, IndicatorType.HIGHLIGHTER, HIGHLIGHT_COLOR,
                         "Property used as variable outside constructor");
                 }
             }
         }
-        
+
         base.VisitIdentifier(node);
     }
 

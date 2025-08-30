@@ -179,8 +179,15 @@ namespace AppRefiner.Refactors
             {
                 return RefactorResult.Failed(failureMessage ?? "Unknown error");
             }
-            
-            return edits.Count > 0 ? RefactorResult.Successful : RefactorResult.Failed("No changes to apply");
+            if (!DeferDialogUntilAfterVisitor)
+            {
+                return edits.Count > 0 ? RefactorResult.Successful : RefactorResult.Failed("No changes to apply");
+            }
+            else
+            {
+                // If deferring dialog, always return successful to allow dialog to show
+                return RefactorResult.Successful;
+            }
         }
 
         #endregion

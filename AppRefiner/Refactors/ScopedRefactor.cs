@@ -12,7 +12,7 @@ namespace AppRefiner.Refactors
     /// Base class for implementing PeopleCode refactoring operations that need scope and variable tracking.
     /// This class leverages the ScopedAstVisitor from the SelfHosted parser to provide automatic scope management.
     /// </summary>
-    public abstract class ScopedRefactor : ScopedAstVisitor<object>, IRefactor
+    public abstract class ScopedRefactor : EnhancedScopedAstVisitor<object>, IRefactor
     {
         #region Static Properties
 
@@ -93,11 +93,6 @@ namespace AppRefiner.Refactors
         /// </summary>
         protected int CurrentCursorPosition => CurrentPosition;
         
-        /// <summary>
-        /// Gets the current scope
-        /// </summary>
-        protected PeopleCodeParser.SelfHosted.Visitors.Models.ScopeInfo? CurrentScope => scopeInfoStack.Count > 0 ? scopeInfoStack.Peek() : null;
-
         #endregion
 
         #region Private Fields
@@ -185,8 +180,14 @@ namespace AppRefiner.Refactors
             {
                 return RefactorResult.Failed(failureMessage ?? "Unknown error");
             }
-            
-            return edits.Count > 0 ? RefactorResult.Successful : RefactorResult.Failed("No changes to apply");
+            if (!DeferDialogUntilAfterVisitor)
+            {
+                return edits.Count > 0 ? RefactorResult.Successful : RefactorResult.Failed("No changes to apply");
+            }
+
+            // Always successful for deferred dialogs. they will report errors after the dialog runs
+            // this is because some refactors require input from the user before they can generate the changes (like renaming variables).
+            return RefactorResult.Successful;
         }
 
         #endregion
@@ -283,53 +284,11 @@ namespace AppRefiner.Refactors
             return node.SourceSpan.ContainsPosition(CurrentPosition);
         }
 
-        /// <summary>
-        /// Finds all occurrences of a variable in the current scope
-        /// </summary>
-        protected List<SourceSpan> FindVariableOccurrencesInScope(string variableName)
-        {
-            var occurrences = new List<SourceSpan>();
-            
-            // Try to find the variable in any accessible scope
-            if (TryFindVariable(variableName, out var variableInfo))
-            {
-                // Add the declaration occurrence
-                if (variableInfo.VariableNameInfo.Token != null)
-                {
-                    occurrences.Add(variableInfo.VariableNameInfo.Token.SourceSpan);
-                }
-                
-                // Add any tracked usages (needs to be implemented in the specific refactor)
-            }
-            
-            return occurrences;
-        }
-
         #endregion
 
         /// <summary>
         /// Gets the list of edits for testing
         /// </summary>
         internal List<TextEdit> GetEdits() => edits;
-        
-        #region Backward Compatibility Methods
-        
-        /// <summary>
-        /// Gets all scopes containing a specific position (for backward compatibility)
-        /// </summary>
-        protected List<PeopleCodeParser.SelfHosted.Visitors.Models.ScopeInfo> GetScopesContaining(int position)
-        {
-            var result = new List<PeopleCodeParser.SelfHosted.Visitors.Models.ScopeInfo>();
-            
-            // Add all scopes in the stack that might contain the position
-            foreach (var scope in scopeInfoStack)
-            {
-                result.Add(scope);
-            }
-            
-            return result;
-        }
-        
-        #endregion
     }
 }

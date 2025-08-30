@@ -52,10 +52,7 @@ public class SQLVariableCountStyler : ScopedStyler, IStyler
     }
 
     public override void VisitLocalVariableDeclaration(LocalVariableDeclarationNode node)
-    {
-        // Update current scope context
-        validationContext.CurrentScope = GetCurrentScopeInfo();
-        
+    {        
         // Validate SQL variable declarations
         var reports = createSqlValidator.ValidateVariableDeclaration(node);
         ProcessReports(reports);
@@ -64,10 +61,7 @@ public class SQLVariableCountStyler : ScopedStyler, IStyler
     }
 
     public override void VisitLocalVariableDeclarationWithAssignment(LocalVariableDeclarationWithAssignmentNode node)
-    {
-        // Update current scope context
-        validationContext.CurrentScope = GetCurrentScopeInfo();
-        
+    {        
         // Validate SQL variable declarations with assignment
         var reports = createSqlValidator.ValidateVariableDeclarationWithAssignment(node);
         ProcessReports(reports);
@@ -76,10 +70,7 @@ public class SQLVariableCountStyler : ScopedStyler, IStyler
     }
 
     public override void VisitFunctionCall(FunctionCallNode node)
-    {
-        // Update current scope context
-        validationContext.CurrentScope = GetCurrentScopeInfo();
-        
+    {        
         var allReports = new List<Report>();
         
         // Validate CreateSQL/GetSQL calls
@@ -105,10 +96,7 @@ public class SQLVariableCountStyler : ScopedStyler, IStyler
         // Check if this member access is followed by a function call (method call pattern)
         // We need to look at the parent context to see if this is part of a method call
         if (node.Parent is FunctionCallNode functionCall && functionCall.Function == node)
-        {
-            // This is a method call like &sqlVar.Execute(args)
-            validationContext.CurrentScope = GetCurrentScopeInfo();
-            
+        {           
             var reports = createSqlValidator.ValidateSQLMethodCall(node, functionCall);
             ProcessReports(reports);
         }

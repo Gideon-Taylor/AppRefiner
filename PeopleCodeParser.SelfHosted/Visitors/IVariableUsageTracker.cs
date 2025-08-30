@@ -1,5 +1,6 @@
-using PeopleCodeParser.SelfHosted.Visitors.Models;
 using PeopleCodeParser.SelfHosted;
+using PeopleCodeParser.SelfHosted.Visitors.Models;
+using static PeopleCodeParser.SelfHosted.Visitors.VariableUsageTracker;
 
 namespace PeopleCodeParser.SelfHosted.Visitors;
 
@@ -22,6 +23,15 @@ public interface IVariableUsageTracker
     /// <param name="currentScope">The current scope to start searching from</param>
     /// <returns>True if a variable was found and marked as used, false otherwise</returns>
     bool MarkAsUsed(string name, ScopeInfo currentScope);
+    
+    /// <summary>
+    /// Marks a variable as used by name with location tracking, searching in the current scope and parent scopes
+    /// </summary>
+    /// <param name="name">The variable name</param>
+    /// <param name="location">The source location where the variable is referenced</param>
+    /// <param name="currentScope">The current scope to start searching from</param>
+    /// <returns>True if a variable was found and marked as used, false otherwise</returns>
+    bool MarkAsUsedWithLocation(string name, SourceSpan location, ScopeInfo currentScope);
     
     /// <summary>
     /// Checks if a variable is used
@@ -70,4 +80,22 @@ public interface IVariableUsageTracker
     /// </summary>
     /// <returns>A collection of undefined variable references with their locations and scopes</returns>
     IEnumerable<(string Name, SourceSpan Location, ScopeInfo Scope)> GetUndefinedReferences();
+    
+    /// <summary>
+    /// Gets all reference locations for a variable by name in the specified scope
+    /// </summary>
+    /// <param name="name">The variable name</param>
+    /// <param name="scope">The scope where the variable is declared</param>
+    /// <returns>A collection of source locations where the variable is referenced</returns>
+    IEnumerable<SourceSpan> GetVariableReferences(string name, ScopeInfo scope);
+    
+    /// <summary>
+    /// Gets all reference locations for a variable in the specified scope
+    /// </summary>
+    /// <param name="variable">The variable information</param>
+    /// <param name="scope">The scope where the variable is declared</param>
+    /// <returns>A collection of source locations where the variable is referenced</returns>
+    IEnumerable<SourceSpan> GetVariableReferences(VariableInfo variable, ScopeInfo scope);
+
+    IEnumerable<VariableInfo> GetAllVariablesInScope(ScopeInfo scope);
 }

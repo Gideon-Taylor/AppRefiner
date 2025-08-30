@@ -97,8 +97,6 @@ namespace AppRefiner.Refactors
                 .SelectMany(s => s.GetTypes())
                 .Where(p => typeof(IRefactor).IsAssignableFrom(p) &&
                               !p.IsAbstract &&
-                              p != typeof(BaseRefactor) &&
-                              p != typeof(ScopedRefactor) &&
                               !p.IsGenericTypeDefinition);
 
             // Add plugin refactors
@@ -363,7 +361,10 @@ namespace AppRefiner.Refactors
                 }
 
                 // Apply refactoring changes
+                ScintillaManager.BeginUndoAction(activeEditor); // Start undo action for all changes
                 var refactorResult = refactorClass.ApplyRefactoring();
+                ScintillaManager.EndUndoAction(activeEditor); // End undo action
+
                 if (!refactorResult.Success)
                 {
                      Debug.Log("Refactoring produced no changes.");
@@ -381,18 +382,6 @@ namespace AppRefiner.Refactors
                      return; 
                 }
 
-                // Begin undo action to group all changes
-                ScintillaManager.BeginUndoAction(activeEditor);
-
-                try
-                {
-                                    // Changes are applied by the refactor itself
-                }
-                finally
-                {
-                    // Always end undo action, even if there were errors
-                    ScintillaManager.EndUndoAction(activeEditor);
-                }
 
                 // Restore original scroll position (cursor positioning is handled by Scintilla automatically)
                 ScintillaManager.SetFirstVisibleLine(activeEditor, currentFirstVisibleLine);

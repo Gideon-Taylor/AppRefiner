@@ -306,6 +306,7 @@ public struct SourceSpan : IEquatable<SourceSpan>
     {
         return $"[{Start}-{End}]";
     }
+
 }
 
 /// <summary>

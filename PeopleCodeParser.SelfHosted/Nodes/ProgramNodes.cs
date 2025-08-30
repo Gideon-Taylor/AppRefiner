@@ -58,6 +58,9 @@ public class ProgramNode : AstNode
     /// </summary>
     public bool IsInterfaceProgram => Interface != null;
 
+
+    public List<SourceSpan> SkippedDirectiveSpans { get; set; } = new();
+
     public ProgramNode()
     {
         // Initialize collections and set up parent relationships

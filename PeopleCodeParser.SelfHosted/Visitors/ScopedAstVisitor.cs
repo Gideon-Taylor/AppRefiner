@@ -33,6 +33,18 @@ public abstract class ScopedAstVisitor<T> : AstVisitorBase
     
     // Stack for scope metadata
     protected readonly Stack<ScopeInfo> scopeInfoStack = new();
+    
+    /// <summary>
+    /// Gets or sets whether this visitor should track variable usage.
+    /// When enabled, provides automatic variable usage tracking via the VariableTracker property.
+    /// </summary>
+    public bool TrackVariableUsage { get; set; } = false;
+    
+    /// <summary>
+    /// Gets the variable usage tracker instance when TrackVariableUsage is enabled.
+    /// Returns null when variable usage tracking is disabled.
+    /// </summary>
+    protected IVariableUsageTracker? VariableTracker { get; private set; }
 
     protected ScopedAstVisitor()
     {
@@ -41,6 +53,26 @@ public abstract class ScopedAstVisitor<T> : AstVisitorBase
         scopeInfoStack.Push(globalScopeInfo);
         customScopeData.Push(new Dictionary<string, T>(StringComparer.InvariantCultureIgnoreCase));
         variableScopeStack.Push(new Dictionary<string, VariableInfo>(StringComparer.InvariantCultureIgnoreCase));
+        
+        // Initialize variable tracker if tracking is enabled
+        UpdateVariableTracker();
+    }
+    
+    /// <summary>
+    /// Updates the VariableTracker instance based on the TrackVariableUsage setting.
+    /// This method should be called after changing the TrackVariableUsage property.
+    /// </summary>
+    protected void UpdateVariableTracker()
+    {
+        if (TrackVariableUsage && VariableTracker == null)
+        {
+            VariableTracker = new VariableUsageTracker();
+        }
+        else if (!TrackVariableUsage && VariableTracker != null)
+        {
+            VariableTracker.Reset();
+            VariableTracker = null;
+        }
     }
 
     #region Scope Management
@@ -125,11 +157,16 @@ public abstract class ScopedAstVisitor<T> : AstVisitorBase
     {
         if (customScopeData.Count > 1 && variableScopeStack.Count > 1 && scopeInfoStack.Count > 1)
         {
-            var customData = customScopeData.Pop();
-            var varScope = variableScopeStack.Pop();
-            var scopeInfo = scopeInfoStack.Pop();
-            
+            var customData = customScopeData.Peek();
+            var varScope = variableScopeStack.Peek();
+            var scopeInfo = scopeInfoStack.Peek();
+
+            // Make sure we alert any subclasses before popping the stacks
             OnExitScope(scopeInfo, varScope, customData);
+
+            customScopeData.Pop();
+            variableScopeStack.Pop();
+            scopeInfoStack.Pop();
         }
     }
 
@@ -145,9 +182,17 @@ public abstract class ScopedAstVisitor<T> : AstVisitorBase
         var currentScope = GetCurrentVariableScope();
         if (!currentScope.ContainsKey(variableNameInfo.Name))
         {
+            var scopeInfo = GetCurrentScopeInfo();
             var variableInfo = new VariableInfo(variableNameInfo, typeName, variableType);
             currentScope[variableNameInfo.Name] = variableInfo;
-            OnVariableDeclared(variableInfo, GetCurrentScopeInfo());
+            
+            // Register with usage tracker if enabled
+            if (VariableTracker != null)
+            {
+                VariableTracker.RegisterVariable(variableInfo, scopeInfo);
+            }
+            
+            OnVariableDeclared(variableInfo, scopeInfo);
         }
     }
 
@@ -189,6 +234,92 @@ public abstract class ScopedAstVisitor<T> : AstVisitorBase
         return allVariables;
     }
 
+    protected IEnumerable<VariableInfo> GetAllVariablesInScope(ScopeInfo scopeInfo)
+    {
+        var allVariables = new List<VariableInfo>();
+        foreach (var scope in variableScopeStack)
+        {
+            if (scopeInfoStack.Contains(scopeInfo))
+            {
+                allVariables.AddRange(scope.Values);
+            }
+        }
+        return allVariables;
+    }
+
+    #endregion
+
+    #region Variable Usage Tracking
+
+    /// <summary>
+    /// Marks a variable as used by name in the current scope or any parent scope.
+    /// Only works when TrackVariableUsage is enabled.
+    /// </summary>
+    protected bool MarkVariableAsUsed(string name)
+    {
+        if (VariableTracker == null) return false;
+        
+        var currentScope = GetCurrentScopeInfo();
+        var wasMarked = VariableTracker.MarkAsUsed(name, currentScope);
+        
+        if (wasMarked)
+        {
+            OnVariableUsed(name, default(SourceSpan), currentScope);
+        }
+        
+        return wasMarked;
+    }
+    
+    /// <summary>
+    /// Marks a variable as used by name with location tracking in the current scope or any parent scope.
+    /// Only works when TrackVariableUsage is enabled.
+    /// </summary>
+    protected bool MarkVariableAsUsedWithLocation(string name, SourceSpan location)
+    {
+        if (VariableTracker == null) return false;
+        
+        var currentScope = GetCurrentScopeInfo();
+        var wasMarked = VariableTracker.MarkAsUsedWithLocation(name, location, currentScope);
+        
+        if (wasMarked)
+        {
+            OnVariableUsed(name, location, currentScope);
+        }
+        
+        return wasMarked;
+    }
+    
+    public IEnumerable<SourceSpan> GetVariableReferences(string variableName, ScopeInfo scope)
+    {
+        if (VariableTracker == null) return Enumerable.Empty<SourceSpan>();
+        
+        return VariableTracker.GetVariableReferences(variableName, scope);
+    }
+
+    /// <summary>
+    /// Checks if a variable is defined in any accessible scope.
+    /// Only works when TrackVariableUsage is enabled.
+    /// </summary>
+    protected bool IsVariableDefined(string name)
+    {
+        if (VariableTracker == null) return false;
+        
+        var currentScope = GetCurrentScopeInfo();
+        return VariableTracker.IsVariableDefined(name, currentScope);
+    }
+    
+    /// <summary>
+    /// Tracks a reference to an undefined variable.
+    /// Only works when TrackVariableUsage is enabled.
+    /// </summary>
+    protected void TrackUndefinedReference(string name, SourceSpan location)
+    {
+        if (VariableTracker == null) return;
+        
+        var currentScope = GetCurrentScopeInfo();
+        VariableTracker.TrackUndefinedReference(name, location, currentScope);
+    }
+
     #endregion
 
     #region AST Visitor Overrides
@@ -225,7 +356,61 @@ public abstract class ScopedAstVisitor<T> : AstVisitorBase
         
         base.VisitVariable(node);
     }
-    
+
+    /// <summary>
+    /// Handles identifier references and tracks variable usage for the usage tracker
+    /// </summary>
+    public override void VisitIdentifier(IdentifierNode node)
+    {
+        // Track the variable usage with location
+        MarkVariableAsUsedWithLocation(node.Name, node.SourceSpan);
+
+        // If this is a property accessed with & prefix, also track the property
+        if (node.Name.StartsWith("&"))
+        {
+            var propertyName = node.Name.Substring(1);
+            MarkVariableAsUsedWithLocation(propertyName, node.SourceSpan);
+        }
+
+        base.VisitIdentifier(node);
+    }
+    /// <summary>
+    /// Handles FOR statements and tracks iterator variable usage
+    /// </summary>
+    public override void VisitFor(ForStatementNode node)
+    {
+        string iteratorName = node.Variable;
+        MarkVariableAsUsedWithLocation(iteratorName, node.IteratorToken.SourceSpan);
+        base.VisitFor(node);
+    }
+
+    public override void VisitFunctionCall(FunctionCallNode node)
+    {
+        if (node.Function is MemberAccessNode member && member.Target is IdentifierNode ident)
+        {
+            if (ident.Name.StartsWith('&'))
+            {
+                MarkVariableAsUsedWithLocation(ident.Name, ident.SourceSpan);
+            }
+        }
+        base.VisitFunctionCall(node);
+    }
+
+    public override void VisitMemberAccess(MemberAccessNode node)
+    {
+        var target = node.Target;
+        if (target is IdentifierNode identNode && identNode.Name.Equals("%THIS", StringComparison.OrdinalIgnoreCase))
+        {
+            var memberName = node.MemberName;
+            MarkVariableAsUsedWithLocation(memberName, node.SourceSpan);
+
+            string varNameWithPrefix = $"&{memberName}";
+            MarkVariableAsUsedWithLocation(varNameWithPrefix, node.SourceSpan);
+        }
+
+        base.VisitMemberAccess(node);
+    }
+
     /// <summary>
     /// Visits a method node and manages its scope
     /// </summary>
@@ -241,6 +426,12 @@ public abstract class ScopedAstVisitor<T> : AstVisitorBase
 
             RegisterVariable(nameInfo, typeName, VariableType.Parameter);
         }
+
+        foreach (var annotation in node.ParameterAnnotations)
+        {
+            MarkVariableAsUsedWithLocation(annotation.Name, annotation.NameToken.SourceSpan);
+        }
+
 
         base.VisitMethod(node);
         
@@ -398,6 +589,12 @@ public abstract class ScopedAstVisitor<T> : AstVisitorBase
         if (customScopeData.Count > 0) customScopeData.Peek().Clear();
         if (variableScopeStack.Count > 0) variableScopeStack.Peek().Clear();
         
+        // Reset variable tracker if enabled
+        if (VariableTracker != null)
+        {
+            VariableTracker.Reset();
+        }
+        
         OnReset();
     }
 
@@ -409,6 +606,12 @@ public abstract class ScopedAstVisitor<T> : AstVisitorBase
     /// Called when a variable is declared in any scope
     /// </summary>
     protected virtual void OnVariableDeclared(VariableInfo varInfo, ScopeInfo scope) { }
+    
+    /// <summary>
+    /// Called when a variable is used (marked as used by the usage tracker)
+    /// Only called when TrackVariableUsage is enabled
+    /// </summary>
+    protected virtual void OnVariableUsed(string name, SourceSpan location, ScopeInfo scope) { }
     
     /// <summary>
     /// Called when entering a new scope
@@ -429,11 +632,11 @@ public abstract class ScopedAstVisitor<T> : AstVisitorBase
     /// Called when exiting a class
     /// </summary>
     protected virtual void OnClassExit(AppClassNode node) { }
-    
+
     /// <summary>
     /// Called when the visitor is reset
     /// </summary>
-    protected virtual void OnReset() { }
+    protected virtual void OnReset() {}
 
     #endregion
 }

@@ -363,7 +363,7 @@ public class PeopleCodeLexer
             
             // Identifiers, keywords, and variables
             '&' when PeekChar() == '&' => ScanTwoCharOperator(TokenType.DirectiveAnd),
-            '&' => ScanUserVariable(),
+            '&' when IsIdentifierChar(PeekChar())=> ScanUserVariable(),
             '%' => ScanSystemIdentifier(),
             '#' when IsDirectiveStart() => ScanDirective(),
             

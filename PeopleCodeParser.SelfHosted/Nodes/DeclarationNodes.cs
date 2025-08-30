@@ -48,6 +48,8 @@ public class MethodNode : DeclarationNode
     /// </summary>
     public List<ParameterNode> Parameters { get; } = new();
 
+    public List<ParameterNode> ParameterAnnotations { get; set; } = new();
+
     /// <summary>
     /// Return type (null for constructors and procedures)
     /// </summary>
@@ -151,6 +153,12 @@ public class MethodNode : DeclarationNode
         var paramStr = string.Join(", ", Parameters);
         var impl = IsImplementation ? " (impl)" : "";
         return $"{className}{Name}({paramStr}){returnType}{impl}";
+    }
+
+    internal void AddParameterAnnotation(ParameterNode parameter)
+    {
+        ParameterAnnotations.Add(parameter);
+        AddChild(parameter);
     }
 }
 

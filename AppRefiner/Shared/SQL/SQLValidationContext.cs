@@ -3,6 +3,7 @@ using AppRefiner.Shared.SQL.Models;
 using PeopleCodeParser.SelfHosted.Nodes;
 using PeopleCodeParser.SelfHosted.Lexing;
 using PeopleCodeParser.SelfHosted;
+using PeopleCodeParser.SelfHosted.Visitors.Models;
 
 namespace AppRefiner.Shared.SQL
 {
@@ -12,11 +13,7 @@ namespace AppRefiner.Shared.SQL
     public class SQLValidationContext
     {
         public IDataManager? DataManager { get; set; }
-        
-        /// <summary>
-        /// Current scope information for variable tracking
-        /// </summary>
-        public object? CurrentScope { get; set; }
+       
         
         /// <summary>
         /// Helper method to extract SQL text from an expression node

@@ -12,7 +12,10 @@ internal class DirectivePreprocessor
     private readonly List<Token> _originalTokens;
     private readonly ToolsVersion _toolsVersion;
     private readonly List<string> _errors = new();
-    
+    private List<SourceSpan> _skippedSpans = new();
+
+    public List<SourceSpan> SkippedSpans => _skippedSpans;
+
     /// <summary>
     /// Create a new DirectivePreprocessor with the given tokens and ToolsVersion
     /// </summary>
@@ -39,7 +42,8 @@ internal class DirectivePreprocessor
         var result = new List<Token>();
         var directiveStack = new Stack<DirectiveContext>();
         var position = 0;
-        
+        DirectiveContext? lastContext = null;
+
         while (position < _originalTokens.Count)
         {
             var token = _originalTokens[position];
@@ -55,7 +59,24 @@ internal class DirectivePreprocessor
                     break;
                 
                 case TokenType.DirectiveEndIf:
-                    position = ProcessDirectiveEndIf(position, directiveStack, result);
+                    (position, lastContext) = ProcessDirectiveEndIf(position, directiveStack, result);
+                    if (lastContext != null)
+                    {
+                        // Record skipped spans for inactive branches
+                        if (lastContext.ConditionResult)
+                        {
+                            // Condition was true - skip ELSE block if it exists
+                            if (lastContext.HasElse)
+                            {
+                                _skippedSpans.Add(new SourceSpan(lastContext.ElseBlockStart, lastContext.ElseBlockEnd));
+                            }
+                        }
+                        else
+                        {
+                            // Condition was false - skip IF block
+                            _skippedSpans.Add(new SourceSpan(lastContext.IfBlockStart, lastContext.IfBlockEnd));
+                        }
+                    }
                     break;
                 
                 default:
@@ -74,7 +95,8 @@ internal class DirectivePreprocessor
         {
             _errors.Add($"Unclosed directive block(s): {directiveStack.Count} remaining");
         }
-        
+
+       
         return result;
     }
     
@@ -91,7 +113,6 @@ internal class DirectivePreprocessor
             // Extract condition tokens until #Then
             var conditionTokens = ExtractConditionTokens(position, out int conditionEndPos);
             position = conditionEndPos + 1; // Skip #Then token
-
             /* optional for there to be 0 or more ; after #Then */
             while (position < _originalTokens.Count && _originalTokens[position].Type == TokenType.Semicolon)
             {
@@ -105,11 +126,11 @@ internal class DirectivePreprocessor
             // Create directive context
             var context = new DirectiveContext
             {
-                Type = DirectiveType.If,
                 ConditionResult = conditionResult,
                 HasElse = false,
                 IsInElseBranch = false,
-                StartPosition = startPos
+                StartPosition = startPos,
+                IfBlockStart = _originalTokens[position].SourceSpan.Start,
             };
             
             directiveStack.Push(context);
@@ -136,6 +157,8 @@ internal class DirectivePreprocessor
         }
         
         var context = directiveStack.Peek();
+        context.IfBlockEnd = _originalTokens[position - 1].SourceSpan.End;
+
         if (context.HasElse)
         {
             _errors.Add($"Multiple #Else blocks in same #If directive at position {position}");
@@ -145,22 +168,25 @@ internal class DirectivePreprocessor
         // Switch to else branch
         context.HasElse = true;
         context.IsInElseBranch = true;
-        
-        return position + 1; // Skip #Else token
+        position++; // Skip #Else token
+        context.ElseBlockStart = _originalTokens[position].SourceSpan.Start;
+        return position;
     }
     
     /// <summary>
     /// Process a #End-If directive
     /// </summary>
-    private int ProcessDirectiveEndIf(int position, Stack<DirectiveContext> directiveStack, List<Token> result)
+    private (int, DirectiveContext?) ProcessDirectiveEndIf(int position, Stack<DirectiveContext> directiveStack, List<Token> result)
     {
         if (directiveStack.Count == 0)
         {
             _errors.Add($"#End-If without matching #If at position {position}");
-            return position + 1;
+            return (position + 1, null);
         }
         
-        directiveStack.Pop();
+        var context = directiveStack.Pop();
+        context.ElseBlockEnd = _originalTokens[position].SourceSpan.Start;
+
 
         /* Skip any trailing semicolons after #End-If */
         position++; // Skip #End-If token
@@ -169,7 +195,7 @@ internal class DirectivePreprocessor
             position++;
         }
 
-        return position; // Skip #End-If token
+        return (position, context); // Skip #End-If token
     }
     
     /// <summary>
@@ -298,12 +324,7 @@ internal class DirectivePreprocessor
 /// Context information for a directive block during preprocessing
 /// </summary>
 internal class DirectiveContext
-{
-    /// <summary>
-    /// The type of directive
-    /// </summary>
-    public DirectiveType Type { get; set; }
-    
+{    
     /// <summary>
     /// Whether the directive condition evaluated to true
     /// </summary>
@@ -323,12 +344,12 @@ internal class DirectiveContext
     /// Starting position in original token stream
     /// </summary>
     public int StartPosition { get; set; }
-}
 
-/// <summary>
-/// Types of compiler directives
-/// </summary>
-internal enum DirectiveType
-{
-    If
+
+    public SourcePosition IfBlockStart { get; set; }
+    public SourcePosition IfBlockEnd { get; set; }
+    public SourcePosition ElseBlockStart { get; set; }
+    public SourcePosition ElseBlockEnd { get; set; }
+
+
 }

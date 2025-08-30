@@ -38,6 +38,9 @@ public static class ParserTest
 
         // Test compiler directives
         DirectiveTest.RunTests();
+        
+        // Test improved error recovery
+        TestImprovedErrorRecovery();
 
         Console.WriteLine("Basic parser test completed.");
     }
@@ -277,5 +280,53 @@ End-If;
         TestProgram(errorRecoveryTest);
 
         Console.WriteLine("NULL literal bug fix test completed.\n");
+    }
+    
+    /// <summary>
+    /// Test improved error recovery for incomplete local variable declarations
+    /// </summary>
+    public static void TestImprovedErrorRecovery()
+    {
+        Console.WriteLine("Testing improved error recovery for incomplete local variable declarations:");
+
+        // Test the specific case: incomplete local variable declaration followed by IF statement
+        var incompleteLocalVarTest = @"
+method FieldValueInRecord
+   /+ &recName as String, +/
+   /+ &fldName as String, +/
+   /+ &fldValue as String +/
+   /+ Returns Boolean +/
+   Local string &FetchStr = ""SELECT COUNT(* ) FROM "" | &recName | "" WHERE "" | &fldName | ""='"" | &fldValue | ""'"";
+   Local SQL &FetchSQL = CreateSQL(&FetchStr);
+   Local integer &cnt;
+   While &FetchSQL.Fetch(&cnt)
+      Break;
+   End-While;
+
+   local integer 
+   If &cnt <> 0 Then
+      Return True;
+   Else
+      Return False;
+   End-If;
+   
+end-method;
+";
+
+        Console.WriteLine("Testing incomplete local variable declaration followed by IF statement...");
+        TestProgram(incompleteLocalVarTest);
+
+        // Test simpler case - just incomplete declaration and IF
+        var simpleCase = @"
+local integer
+If &x > 0 Then
+   &y = 1;
+End-If;
+";
+        
+        Console.WriteLine("Testing simple incomplete local variable declaration...");
+        TestProgram(simpleCase);
+
+        Console.WriteLine("Improved error recovery test completed.\n");
     }
 }

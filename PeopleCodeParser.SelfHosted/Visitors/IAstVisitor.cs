@@ -209,12 +209,6 @@ public abstract class AstVisitorBase : IAstVisitor
             method.Accept(this);
         }
         
-        // 5. Then visit method implementations, property getters and setters
-        foreach (var method in node.MethodImplementations)
-        {
-            method.Accept(this);
-        }
-        
         foreach (var getter in node.PropertyGetters)
         {
             getter.Accept(this);
@@ -294,6 +288,12 @@ public abstract class AstVisitorBase : IAstVisitor
             parameter.Type.Accept(this);
         }
         
+        // Visit parameter annotations
+        foreach (var annotation in node.ParameterAnnotations)
+        {
+            annotation.Accept(this);
+        }
+
         // Visit method body if present (for implementations)
         if (node.Body != null)
         {

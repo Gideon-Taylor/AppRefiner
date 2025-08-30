@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using AppRefiner.Stylers;
+using PeopleCodeParser.SelfHosted;
 using PeopleCodeParser.SelfHosted.Nodes;
 using PeopleCodeParser.SelfHosted.Visitors;
 using PeopleCodeParser.SelfHosted.Visitors.Models;
@@ -15,13 +16,10 @@ namespace AppRefiner.Stylers;
 public class UndefinedVariables : ScopedStyler
 {
     private const uint HIGHLIGHT_COLOR = 0x0000FFA0; // Harsh red color with high alpha
-    private readonly IVariableUsageTracker usageTracker;
-    private readonly HashSet<string> instanceVariables = new(StringComparer.InvariantCultureIgnoreCase);
-    private readonly HashSet<string> classProperties = new(StringComparer.InvariantCultureIgnoreCase);
+    private HashSet<(string Name, SourceSpan Location)> undefinedVars = new();
 
     public UndefinedVariables()
     {
-        usageTracker = new VariableUsageTracker();
     }
 
     public override string Description => "Undefined variables";
@@ -42,31 +40,6 @@ public class UndefinedVariables : ScopedStyler
         GenerateIndicatorsForUndefinedVariables();
     }
 
-    /// <summary>
-    /// Handles app class declarations and collects instance variables and properties
-    /// </summary>
-    public override void VisitAppClass(AppClassNode node)
-    {
-        // Collect instance variables (private members)
-        foreach (var instanceVar in node.InstanceVariables)
-        {
-            instanceVariables.Add(instanceVar.Name);
-        }
-        
-        // Collect class properties (public/protected properties)
-        foreach (var property in node.Properties)
-        {
-            if (property.Visibility == VisibilityModifier.Public || 
-                property.Visibility == VisibilityModifier.Protected)
-            {
-                // Add both with and without & prefix for property access patterns
-                classProperties.Add(property.Name);
-                classProperties.Add($"&{property.Name}");
-            }
-        }
-        
-        base.VisitAppClass(node);
-    }
 
     /// <summary>
     /// Handles identifier references and checks for undefined variables
@@ -85,17 +58,15 @@ public class UndefinedVariables : ScopedStyler
                 base.VisitIdentifier(node);
                 return;
             }
-            
+
             // Check if variable is defined in any accessible scope
-            if (!IsVariableDefined(varName))
+            var curScope = GetCurrentScope();
+            var varsInScope = GetVariablesInScope(curScope);
+            if (!varsInScope.Any(v => v.Name.Equals(varName) || 
+                (varName.StartsWith('&') && v.Name.Equals(varName.Substring(1)) && v.Kind == VariableKind.Property)))
             {
                 // Track this as an undefined reference
-                usageTracker.TrackUndefinedReference(varName, node.SourceSpan, GetCurrentScopeInfo());
-            }
-            else
-            {
-                // Mark as used if it's defined
-                usageTracker.MarkAsUsed(varName, GetCurrentScopeInfo());
+                undefinedVars.Add((varName, node.SourceSpan));
             }
         }
         
@@ -105,15 +76,7 @@ public class UndefinedVariables : ScopedStyler
     #endregion
 
     #region Event Handlers
-
-    /// <summary>
-    /// Called when a variable is declared in any scope - register it with the tracker
-    /// </summary>
-    protected override void OnVariableDeclared(VariableInfo varInfo, ScopeInfo scope)
-    {
-        usageTracker.RegisterVariable(varInfo, scope);
-    }
-
+    // Variable declaration is now handled automatically by base class
     #endregion
 
     #region Helper Methods
@@ -130,50 +93,14 @@ public class UndefinedVariables : ScopedStyler
         return false;
     }
 
-    /// <summary>
-    /// Comprehensive check to determine if a variable is defined in any accessible context
-    /// </summary>
-    private bool IsVariableDefined(string varName)
-    {
-        var currentScope = GetCurrentScopeInfo();
-        
-        // 1. Check if defined in any scope (parameters, locals, etc.)
-        if (usageTracker.IsVariableDefined(varName, currentScope))
-            return true;
-        
-        // 2. Check instance variables (for class contexts)
-        if (instanceVariables.Contains(varName))
-            return true;
-            
-        // 3. Check class properties (both direct name and &-prefixed)
-        if (classProperties.Contains(varName))
-            return true;
-        
-        // 4. For &-prefixed variables, also check the unprefixed property name
-        if (varName.StartsWith("&"))
-        {
-            string propertyName = varName.Substring(1);
-            if (classProperties.Contains(propertyName))
-                return true;
-        }
-        
-        // 5. For non-prefixed names, check if there's a matching &-prefixed property
-        else
-        {
-            string prefixedName = $"&{varName}";
-            if (classProperties.Contains(prefixedName))
-                return true;
-        }
-        
-        return false;
-    }
 
     /// <summary>
     /// Generates indicators for all undefined variable references
     /// </summary>
     private void GenerateIndicatorsForUndefinedVariables()
     {
-        foreach (var (name, location, scope) in usageTracker.GetUndefinedReferences())
+
+        foreach (var (name, location) in undefinedVars)
         {
             string tooltip = $"Undefined variable: {name}";
             AddIndicator(location, IndicatorType.HIGHLIGHTER, HIGHLIGHT_COLOR, tooltip);
@@ -189,9 +116,8 @@ public class UndefinedVariables : ScopedStyler
     /// </summary>
     protected override void OnReset()
     {
-        usageTracker.Reset();
-        instanceVariables.Clear();
-        classProperties.Clear();
+        // Base class handles VariableTracker.Reset() automatically
+        undefinedVars.Clear();
     }
 
     #endregion

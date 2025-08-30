@@ -21,6 +21,12 @@ public class DeadCodeStyler : BaseStyler
     {
         Reset();
         base.VisitProgram(node);
+
+        foreach(var span in node.SkippedDirectiveSpans)
+        {
+            AddIndicator(span, IndicatorType.TEXTCOLOR, DEAD_CODE_COLOR,
+                "Code not compiled due to compiler directives.");
+        }
     }
 
     /// <summary>
