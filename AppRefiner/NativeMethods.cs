@@ -57,6 +57,10 @@ namespace AppRefiner
         [DllImport("user32.dll", CharSet = CharSet.Auto)]
         internal static extern IntPtr SendMessage(IntPtr hWnd, int Msg, int wParam, string? lParam);
 
+        /* DLL import for IsWindow() */
+        [DllImport("user32.dll")]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        internal static extern bool IsWindow(IntPtr hWnd);
 
         [StructLayout(LayoutKind.Sequential)]
         internal struct RECT

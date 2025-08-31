@@ -17,6 +17,9 @@ LRESULT CALLBACK ScintillaSubclassProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPAR
 // Main window subclass procedure for handling keyboard shortcuts
 LRESULT CALLBACK MainWindowSubclassProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam, UINT_PTR uIdSubclass, DWORD_PTR dwRefData);
 
+// Results list view subclass procedure for intercepting item text requests
+LRESULT CALLBACK ResultsListSubclassProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam, UINT_PTR uIdSubclass, DWORD_PTR dwRefData);
+
 // GetMessage hook procedure - for thread messages
 LRESULT CALLBACK GetMsgHook(int nCode, WPARAM wParam, LPARAM lParam);
 

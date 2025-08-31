@@ -22,6 +22,10 @@
 #define WM_TOGGLE_MAIN_WINDOW_SHORTCUTS (WM_USER + 1006)
 // Message to subclass main window
 #define WM_SUBCLASS_MAIN_WINDOW (WM_USER + 1005)
+// Message to subclass Results list view
+#define WM_AR_SUBCLASS_RESULTS_LIST (WM_USER + 1007)
+// Message to set open target for Results list interception
+#define WM_AR_SET_OPEN_TARGET (WM_USER + 1008)
 
 /* TODO define messages with a mask to indicate "this is a scintilla event message" */
 #define WM_SCN_EVENT_MASK 0x7000
@@ -59,3 +63,4 @@ extern HWND g_callbackWindow;
 const UINT_PTR SUBCLASS_ID = 1001;
 const UINT_PTR SCINTILLA_SUBCLASS_ID = 1002;
 const UINT_PTR MAIN_WINDOW_SUBCLASS_ID = 1003;
+const UINT_PTR RESULTS_LIST_SUBCLASS_ID = 1004;

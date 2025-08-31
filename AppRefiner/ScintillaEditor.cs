@@ -146,7 +146,7 @@ namespace AppRefiner
         private string? _caption = null;
 
         public event CaptionChangedEventHandler? CaptionChanged;
-
+        public IntPtr ResultsListView;
         protected virtual void OnCaptionChanged(CaptionChangedEventArgs e)
         {
             CaptionChanged?.Invoke(this, e);

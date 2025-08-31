@@ -362,11 +362,11 @@ namespace AppRefiner
                 // Check if any module in the process has the name "Lexilla.dll"
                 Process process = Process.GetProcessById((int)processId);
                 var lexillaLoaded = process.Modules
-                    .Cast<ProcessModule>()
-                    .Any(module => string.Equals(module.ModuleName, "Lexilla.dll", StringComparison.OrdinalIgnoreCase));
+                        .Cast<ProcessModule>()
+                        .Any(module => string.Equals(module.ModuleName, "Lexilla.dll", StringComparison.OrdinalIgnoreCase));
                 hasLexilla[processId] = lexillaLoaded;
                 editor.HasLexilla = lexillaLoaded;
-            }
+                }
 
             // Initialize annotations right after editor creation
             InitAnnotationStyles(editor);
@@ -431,9 +431,9 @@ namespace AppRefiner
                 var processHandle = editor.hProc;
                 var buffer = VirtualAllocEx(processHandle, IntPtr.Zero, neededSize, MEM_COMMIT, PAGE_READWRITE);
                 processBuffers.Add(processId, (buffer, neededSize));
-            }
+        }
             else
-            {
+        {
                 /* If buffer is too small, free current one and allocate a new one */
                 var(buffer, size) = processBuffers[processId];
                 if (size < neededSize)
@@ -441,7 +441,7 @@ namespace AppRefiner
                     VirtualFreeEx(editor.hProc, buffer, 0, MEM_RELEASE);
                     buffer = VirtualAllocEx(editor.hProc, IntPtr.Zero, neededSize, MEM_COMMIT, PAGE_READWRITE);
                     processBuffers[processId] = (buffer, neededSize);
-                }
+        }
             }
 
             return processBuffers[processId].address;
@@ -896,15 +896,15 @@ namespace AppRefiner
                     if (v != IntPtr.Zero)
                     {
                         VirtualFreeEx(editor.hProc, v, 0, MEM_RELEASE);
-                    }
+            }
                 }
 
                 foreach (var v in editor.PropertyBuffers)
-                {
+            {
                     if (v != IntPtr.Zero)
                     {
                         VirtualFreeEx(editor.hProc, v, 0, MEM_RELEASE);
-                    }
+            }
                 }
                 editor.AnnotationPointers.Clear();
                 editor.PropertyBuffers.Clear();
@@ -3097,6 +3097,23 @@ namespace AppRefiner
             {
                 return Rectangle.Empty;
             }
+        }
+
+        internal static bool WriteWideStringToProcess(ScintillaEditor editor, nint remoteBuffer, string openTarget)
+        {
+            if (string.IsNullOrEmpty(openTarget))
+                return false;
+            // Convert to wide string (UTF-16) and marshall to remote process
+            byte[] stringBytes = Encoding.Unicode.GetBytes(openTarget);
+            int neededSize = stringBytes.Length + 2; // +2 for null terminator
+            // Create buffer with null terminator
+            byte[] buffer = new byte[neededSize];
+            Buffer.BlockCopy(stringBytes, 0, buffer, 0, stringBytes.Length);
+            buffer[neededSize - 2] = 0; // Ensure null termination
+            buffer[neededSize - 1] = 0; // Ensure null termination
+            // Write to remote process memory
+            return WriteProcessMemory(editor.hProc, remoteBuffer, buffer, neededSize, out int bytesWritten) && bytesWritten == neededSize;
+
         }
 
         #endregion

@@ -80,6 +80,8 @@ namespace AppRefiner
         private const int AR_TEXT_PASTED = 2506; // New constant for text pasted detection
         private const int AR_KEY_COMBINATION = 2507; // New constant for key combination detection
         private const int AR_MSGBOX_SHORTHAND = 2508;
+        private const int AR_SUBCLASS_RESULTS_LIST = 1007; // Message to subclass Results list view
+        private const int AR_SET_OPEN_TARGET = 1008; // Message to set open target for Results list interception
         private const int SCN_USERLISTSELECTION = 2014; // User list selection notification
         private const int SCI_REPLACESEL = 0x2170; // Constant for SCI_REPLACESEL
 
@@ -90,7 +92,6 @@ namespace AppRefiner
 
         // Fields for editor management
         private HashSet<ScintillaEditor> knownEditors = new HashSet<ScintillaEditor>();
-        private HashSet<uint> processesToNotDBPrompt = new HashSet<uint>();
         private Dictionary<ScintillaEditor, DateTime> lastStylerProcessingTime = new Dictionary<ScintillaEditor, DateTime>();
         private const int STYLER_PROCESSING_DEBOUNCE_MS = 100; // Prevent duplicate processing within 100ms
 
@@ -110,6 +111,7 @@ namespace AppRefiner
 
         // Dictionary to keep track of generated UI controls for template parameters
         private Dictionary<string, Control> currentTemplateInputControls = new Dictionary<string, Control>();
+        private HashSet<uint> processesToNotDBPrompt = new();
 
         public MainForm()
         {
@@ -631,8 +633,6 @@ namespace AppRefiner
                 IDataManager? currentDataManager = null;
                 if (activeEditor != null)
                 {
-                    processDataManagers.TryGetValue(activeEditor.ProcessId, out currentDataManager);
-                    // If not found in map, use the one directly on the editor object if available
                     currentDataManager ??= activeEditor.DataManager;
                 }
                 linterManager?.ProcessLintersForActiveEditor(activeEditor, currentDataManager);
@@ -1007,9 +1007,9 @@ namespace AppRefiner
                             {
                                 processDataManagers[activeEditor.ProcessId] = manager;
                                 activeEditor.DataManager = manager;
+                                }
                             }
                         }
-                    }
                 },
                 () => activeEditor != null && activeEditor.DataManager == null
             ));
@@ -1024,7 +1024,7 @@ namespace AppRefiner
                         activeEditor.DataManager.Disconnect();
                         processDataManagers.Remove(activeEditor.ProcessId);
                         activeEditor.DataManager = null;
-                    }
+                        }
                 },
                 () => activeEditor != null && activeEditor.DataManager != null
             ));
@@ -2048,6 +2048,35 @@ namespace AppRefiner
                     }
                 }
 
+                // Detect and cache Results list view for this thread if not already cached
+                
+                if (success && isNewThread &&  editor.ResultsListView == IntPtr.Zero)
+                {
+                    try
+                    {
+                        // Find the Results list view for this process
+                        var resultsListView = ResultsListHelper.FindResultsListView(editor.ProcessId);
+                        
+                        if (resultsListView != IntPtr.Zero)
+                        {
+                            // Cache the handle by thread ID
+                            editor.ResultsListView = resultsListView;
+                            
+                            // Subclass the Results list view
+                            bool subclassSuccess = EventHookInstaller.SubclassResultsList(editor.ThreadID, resultsListView, this.Handle);
+                            Debug.Log($"Results list subclassing result for thread {editor.ThreadID}: {subclassSuccess} (HWND: {resultsListView:X})");
+                        }
+                        else
+                        {
+                            Debug.Log($"Could not find Results list view for process {editor.ProcessId}");
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.Log($"Error detecting/subclassing Results list for thread {editor.ThreadID}: {ex.Message}");
+                    }
+                }
+
                 ScintillaManager.SetMouseDwellTime(editor, 1000);
 
 
@@ -2109,10 +2138,10 @@ namespace AppRefiner
             // Pass the editor's DBName to the dialog constructor
             DBConnectDialog dialog = new(mainHandle, activeEditor.DBName);
             dialog.StartPosition = FormStartPosition.CenterParent;
-
             if (dialog.ShowDialog(handleWrapper) == DialogResult.OK)
             {
                 IDataManager? manager = dialog.DataManager;
+                
                 if (manager != null)
                 {
                     processDataManagers[activeEditor.ProcessId] = manager;
@@ -2457,6 +2486,95 @@ namespace AppRefiner
         {
             // Notify all hooked editors that the override find/replace setting has changed
             NotifyMainWindowShortcutsChange(chkOverrideFindReplace.Checked);
+        }
+
+        /// <summary>
+        /// Opens an arbitrary code definition in the IDE by leveraging the Results list view
+        /// </summary>
+        /// <param name="targetString">The target string to open (e.g., class path, method signature)</param>
+        /// <returns>True if operation was successful</returns>
+        public bool OpenTarget(string targetString)
+        {
+            if (string.IsNullOrEmpty(targetString) || targetString.Length >= 256)
+            {
+                Debug.Log($"OpenTarget: Invalid target string length ({targetString?.Length ?? 0} chars)");
+                return false;
+            }
+
+            if (activeEditor == null || !activeEditor.IsValid())
+            {
+                Debug.Log("OpenTarget: No active editor available");
+                return false;
+            }
+
+            try
+            {
+                uint targetThreadId = activeEditor.ThreadID;
+                uint targetProcessId = activeEditor.ProcessId;
+
+                var resultsListView = activeEditor.ResultsListView;
+
+                // Check if we have a cached Results list view for this thread
+                if (resultsListView == IntPtr.Zero)
+                {
+                    Debug.Log($"OpenTarget: No Results list view cached for thread {targetThreadId}");
+                    
+                    // Try to find it now
+                    resultsListView = ResultsListHelper.FindResultsListView(targetProcessId);
+                    if (resultsListView != IntPtr.Zero)
+                    {
+                        // Cache it for future use and subclass it
+                        activeEditor.ResultsListView = resultsListView;
+                        EventHookInstaller.SubclassResultsList(targetThreadId, resultsListView, this.Handle);
+                        Debug.Log($"OpenTarget: Found and cached Results list view {resultsListView:X} for thread {targetThreadId}");
+                    }
+                    else
+                    {
+                        Debug.Log($"OpenTarget: Could not find Results list view for process {targetProcessId}");
+                        return false;
+                    }
+                }
+
+                // Validate the cached handle is still valid
+                if (!NativeMethods.IsWindow(resultsListView))
+                {
+                    Debug.Log($"OpenTarget: Cached Results list view {resultsListView:X} is no longer valid");
+                    // Remove from cache and try to find it again
+                    activeEditor.ResultsListView = IntPtr.Zero;
+                    
+                    resultsListView = ResultsListHelper.FindResultsListView(targetProcessId);
+                    if (resultsListView != IntPtr.Zero)
+                    {
+                        activeEditor.ResultsListView = resultsListView;
+                        EventHookInstaller.SubclassResultsList(targetThreadId, resultsListView, this.Handle);
+                        Debug.Log($"OpenTarget: Re-found and cached Results list view {resultsListView:X}");
+                    }
+                    else
+                    {
+                        Debug.Log("OpenTarget: Could not re-find Results list view after cache invalidation");
+                        return false;
+                    }
+                }
+
+                // Use EventHookInstaller to set the open target and trigger double-click
+                bool success = EventHookInstaller.SetOpenTarget(activeEditor, resultsListView, targetString);
+                
+                if (success)
+                {
+                    Debug.Log($"OpenTarget: Successfully set target '{targetString}' for thread {targetThreadId}");
+                }
+                else
+                {
+                    Debug.Log($"OpenTarget: Failed to set target '{targetString}' for thread {targetThreadId}");
+                }
+
+                return success;
+            }
+            catch (Exception ex)
+            {
+                Debug.Log($"OpenTarget: Exception - {ex.Message}");
+                return false;
+            }
         }
     }
 }

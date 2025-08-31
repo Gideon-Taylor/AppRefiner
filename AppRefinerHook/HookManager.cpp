@@ -15,6 +15,10 @@ DWORD g_lastClipboardSequence = 0;
 DWORD g_lastSeenClipboardSequence = 0;  // Track the last sequence we processed
 bool g_hasUnprocessedCopy = false;      // Track if there's an unprocessed copy operation
 
+// Per-thread open target buffer for Results list interception
+const int OPEN_TARGET_BUFFER_SIZE = 0x100;  // 256 characters max
+thread_local wchar_t g_openTargetBuffer[OPEN_TARGET_BUFFER_SIZE] = { 0 };
+
 
 // Function to check for unprocessed copy operation
 bool HasUnprocessedCopyOperation() {
@@ -560,6 +564,69 @@ LRESULT CALLBACK MainWindowSubclassProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPA
     return DefSubclassProc(hWnd, uMsg, wParam, lParam);
 }
 
+// Results list view subclass procedure for intercepting item text requests
+LRESULT CALLBACK ResultsListSubclassProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam, UINT_PTR uIdSubclass, DWORD_PTR dwRefData) {
+    try {
+        // Handle WM_NCDESTROY message to remove subclassing
+        if (uMsg == WM_NCDESTROY) {
+            RemoveWindowSubclass(hWnd, ResultsListSubclassProc, RESULTS_LIST_SUBCLASS_ID);
+            return DefSubclassProc(hWnd, uMsg, wParam, lParam);
+        }
+
+        // Intercept LVM_GETITEMTEXTW (0x1073)
+        if (uMsg == 0x1073) { // LVM_GETITEMTEXTW
+            LVITEMW* lvItem = (LVITEMW*)lParam;
+            
+            // Restrict handling to iSubItem == 1 as specified
+            if (lvItem && lvItem->iSubItem == 1) {
+                // Check if open target buffer contains a non-empty string
+                if (g_openTargetBuffer[0] != L'\0') {
+                    int bufferLength = wcslen(g_openTargetBuffer);
+                    
+                    // Copy up to min(bufferLength, cchTextMax - 1) characters
+                    int copyLength = min(bufferLength, lvItem->cchTextMax - 1);
+                    
+                    if (copyLength > 0 && lvItem->pszText) {
+                        wcsncpy_s(lvItem->pszText, lvItem->cchTextMax, g_openTargetBuffer, copyLength);
+                        lvItem->pszText[copyLength] = L'\0';
+                    } else if (lvItem->pszText && lvItem->cchTextMax > 0) {
+                        lvItem->pszText[0] = L'\0';
+                        copyLength = 0;
+                    }
+                    
+                    // Clear the open target buffer immediately after use
+                    memset(g_openTargetBuffer, 0, sizeof(g_openTargetBuffer));
+                    
+                    char debugMsg[200];
+                    sprintf_s(debugMsg, "LVM_GETITEMTEXTW intercepted: iSubItem=%d, returned %d characters\n", 
+                              lvItem->iSubItem, copyLength);
+                    OutputDebugStringA(debugMsg);
+                    
+                    // Return the number of characters written, excluding terminator
+                    return copyLength;
+                } else {
+                    // Buffer is empty, return empty string
+                    if (lvItem->pszText && lvItem->cchTextMax > 0) {
+                        lvItem->pszText[0] = L'\0';
+                    }
+                    return 0;
+                }
+            }
+        }
+    }
+    catch (const std::exception& e) {
+        char errorMsg[256];
+        sprintf_s(errorMsg, "Exception in ResultsListSubclassProc: %s", e.what());
+        OutputDebugStringA(errorMsg);
+    }
+    catch (...) {
+        OutputDebugStringA("Unknown exception in ResultsListSubclassProc");
+    }
+
+    // Call default subclass procedure for all other messages
+    return DefSubclassProc(hWnd, uMsg, wParam, lParam);
+}
+
 // Keyboard hook procedure - for intercepting keyboard messages before MFC processing
 LRESULT CALLBACK KeyboardHook(int nCode, WPARAM wParam, LPARAM lParam) {
     // Always call the next hook if code is less than zero
@@ -731,6 +798,53 @@ LRESULT CALLBACK GetMsgHook(int nCode, WPARAM wParam, LPARAM lParam) {
                 OutputDebugStringA(debugMsg);
             } else {
                 OutputDebugStringA("Invalid main window handle for subclassing");
+            }
+
+            // Mark the message as handled
+            msg->message = WM_NULL;
+        }
+        // Check if this is our message to subclass Results list view
+        else if (msg->message == WM_AR_SUBCLASS_RESULTS_LIST) {
+            HWND hResultsListView = (HWND)msg->wParam;
+            HWND callbackWindow = (HWND)msg->lParam;
+            
+            if (hResultsListView && IsWindow(hResultsListView)) {
+                // Subclass the Results list view
+                SetWindowSubclass(hResultsListView, ResultsListSubclassProc, RESULTS_LIST_SUBCLASS_ID, (DWORD_PTR)callbackWindow);
+                
+                char debugMsg[200];
+                sprintf_s(debugMsg, "Results list view subclassed: HWND=%p, Callback=%p\n", hResultsListView, callbackWindow);
+                OutputDebugStringA(debugMsg);
+            } else {
+                OutputDebugStringA("Invalid Results list view handle for subclassing");
+            }
+
+            // Mark the message as handled
+            msg->message = WM_NULL;
+        }
+        // Check if this is our message to set open target
+        else if (msg->message == WM_AR_SET_OPEN_TARGET) {
+            // wParam contains a pointer to the wide string in the remote process buffer
+            // lParam contains the character count
+            wchar_t* remoteWideString = (wchar_t*)msg->wParam;
+            int characterCount = (int)msg->lParam;
+            
+            // Safety check: ensure character count doesn't exceed buffer size
+            if (characterCount > 0 && characterCount < OPEN_TARGET_BUFFER_SIZE && remoteWideString) {
+                // Clear the buffer first
+                memset(g_openTargetBuffer, 0, sizeof(g_openTargetBuffer));
+                
+                // Copy the string to our thread-local buffer
+                wcsncpy_s(g_openTargetBuffer, OPEN_TARGET_BUFFER_SIZE, remoteWideString, characterCount);
+                g_openTargetBuffer[characterCount] = L'\0';
+                
+                char debugMsg[300];
+                sprintf_s(debugMsg, "Open target set: %d characters copied to buffer\n", characterCount);
+                OutputDebugStringA(debugMsg);
+            } else {
+                // Invalid input - clear the buffer
+                memset(g_openTargetBuffer, 0, sizeof(g_openTargetBuffer));
+                OutputDebugStringA("Invalid open target parameters - buffer cleared");
             }
 
             // Mark the message as handled

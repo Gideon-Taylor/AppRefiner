@@ -17,6 +17,8 @@ namespace AppRefiner.Events
         private const uint WM_REMOVE_HOOK = WM_USER + 1004;
         private const uint WM_SUBCLASS_MAIN_WINDOW = WM_USER + 1005;
         private const uint WM_TOGGLE_MAIN_WINDOW_SHORTCUTS = WM_USER + 1006;
+        private const uint WM_AR_SUBCLASS_RESULTS_LIST = WM_USER + 1007;
+        private const uint WM_AR_SET_OPEN_TARGET = WM_USER + 1008;
 
         private static Dictionary<uint, IntPtr> _activeHooks = new Dictionary<uint, IntPtr>();
         private static Dictionary<uint, IntPtr> _activeKeyboardHooks = new Dictionary<uint, IntPtr>();
@@ -143,6 +145,106 @@ namespace AppRefiner.Events
             }
 
             return result;
+        }
+
+        /// <summary>
+        /// Subclasses the Results list view for IDE open target functionality
+        /// </summary>
+        /// <param name="threadId">Thread ID where the Results list view belongs</param>
+        /// <param name="resultsListView">Handle to the Results list view (SysListView32)</param>
+        /// <param name="callbackWindow">AppRefiner main window handle for callbacks</param>
+        /// <returns>True if subclassing was successful</returns>
+        public static bool SubclassResultsList(uint threadId, IntPtr resultsListView, IntPtr callbackWindow)
+        {
+            // Ensure we have a hook for this thread first
+            if (!_activeHooks.ContainsKey(threadId))
+            {
+                // Set a new hook
+                IntPtr hookId = SetHook(threadId);
+                if (hookId == IntPtr.Zero)
+                {
+                    return false;
+                }
+                
+                // Store the hook ID
+                _activeHooks[threadId] = hookId;
+            }
+
+            // Send the thread message to subclass the Results list view
+            return PostThreadMessage(threadId, WM_AR_SUBCLASS_RESULTS_LIST, resultsListView, callbackWindow);
+        }
+
+        /// <summary>
+        /// Sets the open target string for Results list interception and triggers double-click
+        /// </summary>
+        /// <param name="threadId">Thread ID where the Results list view belongs</param>
+        /// <param name="resultsListView">Handle to the Results list view</param>
+        /// <param name="processId">Process ID of the target Editor process</param>
+        /// <param name="openTarget">Target string to open (max 255 chars)</param>
+        /// <returns>True if operation was successful</returns>
+        public static bool SetOpenTarget(ScintillaEditor editor, IntPtr resultsListView, string openTarget)
+        {
+            [DllImport("user32.dll", CharSet = CharSet.Auto)]
+            static extern IntPtr SendMessage(IntPtr hWnd, int Msg, IntPtr wParam, IntPtr lParam);
+
+            if (!_activeHooks.ContainsKey(editor.ThreadID))
+            {
+                return false;
+            }
+
+            if (string.IsNullOrEmpty(openTarget) || openTarget.Length >= 256)
+            {
+                return false; // Exceed buffer size limit
+            }
+
+            try
+            {
+                // Allocate buffer in target process for the wide string
+                int charCount = openTarget.Length;
+                uint bufferSize = (uint)(charCount + 1) * 2; // +1 for null terminator, *2 for wide chars
+                
+                IntPtr remoteBuffer = ScintillaManager.GetStandaloneProcessBuffer(editor, bufferSize);
+                if (remoteBuffer == IntPtr.Zero)
+                {
+                    return false;
+                }
+
+                // Write the wide string to the remote buffer
+                bool writeSuccess = ScintillaManager.WriteWideStringToProcess(editor, remoteBuffer, openTarget);
+                if (!writeSuccess)
+                {
+                    ScintillaManager.FreeStandaloneProcessBuffer(editor, remoteBuffer);
+                    return false;
+                }
+
+                // Send the set open target message with the remote buffer pointer and character count
+                bool setTargetSuccess = PostThreadMessage(editor.ThreadID, WM_AR_SET_OPEN_TARGET, remoteBuffer, (IntPtr)charCount);
+                
+                if (setTargetSuccess)
+                {
+                    // Send synthetic double-click to trigger IDE behavior
+                    const int WM_LBUTTONDBLCLK = 0x0203;
+                    const int MK_LBUTTON = 0x0001;
+                    IntPtr lParam = IntPtr.Zero; // MAKELONG(0, 0) - coordinates (0,0)
+                    
+                    bool doubleClickSuccess = SendMessage(resultsListView, WM_LBUTTONDBLCLK, (IntPtr)MK_LBUTTON, lParam) > 0;
+                    
+                    // Free the buffer after use
+                    ScintillaManager.FreeStandaloneProcessBuffer(editor, remoteBuffer);
+                    
+                    return doubleClickSuccess;
+                }
+                else
+                {
+                    // Free the buffer if set target failed
+                    ScintillaManager.FreeStandaloneProcessBuffer(editor, remoteBuffer);
+                    return false;
+                }
+            }
+            catch (Exception)
+            {
+                return false;
+            }
         }
 
         // Method to send main window shortcuts toggle to a specific thread
