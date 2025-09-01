@@ -7,7 +7,7 @@ namespace PeopleCodeParser.SelfHosted.Visitors;
 /// Example implementation showing how to use the EnhancedScopedAstVisitor
 /// for comprehensive variable analysis and refactoring support.
 /// </summary>
-public class VariableAnalysisVisitor : EnhancedScopedAstVisitor<string>
+public class VariableAnalysisVisitor : ScopedAstVisitor<string>
 {
     private readonly List<string> analysisLog = new();
 
@@ -75,7 +75,7 @@ public class VariableAnalysisVisitor : EnhancedScopedAstVisitor<string>
         }
     }
 
-    protected override void OnVariableDeclared(EnhancedVariableInfo variable)
+    protected override void OnVariableDeclared(VariableInfo variable)
     {
         analysisLog.Add($"Variable declared: {variable.Kind} {variable.Type} {variable.Name} " +
                        $"(Safe to refactor: {variable.IsSafeToRefactor})");
@@ -156,7 +156,7 @@ public class VariableAnalysisVisitor : EnhancedScopedAstVisitor<string>
     /// <summary>
     /// Example: Get all variables accessible from a specific scope
     /// </summary>
-    public List<EnhancedVariableInfo> GetAccessibleVariablesExample(ScopeContext scope)
+    public List<VariableInfo> GetAccessibleVariablesExample(ScopeContext scope)
     {
         return GetAccessibleVariables(scope).OrderBy(v => v.Name).ToList();
     }

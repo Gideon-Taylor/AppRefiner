@@ -12,7 +12,7 @@ namespace AppRefiner.Refactors
     /// Base class for implementing PeopleCode refactoring operations that need scope and variable tracking.
     /// This class leverages the ScopedAstVisitor from the SelfHosted parser to provide automatic scope management.
     /// </summary>
-    public abstract class ScopedRefactor : EnhancedScopedAstVisitor<object>, IRefactor
+    public abstract class ScopedRefactor : ScopedAstVisitor<object>, IRefactor
     {
         #region Static Properties
 

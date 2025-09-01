@@ -2,641 +2,642 @@ using System.Collections;
 using PeopleCodeParser.SelfHosted.Nodes;
 using PeopleCodeParser.SelfHosted.Visitors.Models;
 using PeopleCodeParser.SelfHosted.Visitors.Utilities;
-using PeopleCodeParser.SelfHosted.Visitors;
 
 namespace PeopleCodeParser.SelfHosted.Visitors;
 
-public enum VariableType
-{
-    Local,
-    Global,
-    Instance,
-    Property,
-    Parameter,
-    Constant
-}
-
-
-
 /// <summary>
-/// Base class for AST visitors that need to track variables and other data across different scopes.
-/// This class provides the infrastructure for managing scopes and tracking variable declarations.
+/// Enhanced AST visitor that provides comprehensive scope management and variable tracking
+/// with proper lifecycle management and extensive query capabilities.
 /// </summary>
 /// <typeparam name="T">Type of custom data to track in each scope</typeparam>
 public abstract class ScopedAstVisitor<T> : AstVisitorBase
 {
-    // Stack for custom scope-specific data
-    protected readonly Stack<Dictionary<string, T>> customScopeData = new();
-    
-    // Stack for variable tracking across scopes
-    protected readonly Stack<Dictionary<string, VariableInfo>> variableScopeStack = new();
-    
-    // Stack for scope metadata
-    protected readonly Stack<ScopeInfo> scopeInfoStack = new();
+    #region Private Fields
     
     /// <summary>
-    /// Gets or sets whether this visitor should track variable usage.
-    /// When enabled, provides automatic variable usage tracking via the VariableTracker property.
+    /// Stack for managing scope hierarchy
     /// </summary>
-    public bool TrackVariableUsage { get; set; } = false;
+    private readonly Stack<ScopeContext> scopeStack = new();
     
     /// <summary>
-    /// Gets the variable usage tracker instance when TrackVariableUsage is enabled.
-    /// Returns null when variable usage tracking is disabled.
+    /// Stack for custom scope-specific data
     /// </summary>
-    protected IVariableUsageTracker? VariableTracker { get; private set; }
-
+    private readonly Stack<Dictionary<string, T>> customScopeData = new();
+    
+    /// <summary>
+    /// Central registry for all variables and scopes
+    /// </summary>
+    private readonly VariableRegistry variableRegistry = new();
+    
+    /// <summary>
+    /// Current scope context (top of stack)
+    /// </summary>
+    private ScopeContext? currentScope;
+    
+    #endregion
+    
+    #region Public Properties
+    
+    /// <summary>
+    /// Gets the current scope context
+    /// There is always a current scope during AST traversal (at minimum, the global scope)
+    /// </summary>
+    public ScopeContext GetCurrentScope() 
+    {
+        if (currentScope == null)
+        {
+            throw new InvalidOperationException("No current scope available. Make sure VisitProgram() has been called and is currently executing.");
+        }
+        return currentScope;
+    }
+    
+    /// <summary>
+    /// Gets the variable registry containing all program variables and scopes
+    /// </summary>
+    public VariableRegistry VariableRegistry => variableRegistry;
+    
+    /// <summary>
+    /// Gets all scopes in the program
+    /// </summary>
+    public IEnumerable<ScopeContext> GetAllScopes() => variableRegistry.AllScopes;
+    
+    /// <summary>
+    /// Gets all variables in the program
+    /// </summary>
+    public IEnumerable<VariableInfo> GetAllVariables() => variableRegistry.AllVariables;
+    
+    #endregion
+    
+    #region Constructor
+    
     protected ScopedAstVisitor()
     {
-        // Initialize with global scope
-        var globalScopeInfo = new ScopeInfo(ScopeType.Global, "Global");
-        scopeInfoStack.Push(globalScopeInfo);
-        customScopeData.Push(new Dictionary<string, T>(StringComparer.InvariantCultureIgnoreCase));
-        variableScopeStack.Push(new Dictionary<string, VariableInfo>(StringComparer.InvariantCultureIgnoreCase));
+        // Constructor intentionally empty - initialization happens in VisitProgram
+    }
+    
+    #endregion
+    
+    #region Core Scope Management
+    
+    /// <summary>
+    /// Enters a new scope with proper lifecycle management
+    /// </summary>
+    protected void EnterScope(EnhancedScopeType scopeType, string scopeName, AstNode sourceNode)
+    {
+        var newScope = new ScopeContext(scopeType, scopeName, sourceNode, currentScope);
         
-        // Initialize variable tracker if tracking is enabled
-        UpdateVariableTracker();
+        // Push onto stack and update current scope
+        scopeStack.Push(newScope);
+        currentScope = newScope;
+        
+        // Register the scope in the variable registry
+        variableRegistry.RegisterScope(newScope);
+        
+        // Initialize custom data for this scope
+        customScopeData.Push(new Dictionary<string, T>(StringComparer.OrdinalIgnoreCase));
+        
+        // Call the appropriate OnEnter method based on scope type
+        CallOnEnterScopeMethod(newScope, sourceNode);
     }
     
     /// <summary>
-    /// Updates the VariableTracker instance based on the TrackVariableUsage setting.
-    /// This method should be called after changing the TrackVariableUsage property.
+    /// Exits the current scope with proper lifecycle management
+    /// CRITICAL: OnExit is called BEFORE popping the scope to ensure GetCurrentScope() works correctly
     /// </summary>
-    protected void UpdateVariableTracker()
+    protected void ExitScope()
     {
-        if (TrackVariableUsage && VariableTracker == null)
+        if (scopeStack.Count == 0)
+            return;
+            
+        var exitingScope = scopeStack.Peek();
+        var customData = customScopeData.Count > 0 ? customScopeData.Peek() : new Dictionary<string, T>();
+        
+        // CRITICAL: Call OnExit BEFORE popping so GetCurrentScope() returns the correct scope
+        CallOnExitScopeMethod(exitingScope, exitingScope.SourceNode, customData);
+        
+        // Now pop the scope from the stack
+        scopeStack.Pop();
+        customScopeData.Pop();
+        
+        // Update current scope reference
+        currentScope = scopeStack.Count > 0 ? scopeStack.Peek() : null;
+    }
+    
+    /// <summary>
+    /// Calls the appropriate OnEnter method based on scope type
+    /// </summary>
+    private void CallOnEnterScopeMethod(ScopeContext scope, AstNode sourceNode)
+    {
+        switch (scope.Type)
         {
-            VariableTracker = new VariableUsageTracker();
-        }
-        else if (!TrackVariableUsage && VariableTracker != null)
-        {
-            VariableTracker.Reset();
-            VariableTracker = null;
+            case EnhancedScopeType.Global:
+                OnEnterGlobalScope(scope, (ProgramNode)sourceNode);
+                break;
+            case EnhancedScopeType.Method:
+                OnEnterMethodScope(scope, (MethodNode)sourceNode);
+                break;
+            case EnhancedScopeType.Function:
+                OnEnterFunctionScope(scope, (FunctionNode)sourceNode);
+                break;
+            case EnhancedScopeType.Property:
+                OnEnterPropertyScope(scope, (PropertyNode)sourceNode);
+                break;
+            case EnhancedScopeType.Class:
+                OnEnterClassScope(scope, (AppClassNode)sourceNode);
+                break;
         }
     }
-
-    #region Scope Management
-
+    
+    /// <summary>
+    /// Calls the appropriate OnExit method based on scope type
+    /// </summary>
+    private void CallOnExitScopeMethod(ScopeContext scope, AstNode sourceNode, Dictionary<string, T> customData)
+    {
+        switch (scope.Type)
+        {
+            case EnhancedScopeType.Global:
+                OnExitGlobalScope(scope, (ProgramNode)sourceNode, customData);
+                break;
+            case EnhancedScopeType.Method:
+                OnExitMethodScope(scope, (MethodNode)sourceNode, customData);
+                break;
+            case EnhancedScopeType.Function:
+                OnExitFunctionScope(scope, (FunctionNode)sourceNode, customData);
+                break;
+            case EnhancedScopeType.Property:
+                OnExitPropertyScope(scope, (PropertyNode)sourceNode, customData);
+                break;
+            case EnhancedScopeType.Class:
+                OnExitClassScope(scope, (AppClassNode)sourceNode, customData);
+                break;
+        }
+    }
+    
+    #endregion
+    
+    #region Custom Data Management
+    
     /// <summary>
     /// Gets the custom data dictionary for the current scope
     /// </summary>
-    protected Dictionary<string, T> GetCurrentCustomData() => customScopeData.Peek();
+    protected Dictionary<string, T> GetCurrentCustomData()
+    {
+        return customScopeData.Count > 0 ? customScopeData.Peek() : new Dictionary<string, T>();
+    }
     
-    /// <summary>
-    /// Gets the variable dictionary for the current scope
-    /// </summary>
-    protected Dictionary<string, VariableInfo> GetCurrentVariableScope() => variableScopeStack.Peek();
-    
-    /// <summary>
-    /// Gets the current scope information
-    /// </summary>
-    protected ScopeInfo GetCurrentScopeInfo() => scopeInfoStack.Peek();
-
     /// <summary>
     /// Adds custom data to the current scope
     /// </summary>
     protected void AddToCurrentScope(string key, T value)
     {
-        var currentScope = GetCurrentCustomData();
-        if (!currentScope.ContainsKey(key))
-        {
-            currentScope[key] = value;
-        }
+        var currentData = GetCurrentCustomData();
+        currentData[key] = value;
     }
-
-    /// <summary>
-    /// Replaces custom data in the first scope where the key is found
-    /// </summary>
-    protected void ReplaceInFoundScope(string key, T newValue)
-    {
-        foreach (var scope in customScopeData)
-        {
-            if (scope.ContainsKey(key))
-            {
-                scope[key] = newValue;
-                return;
-            }
-        }
-    }
-
+    
     /// <summary>
     /// Tries to find custom data by key in any accessible scope
     /// </summary>
     protected bool TryFindInScopes(string key, out T? value)
     {
         value = default;
-        foreach (var scope in customScopeData)
+        foreach (var scopeData in customScopeData)
         {
-            if (scope.TryGetValue(key, out value))
+            if (scopeData.TryGetValue(key, out value))
             {
                 return true;
             }
         }
         return false;
     }
-
-    /// <summary>
-    /// Enters a new scope with the specified type and name
-    /// </summary>
-    protected void EnterScope(ScopeType scopeType, string scopeName)
-    {
-        var parentScope = GetCurrentScopeInfo();
-        var newScopeInfo = new ScopeInfo(scopeType, scopeName, parentScope);
-        
-        scopeInfoStack.Push(newScopeInfo);
-        customScopeData.Push(new Dictionary<string, T>(StringComparer.InvariantCultureIgnoreCase));
-        variableScopeStack.Push(new Dictionary<string, VariableInfo>(StringComparer.InvariantCultureIgnoreCase));
-        
-        OnEnterScope(newScopeInfo);
-    }
-
-    /// <summary>
-    /// Exits the current scope
-    /// </summary>
-    protected void ExitScope()
-    {
-        if (customScopeData.Count > 1 && variableScopeStack.Count > 1 && scopeInfoStack.Count > 1)
-        {
-            var customData = customScopeData.Peek();
-            var varScope = variableScopeStack.Peek();
-            var scopeInfo = scopeInfoStack.Peek();
-
-            // Make sure we alert any subclasses before popping the stacks
-            OnExitScope(scopeInfo, varScope, customData);
-
-            customScopeData.Pop();
-            variableScopeStack.Pop();
-            scopeInfoStack.Pop();
-        }
-    }
-
+    
     #endregion
-
+    
     #region Variable Management
     
     /// <summary>
-    /// Registers a variable in the current scope using VariableNameInfo to preserve rich source information
+    /// Registers a variable in the current scope
     /// </summary>
-    protected void RegisterVariable(VariableNameInfo variableNameInfo, string typeName, VariableType variableType = VariableType.Local)
+    protected void RegisterVariable(VariableNameInfo variableNameInfo, string typeName, VariableKind variableKind, AstNode declaringNode)
     {
-        var currentScope = GetCurrentVariableScope();
-        if (!currentScope.ContainsKey(variableNameInfo.Name))
-        {
-            var scopeInfo = GetCurrentScopeInfo();
-            var variableInfo = new VariableInfo(variableNameInfo, typeName, variableType);
-            currentScope[variableNameInfo.Name] = variableInfo;
-            
-            // Register with usage tracker if enabled
-            if (VariableTracker != null)
-            {
-                VariableTracker.RegisterVariable(variableInfo, scopeInfo);
-            }
-            
-            OnVariableDeclared(variableInfo, scopeInfo);
-        }
+        var current = GetCurrentScope(); // Will throw if no current scope
+        var variable = new VariableInfo(variableNameInfo, typeName, variableKind, current, declaringNode);
+        variableRegistry.RegisterVariable(variable);
+        
+        // Call event handler
+        OnVariableDeclared(variable);
     }
-
+    
     /// <summary>
-    /// Tries to find a variable by name in any accessible scope
+    /// Adds a reference to a variable
     /// </summary>
-    protected bool TryFindVariable(string name, out VariableInfo? info)
+    protected void AddVariableReference(string variableName, SourceSpan location, ReferenceType referenceType, string? context = null)
     {
-        info = null;
-        foreach (var scope in variableScopeStack)
-        {
-            if (scope.TryGetValue(name, out info))
-            {
-                return true;
-            }
-        }
-        return false;
+        var current = GetCurrentScope(); // Will throw if no current scope
+        var reference = new VariableReference(variableName, referenceType, location, current, context: context);
+        variableRegistry.AddVariableReference(variableName, current, reference);
+        
+        // Call event handler
+        OnVariableReferenced(variableName, reference);
     }
-
+    
     /// <summary>
-    /// Gets all variables declared in the current scope
+    /// Finds a variable by name that is accessible from the current scope
     /// </summary>
-    protected IEnumerable<VariableInfo> GetVariablesInCurrentScope()
+    protected VariableInfo? FindVariable(string name)
     {
-        if (variableScopeStack.Count == 0) return Enumerable.Empty<VariableInfo>();
-        return variableScopeStack.Peek().Values;
+        return variableRegistry.FindVariableInScope(name, GetCurrentScope());
     }
-
-    /// <summary>
-    /// Gets all variables accessible from the current scope (including parent scopes)
-    /// </summary>
-    protected IEnumerable<VariableInfo> GetAllAccessibleVariables()
-    {
-        var allVariables = new List<VariableInfo>();
-        foreach (var scope in variableScopeStack)
-        {
-            allVariables.AddRange(scope.Values);
-        }
-        return allVariables;
-    }
-
-    protected IEnumerable<VariableInfo> GetAllVariablesInScope(ScopeInfo scopeInfo)
-    {
-        var allVariables = new List<VariableInfo>();
-        foreach (var scope in variableScopeStack)
-        {
-            if (scopeInfoStack.Contains(scopeInfo))
-            {
-                allVariables.AddRange(scope.Values);
-            }
-        }
-        return allVariables;
-    }
-
+    
     #endregion
-
-    #region Variable Usage Tracking
-
+    
+    #region Query API
+    
     /// <summary>
-    /// Marks a variable as used by name in the current scope or any parent scope.
-    /// Only works when TrackVariableUsage is enabled.
+    /// Gets all variables accessible from the specified scope (including parent scopes)
     /// </summary>
-    protected bool MarkVariableAsUsed(string name)
+    public IEnumerable<VariableInfo> GetAccessibleVariables(ScopeContext scope)
     {
-        if (VariableTracker == null) return false;
-        
-        var currentScope = GetCurrentScopeInfo();
-        var wasMarked = VariableTracker.MarkAsUsed(name, currentScope);
-        
-        if (wasMarked)
-        {
-            OnVariableUsed(name, default(SourceSpan), currentScope);
-        }
-        
-        return wasMarked;
+        return variableRegistry.GetAccessibleVariables(scope);
     }
     
     /// <summary>
-    /// Marks a variable as used by name with location tracking in the current scope or any parent scope.
-    /// Only works when TrackVariableUsage is enabled.
+    /// Gets all variables declared directly in the specified scope (local to that scope only)
+    /// For variables accessible from a scope (including parent scopes), use GetAccessibleVariables() instead
     /// </summary>
-    protected bool MarkVariableAsUsedWithLocation(string name, SourceSpan location)
+    public IEnumerable<VariableInfo> GetVariablesDeclaredInScope(ScopeContext scope)
     {
-        if (VariableTracker == null) return false;
-        
-        var currentScope = GetCurrentScopeInfo();
-        var wasMarked = VariableTracker.MarkAsUsedWithLocation(name, location, currentScope);
-        
-        if (wasMarked)
-        {
-            OnVariableUsed(name, location, currentScope);
-        }
-        
-        return wasMarked;
-    }
-    
-    public IEnumerable<SourceSpan> GetVariableReferences(string variableName, ScopeInfo scope)
-    {
-        if (VariableTracker == null) return Enumerable.Empty<SourceSpan>();
-        
-        return VariableTracker.GetVariableReferences(variableName, scope);
-    }
-
-    /// <summary>
-    /// Checks if a variable is defined in any accessible scope.
-    /// Only works when TrackVariableUsage is enabled.
-    /// </summary>
-    protected bool IsVariableDefined(string name)
-    {
-        if (VariableTracker == null) return false;
-        
-        var currentScope = GetCurrentScopeInfo();
-        return VariableTracker.IsVariableDefined(name, currentScope);
+        return variableRegistry.GetVariablesInScope(scope);
     }
     
     /// <summary>
-    /// Tracks a reference to an undefined variable.
-    /// Only works when TrackVariableUsage is enabled.
+    /// Gets all variables accessible from the specified scope (includes variables from parent scopes)
+    /// This is usually what you want when analyzing what variables a scope can use
     /// </summary>
-    protected void TrackUndefinedReference(string name, SourceSpan location)
+    public IEnumerable<VariableInfo> GetVariablesInScope(ScopeContext scope)
     {
-        if (VariableTracker == null) return;
-        
-        var currentScope = GetCurrentScopeInfo();
-        VariableTracker.TrackUndefinedReference(name, location, currentScope);
+        return GetAccessibleVariables(scope);
     }
-
+    
+    /// <summary>
+    /// Gets all references to a variable by name in the specified scope
+    /// </summary>
+    public IEnumerable<VariableReference> GetVariableReferences(string variableName, ScopeContext scope)
+    {
+        var variable = variableRegistry.FindVariableInScope(variableName, scope);
+        return variable?.References ?? Enumerable.Empty<VariableReference>();
+    }
+    
+    /// <summary>
+    /// Checks if a variable is safe to refactor (rename) within the current program
+    /// </summary>
+    public bool IsVariableSafeToRefactor(string variableName, ScopeContext scope)
+    {
+        var variable = variableRegistry.FindVariableInScope(variableName, scope);
+        return variable?.IsSafeToRefactor ?? false;
+    }
+    
+    /// <summary>
+    /// Gets all unused variables across the entire program
+    /// </summary>
+    public IEnumerable<VariableInfo> GetUnusedVariables()
+    {
+        return variableRegistry.GetUnusedVariables();
+    }
+    
     #endregion
-
+    
     #region AST Visitor Overrides
+    
+    /// <summary>
+    /// Visits the program node and establishes the global scope
+    /// </summary>
+    public override void VisitProgram(ProgramNode node)
+    {
+        // Initialize global scope
+        EnterScope(EnhancedScopeType.Global, "Global", node);
+        
+        try
+        {
+            // Visit all program contents
+            base.VisitProgram(node);
+        }
+        finally
+        {
+            // Exit global scope
+            ExitScope();
+        }
+    }
+    
+    /// <summary>
+    /// Visits an app class node and manages class scope
+    /// </summary>
+    public override void VisitAppClass(AppClassNode node)
+    {
+        EnterScope(EnhancedScopeType.Class, node.Name, node);
+        
+        try
+        {
+            base.VisitAppClass(node);
+        }
+        finally
+        {
+            ExitScope();
+        }
+    }
+    
+    /// <summary>
+    /// Visits a method node and manages method scope
+    /// </summary>
+    public override void VisitMethod(MethodNode node)
+    {
+        EnterScope(EnhancedScopeType.Method, node.Name, node);
+        
+        try
+        {
+            // Register method parameters
+            foreach (var parameter in node.Parameters)
+            {
+                var typeName = AstTypeExtractor.GetTypeFromNode(parameter.Type);
+                var nameInfo = new VariableNameInfo(parameter.Name, parameter.NameToken);
+                RegisterVariable(nameInfo, typeName, VariableKind.Parameter, parameter);
+            }
+            
+            // Track parameter annotations as references
+            foreach (var annotation in node.ParameterAnnotations)
+            {
+                AddVariableReference(annotation.Name, annotation.NameToken.SourceSpan, ReferenceType.ParameterAnnotation, "method parameter annotation");
+            }
+            
+            base.VisitMethod(node);
+        }
+        finally
+        {
+            ExitScope();
+        }
+    }
+   
 
+
+    /// <summary>
+    /// Visits a function node and manages function scope
+    /// </summary>
+    public override void VisitFunction(FunctionNode node)
+    {
+        EnterScope(EnhancedScopeType.Function, node.Name, node);
+        
+        try
+        {
+            // Register function parameters
+            foreach (var parameter in node.Parameters)
+            {
+                var typeName = AstTypeExtractor.GetTypeFromNode(parameter.Type);
+                var nameInfo = new VariableNameInfo(parameter.Name, parameter.FirstToken);
+                RegisterVariable(nameInfo, typeName, VariableKind.Parameter, parameter);
+            }
+            
+            base.VisitFunction(node);
+        }
+        finally
+        {
+            ExitScope();
+        }
+    }
+    
+    /// <summary>
+    /// Visits a property node and manages property scope
+    /// </summary>
+    public override void VisitProperty(PropertyNode node)
+    {
+        // Register property in parent scope first
+        var nameInfo = new VariableNameInfo(node.Name, node.NameToken);
+        RegisterVariable(nameInfo, "Property", VariableKind.Property, node);
+        
+        EnterScope(EnhancedScopeType.Property, node.Name, node);
+        
+        try
+        {
+            base.VisitProperty(node);
+        }
+        finally
+        {
+            ExitScope();
+        }
+    }
+    
     /// <summary>
     /// Visits a variable node and registers it in the appropriate scope
     /// </summary>
     public override void VisitVariable(VariableNode node)
     {
-        var variableName = node.Name;
         var typeName = node.Type.ToString();
-        var variableType = GetVariableTypeFromScope(node.Scope);
+        var variableKind = GetVariableKindFromScope(node.Scope);
         
-        // Add primary variable if it exists
-        if (!string.IsNullOrEmpty(variableName))
-        {
-            var nameInfo = node.NameInfos.FirstOrDefault(ni => 
-                ni.Name.Equals(variableName, StringComparison.OrdinalIgnoreCase));
-            if (nameInfo != null)
-            {
-                RegisterVariable(nameInfo, typeName, variableType);
-            }
-        }
-        
-        // Handle all names in NameInfos
+        // Register all variable names
         foreach (var nameInfo in node.NameInfos)
         {
-            if (string.IsNullOrEmpty(variableName) || 
-                !nameInfo.Name.Equals(variableName, StringComparison.OrdinalIgnoreCase))
-            {
-                RegisterVariable(nameInfo, typeName, variableType);
-            }
+            RegisterVariable(nameInfo, typeName, variableKind, node);
         }
         
         base.VisitVariable(node);
     }
-
+    
     /// <summary>
-    /// Handles identifier references and tracks variable usage for the usage tracker
+    /// Visits a local variable declaration and registers it in the current scope
+    /// </summary>
+    public override void VisitLocalVariableDeclaration(LocalVariableDeclarationNode node)
+    {
+        var typeName = AstTypeExtractor.GetTypeFromNode(node.Type);
+        
+        for (int i = 0; i < node.VariableNames.Count && i < node.VariableNameInfos.Count; i++)
+        {
+            RegisterVariable(node.VariableNameInfos[i], typeName, VariableKind.Local, node);
+        }
+        
+        base.VisitLocalVariableDeclaration(node);
+    }
+    
+    /// <summary>
+    /// Visits a local variable declaration with assignment
+    /// </summary>
+    public override void VisitLocalVariableDeclarationWithAssignment(LocalVariableDeclarationWithAssignmentNode node)
+    {
+        var typeName = AstTypeExtractor.GetTypeFromNode(node.Type);
+        RegisterVariable(node.VariableNameInfo, typeName, VariableKind.Local, node);
+        
+        base.VisitLocalVariableDeclarationWithAssignment(node);
+    }
+    
+    /// <summary>
+    /// Visits a constant declaration
+    /// </summary>
+    public override void VisitConstant(ConstantNode node)
+    {
+        var typeName = AstTypeExtractor.GetDefaultTypeForExpression(node.Value);
+        var nameInfo = new VariableNameInfo(node.Name, node.FirstToken);
+        RegisterVariable(nameInfo, $"Constant({typeName})", VariableKind.Constant, node);
+        
+        base.VisitConstant(node);
+    }
+    
+    /// <summary>
+    /// Visits an identifier node and tracks variable references
     /// </summary>
     public override void VisitIdentifier(IdentifierNode node)
     {
-        // Track the variable usage with location
-        MarkVariableAsUsedWithLocation(node.Name, node.SourceSpan);
-
-        // If this is a property accessed with & prefix, also track the property
+        AddVariableReference(node.Name, node.SourceSpan, ReferenceType.Read, "identifier reference");
+        
+        // Handle property access with & prefix
         if (node.Name.StartsWith("&"))
         {
             var propertyName = node.Name.Substring(1);
-            MarkVariableAsUsedWithLocation(propertyName, node.SourceSpan);
+            AddVariableReference(propertyName, node.SourceSpan, ReferenceType.Read, "property reference");
         }
-
+        
         base.VisitIdentifier(node);
     }
+    
     /// <summary>
-    /// Handles FOR statements and tracks iterator variable usage
+    /// Visits a FOR statement and tracks iterator variable usage
     /// </summary>
     public override void VisitFor(ForStatementNode node)
     {
-        string iteratorName = node.Variable;
-        MarkVariableAsUsedWithLocation(iteratorName, node.IteratorToken.SourceSpan);
+        AddVariableReference(node.Variable, node.IteratorToken.SourceSpan, ReferenceType.Read, "for loop iterator");
         base.VisitFor(node);
     }
-
+    
+    /// <summary>
+    /// Visits function calls and tracks variable references in method calls
+    /// </summary>
     public override void VisitFunctionCall(FunctionCallNode node)
     {
         if (node.Function is MemberAccessNode member && member.Target is IdentifierNode ident)
         {
             if (ident.Name.StartsWith('&'))
             {
-                MarkVariableAsUsedWithLocation(ident.Name, ident.SourceSpan);
+                AddVariableReference(ident.Name, ident.SourceSpan, ReferenceType.Read, "method call on property");
             }
         }
         base.VisitFunctionCall(node);
     }
-
+    
+    /// <summary>
+    /// Visits member access and tracks %THIS references
+    /// </summary>
     public override void VisitMemberAccess(MemberAccessNode node)
     {
-        var target = node.Target;
-        if (target is IdentifierNode identNode && identNode.Name.Equals("%THIS", StringComparison.OrdinalIgnoreCase))
+        if (node.Target is IdentifierNode identNode && identNode.Name.Equals("%THIS", StringComparison.OrdinalIgnoreCase))
         {
             var memberName = node.MemberName;
-            MarkVariableAsUsedWithLocation(memberName, node.SourceSpan);
-
-            string varNameWithPrefix = $"&{memberName}";
-            MarkVariableAsUsedWithLocation(varNameWithPrefix, node.SourceSpan);
+            AddVariableReference(memberName, node.SourceSpan, ReferenceType.Read, "%THIS member access");
+            
+            var varNameWithPrefix = $"&{memberName}";
+            AddVariableReference(varNameWithPrefix, node.SourceSpan, ReferenceType.Read, "%THIS property access");
         }
-
+        
         base.VisitMemberAccess(node);
     }
-
-    /// <summary>
-    /// Visits a method node and manages its scope
-    /// </summary>
-    public override void VisitMethod(MethodNode node)
-    {
-        EnterScope(ScopeType.Method, node.Name);
-
-        foreach (var parameter in node.Parameters)
-        {
-            var typeName = AstTypeExtractor.GetTypeFromNode(parameter.Type);
-
-            VariableNameInfo nameInfo = new(parameter.Name, parameter.NameToken);
-
-            RegisterVariable(nameInfo, typeName, VariableType.Parameter);
-        }
-
-        foreach (var annotation in node.ParameterAnnotations)
-        {
-            MarkVariableAsUsedWithLocation(annotation.Name, annotation.NameToken.SourceSpan);
-        }
-
-
-        base.VisitMethod(node);
-        
-        ExitScope();
-    }
-
-    /// <summary>
-    /// Visits a function node and manages its scope
-    /// </summary>
-    public override void VisitFunction(FunctionNode node)
-    {
-        EnterScope(ScopeType.Function, node.Name);
-        
-        AddFunctionParameters(node);
-        
-        base.VisitFunction(node);
-        
-        ExitScope();
-    }
-
-    /// <summary>
-    /// Visits a property node and manages its scope
-    /// </summary>
-    public override void VisitProperty(PropertyNode node)
-    {
-        // Add property to the current scope before entering the property's scope
-        var propertyName = node.Name;
-        var nameInfo = new VariableNameInfo(propertyName, node.NameToken);
-        RegisterVariable(nameInfo, "Property", VariableType.Property);
-        
-        // Enter property scope
-        EnterScope(ScopeType.Property, node.Name);
-        
-        base.VisitProperty(node);
-        
-        ExitScope();
-    }
     
-    /// <summary>
-    /// Visits an app class node and tracks class context
-    /// </summary>
-    public override void VisitAppClass(AppClassNode node)
-    {
-        OnClassEnter(node);
-        base.VisitAppClass(node);
-        OnClassExit(node);
-    }
-
-    /// <summary>
-    /// Visits a local variable declaration and registers variables in the current scope
-    /// </summary>
-    public override void VisitLocalVariableDeclaration(LocalVariableDeclarationNode node)
-    {
-        var typeName = AstTypeExtractor.GetTypeFromNode(node.Type);
-        
-        // Use VariableNameInfos for precise positioning when available
-        for (int i = 0; i < node.VariableNames.Count; i++)
-        {
-            var variableName = node.VariableNames[i];
-            
-            RegisterVariable(node.VariableNameInfos[i], typeName, VariableType.Local);
-        }
-        
-        base.VisitLocalVariableDeclaration(node);
-    }
-
-    /// <summary>
-    /// Visits a local variable declaration with assignment and registers the variable in the current scope
-    /// </summary>
-    public override void VisitLocalVariableDeclarationWithAssignment(LocalVariableDeclarationWithAssignmentNode node)
-    {
-        var typeName = AstTypeExtractor.GetTypeFromNode(node.Type);
-        
-        // Get precise source span for the variable name if available
-        var sourceSpan = node.SourceSpan;
-
-        
-
-        RegisterVariable(node.VariableNameInfo, typeName, VariableType.Local);
-        
-        base.VisitLocalVariableDeclarationWithAssignment(node);
-    }
-
-    /// <summary>
-    /// Visits a constant declaration and registers it in the current scope
-    /// </summary>
-    public override void VisitConstant(ConstantNode node)
-    {
-        var typeName = AstTypeExtractor.GetDefaultTypeForExpression(node.Value);
-
-        VariableNameInfo nameInfo = new(node.Name, node.FirstToken);
-
-        RegisterVariable(nameInfo, $"Constant({typeName})", VariableType.Constant);
-        
-        base.VisitConstant(node);
-    }
-
     #endregion
-
+    
     #region Helper Methods
-
-    /// <summary>
-    /// Adds function parameters to the current scope
-    /// </summary>
-    private void AddFunctionParameters(FunctionNode function)
-    {
-        foreach (var parameter in function.Parameters)
-        {
-            var typeName = AstTypeExtractor.GetTypeFromNode(parameter.Type);
-            var variableNameInfo = new VariableNameInfo(parameter.Name, parameter.FirstToken);
-            RegisterVariable(variableNameInfo, typeName, VariableType.Parameter);
-        }
-    }
     
     /// <summary>
-    /// Converts PeopleCode variable scope to our VariableType enum
+    /// Converts PeopleCode variable scope to VariableKind
     /// </summary>
-    private VariableType GetVariableTypeFromScope(VariableScope scope)
+    private VariableKind GetVariableKindFromScope(VariableScope scope)
     {
         return scope switch
         {
-            VariableScope.Instance => VariableType.Instance,
-            VariableScope.Global => VariableType.Global,
-            VariableScope.Local => VariableType.Local,
-            _ => VariableType.Local
+            VariableScope.Instance => VariableKind.Instance,
+            VariableScope.Global => VariableKind.Global,
+            VariableScope.Component => VariableKind.Component,
+            VariableScope.Local => VariableKind.Local,
+            _ => VariableKind.Local
         };
     }
-
-    #endregion
-
-    #region Lifecycle Methods
-
+    
     /// <summary>
-    /// Resets the visitor to its initial state with only the global scope
+    /// Resets the visitor to its initial state
     /// </summary>
     public void Reset()
     {
-        while (customScopeData.Count > 1)
-        {
-            var dict = customScopeData.Pop();
-            dict.Clear();
-        }
-
-        while (variableScopeStack.Count > 1)
-        {
-            var dict = variableScopeStack.Pop();
-            dict.Clear();
-        }
-
-        while (scopeInfoStack.Count > 1)
-        {
-            scopeInfoStack.Pop();
-        }
-
-        if (customScopeData.Count > 0) customScopeData.Peek().Clear();
-        if (variableScopeStack.Count > 0) variableScopeStack.Peek().Clear();
-        
-        // Reset variable tracker if enabled
-        if (VariableTracker != null)
-        {
-            VariableTracker.Reset();
-        }
+        // Clear all stacks
+        scopeStack.Clear();
+        customScopeData.Clear();
+        variableRegistry.Clear();
+        currentScope = null;
         
         OnReset();
     }
-
+    
     #endregion
-
-    #region Virtual Methods for Subclasses
-
+    
+    #region Virtual Methods for Subclasses (Event Handlers)
+    
+    /// <summary>
+    /// Called when entering the global scope
+    /// </summary>
+    protected virtual void OnEnterGlobalScope(ScopeContext scope, ProgramNode node) { }
+    
+    /// <summary>
+    /// Called when exiting the global scope (BEFORE scope is popped from stack)
+    /// </summary>
+    protected virtual void OnExitGlobalScope(ScopeContext scope, ProgramNode node, Dictionary<string, T> customData) { }
+    
+    /// <summary>
+    /// Called when entering a class scope
+    /// </summary>
+    protected virtual void OnEnterClassScope(ScopeContext scope, AppClassNode node) { }
+    
+    /// <summary>
+    /// Called when exiting a class scope (BEFORE scope is popped from stack)
+    /// </summary>
+    protected virtual void OnExitClassScope(ScopeContext scope, AppClassNode node, Dictionary<string, T> customData) { }
+    
+    /// <summary>
+    /// Called when entering a method scope
+    /// </summary>
+    protected virtual void OnEnterMethodScope(ScopeContext scope, MethodNode node) { }
+    
+    /// <summary>
+    /// Called when exiting a method scope (BEFORE scope is popped from stack)
+    /// </summary>
+    protected virtual void OnExitMethodScope(ScopeContext scope, MethodNode node, Dictionary<string, T> customData) { }
+    
+    /// <summary>
+    /// Called when entering a function scope
+    /// </summary>
+    protected virtual void OnEnterFunctionScope(ScopeContext scope, FunctionNode node) { }
+    
+    /// <summary>
+    /// Called when exiting a function scope (BEFORE scope is popped from stack)
+    /// </summary>
+    protected virtual void OnExitFunctionScope(ScopeContext scope, FunctionNode node, Dictionary<string, T> customData) { }
+    
+    /// <summary>
+    /// Called when entering a property scope
+    /// </summary>
+    protected virtual void OnEnterPropertyScope(ScopeContext scope, PropertyNode node) { }
+    
+    /// <summary>
+    /// Called when exiting a property scope (BEFORE scope is popped from stack)
+    /// </summary>
+    protected virtual void OnExitPropertyScope(ScopeContext scope, PropertyNode node, Dictionary<string, T> customData) { }
+    
     /// <summary>
     /// Called when a variable is declared in any scope
     /// </summary>
-    protected virtual void OnVariableDeclared(VariableInfo varInfo, ScopeInfo scope) { }
+    protected virtual void OnVariableDeclared(VariableInfo variable) { }
     
     /// <summary>
-    /// Called when a variable is used (marked as used by the usage tracker)
-    /// Only called when TrackVariableUsage is enabled
+    /// Called when a variable is referenced
     /// </summary>
-    protected virtual void OnVariableUsed(string name, SourceSpan location, ScopeInfo scope) { }
+    protected virtual void OnVariableReferenced(string variableName, VariableReference reference) { }
     
-    /// <summary>
-    /// Called when entering a new scope
-    /// </summary>
-    protected virtual void OnEnterScope(ScopeInfo scopeInfo) { }
-    
-    /// <summary>
-    /// Called when exiting a scope
-    /// </summary>
-    protected virtual void OnExitScope(ScopeInfo scopeInfo, Dictionary<string, VariableInfo> variableScope, Dictionary<string, T> customData) { }
-    
-    /// <summary>
-    /// Called when entering a class
-    /// </summary>
-    protected virtual void OnClassEnter(AppClassNode node) { }
-    
-    /// <summary>
-    /// Called when exiting a class
-    /// </summary>
-    protected virtual void OnClassExit(AppClassNode node) { }
-
     /// <summary>
     /// Called when the visitor is reset
     /// </summary>
-    protected virtual void OnReset() {}
-
+    protected virtual void OnReset() { }
+    
     #endregion
 }

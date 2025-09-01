@@ -1,4 +1,5 @@
 using AppRefiner.Database;
+using AppRefiner.Refactors.QuickFixes;
 using PeopleCodeParser.SelfHosted.Nodes;
 using PeopleCodeParser.SelfHosted.Lexing;
 using PeopleCodeParser.SelfHosted;
@@ -83,7 +84,12 @@ namespace AppRefiner.Stylers
                         tooltipBuilder.Append($"\n - Property: {prop.Name}");
                     }
 
-                    AddIndicator(targetToHighlight.SourceSpan, IndicatorType.SQUIGGLE, WARNING_COLOR, tooltipBuilder.ToString());
+                    var quickFixes = new List<(Type RefactorClass, string Description)>
+                    {
+                        (typeof(ImplementAbstractMembers), "Implement missing abstract members")
+                    };
+                    
+                    AddIndicator((targetToHighlight.SourceSpan.Start.ByteIndex, targetToHighlight.SourceSpan.End.ByteIndex), IndicatorType.SQUIGGLE, WARNING_COLOR, tooltipBuilder.ToString(), quickFixes);
                 }
             }
             catch (Exception ex)

@@ -10,7 +10,7 @@ using static AppRefiner.PeopleCode.PeopleCodeParser;
 namespace AppRefiner.Stylers
 {
     // New self-hosted parser-based scoped styler
-    public class ScopedStyler : EnhancedScopedAstVisitor<object>, IStyler
+    public class ScopedStyler : ScopedAstVisitor<object>, IStyler
     {
         public List<Indicator> Indicators { get; } = [];
 
@@ -39,12 +39,12 @@ namespace AppRefiner.Stylers
         /// </summary>
         public ScintillaEditor? Editor { get; set; }
 
-        public void AddIndicator(SourceSpan span, IndicatorType type, uint color, string? tooltip = null)
+        public void AddIndicator(SourceSpan span, IndicatorType type, uint color, string? tooltip = null, List<(Type RefactorClass, string Description)>? quickFixes = null)
         {
-            AddIndicator((span.Start.ByteIndex, span.End.ByteIndex), type, color, tooltip);
+            AddIndicator((span.Start.ByteIndex, span.End.ByteIndex), type, color, tooltip, quickFixes);
         }
 
-        public void AddIndicator((int Start, int Stop) span, IndicatorType type, uint color, string? tooltip = null)
+        public void AddIndicator((int Start, int Stop) span, IndicatorType type, uint color, string? tooltip = null, List<(Type RefactorClass, string Description)>? quickFixes = null)
         {
             Indicators.Add(new Indicator
             {
@@ -52,7 +52,8 @@ namespace AppRefiner.Stylers
                 Length = span.Stop - span.Start,
                 Type = type,
                 Color = color,
-                Tooltip = tooltip
+                Tooltip = tooltip,
+                QuickFixes = quickFixes ?? []
             });
         }
 

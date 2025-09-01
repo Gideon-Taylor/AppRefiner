@@ -65,7 +65,7 @@ namespace AppRefiner.Stylers
             AddIndicator((span.Start.ByteIndex, span.End.ByteIndex), type, color, tooltip);
         }
 
-        public void AddIndicator((int Start, int Stop) span, IndicatorType type, uint color, string? tooltip = null)
+        public void AddIndicator((int Start, int Stop) span, IndicatorType type, uint color, string? tooltip = null, List<(Type RefactorClass, string Description)>? quickFixes = null)
         {
             if (span.Start >= 0 && span.Stop >= span.Start)
             {
@@ -75,7 +75,8 @@ namespace AppRefiner.Stylers
                     Length = span.Stop - span.Start,
                     Type = type,
                     Color = color,
-                    Tooltip = tooltip
+                    Tooltip = tooltip,
+                    QuickFixes = quickFixes ?? []
                 });
             }
         }

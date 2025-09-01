@@ -28,8 +28,9 @@ namespace AppRefiner.Refactors.QuickFixes
                 neededToReplace = true;
                 EditText(node.NameToken.SourceSpan, expectedName, "Correct class name to match expected name");
 
-                node.Methods.Where(m => m.Name.Equals(currentClassName, StringComparison.OrdinalIgnoreCase)).ToList()
-                    .ForEach(m => EditText(m.NameToken.SourceSpan, expectedName, "Correct constructor name to match corrected class name"));
+                var constructorMethod = node.Methods.Where(m => m.Name.Equals(currentClassName, StringComparison.OrdinalIgnoreCase)).FirstOrDefault();
+                if (constructorMethod != null)
+                    EditText(constructorMethod.NameToken.SourceSpan, expectedName, "Correct constructor name to match corrected class name");
             }
             
             base.VisitAppClass(node);

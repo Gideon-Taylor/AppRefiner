@@ -1,4 +1,5 @@
 using AppRefiner.Database;
+using AppRefiner.Refactors.QuickFixes;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -139,7 +140,11 @@ public class MissingConstructor : BaseStyler
             if (baseClassConstructor?.Parameters.Count > 0)
             {
                 string tooltip = $"Class '{classNode.Name}' is missing a constructor required by '{classNode.BaseClass.TypeName}'.";
-                AddIndicator(classNode.NameToken.SourceSpan, IndicatorType.SQUIGGLE, ERROR_COLOR, tooltip);
+                var quickFixes = new List<(Type RefactorClass, string Description)>
+                {
+                    (typeof(GenerateBaseConstructor), "Generate missing constructor")
+                };
+                AddIndicator((classNode.NameToken.SourceSpan.Start.ByteIndex, classNode.NameToken.SourceSpan.End.ByteIndex), IndicatorType.SQUIGGLE, ERROR_COLOR, tooltip, quickFixes);
             }
         }
         catch (Exception)

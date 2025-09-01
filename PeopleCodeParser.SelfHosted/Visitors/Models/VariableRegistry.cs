@@ -8,17 +8,17 @@ public class VariableRegistry
     /// <summary>
     /// All variables indexed by their unique key (name + scope ID)
     /// </summary>
-    private readonly Dictionary<VariableKey, EnhancedVariableInfo> variables = new();
+    private readonly Dictionary<VariableKey, VariableInfo> variables = new();
     
     /// <summary>
     /// Variables grouped by scope for efficient scope-based queries
     /// </summary>
-    private readonly Dictionary<Guid, List<EnhancedVariableInfo>> variablesByScope = new();
+    private readonly Dictionary<Guid, List<VariableInfo>> variablesByScope = new();
     
     /// <summary>
     /// All variables grouped by name (case-insensitive) for efficient name-based lookups
     /// </summary>
-    private readonly Dictionary<string, List<EnhancedVariableInfo>> variablesByName = 
+    private readonly Dictionary<string, List<VariableInfo>> variablesByName = 
         new(StringComparer.OrdinalIgnoreCase);
     
     /// <summary>
@@ -29,7 +29,7 @@ public class VariableRegistry
     /// <summary>
     /// Gets all variables in the registry
     /// </summary>
-    public IEnumerable<EnhancedVariableInfo> AllVariables => variables.Values;
+    public IEnumerable<VariableInfo> AllVariables => variables.Values;
     
     /// <summary>
     /// Gets all scopes in the registry
@@ -56,14 +56,14 @@ public class VariableRegistry
         if (!scopes.ContainsKey(scope.Id))
         {
             scopes[scope.Id] = scope;
-            variablesByScope[scope.Id] = new List<EnhancedVariableInfo>();
+            variablesByScope[scope.Id] = new List<VariableInfo>();
         }
     }
     
     /// <summary>
     /// Registers a variable in the registry
     /// </summary>
-    public void RegisterVariable(EnhancedVariableInfo variable)
+    public void RegisterVariable(VariableInfo variable)
     {
         if (variable == null) throw new ArgumentNullException(nameof(variable));
         
@@ -81,7 +81,7 @@ public class VariableRegistry
         // Add to name-based index
         if (!variablesByName.TryGetValue(variable.Name, out var nameList))
         {
-            nameList = new List<EnhancedVariableInfo>();
+            nameList = new List<VariableInfo>();
             variablesByName[variable.Name] = nameList;
         }
         nameList.Add(variable);
@@ -102,7 +102,7 @@ public class VariableRegistry
     /// <summary>
     /// Gets a variable by name and scope
     /// </summary>
-    public EnhancedVariableInfo? GetVariable(string name, ScopeContext scope)
+    public VariableInfo? GetVariable(string name, ScopeContext scope)
     {
         var key = new VariableKey(name, scope.Id);
         return variables.TryGetValue(key, out var variable) ? variable : null;
@@ -111,17 +111,17 @@ public class VariableRegistry
     /// <summary>
     /// Gets all variables declared in a specific scope
     /// </summary>
-    public IEnumerable<EnhancedVariableInfo> GetVariablesInScope(ScopeContext scope)
+    public IEnumerable<VariableInfo> GetVariablesInScope(ScopeContext scope)
     {
-        return variablesByScope.TryGetValue(scope.Id, out var vars) ? vars : Enumerable.Empty<EnhancedVariableInfo>();
+        return variablesByScope.TryGetValue(scope.Id, out var vars) ? vars : Enumerable.Empty<VariableInfo>();
     }
     
     /// <summary>
     /// Gets all variables accessible from a specific scope (including parent scopes)
     /// </summary>
-    public IEnumerable<EnhancedVariableInfo> GetAccessibleVariables(ScopeContext scope)
+    public IEnumerable<VariableInfo> GetAccessibleVariables(ScopeContext scope)
     {
-        var accessibleVars = new List<EnhancedVariableInfo>();
+        var accessibleVars = new List<VariableInfo>();
         
         // Get variables from current scope and all ancestor scopes
         foreach (var currentScope in scope.GetScopeChain())
@@ -136,7 +136,7 @@ public class VariableRegistry
     /// Finds a variable by name that is accessible from the given scope
     /// Uses PeopleCode scoping rules to find the closest matching variable
     /// </summary>
-    public EnhancedVariableInfo? FindVariableInScope(string name, ScopeContext scope)
+    public VariableInfo? FindVariableInScope(string name, ScopeContext scope)
     {
         // Search in current scope first, then parent scopes
         foreach (var currentScope in scope.GetScopeChain())
@@ -154,15 +154,15 @@ public class VariableRegistry
     /// <summary>
     /// Gets all variables with the specified name (case-insensitive)
     /// </summary>
-    public IEnumerable<EnhancedVariableInfo> GetVariablesByName(string name)
+    public IEnumerable<VariableInfo> GetVariablesByName(string name)
     {
-        return variablesByName.TryGetValue(name, out var vars) ? vars : Enumerable.Empty<EnhancedVariableInfo>();
+        return variablesByName.TryGetValue(name, out var vars) ? vars : Enumerable.Empty<VariableInfo>();
     }
     
     /// <summary>
     /// Gets all unused variables across the entire program
     /// </summary>
-    public IEnumerable<EnhancedVariableInfo> GetUnusedVariables()
+    public IEnumerable<VariableInfo> GetUnusedVariables()
     {
         return AllVariables.Where(v => v.IsUnused);
     }
@@ -170,7 +170,7 @@ public class VariableRegistry
     /// <summary>
     /// Gets all unused variables in a specific scope
     /// </summary>
-    public IEnumerable<EnhancedVariableInfo> GetUnusedVariablesInScope(ScopeContext scope)
+    public IEnumerable<VariableInfo> GetUnusedVariablesInScope(ScopeContext scope)
     {
         return GetVariablesInScope(scope).Where(v => v.IsUnused);
     }
@@ -178,7 +178,7 @@ public class VariableRegistry
     /// <summary>
     /// Gets all variables that are safe to refactor (rename)
     /// </summary>
-    public IEnumerable<EnhancedVariableInfo> GetSafeToRefactorVariables()
+    public IEnumerable<VariableInfo> GetSafeToRefactorVariables()
     {
         return AllVariables.Where(v => v.IsSafeToRefactor);
     }
@@ -186,7 +186,7 @@ public class VariableRegistry
     /// <summary>
     /// Gets all variables of a specific kind (local, instance, global, etc.)
     /// </summary>
-    public IEnumerable<EnhancedVariableInfo> GetVariablesByKind(VariableKind kind)
+    public IEnumerable<VariableInfo> GetVariablesByKind(VariableKind kind)
     {
         return AllVariables.Where(v => v.Kind == kind);
     }
@@ -194,9 +194,9 @@ public class VariableRegistry
     /// <summary>
     /// Gets variables that shadow other variables (have the same name in nested scopes)
     /// </summary>
-    public IEnumerable<(EnhancedVariableInfo Shadowing, EnhancedVariableInfo Shadowed)> GetShadowingVariables()
+    public IEnumerable<(VariableInfo Shadowing, VariableInfo Shadowed)> GetShadowingVariables()
     {
-        var shadowing = new List<(EnhancedVariableInfo, EnhancedVariableInfo)>();
+        var shadowing = new List<(VariableInfo, VariableInfo)>();
         
         foreach (var variable in AllVariables)
         {

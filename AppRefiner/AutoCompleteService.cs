@@ -276,7 +276,7 @@ namespace AppRefiner
             }
         }
 
-        public BaseRefactor? HandleQuickFixSelection(ScintillaEditor editor, string selection)
+        public IRefactor? HandleQuickFixSelection(ScintillaEditor editor, string selection)
         {
 
             /* Look through active indicators of the editor, find one that contains a QuickFixDescriptions entry that matches the selection
@@ -300,7 +300,7 @@ namespace AppRefiner
                         Debug.Log($"Failed to create instance of refactor type '{refactorType}'");
                         return null;
                     }
-                    return (BaseRefactor)instance ; // Create an instance of the refactor type
+                    return (IRefactor)instance ; // Create an instance of the refactor type
                 }
             }
 
@@ -314,7 +314,7 @@ namespace AppRefiner
         /// <param name="selection">The raw text selected by the user.</param>
         /// <param name="listType">The type identifier of the list shown (e.g., 1 for App Packages).</param>
         /// <returns>A BaseRefactor instance if refactoring is needed (e.g., AddImport), otherwise null.</returns>
-        public BaseRefactor? HandleUserListSelection(ScintillaEditor editor, string selection, UserListType listType)
+        public IRefactor? HandleUserListSelection(ScintillaEditor editor, string selection, UserListType listType)
         {
             if (editor == null || !editor.IsValid()) return null;
 

@@ -12,7 +12,7 @@ namespace AppRefiner.Stylers
     {
         public List<Indicator> Indicators { get; }
 
-        protected void AddIndicator((int Start, int Stop) span, IndicatorType type, uint color, string? tooltip = null);
+        protected void AddIndicator((int Start, int Stop) span, IndicatorType type, uint color, string? tooltip = null, List<(Type RefactorClass, string Description)>? quickFixes = null);
 
         public void Reset();
 

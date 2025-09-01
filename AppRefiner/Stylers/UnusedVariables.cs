@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using AppRefiner.Refactors.QuickFixes;
 using AppRefiner.Stylers;
 using PeopleCodeParser.SelfHosted.Nodes;
 using PeopleCodeParser.SelfHosted.Visitors;
@@ -56,18 +57,18 @@ public class UnusedVariables : ScopedStyler
     /// </summary>
     private void GenerateIndicatorsForUnusedVariables()
     {
-
-        foreach (var variable in GetUnusedVariables())
+        foreach (var variable in GetUnusedVariables().Where(v => v.Kind == VariableKind.Local || v.Kind == VariableKind.Instance || v.Kind == VariableKind.Parameter))
         {
             string tooltip = GetTooltipForVariable(variable);
-            AddIndicator(variable.VariableNameInfo.SourceSpan, IndicatorType.TEXTCOLOR, HIGHLIGHT_COLOR, tooltip);
+            
+            AddIndicator(variable.VariableNameInfo.SourceSpan, IndicatorType.TEXTCOLOR, HIGHLIGHT_COLOR, tooltip, [(typeof(DeleteUnusedVariable), variable.Kind == VariableKind.Parameter ? "Delete unused parameter" : "Delete unused variable declaration")]);
         }        
     }
 
     /// <summary>
     /// Gets an appropriate tooltip for a variable based on its type and scope
     /// </summary>
-    private string GetTooltipForVariable(EnhancedVariableInfo variable)
+    private string GetTooltipForVariable(VariableInfo variable)
     {
         switch (variable.Kind)
         {
