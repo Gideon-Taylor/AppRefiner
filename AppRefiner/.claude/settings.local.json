@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(dir:*)",
+      "Read(C:\\Users\\tslat\\repos\\GitHub\\AppRefiner/**)",
+      "Read(C:\\Users\\tslat\\repos\\GitHub\\AppRefiner\\AppRefinerHook/**)",
+      "Read(C:\\Users\\tslat\\repos\\GitHub\\AppRefiner\\AppRefinerHook/**)",
+      "Read(C:\\Users\\tslat\\repos\\GitHub\\AppRefiner\\AppRefinerHook/**)",
+      "Read(C:\\Users\\tslat\\repos\\GitHub\\AppRefiner\\AppRefinerHook/**)",
+      "Read(C:\\Users\\tslat\\repos\\GitHub\\AppRefiner\\AppRefinerHook/**)",
+      "Read(C:\\Users\\tslat\\repos\\GitHub\\AppRefiner\\AppRefinerHook/**)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

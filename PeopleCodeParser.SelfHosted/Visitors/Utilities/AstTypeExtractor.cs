@@ -60,7 +60,6 @@ public static class AstTypeExtractor
             IdentifierNode => "any",
             BinaryOperationNode => "any", 
             UnaryOperationNode => "any",
-            MethodCallNode => "any",
             FunctionCallNode => "any",
             PropertyAccessNode => "any",
             ArrayAccessNode =>  "any",

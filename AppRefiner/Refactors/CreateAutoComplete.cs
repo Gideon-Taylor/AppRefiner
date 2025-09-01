@@ -24,7 +24,7 @@ namespace AppRefiner.Refactors
 
         private bool isAppropriateContext = false;
         private string? detectedClassType = null;
-        private MethodCallNode? targetCreateCall = null;
+        private FunctionCallNode? targetCreateCall = null;
         private readonly bool autoPairingEnabled;
 
         // Track instance variables and their types
@@ -44,15 +44,16 @@ namespace AppRefiner.Refactors
         /// </summary>
         private bool IsCreateCallAtCursor(LocalVariableDeclarationWithAssignmentNode node)
         {
-            // Check if the initializer is a method call to "create"
-            if (node.InitialValue is MethodCallNode methodCall)
+            // Check if the initializer is a function call to "create"
+            if (node.InitialValue is FunctionCallNode functionCall && 
+                functionCall.Function is IdentifierNode identifier)
             {
-                if (methodCall.MethodName.Equals("create", StringComparison.OrdinalIgnoreCase))
+                if (identifier.Name.Equals("create", StringComparison.OrdinalIgnoreCase))
                 {
-                    // Check if cursor is within the method call
-                    if (methodCall.SourceSpan.IsValid)
+                    // Check if cursor is within the function call
+                    if (functionCall.SourceSpan.IsValid)
                     {
-                        var span = methodCall.SourceSpan;
+                        var span = functionCall.SourceSpan;
                         if (CurrentPosition >= span.Start.Index && CurrentPosition <= span.End.Index + 1)
                         {
                             // Try to detect the class type from the variable type
@@ -70,7 +71,7 @@ namespace AppRefiner.Refactors
 
         public override void VisitLocalVariableDeclarationWithAssignment(LocalVariableDeclarationWithAssignmentNode node)
         {
-            if (IsCreateCallAtCursor(node) && node.InitialValue is MethodCallNode createCall)
+            if (IsCreateCallAtCursor(node) && node.InitialValue is FunctionCallNode createCall)
             {
                 isAppropriateContext = true;
                 targetCreateCall = createCall;

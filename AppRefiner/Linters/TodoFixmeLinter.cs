@@ -1,9 +1,8 @@
-using Antlr4.Runtime;
-using Antlr4.Runtime.Misc;
-using AppRefiner.PeopleCode;
+using PeopleCodeParser.SelfHosted.Nodes;
+using PeopleCodeParser.SelfHosted.Visitors;
+using PeopleCodeParser.SelfHosted.Lexing;
 using System.Text;
 using System.Text.RegularExpressions;
-using static AppRefiner.PeopleCode.PeopleCodeParser;
 
 namespace AppRefiner.Linters
 {
@@ -29,7 +28,7 @@ namespace AppRefiner.Linters
         };
 
         // Collection of comments by type
-        private readonly List<(string Type, string Content, int LineNumber, (int Start, int Stop) Span)> _collectedComments = new();
+        private readonly List<(string Type, string Content, int LineNumber, PeopleCodeParser.SelfHosted.SourceSpan Span)> _collectedComments = new();
 
         public TodoFixmeLinter()
         {
@@ -60,50 +59,59 @@ namespace AppRefiner.Linters
             _collectedComments.Clear();
         }
 
-        public override void EnterProgram([NotNull] ProgramContext context)
+        public override void VisitProgram(ProgramNode node)
         {
-            // Process any comments in the token stream
-            if (Comments != null)
+            // Process any comments in the program
+            if (node.Comments != null)
             {
-                foreach (var comment in Comments)
+                foreach (var comment in node.Comments)
                 {
                     ProcessComment(comment);
                 }
             }
+
+            // Generate summary report if comments were found
+            GenerateSummaryReport(node);
+
+            base.VisitProgram(node);
         }
 
-        public override void ExitProgram([NotNull] ProgramContext context)
+        private void GenerateSummaryReport(ProgramNode node)
         {
             // If no comments were found, no need to add report
             if (_collectedComments.Count == 0)
                 return;
-            
-            // Get the last token to determine the end of the program
-            int lastLine = 0;
-            (int Start, int Stop) lastSpan = (0, 0);
-            
-            if (context.Stop != null)
+
+            // Get the last comment or use the end of the program for the summary location
+            var lastComment = node.Comments.LastOrDefault();
+            PeopleCodeParser.SelfHosted.SourceSpan summarySpan;
+
+            if (lastComment != null)
             {
-                lastLine = context.Stop.Line;
-                lastSpan = (context.Stop.ByteStartIndex(), context.Stop.ByteStopIndex());
+                summarySpan = lastComment.SourceSpan;
             }
-            
+            else
+            {
+                // Fallback to program span if no comments
+                summarySpan = node.SourceSpan;
+            }
+
             // Build a summary string
             var summaryBuilder = new StringBuilder();
-            
+
             // Add overall summary
-            summaryBuilder.AppendLine($"Found: {TodoCount} TODOs, {FixmeCount} FIXMEs, {NoteCount} NOTEs" + 
+            summaryBuilder.AppendLine($"Found: {TodoCount} TODOs, {FixmeCount} FIXMEs, {NoteCount} NOTEs" +
                 (CustomCount > 0 ? $", {CustomCount} custom markers" : ""));
-            
+
             // Group comments by type
             var todoComments = _collectedComments.Where(c => c.Type.Equals("TODO", StringComparison.OrdinalIgnoreCase)).ToList();
             var fixmeComments = _collectedComments.Where(c => c.Type.Equals("FIXME", StringComparison.OrdinalIgnoreCase)).ToList();
             var noteComments = _collectedComments.Where(c => c.Type.Equals("NOTE", StringComparison.OrdinalIgnoreCase)).ToList();
-            var customComments = _collectedComments.Where(c => 
-                !c.Type.Equals("TODO", StringComparison.OrdinalIgnoreCase) && 
-                !c.Type.Equals("FIXME", StringComparison.OrdinalIgnoreCase) && 
+            var customComments = _collectedComments.Where(c =>
+                !c.Type.Equals("TODO", StringComparison.OrdinalIgnoreCase) &&
+                !c.Type.Equals("FIXME", StringComparison.OrdinalIgnoreCase) &&
                 !c.Type.Equals("NOTE", StringComparison.OrdinalIgnoreCase)).ToList();
-            
+
             // Add TODOs
             if (todoComments.Count > 0)
             {
@@ -115,7 +123,7 @@ namespace AppRefiner.Linters
                     summaryBuilder.AppendLine($"  #{i + 1}: {content} (line {lineNumber})");
                 }
             }
-            
+
             // Add FIXMEs
             if (fixmeComments.Count > 0)
             {
@@ -127,7 +135,7 @@ namespace AppRefiner.Linters
                     summaryBuilder.AppendLine($"  #{i + 1}: {content} (line {lineNumber})");
                 }
             }
-            
+
             // Add NOTEs
             if (noteComments.Count > 0)
             {
@@ -139,18 +147,18 @@ namespace AppRefiner.Linters
                     summaryBuilder.AppendLine($"  #{i + 1}: {content} (line {lineNumber})");
                 }
             }
-            
+
             // Add custom markers
             if (customComments.Count > 0)
             {
                 // Group by marker type
                 var customGroups = customComments.GroupBy(c => c.Type);
-                
+
                 foreach (var group in customGroups)
                 {
                     summaryBuilder.AppendLine();
                     summaryBuilder.AppendLine($"{group.Key}s:");
-                    
+
                     var comments = group.ToList();
                     for (int i = 0; i < comments.Count; i++)
                     {
@@ -159,27 +167,26 @@ namespace AppRefiner.Linters
                     }
                 }
             }
-            
-            // Add a single report with the summary
-            AddReport(1, summaryBuilder.ToString().TrimEnd(), ReportType.Info, lastLine, lastSpan);
 
+            // Add a single report with the summary
+            AddReport(1, summaryBuilder.ToString().TrimEnd(), ReportType.Info, summarySpan.Start.Line, summarySpan);
         }
 
-        private void ProcessComment(IToken comment)
+        private void ProcessComment(PeopleCodeParser.SelfHosted.Lexing.Token comment)
         {
             string commentText = comment.Text;
-            
+
             // Skip empty comments
             if (string.IsNullOrWhiteSpace(commentText))
                 return;
 
-            // Check if the comment is a single line
+            // Check if the comment is a single line (skip multi-line comments for TODO processing)
             if (commentText.Contains('\n') || commentText.Contains('\r'))
                 return;
 
-            // Remove comment markers (/* */, //, REM)
-            string cleanedComment = commentText.TrimStart('/', '*', ' ', '\t').TrimEnd('*', '/', ' ', '\t');
-            
+            // Remove comment markers (/* */, //, REM, <* *>)
+            string cleanedComment = commentText.TrimStart('/', '*', ' ', '\t', '<').TrimEnd('*', '/', ' ', '\t', '>');
+
             // Check for all registered markers
             foreach (var (marker, type) in _markers)
             {
@@ -190,29 +197,29 @@ namespace AppRefiner.Linters
                     string content = match.Success && match.Groups.Count > 1 ? match.Groups[1].Value.Trim() : "";
                     if (string.IsNullOrWhiteSpace(content))
                         continue;
-                    
+
                     // Determine the type of comment for counting
                     if (type.Equals("TODO", StringComparison.OrdinalIgnoreCase))
                     {
                         TodoCount++;
-                        _collectedComments.Add(("TODO", content, comment.Line, (comment.ByteStartIndex(), comment.ByteStopIndex())));
+                        _collectedComments.Add(("TODO", content, comment.SourceSpan.Start.Line, comment.SourceSpan));
                     }
                     else if (type.Equals("FIXME", StringComparison.OrdinalIgnoreCase))
                     {
                         FixmeCount++;
-                        _collectedComments.Add(("FIXME", content, comment.Line, (comment.ByteStartIndex(), comment.ByteStopIndex())));
+                        _collectedComments.Add(("FIXME", content, comment.SourceSpan.Start.Line, comment.SourceSpan));
                     }
                     else if (type.Equals("NOTE", StringComparison.OrdinalIgnoreCase))
                     {
                         NoteCount++;
-                        _collectedComments.Add(("NOTE", content, comment.Line, (comment.ByteStartIndex(), comment.ByteStopIndex())));
+                        _collectedComments.Add(("NOTE", content, comment.SourceSpan.Start.Line, comment.SourceSpan));
                     }
                     else
                     {
                         CustomCount++;
-                        _collectedComments.Add((type, content, comment.Line, (comment.ByteStartIndex(), comment.ByteStopIndex())));
+                        _collectedComments.Add((type, content, comment.SourceSpan.Start.Line, comment.SourceSpan));
                     }
-                    
+
                     // Only process the first matching marker
                     break;
                 }

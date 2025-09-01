@@ -1,6 +1,6 @@
 using AppRefiner.Database;
 using AppRefiner.Linters;
-using AppRefiner.PeopleCode;
+
 using AppRefiner.Shared.SQL.Models;
 using PeopleCodeParser.SelfHosted.Nodes;
 using PeopleCodeParser.SelfHosted;

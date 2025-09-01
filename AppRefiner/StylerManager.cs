@@ -1,8 +1,6 @@
 using AppRefiner.Database;
 using AppRefiner.Database.Models; // Assuming BaseStyler might need this
-using AppRefiner.PeopleCode;
 using AppRefiner.Plugins;
-using Antlr4.Runtime.Tree;
 using PeopleCodeParser.SelfHosted;
 using System;
 using System.Collections.Generic;

@@ -1,5 +1,6 @@
-using Antlr4.Runtime.Tree;
-using AppRefiner.PeopleCode; // For PeopleCodeParser types
+using PeopleCodeParser.SelfHosted.Nodes;
+using PeopleCodeParser.SelfHosted.Visitors;
+using PeopleCodeParser.SelfHosted.Visitors.Models;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -108,7 +109,7 @@ namespace AppRefiner
     /// <summary>
     /// A visitor implementation that collects code definitions for navigation purposes
     /// </summary>
-    public class GoToDefinitionVisitor : PeopleCodeParserBaseListener
+    public class GoToDefinitionVisitor : ScopedAstVisitor<GoToDefinitionType>
     {
         /// <summary>
         /// Collection of all definitions found in the code
@@ -116,272 +117,179 @@ namespace AppRefiner
         public List<GoToCodeDefinition> Definitions { get; } = new List<GoToCodeDefinition>();
 
         /// <summary>
-        /// Tracks the current scope during traversal
-        /// </summary>
-        private GoToDefinitionScope currentScope = GoToDefinitionScope.Public;
-
-        /// <summary>
-        /// Dictionary to map method/property names to their scope from the header declarations
-        /// </summary>
-        private Dictionary<string, GoToDefinitionScope> memberScopes = new Dictionary<string, GoToDefinitionScope>(StringComparer.OrdinalIgnoreCase);
-        
-        /// <summary>
         /// Dictionary to map property names to their types from the header declarations
         /// </summary>
         private Dictionary<string, string> propertyTypes = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
         /// <summary>
-        /// Process method headers to capture scope information
+        /// Current PeopleCode scope (public, protected, private)
         /// </summary>
-        
-        public override void EnterMethodHeader(PeopleCode.PeopleCodeParser.MethodHeaderContext context)
-        {
-            if (context.genericID() != null)
-            {
-                var methodName = context.genericID().GetText();
-                // Store the method name with its scope from the header
-                memberScopes[methodName] = currentScope;
-            }
-        }
+        private GoToDefinitionScope currentPeopleCodeScope = GoToDefinitionScope.Private; // Default to private
 
         /// <summary>
-        /// Process property declarations in headers to capture scope information
+        /// Process methods to capture scope information
         /// </summary>
-        public override void EnterPropertyGetSet(PeopleCode.PeopleCodeParser.PropertyGetSetContext context)
+        public override void VisitMethod(MethodNode node)
         {
-            var propertyName = context.genericID().GetText();
-            var propertyType = GetTypeString(context.typeT());
-            
-            // Store the property name with its scope and type from the header
-            memberScopes[propertyName] = currentScope;
-            propertyTypes[propertyName] = propertyType;
-
-            Definitions.Add(new GoToCodeDefinition(
-                propertyName,
-                propertyType,
-                GoToDefinitionType.Property,
-                currentScope,
-                context.Start.ByteStartIndex(),
-                context.Start.Line
-            ));
-        }
-
-        /// <summary>
-        /// Process property declarations in headers to capture scope information
-        /// </summary>
-        public override void EnterPropertyDirect(PeopleCode.PeopleCodeParser.PropertyDirectContext context)
-        {
-            var propertyName = context.genericID().GetText();
-            var propertyType = GetTypeString(context.typeT());
-            
-            // Store the property name with its scope and type from the header
-            memberScopes[propertyName] = currentScope;
-            propertyTypes[propertyName] = propertyType;
-
-            Definitions.Add(new GoToCodeDefinition(
-                propertyName,
-                propertyType,
-                GoToDefinitionType.Property,
-                currentScope,
-                context.Start.ByteStartIndex(),
-                context.Start.Line
-            ));
-        }
-
-        /// <summary>
-        /// Visit Method implementations
-        /// </summary>
-        /// <param name="context">The method context</param>
-        public override void EnterMethod(PeopleCode.PeopleCodeParser.MethodContext context)
-        {
-            var methodName = context.genericID().GetText();
-            var returnType = "void"; // Default to void
-
-            // Look up the method's scope from its header declaration
-            var methodScope = GoToDefinitionScope.Public; // Default to public
-            if (memberScopes.TryGetValue(methodName, out var scope))
-            {
-                methodScope = scope;
-            }
+            // Extract method information
+            var methodName = node.Name;
+            var returnType = GetReturnTypeString(node.ReturnType);
 
             Definitions.Add(new GoToCodeDefinition(
                 methodName,
                 returnType,
                 GoToDefinitionType.Method,
-                methodScope,
-                context.Start.ByteStartIndex(),
-                context.Start.Line
+                currentPeopleCodeScope,
+                node.SourceSpan.Start.ByteIndex,
+                node.SourceSpan.Start.Line
             ));
+
+            // Call base to continue traversal
+            base.VisitMethod(node);
         }
 
         /// <summary>
-        /// Visit Property getter implementations
+        /// Process properties to capture scope information
         /// </summary>
-        /// <param name="context">The getter context</param>
-        public override void EnterGetter(PeopleCode.PeopleCodeParser.GetterContext context)
+        public override void VisitProperty(PropertyNode node)
         {
-            var propertyName = context.genericID().GetText();
-            
-            // Look up the property's scope from its header declaration
-            var propertyScope = GoToDefinitionScope.Public; // Default to public
-            if (memberScopes.TryGetValue(propertyName, out var scope))
-            {
-                propertyScope = scope;
-            }
-            
-            // Look up the property's type from its header declaration
-            var propertyType = "any"; // Default to any
-            if (propertyTypes.TryGetValue(propertyName, out var type))
-            {
-                propertyType = type;
-            }
+            // Extract property information
+            var propertyName = node.Name;
+            var propertyType = GetTypeString(node.Type);
+
+            // Store the property type for getter/setter lookup
+            propertyTypes[propertyName] = propertyType;
 
             Definitions.Add(new GoToCodeDefinition(
                 propertyName,
                 propertyType,
-                GoToDefinitionType.Getter,
-                propertyScope,
-                context.Start.ByteStartIndex(),
-                context.Start.Line
+                GoToDefinitionType.Property,
+                currentPeopleCodeScope,
+                node.SourceSpan.Start.ByteIndex,
+                node.SourceSpan.Start.Line
             ));
+
+            // Call base to continue traversal
+            base.VisitProperty(node);
         }
 
-        /// <summary>
-        /// Visit Property setter implementations
-        /// </summary>
-        /// <param name="context">The setter context</param>
-        public override void EnterSetter(PeopleCode.PeopleCodeParser.SetterContext context)
-        {
-            var propertyName = context.genericID().GetText();
-            
-            // Look up the property's scope from its header declaration
-            var propertyScope = GoToDefinitionScope.Public; // Default to public
-            if (memberScopes.TryGetValue(propertyName, out var scope))
-            {
-                propertyScope = scope;
-            }
-            
-            // Look up the property's type from its header declaration
-            var propertyType = "any"; // Default to any
-            if (propertyTypes.TryGetValue(propertyName, out var type))
-            {
-                propertyType = type;
-            }
-
-            Definitions.Add(new GoToCodeDefinition(
-                propertyName,
-                propertyType,
-                GoToDefinitionType.Setter,
-                propertyScope,
-                context.Start.ByteStartIndex(),
-                context.Start.Line
-            ));
-        }
 
         /// <summary>
         /// Visit Function definitions
         /// </summary>
-        /// <param name="context">The function definition context</param>
-        public override void EnterFunctionDefinition(PeopleCode.PeopleCodeParser.FunctionDefinitionContext context)
+        public override void VisitFunction(FunctionNode node)
         {
-            var functionName = context.allowableFunctionName().GetText();
-            var returnType = "void"; // Default to void
-
-            // Check if there's a return type specified
-            if (context.typeT() != null)
-            {
-                returnType = GetTypeString(context.typeT());
-            }
+            var functionName = node.Name;
+            var returnType = GetReturnTypeString(node.ReturnType);
 
             Definitions.Add(new GoToCodeDefinition(
                 functionName,
                 returnType,
                 GoToDefinitionType.Function,
                 GoToDefinitionScope.Global, // Functions are always global scope
-                context.Start.ByteStartIndex(),
-                context.Start.Line
+                node.SourceSpan.Start.ByteIndex,
+                node.SourceSpan.Start.Line
             ));
+
+            // Call base to continue traversal
+            base.VisitFunction(node);
         }
 
         /// <summary>
-        /// Visit instance declarations (private variables)
+        /// Visit instance variable declarations
         /// </summary>
-        public override void EnterInstanceDecl(PeopleCode.PeopleCodeParser.InstanceDeclContext context)
+        public override void VisitVariable(VariableNode node)
         {
-            var propertyType = GetTypeString(context.typeT());
-
-            // An instance declaration can define multiple variables
-            foreach (var varNode in context.USER_VARIABLE())
+            // Only process instance variables (private scope)
+            if (node.Scope == VariableScope.Instance)
             {
-                var variableName = varNode.GetText();
-                
-                // Store the variable type, but mark as Instance type rather than Property
-                propertyTypes[variableName] = propertyType;
+                var variableType = GetTypeString(node.Type);
 
-                Definitions.Add(new GoToCodeDefinition(
-                    variableName,
-                    propertyType,
-                    GoToDefinitionType.Instance, // Use Instance instead of Property
-                    GoToDefinitionScope.Private, // Instance variables are always private
-                    varNode.Symbol.ByteStartIndex(),
-                    varNode.Symbol.Line
-                ));
+                // A variable declaration can define multiple variables
+                foreach (var nameInfo in node.NameInfos)
+                {
+                    var variableName = nameInfo.Name;
+
+                    // Store the variable type for potential future lookups
+                    propertyTypes[variableName] = variableType;
+
+                    Definitions.Add(new GoToCodeDefinition(
+                        variableName,
+                        variableType,
+                        GoToDefinitionType.Instance,
+                        GoToDefinitionScope.Private, // Instance variables are always private
+                        nameInfo.SourceSpan.Start.ByteIndex,
+                        nameInfo.SourceSpan.Start.Line
+                    ));
+                }
             }
+
+            // Call base to continue traversal
+            base.VisitVariable(node);
         }
 
         /// <summary>
-        /// Enter public header section
+        /// Helper method to extract type information from type node
         /// </summary>
-        public override void EnterPublicHeader(PeopleCode.PeopleCodeParser.PublicHeaderContext context)
+        private string GetTypeString(TypeNode? typeNode)
         {
-            currentScope = GoToDefinitionScope.Public;
-        }
-
-        /// <summary>
-        /// Enter protected header section
-        /// </summary>
-        public override void EnterProtectedHeader(PeopleCode.PeopleCodeParser.ProtectedHeaderContext context)
-        {
-            currentScope = GoToDefinitionScope.Protected;
-        }
-
-        /// <summary>
-        /// Enter private header section
-        /// </summary>
-        public override void EnterPrivateHeader(PeopleCode.PeopleCodeParser.PrivateHeaderContext context)
-        {
-            currentScope = GoToDefinitionScope.Private;
-        }
-
-        /// <summary>
-        /// Helper method to extract type information from type context
-        /// </summary>
-        private string GetTypeString(PeopleCode.PeopleCodeParser.TypeTContext typeContext)
-        {
-            if (typeContext == null)
+            if (typeNode == null)
                 return "any";
 
-            if (typeContext is PeopleCode.PeopleCodeParser.ArrayTypeContext arrayType)
+            if (typeNode is ArrayTypeNode arrayType)
             {
-                var baseType = arrayType.typeT() != null
-                    ? GetTypeString(arrayType.typeT())
+                var baseType = arrayType.ElementType != null
+                    ? GetTypeString(arrayType.ElementType)
                     : "any";
                 return $"Array of {baseType}";
             }
-            else if (typeContext is PeopleCode.PeopleCodeParser.BaseExceptionTypeContext)
+            else if (typeNode is BuiltInTypeNode builtInType)
             {
-                return "Exception";
+                return builtInType.Type.ToString();
             }
-            else if (typeContext is PeopleCode.PeopleCodeParser.AppClassTypeContext appClass)
+            else if (typeNode is AppClassTypeNode appClassType)
             {
-                return appClass.appClassPath().GetText();
-            }
-            else if (typeContext is PeopleCode.PeopleCodeParser.SimpleTypeTypeContext simpleType)
-            {
-                return simpleType.simpleType().GetText();
+                return appClassType.TypeName;
             }
 
-            return typeContext.GetText();
+            return "any";
+        }
+
+        /// <summary>
+        /// Helper method to extract return type information
+        /// </summary>
+        private string GetReturnTypeString(TypeNode? returnType)
+        {
+            if (returnType == null)
+                return "void";
+
+            return GetTypeString(returnType);
+        }
+
+        /// <summary>
+        /// Override OnEnterGlobalScope to initialize scope tracking
+        /// </summary>
+        protected override void OnEnterGlobalScope(ScopeContext scope, ProgramNode node)
+        {
+            // Reset scope to private at the start
+            currentPeopleCodeScope = GoToDefinitionScope.Private;
+
+            // Call base
+            base.OnEnterGlobalScope(scope, node);
+        }
+
+        /// <summary>
+        /// Override OnEnterClassScope to handle class-level scope changes
+        /// For now, we'll use a simplified approach where class members default to private
+        /// A more sophisticated implementation would parse scope modifiers from tokens
+        /// </summary>
+        protected override void OnEnterClassScope(ScopeContext scope, AppClassNode node)
+        {
+            // Reset scope for each class (PeopleCode classes start with private by default)
+            currentPeopleCodeScope = GoToDefinitionScope.Private;
+
+            // Call base
+            base.OnEnterClassScope(scope, node);
         }
     }
 } 

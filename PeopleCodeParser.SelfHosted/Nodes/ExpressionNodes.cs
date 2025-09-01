@@ -222,61 +222,6 @@ public class IdentifierNode : ExpressionNode
     }
 }
 
-/// <summary>
-/// Method call expression (obj.Method(args))
-/// </summary>
-public class MethodCallNode : ExpressionNode
-{
-    /// <summary>
-    /// Target object (null for function calls)
-    /// </summary>
-    public ExpressionNode? Target { get; }
-
-    /// <summary>
-    /// Method name
-    /// </summary>
-    public string MethodName { get; }
-
-    /// <summary>
-    /// Method arguments
-    /// </summary>
-    public List<ExpressionNode> Arguments { get; }
-
-    /// <summary>
-    /// True if this is a function call (no target)
-    /// </summary>
-    public bool IsFunctionCall => Target == null;
-
-    public override bool HasSideEffects => true; // Method calls generally have side effects
-
-    public MethodCallNode(string methodName, IEnumerable<ExpressionNode> arguments, ExpressionNode? target = null)
-    {
-        MethodName = methodName ?? throw new ArgumentNullException(nameof(methodName));
-        Arguments = arguments?.ToList() ?? throw new ArgumentNullException(nameof(arguments));
-        Target = target;
-
-        if (target != null)
-            AddChild(target);
-        AddChildren(Arguments);
-    }
-
-    public override void Accept(IAstVisitor visitor)
-    {
-        visitor.VisitMethodCall(this);
-    }
-
-    public override TResult Accept<TResult>(IAstVisitor<TResult> visitor)
-    {
-        return visitor.VisitMethodCall(this);
-    }
-
-    public override string ToString()
-    {
-        var targetStr = Target != null ? $"{Target}." : "";
-        var argsStr = string.Join(", ", Arguments);
-        return $"{targetStr}{MethodName}({argsStr})";
-    }
-}
 
 /// <summary>
 /// Property access expression (obj.Property)

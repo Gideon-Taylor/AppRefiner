@@ -1,28 +1,26 @@
 using AppRefiner.Database;
+using AppRefiner.Dialogs;
 using AppRefiner.Linters;
 using AppRefiner.Stylers;
+using AppRefiner.TooltipProviders;
+using DiffPlex.Model;
+using PeopleCodeParser.SelfHosted;
 using SQL.Formatter;
 using SQL.Formatter.Core;
 using SQL.Formatter.Language;
 using System.Collections.Concurrent;
-using System.Diagnostics;
-using System.IO.Hashing;
-using System.Runtime.InteropServices;
-using System.Text;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Drawing;
+using System.IO.Hashing;
 using System.Linq;
 using System.Reflection.Metadata;
+using System.Runtime.InteropServices;
+using System.Text;
 using System.Text.RegularExpressions;
-using AppRefiner.TooltipProviders;
-using Antlr4.Runtime;
-using Antlr4.Runtime.Tree;
-using AppRefiner.PeopleCode;
-using Antlr4.Runtime.Atn;
-using static AppRefiner.AutoCompleteService;
-using DiffPlex.Model;
 using System.Threading.Tasks;
-using AppRefiner.Dialogs;
+using static AppRefiner.AutoCompleteService;
+using static SqlParser.Ast.CopyTarget;
 using static SqlParser.Ast.MatchRecognizeSymbol;
 
 namespace AppRefiner
@@ -2179,15 +2177,35 @@ namespace AppRefiner
                 }
 
                 // Parse the program using ANTLR
-                var parseTree = ProgramParser.Parse(programText);
-                
-                // Create a listener to find methods/functions containing the cursor position
-                var methodFinder = new MethodRangeFinder(cursorPosition);
-                ParseTreeWalker.Default.Walk(methodFinder, parseTree);
-                
-                // Return the found range or full document if no method found
-                return methodFinder.FoundRange ?? (0, programText.Length);
+                var tokens = (new PeopleCodeParser.SelfHosted.Lexing.PeopleCodeLexer(programText)).TokenizeAll();
+                var program = (new PeopleCodeParser.SelfHosted.PeopleCodeParser(tokens)).ParseProgram();
+
+                if (program.IsClassProgram && program.AppClass != null)
+                {
+                    var method = program.AppClass.Methods.Where(m => m.SourceSpan.ContainsPosition(cursorPosition)).FirstOrDefault();
+                    if (method != null)
+                    {
+                        return method.SourceSpan.ToScintillaRange();
+                    }
+
+
+                    // Return the found range or full document if no method found
+                    return (0, programText.Length);
+                }
+                else if (program.Functions != null)
+                {
+                    var function = program.Functions.Where(m => m.SourceSpan.ContainsPosition(cursorPosition)).FirstOrDefault();
+                    if (function != null)
+                    {
+                        return function.SourceSpan.ToScintillaRange();
+                    } else
+                    {
+                        return (0, programText.Length);
+                    }
+                }
+                return (0, programText.Length);
             }
+
             catch (Exception ex)
             {
                 Debug.Log($"Error in GetCurrentMethodRange: {ex.Message}");
@@ -2196,71 +2214,6 @@ namespace AppRefiner
             }
         }
 
-        /// <summary>
-        /// ANTLR listener to find method boundaries containing a specific position
-        /// </summary>
-        private class MethodRangeFinder : PeopleCodeParserBaseListener
-        {
-            private readonly int _targetPosition;
-            public (int start, int end)? FoundRange { get; private set; }
-
-            public MethodRangeFinder(int targetPosition)
-            {
-                _targetPosition = targetPosition;
-            }
-
-            public override void EnterMethod(PeopleCode.PeopleCodeParser.MethodContext context)
-            {
-                if (FoundRange.HasValue) return; // Already found a method
-
-                int startPos = context.Start.ByteStartIndex();
-                int endPos = context.Stop.ByteStopIndex() + 1;
-
-                if (startPos <= _targetPosition && _targetPosition <= endPos)
-                {
-                    FoundRange = (startPos, endPos);
-                }
-            }
-
-            public override void EnterFunctionDefinition(PeopleCode.PeopleCodeParser.FunctionDefinitionContext context)
-            {
-                if (FoundRange.HasValue) return; // Already found a method
-
-                int startPos = context.Start.ByteStartIndex();
-                int endPos = context.Stop.ByteStopIndex() + 1;
-
-                if (startPos <= _targetPosition && _targetPosition <= endPos)
-                {
-                    FoundRange = (startPos, endPos);
-                }
-            }
-
-            public override void EnterGetter(PeopleCode.PeopleCodeParser.GetterContext context)
-            {
-                if (FoundRange.HasValue) return; // Already found a method
-
-                int startPos = context.Start.ByteStartIndex();
-                int endPos = context.Stop.ByteStopIndex() + 1;
-
-                if (startPos <= _targetPosition && _targetPosition <= endPos)
-                {
-                    FoundRange = (startPos, endPos);
-                }
-            }
-
-            public override void EnterSetter(PeopleCode.PeopleCodeParser.SetterContext context)
-            {
-                if (FoundRange.HasValue) return; // Already found a method
-
-                int startPos = context.Start.ByteStartIndex();
-                int endPos = context.Stop.ByteStopIndex() + 1;
-
-                if (startPos <= _targetPosition && _targetPosition <= endPos)
-                {
-                    FoundRange = (startPos, endPos);
-                }
-            }
-        }
 
         /// <summary>
         /// Performs a search operation in the specified direction

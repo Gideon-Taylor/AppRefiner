@@ -1,7 +1,5 @@
-﻿using Antlr4.Runtime;
-using AppRefiner.Database;
+﻿using AppRefiner.Database;
 using AppRefiner.Linters;
-using AppRefiner.PeopleCode;
 using AppRefiner.Stylers;
 using PeopleCodeParser.SelfHosted;
 using PeopleCodeParser.SelfHosted.Lexing;
@@ -14,7 +12,6 @@ using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading.Tasks;
 using static System.Windows.Forms.VisualStyles.VisualStyleElement.Window;
-using AntlrPeopleCodeParser = AppRefiner.PeopleCode.PeopleCodeParser;
 using SelfHostedLexer = PeopleCodeParser.SelfHosted.Lexing.PeopleCodeLexer;
 
 namespace AppRefiner
@@ -233,17 +230,6 @@ namespace AppRefiner
         public Dictionary<string, IntPtr> AnnotationPointers = new();
         public List<IntPtr> PropertyBuffers = new();
 
-        // Content hash for caching purposes
-        private int contentHash;
-        // Cached parsed program (ANTLR)
-        private AntlrPeopleCodeParser.ProgramContext? parsedProgram;
-        // Cached token stream (ANTLR)
-        private CommonTokenStream? tokenStream;
-        // Collection of comments from the token stream (ANTLR)
-        private List<IToken>? comments;
-        // Tracks whether the last parse operation was successful (no syntax errors)
-        private bool parseSuccessful = true;
-
         // Self-hosted parser cached fields
         private int selfHostedContentHash;
         private ProgramNode? selfHostedParsedProgram;
@@ -262,7 +248,7 @@ namespace AppRefiner
         /// <summary>
         /// Gets whether the last parse operation was successful (no syntax errors)
         /// </summary>
-        public bool IsParseSuccessful => parseSuccessful;
+        public bool IsParseSuccessful => selfHostedParseSuccessful;
 
         /// <summary>
         /// Gets whether the last self-hosted parse operation was successful (no syntax errors)
@@ -311,64 +297,7 @@ namespace AppRefiner
 
         public IReadOnlyList<ParseError> ParserErrors { get; set; } = [];
 
-        /// <summary>
-        /// Gets or creates a parsed program tree for the current editor content.
-        /// Uses caching to avoid re-parsing unchanged content.
-        /// </summary>
-        /// <param name="forceReparse">Force a new parse regardless of content hash</param>
-        /// <returns>A tuple containing the parsed program, token stream, and comments</returns>
-        public (AntlrPeopleCodeParser.ProgramContext Program, CommonTokenStream TokenStream, List<IToken> Comments) GetParsedProgram(bool forceReparse = false)
-        {
-            // Ensure we have the current content
-            ContentString = ScintillaManager.GetScintillaText(this);
 
-            // Calculate hash of current content
-            int newHash = ContentString?.GetHashCode() ?? 0;
-            Debug.Log("New content hash: " + newHash);
-            // If content hasn't changed and we have a cached parse tree, return it
-            if (!forceReparse && newHash == contentHash && parsedProgram != null && tokenStream != null && comments != null)
-            {
-                return (parsedProgram, tokenStream, comments);
-            }
-
-            // Content has changed or we don't have a cached parse tree, parse it
-
-            var currentStart = TotalParseTime.Elapsed;
-            TotalParseTime.Start();
-            // Create lexer and parser
-            PeopleCodeLexer lexer = new(new ByteTrackingCharStream(ContentString));
-            tokenStream = new CommonTokenStream(lexer);
-
-            // Get all tokens including those on hidden channels
-            tokenStream.Fill();
-
-            // Collect all comments from both comment channels
-            comments = tokenStream.GetTokens()
-                .Where(token => token.Channel == PeopleCodeLexer.COMMENTS || token.Channel == PeopleCodeLexer.API_COMMENTS)
-                .ToList();
-
-            AntlrPeopleCodeParser parser = new(tokenStream);
-            parsedProgram = parser.program();
-
-            // Check if parsing was successful (no syntax errors)
-            parseSuccessful = parser.NumberOfSyntaxErrors == 0;
-            if (!parseSuccessful)
-            {
-                Debug.Log($"Parse completed with {parser.NumberOfSyntaxErrors} syntax error(s)");
-            }
-
-            TotalParseTime.Stop();
-            Debug.Log($"Parse time: {TotalParseTime.Elapsed - currentStart}");
-            Debug.Log($"Total parse time: {TotalParseTime.Elapsed}");
-            // Clean up resources
-            parser.Interpreter.ClearDFA();
-            GC.Collect();
-
-            // Update the content hash
-            contentHash = newHash;
-
-            return (parsedProgram, tokenStream, comments);
-        }
 
         /// <summary>
         /// Gets the self-hosted parsed program, with caching support.

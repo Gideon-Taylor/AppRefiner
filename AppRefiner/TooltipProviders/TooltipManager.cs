@@ -4,9 +4,9 @@ using System.Diagnostics;
 using System.Linq;
 using System.Reflection;
 using System.Text;
-using Antlr4.Runtime;
+
 using AppRefiner;
-using AppRefiner.PeopleCode;
+
 using PeopleCodeParser.SelfHosted;
 using PeopleCodeParser.SelfHosted.Lexing;
 

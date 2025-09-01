@@ -1,9 +1,9 @@
-using Antlr4.Runtime.Tree;
+
 using AppRefiner.Database;
 using AppRefiner.Database.Models;
 using AppRefiner.Dialogs;
 using AppRefiner.Linters;
-using AppRefiner.PeopleCode;
+
 using AppRefiner.Plugins;
 using AppRefiner.Refactors;
 using AppRefiner.Stylers;
@@ -1735,13 +1735,13 @@ namespace AppRefiner
             if (activeEditor == null) return [];
 
             // Use the parse tree from the editor if available, otherwise parse it now
-            var (program, tokenStream, comments) = activeEditor.GetParsedProgram();
+            var program = activeEditor.GetSelfHostedParsedProgram();
 
             // Create and run the visitor to collect definitions
             var visitor = new GoToDefinitionVisitor();
-            ParseTreeWalker.Default.Walk(visitor, program);
+            program?.Accept(visitor);
 
-            return visitor.Definitions;
+            return visitor.Definitions ?? [];
         }
 
 

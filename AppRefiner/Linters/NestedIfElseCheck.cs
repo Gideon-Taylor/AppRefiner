@@ -1,4 +1,5 @@
-using static AppRefiner.PeopleCode.PeopleCodeParser;
+using PeopleCodeParser.SelfHosted.Nodes;
+using PeopleCodeParser.SelfHosted.Visitors;
 
 namespace AppRefiner.Linters
 {
@@ -10,21 +11,21 @@ namespace AppRefiner.Linters
     public class NestedIfElseCheck : BaseLintRule
     {
         public override string LINTER_ID => "NESTED_IF";
-        
+
         /// <summary>
         /// Maximum allowed nesting level for If/Else blocks before reporting a warning
         /// </summary>
         public int MaxNestingLevel { get; set; } = 3;
-        
+
         /// <summary>
         /// Whether to report on "else if" chains that could be replaced with Evaluate statements
         /// </summary>
         public bool ReportElseIfChains { get; set; } = true;
-        
+
         private int currentNestingLevel = 0;
-        private Stack<IfStatementContext> ifContextStack = new();
-        private HashSet<IfStatementContext> reportedIfStatements = new();
-        private Dictionary<IfStatementContext, int> maxNestingLevelMap = new();
+        private Stack<IfStatementNode> ifContextStack = new();
+        private HashSet<IfStatementNode> reportedIfStatements = new();
+        private Dictionary<IfStatementNode, int> maxNestingLevelMap = new();
 
         public NestedIfElseCheck()
         {
@@ -33,48 +34,46 @@ namespace AppRefiner.Linters
             Active = true;
         }
 
-        public override void EnterIfStatement(IfStatementContext context)
+        public override void VisitIf(IfStatementNode node)
         {
             currentNestingLevel++;
-            ifContextStack.Push(context);
-            
-            // Initialize the max nesting level for this context
-            maxNestingLevelMap[context] = currentNestingLevel;
-        }
+            ifContextStack.Push(node);
 
-        public override void ExitIfStatement(IfStatementContext context)
-        {
+            // Initialize the max nesting level for this context
+            maxNestingLevelMap[node] = currentNestingLevel;
+
+            // Visit the if statement
+            base.VisitIf(node);
+
             // When exiting an if statement, check if its max depth exceeded the threshold
             // and issue a report if needed, but only for the outermost if that wasn't already reported
-            if (ifContextStack.Count == 1 && maxNestingLevelMap[context] > MaxNestingLevel && !reportedIfStatements.Contains(context))
+            if (ifContextStack.Count == 1 && maxNestingLevelMap[node] > MaxNestingLevel && !reportedIfStatements.Contains(node))
             {
                 AddReport(
                     1,
-                    $"Deeply nested If/Else blocks (max level {maxNestingLevelMap[context]}). Consider refactoring using Evaluate or early returns.",
+                    $"Deeply nested If/Else blocks (max level {maxNestingLevelMap[node]}). Consider refactoring using Evaluate or early returns.",
                     Type,
-                    context.Start.Line - 1,
-                    context
+                    node.SourceSpan.Start.Line,
+                    node.SourceSpan
                 );
-                
+
                 // Mark this if statement as reported
-                reportedIfStatements.Add(context);
+                reportedIfStatements.Add(node);
             }
-            
+
             currentNestingLevel--;
             ifContextStack.Pop();
         }
 
         // Add specific method to check for If inside Else
-        public override void EnterStatementBlock(StatementBlockContext context)
+        public override void VisitBlock(BlockNode node)
         {
-            // If this statement block is inside an ELSE clause and contains an immediate IF statement,
+            // If this block is inside an ELSE clause and contains an immediate IF statement,
             // that's a pattern we should highlight even if the nesting isn't too deep yet
-            if (context.Parent is ElseStatementContext elseStmt)
+            if (node.Parent is IfStatementNode parentIf && parentIf.ElseBlock == node)
             {
                 // Check if the first statement in this block is an IF
-                var statements = context.statements();
-                if (statements?.statement()?.Length > 0 &&
-                    statements.statement(0) is IfStmtContext)
+                if (node.Statements.Count > 0 && node.Statements[0] is IfStatementNode)
                 {
                     if (ReportElseIfChains && currentNestingLevel >= 2)
                     {
@@ -89,8 +88,8 @@ namespace AppRefiner.Linters
                                 2,
                                 "Multiple IF-ELSE-IF chains detected. Consider using Evaluate statement for better readability.",
                                 ReportType.Info,
-                                outermost.Start.Line - 1,
-                                outermost
+                                outermost.SourceSpan.Start.Line,
+                                outermost.SourceSpan
                             );
 
                             // Mark this if statement as reported
@@ -99,6 +98,8 @@ namespace AppRefiner.Linters
                     }
                 }
             }
+
+            base.VisitBlock(node);
         }
 
         // Update the max nesting level for all parent contexts in the stack
@@ -110,15 +111,16 @@ namespace AppRefiner.Linters
             }
         }
 
-        public override void EnterEveryRule(Antlr4.Runtime.ParserRuleContext context)
+        // Override the default visit to update nesting levels
+        public override void VisitProgram(ProgramNode node)
         {
-            base.EnterEveryRule(context);
-            
             // Update max nesting levels for all if statements in the stack
             if (ifContextStack.Count > 0)
             {
                 UpdateMaxNestingLevels();
             }
+
+            base.VisitProgram(node);
         }
 
         public override void Reset()

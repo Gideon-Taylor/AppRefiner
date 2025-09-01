@@ -1,29 +1,43 @@
-using Antlr4.Runtime;
 using AppRefiner.Database;
-using AppRefiner.PeopleCode;
+using PeopleCodeParser.SelfHosted.Visitors;
 using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
 namespace AppRefiner.Linters
 {
-    public abstract class BaseLintRule : PeopleCodeParserBaseListener
+    /// <summary>
+    /// Common interface for all linter types
+    /// </summary>
+    public interface ILinter
+    {
+        string LINTER_ID { get; }
+        bool Active { get; set; }
+        string Description { get; set; }
+        ReportType Type { get; set; }
+        List<Report>? Reports { get; set; }
+        DataManagerRequirement DatabaseRequirement { get; }
+        IDataManager? DataManager { get; set; }
+        void Reset();
+        List<PropertyInfo> GetConfigurableProperties();
+        string GetLinterConfig();
+        void SetLinterConfig(string jsonConfig);
+    }
+
+    public abstract class BaseLintRule : AstVisitorBase, ILinter
     {
         // Linter ID must be set by all subclasses
         public abstract string LINTER_ID { get; }
 
-        public bool Active = false;
-        public string Description = "Description not set";
-        public ReportType Type;
-        public List<Report>? Reports;
+        public bool Active { get; set; } = false;
+        public string Description { get; set; } = "Description not set";
+        public ReportType Type { get; set; }
+        public List<Report>? Reports { get; set; }
         public virtual DataManagerRequirement DatabaseRequirement => DataManagerRequirement.NotRequired;
-        public IDataManager? DataManager;
+        public IDataManager? DataManager { get; set; }
 
-        // Add collection to store comments from lexer
-        public IList<IToken>? Comments;
-
-        // The suppression listener shared across all linters
-        public LinterSuppressionListener? SuppressionListener;
+        // The suppression processor shared across all linters
+        public LinterSuppressionProcessor? SuppressionProcessor { get; set; }
 
         public virtual void Reset() {
             
@@ -50,51 +64,23 @@ namespace AppRefiner.Linters
             }
 
             // Only add the report if it's not suppressed
-            if (SuppressionListener == null || !SuppressionListener.IsSuppressed(report.LinterId, report.ReportNumber, report.Line))
+            if (SuppressionProcessor == null || !SuppressionProcessor.IsSuppressed(report.LinterId, report.ReportNumber, report.Line))
             {
                 Reports.Add(report);
             }
         }
 
         /// <summary>
-        /// Helper method to create a report using tokens with automatic byte-index conversion for Scintilla positioning.
+        /// Helper method to create a report using SourceSpan for precise positioning.
         /// </summary>
         /// <param name="reportNumber">The report number</param>
         /// <param name="message">The report message</param>
         /// <param name="type">The report type</param>
         /// <param name="line">The line number</param>
-        /// <param name="startToken">The start token (will be converted to byte indexes)</param>
-        /// <param name="endToken">The end token (will be converted to byte indexes)</param>
-        protected void AddReport(int reportNumber, string message, ReportType type, int line, IToken startToken, IToken endToken)
+        /// <param name="span">The SourceSpan containing start and end positions</param>
+        protected void AddReport(int reportNumber, string message, ReportType type, int line, PeopleCodeParser.SelfHosted.SourceSpan span)
         {
-            AddReport(reportNumber, message, type, line, (startToken.ByteStartIndex(), endToken.ByteStopIndex()));
-        }
-
-        /// <summary>
-        /// Helper method to create a report using tokens with automatic byte-index conversion for Scintilla positioning.
-        /// </summary>
-        /// <param name="reportNumber">The report number</param>
-        /// <param name="message">The report message</param>
-        /// <param name="type">The report type</param>
-        /// <param name="line">The line number</param>
-        /// <param name="startToken">The start token (will be converted to byte indexes)</param>
-        /// <param name="endToken">The end token (will be converted to byte indexes)</param>
-        protected void AddReport(int reportNumber, string message, ReportType type, int line, IToken token)
-        {
-            AddReport(reportNumber, message, type, line, (token.ByteStartIndex(), token.ByteStopIndex()));
-        }
-
-        /// <summary>
-        /// Helper method to create a report using a parser rule context with automatic byte-index conversion for Scintilla positioning.
-        /// </summary>
-        /// <param name="reportNumber">The report number</param>
-        /// <param name="message">The report message</param>
-        /// <param name="type">The report type</param>
-        /// <param name="line">The line number</param>
-        /// <param name="context">The parser rule context (tokens will be converted to byte indexes)</param>
-        protected void AddReport(int reportNumber, string message, ReportType type, int line, ParserRuleContext context)
-        {
-            AddReport(reportNumber, message, type, line, (context.Start.ByteStartIndex(), context.Stop.ByteStopIndex()));
+            AddReport(reportNumber, message, type, line, (span.Start.ByteIndex, span.End.ByteIndex));
         }
 
         /// <summary>
@@ -109,8 +95,7 @@ namespace AppRefiner.Linters
                           p.Name != nameof(LINTER_ID) &&
                           p.Name != nameof(DatabaseRequirement) &&
                           p.Name != nameof(DataManager) &&
-                          p.Name != nameof(Comments) &&
-                          p.Name != nameof(SuppressionListener) &&
+                          p.Name != nameof(SuppressionProcessor) &&
                           p.Name != nameof(Reports))
                 .ToList();
 

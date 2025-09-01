@@ -1,11 +1,7 @@
-using Antlr4.Runtime;
-using Antlr4.Runtime.Misc;
 using AppRefiner.Database;
 using AppRefiner.Linters.Models;
-using AppRefiner.PeopleCode;
 using PeopleCodeParser.SelfHosted;
 using PeopleCodeParser.SelfHosted.Visitors;
-using static AppRefiner.PeopleCode.PeopleCodeParser;
 
 namespace AppRefiner.Stylers
 {

@@ -1,4 +1,7 @@
-using static AppRefiner.PeopleCode.PeopleCodeParser;
+using PeopleCodeParser.SelfHosted.Nodes;
+using PeopleCodeParser.SelfHosted.Visitors;
+using PeopleCodeParser.SelfHosted.Lexing;
+using PeopleCodeParser.SelfHosted;
 
 namespace AppRefiner.Linters
 {
@@ -14,30 +17,29 @@ namespace AppRefiner.Linters
             Active = true;
         }
 
-        public override void Reset()
-        {
-        }
-
         private void AddMissingHeaderReport()
         {
+            // Create a basic span for line 1
+            var span = new SourceSpan(0, 10);
+
             AddReport(
                 1,
                 MISSING_HEADER_MESSAGE,
                 ReportType.Warning,
-                0,
-                (0, 1)
+                1, // Report at line 1
+                span
             );
         }
 
-        public override void EnterProgram(ProgramContext context)
+        public override void VisitProgram(ProgramNode node)
         {
-            if (Comments?.Count == 0)
+            if (node.Comments == null || node.Comments.Count == 0)
             {
                 AddMissingHeaderReport();
                 return;
             }
 
-            var firstComment = Comments?.First();
+            var firstComment = node.Comments.First();
 
             if (firstComment == null)
             {
@@ -45,23 +47,28 @@ namespace AppRefiner.Linters
                 return;
             }
 
-            if (firstComment.Type != PeopleCodeLexer.BLOCK_COMMENT_SLASH)
+            // Check if it's a block comment (/* */ style)
+            if (firstComment.Type != TokenType.BlockComment)
             {
                 AddMissingHeaderReport();
                 return;
             }
 
-            if (firstComment.Line != 1)
+            // Check if it's on line 1
+            if (firstComment.SourceSpan.Start.Line != 1)
             {
                 AddMissingHeaderReport();
                 return;
             }
 
+            // Check if it starts with the flowerbox pattern
             if (!firstComment.Text.StartsWith("/* ====="))
             {
                 AddMissingHeaderReport();
                 return;
             }
+
+            base.VisitProgram(node);
         }
     }
 }

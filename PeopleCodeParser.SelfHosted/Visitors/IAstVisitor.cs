@@ -47,7 +47,6 @@ public interface IAstVisitor
     void VisitUnaryOperation(UnaryOperationNode node);
     void VisitLiteral(LiteralNode node);
     void VisitIdentifier(IdentifierNode node);
-    void VisitMethodCall(MethodCallNode node);
     void VisitPropertyAccess(PropertyAccessNode node);
     void VisitArrayAccess(ArrayAccessNode node);
     void VisitObjectCreation(ObjectCreationNode node);
@@ -108,7 +107,6 @@ public interface IAstVisitor<out TResult>
     TResult VisitUnaryOperation(UnaryOperationNode node);
     TResult VisitLiteral(LiteralNode node);
     TResult VisitIdentifier(IdentifierNode node);
-    TResult VisitMethodCall(MethodCallNode node);
     TResult VisitPropertyAccess(PropertyAccessNode node);
     TResult VisitArrayAccess(ArrayAccessNode node);
     TResult VisitObjectCreation(ObjectCreationNode node);
@@ -500,20 +498,6 @@ public abstract class AstVisitorBase : IAstVisitor
     }
     public virtual void VisitLiteral(LiteralNode node) => DefaultVisit(node);
     public virtual void VisitIdentifier(IdentifierNode node) => DefaultVisit(node);
-    public virtual void VisitMethodCall(MethodCallNode node)
-    {
-        // Visit target object first
-        if (node.Target != null)
-        {
-            node.Target.Accept(this);
-        }
-        
-        // Visit arguments
-        foreach (var argument in node.Arguments)
-        {
-            argument.Accept(this);
-        }
-    }
     public virtual void VisitPropertyAccess(PropertyAccessNode node)
     {
         // Visit target object first
@@ -564,6 +548,9 @@ public abstract class AstVisitorBase : IAstVisitor
     }
     public virtual void VisitFunctionCall(FunctionCallNode node)
     {
+        // Visit function expression first
+        node.Function.Accept(this);
+        
         // Visit arguments
         foreach (var argument in node.Arguments)
         {

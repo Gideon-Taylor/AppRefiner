@@ -1,4 +1,5 @@
-using static AppRefiner.PeopleCode.PeopleCodeParser;
+using PeopleCodeParser.SelfHosted.Nodes;
+using PeopleCodeParser.SelfHosted.Visitors;
 
 namespace AppRefiner.Linters
 {
@@ -21,37 +22,42 @@ namespace AppRefiner.Linters
             Active = false;
         }
 
-        public override void EnterSimpleFunctionCall(SimpleFunctionCallContext context)
+        public override void VisitFunctionCall(FunctionCallNode node)
         {
             // Check if the function being called is "SQLExec" or "CreateSQL"
-            if (context.genericID().GetText().Equals("SQLExec", StringComparison.OrdinalIgnoreCase) ||
-                context.genericID().GetText().Equals("CreateSQL", StringComparison.OrdinalIgnoreCase))
+            if (!(node.Function is IdentifierNode functionId))
+                return;
+
+            var functionName = functionId.Name;
+            if (!functionName.Equals("SQLExec", StringComparison.OrdinalIgnoreCase) &&
+                !functionName.Equals("CreateSQL", StringComparison.OrdinalIgnoreCase))
+                return;
+
+            if (node.Arguments.Count == 0)
+                return;
+
+            // Get the first argument
+            var firstArg = node.Arguments[0];
+
+            // We can only process this rule for calls that have a literal string as the first argument
+            if (firstArg is LiteralNode literal && literal.LiteralType == LiteralType.String)
             {
-                var args = context.functionCallArguments();
-                if (args != null && args.expression() != null && args.expression().Length > 0)
+                var sqlText = literal.Value?.ToString() ?? "";
+
+                if (sqlText.Length > MaxSqlLength)
                 {
-                    // Get the first argument
-                    var firstArg = args.expression()[0];
-
-                    /* We can only process this rule for calls that have a literal string as the first argument */
-                    if (firstArg is LiteralExprContext)
-                    {
-                        var sqlText = SQLHelper.ExtractSQLFromLiteral(firstArg.GetText());
-
-                        if (sqlText.Length > MaxSqlLength)
-                        {
-                            /* Report that the SQL statement is too long */
-                            AddReport(
-                                1,
-                                $"Long literal SQL statements (length: {sqlText.Length}) should be SQL objects.",
-                                Type,
-                                firstArg.Start.Line - 1,
-                                firstArg
-                            );
-                        }
-                    }
+                    // Report that the SQL statement is too long
+                    AddReport(
+                        1,
+                        $"Long literal SQL statements (length: {sqlText.Length}) should be SQL objects.",
+                        Type,
+                        literal.SourceSpan.Start.Line,
+                        literal.SourceSpan
+                    );
                 }
             }
+
+            base.VisitFunctionCall(node);
         }
     }
 }
