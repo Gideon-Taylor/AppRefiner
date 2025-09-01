@@ -1,7 +1,5 @@
 using AppRefiner.Database;
 using PeopleCodeParser.SelfHosted.Nodes;
-using System;
-using System.Linq;
 
 namespace AppRefiner.Stylers
 {

@@ -1,8 +1,3 @@
-using System;
-using System.Diagnostics;
-using System.Text;
-using System.Threading;
-
 namespace AppRefiner.Services
 {
     /// <summary>
@@ -78,7 +73,7 @@ namespace AppRefiner.Services
             {
                 // Optional: Perform a quick check here if desired (e.g., basic class name check)
                 // However, detailed processing should happen in the event handler
-                
+
                 // Raise the event, marshalling to the captured context (usually UI thread)
                 if (syncContext != null)
                 {
@@ -108,4 +103,4 @@ namespace AppRefiner.Services
             Dispose();
         }
     }
-} 
+}

@@ -1,11 +1,8 @@
 using AppRefiner.Database;
 using AppRefiner.Linters;
 using AppRefiner.Shared.SQL;
-using AppRefiner.Stylers;
-using PeopleCodeParser.SelfHosted.Nodes;
-using PeopleCodeParser.SelfHosted.Lexing;
 using PeopleCodeParser.SelfHosted;
-using System.Linq;
+using PeopleCodeParser.SelfHosted.Nodes;
 
 namespace AppRefiner.Stylers;
 
@@ -39,50 +36,50 @@ public class SQLVariableCountStyler : ScopedStyler, IStyler
     {
         // Set up validation context
         validationContext.DataManager = DataManager;
-        
+
         // Reset validators
         createSqlValidator.Reset();
         sqlExecValidator.Reset();
-        
+
         // Clear any previous indicators
         Reset();
-        
+
         // Visit the AST
         base.VisitProgram(node);
     }
 
     public override void VisitLocalVariableDeclaration(LocalVariableDeclarationNode node)
-    {        
+    {
         // Validate SQL variable declarations
         var reports = createSqlValidator.ValidateVariableDeclaration(node);
         ProcessReports(reports);
-        
+
         base.VisitLocalVariableDeclaration(node);
     }
 
     public override void VisitLocalVariableDeclarationWithAssignment(LocalVariableDeclarationWithAssignmentNode node)
-    {        
+    {
         // Validate SQL variable declarations with assignment
         var reports = createSqlValidator.ValidateVariableDeclarationWithAssignment(node);
         ProcessReports(reports);
-        
+
         base.VisitLocalVariableDeclarationWithAssignment(node);
     }
 
     public override void VisitFunctionCall(FunctionCallNode node)
-    {        
+    {
         var allReports = new List<Report>();
-        
+
         // Validate CreateSQL/GetSQL calls
         var createSqlReports = createSqlValidator.ValidateCreateSQL(node);
         allReports.AddRange(createSqlReports);
-        
+
         // Validate SQLExec calls
         var sqlExecReports = sqlExecValidator.ValidateSQLExec(node);
         allReports.AddRange(sqlExecReports);
-        
+
         ProcessReports(allReports);
-        
+
         base.VisitFunctionCall(node);
     }
 
@@ -96,11 +93,11 @@ public class SQLVariableCountStyler : ScopedStyler, IStyler
         // Check if this member access is followed by a function call (method call pattern)
         // We need to look at the parent context to see if this is part of a method call
         if (node.Parent is FunctionCallNode functionCall && functionCall.Function == node)
-        {           
+        {
             var reports = createSqlValidator.ValidateSQLMethodCall(node, functionCall);
             ProcessReports(reports);
         }
-        
+
         base.VisitMemberAccess(node);
     }
 
@@ -133,7 +130,7 @@ public class SQLVariableCountStyler : ScopedStyler, IStyler
     protected override void OnReset()
     {
         base.OnReset();
-        
+
         // Reset validators when the styler is reset
         createSqlValidator?.Reset();
         sqlExecValidator?.Reset();

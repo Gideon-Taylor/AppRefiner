@@ -1,12 +1,7 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
 using AppRefiner.Database;
 using AppRefiner.Database.Models;
-using PeopleCodeParser.SelfHosted;
 using PeopleCodeParser.SelfHosted.Nodes;
-using PeopleCodeParser.SelfHosted.Lexing;
+using System.Text;
 
 namespace AppRefiner.TooltipProviders
 {

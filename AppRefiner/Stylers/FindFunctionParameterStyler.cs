@@ -1,5 +1,3 @@
-using System;
-using System.Linq;
 using PeopleCodeParser.SelfHosted.Nodes;
 
 namespace AppRefiner.Stylers;
@@ -65,7 +63,7 @@ public class FindFunctionParameterStyler : BaseStyler
         {
             return string.Equals(identifier.Name, "Find", StringComparison.OrdinalIgnoreCase);
         }
-        
+
         return false;
     }
 
@@ -74,7 +72,7 @@ public class FindFunctionParameterStyler : BaseStyler
     /// </summary>
     private static bool IsStringLiteral(ExpressionNode expression)
     {
-        return expression is LiteralNode literal && 
+        return expression is LiteralNode literal &&
                literal.LiteralType == LiteralType.String;
     }
 }

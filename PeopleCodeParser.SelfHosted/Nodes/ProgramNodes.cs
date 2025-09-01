@@ -1,5 +1,5 @@
-using PeopleCodeParser.SelfHosted.Visitors;
 using PeopleCodeParser.SelfHosted.Lexing;
+using PeopleCodeParser.SelfHosted.Visitors;
 
 namespace PeopleCodeParser.SelfHosted.Nodes;
 

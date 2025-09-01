@@ -1,7 +1,4 @@
-using System;
-using System.Collections.Generic;
 using PeopleCodeParser.SelfHosted.Nodes;
-using PeopleCodeParser.SelfHosted.Visitors;
 
 namespace AppRefiner.Stylers;
 
@@ -12,7 +9,7 @@ namespace AppRefiner.Stylers;
 public class ReusedForIterator : BaseStyler
 {
     private const uint ERROR_COLOR = 0x0000FF85; // Red color for errors
-    private readonly Stack<string> forIterators = new Stack<string>();
+    private readonly Stack<string> forIterators = new();
 
     public override string Description => "Reused for iterators";
 
@@ -34,7 +31,7 @@ public class ReusedForIterator : BaseStyler
     {
         // Get the iterator variable from the for statement
         var iterator = node.Variable;
-        
+
         // Check if the iterator is already in use
         if (forIterators.Contains(iterator))
         {

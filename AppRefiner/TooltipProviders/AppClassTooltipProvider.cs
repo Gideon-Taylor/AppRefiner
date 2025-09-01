@@ -1,12 +1,6 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
 using AppRefiner.Database;
-using PeopleCodeParser.SelfHosted;
 using PeopleCodeParser.SelfHosted.Nodes;
-using PeopleCodeParser.SelfHosted.Lexing;
-using PeopleCodeParser.SelfHosted.Visitors.Models;
+using System.Text;
 
 namespace AppRefiner.TooltipProviders
 {
@@ -32,7 +26,7 @@ namespace AppRefiner.TooltipProviders
         public override DataManagerRequirement DatabaseRequirement => DataManagerRequirement.Required;
 
         private string extendedClassPath = string.Empty;
-        private Dictionary<string, ProgramNode> _programPathToAst = new Dictionary<string, ProgramNode>(StringComparer.OrdinalIgnoreCase);
+        private Dictionary<string, ProgramNode> _programPathToAst = new(StringComparer.OrdinalIgnoreCase);
 
         /// <summary>
         /// Resets the internal state of the tooltip provider.

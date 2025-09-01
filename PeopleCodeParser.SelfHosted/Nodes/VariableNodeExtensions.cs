@@ -22,7 +22,7 @@ public static class VariableNodeExtensions
             node.NameInfos.Add(new VariableNameInfo(name, token));
         }
     }
-    
+
     /// <summary>
     /// Adds a variable name with its token information
     /// </summary>

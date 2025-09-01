@@ -1,7 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Windows.Forms;
-
 namespace AppRefiner.Services
 {
     public class ApplicationKeyboardService : IDisposable
@@ -69,7 +65,7 @@ namespace AppRefiner.Services
                     {
                         Task.Delay(100).ContinueWith(_ =>
                         {
-                                registration.Action.Invoke();
+                            registration.Action.Invoke();
                         });
                         return true; // Handled
                     }

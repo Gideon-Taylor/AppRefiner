@@ -1,7 +1,6 @@
 ﻿using AppRefiner.Database;
 using AppRefiner.Shared.SQL;
 using PeopleCodeParser.SelfHosted.Nodes;
-using PeopleCodeParser.SelfHosted.Visitors;
 
 namespace AppRefiner.Linters
 {

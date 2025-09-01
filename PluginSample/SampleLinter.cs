@@ -1,7 +1,4 @@
 using AppRefiner.Linters;
-using static AppRefiner.PeopleCode.PeopleCodeParser;
-using System.Collections.Generic; // For List
-using Antlr4.Runtime; // For IToken
 
 namespace PluginSample
 {
@@ -46,4 +43,4 @@ namespace PluginSample
             // Clear any linter-specific state here
         }
     }
-} 
+}

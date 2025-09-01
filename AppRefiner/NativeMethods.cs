@@ -1,4 +1,3 @@
-using System;
 using System.Runtime.InteropServices;
 using System.Text;
 
@@ -53,7 +52,7 @@ namespace AppRefiner
 
         [DllImport("user32.dll", CharSet = CharSet.Auto)]
         internal static extern IntPtr SendMessage(IntPtr hWnd, int Msg, int wParam, IntPtr lParam);
-        
+
         [DllImport("user32.dll", CharSet = CharSet.Auto)]
         internal static extern IntPtr SendMessage(IntPtr hWnd, int Msg, int wParam, string? lParam);
 
@@ -70,9 +69,9 @@ namespace AppRefiner
             public int Right;
             public int Bottom;
         }
-        
+
         // Window Messages
         internal const int WM_GETTEXT = 0x000D;
         internal const int WM_GETTEXTLENGTH = 0x000E;
     }
-} 
+}

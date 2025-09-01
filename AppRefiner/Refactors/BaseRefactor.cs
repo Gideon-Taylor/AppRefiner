@@ -1,8 +1,5 @@
 using PeopleCodeParser.SelfHosted;
-using PeopleCodeParser.SelfHosted.Nodes;
 using PeopleCodeParser.SelfHosted.Visitors;
-using AppRefiner.Services;
-using System.Windows.Forms;
 using System.Diagnostics;
 
 namespace AppRefiner.Refactors
@@ -270,55 +267,55 @@ namespace AppRefiner.Refactors
         /// Gets the list of edits for testing
         /// </summary>
         internal List<TextEdit> GetEdits() => edits;
-        
+
         #region Backward Compatibility Methods
-        
+
         /// <summary>
         /// Gets the original text of a node (for backward compatibility)
         /// </summary>
         protected string? GetOriginalText(AstNode node, bool includeChildren = true)
         {
             if (node == null) return null;
-            
+
             var span = node.SourceSpan;
             if (!span.IsValid) return null;
-            
+
             int startIndex = span.Start.ByteIndex;
             int endIndex = span.End.ByteIndex;
-            
+
             if (startIndex < 0 || endIndex < startIndex || endIndex >= source?.Length) return null;
-            
+
             return source?.Substring(startIndex, endIndex - startIndex);
         }
-        
+
         /// <summary>
         /// Replaces a node with new text (for backward compatibility)
         /// </summary>
         protected void ReplaceNode(AstNode node, string newText, string description)
         {
             if (node == null) return;
-            
+
             var span = node.SourceSpan;
             if (!span.IsValid) return;
-            
+
             EditText(span, newText, description);
         }
-        
+
         /// <summary>
         /// Deletes a node (for backward compatibility)
         /// </summary>
         protected void DeleteNode(AstNode node, string description)
         {
             if (node == null) return;
-            
+
             var span = node.SourceSpan;
             if (!span.IsValid) return;
-            
+
             DeleteText(span, description);
         }
-        
+
         #endregion
-        
+
 
     }
 }

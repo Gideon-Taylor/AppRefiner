@@ -1,4 +1,3 @@
-using AppRefiner.Database;
 using AppRefiner.Linters;
 
 using PeopleCodeParser.SelfHosted.Nodes;
@@ -35,7 +34,7 @@ namespace AppRefiner.Shared.SQL
             var reports = new List<Report>();
 
             // Check if the function being called is "SQLExec"
-            if (!(node.Function is IdentifierNode functionId) || 
+            if (!(node.Function is IdentifierNode functionId) ||
                 !functionId.Name.Equals("SQLExec", StringComparison.OrdinalIgnoreCase))
                 return reports;
 

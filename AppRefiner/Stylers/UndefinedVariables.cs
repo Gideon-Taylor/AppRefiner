@@ -1,10 +1,5 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using AppRefiner.Stylers;
 using PeopleCodeParser.SelfHosted;
 using PeopleCodeParser.SelfHosted.Nodes;
-using PeopleCodeParser.SelfHosted.Visitors;
 using PeopleCodeParser.SelfHosted.Visitors.Models;
 
 namespace AppRefiner.Stylers;
@@ -32,10 +27,10 @@ public class UndefinedVariables : ScopedStyler
     public override void VisitProgram(ProgramNode node)
     {
         Reset();
-        
+
         // Process the program first to collect all declarations
         base.VisitProgram(node);
-        
+
         // Generate indicators for all undefined variable references
         GenerateIndicatorsForUndefinedVariables();
     }
@@ -47,11 +42,11 @@ public class UndefinedVariables : ScopedStyler
     public override void VisitIdentifier(IdentifierNode node)
     {
         // Only check user variables and generic identifiers that could be variables
-        if (node.IdentifierType == IdentifierType.UserVariable || 
+        if (node.IdentifierType == IdentifierType.UserVariable ||
             node.IdentifierType == IdentifierType.Generic)
         {
             string varName = node.Name;
-            
+
             // Skip special system variables
             if (IsSpecialVariable(varName))
             {
@@ -62,14 +57,14 @@ public class UndefinedVariables : ScopedStyler
             // Check if variable is defined in any accessible scope
             var curScope = GetCurrentScope();
             var varsInScope = GetVariablesInScope(curScope);
-            if (!varsInScope.Any(v => v.Name.Equals(varName) || 
+            if (!varsInScope.Any(v => v.Name.Equals(varName) ||
                 (varName.StartsWith('&') && v.Name.Equals(varName.Substring(1)) && v.Kind == VariableKind.Property)))
             {
                 // Track this as an undefined reference
                 undefinedVars.Add((varName, node.SourceSpan));
             }
         }
-        
+
         base.VisitIdentifier(node);
     }
 
@@ -89,7 +84,7 @@ public class UndefinedVariables : ScopedStyler
         // System variables starting with %
         if (varName.StartsWith("%"))
             return true;
-        
+
         return false;
     }
 

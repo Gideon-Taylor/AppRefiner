@@ -74,7 +74,7 @@ public class ArrayTypeNode : TypeNode
         get
         {
             var arrayName = "ARRAY";
-            for(var x = 2; x <= Dimensions; x++)
+            for (var x = 2; x <= Dimensions; x++)
             {
                 arrayName += " OF ARRAY";
             }
@@ -157,9 +157,9 @@ public class AppClassTypeNode : TypeNode
     {
         var packageList = packagePath?.ToList() ?? throw new ArgumentNullException(nameof(packagePath));
         ClassName = className ?? throw new ArgumentNullException(nameof(className));
-        
+
         PackagePath = packageList.AsReadOnly();
-        QualifiedName = packageList.Count > 0 
+        QualifiedName = packageList.Count > 0
             ? string.Join(":", packageList) + ":" + className
             : className;
     }
@@ -196,7 +196,7 @@ public enum BuiltInType
     Number,
     String,
     Time,
-    
+
     // Core PeopleSoft objects
     Field,
     Record,
@@ -204,7 +204,7 @@ public enum BuiltInType
     Component,
     Menu,
     MenuGroup,
-    
+
     // Data and XML objects
     XmlDoc,
     XmlNode,
@@ -216,7 +216,7 @@ public enum BuiltInType
     Query,
     Tree,
     TreeNode,
-    
+
     // UI and graphics objects
     Chart,
     Image,
@@ -236,14 +236,14 @@ public enum BuiltInType
     Static,
     Frame,
     TabPage,
-    
+
     // File and I/O objects
     File,
     FileLayout,
     Message,
     MsgGet,
     MsgGetText,
-    
+
     // Security and session objects
     Session,
     Request,
@@ -253,13 +253,13 @@ public enum BuiltInType
     ProcessRequest,
     ContentReference,
     Url,
-    
+
     // Analytics and reporting objects
     AnalyticGrid,
     PivotGrid,
     Cube,
     Dimension,
-    
+
     // Integration objects
     SoapDoc,
     HttpRequest,
@@ -268,32 +268,32 @@ public enum BuiltInType
     LdapEntry,
     SmtpClient,
     EmailMessage,
-    
+
     // Workflow and approval objects
     WorklistEntry,
     ApprovalInstance,
     WorkflowInstance,
-    
+
     // Meta-data objects
     MetaField,
     MetaRecord,
     MetaPage,
     MetaComponent,
     MetaMenu,
-    
+
     // Array and collection objects
     Array,
     Collection,
     Stack,
     Queue,
     Dictionary,
-    
+
     // Database objects
     DbField,
     Sql,
     GetLevel0,
     CreateLevel0,
-    
+
     // PeopleTools objects
     ProcessScheduler,
     Application,
@@ -302,21 +302,21 @@ public enum BuiltInType
     Channel,
     Publication,
     Subscription,
-    
+
     // Financial objects (if using Financials)
     Voucher,
     Journal,
     Ledger,
     ChartField,
     SetId,
-    
+
     // HCM objects (if using HCM)
     Job,
     Position,
     Employee,
     Person,
     Compensation,
-    
+
     // Campus objects (if using Campus Solutions)
     Student,
     Course,
@@ -350,7 +350,7 @@ public static class BuiltInTypeExtensions
             BuiltInType.Number => "NUMBER",
             BuiltInType.String => "STRING",
             BuiltInType.Time => "TIME",
-            
+
             // Object types (use enum name directly)
             _ => type.ToString()
         };
@@ -379,7 +379,7 @@ public static class BuiltInTypeExtensions
             "TIME" => BuiltInType.Time,
             _ => (BuiltInType?)null
         };
-        
+
         if (result.HasValue)
             return result;
 
@@ -397,8 +397,8 @@ public static class BuiltInTypeExtensions
     /// </summary>
     public static bool IsPrimitiveType(this BuiltInType type)
     {
-        return type is BuiltInType.Any or BuiltInType.Boolean or BuiltInType.Date or 
-               BuiltInType.DateTime or BuiltInType.Exception or BuiltInType.Float or 
+        return type is BuiltInType.Any or BuiltInType.Boolean or BuiltInType.Date or
+               BuiltInType.DateTime or BuiltInType.Exception or BuiltInType.Float or
                BuiltInType.Integer or BuiltInType.Number or BuiltInType.String or BuiltInType.Time;
     }
 

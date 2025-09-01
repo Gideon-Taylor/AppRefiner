@@ -52,7 +52,7 @@ public class MeaninglessVariableNameStyler : ScopedStyler
         {
             CheckVariableName(parameter.Name, parameter.SourceSpan);
         }
-        
+
         base.VisitMethod(node);
     }
 

@@ -1,6 +1,5 @@
-﻿using SqlParser.Ast;
-using PeopleCodeParser.SelfHosted.Nodes;
-using PeopleCodeParser.SelfHosted.Visitors;
+﻿using PeopleCodeParser.SelfHosted.Nodes;
+using SqlParser.Ast;
 
 namespace AppRefiner.Linters
 {

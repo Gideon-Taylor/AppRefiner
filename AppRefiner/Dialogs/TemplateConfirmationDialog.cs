@@ -1,7 +1,3 @@
-using System;
-using System.Drawing;
-using System.Windows.Forms;
-
 namespace AppRefiner.Dialogs
 {
     public class TemplateConfirmationDialog : Form
@@ -22,7 +18,7 @@ namespace AppRefiner.Dialogs
             this.yesButton = new Button();
             this.noButton = new Button();
             this.owner = owner;
-            
+
             InitializeComponent(message);
         }
 
@@ -55,7 +51,7 @@ namespace AppRefiner.Dialogs
             this.yesButton.Text = "Yes";
             this.yesButton.Size = new Size(100, 30);
             this.yesButton.Location = new Point(70, 120);
-            this.yesButton.Click += (s, e) => 
+            this.yesButton.Click += (s, e) =>
             {
                 this.DialogResult = DialogResult.Yes;
                 this.Close();
@@ -65,7 +61,7 @@ namespace AppRefiner.Dialogs
             this.noButton.Text = "No";
             this.noButton.Size = new Size(100, 30);
             this.noButton.Location = new Point(230, 120);
-            this.noButton.Click += (s, e) => 
+            this.noButton.Click += (s, e) =>
             {
                 this.DialogResult = DialogResult.No;
                 this.Close();
@@ -93,7 +89,7 @@ namespace AppRefiner.Dialogs
         protected override void OnShown(EventArgs e)
         {
             base.OnShown(e);
-            
+
             // Center on owner window
             if (owner != IntPtr.Zero)
             {

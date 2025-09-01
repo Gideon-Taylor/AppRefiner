@@ -1,16 +1,5 @@
-using AppRefiner.Database;
-using AppRefiner.Database.Models;
-
 using AppRefiner.Refactors; // For BaseRefactor, AddImport, CreateAutoComplete
-using AppRefiner.Stylers;
-using System;
-using System.Collections.Generic;
-using System.Diagnostics;
-using System.Linq;
 using System.Runtime.InteropServices; // For DllImport
-using System.Text;
-using System.Threading.Tasks;
-using static SqlParser.Ast.Expression;
 
 namespace AppRefiner
 {
@@ -37,7 +26,7 @@ namespace AppRefiner
         {
             if (editor == null || !editor.IsValid()) return;
 
-            List<string> quickFixList = new List<string>();
+            List<string> quickFixList = new();
 
             editor.ActiveIndicators.Where(i => i.Start <= position && i.Start + i.Length >= position && i.QuickFixes != null)
                 .ToList()
@@ -74,8 +63,8 @@ namespace AppRefiner
                 // Ensure position is within content bounds before substring
                 if (position < lineStartPos || position > lineStartPos + content.Length)
                 {
-                     Debug.Log($"Position {position} is out of bounds for line {currentLine} starting at {lineStartPos}");
-                     return;
+                    Debug.Log($"Position {position} is out of bounds for line {currentLine} starting at {lineStartPos}");
+                    return;
                 }
                 string lineContent = content.Substring(lineStartPos, position - lineStartPos);
 
@@ -100,7 +89,7 @@ namespace AppRefiner
                 var packageItems = editor.DataManager.GetAppPackageItems(packagePath);
 
                 // Convert to list of strings for autocomplete
-                List<string> suggestions = new List<string>();
+                List<string> suggestions = new();
                 // Sort alphabetically, packages first, then classes
                 suggestions.AddRange(packageItems.Subpackages.OrderBy(p => p).Select(p => $"{p} (Package)"));
                 suggestions.AddRange(packageItems.Classes.OrderBy(c => c).Select(c => $"{c} (Class)"));
@@ -228,11 +217,11 @@ namespace AppRefiner
                 int currentPos = ScintillaManager.GetCursorPosition(editor);
                 int currentLine = ScintillaManager.GetLineFromPosition(editor, currentPos);
                 int lineStartPos = ScintillaManager.GetLineStartIndex(editor, currentLine);
-                
+
                 // Get the full line text and trim it to cursor position
                 var fullLineText = ScintillaManager.GetCurrentLineText(editor);
                 int cursorPosInLine = currentPos - lineStartPos;
-                
+
                 if (cursorPosInLine > 0 && cursorPosInLine <= fullLineText.Length)
                 {
                     string lineTextToCursor = fullLineText.Substring(0, cursorPosInLine);
@@ -300,7 +289,7 @@ namespace AppRefiner
                         Debug.Log($"Failed to create instance of refactor type '{refactorType}'");
                         return null;
                     }
-                    return (IRefactor)instance ; // Create an instance of the refactor type
+                    return (IRefactor)instance; // Create an instance of the refactor type
                 }
             }
 
@@ -318,7 +307,7 @@ namespace AppRefiner
         {
             if (editor == null || !editor.IsValid()) return null;
 
-            switch(listType)
+            switch (listType)
             {
                 case UserListType.AppPackage:
                     return HandleAppPackageListSelection(editor, selection);
@@ -348,7 +337,8 @@ namespace AppRefiner
         }
 
 
-        public IRefactor? PrepareConcatAutoCompleteRefactor(ScintillaEditor editor) {
+        public IRefactor? PrepareConcatAutoCompleteRefactor(ScintillaEditor editor)
+        {
             if (editor == null || !editor.IsValid()) return null;
 
             // Return the refactor instance for MainForm to process
@@ -371,4 +361,4 @@ namespace AppRefiner
             return new MsgBoxAutoComplete(editor, autoPairingEnabled);
         }
     }
-} 
+}

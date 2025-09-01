@@ -1,7 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Drawing;
-using System.Windows.Forms;
 using AppRefiner.Templates;
 
 namespace AppRefiner.Dialogs
@@ -19,7 +15,7 @@ namespace AppRefiner.Dialogs
         private readonly Dictionary<string, DisplayCondition> inputsDisplayConditions = new();
         private readonly IntPtr owner;
         private DialogHelper.ModalDialogMouseHandler? mouseHandler;
-        
+
         private const int RightMargin = 20; // Add a margin from the right edge
 
         public Dictionary<string, string> ParameterValues { get; private set; } = new();
@@ -33,7 +29,7 @@ namespace AppRefiner.Dialogs
             this.contentPanel = new Panel();
             this.applyButton = new Button();
             this.cancelButton = new Button();
-            
+
             InitializeComponent();
             GenerateParameterControls();
         }
@@ -110,11 +106,11 @@ namespace AppRefiner.Dialogs
                 // Set minimum height for dialog with no parameters
                 const int emptyButtonPadding = 20;
                 int emptyButtonsY = this.headerPanel.Height + emptyButtonPadding;
-                
+
                 // Position buttons
                 this.cancelButton.Location = new Point(this.ClientSize.Width - 230 - RightMargin, emptyButtonsY);
                 this.applyButton.Location = new Point(this.ClientSize.Width - 120 - RightMargin, emptyButtonsY);
-                
+
                 // Adjust dialog height
                 this.ClientSize = new Size(this.ClientSize.Width, emptyButtonsY + this.applyButton.Height + emptyButtonPadding);
                 return;
@@ -206,17 +202,17 @@ namespace AppRefiner.Dialogs
 
             // Initial update of display conditions
             UpdateDisplayConditions();
-            
+
             // Set content panel height to fit all controls
             contentPanel.Height = currentY + 10;
-            
+
             // Position buttons below the last control
             const int buttonPadding = 20;
             int buttonsY = this.headerPanel.Height + contentPanel.Height + buttonPadding;
-            
+
             this.cancelButton.Location = new Point(this.ClientSize.Width - 230 - RightMargin, buttonsY);
             this.applyButton.Location = new Point(this.ClientSize.Width - 120 - RightMargin, buttonsY);
-            
+
             // Adjust dialog height to fit content and buttons
             this.ClientSize = new Size(this.ClientSize.Width, buttonsY + this.applyButton.Height + buttonPadding);
         }
@@ -290,19 +286,19 @@ namespace AppRefiner.Dialogs
         protected override void OnShown(EventArgs e)
         {
             base.OnShown(e);
-            
+
             // Center on owner window
             if (owner != IntPtr.Zero)
             {
                 WindowHelper.CenterFormOnWindow(this, owner);
             }
-            
+
             // Focus the first input control if available
             if (inputControls.Count > 0)
             {
                 inputControls.Values.First().Focus();
             }
-            
+
             // Create the mouse handler if this is a modal dialog
             if (this.Modal && owner != IntPtr.Zero)
             {
@@ -324,7 +320,7 @@ namespace AppRefiner.Dialogs
         protected override void OnFormClosed(FormClosedEventArgs e)
         {
             base.OnFormClosed(e);
-            
+
             // Dispose the mouse handler
             mouseHandler?.Dispose();
             mouseHandler = null;

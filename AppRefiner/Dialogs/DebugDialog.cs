@@ -1,13 +1,6 @@
-using System;
-using System.Collections.Generic;
 using System.Diagnostics;
-using System.Drawing;
-using System.IO;
-using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
-using System.Threading.Tasks;
-using System.Windows.Forms;
 
 namespace AppRefiner.Dialogs
 {
@@ -20,14 +13,14 @@ namespace AppRefiner.Dialogs
         private readonly Button exportButton;
         private readonly IntPtr parentHandle;
         private DialogHelper.ModalDialogMouseHandler? mouseHandler;
-        
+
         // Static list to store debug messages
-        private static readonly List<DebugMessage> debugMessages = new List<DebugMessage>();
+        private static readonly List<DebugMessage> debugMessages = new();
         private static readonly int MaxMessages = 1000; // Limit to prevent memory issues
-        
+
         // Keep track of open debug dialog instances
-        private static readonly List<WeakReference<DebugDialog>> openDialogs = new List<WeakReference<DebugDialog>>();
-        
+        private static readonly List<WeakReference<DebugDialog>> openDialogs = new();
+
         [DllImport("user32.dll")]
         private static extern bool GetWindowRect(IntPtr hWnd, out RECT lpRect);
 
@@ -49,13 +42,13 @@ namespace AppRefiner.Dialogs
         {
             lock (debugMessages)
             {
-                debugMessages.Add(new DebugMessage 
-                { 
-                    Message = message, 
-                    Type = type, 
-                    Timestamp = DateTime.Now 
+                debugMessages.Add(new DebugMessage
+                {
+                    Message = message,
+                    Type = type,
+                    Timestamp = DateTime.Now
                 });
-                
+
                 // Remove oldest messages if we exceed the limit
                 while (debugMessages.Count > MaxMessages)
                 {
@@ -66,7 +59,7 @@ namespace AppRefiner.Dialogs
             // Update any open debug dialogs
             UpdateOpenDialogs();
         }
-        
+
         // Update all open dialog instances
         private static void UpdateOpenDialogs()
         {
@@ -82,14 +75,15 @@ namespace AppRefiner.Dialogs
                     else
                     {
                         // Update the dialog
-                        dialog.BeginInvoke(new Action(() => {
+                        dialog.BeginInvoke(new Action(() =>
+                        {
                             dialog.AppendLatestMessages();
                         }));
                     }
                 }
             }
         }
-        
+
         /// <summary>
         /// Static method to open the debug dialog
         /// </summary>
@@ -98,13 +92,13 @@ namespace AppRefiner.Dialogs
         public static DebugDialog ShowDialog(IntPtr parentHwnd)
         {
             var dialog = new DebugDialog(parentHwnd);
-            
+
             // Register this dialog in the open dialogs list
             lock (openDialogs)
             {
                 openDialogs.Add(new WeakReference<DebugDialog>(dialog));
             }
-            
+
             dialog.Show();
             return dialog;
         }
@@ -121,7 +115,7 @@ namespace AppRefiner.Dialogs
             panel.Show();
             return panel;
         }
-        
+
         /// <summary>
         /// Constructor for the Debug Dialog
         /// </summary>
@@ -134,12 +128,12 @@ namespace AppRefiner.Dialogs
             this.debugTextBox = new RichTextBox();
             this.clearButton = new Button();
             this.exportButton = new Button();
-            
+
             InitializeComponent();
             PositionInParent();
             RefreshDebugMessages();
         }
-        
+
         private void PositionInParent()
         {
             if (parentHandle != IntPtr.Zero)
@@ -161,11 +155,11 @@ namespace AppRefiner.Dialogs
                 }
             }
         }
-        
+
         protected override void OnShown(EventArgs e)
         {
             base.OnShown(e);
-            
+
             // Position on parent window
             if (parentHandle != IntPtr.Zero)
             {
@@ -178,7 +172,7 @@ namespace AppRefiner.Dialogs
                 mouseHandler = new DialogHelper.ModalDialogMouseHandler(this, headerPanel, parentHandle);
             }
         }
-        
+
         /// <summary>
         /// Refreshes all debug messages in the text box
         /// </summary>
@@ -192,11 +186,11 @@ namespace AppRefiner.Dialogs
                     AppendFormattedMessage(msg);
                 }
             }
-            
+
             // Scroll to the end
             ScrollToEnd();
         }
-        
+
         /// <summary>
         /// Appends only the newest messages that aren't in the textbox yet
         /// </summary>
@@ -204,7 +198,7 @@ namespace AppRefiner.Dialogs
         {
             // Get the current count of messages in the textbox (approximated by line count)
             int currentLines = debugTextBox.Lines.Length;
-            
+
             lock (debugMessages)
             {
                 // If we have more messages than lines, append the new ones
@@ -215,36 +209,36 @@ namespace AppRefiner.Dialogs
                     {
                         AppendFormattedMessage(debugMessages[i]);
                     }
-                    
+
                     // Scroll to the end
                     ScrollToEnd();
                 }
             }
         }
-        
+
         private void ScrollToEnd()
         {
             debugTextBox.SelectionStart = debugTextBox.Text.Length;
             debugTextBox.ScrollToCaret();
         }
-        
+
         private void AppendFormattedMessage(DebugMessage msg)
         {
             string timeStamp = msg.Timestamp.ToString("yyyy-MM-dd HH:mm:ss.fff");
-            
+
             // Store current selection state
             int currentSelection = debugTextBox.SelectionStart;
-            
+
             // Format timestamp in gray
             debugTextBox.SelectionStart = debugTextBox.TextLength;
             debugTextBox.SelectionLength = 0;
             debugTextBox.SelectionColor = Color.Gray;
             debugTextBox.AppendText($"[{timeStamp}] ");
-            
+
             // Format message type with color
             Color typeColor = Color.Black;
             string typePrefix = "";
-            
+
             switch (msg.Type)
             {
                 case DebugMessageType.Info:
@@ -260,20 +254,20 @@ namespace AppRefiner.Dialogs
                     typePrefix = "ERROR";
                     break;
             }
-            
+
             debugTextBox.SelectionColor = typeColor;
             debugTextBox.AppendText($"[{typePrefix}] ");
-            
+
             // Append the actual message in black
             debugTextBox.SelectionColor = Color.Black;
             debugTextBox.AppendText(msg.Message + Environment.NewLine);
-            
+
             // Restore selection
             debugTextBox.SelectionStart = currentSelection;
             debugTextBox.SelectionLength = 0;
             debugTextBox.SelectionColor = Color.Black;
         }
-        
+
         private void ClearMessages()
         {
             lock (debugMessages)
@@ -282,43 +276,41 @@ namespace AppRefiner.Dialogs
             }
             RefreshDebugMessages();
         }
-        
+
         private void ExportMessages()
         {
-            using (SaveFileDialog saveFileDialog = new SaveFileDialog())
+            using SaveFileDialog saveFileDialog = new();
+            saveFileDialog.Filter = "Text files (*.txt)|*.txt|All files (*.*)|*.*";
+            saveFileDialog.DefaultExt = "txt";
+            saveFileDialog.FileName = $"AppRefiner_Debug_Log_{DateTime.Now:yyyyMMdd_HHmmss}.txt";
+
+            if (saveFileDialog.ShowDialog() == DialogResult.OK)
             {
-                saveFileDialog.Filter = "Text files (*.txt)|*.txt|All files (*.*)|*.*";
-                saveFileDialog.DefaultExt = "txt";
-                saveFileDialog.FileName = $"AppRefiner_Debug_Log_{DateTime.Now:yyyyMMdd_HHmmss}.txt";
-                
-                if (saveFileDialog.ShowDialog() == DialogResult.OK)
+                StringBuilder sb = new();
+                lock (debugMessages)
                 {
-                    StringBuilder sb = new StringBuilder();
-                    lock (debugMessages)
+                    foreach (var msg in debugMessages)
                     {
-                        foreach (var msg in debugMessages)
-                        {
-                            string timeStamp = msg.Timestamp.ToString("yyyy-MM-dd HH:mm:ss.fff");
-                            string typeStr = msg.Type.ToString().ToUpper();
-                            sb.AppendLine($"[{timeStamp}] [{typeStr}] {msg.Message}");
-                        }
+                        string timeStamp = msg.Timestamp.ToString("yyyy-MM-dd HH:mm:ss.fff");
+                        string typeStr = msg.Type.ToString().ToUpper();
+                        sb.AppendLine($"[{timeStamp}] [{typeStr}] {msg.Message}");
                     }
-                    
-                    try
-                    {
-                        File.WriteAllText(saveFileDialog.FileName, sb.ToString());
-                        MessageBox.Show("Debug log exported successfully.", "Export Complete", 
-                            MessageBoxButtons.OK, MessageBoxIcon.Information);
-                    }
-                    catch (Exception ex)
-                    {
-                        MessageBox.Show($"Failed to export debug log: {ex.Message}", "Export Failed", 
-                            MessageBoxButtons.OK, MessageBoxIcon.Error);
-                    }
+                }
+
+                try
+                {
+                    File.WriteAllText(saveFileDialog.FileName, sb.ToString());
+                    MessageBox.Show("Debug log exported successfully.", "Export Complete",
+                        MessageBoxButtons.OK, MessageBoxIcon.Information);
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show($"Failed to export debug log: {ex.Message}", "Export Failed",
+                        MessageBoxButtons.OK, MessageBoxIcon.Error);
                 }
             }
         }
-        
+
         private void InitializeComponent()
         {
             this.headerPanel.SuspendLayout();
@@ -336,27 +328,27 @@ namespace AppRefiner.Dialogs
             this.headerLabel.Font = new Font("Segoe UI", 9F, FontStyle.Regular, GraphicsUnit.Point);
             this.headerLabel.Dock = DockStyle.Fill;
             this.headerLabel.TextAlign = ContentAlignment.MiddleCenter;
-            
+
             // Button panel for clear and export
-            Panel buttonPanel = new Panel();
+            Panel buttonPanel = new();
             buttonPanel.Dock = DockStyle.Bottom;
             buttonPanel.Height = 40;
             buttonPanel.Padding = new Padding(5);
-            
+
             // Clear button
             this.clearButton.Text = "Clear";
             this.clearButton.Dock = DockStyle.Left;
             this.clearButton.Width = 100;
             this.clearButton.Click += (sender, e) => ClearMessages();
             buttonPanel.Controls.Add(this.clearButton);
-            
+
             // Export button
             this.exportButton.Text = "Export Log";
             this.exportButton.Dock = DockStyle.Right;
             this.exportButton.Width = 100;
             this.exportButton.Click += (sender, e) => ExportMessages();
             buttonPanel.Controls.Add(this.exportButton);
-            
+
             // Debug text box
             this.debugTextBox.Dock = DockStyle.Fill;
             this.debugTextBox.BackColor = Color.White;
@@ -375,11 +367,11 @@ namespace AppRefiner.Dialogs
             this.Name = "DebugDialog";
             this.Text = "Debug Console";
             this.ShowInTaskbar = false;
-            
+
             this.headerPanel.ResumeLayout(false);
             this.ResumeLayout(false);
         }
-        
+
         protected override CreateParams CreateParams
         {
             get
@@ -392,7 +384,7 @@ namespace AppRefiner.Dialogs
             }
         }
     }
-    
+
     /// <summary>
     /// Enum representing the type of debug message
     /// </summary>
@@ -402,7 +394,7 @@ namespace AppRefiner.Dialogs
         Warning,
         Error
     }
-    
+
     /// <summary>
     /// Class representing a debug message
     /// </summary>
@@ -633,61 +625,59 @@ namespace AppRefiner.Dialogs
 
         private void ExportIndicatorData()
         {
-            using (SaveFileDialog saveFileDialog = new SaveFileDialog())
+            using SaveFileDialog saveFileDialog = new();
+            saveFileDialog.Filter = "CSV files (*.csv)|*.csv|Text files (*.txt)|*.txt|All files (*.*)|*.*";
+            saveFileDialog.DefaultExt = "csv";
+            saveFileDialog.FileName = $"AppRefiner_Indicators_{DateTime.Now:yyyyMMdd_HHmmss}.csv";
+
+            if (saveFileDialog.ShowDialog() == DialogResult.OK)
             {
-                saveFileDialog.Filter = "CSV files (*.csv)|*.csv|Text files (*.txt)|*.txt|All files (*.*)|*.*";
-                saveFileDialog.DefaultExt = "csv";
-                saveFileDialog.FileName = $"AppRefiner_Indicators_{DateTime.Now:yyyyMMdd_HHmmss}.csv";
-
-                if (saveFileDialog.ShowDialog() == DialogResult.OK)
+                try
                 {
-                    try
+                    StringBuilder sb = new();
+
+                    // Header
+                    sb.AppendLine("Styler,Type,Start,End,Length,Color,Tooltip,QuickFixes");
+
+                    // Data rows
+                    foreach (DataGridViewRow row in indicatorGrid.Rows)
                     {
-                        StringBuilder sb = new StringBuilder();
-                        
-                        // Header
-                        sb.AppendLine("Styler,Type,Start,End,Length,Color,Tooltip,QuickFixes");
+                        if (row.IsNewRow || !row.Visible) continue;
 
-                        // Data rows
-                        foreach (DataGridViewRow row in indicatorGrid.Rows)
+                        var values = new string[8];
+                        for (int i = 0; i < 8; i++)
                         {
-                            if (row.IsNewRow || !row.Visible) continue;
-
-                            var values = new string[8];
-                            for (int i = 0; i < 8; i++)
+                            values[i] = row.Cells[i].Value?.ToString() ?? "";
+                            // Escape commas and quotes for CSV
+                            if (values[i].Contains(",") || values[i].Contains("\""))
                             {
-                                values[i] = row.Cells[i].Value?.ToString() ?? "";
-                                // Escape commas and quotes for CSV
-                                if (values[i].Contains(",") || values[i].Contains("\""))
-                                {
-                                    values[i] = "\"" + values[i].Replace("\"", "\"\"") + "\"";
-                                }
+                                values[i] = "\"" + values[i].Replace("\"", "\"\"") + "\"";
                             }
-                            sb.AppendLine(string.Join(",", values));
                         }
+                        sb.AppendLine(string.Join(",", values));
+                    }
 
-                        File.WriteAllText(saveFileDialog.FileName, sb.ToString());
-                        
-                        Task.Delay(100).ContinueWith(_ =>
-                        {
-                            var processId = mainForm.ActiveEditor?.ProcessId ?? 0;
-                            var mainHandle = Process.GetProcessById((int)processId).MainWindowHandle;
-                            var handleWrapper = new WindowWrapper(mainHandle);
-                            new MessageBoxDialog("Indicator data exported successfully.", "Export Complete", 
-                                MessageBoxButtons.OK, mainHandle).ShowDialog(handleWrapper);
-                        });
-                    }
-                    catch (Exception ex)
+                    File.WriteAllText(saveFileDialog.FileName, sb.ToString());
+
+                    Task.Delay(100).ContinueWith(_ =>
                     {
-                        Task.Delay(100).ContinueWith(_ =>
-                        {
-                            var processId = mainForm.ActiveEditor?.ProcessId ?? 0;
-                            var mainHandle = Process.GetProcessById((int)processId).MainWindowHandle;
-                            var handleWrapper = new WindowWrapper(mainHandle);
-                            new MessageBoxDialog($"Failed to export indicator data: {ex.Message}", "Export Failed", 
-                                MessageBoxButtons.OK, mainHandle).ShowDialog(handleWrapper);
-                        });
-                    }
+                        var processId = mainForm.ActiveEditor?.ProcessId ?? 0;
+                        var mainHandle = Process.GetProcessById((int)processId).MainWindowHandle;
+                        var handleWrapper = new WindowWrapper(mainHandle);
+                        new MessageBoxDialog("Indicator data exported successfully.", "Export Complete",
+                            MessageBoxButtons.OK, mainHandle).ShowDialog(handleWrapper);
+                    });
+                }
+                catch (Exception ex)
+                {
+                    Task.Delay(100).ContinueWith(_ =>
+                    {
+                        var processId = mainForm.ActiveEditor?.ProcessId ?? 0;
+                        var mainHandle = Process.GetProcessById((int)processId).MainWindowHandle;
+                        var handleWrapper = new WindowWrapper(mainHandle);
+                        new MessageBoxDialog($"Failed to export indicator data: {ex.Message}", "Export Failed",
+                            MessageBoxButtons.OK, mainHandle).ShowDialog(handleWrapper);
+                    });
                 }
             }
         }
@@ -729,12 +719,12 @@ namespace AppRefiner.Dialogs
             this.headerLabel.TextAlign = ContentAlignment.MiddleCenter;
 
             // Filter panel
-            Panel filterPanel = new Panel();
+            Panel filterPanel = new();
             filterPanel.Dock = DockStyle.Top;
             filterPanel.Height = 35;
             filterPanel.Padding = new Padding(5);
 
-            Label filterLabel = new Label();
+            Label filterLabel = new();
             filterLabel.Text = "Filter:";
             filterLabel.Dock = DockStyle.Left;
             filterLabel.Width = 40;
@@ -747,7 +737,7 @@ namespace AppRefiner.Dialogs
             this.filterTextBox.TextChanged += (s, e) => ApplyFilters();
             filterPanel.Controls.Add(this.filterTextBox);
 
-            Label stylerLabel = new Label();
+            Label stylerLabel = new();
             stylerLabel.Text = " Styler:";
             stylerLabel.Dock = DockStyle.Left;
             stylerLabel.Width = 45;
@@ -762,7 +752,7 @@ namespace AppRefiner.Dialogs
             this.stylerFilterCombo.SelectedIndexChanged += (s, e) => ApplyFilters();
             filterPanel.Controls.Add(this.stylerFilterCombo);
 
-            Label typeLabel = new Label();
+            Label typeLabel = new();
             typeLabel.Text = " Type:";
             typeLabel.Dock = DockStyle.Left;
             typeLabel.Width = 35;
@@ -778,7 +768,7 @@ namespace AppRefiner.Dialogs
             filterPanel.Controls.Add(this.typeFilterCombo);
 
             // Button panel
-            Panel buttonPanel = new Panel();
+            Panel buttonPanel = new();
             buttonPanel.Dock = DockStyle.Bottom;
             buttonPanel.Height = 40;
             buttonPanel.Padding = new Padding(5);
@@ -864,4 +854,4 @@ namespace AppRefiner.Dialogs
         [DllImport("user32.dll")]
         private static extern bool GetWindowRect(IntPtr hWnd, out DebugDialog.RECT lpRect);
     }
-} 
+}

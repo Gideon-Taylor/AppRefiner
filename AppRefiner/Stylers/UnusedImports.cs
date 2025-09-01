@@ -1,10 +1,4 @@
 ﻿using PeopleCodeParser.SelfHosted.Nodes;
-using PeopleCodeParser.SelfHosted.Visitors;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace AppRefiner.Stylers
 {
@@ -56,7 +50,8 @@ namespace AppRefiner.Stylers
             if (importUseMap.ContainsKey(packageKey) == false)
             {
                 importUseMap[packageKey] = new() { Node = node, Used = false };
-            } else
+            }
+            else
             {
                 /* duplicate import */
                 AddIndicator(node.SourceSpan, IndicatorType.TEXTCOLOR, 0xFFFFA500, "Duplicate import");

@@ -1,19 +1,9 @@
 using AppRefiner.Dialogs;
-using AppRefiner.Events; // For ModifierKeys
 using AppRefiner.Plugins;
-using AppRefiner.Refactors;
-using PeopleCodeParser.SelfHosted.Nodes;
 using PeopleCodeParser.SelfHosted.Visitors;
-using System.Collections;
-using System;
-using System.Collections.Generic;
 using System.Diagnostics;
-using System.Drawing;
-using System.IO;
-using System.Linq;
 using System.Reflection;
 using System.Text;
-using System.Windows.Forms;
 
 namespace AppRefiner.Refactors
 {
@@ -51,7 +41,7 @@ namespace AppRefiner.Refactors
                 return "";
             }
 
-            StringBuilder shortcutText = new StringBuilder();
+            StringBuilder shortcutText = new();
             if ((mods & ModifierKeys.Control) == ModifierKeys.Control) shortcutText.Append("Ctrl+");
             if ((mods & ModifierKeys.Shift) == ModifierKeys.Shift) shortcutText.Append("Shift+");
             if ((mods & ModifierKeys.Alt) == ModifierKeys.Alt) shortcutText.Append("Alt+");
@@ -74,7 +64,7 @@ namespace AppRefiner.Refactors
             mainForm = form;
             refactorGrid = refactorOptionsGrid;
             DiscoverAndCacheRefactors();
-            
+
             // Load refactor configurations
             RefactorConfigManager.LoadRefactorConfigs();
         }
@@ -133,8 +123,8 @@ namespace AppRefiner.Refactors
                     Debug.LogException(ex, $"Error discovering or caching metadata for refactor type: {type.FullName}");
                 }
             }
-              // Sort by name for consistent ordering
-             availableRefactors.Sort((r1, r2) => string.Compare(r1.Name, r2.Name, StringComparison.OrdinalIgnoreCase));
+            // Sort by name for consistent ordering
+            availableRefactors.Sort((r1, r2) => string.Compare(r1.Name, r2.Name, StringComparison.OrdinalIgnoreCase));
         }
 
         /// <summary>
@@ -145,7 +135,7 @@ namespace AppRefiner.Refactors
             if (refactorGrid == null) return;
 
             refactorGrid.Rows.Clear();
-            
+
             // Plugin discovery should remain here or be moved to a central PluginService
             string pluginDirectory = Path.Combine(
                 Path.GetDirectoryName(Application.ExecutablePath) ?? string.Empty,
@@ -201,34 +191,34 @@ namespace AppRefiner.Refactors
             var prop = type.GetProperty(propertyName, BindingFlags.Public | BindingFlags.Static | BindingFlags.NonPublic | BindingFlags.FlattenHierarchy);
             if (prop != null && prop.PropertyType.IsEnum && prop.PropertyType == typeof(T)) // Ensure the property type matches T
             {
-                 try
-                 {
-                      object? value = prop.GetValue(null);
-                      if (value == null) return default(T); // Return default if value is null
+                try
+                {
+                    object? value = prop.GetValue(null);
+                    if (value == null) return default(T); // Return default if value is null
 
-                      // Special handling for ModifierKeys (Flags enum)
-                      if (typeof(T) == typeof(ModifierKeys))
-                      {
-                            // For flags, the combined value is valid, skip Enum.IsDefined
-                            return (T)value; 
-                      }
-                      
-                      // Original check for non-flags enums
-                      if (Enum.IsDefined(typeof(T), value))
-                      {
-                           return (T)value;
-                      }
-                 }
-                 catch(InvalidCastException castEx) 
-                 { 
-                      // Log specific cast error if needed
-                      Debug.Log($"Cast exception retrieving {propertyName} from {type.Name}: {castEx.Message}");
-                 } 
-                 catch (Exception ex) // Catch other potential reflection/conversion errors
-                 { 
-                      Debug.LogException(ex, $"Error retrieving enum property {propertyName} from {type.Name}");
-                      /* Ignore conversion errors, return default */ 
-                 }
+                    // Special handling for ModifierKeys (Flags enum)
+                    if (typeof(T) == typeof(ModifierKeys))
+                    {
+                        // For flags, the combined value is valid, skip Enum.IsDefined
+                        return (T)value;
+                    }
+
+                    // Original check for non-flags enums
+                    if (Enum.IsDefined(typeof(T), value))
+                    {
+                        return (T)value;
+                    }
+                }
+                catch (InvalidCastException castEx)
+                {
+                    // Log specific cast error if needed
+                    Debug.Log($"Cast exception retrieving {propertyName} from {type.Name}: {castEx.Message}");
+                }
+                catch (Exception ex) // Catch other potential reflection/conversion errors
+                {
+                    Debug.LogException(ex, $"Error retrieving enum property {propertyName} from {type.Name}");
+                    /* Ignore conversion errors, return default */
+                }
             }
             return default(T);
         }
@@ -244,13 +234,13 @@ namespace AppRefiner.Refactors
         {
             if (activeEditor == null || !activeEditor.IsValid())
             {
-                 Debug.Log("ExecuteRefactor called with null or invalid editor.");
-                 return;
+                Debug.Log("ExecuteRefactor called with null or invalid editor.");
+                return;
             }
             if (refactorClass == null)
             {
-                 Debug.Log("ExecuteRefactor called with null refactor instance.");
-                 return;
+                Debug.Log("ExecuteRefactor called with null refactor instance.");
+                return;
             }
 
             try
@@ -280,8 +270,8 @@ namespace AppRefiner.Refactors
                 {
                     if (!refactorClass.ShowRefactorDialog()) // Pass owner Removed owner
                     {
-                         Debug.Log("Refactoring cancelled by user (pre-dialog).");
-                         return; // User cancelled
+                        Debug.Log("Refactoring cancelled by user (pre-dialog).");
+                        return; // User cancelled
                     }
                 }
 
@@ -298,7 +288,7 @@ namespace AppRefiner.Refactors
                             var mainHandle = Process.GetProcessById((int)activeEditor.ProcessId).MainWindowHandle;
                             var handleWrapper = new WindowWrapper(mainHandle);
                             new MessageBoxDialog($"The refactor '{refactorClass.GetType().Name}' cannot run because there are syntax errors in the code.\n\n" +
-                                "Please fix the syntax errors first, then try the refactor again.", 
+                                "Please fix the syntax errors first, then try the refactor again.",
                                 "Refactor Skipped - Syntax Errors", MessageBoxButtons.OK, mainHandle).ShowDialog(handleWrapper);
                         });
                     }
@@ -325,7 +315,7 @@ namespace AppRefiner.Refactors
                         {
                             var mainHandle = Process.GetProcessById((int)activeEditor.ProcessId).MainWindowHandle;
                             var handleWrapper = new WindowWrapper(mainHandle);
-                            new MessageBoxDialog($"The refactor {refactorClass.GetType().Name} cannot be executed because it does not implement IAstVisitor.", 
+                            new MessageBoxDialog($"The refactor {refactorClass.GetType().Name} cannot be executed because it does not implement IAstVisitor.",
                                 "Refactor Error", MessageBoxButtons.OK, mainHandle).ShowDialog(handleWrapper);
                         });
                     }
@@ -344,7 +334,7 @@ namespace AppRefiner.Refactors
                         // Show message box with specific error
                         var mainHandle = Process.GetProcessById((int)activeEditor.ProcessId).MainWindowHandle;
                         var handleWrapper = new WindowWrapper(mainHandle);
-                        new MessageBoxDialog(result.Message ?? "Refactoring failed", "Refactoring Failed", MessageBoxButtons.OK, mainHandle).ShowDialog(handleWrapper); 
+                        new MessageBoxDialog(result.Message ?? "Refactoring failed", "Refactoring Failed", MessageBoxButtons.OK, mainHandle).ShowDialog(handleWrapper);
                     });
 
                     return;
@@ -367,19 +357,19 @@ namespace AppRefiner.Refactors
 
                 if (!refactorResult.Success)
                 {
-                     Debug.Log("Refactoring produced no changes.");
-                     // Optionally show an error, but maybe success was just no change needed
-                     if (!string.IsNullOrEmpty(refactorResult.Message) && showUserMessages)
-                     {
-                          // Show success message if provided
-                          Task.Delay(100).ContinueWith(_ =>
-                          {
-                              var mainHandle = Process.GetProcessById((int)activeEditor.ProcessId).MainWindowHandle;
-                              var handleWrapper = new WindowWrapper(mainHandle);
-                              new MessageBoxDialog(refactorResult.Message, "Refactoring Note", MessageBoxButtons.OK, mainHandle).ShowDialog(handleWrapper);
-                          });
-                     }
-                     return; 
+                    Debug.Log("Refactoring produced no changes.");
+                    // Optionally show an error, but maybe success was just no change needed
+                    if (!string.IsNullOrEmpty(refactorResult.Message) && showUserMessages)
+                    {
+                        // Show success message if provided
+                        Task.Delay(100).ContinueWith(_ =>
+                        {
+                            var mainHandle = Process.GetProcessById((int)activeEditor.ProcessId).MainWindowHandle;
+                            var handleWrapper = new WindowWrapper(mainHandle);
+                            new MessageBoxDialog(refactorResult.Message, "Refactoring Note", MessageBoxButtons.OK, mainHandle).ShowDialog(handleWrapper);
+                        });
+                    }
+                    return;
                 }
 
 
@@ -441,7 +431,7 @@ namespace AppRefiner.Refactors
             }
             catch (Exception ex)
             {
-                 Debug.LogException(ex, $"Critical error during ExecuteRefactor for {refactorClass.GetType().Name}");
+                Debug.LogException(ex, $"Critical error during ExecuteRefactor for {refactorClass.GetType().Name}");
                 Task.Delay(100).ContinueWith(_ =>
                 {
                     // Show message box with specific error
@@ -457,7 +447,7 @@ namespace AppRefiner.Refactors
         public void HandleRefactorGridCellContentClick(object sender, DataGridViewCellEventArgs e)
         {
             if (refactorGrid == null) return;
-            
+
             refactorGrid.CommitEdit(DataGridViewDataErrorContexts.Commit);
             if (e.ColumnIndex == 2 && e.RowIndex >= 0)
             {
@@ -466,14 +456,12 @@ namespace AppRefiner.Refactors
                     if (refactorGrid.Rows[e.RowIndex].Cells[e.ColumnIndex].Tag?.ToString() != "NoConfig")
                     {
                         // Show configuration dialog for the refactor type
-                        using (var dialog = new RefactorConfigDialog(refactorInfo.RefactorType))
-                        {
-                            dialog.ShowDialog(mainForm); // Show dialog owned by MainForm
-                        }
+                        using var dialog = new RefactorConfigDialog(refactorInfo.RefactorType);
+                        dialog.ShowDialog(mainForm); // Show dialog owned by MainForm
                     }
                 }
             }
         }
 
     }
-} 
+}

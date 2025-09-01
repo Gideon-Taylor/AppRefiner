@@ -191,7 +191,7 @@ namespace AppRefiner
         /// <returns>Point in screen coordinates</returns>
         public static Point ClientToScreen(IntPtr hWnd, Point clientPoint)
         {
-            POINT point = new POINT { X = clientPoint.X, Y = clientPoint.Y };
+            POINT point = new() { X = clientPoint.X, Y = clientPoint.Y };
             if (ClientToScreen(hWnd, ref point))
             {
                 return new Point(point.X, point.Y);

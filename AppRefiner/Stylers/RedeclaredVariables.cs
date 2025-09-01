@@ -1,11 +1,5 @@
-using AppRefiner.Stylers;
 using PeopleCodeParser.SelfHosted.Nodes;
-using PeopleCodeParser.SelfHosted.Visitors;
 using PeopleCodeParser.SelfHosted.Visitors.Models;
-using System;
-using System.Collections.Generic;
-using System.Drawing;
-using System.Linq;
 
 namespace AppRefiner.Stylers;
 
@@ -17,7 +11,7 @@ public class ShadowInfo
     public string ActualName { get; set; } = string.Empty;  // Preserves original casing
     public string MemberType { get; set; } = string.Empty;  // "property", "instance variable", etc.
     public ScopeInfo? Scope { get; set; }   // Which scope this member belongs to (for parameters)
-    
+
     public ShadowInfo(string actualName, string memberType, ScopeInfo? scope = null)
     {
         ActualName = actualName;
@@ -52,7 +46,7 @@ public class RedeclaredVariables : ScopedStyler
     /// </summary>
     public override void VisitLocalVariableDeclaration(LocalVariableDeclarationNode node)
     {
-        foreach(var name in node.VariableNameInfos)
+        foreach (var name in node.VariableNameInfos)
         {
             CheckForVariable(name);
         }
@@ -68,7 +62,7 @@ public class RedeclaredVariables : ScopedStyler
         /* Try to get the variable in scope with the name "varName" */
         var variablesInScope = GetVariablesInScope(currentScope).Where(var => var.Name.Equals(varName, StringComparison.OrdinalIgnoreCase));
 
-        
+
         if (variablesInScope.Any())
         {
             var declaredVar = variablesInScope.First();
@@ -95,7 +89,7 @@ public class RedeclaredVariables : ScopedStyler
                     break;
             }
         }
-        
+
     }
 
     /// <summary>

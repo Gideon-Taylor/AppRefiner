@@ -13,7 +13,7 @@ public abstract class DeclarationNode : AstNode
     /// </summary>
     public string Name { get; }
 
-    public Token NameToken{ get; }
+    public Token NameToken { get; }
 
     /// <summary>
     /// True if this Declaration had a semicolon in the source code
@@ -89,12 +89,12 @@ public class MethodNode : DeclarationNode
     /// Documentation string (from DOC annotation)
     /// </summary>
     public string? Documentation { get; set; }
-    
+
     /// <summary>
     /// Implemented interfaces (from EXTENDS/IMPLEMENTS annotation)
     /// </summary>
     public List<TypeNode> ImplementedInterfaces { get; } = new();
-    
+
     /// <summary>
     /// Implemented method name (from EXTENDS/IMPLEMENTS annotation)
     /// </summary>
@@ -103,7 +103,7 @@ public class MethodNode : DeclarationNode
     public MethodNode(string name, Token nameToken) : base(name, nameToken)
     {
     }
-    
+
     public void AddImplementedInterface(TypeNode interfaceType)
     {
         ImplementedInterfaces.Add(interfaceType);
@@ -313,7 +313,7 @@ public class VariableNode : DeclarationNode
     /// Additional variable names (for multi-variable declarations like LOCAL string &a, &b, &c)
     /// </summary>
     public List<string> AdditionalNames { get; } = new();
-    
+
     /// <summary>
     /// Variable name information including tokens (main name + additional names)
     /// </summary>
@@ -340,7 +340,7 @@ public class VariableNode : DeclarationNode
     {
         if (string.IsNullOrEmpty(name))
             throw new ArgumentException("Variable name cannot be empty", nameof(name));
-        
+
         AdditionalNames.Add(name);
     }
 
@@ -510,7 +510,7 @@ public class FunctionNode : DeclarationNode
         var returnType = ReturnType != null ? $" RETURNS {ReturnType}" : "";
         var paramStr = string.Join(", ", Parameters);
         var impl = IsImplementation ? " (impl)" : "";
-        
+
         return FunctionType switch
         {
             FunctionType.PeopleCode => $"FUNCTION {Name}({paramStr}){returnType} PEOPLECODE {RecordName}.{FieldName} {RecordEvent}{impl}",

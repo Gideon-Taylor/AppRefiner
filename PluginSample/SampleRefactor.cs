@@ -1,7 +1,5 @@
 using AppRefiner; // For ScintillaEditor, ModifierKeys etc.
 using AppRefiner.Refactors;
-using AppRefiner.PeopleCode; // For PeopleCodeParserBaseListener
-using static AppRefiner.PeopleCode.PeopleCodeParser;
 using System.Windows.Forms; // For Keys enum
 
 namespace PluginSample
@@ -33,4 +31,4 @@ namespace PluginSample
         // public override bool RequiresUserInputDialog => true; // If you need a dialog
         // public override bool ShowRefactorDialog() { /* Show dialog logic */ return true; }
     }
-} 
+}

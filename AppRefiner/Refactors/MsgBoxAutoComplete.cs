@@ -1,7 +1,4 @@
 using PeopleCodeParser.SelfHosted.Nodes;
-using PeopleCodeParser.SelfHosted;
-using AppRefiner.Services;
-using AppRefiner;
 
 namespace AppRefiner.Refactors
 {
@@ -44,7 +41,7 @@ namespace AppRefiner.Refactors
         private bool IsMsgBoxCallAtCursor(FunctionCallNode functionCall)
         {
             // Check if it's a MsgBox call
-            if (functionCall.Function is IdentifierNode identifier && 
+            if (functionCall.Function is IdentifierNode identifier &&
                 identifier.Name.Equals("msgbox", StringComparison.OrdinalIgnoreCase))
             {
                 if (functionCall.SourceSpan.IsValid)
@@ -103,7 +100,7 @@ namespace AppRefiner.Refactors
 
             // Replace MsgBox() with MessageBox(0,"",0,0,"")
             string replacementText = "MessageBox(0,\"\",0,0,\"\")";
-            
+
             // Check if we need to add a semicolon (if it's a standalone statement)
             var originalText = GetOriginalText(targetMsgBoxCall);
             if (!string.IsNullOrEmpty(originalText) && originalText.TrimEnd().EndsWith(")"))

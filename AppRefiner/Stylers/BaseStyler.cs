@@ -3,8 +3,6 @@ using AppRefiner.Database;
 
 using PeopleCodeParser.SelfHosted;
 using PeopleCodeParser.SelfHosted.Visitors;
-using System;
-using System.Collections.Generic;
 
 namespace AppRefiner.Stylers
 {
@@ -39,7 +37,7 @@ namespace AppRefiner.Stylers
         /// Whether this styler is currently active/enabled
         /// </summary>
         public bool Active { get; set; } = false;
-        
+
         /// <summary>
         /// Description of what this styler does
         /// </summary>
@@ -49,12 +47,12 @@ namespace AppRefiner.Stylers
         /// Specifies whether this styler requires a database connection
         /// </summary>
         public virtual DataManagerRequirement DatabaseRequirement { get; } = DataManagerRequirement.NotRequired;
-        
+
         /// <summary>
         /// The database manager instance, if available
         /// </summary>
         public IDataManager? DataManager { get; set; }
-        
+
         /// <summary>
         /// The ScintillaEditor instance, if available
         /// </summary>

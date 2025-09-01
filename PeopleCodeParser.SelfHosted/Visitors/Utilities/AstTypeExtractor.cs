@@ -29,7 +29,7 @@ public static class AstTypeExtractor
             {
                 return "array";
             }
-            
+
             var untypedResult = "array";
             for (int i = 1; i < arrayType.Dimensions; i++)
             {
@@ -43,7 +43,7 @@ public static class AstTypeExtractor
         {
             return $"array of {elementTypeName}";
         }
-        
+
         var typedResult = $"array of {elementTypeName}";
         for (int i = 1; i < arrayType.Dimensions; i++)
         {
@@ -58,11 +58,11 @@ public static class AstTypeExtractor
         {
             LiteralNode literal => GetLiteralType(literal),
             IdentifierNode => "any",
-            BinaryOperationNode => "any", 
+            BinaryOperationNode => "any",
             UnaryOperationNode => "any",
             FunctionCallNode => "any",
             PropertyAccessNode => "any",
-            ArrayAccessNode =>  "any",
+            ArrayAccessNode => "any",
             ObjectCreationNode => "any",
             TypeCastNode cast => GetTypeFromNode(cast.TargetType),
             _ => "any"
@@ -74,7 +74,7 @@ public static class AstTypeExtractor
         return literal.Value switch
         {
             bool => "boolean",
-            int or long => "integer", 
+            int or long => "integer",
             float or double or decimal => "number",
             string => "string",
             null => "any",
@@ -95,8 +95,8 @@ public static class AstTypeExtractor
 
     public static bool IsAppClassType(string typeName)
     {
-        return !IsBuiltInType(typeName) && 
-               !IsArrayType(typeName) && 
+        return !IsBuiltInType(typeName) &&
+               !IsArrayType(typeName) &&
                !string.Equals(typeName, "any", StringComparison.OrdinalIgnoreCase);
     }
 
@@ -106,7 +106,7 @@ public static class AstTypeExtractor
             return "any";
 
         var normalized = typeName.Trim();
-        
+
         if (BuiltInTypeExtensions.TryParseKeyword(normalized) is BuiltInType builtIn)
         {
             return builtIn.ToKeyword();

@@ -1,12 +1,6 @@
 using AppRefiner.Database;
 using AppRefiner.Refactors.QuickFixes;
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using PeopleCodeParser.SelfHosted.Nodes;
-using PeopleCodeParser.SelfHosted.Visitors;
-using PeopleCodeParser.SelfHosted.Lexing;
-using PeopleCodeParser.SelfHosted;
 
 namespace AppRefiner.Stylers;
 
@@ -34,7 +28,7 @@ public class MissingConstructor : BaseStyler
     public override void VisitProgram(ProgramNode node)
     {
         Reset();
-        
+
         // Visit the program
         base.VisitProgram(node);
     }
@@ -45,7 +39,7 @@ public class MissingConstructor : BaseStyler
     public override void VisitAppClass(AppClassNode node)
     {
         // Check if this class has a constructor
-        var constructorMethod = node.Methods.FirstOrDefault(m => 
+        var constructorMethod = node.Methods.FirstOrDefault(m =>
             string.Equals(m.Name, node.Name, StringComparison.OrdinalIgnoreCase));
 
         // If no constructor and class extends another class, check if base class requires one
@@ -75,14 +69,14 @@ public class MissingConstructor : BaseStyler
         {
             // Get the source code of the base class from the database
             string? baseClassSource = DataManager.GetAppClassSourceByPath(baseClassPath);
-            
+
             if (string.IsNullOrEmpty(baseClassSource))
                 return null; // Base class not found in database
-            
+
             // Parse the base class using the self-hosted parser
             var lexer = new PeopleCodeParser.SelfHosted.Lexing.PeopleCodeLexer(baseClassSource);
             var tokens = lexer.TokenizeAll();
-            
+
             var parser = new PeopleCodeParser.SelfHosted.PeopleCodeParser(tokens);
             return parser.ParseProgram();
         }
@@ -108,16 +102,16 @@ public class MissingConstructor : BaseStyler
             ProgramNode? baseProgram = ParseBaseClassAst(classNode.BaseClass.TypeName);
             if (baseProgram == null)
                 return; // Could not parse base class
-            
+
             // Check both class and interface scenarios like AppRefiner
             MethodNode? baseClassConstructor = null;
             string? baseClassName = null;
-            
+
             if (baseProgram.AppClass != null)
             {
                 var baseClass = baseProgram.AppClass;
                 baseClassName = baseClass.Name;
-                var constructors = baseClass.Methods.Where(m => 
+                var constructors = baseClass.Methods.Where(m =>
                     string.Equals(m.Name, baseClass.Name, StringComparison.OrdinalIgnoreCase));
                 if (constructors.Any())
                 {
@@ -128,14 +122,14 @@ public class MissingConstructor : BaseStyler
             {
                 var baseInterface = baseProgram.Interface;
                 baseClassName = baseInterface.Name;
-                var constructors = baseInterface.Methods.Where(m => 
+                var constructors = baseInterface.Methods.Where(m =>
                     string.Equals(m.Name, baseInterface.Name, StringComparison.OrdinalIgnoreCase));
                 if (constructors.Any())
                 {
                     baseClassConstructor = constructors.First();
                 }
             }
-            
+
             // If base class/interface has parameterized constructor, flag the derived class
             if (baseClassConstructor?.Parameters.Count > 0)
             {

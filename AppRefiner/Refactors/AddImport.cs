@@ -1,6 +1,4 @@
 using PeopleCodeParser.SelfHosted.Nodes;
-using PeopleCodeParser.SelfHosted;
-using AppRefiner.Services;
 
 namespace AppRefiner.Refactors
 {
@@ -39,7 +37,7 @@ namespace AppRefiner.Refactors
                 throw new ArgumentException("Application class path cannot be null or empty", nameof(appClassPathToAdd));
 
             _appClassPathToAdd = appClassPathToAdd.Trim();
-            
+
             if (!IsValidAppClassPath(_appClassPathToAdd))
                 throw new ArgumentException($"Invalid Application Class Path format: {_appClassPathToAdd}", nameof(appClassPathToAdd));
         }
@@ -68,7 +66,7 @@ namespace AppRefiner.Refactors
                 if (!string.IsNullOrEmpty(importText))
                 {
                     // Ensure it ends with a semicolon for consistency
-                    if (!importText.EndsWith(";")) 
+                    if (!importText.EndsWith(";"))
                         importText += ";";
                     _existingImportStatements.Add(importText);
                 }
@@ -94,7 +92,8 @@ namespace AppRefiner.Refactors
             allImportStatements.Add(newImportStatement);
 
             // Sort the imports alphabetically by the path part, case-insensitively
-            allImportStatements.Sort((s1, s2) => {
+            allImportStatements.Sort((s1, s2) =>
+            {
                 // Extract path by removing "import " prefix and trailing ";"
                 string path1 = s1.Length > 7 ? s1.Substring(7, s1.Length - (s1.EndsWith(";") ? 8 : 7)).Trim() : s1;
                 string path2 = s2.Length > 7 ? s2.Substring(7, s2.Length - (s2.EndsWith(";") ? 8 : 7)).Trim() : s2;
@@ -115,10 +114,10 @@ namespace AppRefiner.Refactors
                 // Replace the entire imports section
                 var firstImport = node.Imports.First();
                 var lastImport = node.Imports.Last();
-                
+
                 if (firstImport.SourceSpan.IsValid && lastImport.SourceSpan.IsValid)
                 {
-                    EditText(firstImport.SourceSpan.Start.Index, lastImport.SourceSpan.End.Index, 
+                    EditText(firstImport.SourceSpan.Start.Index, lastImport.SourceSpan.End.Index,
                              newImportsBlockText, $"Add import for {_appClassPathToAdd}");
                 }
             }
@@ -126,7 +125,7 @@ namespace AppRefiner.Refactors
             {
                 // No existing imports - insert at the beginning of the program
                 var insertionPoint = 0;
-                
+
                 // If there's an app class, insert before it
                 if (node.AppClass?.SourceSpan.IsValid == true)
                 {

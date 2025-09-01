@@ -1,9 +1,4 @@
 ﻿using PeopleCodeParser.SelfHosted.Nodes;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace AppRefiner.Stylers
 {
@@ -14,7 +9,7 @@ namespace AppRefiner.Stylers
         {
             base.VisitProgram(node);
 
-            foreach(var error in Editor.ParserErrors)
+            foreach (var error in Editor.ParserErrors)
             {
                 AddIndicator(error.Location, IndicatorType.SQUIGGLE, 0x0000FFA0, error.Message);
             }

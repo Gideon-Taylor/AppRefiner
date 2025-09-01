@@ -26,12 +26,12 @@ internal class DirectivePreprocessor
         _originalTokens = tokens ?? throw new ArgumentNullException(nameof(tokens));
         _toolsVersion = toolsVersion ?? throw new ArgumentNullException(nameof(toolsVersion));
     }
-    
+
     /// <summary>
     /// Errors encountered during directive preprocessing
     /// </summary>
     public IReadOnlyList<string> Errors => _errors.AsReadOnly();
-    
+
     /// <summary>
     /// Process all compiler directives and return the filtered token stream
     /// with inactive directive branches removed
@@ -47,17 +47,17 @@ internal class DirectivePreprocessor
         while (position < _originalTokens.Count)
         {
             var token = _originalTokens[position];
-            
+
             switch (token.Type)
             {
                 case TokenType.DirectiveIf:
                     position = ProcessDirectiveIf(position, directiveStack, result);
                     break;
-                
+
                 case TokenType.DirectiveElse:
                     position = ProcessDirectiveElse(position, directiveStack, result);
                     break;
-                
+
                 case TokenType.DirectiveEndIf:
                     (position, lastContext) = ProcessDirectiveEndIf(position, directiveStack, result);
                     if (lastContext != null)
@@ -78,7 +78,7 @@ internal class DirectivePreprocessor
                         }
                     }
                     break;
-                
+
                 default:
                     // Regular token - add to result if we're in an active branch
                     if (IsTokenInActiveBranch(directiveStack))
@@ -89,17 +89,17 @@ internal class DirectivePreprocessor
                     break;
             }
         }
-        
+
         // Check for unclosed directives
         if (directiveStack.Count > 0)
         {
             _errors.Add($"Unclosed directive block(s): {directiveStack.Count} remaining");
         }
 
-       
+
         return result;
     }
-    
+
     /// <summary>
     /// Process a #If directive and its condition
     /// </summary>
@@ -107,7 +107,7 @@ internal class DirectivePreprocessor
     {
         var startPos = position;
         position++; // Skip #If token
-        
+
         try
         {
             // Extract condition tokens until #Then
@@ -122,7 +122,7 @@ internal class DirectivePreprocessor
 
             // Parse and evaluate condition
             bool conditionResult = EvaluateDirectiveCondition(conditionTokens);
-            
+
             // Create directive context
             var context = new DirectiveContext
             {
@@ -132,9 +132,9 @@ internal class DirectivePreprocessor
                 StartPosition = startPos,
                 IfBlockStart = _originalTokens[position].SourceSpan.Start,
             };
-            
+
             directiveStack.Push(context);
-            
+
             return position;
         }
         catch (Exception ex)
@@ -144,7 +144,7 @@ internal class DirectivePreprocessor
             return RecoverToNextStatement(position);
         }
     }
-    
+
     /// <summary>
     /// Process a #Else directive
     /// </summary>
@@ -155,7 +155,7 @@ internal class DirectivePreprocessor
             _errors.Add($"#Else without matching #If at position {position}");
             return position + 1;
         }
-        
+
         var context = directiveStack.Peek();
         context.IfBlockEnd = _originalTokens[position - 1].SourceSpan.End;
 
@@ -164,7 +164,7 @@ internal class DirectivePreprocessor
             _errors.Add($"Multiple #Else blocks in same #If directive at position {position}");
             return position + 1;
         }
-        
+
         // Switch to else branch
         context.HasElse = true;
         context.IsInElseBranch = true;
@@ -172,7 +172,7 @@ internal class DirectivePreprocessor
         context.ElseBlockStart = _originalTokens[position].SourceSpan.Start;
         return position;
     }
-    
+
     /// <summary>
     /// Process a #End-If directive
     /// </summary>
@@ -183,7 +183,7 @@ internal class DirectivePreprocessor
             _errors.Add($"#End-If without matching #If at position {position}");
             return (position + 1, null);
         }
-        
+
         var context = directiveStack.Pop();
         context.ElseBlockEnd = _originalTokens[position].SourceSpan.Start;
 
@@ -197,7 +197,7 @@ internal class DirectivePreprocessor
 
         return (position, context); // Skip #End-If token
     }
-    
+
     /// <summary>
     /// Check if the current token should be included based on directive context
     /// </summary>
@@ -205,7 +205,7 @@ internal class DirectivePreprocessor
     {
         if (directiveStack.Count == 0)
             return true; // No directives, everything is active
-        
+
         foreach (var context in directiveStack)
         {
             if (context.IsInElseBranch)
@@ -221,10 +221,10 @@ internal class DirectivePreprocessor
                     return false;
             }
         }
-        
+
         return true;
     }
-    
+
     /// <summary>
     /// Extract tokens from #If to #Then for condition parsing
     /// </summary>
@@ -232,11 +232,11 @@ internal class DirectivePreprocessor
     {
         var conditionTokens = new List<Token>();
         endPos = startPos;
-        
+
         while (endPos < _originalTokens.Count && _originalTokens[endPos].Type != TokenType.DirectiveThen)
         {
             var token = _originalTokens[endPos];
-            
+
             // Include non-trivia tokens and directive-specific tokens
             if (!token.Type.IsTrivia() ||
                 token.Type == TokenType.DirectiveToolsRel ||
@@ -245,18 +245,18 @@ internal class DirectivePreprocessor
             {
                 conditionTokens.Add(token);
             }
-            
+
             endPos++;
         }
-        
+
         if (endPos >= _originalTokens.Count)
         {
             throw new InvalidOperationException("#If directive missing #Then");
         }
-        
+
         return conditionTokens;
     }
-    
+
     /// <summary>
     /// Evaluate a directive condition using the DirectiveExpressionParser
     /// </summary>
@@ -267,16 +267,16 @@ internal class DirectivePreprocessor
             _errors.Add("Empty directive condition");
             return false; // Default to false for empty conditions
         }
-        
+
         var parser = new DirectiveExpressionParser(conditionTokens);
         var expression = parser.ParseExpression();
-        
+
         if (expression == null)
         {
             _errors.AddRange(parser.Errors);
             return false; // Default to false for parse failures
         }
-        
+
         try
         {
             return expression.Evaluate(_toolsVersion);
@@ -287,7 +287,7 @@ internal class DirectivePreprocessor
             return false; // Default to false for evaluation failures
         }
     }
-    
+
     /// <summary>
     /// Recover from directive parsing errors by finding the next safe position
     /// </summary>
@@ -306,7 +306,7 @@ internal class DirectivePreprocessor
             TokenType.Try,
             TokenType.Return
         };
-        
+
         while (position < _originalTokens.Count)
         {
             if (syncTokens.Contains(_originalTokens[position].Type))
@@ -315,7 +315,7 @@ internal class DirectivePreprocessor
             }
             position++;
         }
-        
+
         return position;
     }
 }
@@ -324,22 +324,22 @@ internal class DirectivePreprocessor
 /// Context information for a directive block during preprocessing
 /// </summary>
 internal class DirectiveContext
-{    
+{
     /// <summary>
     /// Whether the directive condition evaluated to true
     /// </summary>
     public bool ConditionResult { get; set; }
-    
+
     /// <summary>
     /// Whether this directive has an #Else block
     /// </summary>
     public bool HasElse { get; set; }
-    
+
     /// <summary>
     /// Whether we're currently in the #Else branch
     /// </summary>
     public bool IsInElseBranch { get; set; }
-    
+
     /// <summary>
     /// Starting position in original token stream
     /// </summary>

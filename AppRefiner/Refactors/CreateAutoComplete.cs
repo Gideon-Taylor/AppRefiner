@@ -1,6 +1,4 @@
 using PeopleCodeParser.SelfHosted.Nodes;
-using PeopleCodeParser.SelfHosted;
-using AppRefiner.Services;
 
 namespace AppRefiner.Refactors
 {
@@ -45,7 +43,7 @@ namespace AppRefiner.Refactors
         private bool IsCreateCallAtCursor(LocalVariableDeclarationWithAssignmentNode node)
         {
             // Check if the initializer is a function call to "create"
-            if (node.InitialValue is FunctionCallNode functionCall && 
+            if (node.InitialValue is FunctionCallNode functionCall &&
                 functionCall.Function is IdentifierNode identifier)
             {
                 if (identifier.Name.Equals("create", StringComparison.OrdinalIgnoreCase))

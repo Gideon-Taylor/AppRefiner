@@ -1,12 +1,6 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using AppRefiner.Refactors.QuickFixes;
-using AppRefiner.Stylers;
 using PeopleCodeParser.SelfHosted.Nodes;
-using PeopleCodeParser.SelfHosted.Visitors;
 using PeopleCodeParser.SelfHosted.Visitors.Models;
-using PeopleCodeParser.SelfHosted.Visitors.Utilities;
 
 namespace AppRefiner.Stylers;
 
@@ -33,10 +27,10 @@ public class UnusedVariables : ScopedStyler
     public override void VisitProgram(ProgramNode node)
     {
         Reset();
-        
+
         // Process the program
         base.VisitProgram(node);
-        
+
         // Generate indicators for all unused variables
         GenerateIndicatorsForUnusedVariables();
     }
@@ -60,9 +54,9 @@ public class UnusedVariables : ScopedStyler
         foreach (var variable in GetUnusedVariables().Where(v => v.Kind == VariableKind.Local || v.Kind == VariableKind.Instance || v.Kind == VariableKind.Parameter))
         {
             string tooltip = GetTooltipForVariable(variable);
-            
+
             AddIndicator(variable.VariableNameInfo.SourceSpan, IndicatorType.TEXTCOLOR, HIGHLIGHT_COLOR, tooltip, [(typeof(DeleteUnusedVariable), variable.Kind == VariableKind.Parameter ? "Delete unused parameter" : "Delete unused variable declaration")]);
-        }        
+        }
     }
 
     /// <summary>
@@ -91,7 +85,7 @@ public class UnusedVariables : ScopedStyler
     /// </summary>
     private string GetTooltipPrefixForScope(ScopeContext scopeInfo)
     {
-        
+
         return scopeInfo.Type switch
         {
             EnhancedScopeType.Method => "Unused method variable",

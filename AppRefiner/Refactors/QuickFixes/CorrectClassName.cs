@@ -1,6 +1,4 @@
 using PeopleCodeParser.SelfHosted.Nodes;
-using AppRefiner.Services;
-using System;
 
 namespace AppRefiner.Refactors.QuickFixes
 {
@@ -32,7 +30,7 @@ namespace AppRefiner.Refactors.QuickFixes
                 if (constructorMethod != null)
                     EditText(constructorMethod.NameToken.SourceSpan, expectedName, "Correct constructor name to match corrected class name");
             }
-            
+
             base.VisitAppClass(node);
         }
 

@@ -1,4 +1,3 @@
-using System;
 using AppRefiner.Dialogs;
 
 namespace AppRefiner
@@ -63,12 +62,12 @@ namespace AppRefiner
         /// <param name="context">Optional context information</param>
         public static void LogException(Exception ex, string context = "")
         {
-            string message = string.IsNullOrEmpty(context) 
-                ? $"Exception: {ex.Message}\n{ex.StackTrace}" 
+            string message = string.IsNullOrEmpty(context)
+                ? $"Exception: {ex.Message}\n{ex.StackTrace}"
                 : $"Exception in {context}: {ex.Message}\n{ex.StackTrace}";
-                
+
             DebugDialog.Log(message, DebugMessageType.Error);
-            
+
             // Log inner exceptions if they exist
             if (ex.InnerException != null)
             {
@@ -76,4 +75,4 @@ namespace AppRefiner
             }
         }
     }
-} 
+}

@@ -1,8 +1,6 @@
 using AppRefiner.Database;
 using AppRefiner.Shared.SQL;
-using AppRefiner.Shared.SQL.Models;
 using PeopleCodeParser.SelfHosted.Nodes;
-using PeopleCodeParser.SelfHosted.Visitors;
 
 namespace AppRefiner.Linters
 {
@@ -62,7 +60,7 @@ namespace AppRefiner.Linters
                 var methodReports = validator.ValidateSQLMethodCall(memberAccess, node);
                 ProcessReports(methodReports);
             }
-            
+
             base.VisitFunctionCall(node);
         }
 

@@ -1,14 +1,8 @@
-﻿using System;
-using System.Collections.Generic;
-using System.IO.Pipes;
-using System.Linq;
-using System.Runtime.InteropServices;
-using System.Text;
-using System.Threading.Tasks;
+﻿using System.Runtime.InteropServices;
 
 namespace AppRefiner.Events
 {
-    
+
     internal static class EventHookInstaller
     {
         private const uint WM_USER = 0x400;
@@ -20,8 +14,8 @@ namespace AppRefiner.Events
         private const uint WM_AR_SUBCLASS_RESULTS_LIST = WM_USER + 1007;
         private const uint WM_AR_SET_OPEN_TARGET = WM_USER + 1008;
 
-        private static Dictionary<uint, IntPtr> _activeHooks = new Dictionary<uint, IntPtr>();
-        private static Dictionary<uint, IntPtr> _activeKeyboardHooks = new Dictionary<uint, IntPtr>();
+        private static Dictionary<uint, IntPtr> _activeHooks = new();
+        private static Dictionary<uint, IntPtr> _activeKeyboardHooks = new();
 
         // Win32 API imports
         [DllImport("user32.dll")]
@@ -55,7 +49,7 @@ namespace AppRefiner.Events
                 {
                     return false;
                 }
-                
+
                 // Store the hook ID
                 _activeHooks[threadId] = hookId;
             }
@@ -88,16 +82,16 @@ namespace AppRefiner.Events
             {
                 UnhookThread(hookPair.Key);
             }
-            
+
             foreach (var keyboardHookPair in _activeKeyboardHooks.ToList())
             {
                 UnhookKeyboardForThread(keyboardHookPair.Key);
             }
-            
+
             _activeHooks.Clear();
             _activeKeyboardHooks.Clear();
         }
-        
+
         // Method to send auto-pairing toggle to a specific thread
         public static bool SendAutoPairingToggle(uint threadId, bool enabled)
         {
@@ -120,7 +114,7 @@ namespace AppRefiner.Events
                 {
                     return false;
                 }
-                
+
                 // Store the hook ID
                 _activeHooks[threadId] = hookId;
             }
@@ -165,7 +159,7 @@ namespace AppRefiner.Events
                 {
                     return false;
                 }
-                
+
                 // Store the hook ID
                 _activeHooks[threadId] = hookId;
             }
@@ -202,7 +196,7 @@ namespace AppRefiner.Events
                 // Allocate buffer in target process for the wide string
                 int charCount = openTarget.Length;
                 uint bufferSize = (uint)(charCount + 1) * 2; // +1 for null terminator, *2 for wide chars
-                
+
                 IntPtr remoteBuffer = ScintillaManager.GetStandaloneProcessBuffer(editor, bufferSize);
                 if (remoteBuffer == IntPtr.Zero)
                 {
@@ -218,20 +212,20 @@ namespace AppRefiner.Events
                 }
 
                 // Send the set open target message with the remote buffer pointer and character count
-                bool setTargetSuccess = PostThreadMessage(editor.ThreadID, WM_AR_SET_OPEN_TARGET, remoteBuffer, (IntPtr)charCount);
-                
+                bool setTargetSuccess = PostThreadMessage(editor.ThreadID, WM_AR_SET_OPEN_TARGET, remoteBuffer, charCount);
+
                 if (setTargetSuccess)
                 {
                     // Send synthetic double-click to trigger IDE behavior
                     const int WM_LBUTTONDBLCLK = 0x0203;
                     const int MK_LBUTTON = 0x0001;
                     IntPtr lParam = IntPtr.Zero; // MAKELONG(0, 0) - coordinates (0,0)
-                    
-                    bool doubleClickSuccess = SendMessage(resultsListView, WM_LBUTTONDBLCLK, (IntPtr)MK_LBUTTON, lParam) > 0;
-                    
+
+                    bool doubleClickSuccess = SendMessage(resultsListView, WM_LBUTTONDBLCLK, MK_LBUTTON, lParam) > 0;
+
                     // Free the buffer after use
                     ScintillaManager.FreeStandaloneProcessBuffer(editor, remoteBuffer);
-                    
+
                     return doubleClickSuccess;
                 }
                 else
@@ -269,7 +263,7 @@ namespace AppRefiner.Events
                 }
                 return result;
             }
-            
+
             return false;
         }
 
@@ -277,13 +271,13 @@ namespace AppRefiner.Events
         public static bool UnhookThread(uint threadId)
         {
             bool result = true;
-            
+
             // Unhook keyboard hook first
             if (_activeKeyboardHooks.ContainsKey(threadId))
             {
                 result &= UnhookKeyboardForThread(threadId);
             }
-            
+
             // Unhook main hook
             if (_activeHooks.TryGetValue(threadId, out IntPtr hookId))
             {
@@ -294,7 +288,7 @@ namespace AppRefiner.Events
                 }
                 result &= unhookResult;
             }
-            
+
             return result;
         }
     }

@@ -1,11 +1,7 @@
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Reflection;
 using AppRefiner.Linters;
 using AppRefiner.Stylers;
 using AppRefiner.TooltipProviders;
+using System.Reflection;
 
 namespace AppRefiner.Plugins
 {
@@ -33,7 +29,7 @@ namespace AppRefiner.Plugins
 
             // Find all DLL files in the plugin directory
             var dllFiles = Directory.GetFiles(pluginDirectory, "*.dll", SearchOption.TopDirectoryOnly);
-            
+
             foreach (var dllFile in dllFiles)
             {
                 try
@@ -67,7 +63,7 @@ namespace AppRefiner.Plugins
                     // Find all non-abstract types that inherit from BaseLintRule
                     var types = assembly.GetTypes()
                         .Where(t => typeof(BaseLintRule).IsAssignableFrom(t) && !t.IsAbstract);
-                    
+
                     linterTypes.AddRange(types);
                 }
                 catch (Exception ex)
@@ -95,7 +91,7 @@ namespace AppRefiner.Plugins
                     // Find all non-abstract types that implement IStyler
                     var types = assembly.GetTypes()
                         .Where(t => typeof(IStyler).IsAssignableFrom(t) && !t.IsAbstract && !t.IsInterface);
-                    
+
                     stylerTypes.AddRange(types);
                 }
                 catch (Exception ex)
@@ -122,10 +118,10 @@ namespace AppRefiner.Plugins
                 {
                     // Find all non-abstract types that inherit from BaseRefactor
                     var types = assembly.GetTypes()
-                        .Where(t => typeof(Refactors.BaseRefactor).IsAssignableFrom(t) && 
-                               !t.IsAbstract && 
+                        .Where(t => typeof(Refactors.BaseRefactor).IsAssignableFrom(t) &&
+                               !t.IsAbstract &&
                                t != typeof(Refactors.ScopedRefactor));
-                    
+
                     refactorTypes.AddRange(types);
                 }
                 catch (Exception ex)
@@ -153,7 +149,7 @@ namespace AppRefiner.Plugins
                     // Find all non-abstract types that implement ITooltipProvider
                     var types = assembly.GetTypes()
                         .Where(t => typeof(ITooltipProvider).IsAssignableFrom(t) && !t.IsAbstract && !t.IsInterface);
-                    
+
                     tooltipProviderTypes.AddRange(types);
                 }
                 catch (Exception ex)
@@ -180,15 +176,15 @@ namespace AppRefiner.Plugins
                 {
                     var linterCount = assembly.GetTypes()
                         .Count(t => typeof(BaseLintRule).IsAssignableFrom(t) && !t.IsAbstract);
-                    
+
                     var stylerCount = assembly.GetTypes()
                         .Count(t => typeof(BaseStyler).IsAssignableFrom(t) && !t.IsAbstract);
 
                     var refactorCount = assembly.GetTypes()
-                        .Count(t => typeof(Refactors.BaseRefactor).IsAssignableFrom(t) && 
-                               !t.IsAbstract && 
+                        .Count(t => typeof(Refactors.BaseRefactor).IsAssignableFrom(t) &&
+                               !t.IsAbstract &&
                                t != typeof(Refactors.ScopedRefactor));
-                               
+
                     var tooltipProviderCount = assembly.GetTypes()
                         .Count(t => typeof(ITooltipProvider).IsAssignableFrom(t) && !t.IsAbstract && !t.IsInterface);
 

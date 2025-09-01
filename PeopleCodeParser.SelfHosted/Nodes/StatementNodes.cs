@@ -23,14 +23,14 @@ public abstract class StatementNode : AstNode
     /// True if this statement introduces a new scope
     /// </summary>
     public virtual bool IntroducesScope => false;
-    
+
     /// <summary>
     /// True if this statement had a semicolon in the source code
     /// This is used for style checking, as PeopleCode allows but doesn't require
     /// semicolons after statements (especially the last statement in a block)
     /// </summary>
     public bool HasSemicolon { get; set; } = false;
-    
+
     /// <summary>
     /// The sequential number of this statement in the program
     /// This is useful for consumers of the library to track statement execution order
@@ -320,8 +320,8 @@ public class EvaluateStatementNode : StatementNode
     public BlockNode? WhenOtherBlock { get; set; }
 
     public override bool IntroducesScope => true;
-    public override bool CanTransferControl => 
-        WhenClauses.Any(w => w.Body.CanTransferControl) || 
+    public override bool CanTransferControl =>
+        WhenClauses.Any(w => w.Body.CanTransferControl) ||
         (WhenOtherBlock?.CanTransferControl ?? false);
 
     public EvaluateStatementNode(ExpressionNode expression)
@@ -412,15 +412,15 @@ public class TryStatementNode : StatementNode
     public List<CatchStatementNode> CatchClauses { get; } = new();
 
     public override bool IntroducesScope => true;
-    public override bool CanTransferControl => 
-        TryBlock.CanTransferControl || 
+    public override bool CanTransferControl =>
+        TryBlock.CanTransferControl ||
         CatchClauses.Any(c => c.CanTransferControl);
 
     public TryStatementNode(BlockNode tryBlock, IEnumerable<CatchStatementNode>? catchClauses = null)
     {
         TryBlock = tryBlock ?? throw new ArgumentNullException(nameof(tryBlock));
         AddChild(tryBlock);
-        
+
         if (catchClauses != null)
         {
             foreach (var catchClause in catchClauses)
@@ -737,7 +737,7 @@ public class LocalVariableDeclarationNode : StatementNode
     /// Variable names
     /// </summary>
     public List<string> VariableNames { get; }
-    
+
     /// <summary>
     /// Variable name information including tokens
     /// </summary>
@@ -745,7 +745,7 @@ public class LocalVariableDeclarationNode : StatementNode
 
     public override bool IntroducesScope => false; // Local variables don't introduce new scopes
 
-    public LocalVariableDeclarationNode(TypeNode type, IEnumerable<(string,Token)> variableNames)
+    public LocalVariableDeclarationNode(TypeNode type, IEnumerable<(string, Token)> variableNames)
     {
         Type = type ?? throw new ArgumentNullException(nameof(type));
         VariableNames = variableNames?.Select(v => v.Item1).ToList() ?? throw new ArgumentNullException(nameof(variableNames));

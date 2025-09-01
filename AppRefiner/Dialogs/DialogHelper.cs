@@ -1,6 +1,3 @@
-using System;
-using System.Drawing;
-using System.Windows.Forms;
 using System.Runtime.InteropServices;
 
 namespace AppRefiner.Dialogs
@@ -83,12 +80,12 @@ namespace AppRefiner.Dialogs
             int cycles = 3,
             int interval = 100)
         {
-            var attentionColors = new[] { Color.FromArgb(0, 178, 227), originalColor,Color.FromArgb(255, 158, 24) };
+            var attentionColors = new[] { Color.FromArgb(0, 178, 227), originalColor, Color.FromArgb(255, 158, 24) };
 
             int flickerCount = 0;
             int maxFlickerCount = cycles * 2; // Each cycle is two color changes
 
-            System.Windows.Forms.Timer flickerTimer = new System.Windows.Forms.Timer();
+            System.Windows.Forms.Timer flickerTimer = new();
             flickerTimer.Interval = interval;
             flickerTimer.Tick += (s, e) =>
             {
@@ -145,17 +142,15 @@ namespace AppRefiner.Dialogs
 
             private IntPtr SetHook(HookProc proc)
             {
-                using (var curProcess = System.Diagnostics.Process.GetCurrentProcess())
-                using (var curModule = curProcess.MainModule)
-                {
-                    string moduleName = curModule?.ModuleName ?? string.Empty;
-                    return SetWindowsHookEx(WH_MOUSE_LL, proc, GetModuleHandle(moduleName), 0);
-                }
+                using var curProcess = System.Diagnostics.Process.GetCurrentProcess();
+                using var curModule = curProcess.MainModule;
+                string moduleName = curModule?.ModuleName ?? string.Empty;
+                return SetWindowsHookEx(WH_MOUSE_LL, proc, GetModuleHandle(moduleName), 0);
             }
 
             private IntPtr HookCallback(int nCode, IntPtr wParam, IntPtr lParam)
             {
-                if (nCode >= 0 && wParam == (IntPtr)WM_LBUTTONDOWN && !_isFlickering)
+                if (nCode >= 0 && wParam == WM_LBUTTONDOWN && !_isFlickering)
                 {
                     // Get the mouse position
                     var hookStruct = Marshal.PtrToStructure<MSLLHOOKSTRUCT>(lParam);
@@ -179,7 +174,7 @@ namespace AppRefiner.Dialogs
 
                                 // Return a non-zero value to prevent the click from being processed
                                 // This prevents the click from being sent to the owner window
-                                return (IntPtr)1;
+                                return 1;
                             }
                         }
                     }

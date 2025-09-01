@@ -1,34 +1,27 @@
-using System;
-using System.Collections.Generic;
-using System.ComponentModel;
-using System.Data;
-using System.Drawing;
-using System.Linq;
 using System.Reflection;
 using System.Text;
 using System.Text.Json;
-using System.Windows.Forms;
 
 namespace AppRefiner.Refactors
 {
     public partial class RefactorConfigDialog : Form
     {
         private Type _refactorType;
-        private Dictionary<string, Control> _propertyControls = new Dictionary<string, Control>();
-        private Dictionary<string, object?> _currentConfig = new Dictionary<string, object?>();
+        private Dictionary<string, Control> _propertyControls = new();
+        private Dictionary<string, object?> _currentConfig = new();
 
         public RefactorConfigDialog(Type refactorType)
         {
             InitializeComponent();
             _refactorType = refactorType;
-            
+
             // Get refactor name for dialog title
             string refactorName = _refactorType.Name;
             Text = $"Configure {refactorName} Refactor";
-            
+
             // Load current configuration
             LoadCurrentConfiguration();
-            
+
             // Set up the form with controls for each configurable property
             InitializePropertyControls();
         }
@@ -39,7 +32,7 @@ namespace AppRefiner.Refactors
             {
                 var configJson = RefactorConfigManager.GetOrCreateRefactorConfig(_refactorType);
                 var config = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(configJson);
-                
+
                 if (config != null)
                 {
                     foreach (var kvp in config)
@@ -71,14 +64,14 @@ namespace AppRefiner.Refactors
         private void InitializePropertyControls()
         {
             var properties = _refactorType.GetConfigurableProperties();
-            
+
             if (properties.Count == 0)
             {
                 return;
             }
 
             // Create a panel for the controls
-            Panel panel = new Panel
+            Panel panel = new()
             {
                 Dock = DockStyle.Fill,
                 AutoScroll = true,
@@ -94,7 +87,7 @@ namespace AppRefiner.Refactors
             foreach (var property in properties)
             {
                 // Create a label for the property
-                Label label = new Label
+                Label label = new()
                 {
                     Text = FormatPropertyName(property.Name) + ":",
                     Location = new Point(horizontalPadding, currentY + 3),
@@ -108,24 +101,24 @@ namespace AppRefiner.Refactors
                 {
                     control.Location = new Point(horizontalPadding + labelWidth + 10, currentY);
                     control.Size = new Size(controlWidth, control is ComboBox ? 21 : 20);
-                    
+
                     panel.Controls.Add(label);
                     panel.Controls.Add(control);
                     _propertyControls[property.Name] = control;
-                    
+
                     currentY += verticalSpacing;
                 }
             }
 
             // Add buttons at the bottom
-            Panel buttonPanel = new Panel
+            Panel buttonPanel = new()
             {
                 Dock = DockStyle.Bottom,
                 Height = 50,
                 Padding = new Padding(10)
             };
 
-            Button okButton = new Button
+            Button okButton = new()
             {
                 Text = "OK",
                 DialogResult = DialogResult.OK,
@@ -134,7 +127,7 @@ namespace AppRefiner.Refactors
             };
             okButton.Click += OkButton_Click;
 
-            Button cancelButton = new Button
+            Button cancelButton = new()
             {
                 Text = "Cancel",
                 DialogResult = DialogResult.Cancel,
@@ -150,11 +143,11 @@ namespace AppRefiner.Refactors
             Controls.Add(buttonPanel);
             AcceptButton = okButton;
             CancelButton = cancelButton;
-            
+
             // Set form size based on content
             int formHeight = Math.Min(500, (properties.Count * verticalSpacing) + 100);
             ClientSize = new Size(400, formHeight);
-            
+
             // Adjust button positions after form size is set
             okButton.Location = new Point(ClientSize.Width - 180, 10);
             cancelButton.Location = new Point(ClientSize.Width - 90, 10);
@@ -163,7 +156,7 @@ namespace AppRefiner.Refactors
         private string FormatPropertyName(string propertyName)
         {
             // Add spaces before capital letters and capitalize the first letter
-            StringBuilder result = new StringBuilder();
+            StringBuilder result = new();
             for (int i = 0; i < propertyName.Length; i++)
             {
                 if (i > 0 && char.IsUpper(propertyName[i]))
@@ -179,10 +172,10 @@ namespace AppRefiner.Refactors
         {
             // Get the current value from configuration
             _currentConfig.TryGetValue(property.Name, out object? value);
-            
+
             if (property.PropertyType == typeof(bool))
             {
-                CheckBox checkBox = new CheckBox
+                CheckBox checkBox = new()
                 {
                     Checked = value != null && (bool)value,
                     AutoSize = true
@@ -191,13 +184,13 @@ namespace AppRefiner.Refactors
             }
             else if (property.PropertyType == typeof(int))
             {
-                NumericUpDown numericUpDown = new NumericUpDown
+                NumericUpDown numericUpDown = new()
                 {
                     Minimum = 0,
                     Maximum = 10000,
                     Width = 200
                 };
-                
+
                 // Set the value after setting Min/Max
                 if (value != null)
                 {
@@ -210,12 +203,12 @@ namespace AppRefiner.Refactors
                         numericUpDown.Value = 0;
                     }
                 }
-                
+
                 return numericUpDown;
             }
             else if (property.PropertyType == typeof(string))
             {
-                TextBox textBox = new TextBox
+                TextBox textBox = new()
                 {
                     Text = value?.ToString() ?? string.Empty,
                     Width = 200
@@ -224,17 +217,17 @@ namespace AppRefiner.Refactors
             }
             else if (property.PropertyType.IsEnum)
             {
-                ComboBox comboBox = new ComboBox
+                ComboBox comboBox = new()
                 {
                     Width = 200,
                     DropDownStyle = ComboBoxStyle.DropDownList
                 };
-                
+
                 foreach (var enumValue in Enum.GetValues(property.PropertyType))
                 {
                     comboBox.Items.Add(enumValue);
                 }
-                
+
                 // Set selected item
                 if (value != null)
                 {
@@ -253,12 +246,12 @@ namespace AppRefiner.Refactors
                 {
                     comboBox.SelectedIndex = 0;
                 }
-                
+
                 return comboBox;
             }
-            
+
             // For unsupported types, return a disabled textbox with the string representation
-            TextBox disabledTextBox = new TextBox
+            TextBox disabledTextBox = new()
             {
                 Text = value?.ToString() ?? string.Empty,
                 Width = 200,
@@ -286,27 +279,27 @@ namespace AppRefiner.Refactors
                         }
                         catch (Exception ex)
                         {
-                            MessageBox.Show($"Error setting property {property.Name}: {ex.Message}", "Error", 
+                            MessageBox.Show($"Error setting property {property.Name}: {ex.Message}", "Error",
                                 MessageBoxButtons.OK, MessageBoxIcon.Error);
                             return;
                         }
                     }
                 }
-                
+
                 // Serialize and save the configuration
                 string configJson = JsonSerializer.Serialize(config, new JsonSerializerOptions
                 {
                     WriteIndented = true
                 });
-                
+
                 RefactorConfigManager.UpdateRefactorConfig(_refactorType, configJson);
-                
+
                 DialogResult = DialogResult.OK;
                 Close();
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Error saving configuration: {ex.Message}", "Error", 
+                MessageBox.Show($"Error saving configuration: {ex.Message}", "Error",
                     MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
@@ -331,7 +324,7 @@ namespace AppRefiner.Refactors
             {
                 return comboBox.SelectedItem;
             }
-            
+
             return null;
         }
 

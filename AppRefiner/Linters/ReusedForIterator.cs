@@ -1,7 +1,4 @@
 ﻿using PeopleCodeParser.SelfHosted.Nodes;
-using PeopleCodeParser.SelfHosted.Visitors;
-using System;
-using System.Collections.Generic;
 
 namespace AppRefiner.Linters
 {
@@ -9,7 +6,7 @@ namespace AppRefiner.Linters
     {
         public override string LINTER_ID => "REUSED_FOR_ITER";
 
-        private Stack<string> forIterators = new Stack<string>();
+        private Stack<string> forIterators = new();
 
         public ReusedForIterator()
         {

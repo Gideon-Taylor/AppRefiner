@@ -1,13 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.ComponentModel;
-using System.Data;
-using System.Drawing;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using System.Windows.Forms;
-
 namespace AppRefiner.Plugins
 {
     public partial class PluginManagerDialog : Form
@@ -32,7 +22,7 @@ namespace AppRefiner.Plugins
         private void RefreshPluginList()
         {
             lstPlugins.Items.Clear();
-            
+
             var plugins = PluginManager.GetLoadedPluginMetadata();
             foreach (var plugin in plugins)
             {
@@ -42,7 +32,7 @@ namespace AppRefiner.Plugins
                 item.SubItems.Add(plugin.StylerCount.ToString());
                 item.SubItems.Add(plugin.FilePath);
                 item.Tag = plugin;
-                
+
                 lstPlugins.Items.Add(item);
             }
 
@@ -71,7 +61,7 @@ namespace AppRefiner.Plugins
         {
             Properties.Settings.Default.PluginDirectory = txtPluginDirectory.Text;
             Properties.Settings.Default.Save();
-            
+
             DialogResult = DialogResult.OK;
             Close();
         }
@@ -89,12 +79,12 @@ namespace AppRefiner.Plugins
                 Cursor = Cursors.WaitCursor;
                 int count = PluginManager.LoadPlugins(txtPluginDirectory.Text);
                 RefreshPluginList();
-                MessageBox.Show($"Successfully loaded {count} plugin assemblies.", 
+                MessageBox.Show($"Successfully loaded {count} plugin assemblies.",
                     "Plugins Loaded", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Error loading plugins: {ex.Message}", 
+                MessageBox.Show($"Error loading plugins: {ex.Message}",
                     "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
             finally

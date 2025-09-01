@@ -1,10 +1,3 @@
-using AppRefiner;
-using AppRefiner.TooltipProviders;
-using AppRefiner.PeopleCode; // For PeopleCodeParserBaseListener etc.
-using static AppRefiner.PeopleCode.PeopleCodeParser;
-using System.Collections.Generic;
-using Antlr4.Runtime;
-
 namespace PluginSample
 {
     // Example using ParseTreeTooltipProvider for context-aware tooltips
@@ -30,4 +23,4 @@ namespace PluginSample
             }
         }
     }
-} 
+}

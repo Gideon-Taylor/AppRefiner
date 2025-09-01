@@ -1,5 +1,3 @@
-using System.Collections.Generic;
-
 namespace AppRefiner.Database.Models
 {
     /// <summary>
@@ -53,4 +51,4 @@ namespace AppRefiner.Database.Models
             if (PackageLevel < 0) PackageLevel = 0;
         }
     }
-} 
+}

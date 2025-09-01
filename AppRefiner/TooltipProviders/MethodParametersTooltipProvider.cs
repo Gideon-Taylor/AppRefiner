@@ -1,12 +1,8 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
 using AppRefiner.Database;
 using PeopleCodeParser.SelfHosted;
 using PeopleCodeParser.SelfHosted.Nodes;
-using PeopleCodeParser.SelfHosted.Lexing;
 using PeopleCodeParser.SelfHosted.Visitors.Models;
+using System.Text;
 
 namespace AppRefiner.TooltipProviders
 {
@@ -18,10 +14,10 @@ namespace AppRefiner.TooltipProviders
     /// </summary>
     public class MethodParametersTooltipProvider : ScopedAstTooltipProvider
     {
-        private Dictionary<string, MethodInfo> methodData = new Dictionary<string, MethodInfo>(StringComparer.OrdinalIgnoreCase);
+        private Dictionary<string, MethodInfo> methodData = new(StringComparer.OrdinalIgnoreCase);
         private string? superClassName;
         private Dictionary<string, Dictionary<string, MethodInfo>> inheritanceChainMethods =
-            new Dictionary<string, Dictionary<string, MethodInfo>>(StringComparer.OrdinalIgnoreCase);
+            new(StringComparer.OrdinalIgnoreCase);
         private bool hasProcessedInheritanceChain = false;
 
         /// <summary>
@@ -350,7 +346,7 @@ namespace AppRefiner.TooltipProviders
                         // If this class also has a parent, process that hierarchy if needed
                         if (!string.IsNullOrEmpty(nextParent) && !inheritanceChainMethods.ContainsKey(nextParent))
                         {
-                            HashSet<string> processedParents = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                            HashSet<string> processedParents = new(StringComparer.OrdinalIgnoreCase);
                             processedParents.Add(classType);
 
                             string? currentParent = nextParent;
@@ -450,7 +446,7 @@ namespace AppRefiner.TooltipProviders
                 return;
 
             // Track the inheritance chain to avoid circular references
-            HashSet<string> processedClasses = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            HashSet<string> processedClasses = new(StringComparer.OrdinalIgnoreCase);
             string? currentParent = superClassName;
 
             while (!string.IsNullOrEmpty(currentParent) && !processedClasses.Contains(currentParent))

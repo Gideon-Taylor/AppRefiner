@@ -1,7 +1,3 @@
-using PeopleCodeParser.SelfHosted.Nodes;
-using PeopleCodeParser.SelfHosted.Lexing;
-using PeopleCodeParser.SelfHosted;
-
 namespace AppRefiner.Shared.SQL.Models
 {
     /// <summary>
@@ -15,12 +11,12 @@ namespace AppRefiner.Shared.SQL.Models
         public int BindCount { get; set; }
         public int OutputColumnCount { get; set; }
         public int CreateLine { get; set; }
-        
+
         /// <summary>
         /// Source span for the SQL variable creation (using SourceSpan instead of byte indices)
         /// </summary>
         public PeopleCodeParser.SelfHosted.SourceSpan CreateSpan { get; set; }
-        
+
         public string VariableName { get; set; }
 
         public bool InVarsBound { get; set; }

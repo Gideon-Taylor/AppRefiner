@@ -1,9 +1,5 @@
 using PeopleCodeParser.SelfHosted;
-using PeopleCodeParser.SelfHosted.Nodes;
 using PeopleCodeParser.SelfHosted.Visitors;
-using PeopleCodeParser.SelfHosted.Visitors.Models;
-using AppRefiner.Services;
-using System.Windows.Forms;
 using System.Diagnostics;
 
 namespace AppRefiner.Refactors
@@ -92,7 +88,7 @@ namespace AppRefiner.Refactors
         /// Gets the current cursor position (alias for CurrentPosition)
         /// </summary>
         protected int CurrentCursorPosition => CurrentPosition;
-        
+
         #endregion
 
         #region Private Fields

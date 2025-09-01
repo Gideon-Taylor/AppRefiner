@@ -303,7 +303,7 @@ namespace AppRefiner.Templates
         public string Apply(Dictionary<string, string> values)
         {
             if (TemplateText == null) return string.Empty;
-            
+
             // Store original cursor/selection state before modification
             CursorPosition = -1;
             SelectionStart = -1;

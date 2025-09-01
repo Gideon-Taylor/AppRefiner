@@ -1,5 +1,3 @@
-using PeopleCodeParser.SelfHosted.Lexing;
-
 namespace PeopleCodeParser.SelfHosted;
 
 /// <summary>

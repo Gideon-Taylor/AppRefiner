@@ -1,10 +1,4 @@
-using AppRefiner.Database;
-using PeopleCodeParser.SelfHosted;
 using PeopleCodeParser.SelfHosted.Nodes;
-using PeopleCodeParser.SelfHosted.Lexing;
-using System;
-using System.Collections.Generic;
-using System.Linq;
 
 namespace AppRefiner.Refactors.QuickFixes
 {
@@ -19,7 +13,7 @@ namespace AppRefiner.Refactors.QuickFixes
         private MethodNode? targetMethod;
         private MethodNode? baseMethodToOverride;
         private string? baseClassPath;
-        
+
         public ImplementMissingMethod(ScintillaEditor editor) : base(editor)
         {
         }
@@ -33,15 +27,15 @@ namespace AppRefiner.Refactors.QuickFixes
         public override void VisitAppClass(AppClassNode node)
         {
             base.VisitAppClass(node);
-            
+
             if (targetClass != null)
                 return;
 
             targetClass = node;
-            
+
             // Find method declarations that don't have implementations
             var methodsNeedingImplementation = FindMethodsNeedingImplementation(node);
-            
+
             if (methodsNeedingImplementation.Count == 0)
             {
                 SetFailure("No methods found that need implementation");
@@ -50,20 +44,20 @@ namespace AppRefiner.Refactors.QuickFixes
 
             // Find the method that contains the current cursor position
             targetMethod = FindTargetMethodByCursorPosition(methodsNeedingImplementation);
-            
+
             if (targetMethod == null)
             {
                 // If no method found at cursor, take the first one
                 targetMethod = methodsNeedingImplementation.First();
             }
-            
+
             // Check if this method exists in base class/interface for override annotation
             if (node.BaseClass != null && Editor.DataManager != null)
             {
                 baseClassPath = node.BaseClass.TypeName;
                 AnalyzeBaseClassForOverride(baseClassPath, targetMethod.Name);
             }
-            
+
             // Generate the implementation now that we have everything we need
             GenerateMethodImplementation();
         }
@@ -79,7 +73,7 @@ namespace AppRefiner.Refactors.QuickFixes
         private MethodNode? FindTargetMethodByCursorPosition(List<MethodNode> methodsNeedingImplementation)
         {
             var currentPosition = CurrentPosition;
-            
+
             foreach (var method in methodsNeedingImplementation)
             {
                 if (method.SourceSpan.ContainsPosition(currentPosition))
@@ -87,36 +81,36 @@ namespace AppRefiner.Refactors.QuickFixes
                     return method;
                 }
             }
-            
+
             return null;
         }
 
         private List<MethodNode> FindMethodsNeedingImplementation(AppClassNode classNode)
         {
             var methodsNeedingImpl = new List<MethodNode>();
-            
+
             // Get all method declarations (methods without implementations)
             var declarations = classNode.Methods.Where(m => m.IsDeclaration).ToList();
-            
+
             // Get all method implementations
             var implementations = classNode.Methods.Where(m => m.IsImplementation).ToList();
-            
+
             foreach (var declaration in declarations)
             {
                 // Skip constructors
                 if (declaration.IsConstructor)
                     continue;
-                
+
                 // Check if there's already an implementation for this method
-                bool hasImplementation = implementations.Any(impl => 
+                bool hasImplementation = implementations.Any(impl =>
                     string.Equals(impl.Name, declaration.Name, StringComparison.OrdinalIgnoreCase));
-                
+
                 if (!hasImplementation)
                 {
                     methodsNeedingImpl.Add(declaration);
                 }
             }
-            
+
             return methodsNeedingImpl;
         }
 
@@ -153,12 +147,12 @@ namespace AppRefiner.Refactors.QuickFixes
 
             if (baseProgram.AppClass != null)
             {
-                baseMethod = baseProgram.AppClass.Methods.FirstOrDefault(m => 
+                baseMethod = baseProgram.AppClass.Methods.FirstOrDefault(m =>
                     string.Equals(m.Name, methodName, StringComparison.OrdinalIgnoreCase));
             }
             else if (baseProgram.Interface != null)
             {
-                baseMethod = baseProgram.Interface.Methods.FirstOrDefault(m => 
+                baseMethod = baseProgram.Interface.Methods.FirstOrDefault(m =>
                     string.Equals(m.Name, methodName, StringComparison.OrdinalIgnoreCase));
             }
 
@@ -184,7 +178,7 @@ namespace AppRefiner.Refactors.QuickFixes
             var methodBody = GenerateMethodBody(targetMethod);
 
             var implementation = GenerateFullImplementation(methodName, overrideAnnotation, parameterAnnotations, methodBody);
-            
+
             var insertPosition = FindImplementationInsertionPosition();
             if (insertPosition >= 0)
             {
@@ -199,14 +193,14 @@ namespace AppRefiner.Refactors.QuickFixes
         private List<(string Name, string Type, bool IsOut)> GenerateParameterInfo(List<ParameterNode> parameters)
         {
             var paramInfo = new List<(string Name, string Type, bool IsOut)>();
-            
+
             foreach (var param in parameters)
             {
                 var paramType = param.Type?.ToString() ?? "any";
                 var isOut = param.IsOut;
                 paramInfo.Add((param.Name, paramType, isOut));
             }
-            
+
             return paramInfo;
         }
 
@@ -216,7 +210,7 @@ namespace AppRefiner.Refactors.QuickFixes
             {
                 return $"   /+ Extends/implements {baseClassPath}.{baseMethodToOverride.Name} +/" + Environment.NewLine;
             }
-            
+
             return string.Empty;
         }
 
@@ -231,7 +225,7 @@ namespace AppRefiner.Refactors.QuickFixes
                 var outModifier = param.IsOut ? " out" : "";
                 annotations.Add($"   /+ &{param.Name} as {param.Type}{outModifier} +/");
             }
-            
+
             return string.Join(Environment.NewLine, annotations) + Environment.NewLine;
         }
 
@@ -239,14 +233,14 @@ namespace AppRefiner.Refactors.QuickFixes
         {
             var indent = "   ";
             var methodBody = $"{indent}throw CreateException(0, 0, \"Method '{method.Name}' not implemented.\");" + Environment.NewLine;
-            
+
             // Add return statement if method has a return type
             if (method.ReturnType != null)
             {
                 var defaultValue = GetDefaultValueForType(method.ReturnType.ToString());
                 methodBody += $"{indent}Return {defaultValue};" + Environment.NewLine;
             }
-            
+
             return methodBody;
         }
 
@@ -257,7 +251,7 @@ namespace AppRefiner.Refactors.QuickFixes
                                 parameterAnnotations +
                                 methodBody +
                                 "end-method;";
-            
+
             return Environment.NewLine + Environment.NewLine + implementation;
         }
 
@@ -284,7 +278,7 @@ namespace AppRefiner.Refactors.QuickFixes
 
         private int FindImplementationInsertionPosition()
         {
-            if (targetClass == null) 
+            if (targetClass == null)
                 return -1;
 
             var lastImplementation = targetClass.Methods

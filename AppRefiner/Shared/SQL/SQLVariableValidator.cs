@@ -1,9 +1,5 @@
-using AppRefiner.Database;
 using AppRefiner.Linters;
-
-using AppRefiner.Shared.SQL.Models;
 using PeopleCodeParser.SelfHosted.Nodes;
-using PeopleCodeParser.SelfHosted;
 using SqlParser.Ast;
 using SQLStatementInfo = AppRefiner.Shared.SQL.Models.SQLStatementInfo;
 
@@ -37,7 +33,7 @@ namespace AppRefiner.Shared.SQL
         public List<Report> ValidateVariableDeclaration(LocalVariableDeclarationNode node)
         {
             var reports = new List<Report>();
-            
+
             if (!IsTypeSQL(node.Type))
                 return reports;
 
@@ -45,7 +41,7 @@ namespace AppRefiner.Shared.SQL
             {
                 var varName = varInfo.Name;
                 var span = varInfo.SourceSpan;
-                
+
                 var defaultInfo = new SQLStatementInfo(
                     sqlText: "",
                     bindCount: 0,
@@ -67,13 +63,13 @@ namespace AppRefiner.Shared.SQL
         public List<Report> ValidateVariableDeclarationWithAssignment(LocalVariableDeclarationWithAssignmentNode node)
         {
             var reports = new List<Report>();
-            
+
             if (!IsTypeSQL(node.Type))
                 return reports;
 
             var varName = node.VariableName;
             var span = node.VariableNameInfo?.SourceSpan ?? node.SourceSpan;
-            
+
             var defaultInfo = new SQLStatementInfo(
                 sqlText: "",
                 bindCount: 0,
@@ -231,19 +227,19 @@ namespace AppRefiner.Shared.SQL
         {
             // Navigate up the AST to find assignment context
             var parent = functionCall.Parent;
-            
+
             // Check for local variable declaration with assignment
             if (parent is LocalVariableDeclarationWithAssignmentNode localDecl)
             {
                 return localDecl.VariableName;
             }
-            
+
             // Check for assignment expression
             if (parent is AssignmentNode assignment && assignment.Target is IdentifierNode targetId)
             {
                 return targetId.Name;
             }
-            
+
             return null;
         }
 
@@ -255,7 +251,7 @@ namespace AppRefiner.Shared.SQL
         private List<Report> ValidateArguments(string? sqlText, List<ExpressionNode> args, SQLStatementInfo sqlInfo, PeopleCodeParser.SelfHosted.AstNode context, ValidationMode validationMode)
         {
             var reports = new List<Report>();
-            
+
             if (string.IsNullOrWhiteSpace(sqlText))
                 return reports;
 
@@ -421,7 +417,7 @@ namespace AppRefiner.Shared.SQL
         private List<Report> ValidateFetchCall(FunctionCallNode functionCall, SQLStatementInfo sqlInfo)
         {
             var reports = new List<Report>();
-            
+
             // Cannot validate calls where we don't have the SQL text
             if (!sqlInfo.HasValidSqlText)
             {
@@ -469,10 +465,10 @@ namespace AppRefiner.Shared.SQL
                 if (sqlInfo.OutputColumnCount > 1)
                 {
                     var singleArg = args[0];
-                    
+
                     // For now, we'll skip detailed type checking since we don't have variable type tracking in this validator
                     // This would need to be enhanced with type information from the scope
-                    
+
                     reports.Add(new Report
                     {
                         ReportNumber = 15,

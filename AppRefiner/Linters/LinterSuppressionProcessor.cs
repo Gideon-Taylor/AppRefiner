@@ -1,5 +1,4 @@
 using PeopleCodeParser.SelfHosted.Nodes;
-using PeopleCodeParser.SelfHosted.Visitors;
 using System.Text.RegularExpressions;
 
 namespace AppRefiner.Linters
@@ -155,7 +154,7 @@ namespace AppRefiner.Linters
             // Check for imports (look at the program statements)
             foreach (var import in programNode.Imports)
             {
-               boundaryLine = Math.Min(boundaryLine, import.SourceSpan.Start.Line);
+                boundaryLine = Math.Min(boundaryLine, import.SourceSpan.Start.Line);
             }
 
             return boundaryLine != int.MaxValue ? boundaryLine : 1;

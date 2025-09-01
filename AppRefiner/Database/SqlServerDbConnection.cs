@@ -1,6 +1,6 @@
-using System.Data.Odbc;
-using System.Data;
 using Microsoft.Win32;
+using System.Data;
+using System.Data.Odbc;
 
 namespace AppRefiner.Database
 {
@@ -10,7 +10,7 @@ namespace AppRefiner.Database
     public class SqlServerDbConnection : IDbConnection
     {
         private OdbcConnection _connection;
-        
+
         /// <summary>
         /// Gets or sets the connection string
         /// </summary>
@@ -86,29 +86,27 @@ namespace AppRefiner.Database
         /// </summary>
         public DataTable ExecuteQuery(string sql, Dictionary<string, object>? parameters = null)
         {
-            using (var command = _connection.CreateCommand())
+            using var command = _connection.CreateCommand();
+            command.CommandText = sql;
+
+            if (parameters != null)
             {
-                command.CommandText = sql;
-
-                if (parameters != null)
+                foreach (var param in parameters)
                 {
-                    foreach (var param in parameters)
-                    {
-                        OdbcParameter odbcParam = command.CreateParameter();
-                        odbcParam.ParameterName = param.Key;
-                        odbcParam.Value = param.Value ?? DBNull.Value;
-                        command.Parameters.Add(odbcParam);
-                    }
+                    OdbcParameter odbcParam = command.CreateParameter();
+                    odbcParam.ParameterName = param.Key;
+                    odbcParam.Value = param.Value ?? DBNull.Value;
+                    command.Parameters.Add(odbcParam);
                 }
-
-                DataTable dataTable = new();
-                using (var adapter = new OdbcDataAdapter(command))
-                {
-                    adapter.Fill(dataTable);
-                }
-
-                return dataTable;
             }
+
+            DataTable dataTable = new();
+            using (var adapter = new OdbcDataAdapter(command))
+            {
+                adapter.Fill(dataTable);
+            }
+
+            return dataTable;
         }
 
         /// <summary>
@@ -116,23 +114,21 @@ namespace AppRefiner.Database
         /// </summary>
         public int ExecuteNonQuery(string sql, Dictionary<string, object>? parameters = null)
         {
-            using (var command = _connection.CreateCommand())
+            using var command = _connection.CreateCommand();
+            command.CommandText = sql;
+
+            if (parameters != null)
             {
-                command.CommandText = sql;
-
-                if (parameters != null)
+                foreach (var param in parameters)
                 {
-                    foreach (var param in parameters)
-                    {
-                        OdbcParameter odbcParam = command.CreateParameter();
-                        odbcParam.ParameterName = param.Key;
-                        odbcParam.Value = param.Value ?? DBNull.Value;
-                        command.Parameters.Add(odbcParam);
-                    }
+                    OdbcParameter odbcParam = command.CreateParameter();
+                    odbcParam.ParameterName = param.Key;
+                    odbcParam.Value = param.Value ?? DBNull.Value;
+                    command.Parameters.Add(odbcParam);
                 }
-
-                return command.ExecuteNonQuery();
             }
+
+            return command.ExecuteNonQuery();
         }
 
         /// <summary>
@@ -156,7 +152,7 @@ namespace AppRefiner.Database
                 // Read System DSNs from registry
                 var systemDsns = ReadDsnsFromRegistry(Registry.LocalMachine, "System");
                 allDsns.UnionWith(systemDsns);
-                
+
                 // Read User DSNs from registry
                 var userDsns = ReadDsnsFromRegistry(Registry.CurrentUser, "User");
                 allDsns.UnionWith(userDsns);
@@ -181,26 +177,22 @@ namespace AppRefiner.Database
 
             try
             {
-                using (RegistryKey? odbcKey = registryHive.OpenSubKey(@"SOFTWARE\ODBC\ODBC.INI"))
+                using RegistryKey? odbcKey = registryHive.OpenSubKey(@"SOFTWARE\ODBC\ODBC.INI");
+                if (odbcKey != null)
                 {
-                    if (odbcKey != null)
+                    // Get ODBC Data Sources key
+                    using RegistryKey? dataSourcesKey = odbcKey.OpenSubKey("ODBC Data Sources");
+                    if (dataSourcesKey != null)
                     {
-                        // Get ODBC Data Sources key
-                        using (RegistryKey? dataSourcesKey = odbcKey.OpenSubKey("ODBC Data Sources"))
+                        // Iterate through all DSN entries
+                        foreach (string dsnName in dataSourcesKey.GetValueNames())
                         {
-                            if (dataSourcesKey != null)
+                            string? driver = dataSourcesKey.GetValue(dsnName)?.ToString();
+
+                            // Filter for SQL Server drivers
+                            if (IsSqlServerDriver(driver))
                             {
-                                // Iterate through all DSN entries
-                                foreach (string dsnName in dataSourcesKey.GetValueNames())
-                                {
-                                    string? driver = dataSourcesKey.GetValue(dsnName)?.ToString();
-                                    
-                                    // Filter for SQL Server drivers
-                                    if (IsSqlServerDriver(driver))
-                                    {
-                                        dsns.Add(dsnName);
-                                    }
-                                }
+                                dsns.Add(dsnName);
                             }
                         }
                     }
@@ -225,7 +217,7 @@ namespace AppRefiner.Database
                 return false;
 
             string driverLower = driver.ToLowerInvariant();
-            
+
             // Common SQL Server driver names
             return driverLower.Contains("sql server") ||
                    driverLower.Contains("sqlsrv") ||

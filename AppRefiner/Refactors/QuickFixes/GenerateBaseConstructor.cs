@@ -1,10 +1,4 @@
-using AppRefiner.Database;
-using PeopleCodeParser.SelfHosted;
 using PeopleCodeParser.SelfHosted.Nodes;
-using PeopleCodeParser.SelfHosted.Lexing;
-using System;
-using System.Collections.Generic;
-using System.Linq;
 
 namespace AppRefiner.Refactors.QuickFixes
 {
@@ -18,7 +12,7 @@ namespace AppRefiner.Refactors.QuickFixes
         private AppClassNode? targetClass;
         private MethodNode? baseConstructor;
         private HashSet<string> existingMemberNames = new(StringComparer.OrdinalIgnoreCase);
-        
+
         public GenerateBaseConstructor(ScintillaEditor editor) : base(editor)
         {
         }
@@ -32,13 +26,13 @@ namespace AppRefiner.Refactors.QuickFixes
         public override void VisitAppClass(AppClassNode node)
         {
             base.VisitAppClass(node);
-            
+
             if (targetClass != null)
                 return;
 
-            var existingConstructor = node.Methods.FirstOrDefault(m => 
+            var existingConstructor = node.Methods.FirstOrDefault(m =>
                 string.Equals(m.Name, node.Name, StringComparison.OrdinalIgnoreCase));
-            
+
             if (existingConstructor != null)
                 return;
 
@@ -50,7 +44,7 @@ namespace AppRefiner.Refactors.QuickFixes
 
             targetClass = node;
             CollectExistingMemberNames(node);
-            
+
             if (Editor.DataManager != null)
             {
                 AnalyzeBaseClass(node.BaseClass.TypeName);
@@ -74,12 +68,12 @@ namespace AppRefiner.Refactors.QuickFixes
             {
                 existingMemberNames.Add(variable.Name);
             }
-            
+
             foreach (var property in classNode.Properties)
             {
                 existingMemberNames.Add(property.Name);
             }
-            
+
             foreach (var method in classNode.Methods)
             {
                 existingMemberNames.Add(method.Name);
@@ -131,14 +125,14 @@ namespace AppRefiner.Refactors.QuickFixes
             {
                 var baseClass = baseProgram.AppClass;
                 baseClassName = baseClass.Name;
-                constructor = baseClass.Methods.FirstOrDefault(m => 
+                constructor = baseClass.Methods.FirstOrDefault(m =>
                     string.Equals(m.Name, baseClass.Name, StringComparison.OrdinalIgnoreCase));
             }
             else if (baseProgram.Interface != null)
             {
                 var baseInterface = baseProgram.Interface;
                 baseClassName = baseInterface.Name;
-                constructor = baseInterface.Methods.FirstOrDefault(m => 
+                constructor = baseInterface.Methods.FirstOrDefault(m =>
                     string.Equals(m.Name, baseInterface.Name, StringComparison.OrdinalIgnoreCase));
             }
 
@@ -176,7 +170,7 @@ namespace AppRefiner.Refactors.QuickFixes
         private List<(string Name, string Type)> GenerateSafeParameters()
         {
             var safeParameters = new List<(string Name, string Type)>();
-            
+
             foreach (var param in baseConstructor!.Parameters)
             {
                 var paramType = param.Type?.ToString() ?? "any";
@@ -211,15 +205,15 @@ namespace AppRefiner.Refactors.QuickFixes
         {
             var parameterList = string.Join(", ", parameters.Select(p => p.Name));
             var baseClassPath = targetClass!.BaseClass!.TypeName;
-            
+
             var parameterAnnotations = GenerateParameterAnnotations(parameters);
-            
+
             var implementation = $"method {targetClass.Name}" + Environment.NewLine +
                                 parameterAnnotations +
                                 $"   %Super = create {baseClassPath}({parameterList});" + Environment.NewLine +
                                 Environment.NewLine +
                                 "end-method;";
-            
+
             return Environment.NewLine + Environment.NewLine + implementation;
         }
 
@@ -233,7 +227,7 @@ namespace AppRefiner.Refactors.QuickFixes
             {
                 annotations.Add($"   /+ &{param.Name} as {param.Type} +/");
             }
-            
+
             return string.Join(Environment.NewLine, annotations) + Environment.NewLine;
         }
 
@@ -249,7 +243,7 @@ namespace AppRefiner.Refactors.QuickFixes
             if (insertPosition >= 0)
             {
                 var headerWithNewline = constructorHeader + Environment.NewLine;
-                InsertText(insertPosition, headerWithNewline, 
+                InsertText(insertPosition, headerWithNewline,
                           $"Insert constructor header for '{targetClass.Name}'");
             }
             else
@@ -284,7 +278,7 @@ namespace AppRefiner.Refactors.QuickFixes
 
             var classEndPosition = targetClass.SourceSpan.End.ByteIndex;
             var firstMethod = targetClass.Methods.FirstOrDefault();
-            
+
             if (firstMethod != null)
             {
                 return firstMethod.SourceSpan.Start.ByteIndex;

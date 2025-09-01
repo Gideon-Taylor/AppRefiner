@@ -1,7 +1,4 @@
 using AppRefiner.Stylers;
-using static AppRefiner.PeopleCode.PeopleCodeParser;
-using System.Collections.Generic;
-using Antlr4.Runtime.Misc;
 
 namespace PluginSample
 {

@@ -1,12 +1,5 @@
-using System;
-using System.Drawing;
-using System.Windows.Forms;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
 using AppRefiner.Database.Models;
 using AppRefiner.Snapshots;
-using DiffPlex.DiffBuilder.Model;
 
 namespace AppRefiner.Dialogs
 {
@@ -25,7 +18,7 @@ namespace AppRefiner.Dialogs
         private readonly Button cancelButton;
         private readonly IntPtr owner;
         private DialogHelper.ModalDialogMouseHandler? mouseHandler;
-        
+
         // Data
         private readonly SnapshotManager snapshotManager;
         private readonly ScintillaEditor editor;
@@ -44,7 +37,7 @@ namespace AppRefiner.Dialogs
             this.snapshotManager = snapshotManager;
             this.editor = editor;
             this.owner = owner;
-            
+
             // Initialize UI controls
             this.headerPanel = new Panel();
             this.headerLabel = new Label();
@@ -53,7 +46,7 @@ namespace AppRefiner.Dialogs
             this.viewButton = new Button();
             this.diffButton = new Button();
             this.cancelButton = new Button();
-            
+
             // Get commit history for the file
             if (!string.IsNullOrEmpty(editor.RelativePath))
             {
@@ -63,7 +56,7 @@ namespace AppRefiner.Dialogs
             {
                 snapshotHistory = new List<Snapshot>();
             }
-            
+
             InitializeComponent();
         }
 
@@ -97,11 +90,11 @@ namespace AppRefiner.Dialogs
             this.historyListView.View = View.Details;
             this.historyListView.MultiSelect = false;
             this.historyListView.SelectedIndexChanged += HistoryListView_SelectedIndexChanged;
-            
+
             // Configure columns
             this.historyListView.Columns.Add("Date", 120);
             this.historyListView.Columns.Add("Message", 420);
-            
+
             // Populate with commit history
             PopulateHistoryList();
 
@@ -150,7 +143,7 @@ namespace AppRefiner.Dialogs
             this.cancelButton.ForeColor = Color.White;
             this.cancelButton.FlatStyle = FlatStyle.Flat;
             this.cancelButton.FlatAppearance.BorderSize = 0;
-            this.cancelButton.Click += (s, e) => 
+            this.cancelButton.Click += (s, e) =>
             {
                 this.DialogResult = DialogResult.Cancel;
                 this.Close();
@@ -181,16 +174,16 @@ namespace AppRefiner.Dialogs
         private void PopulateHistoryList()
         {
             historyListView.Items.Clear();
-            
+
             foreach (var snapshot in snapshotHistory)
             {
                 var item = new ListViewItem(snapshot.CreatedAt.ToString("yyyy-MM-dd HH:mm:ss"));
                 item.SubItems.Add(snapshot.Description);
                 item.Tag = snapshot;
-                
+
                 historyListView.Items.Add(item);
             }
-            
+
             // Select the first item if there are any
             if (historyListView.Items.Count > 0)
             {
@@ -227,7 +220,7 @@ namespace AppRefiner.Dialogs
                     "Confirm Revert",
                     MessageBoxButtons.YesNo,
                     MessageBoxIcon.Question);
-                
+
                 if (result == DialogResult.Yes)
                 {
                     if (snapshotManager.ApplySnapshotToEditor(editor, selectedSnapshot.Id))
@@ -255,10 +248,10 @@ namespace AppRefiner.Dialogs
                 if (content != null)
                 {
                     using var viewDialog = new TextViewDialog(
-                        content, 
+                        content,
                         $"{editor.Caption} - {selectedSnapshot.CreatedAt.ToString("yyyy-MM-dd HH:mm:ss")}",
                         owner);
-                    
+
                     viewDialog.ShowDialog();
                 }
                 else
@@ -278,24 +271,24 @@ namespace AppRefiner.Dialogs
             {
                 // Get the content from the selected commit
                 var historicalContent = selectedSnapshot.Content;
-                
+
                 if (historicalContent != null)
                 {
                     // Get the current editor content
                     var currentContent = ScintillaManager.GetScintillaText(editor);
-                    
+
                     if (currentContent != null)
                     {
                         // Generate a unified diff format manually
                         // Pass current content as old text and historical content as new text
                         // This shows what changes would be made if reverting to the selected version
                         var diff = GenerateUnifiedDiff(currentContent, historicalContent, editor.RelativePath);
-                        
+
                         using var diffDialog = new DiffViewDialog(
                             diff,
                             $"Diff: {editor.Caption} @ {selectedSnapshot.CreatedAt.ToString("yyyy-MM-dd HH:mm:ss")} vs Current Editor",
                             owner);
-                        
+
                         diffDialog.ShowDialog();
                     }
                     else
@@ -317,7 +310,7 @@ namespace AppRefiner.Dialogs
                 }
             }
         }
-        
+
         /// <summary>
         /// Generates a unified diff between two versions of text
         /// </summary>
@@ -331,17 +324,17 @@ namespace AppRefiner.Dialogs
             var differ = new DiffPlex.Differ();
             var diffBuilder = new DiffPlex.DiffBuilder.InlineDiffBuilder(differ);
             var diff = diffBuilder.BuildDiffModel(oldText, newText);
-            
+
             // Format the diff as unified diff text
             var sb = new System.Text.StringBuilder();
             sb.AppendLine($"--- {filePath} (Old)");
             sb.AppendLine($"+++ {filePath} (New)");
             sb.AppendLine();
-            
+
             foreach (var line in diff.Lines)
             {
                 string prefix = "";
-                
+
                 switch (line.Type)
                 {
                     case DiffPlex.DiffBuilder.Model.ChangeType.Inserted:
@@ -360,17 +353,17 @@ namespace AppRefiner.Dialogs
                         // Skip imaginary lines
                         continue;
                 }
-                
+
                 sb.AppendLine($"{prefix}{line.Text}");
             }
-            
+
             return sb.ToString();
         }
 
         protected override void OnShown(EventArgs e)
         {
             base.OnShown(e);
-            
+
             // Center on owner window
             if (owner != IntPtr.Zero)
             {
@@ -387,12 +380,10 @@ namespace AppRefiner.Dialogs
         protected override void OnPaint(PaintEventArgs e)
         {
             base.OnPaint(e);
-            
+
             // Draw a border around the form
-            using (var pen = new Pen(Color.FromArgb(100, 100, 120)))
-            {
-                e.Graphics.DrawRectangle(pen, 0, 0, Width - 1, Height - 1);
-            }
+            using var pen = new Pen(Color.FromArgb(100, 100, 120));
+            e.Graphics.DrawRectangle(pen, 0, 0, Width - 1, Height - 1);
         }
 
         protected override bool ProcessDialogKey(Keys keyData)
@@ -409,10 +400,10 @@ namespace AppRefiner.Dialogs
         protected override void OnFormClosed(FormClosedEventArgs e)
         {
             base.OnFormClosed(e);
-            
+
             // Dispose the mouse handler
             mouseHandler?.Dispose();
             mouseHandler = null;
         }
     }
-} 
+}

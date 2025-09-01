@@ -15,7 +15,7 @@ namespace AppRefiner.Refactors
         public static List<PropertyInfo> GetConfigurableProperties(this Type refactorType)
         {
             var properties = new List<PropertyInfo>();
-            
+
             // Get all instance properties with a ConfigurableProperty attribute
             foreach (var prop in refactorType.GetProperties(BindingFlags.Public | BindingFlags.Instance))
             {
@@ -25,7 +25,7 @@ namespace AppRefiner.Refactors
                     properties.Add(prop);
                 }
             }
-            
+
             return properties;
         }
     }

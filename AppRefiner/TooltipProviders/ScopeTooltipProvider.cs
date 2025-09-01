@@ -1,11 +1,7 @@
-using System;
-using System.Collections.Generic;
-using System.Text;
-using System.Linq;
 using PeopleCodeParser.SelfHosted;
-using PeopleCodeParser.SelfHosted.Nodes;
 using PeopleCodeParser.SelfHosted.Lexing;
-using PeopleCodeParser.SelfHosted.Visitors.Models;
+using PeopleCodeParser.SelfHosted.Nodes;
+using System.Text;
 
 namespace AppRefiner.TooltipProviders
 {
@@ -21,14 +17,14 @@ namespace AppRefiner.TooltipProviders
         /// </summary>
         public int LineNumber { get; set; } = -1;
 
-        private List<ScopeInfo> containingScopes = new List<ScopeInfo>();
+        private List<ScopeInfo> containingScopes = new();
 
         // Map from line number to first token on that line
-        private Dictionary<int, Token> firstTokensOnLine = new Dictionary<int, Token>();
+        private Dictionary<int, Token> firstTokensOnLine = new();
 
         // Map from method name to parameter signature
-        private Dictionary<string, string> methodParameterMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        private Dictionary<string, string> methodReturnsMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        private Dictionary<string, string> methodParameterMap = new(StringComparer.OrdinalIgnoreCase);
+        private Dictionary<string, string> methodReturnsMap = new(StringComparer.OrdinalIgnoreCase);
 
         /// <summary>
         /// Name of the tooltip provider.
@@ -368,7 +364,6 @@ namespace AppRefiner.TooltipProviders
 
             // Create the tooltip with indentation
             var tooltipBuilder = new StringBuilder();
-            int currentIndent = 0;
 
             // First add method/function scopes which are at the outermost level
             foreach (var scope in methodScopes)
@@ -379,7 +374,7 @@ namespace AppRefiner.TooltipProviders
             // Then add control flow scopes with proper indentation
             foreach (var scope in processedControlScopes)
             {
-                string indentation = new string(' ', scope.IndentLevel * 2);
+                string indentation = new(' ', scope.IndentLevel * 2);
                 tooltipBuilder.AppendLine(indentation + scope.HeaderText);
             }
 

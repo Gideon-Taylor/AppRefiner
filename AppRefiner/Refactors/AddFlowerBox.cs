@@ -1,6 +1,5 @@
-using PeopleCodeParser.SelfHosted.Nodes;
 using PeopleCodeParser.SelfHosted;
-using AppRefiner.Services;
+using PeopleCodeParser.SelfHosted.Nodes;
 
 namespace AppRefiner.Refactors
 {

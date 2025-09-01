@@ -1,7 +1,4 @@
 using PeopleCodeParser.SelfHosted.Nodes;
-using PeopleCodeParser.SelfHosted;
-using AppRefiner.Services;
-using AppRefiner;
 using System.Text.RegularExpressions;
 
 namespace AppRefiner.Refactors
@@ -109,7 +106,7 @@ namespace AppRefiner.Refactors
             // Find the operator pattern in the original text
             var operatorPattern = $@"({Regex.Escape(concatChar)}=)";
             var operatorMatch = Regex.Match(originalText, operatorPattern);
-            
+
             if (!operatorMatch.Success)
             {
                 Debug.Log($"Could not find operator pattern {concatChar}= in original text: '{originalText}'");
@@ -133,7 +130,7 @@ namespace AppRefiner.Refactors
 
             // Replace only the "target operator=" portion, leaving everything after untouched
             EditText(assignment.SourceSpan.Start.Index, operatorEndIndex - 1, newText, RefactorDescription);
-            
+
             refactorApplied = true; // Mark as applied to prevent re-application.
         }
     }

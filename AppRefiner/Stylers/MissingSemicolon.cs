@@ -1,9 +1,4 @@
 ﻿using PeopleCodeParser.SelfHosted.Nodes;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace AppRefiner.Stylers
 {
@@ -15,14 +10,14 @@ namespace AppRefiner.Stylers
         {
             base.VisitBlock(node);
 
-            foreach(var statement in node.Statements.SkipLast(1))
+            foreach (var statement in node.Statements.SkipLast(1))
             {
-                if(statement.HasSemicolon == false)
+                if (statement.HasSemicolon == false)
                 {
                     AddIndicator(statement.SourceSpan, IndicatorType.SQUIGGLE, 0x0000FFA0, "Missing semicolon");
                 }
             }
         }
-     
+
     }
 }

@@ -1,6 +1,5 @@
-using PeopleCodeParser.SelfHosted.Nodes;
-using PeopleCodeParser.SelfHosted.Visitors;
 using PeopleCodeParser.SelfHosted.Lexing;
+using PeopleCodeParser.SelfHosted.Nodes;
 
 namespace AppRefiner.Linters
 {

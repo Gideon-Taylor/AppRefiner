@@ -1,4 +1,3 @@
-using System.Collections.Immutable;
 using PeopleCodeParser.SelfHosted.Lexing;
 using PeopleCodeParser.SelfHosted.Visitors;
 
@@ -59,13 +58,13 @@ public abstract class AstNode
         set
         {
             if (_parent == value) return;
-            
+
             // Remove from old parent
             _parent?._children.Remove(this);
-            
+
             // Set new parent
             _parent = value;
-            
+
             // Add to new parent
             if (value != null && !value._children.Contains(this))
             {
@@ -418,7 +417,7 @@ public static class SourcePositionExtensions
     {
         return pos.ByteIndex;
     }
-    
+
     /// <summary>
     /// Get Scintilla-compatible byte range
     /// </summary>

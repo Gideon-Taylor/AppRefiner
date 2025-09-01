@@ -1,9 +1,4 @@
-using System;
-using System.Collections.Generic;
-using System.Drawing;
-using System.Linq;
 using System.Runtime.InteropServices;
-using System.Windows.Forms;
 
 namespace AppRefiner.Dialogs
 {
@@ -19,15 +14,15 @@ namespace AppRefiner.Dialogs
 
         [DllImport("user32.dll")]
         private static extern IntPtr GetForegroundWindow();
-        
+
         [DllImport("user32.dll")]
         private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
 
         [DllImport("user32.dll")]
         private static extern bool BringWindowToTop(IntPtr hWnd);
 
-        private static readonly IntPtr HWND_TOPMOST = new IntPtr(-1);
-        private static readonly IntPtr HWND_NOTOPMOST = new IntPtr(-2);
+        private static readonly IntPtr HWND_TOPMOST = new(-1);
+        private static readonly IntPtr HWND_NOTOPMOST = new(-2);
         private const uint SWP_NOMOVE = 0x0002;
         private const uint SWP_NOSIZE = 0x0001;
         private const uint SWP_SHOWWINDOW = 0x0040;
@@ -185,7 +180,7 @@ namespace AppRefiner.Dialogs
                     {
                         var process = System.Diagnostics.Process.GetProcessById((int)processId);
                         string processName = process.ProcessName.ToLowerInvariant();
-                        
+
                         // Close dialog if foreground window doesn't belong to our target processes
                         if (processName != "apprefiner" && processName != "pside")
                         {
@@ -200,7 +195,7 @@ namespace AppRefiner.Dialogs
                         return;
                     }
                 }
-                
+
                 BringWindowToTop(this.Handle);
                 MakeAlwaysOnTop();
             }
@@ -215,7 +210,7 @@ namespace AppRefiner.Dialogs
                 MakeAlwaysOnTop();
                 // Start the timer to maintain always-on-top behavior
                 alwaysOnTopTimer?.Start();
-                
+
                 // Ensure focus goes to the find combo box
                 this.BeginInvoke(new Action(() =>
                 {
@@ -519,7 +514,7 @@ namespace AppRefiner.Dialogs
 
             // Row 2: Replace, Replace All, Find All, Show Results checkbox
             var buttonY2 = buttonY + 35;
-            
+
             replaceButton = new Button
             {
                 Text = "Replace",
@@ -693,7 +688,7 @@ namespace AppRefiner.Dialogs
             useRegexCheckBox.Checked = searchState.UseRegex;
             wrapAroundCheckBox.Checked = searchState.WrapSearch;
             // Always use POSIX regex when regex is enabled
-            
+
             // Check if there's a selection and store it in SearchState
             var (selectedText, selStart, selEnd) = ScintillaManager.GetSelectedText(editor);
             if (!string.IsNullOrEmpty(selectedText))
@@ -701,11 +696,11 @@ namespace AppRefiner.Dialogs
                 selectionRadioButton.Enabled = true;
                 // Store the initial selection range for search scope
                 searchState.SetSelectionRange(selStart, selEnd);
-                
+
                 // Determine if selection spans multiple lines using smart logic
                 int startLine = ScintillaManager.GetLineFromPosition(editor, selStart);
                 int endLine = ScintillaManager.GetLineFromPosition(editor, selEnd);
-                
+
                 if (startLine == endLine)
                 {
                     // Same line: Use selected text as search term, keep Document scope
@@ -848,7 +843,7 @@ namespace AppRefiner.Dialogs
             {
                 resultsListBox.Items.Add(match);
             }
-            
+
             // Select first item if available
             if (resultsListBox.Items.Count > 0)
             {
@@ -871,7 +866,7 @@ namespace AppRefiner.Dialogs
                     return;
 
                 // Get current dialog screen position
-                Rectangle dialogRect = new Rectangle(this.Location, this.Size);
+                Rectangle dialogRect = new(this.Location, this.Size);
 
                 // Check if dialog overlaps with found text
                 if (!dialogRect.IntersectsWith(textRect))
@@ -918,7 +913,7 @@ namespace AppRefiner.Dialogs
                 // Strategy 5: If all else fails, try to find any non-overlapping position
                 // Check top-left quadrant
                 newLocation = new Point(screenBounds.Left + 10, screenBounds.Top + 10);
-                Rectangle testRect = new Rectangle(newLocation, this.Size);
+                Rectangle testRect = new(newLocation, this.Size);
                 if (!testRect.IntersectsWith(textRect))
                 {
                     SetNewLocationIfValid(newLocation, screenBounds);
@@ -974,7 +969,7 @@ namespace AppRefiner.Dialogs
             if (isDragging && e.Button == MouseButtons.Left)
             {
                 // Calculate the new position
-                Point newLocation = new Point(
+                Point newLocation = new(
                     this.Location.X + (e.X - dragStartPoint.X),
                     this.Location.Y + (e.Y - dragStartPoint.Y)
                 );
@@ -1055,7 +1050,7 @@ namespace AppRefiner.Dialogs
             if (ScintillaManager.FindNext(editor))
             {
                 UpdateStatus("Text found");
-                
+
                 // Avoid covering the found text with the dialog
                 var (selectedText, selStart, selEnd) = ScintillaManager.GetSelectedText(editor);
                 if (!string.IsNullOrEmpty(selectedText))
@@ -1076,7 +1071,7 @@ namespace AppRefiner.Dialogs
             if (ScintillaManager.FindPrevious(editor))
             {
                 UpdateStatus("Text found");
-                
+
                 // Avoid covering the found text with the dialog
                 var (selectedText, selStart, selEnd) = ScintillaManager.GetSelectedText(editor);
                 if (!string.IsNullOrEmpty(selectedText))
@@ -1195,7 +1190,7 @@ namespace AppRefiner.Dialogs
         {
             SaveToEditor();
             if (!editor.SearchState.HasValidSearch) return;
-            
+
             int count = ScintillaManager.CountMatches(editor, findComboBox.Text);
             if (count > 0)
                 UpdateStatus($"Found {count} occurrence(s)");
@@ -1207,10 +1202,10 @@ namespace AppRefiner.Dialogs
         {
             SaveToEditor();
             if (!editor.SearchState.HasValidSearch) return;
-            
+
             // Clear existing search indicators first
             ScintillaManager.ClearSearchIndicators(editor);
-            
+
             int count = ScintillaManager.MarkAllMatches(editor, findComboBox.Text);
             if (count > 0)
                 UpdateStatus($"Marked {count} occurrence(s)");
@@ -1222,10 +1217,10 @@ namespace AppRefiner.Dialogs
         {
             SaveToEditor();
             if (!editor.SearchState.HasValidSearch) return;
-            
+
             var matches = ScintillaManager.FindAllMatches(editor, findComboBox.Text);
             PopulateResultsList(matches);
-            
+
             if (matches.Count > 0)
             {
                 showResultsCheckBox.Checked = true; // This will trigger UpdateResultsVisibility
@@ -1248,10 +1243,10 @@ namespace AppRefiner.Dialogs
             {
                 // Navigate to match position
                 ScintillaManager.SetSelection(editor, match.Position, match.Position + match.Length);
-                
+
                 // Move dialog away from selection
                 AvoidTextOverlap(match.Position, match.Position + findComboBox.Text.Length);
-                
+
                 UpdateStatus($"Navigated to line {match.LineNumber + 1}, Position {match.Position}");
             }
         }
@@ -1263,11 +1258,9 @@ namespace AppRefiner.Dialogs
             base.OnPaint(e);
 
             // Draw border
-            using (var pen = new Pen(Color.FromArgb(100, 100, 120)))
-            {
-                var rect = new Rectangle(0, 0, Width - 1, Height - 1);
-                e.Graphics.DrawRectangle(pen, rect);
-            }
+            using var pen = new Pen(Color.FromArgb(100, 100, 120));
+            var rect = new Rectangle(0, 0, Width - 1, Height - 1);
+            e.Graphics.DrawRectangle(pen, rect);
         }
 
         protected override bool ProcessCmdKey(ref Message msg, Keys keyData)

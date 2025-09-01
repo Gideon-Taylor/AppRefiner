@@ -1,14 +1,4 @@
-using System;
-using System.Collections.Generic;
-using System.Diagnostics;
-using System.Linq;
 using System.Reflection;
-using System.Text;
-
-using AppRefiner;
-
-using PeopleCodeParser.SelfHosted;
-using PeopleCodeParser.SelfHosted.Lexing;
 
 namespace AppRefiner.TooltipProviders
 {
@@ -17,7 +7,7 @@ namespace AppRefiner.TooltipProviders
     /// </summary>
     public static class TooltipManager
     {
-        private static readonly List<ITooltipProvider> providers = new List<ITooltipProvider>();
+        private static readonly List<ITooltipProvider> providers = new();
         private static bool initialized = false;
 
         /// <summary>
@@ -38,10 +28,10 @@ namespace AppRefiner.TooltipProviders
             DiscoverAndRegisterPluginProviders();
 
             initialized = true;
-            
+
             Debug.Log($"Initialized TooltipManager with {providers.Count} providers");
         }
-        
+
         /// <summary>
         /// Discovers and registers tooltip providers from the current assembly
         /// </summary>
@@ -50,11 +40,11 @@ namespace AppRefiner.TooltipProviders
             try
             {
                 var currentAssembly = Assembly.GetExecutingAssembly();
-                
+
                 // Find all non-abstract types that implement ITooltipProvider
                 var tooltipProviderTypes = currentAssembly.GetTypes()
                     .Where(t => typeof(ITooltipProvider).IsAssignableFrom(t) && !t.IsAbstract && !t.IsInterface);
-                
+
                 foreach (var type in tooltipProviderTypes)
                 {
                     try
@@ -79,7 +69,7 @@ namespace AppRefiner.TooltipProviders
                 Debug.LogError($"Error discovering built-in tooltip providers: {ex.Message}");
             }
         }
-        
+
         /// <summary>
         /// Discovers and registers tooltip providers from plugins
         /// </summary>
@@ -89,7 +79,7 @@ namespace AppRefiner.TooltipProviders
             {
                 // Get tooltip provider types from plugins
                 var pluginProviderTypes = Plugins.PluginManager.DiscoverTooltipProviderTypes();
-                
+
                 foreach (var type in pluginProviderTypes)
                 {
                     try
@@ -126,7 +116,7 @@ namespace AppRefiner.TooltipProviders
 
             // Add provider and sort by priority
             providers.Add(provider);
-            
+
             // Sort in descending order of priority
             providers.Sort((a, b) => b.Priority.CompareTo(a.Priority));
         }
@@ -161,12 +151,12 @@ namespace AppRefiner.TooltipProviders
 
             // Collect tooltips from all active providers
             var tooltips = new List<string>();
-            
+
             // Separate self-hosted AST providers from regular providers
             var selfHostedProviders = providers.Where(p => p.Active && p is ScopedAstTooltipProvider)
                 .Cast<ScopedAstTooltipProvider>().ToList();
             var regularProviders = providers.Where(p => p.Active && !(p is ScopedAstTooltipProvider));
-            
+
             // First, query regular providers which don't need parse tree analysis
             foreach (var provider in regularProviders)
             {
@@ -176,7 +166,7 @@ namespace AppRefiner.TooltipProviders
                     tooltips.Add(tooltip);
                 }
             }
-            
+
             // Then, handle self-hosted AST providers if there are any
             if (selfHostedProviders.Count > 0 && editor.Type == EditorType.PeopleCode)
             {
@@ -188,19 +178,19 @@ namespace AppRefiner.TooltipProviders
                     ProcessSelfHostedTooltipProviders(editor, position, lineNumber, applicableProviders, tooltips);
                 }
             }
-            
+
             // If no tooltips were found, return false
             if (tooltips.Count == 0)
                 return false;
-                
+
             // Combine all tooltips with blank lines between them
             var combinedTooltip = string.Join(Environment.NewLine + Environment.NewLine, tooltips);
-                
+
             // Show the combined tooltip
             ScintillaManager.ShowCallTipWithText(editor, position, combinedTooltip);
             return true;
         }
-        
+
         /// <summary>
         /// Filters self-hosted AST providers based on the AST node at the given position.
         /// </summary>
@@ -231,7 +221,7 @@ namespace AppRefiner.TooltipProviders
 
             return applicableProviders;
         }
-        
+
         /// <summary>
         /// Process self-hosted AST tooltip providers.
         /// </summary>
@@ -321,4 +311,4 @@ namespace AppRefiner.TooltipProviders
             ScintillaManager.HideCallTip(editor);
         }
     }
-} 
+}

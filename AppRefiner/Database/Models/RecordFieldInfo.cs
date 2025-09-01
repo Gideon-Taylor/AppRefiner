@@ -1,5 +1,3 @@
-using System;
-
 namespace AppRefiner.Database.Models
 {
     /// <summary>
@@ -18,7 +16,8 @@ namespace AppRefiner.Database.Models
         public bool IsRequired => (UseEdit & 256) != 0; // Bit 8: Set if required
 
         // Basic mapping of PSDBFIELD.FIELDTYPE to readable names
-        public string FieldTypeName => FieldType switch {
+        public string FieldTypeName => FieldType switch
+        {
             0 => "Char",
             1 => "Long Char",
             2 => "Number",
@@ -30,7 +29,7 @@ namespace AppRefiner.Database.Models
             9 => "Image Ref",
             _ => $"Unknown ({FieldType})"
         };
-        
+
         // Formatted length/precision string
         public string LengthPrecision => FieldType switch
         {
@@ -56,4 +55,4 @@ namespace AppRefiner.Database.Models
             return $"{FieldName}{keyIndicator}{requiredIndicator} : {FieldTypeName}{LengthPrecision}";
         }
     }
-} 
+}

@@ -1,9 +1,5 @@
 using PeopleCodeParser.SelfHosted.Nodes;
-using PeopleCodeParser.SelfHosted;
-using AppRefiner.Services;
-using AppRefiner;
 using System.Text;
-using System.Windows.Forms;
 
 namespace AppRefiner.Refactors
 {
@@ -14,18 +10,18 @@ namespace AppRefiner.Refactors
     {
         public new static string RefactorName => "Resolve Imports";
         public new static string RefactorDescription => "Resolves all class references in the code and creates explicit imports for each one";
-        
+
         /// <summary>
         /// Whether to sort imports alphabetically. If false, maintains original order and adds new imports at the bottom.
         /// </summary>
         public bool SortImportsAlphabetically { get; set; } = true;
-        
+
         /// <summary>
         /// Whether to preserve existing wildcard imports that cover used classes. 
         /// If true, keeps wildcard imports when they match used class packages.
         /// </summary>
         public bool PreserveWildcardImports { get; set; } = false;
-        
+
         // Tracks unique application class paths used in the code
         private readonly HashSet<string> usedClassPaths = new();
 
@@ -92,8 +88,8 @@ namespace AppRefiner.Refactors
         public override void VisitObjectCreation(ObjectCreationNode node)
         {
             // Record object creation with app class types
-            if (node.Type is AppClassTypeNode appClassType && 
-                !string.IsNullOrEmpty(appClassType.ClassName) && 
+            if (node.Type is AppClassTypeNode appClassType &&
+                !string.IsNullOrEmpty(appClassType.ClassName) &&
                 appClassType.ClassName.Contains(":"))
             {
                 usedClassPaths.Add(appClassType.ClassName);
@@ -112,7 +108,7 @@ namespace AppRefiner.Refactors
 
             // Step 1: Start with existing imports in their original order
             var finalImportList = new List<string>(existingImportPaths);
-            
+
             // Step 2: Create a working copy of used classes to process
             var remainingUsedClasses = new HashSet<string>(usedClassPaths);
 
@@ -128,7 +124,7 @@ namespace AppRefiner.Refactors
                         var coveredClasses = remainingUsedClasses
                             .Where(usedClass => GetPackageFromClassPath(usedClass).Equals(wildcardPackage, StringComparison.OrdinalIgnoreCase))
                             .ToList();
-                        
+
                         // Remove covered classes from remaining list
                         foreach (var coveredClass in coveredClasses)
                         {
@@ -180,7 +176,7 @@ namespace AppRefiner.Refactors
             // Step 5: Remove only used imports and deduplicate while preserving order
             var seenImports = new HashSet<string>();
             var usedImportsOnly = new List<string>();
-            
+
             foreach (var import in finalImportList)
             {
                 // Keep import if it's a wildcard that covers used classes, or if it's a used explicit class
@@ -200,7 +196,7 @@ namespace AppRefiner.Refactors
                     usedImportsOnly.Add(import);
                 }
             }
-            
+
             finalImportList = usedImportsOnly;
 
             // Step 6: Sort if requested
@@ -229,7 +225,7 @@ namespace AppRefiner.Refactors
                 // Replace the existing imports block
                 var firstImport = programNode.Imports.First();
                 var lastImport = programNode.Imports.Last();
-                
+
                 if (firstImport.SourceSpan.IsValid && lastImport.SourceSpan.IsValid)
                 {
                     EditText(firstImport.SourceSpan.Start.Index, lastImport.SourceSpan.End.Index, imports, "Resolve imports");
@@ -239,7 +235,7 @@ namespace AppRefiner.Refactors
             {
                 // No existing imports block, so add one at the beginning of the program
                 var insertionPoint = 0;
-                
+
                 // Find the best insertion point
                 if (programNode?.AppClass?.SourceSpan.IsValid == true)
                 {
@@ -307,7 +303,7 @@ namespace AppRefiner.Refactors
                     return true;
                 }
             }
-            
+
             return false;
         }
     }

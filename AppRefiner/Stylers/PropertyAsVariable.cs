@@ -1,6 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using PeopleCodeParser.SelfHosted.Nodes;
 using PeopleCodeParser.SelfHosted.Visitors.Models;
 
@@ -35,17 +32,17 @@ public class PropertyAsVariable : ScopedStyler
     public override void VisitAppClass(AppClassNode node)
     {
         currentClassName = node.Name;
-        
+
         // Collect all public and protected properties
         foreach (var property in node.Properties)
         {
-            if (property.Visibility == VisibilityModifier.Public || 
+            if (property.Visibility == VisibilityModifier.Public ||
                 property.Visibility == VisibilityModifier.Protected)
             {
                 publicProperties.Add(property.Name);
             }
         }
-        
+
         base.VisitAppClass(node);
     }
 
@@ -102,7 +99,7 @@ public class PropertyAsVariable : ScopedStyler
             }
             current = current.Parent;
         }
-        
+
         return false;
     }
 

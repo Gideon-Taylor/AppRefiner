@@ -1,7 +1,6 @@
-using PeopleCodeParser.SelfHosted.Nodes;
-using System.Collections.Generic;
-using System.Text.RegularExpressions;
 using PeopleCodeParser.SelfHosted.Lexing;
+using PeopleCodeParser.SelfHosted.Nodes;
+using System.Text.RegularExpressions;
 namespace AppRefiner.Stylers;
 
 /// <summary>
@@ -44,7 +43,7 @@ public class TodoFixmeStyler : BaseStyler
     {
         if (!string.IsNullOrWhiteSpace(marker))
         {
-            var pattern = new Regex($@"{Regex.Escape(marker)}\s*:?\s*(.*)", 
+            var pattern = new Regex($@"{Regex.Escape(marker)}\s*:?\s*(.*)",
                 RegexOptions.IgnoreCase | RegexOptions.Compiled);
             _markers.Add((marker, color, pattern));
         }
@@ -56,10 +55,10 @@ public class TodoFixmeStyler : BaseStyler
     public override void VisitProgram(ProgramNode node)
     {
         Reset();
-        
+
         // Visit the program first
         base.VisitProgram(node);
-        
+
         // After visiting the AST, process comments from the ProgramNode
         ProcessComments(node);
     }
@@ -84,7 +83,7 @@ public class TodoFixmeStyler : BaseStyler
     private void ProcessComment(Token comment)
     {
         string commentText = comment.Text;
-        
+
         // Skip empty comments
         if (string.IsNullOrWhiteSpace(commentText))
             return;
@@ -95,7 +94,7 @@ public class TodoFixmeStyler : BaseStyler
 
         // Clean the comment text by removing comment markers
         string cleanedComment = CleanCommentText(commentText);
-        
+
         // Check for all registered markers
         foreach (var (marker, color, pattern) in _markers)
         {
@@ -104,14 +103,14 @@ public class TodoFixmeStyler : BaseStyler
             {
                 // Extract the content after the marker
                 string content = match.Groups.Count > 1 ? match.Groups[1].Value.Trim() : "";
-                
+
                 AddIndicator(
-                    comment.SourceSpan, 
-                    IndicatorType.HIGHLIGHTER, 
+                    comment.SourceSpan,
+                    IndicatorType.HIGHLIGHTER,
                     color,
                     $"{marker}: {content}"
                 );
-                
+
                 // Only process the first matching marker
                 break;
             }
@@ -128,19 +127,19 @@ public class TodoFixmeStyler : BaseStyler
         {
             return commentText.Substring(2, commentText.Length - 4).Trim();
         }
-        
+
         // Handle line comments // ...
         if (commentText.StartsWith("//"))
         {
             return commentText.Substring(2).Trim();
         }
-        
+
         // Handle REM comments (PeopleCode specific)
         if (commentText.StartsWith("REM", System.StringComparison.OrdinalIgnoreCase))
         {
             return commentText.Substring(3).Trim();
         }
-        
+
         // Fallback: just trim whitespace and common comment characters
         return commentText.TrimStart('/', '*', ' ', '\t').TrimEnd('*', '/', ' ', '\t');
     }

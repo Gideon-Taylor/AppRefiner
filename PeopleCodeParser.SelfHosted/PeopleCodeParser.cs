@@ -1,7 +1,6 @@
 using PeopleCodeParser.SelfHosted.Lexing;
 using PeopleCodeParser.SelfHosted.Nodes;
 using System.Diagnostics;
-using System.Numerics;
 
 namespace PeopleCodeParser.SelfHosted;
 
@@ -15,7 +14,7 @@ public class PeopleCodeParser
     private int _position;
     private readonly List<ParseError> _errors = new();
     private readonly Stack<string> _ruleStack = new(); // For debugging and error context
-    
+
     // Statement counter for tracking statement execution order
     private int _statementCounter = 0;
 
@@ -24,7 +23,7 @@ public class PeopleCodeParser
     private int _errorRecoveryCount = 0;
 
     // Compiler directive support - defaults to 99.99.99 for "newest version" policy
-    private ToolsVersion _toolsRelease = new ToolsVersion("99.99.99");
+    private ToolsVersion _toolsRelease = new("99.99.99");
 
     // Synchronization tokens for error recovery
     private static readonly HashSet<TokenType> StatementSyncTokens = new()
@@ -76,7 +75,7 @@ public class PeopleCodeParser
         }
         _skippedDirectiveSpans = PreProcessDirectives();
     }
-    
+
     /// <summary>
     /// Reprocess directives with the current ToolsRelease setting
     /// </summary>
@@ -84,17 +83,17 @@ public class PeopleCodeParser
     {
         // Clear existing errors from previous preprocessing
         _errors.RemoveAll(e => e.Message.Contains("directive") || e.Message.Contains("Directive"));
-        
+
         // Pass 1: Process directives with all tokens (including trivia)
         var preprocessor = new DirectivePreprocessor(_originalTokens, _toolsRelease);
         var processedTokens = preprocessor.ProcessDirectives();
-        
+
         // Add any preprocessing errors to our error list
         foreach (var error in preprocessor.Errors)
         {
             _errors.Add(new ParseError(error, new SourceSpan(new SourcePosition(0), new SourcePosition(0)), ParseErrorSeverity.Error, "Directive preprocessing"));
         }
-        processedTokens = processedTokens?.Where(t => !t.Type.IsTrivia()).ToList() ?? throw new ArgumentException(nameof(processedTokens)) ;
+        processedTokens = processedTokens?.Where(t => !t.Type.IsTrivia()).ToList() ?? throw new ArgumentException(nameof(processedTokens));
         // Update tokens list
         _tokens.Clear();
         _tokens.AddRange(processedTokens);
@@ -111,20 +110,20 @@ public class PeopleCodeParser
     /// <summary>
     /// Current token being processed
     /// </summary>
-    private Token Current => _position < _tokens.Count ? _tokens[_position] : 
+    private Token Current => _position < _tokens.Count ? _tokens[_position] :
                            Token.CreateEof(new SourcePosition(_tokens.LastOrDefault()?.SourceSpan.End.Index ?? 0));
 
     /// <summary>
     /// Previous token that was processed
     /// </summary>
-    private Token Previous => _position > 0 && _position - 1 < _tokens.Count ? _tokens[_position - 1] : 
+    private Token Previous => _position > 0 && _position - 1 < _tokens.Count ? _tokens[_position - 1] :
                            Token.CreateEof(new SourcePosition(0));
 
     /// <summary>
     /// Look ahead at the next token without consuming it
     /// </summary>
-    private Token Peek(int offset = 1) => 
-        _position + offset < _tokens.Count ? _tokens[_position + offset] : 
+    private Token Peek(int offset = 1) =>
+        _position + offset < _tokens.Count ? _tokens[_position + offset] :
         Token.CreateEof(new SourcePosition(_tokens.LastOrDefault()?.SourceSpan.End.Index ?? 0));
 
     /// <summary>
@@ -225,7 +224,7 @@ public class PeopleCodeParser
     private void ReportError(string message)
     {
         var context = _ruleStack.Count > 0 ? string.Join(" -> ", _ruleStack.Reverse()) : "unknown";
-        
+
         _errors.Add(new ParseError(
             message,
             Current.SourceSpan,
@@ -242,7 +241,7 @@ public class PeopleCodeParser
     private void ReportError(string message, Token highlightToken)
     {
         var context = _ruleStack.Count > 0 ? string.Join(" -> ", _ruleStack.Reverse()) : "unknown";
-        
+
         _errors.Add(new ParseError(
             message,
             highlightToken.SourceSpan,
@@ -259,7 +258,7 @@ public class PeopleCodeParser
     private void ReportError(string message, SourceSpan location)
     {
         var context = _ruleStack.Count > 0 ? string.Join(" -> ", _ruleStack.Reverse()) : "unknown";
-        
+
         _errors.Add(new ParseError(
             message,
             location,
@@ -286,7 +285,7 @@ public class PeopleCodeParser
     {
         location ??= Current.SourceSpan;
         var context = _ruleStack.Count > 0 ? string.Join(" -> ", _ruleStack.Reverse()) : "unknown";
-        
+
         _errors.Add(new ParseError(
             message,
             location.Value,
@@ -400,12 +399,12 @@ public class PeopleCodeParser
             ReportError("Too many parse errors, stopping recovery attempts");
             return false;
         }
-        
+
 
         _errorRecoveryCount++;
-        
+
         int tokensSkipped = 0;
-        
+
         // Skip tokens until we find a statement synchronization point
         while (!IsAtEnd && !StatementSyncTokens.Contains(Current.Type))
         {
@@ -449,7 +448,7 @@ public class PeopleCodeParser
             EnterRule("program");
             _errorRecoveryCount = 0;
             _statementCounter = 0; // Reset statement counter for a new program
-            
+
             // Collect all comments from the token stream
             CollectComments(program);
 
@@ -473,19 +472,19 @@ public class PeopleCodeParser
                 {
                     program.SetAppClass(appClass);
                 }
-                
+
                 // Phase 2: Parse preambles (external declarations) at program level
                 ParseProgramPreambles(program);
-                
+
                 // Phase 3: Parse class body if app class exists
                 if (program.AppClass != null && !IsAtEnd && !Check(TokenType.EndOfFile))
                 {
                     ParseClassBody(program.AppClass);
                 }
-                
+
                 // Consume any trailing semicolons
                 while (Match(TokenType.Semicolon)) { }
-                
+
                 return program;
             }
             else if (Check(TokenType.Interface))
@@ -496,10 +495,10 @@ public class PeopleCodeParser
                 {
                     program.SetInterface(interfaceNode);
                 }
-                
+
                 // Consume any trailing semicolons
                 while (Match(TokenType.Semicolon)) { }
-                
+
                 return program;
             }
 
@@ -559,7 +558,7 @@ public class PeopleCodeParser
             }
             ExitRule();
 
-            foreach(var error in _errors)
+            foreach (var error in _errors)
             {
 
             }
@@ -599,7 +598,8 @@ public class PeopleCodeParser
                         if (variable != null)
                             program.AddVariable(variable);
 
-                    } else if (Check(TokenType.Local))
+                    }
+                    else if (Check(TokenType.Local))
                     {
                         var startPosition = _position;
                         var variable = ParseVariableDeclaration();
@@ -764,7 +764,7 @@ public class PeopleCodeParser
                 return null;
             }
 
-            var classNode = new AppClassNode(className,nameToken);
+            var classNode = new AppClassNode(className, nameToken);
 
             // Check for EXTENDS or IMPLEMENTS clause
             if (Match(TokenType.Extends))
@@ -867,8 +867,8 @@ public class PeopleCodeParser
             EnterRule($"{visibility}Section");
 
             // Continue parsing members until we hit an end token or different visibility
-            while (!IsAtEnd && 
-                   !Check(TokenType.EndClass) && 
+            while (!IsAtEnd &&
+                   !Check(TokenType.EndClass) &&
                    !Check(TokenType.Protected, TokenType.Private))
             {
                 try
@@ -941,8 +941,8 @@ public class PeopleCodeParser
                 {
                     ReportError($"Error parsing class member: {ex.Message}");
                     // Skip to next semicolon or section boundary
-                    while (!IsAtEnd && 
-                           !Check(TokenType.Semicolon) && 
+                    while (!IsAtEnd &&
+                           !Check(TokenType.Semicolon) &&
                            !Check(TokenType.Protected, TokenType.Private, TokenType.EndClass))
                     {
                         _position++;
@@ -1026,7 +1026,6 @@ public class PeopleCodeParser
             {
                 if (builtInType.SourceSpan.Start.Index == 0 && builtInType.SourceSpan.End.Index == 0)
                 {
-                    int debug = 0; // builtin type has no valid span
                 }
                 return builtInType;
             }
@@ -1037,7 +1036,7 @@ public class PeopleCodeParser
                 var typeName = Current.Text;
                 var token = Current;
                 _position++;
-                
+
                 // Could be a simple class name without package
                 return new AppClassTypeNode(typeName)
                 {
@@ -1360,7 +1359,7 @@ public class PeopleCodeParser
             {
                 propertyNode.HasGet = true;
                 lastToken = Previous; // Update last token
-                
+
                 if (Match(TokenType.Set))
                 {
                     propertyNode.HasSet = true;
@@ -1821,7 +1820,7 @@ public class PeopleCodeParser
                 {
                     ReportError("Expected ';' between class members");
                 }
-                
+
                 // Consume any additional semicolons
                 while (Match(TokenType.Semicolon)) { }
 
@@ -1865,11 +1864,11 @@ public class PeopleCodeParser
         try
         {
             EnterRule("classBody");
-            
+
             // Create lookup tables for method and property unification
             var methodDeclarations = new Dictionary<string, MethodNode>(StringComparer.OrdinalIgnoreCase);
             var propertyDeclarations = new Dictionary<string, PropertyNode>(StringComparer.OrdinalIgnoreCase);
-            
+
             // Populate lookup tables from existing declarations in the class
             foreach (var method in appClass.Methods)
             {
@@ -1895,7 +1894,7 @@ public class PeopleCodeParser
                 {
                     ReportError("Expected ';' between class members");
                 }
-                
+
                 // Consume any additional semicolons
                 while (Match(TokenType.Semicolon)) { }
 
@@ -1917,7 +1916,7 @@ public class PeopleCodeParser
                     break;
                 }
             }
-            
+
             // After parsing all implementations, check for orphaned declarations
             ValidateMethodDeclarationImplementationPairs(appClass, methodDeclarations, propertyDeclarations);
         }
@@ -1949,11 +1948,11 @@ public class PeopleCodeParser
                         declarationMethod.SetBody(implementationMethod.Body);
                         declarationMethod.ParameterAnnotations = implementationMethod.ParameterAnnotations;
                     }
-                    
+
                     // Copy any annotations from implementation
                     if (!string.IsNullOrEmpty(implementationMethod.Documentation))
                         declarationMethod.Documentation = implementationMethod.Documentation;
-                    
+
                     // The unified method is already in appClass.Methods, so we're done
                 }
                 else
@@ -1963,7 +1962,7 @@ public class PeopleCodeParser
                     appClass.AddMember(implementationMethod, VisibilityModifier.Public);
                 }
                 break;
-                
+
             case PropertyNode implementationProperty:
                 // Handle property getter/setter implementations
                 if (propertyDeclarations.TryGetValue(implementationProperty.Name, out var declarationProperty))
@@ -1973,7 +1972,7 @@ public class PeopleCodeParser
                         declarationProperty.SetGetterBody(implementationProperty.GetterBody);
                     else if (implementationProperty.IsSetter && implementationProperty.SetterBody != null)
                         declarationProperty.SetSetterBody(implementationProperty.SetterBody);
-                    
+
                     // The unified property is already in appClass.Properties, so we're done
                 }
                 else
@@ -1984,14 +1983,14 @@ public class PeopleCodeParser
                     appClass.AddMember(implementationProperty, VisibilityModifier.Public);
                 }
                 break;
-                
+
             default:
                 // Other member types (shouldn't happen in class body, but handle gracefully)
                 appClass.AddMember(member, VisibilityModifier.Public);
                 break;
         }
     }
-    
+
     /// <summary>
     /// Validate that all method/property declarations have matching implementations
     /// </summary>
@@ -2002,7 +2001,7 @@ public class PeopleCodeParser
         {
             ReportError($"Method declaration '{method.Name}' has no matching implementation");
         }
-        
+
         // Check for property declarations without getter/setter implementations (if required)
         foreach (var property in appClass.Properties.Where(p => !p.IsImplementation && !p.IsReadOnly))
         {
@@ -2097,13 +2096,14 @@ public class PeopleCodeParser
             {
                 var body = ParseStatementList(TokenType.EndMethod);
                 methodNode.SetBody(body);
-            } else
+            }
+            else
             {
                 /* Create an empty body node */
                 methodNode.SetBody(new BlockNode());
             }
 
-                // Expect END-METHOD
+            // Expect END-METHOD
             Consume(TokenType.EndMethod, "Expected 'END-METHOD' after method implementation");
             methodNode.LastToken = Previous;
             return methodNode;
@@ -2267,27 +2267,27 @@ public class PeopleCodeParser
             while (Check(TokenType.SlashPlus))
             {
                 int startPosition = _position;
-                
+
                 // Try to parse as a parameter annotation
                 if (ParseMethodParameterAnnotation(methodNode))
                 {
                     continue;
                 }
-                
+
                 // Reset position and try to parse as a return annotation
                 _position = startPosition;
                 if (ParseMethodReturnAnnotation(methodNode))
                 {
                     continue;
                 }
-                
+
                 // Reset position and try to parse as an extends annotation
                 _position = startPosition;
                 if (ParseMethodExtendsAnnotation(methodNode))
                 {
                     continue;
                 }
-                
+
                 // If we get here, we couldn't parse the annotation, so skip it
                 Match(TokenType.SlashPlus);
                 while (!IsAtEnd && !Check(TokenType.PlusSlash))
@@ -2299,7 +2299,7 @@ public class PeopleCodeParser
             }
 
             /* for some reason PeopleCode allows a trailing ; after the annotations */
-            while(Match(TokenType.Semicolon)) { }
+            while (Match(TokenType.Semicolon)) { }
         }
         finally
         {
@@ -2655,9 +2655,10 @@ public class PeopleCodeParser
             }
 
             var endToken = Previous;
-            var parameter = new ParameterNode(paramName, nameToken, paramType) { 
-                FirstToken = startToken, 
-                LastToken = endToken, 
+            var parameter = new ParameterNode(paramName, nameToken, paramType)
+            {
+                FirstToken = startToken,
+                LastToken = endToken,
                 IsOut = isOut
             };
 
@@ -2748,7 +2749,7 @@ public class PeopleCodeParser
             ParseInterfaceHeader(iface);
 
             Consume(TokenType.EndInterface, "Expected 'END-INTERFACE' to close interface");
-            while(Match(TokenType.Semicolon)) { }
+            while (Match(TokenType.Semicolon)) { }
             iface.FirstToken = startToken;
             iface.LastToken = Previous;
             return iface;
@@ -2758,7 +2759,7 @@ public class PeopleCodeParser
             ExitRule();
         }
     }
-    
+
     /// <summary>
     /// Parse interface header according to grammar (similar to classHeader but only allowing method headers)
     /// </summary>
@@ -2767,7 +2768,7 @@ public class PeopleCodeParser
         try
         {
             EnterRule("interfaceHeader");
-            
+
             // In interfaces, all methods are implicitly public
             // Parse method headers until END-INTERFACE
             while (!IsAtEnd && !Check(TokenType.EndInterface))
@@ -2826,7 +2827,7 @@ public class PeopleCodeParser
         try
         {
             EnterRule("function");
-            
+
             var firstToken = Current; // Capture the very first token
 
             // Handle optional prefixes (e.g., PEOPLECODE) before FUNCTION if present
@@ -2960,7 +2961,7 @@ public class PeopleCodeParser
                     }
 
                     Match(TokenType.Semicolon);
-                    
+
                     declNode = new FunctionNode(declName, declNameToken, FunctionType.Library)
                     {
                         LibraryName = declNode.LibraryName,
@@ -3032,7 +3033,7 @@ public class PeopleCodeParser
                     functionNode.SetReturnType(returnType);
                 }
             }
-            
+
             // Optional documentation comment (DOC StringLiteral)
             if (Match(TokenType.Doc))
             {
@@ -3055,7 +3056,7 @@ public class PeopleCodeParser
             Consume(TokenType.EndFunction, "Expected 'END-FUNCTION' after function body");
             var lastToken = Previous; // Capture the END-FUNCTION token
 
-            while (Match(TokenType.Semicolon)) 
+            while (Match(TokenType.Semicolon))
             {
                 lastToken = Previous; // Update to semicolon if present
             }
@@ -3163,7 +3164,6 @@ public class PeopleCodeParser
                 {
                     if (builtInType.SourceSpan.Start.Index == 0 && builtInType.SourceSpan.End.Index == 0)
                     {
-                        int debug = 0; // builtin type has no valid span
                     }
                     parameter.Type = builtInType;
                 }
@@ -3206,7 +3206,6 @@ public class PeopleCodeParser
                 {
                     if (builtInType.SourceSpan.Start.Index == 0 && builtInType.SourceSpan.End.Index == 0)
                     {
-                        int debug = 0; // builtin type has no valid span
                     }
                     return builtInType;
                 }
@@ -3224,7 +3223,6 @@ public class PeopleCodeParser
                 {
                     if (builtInType.SourceSpan.Start.Index == 0 && builtInType.SourceSpan.End.Index == 0)
                     {
-                        int debug = 0; // builtin type has no valid span
                     }
                 }
                 return builtInType;
@@ -3242,19 +3240,19 @@ public class PeopleCodeParser
     private bool TryParseRecordField(out string recordName, out string fieldName)
     {
         recordName = ""; fieldName = "";
-        
+
         // Parse record name using ParseGenericId to allow keywords like STEP
         var tempRecordName = ParseGenericId();
         if (tempRecordName == null) return false;
         recordName = tempRecordName;
-        
+
         if (!Match(TokenType.Dot)) return false;
-        
+
         // Parse field name using ParseGenericId to allow keywords like STEP
         var tempFieldName = ParseGenericId();
         if (tempFieldName == null) return false;
         fieldName = tempFieldName;
-        
+
         return true;
     }
 
@@ -3293,7 +3291,7 @@ public class PeopleCodeParser
                 // Set token positioning for empty variable
                 emptyVariable.FirstToken = firstToken;
                 emptyVariable.LastToken = Previous; // Last token consumed was the type
-                
+
                 Match(TokenType.Semicolon); // optional
                 return emptyVariable;
             }
@@ -3435,18 +3433,18 @@ public class PeopleCodeParser
                 TokenType.Local => ParseLocalVariableStatement(),
                 _ => ParseExpressionStatement()
             };
-            
+
             // If we have a valid statement, assign a statement number and check for a semicolon
             if (statement != null)
             {
-                
+
                 // Increment statement counter and assign to this statement
                 _statementCounter++;
                 statement.StatementNumber = _statementCounter;
-                
+
                 // Set the HasSemicolon flag if a semicolon is present
                 statement.HasSemicolon = Match(TokenType.Semicolon);
-                
+
                 // Consume any additional semicolons (allowed by the grammar)
                 while (Match(TokenType.Semicolon))
                 {
@@ -3456,7 +3454,7 @@ public class PeopleCodeParser
                 statement.FirstToken = startToken;
                 statement.LastToken = endToken;
             }
-            
+
             return statement;
         }
         catch (Exception ex)
@@ -3488,7 +3486,7 @@ public class PeopleCodeParser
             if (condition == null)
             {
                 ReportError("Expected condition after 'IF'");
-                
+
                 // Error recovery: try to synchronize to THEN token
                 if (SynchronizeToToken(TokenType.Then))
                 {
@@ -3510,7 +3508,7 @@ public class PeopleCodeParser
             if (!Match(TokenType.Then))
             {
                 ReportError("Expected 'THEN' after IF condition");
-                
+
                 // Error recovery: try to synchronize to THEN token
                 if (!SynchronizeToToken(TokenType.Then))
                 {
@@ -3519,27 +3517,27 @@ public class PeopleCodeParser
                 }
             }
 
-        // Handle optional semicolons after THEN (SEMI*)
-        while (Match(TokenType.Semicolon)) { }
-
-        var thenStatements = ParseStatementList(TokenType.EndIf, TokenType.Else);
-            
-            BlockNode? elseStatements = null;
-                    if (Match(TokenType.Else))
-        {
-            // Handle optional semicolons after ELSE (SEMI*)
+            // Handle optional semicolons after THEN (SEMI*)
             while (Match(TokenType.Semicolon)) { }
-            
-            elseStatements = ParseStatementList(TokenType.EndIf);
-        }
 
-        // Use custom logic instead of Consume to highlight IF token for missing END-IF
-        if (!Match(TokenType.EndIf))
-        {
-            ReportError("IF statement is missing 'END-IF'", ifToken);
-            // Use smart recovery to find next statement boundary, not just END-IF
-            SmartStatementRecover();
-        }
+            var thenStatements = ParseStatementList(TokenType.EndIf, TokenType.Else);
+
+            BlockNode? elseStatements = null;
+            if (Match(TokenType.Else))
+            {
+                // Handle optional semicolons after ELSE (SEMI*)
+                while (Match(TokenType.Semicolon)) { }
+
+                elseStatements = ParseStatementList(TokenType.EndIf);
+            }
+
+            // Use custom logic instead of Consume to highlight IF token for missing END-IF
+            if (!Match(TokenType.EndIf))
+            {
+                ReportError("IF statement is missing 'END-IF'", ifToken);
+                // Use smart recovery to find next statement boundary, not just END-IF
+                SmartStatementRecover();
+            }
 
             var ifNode = new IfStatementNode(condition, thenStatements);
             if (elseStatements != null)
@@ -3571,7 +3569,7 @@ public class PeopleCodeParser
                 ReportError("Expected user variable after 'FOR'");
                 return null;
             }
-            
+
             var variableToken = Current;
             var variableName = variableToken.Value?.ToString() ?? "";
             _position++; // Consume the user variable token
@@ -3652,25 +3650,25 @@ public class PeopleCodeParser
             if (!Match(TokenType.While))
                 return null;
 
-                    var condition = ParseExpression();
-        if (condition == null)
-        {
-            ReportError("Expected condition after 'WHILE'");
-            return null;
-        }
+            var condition = ParseExpression();
+            if (condition == null)
+            {
+                ReportError("Expected condition after 'WHILE'");
+                return null;
+            }
 
-        // Handle optional semicolons after condition (SEMI*)
-        while (Match(TokenType.Semicolon)) { }
+            // Handle optional semicolons after condition (SEMI*)
+            while (Match(TokenType.Semicolon)) { }
 
-        var body = ParseStatementList(TokenType.EndWhile);
+            var body = ParseStatementList(TokenType.EndWhile);
 
-        // Use custom logic instead of Consume to highlight WHILE token for missing END-WHILE
-        if (!Match(TokenType.EndWhile))
-        {
-            ReportError("WHILE statement is missing 'END-WHILE'", whileToken);
-            // Use smart recovery to find next statement boundary, not just END-WHILE
-            SmartStatementRecover();
-        }
+            // Use custom logic instead of Consume to highlight WHILE token for missing END-WHILE
+            if (!Match(TokenType.EndWhile))
+            {
+                ReportError("WHILE statement is missing 'END-WHILE'", whileToken);
+                // Use smart recovery to find next statement boundary, not just END-WHILE
+                SmartStatementRecover();
+            }
 
             return new WhileStatementNode(condition, body);
         }
@@ -3689,13 +3687,13 @@ public class PeopleCodeParser
         {
             EnterRule("repeat-statement");
 
-                    if (!Match(TokenType.Repeat))
-            return null;
+            if (!Match(TokenType.Repeat))
+                return null;
 
-        // Handle optional semicolons after REPEAT (SEMI*)
-        while (Match(TokenType.Semicolon)) { }
+            // Handle optional semicolons after REPEAT (SEMI*)
+            while (Match(TokenType.Semicolon)) { }
 
-        var body = ParseStatementList(TokenType.Until);
+            var body = ParseStatementList(TokenType.Until);
 
             Consume(TokenType.Until, "Expected 'UNTIL' after REPEAT statements");
 
@@ -3704,9 +3702,9 @@ public class PeopleCodeParser
             {
                 ReportError("Expected condition after 'UNTIL'");
                 return null;
-                    }
+            }
 
-        return new RepeatStatementNode(body, condition);
+            return new RepeatStatementNode(body, condition);
         }
         finally
         {
@@ -3725,7 +3723,7 @@ public class PeopleCodeParser
             var tryStartToken = Current; // Capture the starting token
             if (!Match(TokenType.Try))
                 return null;
-                
+
             // Handle optional semicolons after TRY (SEMI*)
             while (Match(TokenType.Semicolon)) { }
 
@@ -3738,7 +3736,7 @@ public class PeopleCodeParser
                 var catchStartToken = Previous;
                 // According to grammar: CATCH (EXCEPTION | appClassPath) USER_VARIABLE SEMI* statementBlock?
                 TypeNode? exceptionType = null;
-                
+
                 // Parse exception type (EXCEPTION or appClassPath)
                 if (Match(TokenType.Exception))
                 {
@@ -3748,7 +3746,7 @@ public class PeopleCodeParser
                 {
                     // Try to parse as app class path
                     exceptionType = ParseAppClassPath();
-                    
+
                     // If not an app class path, report error
                     if (exceptionType == null)
                     {
@@ -3765,24 +3763,25 @@ public class PeopleCodeParser
                 {
                     var exceptionVariable = new IdentifierNode(Current.Text, IdentifierType.UserVariable);
                     _position++;
-                    
+
                     // Handle optional semicolons (SEMI*)
                     while (Match(TokenType.Semicolon)) { }
-                    
+
                     var catchBlock = ParseStatementList(TokenType.Catch, TokenType.EndTry);
                     catchNode = new CatchStatementNode(exceptionVariable, catchBlock, exceptionType);
                     catchClauses.Add(catchNode);
                 }
-                
+
                 // Handle optional semicolons between catch clauses (SEMI*)
                 while (Match(TokenType.Semicolon)) { }
                 var catchEndToken = Previous; // Capture the last token of the catch clause
-                if (catchNode != null) {
+                if (catchNode != null)
+                {
                     catchNode.FirstToken = catchStartToken;
                     catchNode.LastToken = catchEndToken;
                 }
             }
-            
+
             // Handle optional semicolons before END-TRY (SEMI*)
             while (Match(TokenType.Semicolon)) { }
 
@@ -3829,7 +3828,7 @@ public class PeopleCodeParser
     {
         if (!Check(TokenType.Break))
             return null;
-        
+
         var token = Current;
         _position++;
         return new BreakStatementNode()
@@ -3843,7 +3842,7 @@ public class PeopleCodeParser
     {
         if (!Check(TokenType.Continue))
             return null;
-        
+
         var token = Current;
         _position++;
         return new ContinueStatementNode()
@@ -3857,7 +3856,7 @@ public class PeopleCodeParser
     {
         if (!Check(TokenType.Exit))
             return null;
-        
+
         var token = Current;
         _position++;
         return new ExitStatementNode()
@@ -3979,8 +3978,8 @@ public class PeopleCodeParser
             else
             {
                 // This is localVariableDefinition: LOCAL type &var1, &var2, ...
-                var node = new LocalVariableDeclarationNode(variableType, new List<(string,Token)> { (firstVariableName, firstVarToken) });
-                
+                var node = new LocalVariableDeclarationNode(variableType, new List<(string, Token)> { (firstVariableName, firstVarToken) });
+
                 // Parse additional variable names separated by commas
                 while (Match(TokenType.Comma))
                 {
@@ -4161,7 +4160,7 @@ public class PeopleCodeParser
                 // Use smart recovery to find next statement boundary, not just END-EVALUATE
                 SmartStatementRecover();
             }
-        return evalNode;
+            return evalNode;
         }
         catch (Exception ex)
         {
@@ -4270,7 +4269,7 @@ public class PeopleCodeParser
     {
         var left = ParseEqualityExpression();
         if (left == null) return null;
-        
+
         while (Match(TokenType.And))
         {
             var right = ParseEqualityExpression();
@@ -4342,7 +4341,7 @@ public class PeopleCodeParser
             _position++;
         }
 
-        while (Current.Type is TokenType.LessThan or TokenType.LessThanOrEqual or 
+        while (Current.Type is TokenType.LessThan or TokenType.LessThanOrEqual or
                                TokenType.GreaterThan or TokenType.GreaterThanOrEqual)
         {
             var op = Current.Type switch
@@ -4380,10 +4379,10 @@ public class PeopleCodeParser
         try
         {
             EnterRule("typeCastExpression");
-            
+
             var expr = ParseConcatenationExpression();
             if (expr == null) return null;
-            
+
             // Handle type casting (expr AS Type) - PeopleCode only supports single casts, not chains
             if (Match(TokenType.As))
             {
@@ -4392,8 +4391,8 @@ public class PeopleCodeParser
                 {
                     ReportError("Expected type specifier after 'AS'");
                     // Error recovery: try to sync to expression boundaries
-                    var syncTokens = new HashSet<TokenType> { 
-                        TokenType.Semicolon, TokenType.Comma, TokenType.RightParen, 
+                    var syncTokens = new HashSet<TokenType> {
+                        TokenType.Semicolon, TokenType.Comma, TokenType.RightParen,
                         TokenType.RightBracket, TokenType.Then, TokenType.EndIf,
                         TokenType.And, TokenType.Or, TokenType.Equal, TokenType.NotEqual
                     };
@@ -4448,7 +4447,7 @@ public class PeopleCodeParser
 
         return left;
     }
-    
+
     /// <summary>
     /// Parse NOT expressions (NOT expression)
     /// </summary>
@@ -4458,13 +4457,13 @@ public class PeopleCodeParser
         {
             var notToken = Current;
             _position++; // Advance past NOT token
-            
+
             var operand = ParseAdditiveExpression();
             if (operand == null)
             {
                 ReportError("Expected expression after 'NOT'");
                 // Error recovery for NOT expressions - sync to appropriate expression boundaries
-                var syncTokens = new HashSet<TokenType> { 
+                var syncTokens = new HashSet<TokenType> {
                     TokenType.Semicolon, TokenType.Then, TokenType.EndIf,
                     TokenType.And, TokenType.Or, TokenType.RightParen,
                     TokenType.RightBracket, TokenType.Comma
@@ -4472,14 +4471,14 @@ public class PeopleCodeParser
                 PanicRecover(syncTokens);
                 return null;
             }
-            
+
             return new UnaryOperationNode(UnaryOperator.Not, operand)
             {
                 FirstToken = notToken,
                 LastToken = operand.LastToken
             };
         }
-        
+
         return ParseAdditiveExpression();
     }
 
@@ -4627,7 +4626,7 @@ public class PeopleCodeParser
                 // Array access - supports both single index and comma-separated indices
                 var indices = ParseArrayIndices();
                 Consume(TokenType.RightBracket, "Expected ']' after array index");
-                
+
                 expr = new ArrayAccessNode(expr, indices)
                 {
                     FirstToken = expr.FirstToken,
@@ -4642,7 +4641,7 @@ public class PeopleCodeParser
                     // Empty function call like CreateArray()
                     var args = new List<ExpressionNode>();
                     Consume(TokenType.RightParen, "Expected ')' after function arguments");
-                    
+
                     expr = new FunctionCallNode(expr, args)
                     {
                         FirstToken = expr.FirstToken,
@@ -4655,7 +4654,7 @@ public class PeopleCodeParser
                     // Array access uses [] brackets, function calls use () parentheses
                     var args = ParseArgumentList();
                     Consume(TokenType.RightParen, "Expected ')' after function arguments");
-                    
+
                     expr = new FunctionCallNode(expr, args)
                     {
                         FirstToken = expr.FirstToken,
@@ -4670,21 +4669,21 @@ public class PeopleCodeParser
                 if (member != null)
                 {
                     var memberToken = Previous; // Previous token after ParseGenericId consumed it
-                    
+
                     // Create member access node
                     expr = new MemberAccessNode(expr, member)
                     {
                         FirstToken = expr.FirstToken,
                         LastToken = memberToken
                     };
-                    
+
                     // Check for method call after dot access
                     if (Match(TokenType.LeftParen))
                     {
                         // Method call
                         var args = ParseArgumentList();
                         Consume(TokenType.RightParen, "Expected ')' after method arguments");
-                        
+
                         expr = new FunctionCallNode(expr, args)
                         {
                             FirstToken = expr.FirstToken,
@@ -4698,7 +4697,7 @@ public class PeopleCodeParser
                     var stringMember = Current.Value?.ToString() ?? "";
                     var memberToken = Current;
                     _position++;
-                    
+
                     expr = new MemberAccessNode(expr, stringMember, isDynamic: true)
                     {
                         FirstToken = expr.FirstToken,
@@ -4745,9 +4744,9 @@ public class PeopleCodeParser
         try
         {
             EnterRule("classConstant");
-            
+
             var startToken = Current;
-            
+
             // Parse class name
             var className = ParseGenericId();
             if (className == null)
@@ -4755,14 +4754,14 @@ public class PeopleCodeParser
                 ReportError("Expected class name in class constant");
                 return null;
             }
-            
+
             // Consume colon
             if (!Match(TokenType.Colon))
             {
                 ReportError("Expected ':' after class name in class constant");
                 return null;
             }
-            
+
             // Parse constant name
             var constantName = ParseGenericId();
             if (constantName == null)
@@ -4770,9 +4769,9 @@ public class PeopleCodeParser
                 ReportError("Expected constant name after ':' in class constant");
                 return null;
             }
-            
+
             var endToken = Previous;
-            
+
             return new ClassConstantNode(className, constantName)
             {
                 FirstToken = startToken,
@@ -4835,10 +4834,10 @@ public class PeopleCodeParser
             {
                 ReportError("Expected expression inside parentheses");
             }
-            
+
             Consume(TokenType.RightParen, "Expected ')' after expression");
             var rightParenToken = Previous; // Capture closing paren
-            
+
             return new ParenthesizedExpressionNode(expr ?? CreateErrorExpression())
             {
                 FirstToken = leftParenToken,
@@ -4851,7 +4850,7 @@ public class PeopleCodeParser
         {
             return ParseObjectCreation();
         }
-        
+
         // App class path (metadata expression)
         if ((Check(TokenType.Metadata) || Check(TokenType.GenericId)) && Peek().Type == TokenType.Colon)
         {
@@ -5116,7 +5115,7 @@ public class PeopleCodeParser
         }
 
         // Prepare prefix for children
-        var childPrefix = useTreeCharacters 
+        var childPrefix = useTreeCharacters
             ? prefix + (isLast ? "    " : "│   ")
             : prefix + "  ";
 
@@ -5138,16 +5137,16 @@ public class PeopleCodeParser
     public void SetToolsRelease(string? version)
     {
         _toolsRelease = string.IsNullOrEmpty(version) ? new ToolsVersion("99.99.99") : new ToolsVersion(version);
-        
+
         // Reprocess directives with the new ToolsRelease setting
         _skippedDirectiveSpans = PreProcessDirectives();
     }
-    
+
     /// <summary>
     /// Get the current PeopleTools version configuration
     /// </summary>
     public ToolsVersion? ToolsRelease => _toolsRelease;
-    
+
     /// <summary>
     /// Collects all comments from the token stream and adds them to the program node
     /// </summary>
@@ -5161,7 +5160,7 @@ public class PeopleCodeParser
             {
                 program.AddComment(token);
             }
-            
+
             // Check leading trivia for comments
             foreach (var leadingTrivia in token.LeadingTrivia)
             {
@@ -5170,7 +5169,7 @@ public class PeopleCodeParser
                     program.AddComment(leadingTrivia);
                 }
             }
-            
+
             // Check trailing trivia for comments
             foreach (var trailingTrivia in token.TrailingTrivia)
             {

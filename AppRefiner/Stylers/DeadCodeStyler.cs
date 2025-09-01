@@ -22,7 +22,7 @@ public class DeadCodeStyler : BaseStyler
         Reset();
         base.VisitProgram(node);
 
-        foreach(var span in node.SkippedDirectiveSpans)
+        foreach (var span in node.SkippedDirectiveSpans)
         {
             AddIndicator(span, IndicatorType.TEXTCOLOR, DEAD_CODE_COLOR,
                 "Code not compiled due to compiler directives.");
@@ -36,14 +36,13 @@ public class DeadCodeStyler : BaseStyler
     {
         if (node.Name == "FieldValueInRecord")
         {
-            int debug = 0;
         }
         // Check method body for dead code
         if (node.Body != null)
         {
             ProcessBlock(node.Body);
         }
-        
+
         base.VisitMethod(node);
     }
 
@@ -57,7 +56,7 @@ public class DeadCodeStyler : BaseStyler
         {
             ProcessBlock(node.Body);
         }
-        
+
         base.VisitFunction(node);
     }
 
@@ -71,13 +70,13 @@ public class DeadCodeStyler : BaseStyler
         {
             ProcessBlock(node.GetterBody);
         }
-        
+
         // Check setter body for dead code
         if (node.SetterBody != null)
         {
             ProcessBlock(node.SetterBody);
         }
-        
+
         base.VisitProperty(node);
     }
 
@@ -88,13 +87,13 @@ public class DeadCodeStyler : BaseStyler
     {
         // Check then block for dead code
         ProcessBlock(node.ThenBlock);
-        
+
         // Check else block for dead code if it exists
         if (node.ElseBlock != null)
         {
             ProcessBlock(node.ElseBlock);
         }
-        
+
         base.VisitIf(node);
     }
 
@@ -105,7 +104,7 @@ public class DeadCodeStyler : BaseStyler
     {
         // Check loop body for dead code
         ProcessBlock(node.Body);
-        
+
         base.VisitFor(node);
     }
 
@@ -116,7 +115,7 @@ public class DeadCodeStyler : BaseStyler
     {
         // Check loop body for dead code
         ProcessBlock(node.Body);
-        
+
         base.VisitWhile(node);
     }
 
@@ -127,7 +126,7 @@ public class DeadCodeStyler : BaseStyler
     {
         // Check loop body for dead code
         ProcessBlock(node.Body);
-        
+
         base.VisitRepeat(node);
     }
 
@@ -141,13 +140,13 @@ public class DeadCodeStyler : BaseStyler
         {
             ProcessBlock(whenClause.Body);
         }
-        
+
         // Check when-other block for dead code if it exists
         if (node.WhenOtherBlock != null)
         {
             ProcessBlock(node.WhenOtherBlock);
         }
-        
+
         base.VisitEvaluate(node);
     }
 
@@ -169,16 +168,16 @@ public class DeadCodeStyler : BaseStyler
     private void ProcessBlock(BlockNode block)
     {
         bool foundControlTransfer = false;
-        
+
         for (int i = 0; i < block.Statements.Count; i++)
         {
             var statement = block.Statements[i];
-            
+
             if (!foundControlTransfer)
             {
                 // Continue processing normally until we hit a control transfer statement
                 statement.Accept(this);
-                
+
                 // Check if this statement can transfer control (return, exit, throw, etc.)
                 if (statement.DoesTransferControl)
                 {
@@ -210,7 +209,7 @@ public class DeadCodeStyler : BaseStyler
         // Use the statement's source span for precise highlighting
         AddIndicator(targetSpan, IndicatorType.TEXTCOLOR, DEAD_CODE_COLOR,
         "Unreachable code (after return/exit/throw statement)");
-        
+
         // Also continue visiting the statement to handle nested blocks that might also have dead code
         statement.Accept(this);
     }

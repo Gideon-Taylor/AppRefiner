@@ -4,14 +4,9 @@ using AppRefiner.Stylers;
 using PeopleCodeParser.SelfHosted;
 using PeopleCodeParser.SelfHosted.Lexing;
 using PeopleCodeParser.SelfHosted.Nodes;
-using System;
-using System.Collections.Generic;
 using System.Diagnostics;
-using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
-using System.Threading.Tasks;
-using static System.Windows.Forms.VisualStyles.VisualStyleElement.Window;
 using SelfHostedLexer = PeopleCodeParser.SelfHosted.Lexing.PeopleCodeLexer;
 
 namespace AppRefiner
@@ -72,7 +67,7 @@ namespace AppRefiner
         public void UpdateSearchHistory(string term)
         {
             if (string.IsNullOrWhiteSpace(term)) return;
-            
+
             // Remove if already exists
             SearchHistory.Remove(term);
             // Add to front
@@ -86,7 +81,7 @@ namespace AppRefiner
         public void UpdateReplaceHistory(string term)
         {
             if (string.IsNullOrWhiteSpace(term)) return;
-            
+
             // Remove if already exists
             ReplaceHistory.Remove(term);
             // Add to front
@@ -95,14 +90,14 @@ namespace AppRefiner
             if (ReplaceHistory.Count > 10)
                 ReplaceHistory.RemoveAt(10);
         }
-        
+
         // Helper method to set selection range
         public void SetSelectionRange(int start, int end)
         {
             SelectionStart = start;
             SelectionEnd = end;
         }
-        
+
         // Helper method to clear selection range
         public void ClearSelectionRange()
         {
@@ -157,7 +152,8 @@ namespace AppRefiner
             }
         }
 
-        public string? Caption { 
+        public string? Caption
+        {
             get
             {
                 return _caption;
@@ -207,7 +203,7 @@ namespace AppRefiner
                     DetermineRelativeFilePath();
                     SetEventMapInfo();
                     SetClassPath();
-                    
+
                 }
 
                 // If the caption has actually changed, raise the event *after* all other logic.
@@ -312,7 +308,7 @@ namespace AppRefiner
             // Calculate hash of current content
             int newHash = ContentString?.GetHashCode() ?? 0;
             Debug.Log($"Self-hosted parser - New content hash: {newHash}");
-            
+
             // If content hasn't changed and we have a cached parse tree, return it
             if (!forceReparse && newHash == selfHostedContentHash && selfHostedParsedProgram != null)
             {
@@ -329,15 +325,15 @@ namespace AppRefiner
 
 
 
-                SelfHostedLexer selfHostedLexer = new SelfHostedLexer(ContentString ?? string.Empty);
+                SelfHostedLexer selfHostedLexer = new(ContentString ?? string.Empty);
                 var tokens = selfHostedLexer.TokenizeAll();
                 /* TODO: data manager support for getting current tools release */
-                var parser = new PeopleCodeParser.SelfHosted.PeopleCodeParser(tokens,"8.61");
+                var parser = new PeopleCodeParser.SelfHosted.PeopleCodeParser(tokens, "8.61");
                 selfHostedParsedProgram = parser.ParseProgram();
                 this.ParserErrors = parser.Errors;
                 selfHostedParseSuccessful = true;
                 selfHostedContentHash = newHash;
-                
+
                 Debug.Log("Self-hosted parse completed successfully");
             }
             catch (Exception ex)
@@ -370,7 +366,7 @@ namespace AppRefiner
             // Calculate hash of current content
             int newHash = ContentString?.GetHashCode() ?? 0;
             Debug.Log($"Self-hosted parser (with tokens) - New content hash: {newHash}");
-            
+
             // If content hasn't changed and we have a cached parse tree, return it
             if (!forceReparse && newHash == selfHostedContentHash && selfHostedParsedProgram != null && selfHostedTokens != null)
             {
@@ -384,10 +380,10 @@ namespace AppRefiner
             try
             {
                 // Use the self-hosted parser
-                SelfHostedLexer selfHostedLexer = new SelfHostedLexer(ContentString ?? string.Empty);
+                SelfHostedLexer selfHostedLexer = new(ContentString ?? string.Empty);
                 var tokens = selfHostedLexer.TokenizeAll();
                 /* TODO: data manager support for getting current tools release */
-                var parser = new PeopleCodeParser.SelfHosted.PeopleCodeParser(tokens,"8.61");
+                var parser = new PeopleCodeParser.SelfHosted.PeopleCodeParser(tokens, "8.61");
                 selfHostedParsedProgram = parser.ParseProgram();
                 this.ParserErrors = parser.Errors;
                 selfHostedTokens = tokens;
@@ -522,7 +518,7 @@ namespace AppRefiner
             // Walk up the parent chain until we find the Application Designer window
             while (hwnd != IntPtr.Zero)
             {
-                StringBuilder caption = new StringBuilder(256);
+                StringBuilder caption = new(256);
                 NativeMethods.GetWindowText(hwnd, caption, caption.Capacity); // Use NativeMethods
                 string windowTitle = caption.ToString();
 
@@ -553,7 +549,8 @@ namespace AppRefiner
             {
                 var parts = this.Caption.Replace(" (Application Package PeopleCode)", "").Split('.', StringSplitOptions.None);
                 ClassPath = string.Join(":", parts.SkipLast(1));
-            } else
+            }
+            else
             {
                 ClassPath = string.Empty;
             }
@@ -562,7 +559,7 @@ namespace AppRefiner
         {
             if (this.Caption == null) return;
 
-            
+
             if (this.Caption.EndsWith("(Component PeopleCode)"))
             {
                 var info = new EventMapInfo();
@@ -573,14 +570,16 @@ namespace AppRefiner
                     info.Component = parts[0];
                     info.Segment = parts[1];
                     info.ComponentEvent = EventMapInfo.EventToXlat(parts[2]);
-                } else if (parts.Length == 4)
+                }
+                else if (parts.Length == 4)
                 {
                     info.Type = EventMapType.ComponentRecord;
                     info.Component = parts[0];
                     info.Segment = parts[1];
                     info.Record = parts[2];
                     info.ComponentRecordEvent = EventMapInfo.EventToXlat(parts[3]);
-                } else if (parts.Length == 5)
+                }
+                else if (parts.Length == 5)
                 {
                     info.Type = EventMapType.ComponentRecordField;
                     info.Component = parts[0];
@@ -590,7 +589,8 @@ namespace AppRefiner
                     info.ComponentRecordEvent = EventMapInfo.EventToXlat(parts[4]);
                 }
                 this.EventMapInfo = info;
-            } else if (this.Caption.EndsWith(" (Page PeopleCode)"))
+            }
+            else if (this.Caption.EndsWith(" (Page PeopleCode)"))
             {
                 var info = new EventMapInfo();
                 var parts = this.Caption.Replace(" (Page PeopleCode)", "").Split('.', StringSplitOptions.None);
@@ -601,7 +601,8 @@ namespace AppRefiner
                     info.ComponentRecordEvent = EventMapInfo.EventToXlat(parts[1]);
                 }
                 this.EventMapInfo = info;
-            } else
+            }
+            else
             {
                 this.EventMapInfo = null;
             }
@@ -625,7 +626,7 @@ namespace AppRefiner
                     IntPtr grandparentHwnd = NativeMethods.GetParent(parentHwnd); // Use NativeMethods
                     if (grandparentHwnd != IntPtr.Zero)
                     {
-                        StringBuilder caption = new StringBuilder(512);
+                        StringBuilder caption = new(512);
                         NativeMethods.GetWindowText(grandparentHwnd, caption, caption.Capacity); // Use NativeMethods
                         string windowTitle = caption.ToString().Trim();
 

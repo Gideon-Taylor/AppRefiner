@@ -1,11 +1,7 @@
 using AppRefiner.Linters;
 using AppRefiner.Stylers;
 using AppRefiner.TooltipProviders;
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Text.Json;
-using System.Windows.Forms; // Required for CheckBox references if loading/saving general settings here
 
 namespace AppRefiner
 {
@@ -89,18 +85,18 @@ namespace AppRefiner
             Properties.Settings.Default.rememberFolds = settings.RememberFolds;
             Properties.Settings.Default.overrideFindReplace = settings.OverrideFindReplace;
         }
-        
+
         public void SaveChanges()
         {
-             try
-             {
+            try
+            {
                 Properties.Settings.Default.Save();
-             }
-             catch (Exception ex)
-             {
-                 Debug.LogException(ex, "Error saving settings");
-                 // Inform the user?
-             }
+            }
+            catch (Exception ex)
+            {
+                Debug.LogException(ex, "Error saving settings");
+                // Inform the user?
+            }
         }
 
         // --- Linter States --- 
@@ -136,9 +132,9 @@ namespace AppRefiner
                 Debug.LogException(ex, "Error deserializing LinterStates - using defaults.");
                 // Use defaults if settings are corrupt
             }
-             catch (Exception ex)
+            catch (Exception ex)
             {
-                 Debug.LogException(ex, "Error loading linter states");
+                Debug.LogException(ex, "Error loading linter states");
             }
         }
 
@@ -146,7 +142,7 @@ namespace AppRefiner
         {
             try
             {
-                 var states = linterRules.Select(l => new RuleState
+                var states = linterRules.Select(l => new RuleState
                 {
                     TypeName = l.GetType().FullName ?? "",
                     Active = l.Active
@@ -171,7 +167,7 @@ namespace AppRefiner
                     Properties.Settings.Default.StylerStates);
 
                 if (states == null) return;
-                
+
                 var stylerMap = stylers.ToDictionary(s => s.GetType().FullName ?? "");
 
                 foreach (var state in states)
@@ -189,13 +185,13 @@ namespace AppRefiner
                     }
                 }
             }
-             catch (JsonException ex)
+            catch (JsonException ex)
             {
                 Debug.LogException(ex, "Error deserializing StylerStates - using defaults.");
             }
             catch (Exception ex)
             {
-                 Debug.LogException(ex, "Error loading styler states");
+                Debug.LogException(ex, "Error loading styler states");
             }
         }
 
@@ -228,12 +224,12 @@ namespace AppRefiner
                     Properties.Settings.Default.TooltipStates);
 
                 if (states == null) return;
-                
+
                 var providerMap = tooltipProviders.ToDictionary(p => p.GetType().FullName ?? "");
 
                 foreach (var state in states)
                 {
-                    if(providerMap.TryGetValue(state.TypeName, out var provider))
+                    if (providerMap.TryGetValue(state.TypeName, out var provider))
                     {
                         provider.Active = state.Active;
                         // Update corresponding grid row
@@ -246,7 +242,7 @@ namespace AppRefiner
                     }
                 }
             }
-             catch (JsonException ex)
+            catch (JsonException ex)
             {
                 Debug.LogException(ex, "Error deserializing TooltipStates - using defaults.");
             }
@@ -260,7 +256,7 @@ namespace AppRefiner
         {
             try
             {
-                 var states = tooltipProviders.Select(p => new RuleState
+                var states = tooltipProviders.Select(p => new RuleState
                 {
                     TypeName = p.GetType().FullName ?? "",
                     Active = p.Active
@@ -269,10 +265,10 @@ namespace AppRefiner
                 Properties.Settings.Default.TooltipStates =
                     JsonSerializer.Serialize(states);
             }
-             catch (Exception ex)
+            catch (Exception ex)
             {
                 Debug.LogException(ex, "Error saving tooltip states");
             }
         }
     }
-} 
+}

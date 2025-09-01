@@ -1,5 +1,4 @@
 using PeopleCodeParser.SelfHosted.Nodes;
-using PeopleCodeParser.SelfHosted.Visitors;
 
 namespace AppRefiner.Linters
 {
@@ -9,12 +8,12 @@ namespace AppRefiner.Linters
     public class FunctionParameterCountLinter : BaseLintRule
     {
         public override string LINTER_ID => "FUNC_PARAM_COUNT";
-        
+
         /// <summary>
         /// Maximum recommended number of parameters for a method
         /// </summary>
         public int MaxMethodParameters { get; set; } = 5;
-        
+
         /// <summary>
         /// Maximum recommended number of parameters for a function
         /// </summary>

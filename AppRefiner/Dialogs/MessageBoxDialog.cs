@@ -1,8 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Drawing;
-using System.Windows.Forms;
-
 namespace AppRefiner.Dialogs
 {
     public class MessageBoxDialog : Form
@@ -96,7 +91,7 @@ namespace AppRefiner.Dialogs
             this.MaximizeBox = false;
             this.MinimizeBox = false;
             this.ShowInTaskbar = false;
-            
+
             // Set AcceptButton and CancelButton after buttons are created
             SetDefaultAndCancelButtons(buttons);
 
@@ -153,14 +148,14 @@ namespace AppRefiner.Dialogs
                 Size = new Size(100, 30),
                 // Add any specific styling like in TemplateConfirmationDialog if needed
             };
-            button.Click += (s, e) => 
+            button.Click += (s, e) =>
             {
                 this.resultCallback?.Invoke(dialogResult);
                 this.Close(); // DialogResult takes care of returning
             };
             return button;
         }
-        
+
         private void SetDefaultAndCancelButtons(MessageBoxButtons buttons)
         {
             // Default behavior: first button is accept, last is cancel if applicable

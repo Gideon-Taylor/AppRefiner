@@ -1,7 +1,5 @@
-using PeopleCodeParser.SelfHosted;
 using System.Globalization;
 using System.Text;
-using System.Text.RegularExpressions;
 
 namespace PeopleCodeParser.SelfHosted.Lexing;
 
@@ -147,7 +145,7 @@ public class PeopleCodeLexer
     public PeopleCodeLexer(string source)
     {
         _source = source ?? throw new ArgumentNullException(nameof(source));
-        
+
         // Pre-compute character position to byte position mapping for efficient lookup
         _charToByteIndex = new int[source.Length + 1];
         int bytePos = 0;
@@ -157,7 +155,7 @@ public class PeopleCodeLexer
             bytePos += Encoding.UTF8.GetByteCount(source, charPos, 1);
         }
         _charToByteIndex[source.Length] = bytePos; // End position
-        
+
         _position = 0;
         _line = 1;
         _column = 1;
@@ -235,7 +233,7 @@ public class PeopleCodeLexer
     public List<Token> TokenizeAll()
     {
         var tokens = new List<Token>();
-        
+
         while (!IsAtEnd)
         {
             var token = NextToken();
@@ -249,14 +247,14 @@ public class PeopleCodeLexer
                         tokens.Add(trivia);
                     }
                 }
-                
+
                 tokens.Add(token);
             }
         }
 
         // Add EOF token
         tokens.Add(Token.CreateEof(CurrentPosition));
-        
+
         return tokens;
     }
 
@@ -267,7 +265,7 @@ public class PeopleCodeLexer
     {
         // Collect leading trivia (whitespace and comments)
         var leadingTrivia = new List<Token>();
-        
+
         while (!IsAtEnd)
         {
             if (char.IsWhiteSpace(CurrentChar))
@@ -314,36 +312,36 @@ public class PeopleCodeLexer
         {
             // Special operators
             '/' when PeekChar() == '+' => ScanSlashPlus(),
-            
+
             // Operators and punctuation
             '+' when PeekChar() == '/' => ScanPlusSlash(),
             '+' when PeekChar() == '=' => ScanTwoCharOperator(TokenType.PlusEqual),
             '+' => ScanSingleCharOperator(TokenType.Plus),
-            
+
             '-' when PeekChar() == '=' => ScanTwoCharOperator(TokenType.MinusEqual),
             '-' when char.IsDigit(PeekChar()) => ScanNumber(),
             '-' => ScanSingleCharOperator(TokenType.Minus),
-            
+
             '*' when PeekChar() == '*' => ScanTwoCharOperator(TokenType.Power),
             '*' => ScanSingleCharOperator(TokenType.Star),
-            
+
             '/' => ScanSingleCharOperator(TokenType.Div),
-            
+
             '=' => ScanSingleCharOperator(TokenType.Equal),
-            
+
             '<' when PeekChar() == '>' => ScanTwoCharOperator(TokenType.NotEqual),
             '<' when PeekChar() == '=' => ScanTwoCharOperator(TokenType.LessThanOrEqual),
             '<' => ScanSingleCharOperator(TokenType.LessThan),
-            
+
             '>' when PeekChar() == '=' => ScanTwoCharOperator(TokenType.GreaterThanOrEqual),
             '>' => ScanSingleCharOperator(TokenType.GreaterThan),
-            
+
             '!' when PeekChar() == '=' => ScanTwoCharOperator(TokenType.NotEqual),
-            
+
             '|' when PeekChar() == '|' => ScanTwoCharOperator(TokenType.DirectiveOr),
             '|' when PeekChar() == '=' => ScanTwoCharOperator(TokenType.PipeEqual),
             '|' => ScanSingleCharOperator(TokenType.Pipe),
-            
+
             '(' => ScanSingleCharOperator(TokenType.LeftParen),
             ')' => ScanSingleCharOperator(TokenType.RightParen),
             '[' => ScanSingleCharOperator(TokenType.LeftBracket),
@@ -353,23 +351,23 @@ public class PeopleCodeLexer
             '.' => ScanSingleCharOperator(TokenType.Dot),
             ':' => ScanSingleCharOperator(TokenType.Colon),
             '@' => ScanSingleCharOperator(TokenType.At),
-            
+
             // String literals
             '"' => ScanStringLiteral('"'),
             '\'' => ScanStringLiteral('\''),
-            
+
             // Numbers
             _ when char.IsDigit(ch) => ScanNumber(),
-            
+
             // Identifiers, keywords, and variables
             '&' when PeekChar() == '&' => ScanTwoCharOperator(TokenType.DirectiveAnd),
-            '&' when IsIdentifierChar(PeekChar())=> ScanUserVariable(),
+            '&' when IsIdentifierChar(PeekChar()) => ScanUserVariable(),
             '%' => ScanSystemIdentifier(),
             '#' when IsDirectiveStart() => ScanDirective(),
-            
+
             // Letters and identifiers  
             _ when char.IsLetter(ch) || ch == '_' || ch == '$' || ch == '#' => ScanIdentifierOrKeyword(),
-            
+
             _ => ScanInvalidCharacter()
         };
 
@@ -433,7 +431,7 @@ public class PeopleCodeLexer
     {
         // Check if we're at the start of a line or after a semicolon
         if (_position == 0) return true;
-        
+
         // Look backward for context
         for (int i = _position - 1; i >= 0; i--)
         {
@@ -445,7 +443,7 @@ public class PeopleCodeLexer
             if (!char.IsWhiteSpace(ch))
                 return false; // Found non-whitespace, non-separator
         }
-        
+
         return true; // Beginning of file
     }
 
@@ -454,7 +452,7 @@ public class PeopleCodeLexer
         // First, check if we're in a context where REM comments are valid
         if (!IsInCommentContext())
             return false;
-            
+
         // Check if this looks like "REM" or "REMARK"
         if (_position + 2 < _source.Length)
         {
@@ -570,7 +568,7 @@ public class PeopleCodeLexer
         var start = CurrentPosition;
         var rawText = new StringBuilder();
         var value = new StringBuilder();
-        
+
         rawText.Append(Advance()); // Opening quote
 
         while (!IsAtEnd)
@@ -605,7 +603,7 @@ public class PeopleCodeLexer
         }
 
         rawText.Append(Advance()); // Closing quote
-        
+
         return Token.CreateLiteral(TokenType.StringLiteral, rawText.ToString(), CreateSpan(start), value.ToString());
     }
 
@@ -631,7 +629,7 @@ public class PeopleCodeLexer
         {
             hasDecimal = true;
             sb.Append(Advance()); // '.'
-            
+
             while (!IsAtEnd && char.IsDigit(CurrentChar))
             {
                 sb.Append(Advance());
@@ -645,13 +643,13 @@ public class PeopleCodeLexer
         if (hasDecimal)
         {
             tokenType = TokenType.DecimalLiteral;
-            value = decimal.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out var decimalValue) 
+            value = decimal.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out var decimalValue)
                 ? decimalValue : 0m;
         }
         else
         {
             tokenType = TokenType.IntegerLiteral;
-            value = int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var intValue) 
+            value = int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var intValue)
                 ? intValue : 0;
         }
 
@@ -705,7 +703,7 @@ public class PeopleCodeLexer
         }
 
         var text = sb.ToString();
-        
+
         // Check if it's a known system variable
         if (SystemVariables.Contains(text))
         {
@@ -812,7 +810,7 @@ public class PeopleCodeLexer
         }
 
         var fullKeyword = sb.ToString().Replace(" ", "-").Replace("--", "-").ToUpperInvariant();
-        
+
         if (Keywords.TryGetValue(fullKeyword, out var keywordType))
         {
             return Token.CreateKeyword(keywordType, sb.ToString(), CreateSpan(start));
@@ -841,14 +839,14 @@ public class PeopleCodeLexer
     private bool IsDirectiveStart()
     {
         if (CurrentChar != '#') return false;
-        
+
         // Check for known directive patterns
         if (MatchText("#IF")) return true;
         if (MatchText("#ELSE")) return true;
         if (MatchText("#THEN")) return true;
         if (MatchText("#END-IF")) return true;
         if (MatchText("#TOOLSREL")) return true;
-        
+
         return false;
     }
 

@@ -1,11 +1,5 @@
 using PeopleCodeParser.SelfHosted.Nodes;
-using PeopleCodeParser.SelfHosted;
-using PeopleCodeParser.SelfHosted.Visitors;
 using PeopleCodeParser.SelfHosted.Visitors.Models;
-using AppRefiner.Services;
-using System.Drawing;
-using System.Windows.Forms;
-using PeopleCodeParser.SelfHosted.Lexing;
 
 namespace AppRefiner.Refactors
 {
@@ -249,10 +243,10 @@ namespace AppRefiner.Refactors
         }
         protected override void OnExitGlobalScope(ScopeContext scope, ProgramNode node, Dictionary<string, object> customData)
         {
-            
+
             foreach (var testScope in GetAllScopes())
             {
-                foreach(var variable in GetVariablesInScope(testScope))
+                foreach (var variable in GetVariablesInScope(testScope))
                 {
                     if (variable.References.Any(r => r.SourceSpan.ContainsPosition(CurrentPosition)))
                     {
@@ -269,7 +263,7 @@ namespace AppRefiner.Refactors
         /// <summary>
         /// Handles function calls and tracks variable usage in member access scenarios
         /// </summary>
-       
+
 
         /// <summary>
         /// Resets the refactor state for a new analysis
@@ -291,7 +285,7 @@ namespace AppRefiner.Refactors
 
             // Sort by position in reverse order to maintain accuracy when making replacements
             var targetReferences = GetVariableReferences(variableToRename.Name, targetScope);
-           
+
             //targetReferences = targetReferences.OrderByDescending(r => r.Start.ByteIndex).ToList();
             foreach (var varRef in targetReferences)
             {

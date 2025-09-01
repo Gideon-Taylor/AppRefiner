@@ -31,7 +31,7 @@ public class VariableAnalysisVisitor : ScopedAstVisitor<string>
         analysisLog.Add($"Global Variables: {globalVars.Count()}");
         analysisLog.Add($"Functions: {functions.Count()}");
         analysisLog.Add($"Methods: {methods.Count()}");
-        
+
         // Example: Find all unused variables
         var unusedVars = GetUnusedVariables();
         if (unusedVars.Any())
@@ -46,7 +46,7 @@ public class VariableAnalysisVisitor : ScopedAstVisitor<string>
         // Example: Find variables safe for refactoring
         var safeVars = GetAllVariables().Where(v => v.IsSafeToRefactor);
         analysisLog.Add($"Variables safe for refactoring: {safeVars.Count()}");
-        
+
         // CRITICAL: GetCurrentScope() works correctly here because OnExit is called BEFORE pop
         var currentScope = GetCurrentScope();
         analysisLog.Add($"Current scope during OnExit: {currentScope.Name} (should be 'Global')");
@@ -62,11 +62,11 @@ public class VariableAnalysisVisitor : ScopedAstVisitor<string>
     {
         var localVars = GetVariablesInScope(scope).Where(v => v.Kind == VariableKind.Local);
         var parameters = GetVariablesInScope(scope).Where(v => v.Kind == VariableKind.Parameter);
-        
+
         analysisLog.Add($"Method '{node.Name}' analysis:");
         analysisLog.Add($"  Parameters: {parameters.Count()}");
         analysisLog.Add($"  Local variables: {localVars.Count()}");
-        
+
         // Check for unused parameters (potential code smell)
         var unusedParams = parameters.Where(p => p.IsUnused);
         if (unusedParams.Any())
@@ -99,7 +99,7 @@ public class VariableAnalysisVisitor : ScopedAstVisitor<string>
     public List<VariableReference> FindAllReferencesToVariable(string variableName)
     {
         var allReferences = new List<VariableReference>();
-        
+
         foreach (var variable in GetAllVariables())
         {
             if (variable.Name.Equals(variableName, StringComparison.OrdinalIgnoreCase))
@@ -107,7 +107,7 @@ public class VariableAnalysisVisitor : ScopedAstVisitor<string>
                 allReferences.AddRange(variable.References);
             }
         }
-        
+
         return allReferences.OrderBy(r => r.Line).ThenBy(r => r.Column).ToList();
     }
 

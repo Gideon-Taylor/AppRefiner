@@ -234,7 +234,7 @@ namespace AppRefiner.Database
         /// <param name="appClassPath">The application class path to check</param>
         /// <returns>True if the application class exists, false otherwise</returns>
         bool CheckAppClassExists(string appClassPath);
-        
+
         /// <summary>
         /// Retrieves the source code for an Application Class by its path
         /// </summary>
@@ -248,7 +248,7 @@ namespace AppRefiner.Database
         /// <param name="recordName">The name of the record (uppercase).</param>
         /// <returns>A list of RecordFieldInfo objects, or null if the record doesn't exist or an error occurs.</returns>
         List<RecordFieldInfo>? GetRecordFields(string recordName);
-        
+
         /// <summary>
         /// Gets all subpackages and classes in the specified application package path
         /// </summary>

@@ -111,7 +111,7 @@ namespace AppRefiner.Dialogs
         protected override void OnShown(EventArgs e)
         {
             base.OnShown(e);
-            
+
             // Center on owner window
             if (parentHandle != IntPtr.Zero)
             {
@@ -190,29 +190,29 @@ namespace AppRefiner.Dialogs
             {
                 this.DialogResult = DialogResult.Cancel;
             }
-            
+
             this.Close();
         }
 
         private void ExecuteLintProject()
         {
             // Create callbacks for progress updates
-            Action<string> updateHeaderCallback = (header) => 
+            Action<string> updateHeaderCallback = (header) =>
             {
                 backgroundWorker?.ReportProgress(0, $"HEADER:{header}");
             };
 
-            Action<string> updateStatusCallback = (status) => 
+            Action<string> updateStatusCallback = (status) =>
             {
                 backgroundWorker?.ReportProgress(0, $"STATUS:{status}");
             };
 
-            Action<int, int> updateProgressCallback = (current, total) => 
+            Action<int, int> updateProgressCallback = (current, total) =>
             {
                 backgroundWorker?.ReportProgress(0, $"PROGRESS:{current}|{total}");
             };
 
-            Func<bool> shouldCancelCallback = () => 
+            Func<bool> shouldCancelCallback = () =>
             {
                 return backgroundWorker?.CancellationPending == true || isCancelled;
             };
@@ -332,7 +332,7 @@ namespace AppRefiner.Dialogs
         protected override void OnFormClosed(FormClosedEventArgs e)
         {
             base.OnFormClosed(e);
-            
+
             // Clean up background worker
             if (backgroundWorker != null)
             {
@@ -340,7 +340,7 @@ namespace AppRefiner.Dialogs
                 backgroundWorker.Dispose();
                 backgroundWorker = null;
             }
-            
+
             // Dispose the mouse handler
             mouseHandler?.Dispose();
             mouseHandler = null;

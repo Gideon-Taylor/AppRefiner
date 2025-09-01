@@ -1,6 +1,4 @@
 using PeopleCodeParser.SelfHosted.Nodes;
-using PeopleCodeParser.SelfHosted.Visitors;
-using PeopleCodeParser.SelfHosted.Lexing;
 using System.Text;
 using System.Text.RegularExpressions;
 
@@ -226,4 +224,4 @@ namespace AppRefiner.Linters
             }
         }
     }
-} 
+}

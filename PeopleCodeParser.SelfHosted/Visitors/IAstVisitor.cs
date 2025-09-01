@@ -143,7 +143,7 @@ public abstract class AstVisitorBase : IAstVisitor
         {
             import.Accept(this);
         }
-        
+
         // Visit app class or interface if present
         if (node.AppClass != null)
         {
@@ -153,25 +153,25 @@ public abstract class AstVisitorBase : IAstVisitor
         {
             node.Interface.Accept(this);
         }
-        
+
         // Visit constants
         foreach (var constant in node.Constants)
         {
             constant.Accept(this);
         }
-        
+
         // Visit global variables
         foreach (var variable in node.Variables)
         {
             variable.Accept(this);
         }
-        
+
         // Visit functions
         foreach (var function in node.Functions)
         {
             function.Accept(this);
         }
-        
+
         // Visit main block if present (for non-class programs)
         if (node.MainBlock != null)
         {
@@ -182,41 +182,41 @@ public abstract class AstVisitorBase : IAstVisitor
     public virtual void VisitAppClass(AppClassNode node)
     {
         // Visit members in a specific order to ensure proper semantic analysis
-        
+
         // 1. First visit instance variables
         foreach (var instanceVar in node.InstanceVariables)
         {
             instanceVar.Accept(this);
         }
-        
+
         // 2. Then visit properties
         foreach (var property in node.Properties)
         {
             property.Accept(this);
         }
-        
+
         // 3. Then visit constants
         foreach (var constant in node.Constants)
         {
             constant.Accept(this);
         }
-        
+
         // 4. Then visit method declarations
         foreach (var method in node.Methods)
         {
             method.Accept(this);
         }
-        
+
         foreach (var getter in node.PropertyGetters)
         {
             getter.Accept(this);
         }
-        
+
         foreach (var setter in node.PropertySetters)
         {
             setter.Accept(this);
         }
-        
+
         // 6. Finally visit any other children that might not be in the specialized collections
         foreach (var child in node.Children)
         {
@@ -231,11 +231,11 @@ public abstract class AstVisitorBase : IAstVisitor
             {
                 continue;
             }
-            
+
             child.Accept(this);
         }
     }
-    
+
     public virtual void VisitInterface(InterfaceNode node)
     {
         // Visit base interface first if present
@@ -243,13 +243,13 @@ public abstract class AstVisitorBase : IAstVisitor
         {
             node.BaseInterface.Accept(this);
         }
-        
+
         // Visit method signatures
         foreach (var method in node.Methods)
         {
             method.Accept(this);
         }
-        
+
         // Visit property signatures
         foreach (var property in node.Properties)
         {
@@ -272,20 +272,20 @@ public abstract class AstVisitorBase : IAstVisitor
         {
             node.ReturnType.Accept(this);
         }
-        
+
         // Visit implemented interfaces if any
         foreach (var interfaceType in node.ImplementedInterfaces)
         {
             interfaceType.Accept(this);
         }
-        
+
         // Visit parameters
         foreach (var parameter in node.Parameters)
         {
             // Parameters don't have their own Accept method, so visit their type
             parameter.Type.Accept(this);
         }
-        
+
         // Visit parameter annotations
         foreach (var annotation in node.ParameterAnnotations)
         {
@@ -302,19 +302,19 @@ public abstract class AstVisitorBase : IAstVisitor
     {
         // Visit property type first
         node.Type.Accept(this);
-        
+
         // Visit implemented interface if present
         if (node.ImplementedInterface != null)
         {
             node.ImplementedInterface.Accept(this);
         }
-        
+
         // Visit getter body if present
         if (node.GetterBody != null)
         {
             node.GetterBody.Accept(this);
         }
-        
+
         // Visit setter body if present
         if (node.SetterBody != null)
         {
@@ -325,7 +325,7 @@ public abstract class AstVisitorBase : IAstVisitor
     {
         // Visit type first
         node.Type.Accept(this);
-        
+
         // Visit initial value if present
         if (node.InitialValue != null)
         {
@@ -344,14 +344,14 @@ public abstract class AstVisitorBase : IAstVisitor
         {
             node.ReturnType.Accept(this);
         }
-        
+
         // Visit parameters
         foreach (var parameter in node.Parameters)
         {
             // Parameters don't have their own Accept method, so visit their type
             parameter.Type.Accept(this);
         }
-        
+
         // Visit function body if present (for implementations)
         if (node.Body != null)
         {
@@ -370,10 +370,10 @@ public abstract class AstVisitorBase : IAstVisitor
     {
         // Visit condition first
         node.Condition.Accept(this);
-        
+
         // Visit then block
         node.ThenBlock.Accept(this);
-        
+
         // Visit else block if present
         if (node.ElseBlock != null)
         {
@@ -384,16 +384,16 @@ public abstract class AstVisitorBase : IAstVisitor
     {
         // Visit from value first
         node.FromValue.Accept(this);
-        
+
         // Visit to value
         node.ToValue.Accept(this);
-        
+
         // Visit step value if present
         if (node.StepValue != null)
         {
             node.StepValue.Accept(this);
         }
-        
+
         // Visit loop body
         node.Body.Accept(this);
     }
@@ -401,7 +401,7 @@ public abstract class AstVisitorBase : IAstVisitor
     {
         // Visit condition first
         node.Condition.Accept(this);
-        
+
         // Visit loop body
         node.Body.Accept(this);
     }
@@ -409,7 +409,7 @@ public abstract class AstVisitorBase : IAstVisitor
     {
         // Visit body first (since it executes before the condition is checked)
         node.Body.Accept(this);
-        
+
         // Visit condition
         node.Condition.Accept(this);
     }
@@ -417,17 +417,17 @@ public abstract class AstVisitorBase : IAstVisitor
     {
         // Visit expression being evaluated first
         node.Expression.Accept(this);
-        
+
         // Visit when clauses
         foreach (var whenClause in node.WhenClauses)
         {
             // Visit condition
             whenClause.Condition.Accept(this);
-            
+
             // Visit body
             whenClause.Body.Accept(this);
         }
-        
+
         // Visit when-other block if present
         if (node.WhenOtherBlock != null)
         {
@@ -438,7 +438,7 @@ public abstract class AstVisitorBase : IAstVisitor
     {
         // Visit try block first
         node.TryBlock.Accept(this);
-        
+
         // Visit catch clauses
         foreach (var catchClause in node.CatchClauses)
         {
@@ -487,7 +487,7 @@ public abstract class AstVisitorBase : IAstVisitor
     {
         // Visit left operand first
         node.Left.Accept(this);
-        
+
         // Visit right operand
         node.Right.Accept(this);
     }
@@ -507,7 +507,7 @@ public abstract class AstVisitorBase : IAstVisitor
     {
         // Visit array object first
         node.Array.Accept(this);
-        
+
         // Visit index expression
         foreach (var index in node.Indices)
         {
@@ -518,7 +518,7 @@ public abstract class AstVisitorBase : IAstVisitor
     {
         // Visit type first
         node.Type.Accept(this);
-        
+
         // Visit arguments
         foreach (var argument in node.Arguments)
         {
@@ -529,7 +529,7 @@ public abstract class AstVisitorBase : IAstVisitor
     {
         // Visit target type first
         node.TargetType.Accept(this);
-        
+
         // Visit expression being cast
         node.Expression.Accept(this);
     }
@@ -542,7 +542,7 @@ public abstract class AstVisitorBase : IAstVisitor
     {
         // Visit left side (target) first
         node.Target.Accept(this);
-        
+
         // Visit right side (value)
         node.Value.Accept(this);
     }
@@ -550,7 +550,7 @@ public abstract class AstVisitorBase : IAstVisitor
     {
         // Visit function expression first
         node.Function.Accept(this);
-        
+
         // Visit arguments
         foreach (var argument in node.Arguments)
         {
@@ -572,7 +572,7 @@ public abstract class AstVisitorBase : IAstVisitor
     {
         // Visit type first
         node.Type.Accept(this);
-        
+
         // Visit initial value
         node.InitialValue.Accept(this);
     }
@@ -583,13 +583,13 @@ public abstract class AstVisitorBase : IAstVisitor
         {
             node.ExceptionVariable.Accept(this);
         }
-        
+
         // Visit exception type if present
         if (node.ExceptionType != null)
         {
             node.ExceptionType.Accept(this);
         }
-        
+
         // Visit catch body
         node.Body.Accept(this);
     }

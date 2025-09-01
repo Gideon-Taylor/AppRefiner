@@ -1,11 +1,6 @@
 using AppRefiner.Database;
 using AppRefiner.Refactors.QuickFixes;
 using PeopleCodeParser.SelfHosted.Nodes;
-using PeopleCodeParser.SelfHosted.Lexing;
-using PeopleCodeParser.SelfHosted;
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Text;
 
 namespace AppRefiner.Stylers
@@ -88,7 +83,7 @@ namespace AppRefiner.Stylers
                     {
                         (typeof(ImplementAbstractMembers), "Implement missing abstract members")
                     };
-                    
+
                     AddIndicator((targetToHighlight.SourceSpan.Start.ByteIndex, targetToHighlight.SourceSpan.End.ByteIndex), IndicatorType.SQUIGGLE, WARNING_COLOR, tooltipBuilder.ToString(), quickFixes);
                 }
             }
@@ -104,7 +99,7 @@ namespace AppRefiner.Stylers
         /// <summary>
         /// Gets all unimplemented abstract members from base classes and interfaces
         /// </summary>
-        private (List<MethodNode> UnimplementedMethods, List<PropertyNode> UnimplementedProperties) 
+        private (List<MethodNode> UnimplementedMethods, List<PropertyNode> UnimplementedProperties)
             GetAllUnimplementedAbstractMembers(AppClassNode node)
         {
             var abstractMethods = new Dictionary<string, MethodNode>();
@@ -132,22 +127,22 @@ namespace AppRefiner.Stylers
         private static HashSet<string> GetImplementedSignatures(AppClassNode node)
         {
             var signatures = new HashSet<string>();
-            
+
             // Add concrete methods (excluding constructors)
             foreach (var method in node.Methods.Where(m => !m.IsAbstract && !IsConstructor(m, node.Name)))
                 signatures.Add($"M:{method.Name}({method.Parameters.Count})");
-                
+
             // Add concrete properties
             foreach (var property in node.Properties.Where(p => !p.IsAbstract))
                 signatures.Add($"P:{property.Name}");
-                
+
             return signatures;
         }
 
         /// <summary>
         /// Recursively collects abstract members from a class or interface hierarchy
         /// </summary>
-        private void CollectAbstractMembers(string typePath, HashSet<string> implementedSignatures, 
+        private void CollectAbstractMembers(string typePath, HashSet<string> implementedSignatures,
             Dictionary<string, MethodNode> abstractMethods, Dictionary<string, PropertyNode> abstractProperties)
         {
             try
@@ -158,7 +153,7 @@ namespace AppRefiner.Stylers
                 var isInterface = program.Interface != null;
                 var methods = isInterface ? program.Interface!.Methods : program.AppClass?.Methods;
                 var properties = isInterface ? program.Interface!.Properties : program.AppClass?.Properties;
-                
+
                 if (methods == null && properties == null) return;
 
                 // Process methods - all interface methods are abstract, only abstract class methods
@@ -217,14 +212,14 @@ namespace AppRefiner.Stylers
             {
                 // Get the source code from the database
                 string? sourceCode = DataManager.GetAppClassSourceByPath(classPath);
-                
+
                 if (string.IsNullOrEmpty(sourceCode))
                     return null; // Class not found in database
-                
+
                 // Parse using the self-hosted parser
                 var lexer = new PeopleCodeParser.SelfHosted.Lexing.PeopleCodeLexer(sourceCode);
                 var tokens = lexer.TokenizeAll();
-                
+
                 var parser = new PeopleCodeParser.SelfHosted.PeopleCodeParser(tokens);
                 return parser.ParseProgram();
             }

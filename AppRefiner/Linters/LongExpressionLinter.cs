@@ -1,6 +1,5 @@
-using PeopleCodeParser.SelfHosted.Nodes;
-using PeopleCodeParser.SelfHosted.Visitors;
 using PeopleCodeParser.SelfHosted;
+using PeopleCodeParser.SelfHosted.Nodes;
 
 namespace AppRefiner.Linters
 {
@@ -10,12 +9,12 @@ namespace AppRefiner.Linters
     public class LongExpressionLinter : BaseLintRule
     {
         public override string LINTER_ID => "LONG_EXPR";
-        
+
         /// <summary>
         /// Maximum character length for an expression before it's considered too long
         /// </summary>
         public int MaxExpressionLength { get; set; } = 200;
-        
+
         /// <summary>
         /// Maximum number of operators in a single expression before it's considered too complex
         /// </summary>

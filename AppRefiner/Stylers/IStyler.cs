@@ -1,10 +1,4 @@
-﻿using AppRefiner;
-using AppRefiner.Database;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+﻿using AppRefiner.Database;
 
 namespace AppRefiner.Stylers
 {
@@ -20,7 +14,7 @@ namespace AppRefiner.Stylers
         /// Whether this styler is currently active/enabled
         /// </summary>
         bool Active { get; set; }
-        
+
         /// <summary>
         /// Description of what this styler does
         /// </summary>
@@ -30,12 +24,12 @@ namespace AppRefiner.Stylers
         /// Specifies whether this styler requires a database connection
         /// </summary>
         DataManagerRequirement DatabaseRequirement { get; }
-        
+
         /// <summary>
         /// The database manager instance, if available
         /// </summary>
         IDataManager? DataManager { get; set; }
-        
+
         /// <summary>
         /// The ScintillaEditor instance, if available
         /// </summary>

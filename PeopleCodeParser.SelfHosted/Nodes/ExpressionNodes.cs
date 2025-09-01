@@ -597,7 +597,7 @@ public static class OperatorExtensions
         BinaryOperator.Or => 1,
         BinaryOperator.And => 2,
         BinaryOperator.Equal or BinaryOperator.NotEqual => 3,
-        BinaryOperator.LessThan or BinaryOperator.LessThanOrEqual or 
+        BinaryOperator.LessThan or BinaryOperator.LessThanOrEqual or
         BinaryOperator.GreaterThan or BinaryOperator.GreaterThanOrEqual => 4,
         BinaryOperator.Concatenate => 5,
         BinaryOperator.Add or BinaryOperator.Subtract => 6,

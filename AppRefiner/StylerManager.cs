@@ -1,16 +1,7 @@
 using AppRefiner.Database;
-using AppRefiner.Database.Models; // Assuming BaseStyler might need this
 using AppRefiner.Plugins;
-using PeopleCodeParser.SelfHosted;
-using System;
-using System.Collections.Generic;
-using System.Drawing;
-using System.IO;
-using System.Linq;
-using System.Reflection; // Added for Assembly.GetExecutingAssembly
-using System.Windows.Forms;
-using System.Text.Json;
 using PeopleCodeParser.SelfHosted.Visitors; // For settings serialization
+using System.Reflection; // Added for Assembly.GetExecutingAssembly
 
 namespace AppRefiner.Stylers
 {
@@ -44,7 +35,7 @@ namespace AppRefiner.Stylers
             // Discover core stylers from the main assembly
             var executingAssembly = Assembly.GetExecutingAssembly();
             var coreStylerTypes = executingAssembly.GetTypes()
-                .Where(p => typeof(IStyler).IsAssignableFrom(p) && !p.IsAbstract && !p.IsInterface 
+                .Where(p => typeof(IStyler).IsAssignableFrom(p) && !p.IsAbstract && !p.IsInterface
                     && p.Name != "BaseStyler" && p.Name != "ScopedStyler");
 
             // Discover stylers from plugins
@@ -97,9 +88,9 @@ namespace AppRefiner.Stylers
             }
 
             // Get active stylers, filtering by database requirement and excluding base classes
-            var activeStylers = stylers.Where(a => a.Active 
+            var activeStylers = stylers.Where(a => a.Active
                 && (a.DatabaseRequirement != DataManagerRequirement.Required || editorDataManager != null)
-                && a.GetType() != typeof(BaseStyler) 
+                && a.GetType() != typeof(BaseStyler)
                 && a.GetType() != typeof(ScopedStyler));
 
             List<Indicator> newIndicators = new();
@@ -111,10 +102,10 @@ namespace AppRefiner.Stylers
                     styler.Reset(); // Reset internal state before processing
                     styler.DataManager = editorDataManager;
                     styler.Editor = editor;
-                    
+
                     // Visit the program using the styler
                     program.Accept((IAstVisitor)styler);
-                    
+
                     // Collect indicators from this styler
                     newIndicators.AddRange(styler.Indicators);
                 }
@@ -123,7 +114,7 @@ namespace AppRefiner.Stylers
                     Debug.LogException(ex, $"Error processing styler {styler.GetType().Name}");
                 }
             }
-            
+
             // Now apply the collected indicators, comparing against existing ones
             ApplyIndicators(editor, newIndicators);
         }
@@ -149,7 +140,7 @@ namespace AppRefiner.Stylers
 
             // Use Invoke if required for UI thread safety, though ScintillaManager might handle this internally
             // For now, assume direct calls are safe or handled by ScintillaManager/caller.
-            
+
             // Remove indicators that are no longer needed
             foreach (var indicator in indicatorsToRemove)
             {
@@ -232,10 +223,10 @@ namespace AppRefiner.Stylers
                     }
                     else
                     {
-                         Debug.Log($"Unexpected value type in StylerGrid Active column: {stylerGrid.Rows[e.RowIndex].Cells[0].Value?.GetType()}");
+                        Debug.Log($"Unexpected value type in StylerGrid Active column: {stylerGrid.Rows[e.RowIndex].Cells[0].Value?.GetType()}");
                     }
                 }
             }
         }
     }
-} 
+}

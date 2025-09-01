@@ -1,8 +1,5 @@
 using AppRefiner.Database;
-using AppRefiner.Linters.Models;
 using PeopleCodeParser.SelfHosted.Visitors;
-using PeopleCodeParser.SelfHosted.Nodes;
-using PeopleCodeParser.SelfHosted.Visitors.Models;
 using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Serialization;

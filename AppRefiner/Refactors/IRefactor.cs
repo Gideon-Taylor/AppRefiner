@@ -1,6 +1,3 @@
-using PeopleCodeParser.SelfHosted;
-using System.Windows.Forms;
-
 namespace AppRefiner.Refactors
 {
     /// <summary>
@@ -67,7 +64,7 @@ namespace AppRefiner.Refactors
         /// Gets the main window handle for the editor
         /// </summary>
         IntPtr GetEditorMainWindowHandle();
-        
+
         /// <summary>
         /// Gets the result of the refactoring operation
         /// </summary>

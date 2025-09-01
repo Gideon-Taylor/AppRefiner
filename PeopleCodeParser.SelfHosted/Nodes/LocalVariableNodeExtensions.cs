@@ -15,7 +15,7 @@ public static class LocalVariableNodeExtensions
         node.VariableNameInfos.Add(new VariableNameInfo(name, token));
         node.VariableNames.Add(name);
     }
-    
+
     /// <summary>
     /// Adds a variable name with its token information to a LocalVariableDeclarationWithAssignmentNode
     /// </summary>

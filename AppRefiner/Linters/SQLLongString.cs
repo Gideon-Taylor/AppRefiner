@@ -1,5 +1,4 @@
 using PeopleCodeParser.SelfHosted.Nodes;
-using PeopleCodeParser.SelfHosted.Visitors;
 
 namespace AppRefiner.Linters
 {
@@ -9,7 +8,7 @@ namespace AppRefiner.Linters
     public class SQLLongString : BaseLintRule
     {
         public override string LINTER_ID => "SQL_LONG";
-        
+
         /// <summary>
         /// Maximum allowed length for SQL strings before reporting a warning
         /// </summary>

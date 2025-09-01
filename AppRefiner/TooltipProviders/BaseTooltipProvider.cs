@@ -1,5 +1,3 @@
-using System;
-
 namespace AppRefiner.TooltipProviders
 {
     /// <summary>
@@ -84,4 +82,4 @@ namespace AppRefiner.TooltipProviders
             // Default implementation does nothing
         }
     }
-} 
+}

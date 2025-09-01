@@ -1,12 +1,6 @@
-﻿using DiffPlex.Model;
-using PeopleCodeParser.SelfHosted;
+﻿using PeopleCodeParser.SelfHosted;
 using PeopleCodeParser.SelfHosted.Nodes;
 using PeopleCodeParser.SelfHosted.Visitors.Models;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace AppRefiner.Refactors.QuickFixes
 {

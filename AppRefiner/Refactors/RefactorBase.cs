@@ -1,6 +1,4 @@
 using PeopleCodeParser.SelfHosted;
-using AppRefiner.Services;
-using System.Windows.Forms;
 using System.Diagnostics;
 
 namespace AppRefiner.Refactors
@@ -152,7 +150,7 @@ namespace AppRefiner.Refactors
                 return RefactorResult.Failed($"Error applying edits: {ex.Message}");
             }
         }
-        
+
         /// <summary>
         /// Gets the result of the refactoring operation
         /// </summary>
@@ -162,7 +160,7 @@ namespace AppRefiner.Refactors
             {
                 return RefactorResult.Failed(failureMessage ?? "Unknown error");
             }
-            
+
             return edits.Count > 0 ? RefactorResult.Successful : RefactorResult.Failed("No changes to apply");
         }
 

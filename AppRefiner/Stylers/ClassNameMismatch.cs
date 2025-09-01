@@ -1,7 +1,4 @@
-using AppRefiner.Database;
 using PeopleCodeParser.SelfHosted.Nodes;
-using System;
-using System.Linq;
 
 namespace AppRefiner.Stylers;
 
@@ -21,7 +18,7 @@ public class ClassNameMismatch : BaseStyler
     public override void VisitProgram(ProgramNode node)
     {
         Reset();
-        
+
         // Visit the program
         base.VisitProgram(node);
     }
@@ -39,10 +36,10 @@ public class ClassNameMismatch : BaseStyler
 
         // Get the class name from the AST
         string className = node.Name;
-        
+
         // Get the expected class name from the editor's class path
         string expectedName = Editor.ClassPath.Split(':').LastOrDefault() ?? string.Empty;
-        
+
         // Check if the class name matches the expected name (case-insensitive)
         if (!string.Equals(className, expectedName, StringComparison.OrdinalIgnoreCase))
         {

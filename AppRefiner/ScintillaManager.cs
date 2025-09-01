@@ -1,27 +1,15 @@
-using AppRefiner.Database;
 using AppRefiner.Dialogs;
-using AppRefiner.Linters;
 using AppRefiner.Stylers;
-using AppRefiner.TooltipProviders;
-using DiffPlex.Model;
 using PeopleCodeParser.SelfHosted;
 using SQL.Formatter;
 using SQL.Formatter.Core;
 using SQL.Formatter.Language;
 using System.Collections.Concurrent;
-using System.Collections.Generic;
 using System.Diagnostics;
-using System.Drawing;
 using System.IO.Hashing;
-using System.Linq;
-using System.Reflection.Metadata;
 using System.Runtime.InteropServices;
 using System.Text;
-using System.Text.RegularExpressions;
-using System.Threading.Tasks;
 using static AppRefiner.AutoCompleteService;
-using static SqlParser.Ast.CopyTarget;
-using static SqlParser.Ast.MatchRecognizeSymbol;
 
 namespace AppRefiner
 {
@@ -38,7 +26,7 @@ namespace AppRefiner
         public int Length { get; set; }
         public int LineNumber { get; set; }
         public string LineText = "";
-        
+
 
         public override string ToString()
         {
@@ -173,7 +161,7 @@ namespace AppRefiner
         private const int SCI_AUTOCSETIGNORECASE = 2115;
         private const int SC_ORDER_PERFORMSORT = 1;
         /* ignore case */
-        
+
         // User list constants
         private const int SCI_USERLISTSHOW = 2117;
         private const int SCN_USERLISTSELECTION = 2014;
@@ -364,7 +352,7 @@ namespace AppRefiner
                         .Any(module => string.Equals(module.ModuleName, "Lexilla.dll", StringComparison.OrdinalIgnoreCase));
                 hasLexilla[processId] = lexillaLoaded;
                 editor.HasLexilla = lexillaLoaded;
-                }
+            }
 
             // Initialize annotations right after editor creation
             InitAnnotationStyles(editor);
@@ -394,7 +382,7 @@ namespace AppRefiner
                     throw;
                 }
             }
-            
+
             // Check that the editor is still valid
             var editor = editors[hWnd];
             if (!editor.IsValid())
@@ -404,7 +392,7 @@ namespace AppRefiner
                 editors.Remove(hWnd);
                 throw new InvalidOperationException("Editor is no longer valid.");
             }
-            
+
             return editor;
         }
 
@@ -429,17 +417,17 @@ namespace AppRefiner
                 var processHandle = editor.hProc;
                 var buffer = VirtualAllocEx(processHandle, IntPtr.Zero, neededSize, MEM_COMMIT, PAGE_READWRITE);
                 processBuffers.Add(processId, (buffer, neededSize));
-        }
+            }
             else
-        {
+            {
                 /* If buffer is too small, free current one and allocate a new one */
-                var(buffer, size) = processBuffers[processId];
+                var (buffer, size) = processBuffers[processId];
                 if (size < neededSize)
                 {
                     VirtualFreeEx(editor.hProc, buffer, 0, MEM_RELEASE);
                     buffer = VirtualAllocEx(editor.hProc, IntPtr.Zero, neededSize, MEM_COMMIT, PAGE_READWRITE);
                     processBuffers[processId] = (buffer, neededSize);
-        }
+                }
             }
 
             return processBuffers[processId].address;
@@ -767,7 +755,7 @@ namespace AppRefiner
         /// <param name="editor">The ScintillaEditor to clear all indicators from</param>
         public static void ClearAllIndicators(ScintillaEditor editor)
         {
-            for (var x = 0; x < editor.ActiveIndicators.Count; x++) 
+            for (var x = 0; x < editor.ActiveIndicators.Count; x++)
             {
                 RemoveIndicator(editor, editor.ActiveIndicators[x]);
             }
@@ -858,21 +846,21 @@ namespace AppRefiner
                     VirtualFreeEx(editor.hProc, v, 0, MEM_RELEASE);
                 }
             }
-            
+
             // Free autocompletion pointer if exists
             if (editor.AutoCompletionPointer != IntPtr.Zero)
             {
                 VirtualFreeEx(editor.hProc, editor.AutoCompletionPointer, 0, MEM_RELEASE);
                 editor.AutoCompletionPointer = IntPtr.Zero;
             }
-            
+
             // Free user list pointer if exists
             if (editor.UserListPointer != IntPtr.Zero)
             {
                 VirtualFreeEx(editor.hProc, editor.UserListPointer, 0, MEM_RELEASE);
                 editor.UserListPointer = IntPtr.Zero;
             }
-            
+
             editor.AnnotationPointers.Clear();
             editor.PropertyBuffers.Clear();
             editor.Caption = null;
@@ -894,15 +882,15 @@ namespace AppRefiner
                     if (v != IntPtr.Zero)
                     {
                         VirtualFreeEx(editor.hProc, v, 0, MEM_RELEASE);
-            }
+                    }
                 }
 
                 foreach (var v in editor.PropertyBuffers)
-            {
+                {
                     if (v != IntPtr.Zero)
                     {
                         VirtualFreeEx(editor.hProc, v, 0, MEM_RELEASE);
-            }
+                    }
                 }
                 editor.AnnotationPointers.Clear();
                 editor.PropertyBuffers.Clear();
@@ -1140,7 +1128,7 @@ namespace AppRefiner
             for (int i = startLine + 1; i < endLine; i++)
             {
                 int foldLevel = (int)editor.SendMessage(SCI_GETFOLDLEVEL, i, IntPtr.Zero);
-                editor.SendMessage(SCI_SETFOLDLEVEL, i, (AppRefinerRegionOffset+foldLevel + 1));
+                editor.SendMessage(SCI_SETFOLDLEVEL, i, (AppRefinerRegionOffset + foldLevel + 1));
             }
 
             if (collapseByDefault)
@@ -1250,7 +1238,7 @@ namespace AppRefiner
 
         internal static void ShowCallTip(ScintillaEditor editor, IntPtr position)
         {
-            try 
+            try
             {
                 // Validate editor
                 if (editor == null || !editor.IsValid())
@@ -1258,7 +1246,7 @@ namespace AppRefiner
                     Debug.LogError("Cannot show call tip - editor is null or invalid");
                     return;
                 }
-            
+
                 // Use the tooltip provider system to show tooltips
                 TooltipProviders.TooltipManager.ShowTooltip(editor, position.ToInt32());
             }
@@ -1276,7 +1264,7 @@ namespace AppRefiner
         /// <param name="text">The text to display in the call tip</param>
         internal static void ShowCallTipWithText(ScintillaEditor editor, int position, string text)
         {
-            try 
+            try
             {
                 // Validate editor
                 if (editor == null || !editor.IsValid())
@@ -1284,37 +1272,37 @@ namespace AppRefiner
                     Debug.LogError("Cannot show call tip - editor is null or invalid");
                     return;
                 }
-                
+
                 if (string.IsNullOrEmpty(text))
                 {
                     return;
                 }
-                
+
                 // Clean up existing call tip if any
                 if (editor.CallTipPointer != IntPtr.Zero)
                 {
                     VirtualFreeEx(editor.hProc, editor.CallTipPointer, 0, MEM_RELEASE);
                     editor.CallTipPointer = IntPtr.Zero;
                 }
-                
+
                 // Allocate memory for new call tip text
                 var textBytes = Encoding.Default.GetBytes(text);
                 var neededSize = textBytes.Length + 1;
                 var remoteBuffer = VirtualAllocEx(editor.hProc, IntPtr.Zero, (uint)neededSize, MEM_COMMIT, PAGE_READWRITE);
-                
+
                 if (remoteBuffer == IntPtr.Zero)
                 {
                     Debug.LogError($"Failed to allocate memory for call tip: {Marshal.GetLastWin32Error()}");
                     return;
                 }
-                
+
                 if (!WriteProcessMemory(editor.hProc, remoteBuffer, textBytes, neededSize, out int bytesWritten) || bytesWritten != neededSize)
                 {
                     VirtualFreeEx(editor.hProc, remoteBuffer, 0, MEM_RELEASE);
                     Debug.LogError($"Failed to write call tip text to memory: {Marshal.GetLastWin32Error()}");
                     return;
                 }
-                
+
                 editor.CallTipPointer = remoteBuffer;
                 editor.SendMessage(SCI_CALLTIPSHOW, new IntPtr(position), remoteBuffer);
             }
@@ -1333,10 +1321,10 @@ namespace AppRefiner
                 {
                     return;
                 }
-                
+
                 // Cancel the call tip in Scintilla
                 editor.SendMessage(SCI_CALLTIPCANCEL, IntPtr.Zero, IntPtr.Zero);
-                
+
                 // Free memory used by the call tip
                 if (editor.CallTipPointer != IntPtr.Zero)
                 {
@@ -1413,27 +1401,27 @@ namespace AppRefiner
         {
             var selectionStart = (int)editor.SendMessage(SCI_GETSELECTIONSTART, IntPtr.Zero, IntPtr.Zero);
             var selectionEnd = (int)editor.SendMessage(SCI_GETSELECTIONEND, IntPtr.Zero, IntPtr.Zero);
-            
+
             // Return null if there's no selection
             if (selectionStart == selectionEnd)
             {
                 return (null, 0, 0);
             }
-            
+
             // Get the full text
             var fullText = GetScintillaText(editor);
             if (fullText == null)
             {
                 return (null, 0, 0);
             }
-            
+
             // Extract the selected portion
             int length = selectionEnd - selectionStart;
             if (selectionStart < 0 || length <= 0 || selectionStart + length > fullText.Length)
             {
                 return (null, 0, 0);
             }
-            
+
             return (fullText.Substring(selectionStart, length), selectionStart, selectionEnd);
         }
 
@@ -1563,7 +1551,7 @@ namespace AppRefiner
         {
             // Clear document styles
             activeEditor.SendMessage(SCI_CLEARDOCUMENTSTYLE, 0, 0);
-            
+
             // Clear all indicators
             ClearAllIndicators(activeEditor);
 
@@ -1613,7 +1601,7 @@ namespace AppRefiner
         public static void SetCursorPosition(ScintillaEditor editor, int position)
         {
             if (editor == null) return;
-            
+
             // Set the cursor position
             editor.SendMessage(SCI_GOTOPOS, position, IntPtr.Zero);
 
@@ -1629,7 +1617,7 @@ namespace AppRefiner
         public static void SetCursorPositionWithoutScroll(ScintillaEditor editor, int position)
         {
             if (editor == null) return;
-            
+
             // Set the cursor position without scrolling
             editor.SendMessage(SCI_GOTOPOS, position, IntPtr.Zero);
         }
@@ -1711,17 +1699,17 @@ namespace AppRefiner
         public static int CreateHighlighter(ScintillaEditor editor, uint bgraColor)
         {
             int highlighterNumber = editor.NextIndicatorNumber;
-            
+
             var bgrColor = (bgraColor & 0xFFFFFF00) >> 8; // Remove alpha
             var alpha = bgraColor & 0x000000FF; // Extract alpha
             editor.SendMessage(SCI_INDICSETSTYLE, highlighterNumber, INDIC_FULLBOX);
             editor.SendMessage(SCI_INDICSETFORE, highlighterNumber, new IntPtr(bgrColor));
             editor.SendMessage(SCI_INDICSETALPHA, highlighterNumber, new IntPtr(alpha));
             editor.SendMessage(SCI_INDICSETUNDER, highlighterNumber, 1);
-            
+
             editor.ColorToHighlighterMap[bgraColor] = highlighterNumber;
             editor.NextIndicatorNumber++;
-            
+
             return highlighterNumber;
         }
 
@@ -1766,14 +1754,14 @@ namespace AppRefiner
         public static int CreateSquiggle(ScintillaEditor editor, uint bgraColor)
         {
             int squiggleNumber = editor.NextIndicatorNumber;
-            
+
             var bgrColor = (bgraColor & 0xFFFFFF00) >> 8; // Remove alpha
             editor.SendMessage(SCI_INDICSETSTYLE, squiggleNumber, INDIC_SQUIGGLE);
             editor.SendMessage(SCI_INDICSETFORE, squiggleNumber, new IntPtr(bgrColor));
-            
+
             editor.ColorToSquiggleMap[bgraColor] = squiggleNumber;
             editor.NextIndicatorNumber++;
-            
+
             return squiggleNumber;
         }
 
@@ -1860,32 +1848,32 @@ namespace AppRefiner
             {
                 // Create a string with all options separated by spaces
                 string optionsString = string.Join("/", options);
-                
+
                 // Get the required buffer size - including null terminator
                 int bufferSize = Encoding.UTF8.GetByteCount(optionsString) + 1; // +1 for null terminator
-                
+
                 // Allocate memory in the target process for storing the options
                 IntPtr remoteBuffer = VirtualAllocEx(
                     editor.hProc,
-                    IntPtr.Zero, 
+                    IntPtr.Zero,
                     (uint)bufferSize,
-                    MEM_COMMIT, 
+                    MEM_COMMIT,
                     PAGE_READWRITE);
-                
+
                 if (remoteBuffer == IntPtr.Zero)
                 {
                     Debug.Log("ShowUserList: Failed to allocate memory in remote process");
                     return false;
                 }
-                
+
                 // Store the pointer for later cleanup
                 editor.UserListPointer = remoteBuffer;
-                
+
                 // Convert the string to a byte array with a null terminator
                 byte[] buffer = new byte[bufferSize];
                 Encoding.UTF8.GetBytes(optionsString, 0, optionsString.Length, buffer, 0);
                 buffer[bufferSize - 1] = 0; // Ensure null termination
-                
+
                 // Write the options to the remote process memory
                 int bytesWritten;
                 bool result = WriteProcessMemory(
@@ -1894,7 +1882,7 @@ namespace AppRefiner
                     buffer,
                     bufferSize,
                     out bytesWritten);
-                    
+
                 if (!result || bytesWritten != bufferSize)
                 {
                     Debug.Log($"ShowUserList: Failed to write to remote process memory. Written {bytesWritten} of {bufferSize} bytes");
@@ -1902,7 +1890,7 @@ namespace AppRefiner
                     editor.UserListPointer = IntPtr.Zero;
                     return false;
                 }
-                
+
                 // Send the Scintilla message to show the user list
                 IntPtr ret = editor.SendMessage(SCI_USERLISTSHOW, (IntPtr)listType, remoteBuffer);
                 SetAutoCompletionSeparator(editor, ' '); // Reset separator to default
@@ -1911,14 +1899,14 @@ namespace AppRefiner
             catch (Exception ex)
             {
                 Debug.Log($"ShowUserList: Exception: {ex.Message}");
-                
+
                 // Clean up on exception
                 if (editor.UserListPointer != IntPtr.Zero)
                 {
                     VirtualFreeEx(editor.hProc, editor.UserListPointer, 0, MEM_RELEASE);
                     editor.UserListPointer = IntPtr.Zero;
                 }
-                
+
                 return false;
             }
         }
@@ -2095,16 +2083,16 @@ namespace AppRefiner
                 {
                     var mainHandle = Process.GetProcessById((int)editor.ProcessId).MainWindowHandle;
                     var handleWrapper = new WindowWrapper(0);
-                    
+
                     var dialog = new Dialogs.BetterFindDialog(editor, 0, enableReplaceMode);
-                    
+
                     // Track this dialog
                     _activeDialogs[editor] = dialog;
 
                     // Auto-cleanup when dialog closes
                     BetterFindDialog? v = null;
                     dialog.FormClosed += (s, e) => _activeDialogs.TryRemove(editor, out v);
-                    
+
                     WindowHelper.CenterFormOnWindow(dialog, mainHandle);
 
                     // Make the dialog always on top
@@ -2121,7 +2109,7 @@ namespace AppRefiner
                     Debug.LogError($"Error showing Better Find dialog: {ex.Message}");
                     // Clean up tracking on error
                     BetterFindDialog? v = null;
-                    _activeDialogs.TryRemove(editor,out v);
+                    _activeDialogs.TryRemove(editor, out v);
                 }
             }, TaskScheduler.Default);
         }
@@ -2198,7 +2186,8 @@ namespace AppRefiner
                     if (function != null)
                     {
                         return function.SourceSpan.ToScintillaRange();
-                    } else
+                    }
+                    else
                     {
                         return (0, programText.Length);
                     }
@@ -2225,9 +2214,9 @@ namespace AppRefiner
         {
             var searchState = editor.SearchState;
             var searchFlags = BuildSearchFlags(searchState);
-            
+
             int docLength = (int)editor.SendMessage(SCI_GETLENGTH, IntPtr.Zero, IntPtr.Zero);
-            
+
             // Determine search range based on scope preference
             int rangeStart, rangeEnd;
             if (searchState.SearchInSelection && searchState.HasValidSelection)
@@ -2242,16 +2231,17 @@ namespace AppRefiner
                 {
                     // Limit to current method/function/getter/setter if possible, else whole document.
                     (rangeStart, rangeEnd) = ScintillaManager.GetCurrentMethodRange(editor, GetCursorPosition(editor));
-                } else
+                }
+                else
                 {
                     // Search whole document
                     rangeStart = 0;
                     rangeEnd = docLength;
                 }
-                    
-                
+
+
             }
-            
+
             // Get current position - use selection start if there's a selection, otherwise cursor position
             int currentPos;
             var (currentSelText, currentSelStart, currentSelEnd) = GetSelectedText(editor);
@@ -2264,7 +2254,7 @@ namespace AppRefiner
             {
                 currentPos = GetCursorPosition(editor);
             }
-            
+
             // Set search target based on direction and current position within range
             int targetStart, targetEnd;
             if (forward)
@@ -2281,13 +2271,13 @@ namespace AppRefiner
 
             // Set the target range
             editor.SendMessage(SCI_SETTARGETRANGE, targetStart, targetEnd);
-            
+
             // Set search flags
             editor.SendMessage(SCI_SETSEARCHFLAGS, searchFlags, IntPtr.Zero);
-            
+
             // Perform the search using marshalled string
             bool found = PerformSearchInTarget(editor, searchState.LastSearchTerm);
-            
+
             if (!found && searchState.WrapSearch)
             {
                 // Try wrapping around within the same scope
@@ -2302,10 +2292,10 @@ namespace AppRefiner
                     // Search from end of range to current position
                     editor.SendMessage(SCI_SETTARGETRANGE, rangeEnd, Math.Max(currentPos, rangeStart));
                 }
-                
+
                 found = PerformSearchInTarget(editor, searchState.LastSearchTerm);
             }
-            
+
             if (found)
             {
                 // Get the found text position
@@ -2328,15 +2318,15 @@ namespace AppRefiner
                 // Select the found text and scroll to it
                 SetSelection(editor, foundStart, foundEnd);
                 //SetCursorPosition(editor, foundEnd);
-                
+
                 // Update last match position
                 searchState.LastMatchPosition = foundStart;
             }
-            
+
             return found;
         }
 
-        
+
 
         /// <summary>
         /// Clears all search highlight indicators from the editor
@@ -2345,7 +2335,7 @@ namespace AppRefiner
         public static void ClearSearchHighlights(ScintillaEditor editor)
         {
             uint highlightColor = 0x80FFFF00; // Same color used for search highlights
-            
+
             // Remove all indicators of this color
             var indicatorsToRemove = editor.ActiveIndicators
                 .Where(i => i.Type == IndicatorType.HIGHLIGHTER && i.Color == highlightColor)
@@ -2385,7 +2375,7 @@ namespace AppRefiner
 
             // Perform the search
             int result = (int)editor.SendMessage(SCI_SEARCHINTARGET, searchBytes.Length, remoteBuffer);
-            
+
             return result != -1;
         }
 
@@ -2397,22 +2387,22 @@ namespace AppRefiner
         private static int BuildSearchFlags(SearchState searchState)
         {
             int flags = SCFIND_NONE;
-            
+
             if (searchState.MatchCase)
                 flags |= SCFIND_MATCHCASE;
-            
+
             if (searchState.WholeWord)
                 flags |= SCFIND_WHOLEWORD;
-            
+
             if (searchState.WordStart)
                 flags |= SCFIND_WORDSTART;
-            
+
             if (searchState.UseRegex)
             {
                 flags |= SCFIND_REGEXP;
                 flags |= SCFIND_POSIX;
             }
-            
+
             return flags;
         }
 
@@ -2428,7 +2418,7 @@ namespace AppRefiner
                 replaceText = string.Empty;
 
             var searchState = editor.SearchState;
-            
+
             // Check if we have a selection
             var (selectedText, start, end) = GetSelectedText(editor);
             if (selectedText == null)
@@ -2436,17 +2426,17 @@ namespace AppRefiner
 
             // Set target to current selection
             editor.SendMessage(SCI_SETTARGETRANGE, start, end);
-            
+
             // Marshall replacement text
             byte[] replaceBytes = Encoding.Default.GetBytes(replaceText);
             int neededSize = replaceBytes.Length + 1;
-            
+
             var remoteBuffer = GetProcessBuffer(editor, (uint)neededSize);
-            
+
             byte[] buffer = new byte[neededSize];
             Buffer.BlockCopy(replaceBytes, 0, buffer, 0, replaceBytes.Length);
             buffer[neededSize - 1] = 0;
-            
+
             if (!WriteProcessMemory(editor.hProc, remoteBuffer, buffer, neededSize, out int bytesWritten) || bytesWritten != neededSize)
                 return false;
 
@@ -2463,12 +2453,12 @@ namespace AppRefiner
             }
 
             /* move to the end of the replacement */
-            editor.SendMessage(SCI_GOTOPOS, start + replacementLength,0);
+            editor.SendMessage(SCI_GOTOPOS, start + replacementLength, 0);
 
             return true;
         }
 
-        public static (bool Success,int Length) ReplaceRange(ScintillaEditor editor, int start, int end, int replaceTextLength, IntPtr replaceTextBuffer)
+        public static (bool Success, int Length) ReplaceRange(ScintillaEditor editor, int start, int end, int replaceTextLength, IntPtr replaceTextBuffer)
         {
             var searchState = editor.SearchState;
             var replacementLength = replaceTextLength;
@@ -2485,7 +2475,7 @@ namespace AppRefiner
                 replacementLength = (int)editor.SendMessage(SCI_REPLACETARGET, replaceTextLength, replaceTextBuffer);
             }
 
-            return (true,replacementLength);
+            return (true, replacementLength);
 
         }
 
@@ -2553,7 +2543,7 @@ namespace AppRefiner
             buffer[neededSize - 1] = 0;
 
             if (!WriteProcessMemory(editor.hProc, replaceTextBuffer, buffer, neededSize, out int bytesWritten) || bytesWritten != neededSize)
-                return ( 0);
+                return (0);
 
             try
             {
@@ -2608,7 +2598,7 @@ namespace AppRefiner
             var searchState = editor.SearchState;
             var searchFlags = BuildSearchFlags(searchState);
             int matchCount = 0;
-            
+
             // Determine search range based on scope preference
             int rangeStart, rangeEnd;
             if (searchState.SearchInSelection && searchState.HasValidSelection)
@@ -2621,21 +2611,21 @@ namespace AppRefiner
                 rangeStart = 0;
                 rangeEnd = (int)editor.SendMessage(SCI_GETLENGTH, IntPtr.Zero, IntPtr.Zero);
             }
-            
+
             // Set search flags
             editor.SendMessage(SCI_SETSEARCHFLAGS, searchFlags, IntPtr.Zero);
-            
+
             // Marshall search string
             byte[] searchBytes = Encoding.Default.GetBytes(searchTerm);
             int searchSize = searchBytes.Length + 1;
-            
+
             var searchBuffer = GetProcessBuffer(editor, (uint)searchSize);
-            
+
             byte[] searchBufferData = new byte[searchSize];
             Buffer.BlockCopy(searchBytes, 0, searchBufferData, 0, searchBytes.Length);
             searchBufferData[searchSize - 1] = 0;
-            
-            if (!WriteProcessMemory(editor.hProc, searchBuffer, searchBufferData, searchSize, out int searchBytesWritten) || 
+
+            if (!WriteProcessMemory(editor.hProc, searchBuffer, searchBufferData, searchSize, out int searchBytesWritten) ||
                 searchBytesWritten != searchSize)
                 return 0;
 
@@ -2644,21 +2634,21 @@ namespace AppRefiner
             while (true)
             {
                 editor.SendMessage(SCI_SETTARGETRANGE, currentPos, rangeEnd);
-                
+
                 int result = (int)editor.SendMessage(SCI_SEARCHINTARGET, searchBytes.Length, searchBuffer);
                 if (result == -1)
                     break;
-                
+
                 int targetStart = (int)editor.SendMessage(SCI_GETTARGETSTART, IntPtr.Zero, IntPtr.Zero);
                 int targetEnd = (int)editor.SendMessage(SCI_GETTARGETEND, IntPtr.Zero, IntPtr.Zero);
-                
+
                 if (targetStart < rangeStart || targetStart >= rangeEnd)
                     break;
-                
+
                 matchCount++;
                 currentPos = targetEnd;
             }
-            
+
             return matchCount;
         }
 
@@ -2676,14 +2666,14 @@ namespace AppRefiner
             var searchState = editor.SearchState;
             var searchFlags = BuildSearchFlags(searchState);
             int matchCount = 0;
-            
+
             // Clear previous search indicators
             ClearSearchIndicators(editor);
-            
+
             // Use distinct color for mark all (light blue)
             uint markColor = 0xFFFF0060;
             int highlighter = editor.GetHighlighter(markColor);
-            
+
             // Determine search range based on scope preference
             int rangeStart, rangeEnd;
             if (searchState.SearchInSelection && searchState.HasValidSelection)
@@ -2696,21 +2686,21 @@ namespace AppRefiner
                 rangeStart = 0;
                 rangeEnd = (int)editor.SendMessage(SCI_GETLENGTH, IntPtr.Zero, IntPtr.Zero);
             }
-            
+
             // Set search flags
             editor.SendMessage(SCI_SETSEARCHFLAGS, searchFlags, IntPtr.Zero);
-            
+
             // Marshall search string
             byte[] searchBytes = Encoding.Default.GetBytes(searchTerm);
             int searchSize = searchBytes.Length + 1;
-            
+
             var searchBuffer = GetProcessBuffer(editor, (uint)searchSize);
-            
+
             byte[] searchBufferData = new byte[searchSize];
             Buffer.BlockCopy(searchBytes, 0, searchBufferData, 0, searchBytes.Length);
             searchBufferData[searchSize - 1] = 0;
-            
-            if (!WriteProcessMemory(editor.hProc, searchBuffer, searchBufferData, searchSize, out int searchBytesWritten) || 
+
+            if (!WriteProcessMemory(editor.hProc, searchBuffer, searchBufferData, searchSize, out int searchBytesWritten) ||
                 searchBytesWritten != searchSize)
                 return 0;
 
@@ -2719,17 +2709,17 @@ namespace AppRefiner
             while (true)
             {
                 editor.SendMessage(SCI_SETTARGETRANGE, currentPos, rangeEnd);
-                
+
                 int result = (int)editor.SendMessage(SCI_SEARCHINTARGET, searchBytes.Length, searchBuffer);
                 if (result == -1)
                     break;
-                
+
                 int targetStart = (int)editor.SendMessage(SCI_GETTARGETSTART, IntPtr.Zero, IntPtr.Zero);
                 int targetEnd = (int)editor.SendMessage(SCI_GETTARGETEND, IntPtr.Zero, IntPtr.Zero);
-                
+
                 if (targetStart < rangeStart || targetStart >= rangeEnd)
                     break;
-                
+
                 // Add search indicator
                 var indicator = new Indicator()
                 {
@@ -2740,11 +2730,11 @@ namespace AppRefiner
                 };
                 AddIndicator(editor, indicator);
                 editor.SearchIndicators.Add(indicator);
-                
+
                 matchCount++;
                 currentPos = targetEnd;
             }
-            
+
             return matchCount;
         }
 
@@ -2831,7 +2821,7 @@ namespace AppRefiner
             }
 
             /* Now that the process buffer is free to use, retrieve line information (line text) */
-            foreach(var match in matches)
+            foreach (var match in matches)
             {
                 int lineStart = (int)editor.SendMessage(SCI_POSITIONFROMLINE, match.LineNumber, IntPtr.Zero);
                 int lineEnd = (int)editor.SendMessage(SCI_GETLINEENDPOSITION, match.LineNumber, IntPtr.Zero);
@@ -2878,7 +2868,7 @@ namespace AppRefiner
             {
                 RemoveIndicator(editor, indicator);
             }
-            
+
             // Clear the list
             editor.SearchIndicators.Clear();
         }
@@ -2896,7 +2886,7 @@ namespace AppRefiner
             {
                 // Get current cursor position
                 int currentPosition = (int)editor.SendMessage(SCI_GETCURRENTPOS, IntPtr.Zero, IntPtr.Zero);
-                
+
                 // Get current first visible line for viewport restoration
                 int firstVisibleLine = GetFirstVisibleLine(editor);
 
@@ -3005,7 +2995,7 @@ namespace AppRefiner
                 // Get relative coordinates within the Scintilla control
                 int x = (int)editor.SendMessage(SCI_POINTXFROMPOSITION, IntPtr.Zero, textPosition);
                 int y = (int)editor.SendMessage(SCI_POINTYFROMPOSITION, IntPtr.Zero, textPosition);
-                
+
                 // Convert to screen coordinates using WindowHelper
                 return WindowHelper.ClientToScreen(editor.hWnd, new Point(x, y));
             }
@@ -3028,10 +3018,10 @@ namespace AppRefiner
             {
                 Point startPoint = GetTextScreenCoordinates(editor, startPos);
                 Point endPoint = GetTextScreenCoordinates(editor, endPos);
-                
+
                 if (startPoint.IsEmpty || endPoint.IsEmpty)
                     return Rectangle.Empty;
-                
+
                 // Create rectangle encompassing the text range
                 // Add some padding for better visibility
                 int padding = 5;
@@ -3039,11 +3029,11 @@ namespace AppRefiner
                 int top = Math.Min(startPoint.Y, endPoint.Y) - padding;
                 int right = Math.Max(startPoint.X, endPoint.X) + padding;
                 int bottom = Math.Max(startPoint.Y, endPoint.Y) + padding;
-                
+
                 // Estimate text height (using font metrics would be more accurate, but this is simpler)
                 int estimatedTextHeight = 20; // Default text height
                 bottom = Math.Max(bottom, top + estimatedTextHeight);
-                
+
                 return new Rectangle(left, top, right - left, bottom - top);
             }
             catch

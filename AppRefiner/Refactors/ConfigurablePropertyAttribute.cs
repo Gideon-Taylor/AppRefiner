@@ -10,12 +10,12 @@ namespace AppRefiner.Refactors
         /// Gets or sets the display name for the property
         /// </summary>
         public string DisplayName { get; set; }
-        
+
         /// <summary>
         /// Gets or sets the description for the property
         /// </summary>
         public string Description { get; set; }
-        
+
         /// <summary>
         /// Creates a new configurable property attribute
         /// </summary>

@@ -26,7 +26,7 @@ public class DirectiveExpressionParser
     /// <summary>
     /// Current token being processed
     /// </summary>
-    private Token Current => _position < _tokens.Count ? _tokens[_position] : 
+    private Token Current => _position < _tokens.Count ? _tokens[_position] :
                            Token.CreateEof(new SourcePosition(_tokens.LastOrDefault()?.SourceSpan.End.Index ?? 0));
 
     /// <summary>
@@ -213,7 +213,7 @@ public class DirectiveExpressionParser
             TokenType.LessThanOrEqual => DirectiveComparisonOperator.LessThanOrEqual,
             TokenType.GreaterThan => DirectiveComparisonOperator.GreaterThan,
             TokenType.GreaterThanOrEqual => DirectiveComparisonOperator.GreaterThanOrEqual,
-            _ => (DirectiveComparisonOperator?)null
+            _ => null
         };
 
         if (op.HasValue)
@@ -238,14 +238,14 @@ public class DirectiveExpressionParser
     public static List<Token> ExtractTokensBetween(List<Token> allTokens, int startPos, TokenType endToken)
     {
         var result = new List<Token>();
-        
+
         for (int i = startPos; i < allTokens.Count; i++)
         {
             if (allTokens[i].Type == endToken)
                 break;
-                
+
             // Skip trivia tokens but include directive-specific tokens
-            if (!allTokens[i].Type.IsTrivia() || 
+            if (!allTokens[i].Type.IsTrivia() ||
                 allTokens[i].Type == TokenType.DirectiveToolsRel ||
                 allTokens[i].Type == TokenType.DirectiveAnd ||
                 allTokens[i].Type == TokenType.DirectiveOr)
@@ -253,7 +253,7 @@ public class DirectiveExpressionParser
                 result.Add(allTokens[i]);
             }
         }
-        
+
         return result;
     }
 }

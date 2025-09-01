@@ -39,8 +39,9 @@ namespace AppRefiner.Linters
         // The suppression processor shared across all linters
         public LinterSuppressionProcessor? SuppressionProcessor { get; set; }
 
-        public virtual void Reset() {
-            
+        public virtual void Reset()
+        {
+
         }
 
         // Helper method to create a report with the proper linter ID set and add it to the Reports list
@@ -90,7 +91,7 @@ namespace AppRefiner.Linters
         public List<PropertyInfo> GetConfigurableProperties()
         {
             var properties = GetType().GetProperties(BindingFlags.Public | BindingFlags.Instance)
-                .Where(p => p.CanRead && p.CanWrite && 
+                .Where(p => p.CanRead && p.CanWrite &&
                           p.GetCustomAttribute<JsonIgnoreAttribute>() == null &&
                           p.Name != nameof(LINTER_ID) &&
                           p.Name != nameof(DatabaseRequirement) &&

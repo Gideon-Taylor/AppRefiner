@@ -1,8 +1,6 @@
 using PeopleCodeParser.SelfHosted.Nodes;
 using System.Text.RegularExpressions;
 
-using System.Linq;
-
 namespace AppRefiner.Stylers;
 
 /// <summary>
@@ -22,10 +20,10 @@ public class LinterSuppressionStyler : BaseStyler
     public override void VisitProgram(ProgramNode node)
     {
         Reset();
-        
+
         // Visit the program first
         base.VisitProgram(node);
-        
+
         // After visiting the AST, process comments from the ProgramNode
         ProcessComments(node);
     }
@@ -52,7 +50,7 @@ public class LinterSuppressionStyler : BaseStyler
 
                     // Create indicator for the suppression comment
                     string tooltip = $"Suppressed rules: {suppressedRules}";
-                    
+
                     AddIndicator(comment.SourceSpan, IndicatorType.HIGHLIGHTER, HIGHLIGHT_COLOR, tooltip);
                 }
             }
@@ -66,7 +64,7 @@ public class LinterSuppressionStyler : BaseStyler
 
                     // Create indicator for the suppression comment
                     string tooltip = $"Suppressed rules: {suppressedRules}";
-                    
+
                     AddIndicator(comment.SourceSpan, IndicatorType.HIGHLIGHTER, HIGHLIGHT_COLOR, tooltip);
                 }
             }

@@ -1,22 +1,9 @@
 using AppRefiner.Database;
 using AppRefiner.Database.Models;
 using AppRefiner.Dialogs;
-
-using AppRefiner.Plugins;
-
-
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Text;
-using System.Windows.Forms;
-using System.Drawing;
 using AppRefiner.Linters;
-using AppRefiner.Refactors;
+using AppRefiner.Plugins;
 using System.Diagnostics;
-using PeopleCodeParser.SelfHosted;
-using PeopleCodeParser.SelfHosted.Lexing;
 
 namespace AppRefiner
 {
@@ -28,15 +15,15 @@ namespace AppRefiner
         private readonly Label lblStatus; // Status label
         private readonly ProgressBar progressBar; // Progress bar
         private readonly SettingsService settingsService; // Added SettingsService
-        
+
         // We might still need access to the general settings like LintReportPath
         // Pass it during construction or retrieve via a SettingsService later.
         private string? lintReportPath;
-        
-        // Public property to expose LintReportPath
-        public string? LintReportPath => lintReportPath; 
 
-        public LinterManager(MainForm form, DataGridView linterOptionsGrid, Label statusLabel, ProgressBar progBar, 
+        // Public property to expose LintReportPath
+        public string? LintReportPath => lintReportPath;
+
+        public LinterManager(MainForm form, DataGridView linterOptionsGrid, Label statusLabel, ProgressBar progBar,
                              string? initialLintReportPath, SettingsService settings)
         {
             mainForm = form;
@@ -78,7 +65,7 @@ namespace AppRefiner
         {
             linterRules.Clear();
             linterGrid.Rows.Clear();
-            
+
             /* Find all classes in this assembly that extend BaseLintRule*/
             var linters = AppDomain.CurrentDomain.GetAssemblies()
                 .SelectMany(s => s.GetTypes())
@@ -131,12 +118,12 @@ namespace AppRefiner
             }
             // Apply saved configurations to linters
             LinterConfigManager.ApplyConfigurations(linterRules);
-            
+
             // Now load saved active states using SettingsService
             settingsService.LoadLinterStates(linterRules, linterGrid);
         }
 
-        private void ShowMessageBox(ScintillaEditor activeEditor, string message, string caption, MessageBoxButtons buttons,Action<DialogResult>? callback = null)
+        private void ShowMessageBox(ScintillaEditor activeEditor, string message, string caption, MessageBoxButtons buttons, Action<DialogResult>? callback = null)
         {
             Task.Delay(100).ContinueWith(_ =>
             {
@@ -231,7 +218,7 @@ namespace AppRefiner
 
         public void ProcessSingleLinter(BaseLintRule linter, ScintillaEditor? activeEditor, IDataManager? editorDataManager)
         {
-             if (activeEditor == null) return;
+            if (activeEditor == null) return;
 
             ScintillaManager.ClearAnnotations(activeEditor);
 
@@ -294,7 +281,7 @@ namespace AppRefiner
 
         private void DisplayLintReports(List<Report> reports, ScintillaEditor activeEditor)
         {
-            
+
             foreach (var g in reports.GroupBy(r => r.Line).OrderBy(b => b.First().Line))
             {
                 List<string> messages = new();
@@ -339,14 +326,14 @@ namespace AppRefiner
             string projectName = ScintillaManager.GetProjectName(editorContext);
             if (projectName == "Untitled" || string.IsNullOrEmpty(projectName))
             {
-                ShowMessageBox(editorContext, string.IsNullOrEmpty(projectName) ? "Unable to determine the project name." : "Please open a project first.", 
+                ShowMessageBox(editorContext, string.IsNullOrEmpty(projectName) ? "Unable to determine the project name." : "Please open a project first.",
                                "Project Linting Error", MessageBoxButtons.OK);
                 return;
             }
-            
+
             if (string.IsNullOrEmpty(lintReportPath) || !Directory.Exists(lintReportPath))
             {
-                ShowMessageBox(editorContext, $"Lint report directory is not set or does not exist: {lintReportPath}", 
+                ShowMessageBox(editorContext, $"Lint report directory is not set or does not exist: {lintReportPath}",
                                "Lint Report Path Error", MessageBoxButtons.OK);
                 return;
             }
@@ -383,7 +370,7 @@ namespace AppRefiner
                 if (!dataManager.LoadPeopleCodeItemContent(ppcProg)) continue;
                 var programText = ppcProg.GetProgramTextAsString();
                 if (string.IsNullOrEmpty(programText)) continue;
-                
+
                 // Parsing logic using self-hosted parser
                 var lexer = new PeopleCodeParser.SelfHosted.Lexing.PeopleCodeLexer(programText);
                 var tokens = lexer.TokenizeAll();
@@ -412,7 +399,7 @@ namespace AppRefiner
 
                 foreach (var report in programReports) allReports.Add((ppcProg, report));
                 foreach (var linter in activeProjectLinters) linter.Reset();
-                
+
                 ppcProg.SetProgramText(Array.Empty<byte>()); // Free memory
                 ppcProg.SetNameReferences(new List<NameReference>());
             }
@@ -429,14 +416,15 @@ namespace AppRefiner
             GenerateHtmlReport(editorContext, reportPath, projectName, allReports);
 
             updateStatus?.Invoke("Complete!");
-            
+
             // Show completion message
             FinalizeProjectLinting(editorContext, reportPath, allReports.Count);
         }
 
         private void FinalizeProjectLinting(ScintillaEditor editorContext, string reportPath, int issueCount)
         {
-            mainForm.Invoke(() => {
+            mainForm.Invoke(() =>
+            {
                 string message = issueCount > 0
                   ? $"Project linting complete. {issueCount} issues found.\n\nWould you like to open the report?"
                   : "Project linting complete. No issues found.\n\nWould you like to open the report?";
@@ -457,7 +445,7 @@ namespace AppRefiner
                 });
             });
         }
-        
+
         public void GenerateHtmlReport(ScintillaEditor editorContext, string reportPath, string projectName,
             List<(PeopleCodeItem Program, Report LintReport)> reportData)
         {
@@ -509,11 +497,13 @@ namespace AppRefiner
                 }
                 else
                 {
-                    using (Stream? stream = GetType().Assembly.GetManifestResourceStream("AppRefiner.Templates.LintReportTemplate.html"))
+                    using Stream? stream = GetType().Assembly.GetManifestResourceStream("AppRefiner.Templates.LintReportTemplate.html");
+                    if (stream != null)
                     {
-                        if (stream != null) { using (var reader = new StreamReader(stream)) { templateHtml = reader.ReadToEnd(); } }
-                        else { ShowMessageBox(editorContext, "Lint report template not found.", "Template Missing", MessageBoxButtons.OK); return; }
+                        using var reader = new StreamReader(stream);
+                        templateHtml = reader.ReadToEnd();
                     }
+                    else { ShowMessageBox(editorContext, "Lint report template not found.", "Template Missing", MessageBoxButtons.OK); return; }
                 }
 
                 string finalHtml = templateHtml.Replace("{{projectName}}", projectName)
@@ -539,11 +529,9 @@ namespace AppRefiner
                 {
                     if (linterGrid.Rows[e.RowIndex].Cells[e.ColumnIndex].Tag?.ToString() != "NoConfig")
                     {
-                         // Need to show dialog relative to the main form
-                        using (var dialog = new LinterConfigDialog(linter))
-                        {
-                            dialog.ShowDialog(mainForm); // Show dialog owned by MainForm
-                        }
+                        // Need to show dialog relative to the main form
+                        using var dialog = new LinterConfigDialog(linter);
+                        dialog.ShowDialog(mainForm); // Show dialog owned by MainForm
                     }
                 }
             }
@@ -561,4 +549,4 @@ namespace AppRefiner
             }
         }
     }
-} 
+}

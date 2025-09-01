@@ -1,35 +1,19 @@
 
 using AppRefiner.Database;
-using AppRefiner.Database.Models;
 using AppRefiner.Dialogs;
+using AppRefiner.Events;
 using AppRefiner.Linters;
-
 using AppRefiner.Plugins;
 using AppRefiner.Refactors;
+using AppRefiner.Services;
+using AppRefiner.Snapshots;
 using AppRefiner.Stylers;
 using AppRefiner.Templates;
-using AppRefiner.Events;
-using System;
-using System.Collections.Generic;
-using System.ComponentModel;
+using AppRefiner.TooltipProviders;
 using System.Data;
 using System.Diagnostics;
-using System.Drawing;
-using System.IO;
-using System.Linq;
-using System.Reflection;
 using System.Text;
-using System.Threading.Tasks;
-using System.Windows.Forms;
-using System.Drawing.Text;
-using AppRefiner.TooltipProviders;
-using AppRefiner.Snapshots;
-using System.Runtime.InteropServices;
-using AppRefiner.Services;
 using static AppRefiner.AutoCompleteService;
-using DiffPlex.Model;
-using System.Linq.Expressions;
-using OracleInternal.Common;
 
 namespace AppRefiner
 {
@@ -91,8 +75,8 @@ namespace AppRefiner
         private SnapshotManager? snapshotManager;
 
         // Fields for editor management
-        private HashSet<ScintillaEditor> knownEditors = new HashSet<ScintillaEditor>();
-        private Dictionary<ScintillaEditor, DateTime> lastStylerProcessingTime = new Dictionary<ScintillaEditor, DateTime>();
+        private HashSet<ScintillaEditor> knownEditors = new();
+        private Dictionary<ScintillaEditor, DateTime> lastStylerProcessingTime = new();
         private const int STYLER_PROCESSING_DEBOUNCE_MS = 100; // Prevent duplicate processing within 100ms
 
         // Throttling for duplicate shortcut prevention
@@ -100,17 +84,17 @@ namespace AppRefiner
         private const int SHORTCUT_THROTTLE_MS = 300; // Very short window to catch rapid duplicates
 
         // Fields for debouncing SAVEPOINTREACHED events
-        private readonly object savepointLock = new object();
+        private readonly object savepointLock = new();
         private DateTime lastSavepointTime = DateTime.MinValue;
         private System.Threading.Timer? savepointDebounceTimer = null;
         private ScintillaEditor? pendingSaveEditor = null;
         private const int SAVEPOINT_DEBOUNCE_MS = 300;
 
         // Add instance of the new TemplateManager
-        private TemplateManager templateManager = new TemplateManager();
+        private TemplateManager templateManager = new();
 
         // Dictionary to keep track of generated UI controls for template parameters
-        private Dictionary<string, Control> currentTemplateInputControls = new Dictionary<string, Control>();
+        private Dictionary<string, Control> currentTemplateInputControls = new();
         private HashSet<uint> processesToNotDBPrompt = new();
 
         public MainForm()
@@ -688,7 +672,7 @@ namespace AppRefiner
             foreach (var definition in definitions)
             {
                 // Create label for parameter
-                Label label = new Label
+                Label label = new()
                 {
                     Text = definition.Label + ":",
                     Location = new Point(horizontalPadding, currentY + 3),
@@ -736,7 +720,7 @@ namespace AppRefiner
                 // Add tooltip if description is available
                 if (!string.IsNullOrEmpty(definition.Description))
                 {
-                    ToolTip tooltip = new ToolTip();
+                    ToolTip tooltip = new();
                     tooltip.SetToolTip(inputControl, definition.Description);
                     tooltip.SetToolTip(label, definition.Description);
                 }
@@ -1007,9 +991,9 @@ namespace AppRefiner
                             {
                                 processDataManagers[activeEditor.ProcessId] = manager;
                                 activeEditor.DataManager = manager;
-                                }
                             }
                         }
+                    }
                 },
                 () => activeEditor != null && activeEditor.DataManager == null
             ));
@@ -1024,7 +1008,7 @@ namespace AppRefiner
                         activeEditor.DataManager.Disconnect();
                         processDataManagers.Remove(activeEditor.ProcessId);
                         activeEditor.DataManager = null;
-                        }
+                    }
                 },
                 () => activeEditor != null && activeEditor.DataManager != null
             ));
@@ -1388,7 +1372,7 @@ namespace AppRefiner
             if (editor.Type == EditorType.PeopleCode)
             {
                 var now = DateTime.UtcNow;
-                if (!lastStylerProcessingTime.TryGetValue(editor, out var lastProcessed) || 
+                if (!lastStylerProcessingTime.TryGetValue(editor, out var lastProcessed) ||
                     (now - lastProcessed).TotalMilliseconds > STYLER_PROCESSING_DEBOUNCE_MS)
                 {
                     lastStylerProcessingTime[editor] = now;
@@ -1955,7 +1939,7 @@ namespace AppRefiner
 
                     if (xrefs.Count > 0)
                     {
-                        StringBuilder sb = new StringBuilder();
+                        StringBuilder sb = new();
                         sb.Append("Event Mapping Xrefs:\n");
 
                         foreach (var g in groups)
@@ -2049,19 +2033,19 @@ namespace AppRefiner
                 }
 
                 // Detect and cache Results list view for this thread if not already cached
-                
-                if (success && isNewThread &&  editor.ResultsListView == IntPtr.Zero)
+
+                if (success && isNewThread && editor.ResultsListView == IntPtr.Zero)
                 {
                     try
                     {
                         // Find the Results list view for this process
                         var resultsListView = ResultsListHelper.FindResultsListView(editor.ProcessId);
-                        
+
                         if (resultsListView != IntPtr.Zero)
                         {
                             // Cache the handle by thread ID
                             editor.ResultsListView = resultsListView;
-                            
+
                             // Subclass the Results list view
                             bool subclassSuccess = EventHookInstaller.SubclassResultsList(editor.ThreadID, resultsListView, this.Handle);
                             Debug.Log($"Results list subclassing result for thread {editor.ThreadID}: {subclassSuccess} (HWND: {resultsListView:X})");
@@ -2141,7 +2125,7 @@ namespace AppRefiner
             if (dialog.ShowDialog(handleWrapper) == DialogResult.OK)
             {
                 IDataManager? manager = dialog.DataManager;
-                
+
                 if (manager != null)
                 {
                     processDataManagers[activeEditor.ProcessId] = manager;
@@ -2275,7 +2259,7 @@ namespace AppRefiner
         private void HandleWindowFocusEvent(object? sender, IntPtr hwnd)
         {
             // Check if the focused window is a Scintilla window
-            StringBuilder className = new StringBuilder(256);
+            StringBuilder className = new(256);
             NativeMethods.GetClassName(hwnd, className, className.Capacity); // Use NativeMethods
 
             if (className.ToString().Contains("Scintilla"))
@@ -2358,18 +2342,16 @@ namespace AppRefiner
                 if (cell.Tag?.ToString() == "NoConfig")
                 {
                     // Paint the background to match the grid's default background
-                    using (Brush backColorBrush = new SolidBrush(SystemColors.Control))
-                    using (Pen gridLinePen = new Pen(gridRefactors.GridColor, 1)) // Use the grid color for the border
-                    {
-                        // Erase the cell background
-                        e.Graphics.FillRectangle(backColorBrush, e.CellBounds);
+                    using Brush backColorBrush = new SolidBrush(SystemColors.Control);
+                    using Pen gridLinePen = new(gridRefactors.GridColor, 1); // Use the grid color for the border
+                                                                             // Erase the cell background
+                    e.Graphics.FillRectangle(backColorBrush, e.CellBounds);
 
-                        // Draw the grid lines (border) - Adjust coordinates slightly for standard appearance
-                        e.Graphics.DrawRectangle(gridLinePen, e.CellBounds.Left - 1, e.CellBounds.Top - 1, e.CellBounds.Width, e.CellBounds.Height);
+                    // Draw the grid lines (border) - Adjust coordinates slightly for standard appearance
+                    e.Graphics.DrawRectangle(gridLinePen, e.CellBounds.Left - 1, e.CellBounds.Top - 1, e.CellBounds.Width, e.CellBounds.Height);
 
-                        // Prevent default painting (including hover effects)
-                        e.Handled = true;
-                    }
+                    // Prevent default painting (including hover effects)
+                    e.Handled = true;
                 }
                 // Allow default painting for normal button cells or other columns
             }
@@ -2386,18 +2368,16 @@ namespace AppRefiner
                 if (cell.Tag?.ToString() == "NoConfig")
                 {
                     // Paint the background to match the grid's default background
-                    using (Brush backColorBrush = new SolidBrush(SystemColors.Control))
-                    using (Pen gridLinePen = new Pen(dataGridView1.GridColor, 1)) // Use the grid color for the border
-                    {
-                        // Erase the cell background
-                        e.Graphics.FillRectangle(backColorBrush, e.CellBounds);
+                    using Brush backColorBrush = new SolidBrush(SystemColors.Control);
+                    using Pen gridLinePen = new(dataGridView1.GridColor, 1); // Use the grid color for the border
+                                                                             // Erase the cell background
+                    e.Graphics.FillRectangle(backColorBrush, e.CellBounds);
 
-                        // Draw the grid lines (border) - Adjust coordinates slightly for standard appearance
-                        e.Graphics.DrawRectangle(gridLinePen, e.CellBounds.Left - 1, e.CellBounds.Top - 1, e.CellBounds.Width, e.CellBounds.Height);
+                    // Draw the grid lines (border) - Adjust coordinates slightly for standard appearance
+                    e.Graphics.DrawRectangle(gridLinePen, e.CellBounds.Left - 1, e.CellBounds.Top - 1, e.CellBounds.Width, e.CellBounds.Height);
 
-                        // Prevent default painting (including hover effects)
-                        e.Handled = true;
-                    }
+                    // Prevent default painting (including hover effects)
+                    e.Handled = true;
                 }
                 // Allow default painting for normal button cells or other columns
             }
@@ -2445,24 +2425,22 @@ namespace AppRefiner
         private void btnTNSADMIN_Click(object sender, EventArgs e)
         {
             /* Folder selection dialog and save result to TNS_ADMIN */
-            using (var folderDialog = new FolderBrowserDialog())
+            using var folderDialog = new FolderBrowserDialog();
+            folderDialog.Description = "Select the TNS_ADMIN directory";
+            folderDialog.ShowNewFolderButton = false;
+            if (string.IsNullOrEmpty(TNS_ADMIN))
             {
-                folderDialog.Description = "Select the TNS_ADMIN directory";
-                folderDialog.ShowNewFolderButton = false;
-                if (string.IsNullOrEmpty(TNS_ADMIN))
-                {
-                    folderDialog.SelectedPath = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
-                }
-                else
-                {
-                    folderDialog.SelectedPath = TNS_ADMIN;
-                }
-                if (folderDialog.ShowDialog(this) == DialogResult.OK)
-                {
-                    TNS_ADMIN = folderDialog.SelectedPath;
-                    SaveSettings(); // Save all settings
-                    Debug.Log($"TNS_ADMIN property set to: {folderDialog.SelectedPath}");
-                }
+                folderDialog.SelectedPath = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+            }
+            else
+            {
+                folderDialog.SelectedPath = TNS_ADMIN;
+            }
+            if (folderDialog.ShowDialog(this) == DialogResult.OK)
+            {
+                TNS_ADMIN = folderDialog.SelectedPath;
+                SaveSettings(); // Save all settings
+                Debug.Log($"TNS_ADMIN property set to: {folderDialog.SelectedPath}");
             }
         }
 
@@ -2518,7 +2496,7 @@ namespace AppRefiner
                 if (resultsListView == IntPtr.Zero)
                 {
                     Debug.Log($"OpenTarget: No Results list view cached for thread {targetThreadId}");
-                    
+
                     // Try to find it now
                     resultsListView = ResultsListHelper.FindResultsListView(targetProcessId);
                     if (resultsListView != IntPtr.Zero)
@@ -2541,7 +2519,7 @@ namespace AppRefiner
                     Debug.Log($"OpenTarget: Cached Results list view {resultsListView:X} is no longer valid");
                     // Remove from cache and try to find it again
                     activeEditor.ResultsListView = IntPtr.Zero;
-                    
+
                     resultsListView = ResultsListHelper.FindResultsListView(targetProcessId);
                     if (resultsListView != IntPtr.Zero)
                     {
@@ -2558,7 +2536,7 @@ namespace AppRefiner
 
                 // Use EventHookInstaller to set the open target and trigger double-click
                 bool success = EventHookInstaller.SetOpenTarget(activeEditor, resultsListView, targetString);
-                
+
                 if (success)
                 {
                     Debug.Log($"OpenTarget: Successfully set target '{targetString}' for thread {targetThreadId}");

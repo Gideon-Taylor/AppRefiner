@@ -1,6 +1,5 @@
 using AppRefiner.Database.Models;
 using System.Data;
-using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
 
@@ -50,14 +49,14 @@ namespace AppRefiner.Database
                 if (_connection.State != ConnectionState.Open)
                 {
                     _connection.Open();
-                    
+
                     // Set namespace if provided
                     if (!string.IsNullOrEmpty(_namespace))
                     {
                         string sql = $"ALTER SESSION SET CURRENT_SCHEMA={_namespace}";
                         _connection.ExecuteNonQuery(sql);
                     }
-                    
+
                     // Clear the record field cache when connecting
                     ClearRecordFieldCache();
                 }
@@ -80,7 +79,7 @@ namespace AppRefiner.Database
             {
                 _connection.Close();
             }
-            
+
             // Clear the record field cache when disconnecting
             ClearRecordFieldCache();
         }
@@ -441,22 +440,22 @@ namespace AppRefiner.Database
             // Parse the package path
             string[] parts = packagePath.Split(':');
             string rootPackage = parts.Length > 0 ? parts[0] : string.Empty;
-            
+
             // Determine package level (0=root, 1=subpackage, 2=subsubpackage)
             int packageLevel = parts.Length - 1;
             if (packageLevel < 0) packageLevel = 0;
-            
+
             // Build qualify path for queries (e.g., ":" or "SUB:" or "SUB:SUBSUB:")
             string qualifyPath = ":";
             if (packageLevel > 0)
             {
                 qualifyPath = string.Join(":", parts.Skip(1));
             }
-            
+
             // Get subpackages based on current level
             string subpackageSql = string.Empty;
             Dictionary<string, object> subpackageParams = new();
-            
+
             // Only root and first subpackage level can have subpackages in PeopleSoft
             // (max 3 levels: ROOT:SUB:SUBSUB)
             if (packageLevel < 2)
@@ -500,7 +499,7 @@ namespace AppRefiner.Database
                 if (!string.IsNullOrEmpty(subpackageSql))
                 {
                     DataTable subpackageResults = _connection.ExecuteQuery(subpackageSql, subpackageParams);
-                    
+
                     foreach (DataRow row in subpackageResults.Rows)
                     {
                         string? subpackageName = row["PACKAGEID"].ToString();
@@ -511,22 +510,22 @@ namespace AppRefiner.Database
                     }
                 }
             }
-            
+
             // Get classes in the current package path
             string classSql = @"
                 SELECT APPCLASSID FROM PSAPPCLASSDEFN 
                 WHERE PACKAGEROOT = :rootPackage 
                 AND QUALIFYPATH = :qualifyPath
                 ORDER BY APPCLASSID";
-                
+
             Dictionary<string, object> classParams = new()
             {
                 { ":rootPackage", rootPackage },
                 { ":qualifyPath", qualifyPath }
             };
-            
+
             DataTable classResults = _connection.ExecuteQuery(classSql, classParams);
-            
+
             foreach (DataRow row in classResults.Rows)
             {
                 string? className = row["APPCLASSID"].ToString();
@@ -535,7 +534,7 @@ namespace AppRefiner.Database
                     classes.Add(className);
                 }
             }
-            
+
             return new PackageItems(packagePath, subpackages, classes);
         }
 
@@ -631,29 +630,29 @@ namespace AppRefiner.Database
 
         public bool CheckAppClassExists(string appClassPath)
         {
-           if (!IsConnected)
+            if (!IsConnected)
             {
                 throw new InvalidOperationException("Database connection is not open");
             }
-            
+
             // Split the appClassPath by colons
             string[] parts = appClassPath.Split(':');
-            
+
             // Need at least one package and a class name
             if (parts.Length < 2)
             {
                 return false;
             }
-            
+
             // Prepare the query parameters
             Dictionary<string, object> parameters = new();
-            
+
             // Set all object IDs and values based on the parts of the appClassPath
             for (int i = 0; i < 7; i++)
             {
                 int objId = 0;
                 string objVal = " ";
-                
+
                 if (i < parts.Length)
                 {
                     if (i == parts.Length - 1)
@@ -675,7 +674,7 @@ namespace AppRefiner.Database
                     objId = 12;
                     objVal = "ONEXECUTE";
                 }
-                
+
                 // Parameter indices are 1-based
                 parameters[$":objId{i + 1}"] = objId;
                 parameters[$":objVal{i + 1}"] = objVal;
@@ -690,16 +689,16 @@ namespace AppRefiner.Database
                 AND OBJECTID5 = :objId5 AND UPPER(OBJECTVALUE5) = :objVal5
                 AND OBJECTID6 = :objId6 AND UPPER(OBJECTVALUE6) = :objVal6
                 AND OBJECTID7 = :objId7 AND UPPER(OBJECTVALUE7) = :objVal7";
-            
+
             // Execute the query
             DataTable result = _connection.ExecuteQuery(query, parameters);
-            
+
             // If any row exists, the app class exists
             if (result.Rows.Count > 0 && result.Rows[0][0] is string exists)
             {
                 return exists == "Y";
             }
-            
+
             return false;
         }
 
@@ -714,25 +713,25 @@ namespace AppRefiner.Database
             {
                 throw new InvalidOperationException("Database connection is not open");
             }
-            
+
             // First check if the class exists
             if (!CheckAppClassExists(appClassPath))
             {
                 return null;
             }
-            
+
             // Split the appClassPath by colons
             string[] parts = appClassPath.Split(':');
-            
+
             // Create a PeopleCodeItem for the class
             List<Tuple<int, string>> programFields = new();
-            
+
             // Map parts to object IDs and values
             for (int i = 0; i < parts.Length; i++)
             {
                 int objId;
                 string objVal = parts[i];
-                
+
                 if (i == parts.Length - 1)
                 {
                     // Last part is the class (OBJECTID = 107)
@@ -743,17 +742,17 @@ namespace AppRefiner.Database
                     // Package parts start at 104 and increment
                     objId = 104 + i;
                 }
-                
+
                 programFields.Add(new Tuple<int, string>(objId, objVal));
             }
-            
+
             // Add the ONEXECUTE part
             programFields.Add(new Tuple<int, string>(12, "OnExecute"));
-            
+
             // Build the PeopleCodeItem with the proper object IDs and values
             int[] objectIDs = new int[7];
             string[] objectValues = new string[7];
-            
+
             for (int i = 0; i < 7; i++)
             {
                 if (i < programFields.Count)
@@ -767,22 +766,22 @@ namespace AppRefiner.Database
                     objectValues[i] = " ";
                 }
             }
-            
+
             // Create a PeopleCodeItem with empty program text
             PeopleCodeItem item = new(
                 objectIDs,
                 objectValues,
-                Array.Empty<byte>(), 
+                Array.Empty<byte>(),
                 new List<NameReference>()
             );
-            
+
             // Load the program text
             if (LoadPeopleCodeItemContent(item))
             {
                 // Convert the binary program text to a string
                 return item.GetProgramTextAsString();
             }
-            
+
             return null;
         }
 
@@ -800,16 +799,16 @@ namespace AppRefiner.Database
 
             // Ensure record name is uppercase
             recordName = recordName.ToUpper();
-            
+
             // Check if we have this record's version in the database
             int recordVersion = GetRecordVersion(recordName);
-            
+
             // If record doesn't exist, return null
             if (recordVersion < 0)
             {
                 return null;
             }
-            
+
             // Check if we have a valid cached version
             if (_recordFieldCache.TryGetValue(recordName, out RecordFieldCache? cache))
             {
@@ -821,19 +820,19 @@ namespace AppRefiner.Database
                 // Otherwise, version is different, so remove the outdated cache entry
                 _recordFieldCache.Remove(recordName);
             }
-            
+
             // Cache miss or version mismatch, fetch the fields from the database
             List<RecordFieldInfo>? fields = FetchRecordFieldsFromDb(recordName);
-            
+
             // If fields were retrieved successfully, cache them with the current version
             if (fields != null && fields.Count > 0)
             {
                 _recordFieldCache[recordName] = new RecordFieldCache(recordName, recordVersion, fields);
             }
-            
+
             return fields;
         }
-        
+
         /// <summary>
         /// Gets the VERSION field value from PSRECDEFN for a specific record.
         /// </summary>
@@ -850,16 +849,16 @@ namespace AppRefiner.Database
             {
                 { ":recordName", recordName }
             };
-            
+
             try
             {
                 DataTable result = _connection.ExecuteQuery(sql, parameters);
-                
+
                 if (result.Rows.Count == 0)
                 {
                     return -1; // Record doesn't exist
                 }
-                
+
                 return Convert.ToInt32(result.Rows[0]["VERSION"]);
             }
             catch (Exception)
@@ -868,7 +867,7 @@ namespace AppRefiner.Database
                 return -1;
             }
         }
-        
+
         /// <summary>
         /// Fetches record field information directly from the database.
         /// </summary>
@@ -917,7 +916,7 @@ namespace AppRefiner.Database
                 return null;
             }
         }
-        
+
         /// <summary>
         /// Clears the record field cache
         /// </summary>
@@ -1140,7 +1139,7 @@ namespace AppRefiner.Database
                 {
                     EventMapSequence sequence;
                     string procSeq = row["ptcs_procseq"].ToString() ?? string.Empty;
-                    
+
                     if (procSeq.Equals("PRE", StringComparison.OrdinalIgnoreCase))
                         sequence = EventMapSequence.Pre;
                     else if (procSeq.Equals("OVER", StringComparison.OrdinalIgnoreCase))
@@ -1152,7 +1151,7 @@ namespace AppRefiner.Database
 
                     string component = string.Empty;
                     string segment = string.Empty;
-                    
+
                     if (eventMapInfo.Type == EventMapType.Page)
                     {
                         component = row["PORTAL_URI_SEG2"].ToString() ?? string.Empty;
@@ -1183,7 +1182,7 @@ namespace AppRefiner.Database
                     });
                 }
             }
-            catch (Exception ex)
+            catch (Exception)
             {
                 // Consider logging the exception here
                 // Logger.LogError($"Error retrieving event map items: {ex.Message}");

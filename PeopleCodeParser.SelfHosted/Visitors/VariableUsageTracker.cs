@@ -1,5 +1,4 @@
 using PeopleCodeParser.SelfHosted.Visitors.Models;
-using PeopleCodeParser.SelfHosted;
 
 namespace PeopleCodeParser.SelfHosted.Visitors;
 
@@ -39,7 +38,7 @@ public class VariableUsageTracker : IVariableUsageTracker
 
     private readonly Dictionary<VariableKey, (VariableInfo Variable, bool Used, List<SourceSpan> References)> usageMap = new();
     private readonly Dictionary<ScopeInfo, List<VariableKey>> scopeToVariablesMap = new();
-    
+
     // Track undefined variable references
     private readonly List<(string Name, SourceSpan Location, ScopeInfo Scope)> undefinedReferences = new();
 
@@ -50,7 +49,7 @@ public class VariableUsageTracker : IVariableUsageTracker
     {
         var key = new VariableKey(variable.Name, scope);
         usageMap[key] = (variable, false, [variable.VariableNameInfo.SourceSpan]);
-        
+
         if (!scopeToVariablesMap.TryGetValue(scope, out var variables))
         {
             variables = new List<VariableKey>();
@@ -86,12 +85,12 @@ public class VariableUsageTracker : IVariableUsageTracker
                 {
                     references.Add(location);
                 }
-                
+
                 usageMap[key] = (entry.Variable, true, references);
                 return true;
             }
         }
-        
+
         return false;
     }
 
@@ -121,7 +120,7 @@ public class VariableUsageTracker : IVariableUsageTracker
     {
         if (!scopeToVariablesMap.TryGetValue(scope, out var variables))
             return Enumerable.Empty<VariableInfo>();
-            
+
         return variables
             .Where(key => usageMap.TryGetValue(key, out var entry) && !entry.Used)
             .Select(key => usageMap[key].Variable);
@@ -171,7 +170,7 @@ public class VariableUsageTracker : IVariableUsageTracker
         {
             return entry.References.ToList();
         }
-        
+
         return Enumerable.Empty<SourceSpan>();
     }
 
@@ -198,7 +197,7 @@ public class VariableUsageTracker : IVariableUsageTracker
     private VariableKey? FindVariableKey(string name, ScopeInfo scope)
     {
         var currentScope = scope;
-        
+
         while (currentScope != null)
         {
             if (scopeToVariablesMap.TryGetValue(currentScope, out var variables))
@@ -211,10 +210,10 @@ public class VariableUsageTracker : IVariableUsageTracker
                     }
                 }
             }
-            
+
             currentScope = currentScope.Parent;
         }
-        
+
         return null;
     }
 }

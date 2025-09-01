@@ -1,6 +1,5 @@
 using AppRefiner.Database;
 using PeopleCodeParser.SelfHosted.Nodes;
-using System.Collections.Generic;
 
 namespace AppRefiner.Stylers;
 
@@ -11,7 +10,7 @@ namespace AppRefiner.Stylers;
 public class InvalidAppClass : BaseStyler
 {
     private const uint ERROR_COLOR = 0x0000FF60; // Red color for invalid app classes
-    
+
     // Dictionary cache to store app class path validity status (true = valid, false = invalid)
     private static Dictionary<string, bool> AppClassValidity = new();
 
@@ -37,7 +36,7 @@ public class InvalidAppClass : BaseStyler
     public override void VisitProgram(ProgramNode node)
     {
         Reset();
-        
+
         // Visit the program
         base.VisitProgram(node);
     }
@@ -55,7 +54,7 @@ public class InvalidAppClass : BaseStyler
 
         string appClassPath = node.QualifiedName;
         bool isValid;
-        
+
         // Check if this app class path is already in our cache
         if (AppClassValidity.TryGetValue(appClassPath, out isValid))
         {
@@ -65,11 +64,11 @@ public class InvalidAppClass : BaseStyler
         {
             // Check if app class exists
             isValid = DataManager.CheckAppClassExists(appClassPath);
-            
+
             // Add to cache for future lookups
             AppClassValidity[appClassPath] = isValid;
         }
-        
+
         // If the app class is invalid, highlight it with an error
         if (!isValid)
         {
@@ -90,7 +89,7 @@ public class InvalidAppClass : BaseStyler
         {
             VisitAppClassType(baseClass);
         }
-        
+
         // Check implemented interface if present
         if (node.ImplementedInterface is AppClassTypeNode implementedInterface)
         {

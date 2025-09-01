@@ -1,5 +1,3 @@
-using PeopleCodeParser.SelfHosted;
-
 namespace PeopleCodeParser.SelfHosted.Lexing;
 
 /// <summary>
@@ -79,7 +77,7 @@ public class Token
     {
         if (!type.IsKeyword())
             throw new ArgumentException($"Token type {type} is not a keyword", nameof(type));
-        
+
         return new Token(type, text, sourceSpan);
     }
 
@@ -90,7 +88,7 @@ public class Token
     {
         if (!type.IsOperator())
             throw new ArgumentException($"Token type {type} is not an operator", nameof(type));
-        
+
         return new Token(type, text, sourceSpan);
     }
 
@@ -101,7 +99,7 @@ public class Token
     {
         if (!type.IsLiteral())
             throw new ArgumentException($"Token type {type} is not a literal", nameof(type));
-        
+
         return new Token(type, text, sourceSpan, value);
     }
 
@@ -112,7 +110,7 @@ public class Token
     {
         if (!type.IsIdentifier())
             throw new ArgumentException($"Token type {type} is not an identifier", nameof(type));
-        
+
         return new Token(type, text, sourceSpan);
     }
 
@@ -123,7 +121,7 @@ public class Token
     {
         if (!type.IsTrivia())
             throw new ArgumentException($"Token type {type} is not trivia", nameof(type));
-        
+
         return new Token(type, text, sourceSpan);
     }
 }
@@ -276,7 +274,7 @@ public enum TokenType
     UserVariable,         // &variable
     SystemVariable,       // %USERID, %DATE, etc.
     SystemConstant,       // %THIS, etc.
-    
+
     // Special identifiers
     Metadata,             // %METADATA
 
@@ -329,7 +327,7 @@ public static class TokenTypeExtensions
     /// </summary>
     public static bool IsLiteral(this TokenType type)
     {
-        return type == TokenType.Null || 
+        return type == TokenType.Null ||
                (type >= TokenType.IntegerLiteral && type <= TokenType.BooleanLiteral);
     }
 
@@ -354,7 +352,7 @@ public static class TokenTypeExtensions
     /// </summary>
     public static bool IsCommentType(this TokenType type)
     {
-        return type is TokenType.LineComment or TokenType.BlockComment or 
+        return type is TokenType.LineComment or TokenType.BlockComment or
                TokenType.NestedComment or TokenType.ApiComment;
     }
 
@@ -371,7 +369,7 @@ public static class TokenTypeExtensions
     /// </summary>
     public static bool IsComparisonOperator(this TokenType type)
     {
-        return type is TokenType.Equal or TokenType.NotEqual or TokenType.LessThan or 
+        return type is TokenType.Equal or TokenType.NotEqual or TokenType.LessThan or
                TokenType.LessThanOrEqual or TokenType.GreaterThan or TokenType.GreaterThanOrEqual;
     }
 
@@ -545,7 +543,7 @@ public static class TokenTypeExtensions
             TokenType.Or => 1,
             TokenType.And => 2,
             TokenType.Equal or TokenType.NotEqual => 3,
-            TokenType.LessThan or TokenType.LessThanOrEqual or 
+            TokenType.LessThan or TokenType.LessThanOrEqual or
             TokenType.GreaterThan or TokenType.GreaterThanOrEqual => 4,
             TokenType.Pipe => 5,
             TokenType.Plus or TokenType.Minus => 6,

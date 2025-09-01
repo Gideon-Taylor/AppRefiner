@@ -1,6 +1,4 @@
-using System.Collections.Generic;
 using PeopleCodeParser.SelfHosted.Nodes;
-using PeopleCodeParser.SelfHosted.Visitors;
 
 namespace AppRefiner.Linters
 {

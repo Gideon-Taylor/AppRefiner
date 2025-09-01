@@ -1,10 +1,6 @@
 using PeopleCodeParser.SelfHosted.Nodes;
 using PeopleCodeParser.SelfHosted.Visitors;
 using PeopleCodeParser.SelfHosted.Visitors.Models;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
 
 namespace AppRefiner
 {
@@ -119,7 +115,7 @@ namespace AppRefiner
         /// <summary>
         /// Dictionary to map property names to their types from the header declarations
         /// </summary>
-        private Dictionary<string, string> propertyTypes = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        private Dictionary<string, string> propertyTypes = new(StringComparer.OrdinalIgnoreCase);
 
         /// <summary>
         /// Current PeopleCode scope (public, protected, private)
@@ -292,4 +288,4 @@ namespace AppRefiner
             base.OnEnterClassScope(scope, node);
         }
     }
-} 
+}

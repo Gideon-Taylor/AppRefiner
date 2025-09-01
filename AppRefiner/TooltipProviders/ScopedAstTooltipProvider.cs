@@ -1,9 +1,5 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using AppRefiner.Database;
 using PeopleCodeParser.SelfHosted;
-using PeopleCodeParser.SelfHosted.Lexing;
 using PeopleCodeParser.SelfHosted.Nodes;
 using PeopleCodeParser.SelfHosted.Visitors;
 using PeopleCodeParser.SelfHosted.Visitors.Models;
@@ -114,7 +110,7 @@ namespace AppRefiner.TooltipProviders
             {
                 Reset();
                 Program = program;
-                
+
                 if (Program != null)
                 {
                     Program.Accept(this);
@@ -194,7 +190,7 @@ namespace AppRefiner.TooltipProviders
         /// </summary>
         protected bool ContainsPosition(SourceSpan span)
         {
-            return span.IsValid && CurrentPosition >= span.Start.ByteIndex && 
+            return span.IsValid && CurrentPosition >= span.Start.ByteIndex &&
                    CurrentPosition <= span.End.ByteIndex;
         }
 
@@ -216,7 +212,7 @@ namespace AppRefiner.TooltipProviders
             {
                 var currentScope = GetCurrentScope();
                 return GetAccessibleVariables(currentScope)
-                    .FirstOrDefault(v => v.VariableNameInfo.Token.SourceSpan.IsValid && 
+                    .FirstOrDefault(v => v.VariableNameInfo.Token.SourceSpan.IsValid &&
                                         ContainsPosition(v.VariableNameInfo.Token.SourceSpan));
             }
             catch
