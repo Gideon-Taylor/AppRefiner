@@ -1,23 +1,22 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text.RegularExpressions;
-using Antlr4.Runtime;
-using Antlr4.Runtime.Misc;
-using Antlr4.Runtime.Tree;
-using AppRefiner.PeopleCode;
+using System.Text;
+using PeopleCodeParser.SelfHosted;
+using PeopleCodeParser.SelfHosted.Nodes;
+using PeopleCodeParser.SelfHosted.Lexing;
+using PeopleCodeParser.SelfHosted.Visitors.Models;
 
 namespace AppRefiner.TooltipProviders
 {
     /// <summary>
-    /// Provides tooltips showing information about variables in the code.
-    /// This is a sample implementation showing how to use ParseTreeTooltipProvider.
+    /// Provides comprehensive tooltips for variables showing rich information including
+    /// usage statistics, reference counts, safety classification, and scope information.
+    /// This is the self-hosted equivalent of the ANTLR-based VariableInfoTooltipProvider
+    /// with significantly enhanced capabilities.
     /// </summary>
-    public class VariableInfoTooltipProvider : ParseTreeTooltipProvider
+    public class VariableInfoTooltipProvider : ScopedAstTooltipProvider
     {
-        private Dictionary<string, VariableInfo> variableData = new Dictionary<string, VariableInfo>(StringComparer.OrdinalIgnoreCase);
-        private Dictionary<string, string> propertyNameToVariableName = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-
         /// <summary>
         /// Name of the tooltip provider.
         /// </summary>
@@ -26,7 +25,7 @@ namespace AppRefiner.TooltipProviders
         /// <summary>
         /// Description of what the tooltip provider does.
         /// </summary>
-        public override string Description => "Shows information about variables in the code";
+        public override string Description => "Shows comprehensive information about variables including usage statistics and reference tracking";
 
         /// <summary>
         /// Medium priority
@@ -34,513 +33,365 @@ namespace AppRefiner.TooltipProviders
         public override int Priority => 50;
 
         /// <summary>
-        /// Specifies which token types this provider is interested in.
+        /// Processes the AST to register tooltips for all variable references
         /// </summary>
-        public override int[]? TokenTypes => new int[] 
-        { 
-            PeopleCodeLexer.USER_VARIABLE,
-//            PeopleCodeLexer.LOCAL,
-//            PeopleCodeLexer.CONSTANT,
-//            PeopleCodeLexer.INSTANCE,
-//            PeopleCodeLexer.PRIVATE,
-//            PeopleCodeLexer.PROTECTED,
-//            PeopleCodeLexer.PROPERTY,
-//            PeopleCodeLexer.GLOBAL,
-//            PeopleCodeLexer.COMPONENT,
-            PeopleCodeLexer.GENERIC_ID_LIMITED // For property names
-        };
+        public override void ProcessProgram(ProgramNode program)
+        {
+            base.ProcessProgram(program);
+        }
 
         /// <summary>
-        /// Structure to store variable information
+        /// Override to process identifier references and register rich variable tooltips
         /// </summary>
-        private class VariableInfo
+        public override void VisitIdentifier(IdentifierNode node)
         {
-            public string Name { get; set; } = string.Empty;
-            public string Type { get; set; } = string.Empty;
-            public string Scope { get; set; } = "Unknown";
-            public string AccessModifier { get; set; } = string.Empty;
-            public string InitialValue { get; set; } = string.Empty;
-            public string Direction { get; set; } = string.Empty;
-            public bool IsReadOnly { get; set; } = false;
-            public bool IsProperty { get; set; } = false;
-            public bool IsConstant { get; set; } = false;
-            
-            public override string ToString()
+            // Check if this identifier represents a variable
+            if (IsVariableIdentifier(node))
             {
-                var sb = new System.Text.StringBuilder();
-                
-                sb.AppendLine("Variable Info:");
-                
-                // Show scope
-                sb.Append("   Scope: ");
-                if (IsProperty)
+                ProcessVariableReference(node);
+            }
+
+            base.VisitIdentifier(node);
+        }
+
+        /// <summary>
+        /// Override to process member access expressions for properties
+        /// </summary>
+        public override void VisitMemberAccess(MemberAccessNode node)
+        {
+            // Handle property access patterns like %This.PropertyName or &variable.PropertyName
+            if (IsPropertyAccessPattern(node))
+            {
+                ProcessPropertyAccess(node);
+            }
+
+            base.VisitMemberAccess(node);
+        }
+
+        /// <summary>
+        /// Checks if an identifier represents a variable that should have tooltips
+        /// </summary>
+        private bool IsVariableIdentifier(IdentifierNode node)
+        {
+            return node.IdentifierType == IdentifierType.UserVariable ||
+                   node.IdentifierType == IdentifierType.Generic;
+        }
+
+        /// <summary>
+        /// Checks if a member access represents a property access pattern
+        /// </summary>
+        private bool IsPropertyAccessPattern(MemberAccessNode node)
+        {
+            // Check for patterns like %This.Property or &variable.Property
+            return node.Target is IdentifierNode target &&
+                   (target.Name.Equals("%This", StringComparison.OrdinalIgnoreCase) ||
+                    target.Name.StartsWith("&"));
+        }
+
+        /// <summary>
+        /// Processes a variable reference and registers a rich tooltip
+        /// </summary>
+        private void ProcessVariableReference(IdentifierNode node)
+        {
+            try
+            {
+                // Try to get the variable information from the scoped visitor
+                var variable = GetVariablesAtPosition()
+                    .FirstOrDefault(v => v.Name.Equals(node.Name, StringComparison.OrdinalIgnoreCase) &&
+                                        v.VariableNameInfo.SourceSpan.IsValid);
+
+                if (variable != null)
                 {
-                    sb.Append("Property");
-                    if (IsReadOnly)
-                        sb.Append(" (ReadOnly)");
-                }
-                else if (IsConstant)
-                {
-                    sb.Append("Constant");
+                    string tooltipText = GenerateRichVariableTooltip(variable);
+                    RegisterTooltip(node.SourceSpan, tooltipText);
                 }
                 else
                 {
-                    sb.Append(Scope);
+                    // Fallback for variables not found in scope (could be system variables or globals)
+                    string tooltipText = GenerateBasicVariableTooltip(node);
+                    RegisterTooltip(node.SourceSpan, tooltipText);
                 }
-                sb.AppendLine();
-                
-                // Access modifier if present
-                if (!string.IsNullOrEmpty(AccessModifier))
-                {
-                    sb.AppendLine($"   Access: {AccessModifier}");
-                }
-                
-                // Type information with formatted array types
-                if (!string.IsNullOrEmpty(Type))
-                {
-                    string formattedType = FormatArrayType(Type);
-                    sb.AppendLine($"   Type: {formattedType}");
-                }
-                
-                // Parameter direction if applicable
-                if (!string.IsNullOrEmpty(Direction))
-                {
-                    sb.AppendLine($"   Direction: {Direction}");
-                }
-                
-                // Initial value if present
-                if (!string.IsNullOrEmpty(InitialValue))
-                {
-                    sb.AppendLine($"   Initial Value: {InitialValue}");
-                }
-                
-                return sb.ToString().TrimEnd();
+            }
+            catch (Exception)
+            {
+                // Silently handle errors and fall back to basic tooltip
+                string tooltipText = GenerateBasicVariableTooltip(node);
+                RegisterTooltip(node.SourceSpan, tooltipText);
             }
         }
 
         /// <summary>
-        /// Formats array type strings to be more readable.
-        /// Converts "arrayofarrayofstring" to "Array2 of String".
+        /// Processes a property access and registers a rich tooltip
         /// </summary>
-        /// <param name="type">The original type string</param>
-        /// <returns>A formatted type string</returns>
-        private static string FormatArrayType(string type)
+        private void ProcessPropertyAccess(MemberAccessNode node)
         {
-            if (string.IsNullOrEmpty(type))
-                return type;
-                
-            // Check if it's an array type
-            string lowerType = type.ToLowerInvariant();
-            if (!lowerType.StartsWith("array"))
-                return type; // Not an array type, return as is
-                
-            // Count occurrences of "arrayof"
-            int arrayCount = 0;
-            int index = 0;
-            
-            // Use regex to count array of occurrences
-            string pattern = @"(array\s*of\s*)";
-            Match match = Regex.Match(lowerType, pattern, RegexOptions.IgnoreCase);
-            
-            while (match.Success)
+            try
             {
-                arrayCount++;
-                index = match.Index + match.Length;
-                match = match.NextMatch();
-            }
-            
-            if (arrayCount == 0)
-            {
-                // Fallback for when the regex doesn't match
-                arrayCount = Regex.Matches(lowerType, "array").Count;
-                
-                // Check if the type follows the pattern "arrayofarrayof..."
-                if (Regex.IsMatch(lowerType, @"^array(\s*of\s*array)*"))
+                // Try to find the property in the current class
+                var property = GetAllVariables()
+                    .Where(v => v.Kind == VariableKind.Property &&
+                               v.Name.Equals(node.MemberName, StringComparison.OrdinalIgnoreCase))
+                    .FirstOrDefault(v => v.VariableNameInfo.SourceSpan.IsValid);
+
+                if (property != null)
                 {
-                    // Extract the base type by removing all "array of" parts
-                    string baseType = Regex.Replace(type, @"^(array\s*of\s*)*", "", RegexOptions.IgnoreCase);
-                    
-                    // Format the array declaration
-                    if (arrayCount == 1)
-                        return $"Array of {baseType}";
-                    else
-                        return $"Array{arrayCount} of {baseType}";
+                    string tooltipText = GenerateRichVariableTooltip(property);
+                    RegisterTooltip(node.SourceSpan, tooltipText);
+                }
+                else
+                {
+                    // Fallback for unknown properties
+                    string tooltipText = GenerateBasicPropertyTooltip(node.MemberName);
+                    RegisterTooltip(node.SourceSpan, tooltipText);
+                }
+            }
+            catch (Exception)
+            {
+                // Silently handle errors and fall back to basic tooltip
+                string tooltipText = GenerateBasicPropertyTooltip(node.MemberName);
+                RegisterTooltip(node.SourceSpan, tooltipText);
+            }
+        }
+
+        /// <summary>
+        /// Generates a rich tooltip with comprehensive variable information
+        /// </summary>
+        private string GenerateRichVariableTooltip(VariableInfo variable)
+        {
+            var sb = new StringBuilder();
+
+            // Variable header with type and name
+            sb.AppendLine($"**{variable.Name}** ({variable.Type})");
+
+            // Variable kind with emoji
+            string kindIcon = GetVariableKindIcon(variable.Kind);
+            string kindDescription = GetVariableKindDescription(variable.Kind);
+            sb.AppendLine($"{kindIcon} {kindDescription}");
+
+            // Declaration scope information
+            if (variable.DeclarationScope != null)
+            {
+                sb.AppendLine($"📍 Declared in: {variable.DeclarationScope.Name}");
+                sb.AppendLine($"📍 Line: {variable.DeclarationLine}");
+            }
+
+            // Safety classification
+            string safetyIcon = variable.IsSafeToRefactor ? "✅" : "⚠️";
+            string safetyText = variable.IsSafeToRefactor ? "Safe to refactor" : "Unsafe to refactor";
+            sb.AppendLine($"{safetyIcon} {safetyText}");
+
+            // Usage statistics with detailed breakdown
+            var usageSummary = variable.GetUsageSummary();
+            sb.AppendLine("");
+            sb.AppendLine("📊 **Usage Statistics:**");
+
+            if (variable.IsUsed)
+            {
+                sb.AppendLine($"   • Total references: {usageSummary.TotalReferences}");
+
+                if (usageSummary.ReadCount > 0)
+                    sb.AppendLine($"   • Read operations: {usageSummary.ReadCount}");
+
+                if (usageSummary.WriteCount > 0)
+                    sb.AppendLine($"   • Write operations: {usageSummary.WriteCount}");
+
+                if (usageSummary.ParameterAnnotationCount > 0)
+                    sb.AppendLine($"   • Parameter annotations: {usageSummary.ParameterAnnotationCount}");
+
+                // Show read/write ratio if both exist
+                if (usageSummary.ReadCount > 0 && usageSummary.WriteCount > 0)
+                {
+                    double readRatio = (double)usageSummary.ReadCount / (usageSummary.ReadCount + usageSummary.WriteCount);
+                    double writeRatio = (double)usageSummary.WriteCount / (usageSummary.ReadCount + usageSummary.WriteCount);
+                    sb.AppendLine($"   • Read/Write ratio: {readRatio:P0} / {writeRatio:P0}");
                 }
             }
             else
             {
-                // Extract the base type (everything after the last "of")
-                string baseType = lowerType.Substring(index).Trim();
-                if (string.IsNullOrEmpty(baseType))
-                    baseType = "Any"; // Default if no base type specified
-                    
-                // Keep original casing for base type if possible
-                if (index < type.Length)
-                    baseType = type.Substring(index).Trim();
-                
-                // Format the array declaration
-                if (arrayCount == 1)
-                    return $"Array of {baseType}";
-                else
-                    return $"Array{arrayCount} of {baseType}";
+                sb.AppendLine("   • *Unused variable*");
             }
-            
-            // If we can't parse it properly, return the original
-            return type;
+
+            // Reference locations (show first few and indicate if there are more)
+            var sortedRefs = variable.GetReferencesSortedByLocation().ToList();
+            if (sortedRefs.Any())
+            {
+                sb.AppendLine("");
+                sb.AppendLine("📍 **Reference Locations:**");
+
+                int maxRefsToShow = 5;
+                var refsToShow = sortedRefs.Take(maxRefsToShow).ToList();
+
+                foreach (var reference in refsToShow)
+                {
+                    string refIcon = GetReferenceTypeIcon(reference.ReferenceType);
+                    string context = string.IsNullOrEmpty(reference.Context) ? "" : $" ({reference.Context})";
+                    sb.AppendLine($"   {refIcon} Line {reference.Line}: {reference.ReferenceType}{context}");
+                }
+
+                if (sortedRefs.Count > maxRefsToShow)
+                {
+                    int remaining = sortedRefs.Count - maxRefsToShow;
+                    sb.AppendLine($"   ... and {remaining} more reference{(remaining != 1 ? "s" : "")}");
+                }
+            }
+
+            // Shadowing information
+            var shadowedVars = GetAllVariables()
+                .Where(v => v.Name.Equals(variable.Name, StringComparison.OrdinalIgnoreCase) &&
+                           v.DeclarationScope.Id != variable.DeclarationScope.Id)
+                .ToList();
+
+            if (shadowedVars.Any())
+            {
+                sb.AppendLine("");
+                sb.AppendLine("⚠️ **Variable Shadowing:**");
+
+                var shadowing = shadowedVars.FirstOrDefault(v => v.Shadows(variable));
+                if (shadowing != null)
+                {
+                    sb.AppendLine($"   • Shadows variable in {shadowing.DeclarationScope.Name}");
+                }
+
+                var shadowed = shadowedVars.FirstOrDefault(v => variable.Shadows(v));
+                if (shadowed != null)
+                {
+                    sb.AppendLine($"   • Shadowed by variable in {shadowed.DeclarationScope.Name}");
+                }
+            }
+
+            return sb.ToString();
         }
 
         /// <summary>
-        /// Resets the internal state of the tooltip provider.
+        /// Generates a basic tooltip for variables not found in scope analysis
         /// </summary>
-        public override void Reset()
+        private string GenerateBasicVariableTooltip(IdentifierNode node)
         {
-            base.Reset();
-            variableData.Clear();
-            propertyNameToVariableName.Clear();
-        }
+            var sb = new StringBuilder();
 
-        // Track current access modifier context (for class members)
-        private string currentAccessModifier = string.Empty;
-        
-        /// <summary>
-        /// Captures access modifier for public section
-        /// </summary>
-        public override void EnterPublicHeader([NotNull] PeopleCode.PeopleCodeParser.PublicHeaderContext context)
-        {
-            currentAccessModifier = "Public";
-        }
-        
-        /// <summary>
-        /// Captures access modifier for protected section
-        /// </summary>
-        public override void EnterProtectedHeader([NotNull] PeopleCode.PeopleCodeParser.ProtectedHeaderContext context)
-        {
-            currentAccessModifier = "Protected";
-        }
-        
-        /// <summary>
-        /// Captures access modifier for private section
-        /// </summary>
-        public override void EnterPrivateHeader([NotNull] PeopleCode.PeopleCodeParser.PrivateHeaderContext context)
-        {
-            currentAccessModifier = "Private";
+            sb.AppendLine($"**{node.Name}**");
+
+            // Try to infer variable type from name patterns
+            string inferredType = InferVariableType(node.Name);
+            if (!string.IsNullOrEmpty(inferredType))
+            {
+                sb.AppendLine($"🔍 Type: {inferredType}");
+            }
+
+            sb.AppendLine("❓ Variable not found in scope analysis");
+            sb.AppendLine("   (May be a system variable, global, or defined elsewhere)");
+
+            return sb.ToString();
         }
 
         /// <summary>
-        /// Handles local variable definitions
+        /// Generates a basic tooltip for properties
         /// </summary>
-        public override void EnterLocalVariableDefinition([NotNull] PeopleCode.PeopleCodeParser.LocalVariableDefinitionContext context)
+        private string GenerateBasicPropertyTooltip(string propertyName)
         {
-            if (context.typeT() != null && context.USER_VARIABLE() != null)
-            {
-                var typeName = context.typeT().GetText();
-                
-                foreach (var userVariable in context.USER_VARIABLE())
-                {
-                    var variableName = userVariable.GetText();
-                    
-                    var varInfo = new VariableInfo
-                    {
-                        Name = variableName,
-                        Type = typeName,
-                        Scope = "Local Variable"
-                    };
-                    
-                    variableData[variableName] = varInfo;
-                    RegisterTooltip(userVariable.Symbol, $"{varInfo}");
-                }
-            }
+            var sb = new StringBuilder();
+
+            sb.AppendLine($"**{propertyName}**");
+            sb.AppendLine("🏠 Property");
+            sb.AppendLine("❓ Property definition not found in scope analysis");
+
+            return sb.ToString();
         }
-        
+
         /// <summary>
-        /// Handles local variable declarations with assignment
+        /// Gets an appropriate icon for variable kind
         /// </summary>
-        public override void EnterLocalVariableDeclAssignment([NotNull] PeopleCode.PeopleCodeParser.LocalVariableDeclAssignmentContext context)
+        private string GetVariableKindIcon(VariableKind kind)
         {
-            if (context.typeT() != null && context.USER_VARIABLE() != null && context.expression() != null)
+            return kind switch
             {
-                var typeName = context.typeT().GetText();
-                var variableName = context.USER_VARIABLE().GetText();
-                var initialValue = context.expression().GetText();
-                
-                var varInfo = new VariableInfo
+                VariableKind.Local => "🔸",
+                VariableKind.Instance => "🏠",
+                VariableKind.Global => "🌍",
+                VariableKind.Component => "📦",
+                VariableKind.Parameter => "📥",
+                VariableKind.Constant => "🔒",
+                VariableKind.Property => "🏷️",
+                _ => "❓"
+            };
+        }
+
+        /// <summary>
+        /// Gets a human-readable description for variable kind
+        /// </summary>
+        private string GetVariableKindDescription(VariableKind kind)
+        {
+            return kind switch
+            {
+                VariableKind.Local => "Local variable",
+                VariableKind.Instance => "Instance variable",
+                VariableKind.Global => "Global variable",
+                VariableKind.Component => "Component variable",
+                VariableKind.Parameter => "Method parameter",
+                VariableKind.Constant => "Constant",
+                VariableKind.Property => "Property",
+                _ => "Variable"
+            };
+        }
+
+        /// <summary>
+        /// Gets an appropriate icon for reference type
+        /// </summary>
+        private string GetReferenceTypeIcon(ReferenceType referenceType)
+        {
+            return referenceType switch
+            {
+                ReferenceType.Declaration => "📝",
+                ReferenceType.Read => "👁️",
+                ReferenceType.Write => "✏️",
+                ReferenceType.ParameterAnnotation => "🏷️",
+                _ => "🔗"
+            };
+        }
+
+        /// <summary>
+        /// Attempts to infer variable type from naming patterns
+        /// </summary>
+        private string InferVariableType(string variableName)
+        {
+            if (variableName.StartsWith("&"))
+            {
+                return "User variable";
+            }
+            else if (variableName.StartsWith("%"))
+            {
+                // Common PeopleSoft system variables
+                return variableName.ToUpperInvariant() switch
                 {
-                    Name = variableName,
-                    Type = typeName,
-                    Scope = "Local Variable",
-                    InitialValue = initialValue
+                    "%THIS" => "Current object reference",
+                    "%SESSION" => "Session object",
+                    "%COMPONENT" => "Component object",
+                    "%PAGE" => "Page object",
+                    "%ROW" => "Row object",
+                    "%SQL" => "SQL object",
+                    "%FILE" => "File object",
+                    _ => "System variable"
                 };
-                
-                variableData[variableName] = varInfo;
-                RegisterTooltip(context.USER_VARIABLE().Symbol, $"{varInfo}");
             }
-        }
-        
-        /// <summary>
-        /// Handles instance variable declarations
-        /// </summary>
-        public override void EnterInstanceDecl([NotNull] PeopleCode.PeopleCodeParser.InstanceDeclContext context)
-        {
-            if (context.typeT() != null && context.USER_VARIABLE() != null)
+            else
             {
-                var typeName = context.typeT().GetText();
-                
-                foreach (var userVariable in context.USER_VARIABLE())
-                {
-                    var variableName = userVariable.GetText();
-                    
-                    var varInfo = new VariableInfo
-                    {
-                        Name = variableName,
-                        Type = typeName,
-                        Scope = "Instance Variable",
-                        AccessModifier = currentAccessModifier
-                    };
-                    
-                    variableData[variableName] = varInfo;
-                    RegisterTooltip(userVariable.Symbol, $"{varInfo}");
-                }
-            }
-        }
-        
-        /// <summary>
-        /// Handles constant declarations
-        /// </summary>
-        public override void EnterConstantDeclaration([NotNull] PeopleCode.PeopleCodeParser.ConstantDeclarationContext context)
-        {
-            if (context.USER_VARIABLE() != null && context.literal() != null)
-            {
-                var variableName = context.USER_VARIABLE().GetText();
-                var value = context.literal().GetText();
-                
-                var varInfo = new VariableInfo
-                {
-                    Name = variableName,
-                    InitialValue = value,
-                    Scope = "Constant",
-                    IsConstant = true,
-                    AccessModifier = currentAccessModifier
-                };
-                
-                variableData[variableName] = varInfo;
-                RegisterTooltip(context.USER_VARIABLE().Symbol, $"{varInfo}");
-            }
-        }
-        
-        /// <summary>
-        /// Handles properties with get/set
-        /// </summary>
-        public override void EnterPropertyGetSet([NotNull] PeopleCode.PeopleCodeParser.PropertyGetSetContext context)
-        {
-            if (context.genericID() != null && context.typeT() != null)
-            {
-                var propertyName = context.genericID().GetText();
-                var typeName = context.typeT().GetText();
-                bool hasGet = true; // Always has GET
-                bool hasSet = context.SET() != null;
-                
-                var varInfo = new VariableInfo
-                {
-                    Name = propertyName,
-                    Type = typeName,
-                    Scope = "Property",
-                    IsProperty = true,
-                    IsReadOnly = !hasSet,
-                    AccessModifier = currentAccessModifier
-                };
-                
-                // Store property info under both access patterns
-                string thisPropertyKey = "%This." + propertyName;
-                string varPropertyKey = "&" + propertyName;
-                
-                variableData[thisPropertyKey] = varInfo;
-                variableData[varPropertyKey] = varInfo;
-                
-                // Map property name to variable patterns for dotAccess resolution
-                propertyNameToVariableName[propertyName.ToLowerInvariant()] = thisPropertyKey;
-                
-                // Register tooltip for the property name in the declaration
-                // Use token indexes to register the tooltip
-                int start = context.genericID().Start.ByteStartIndex();
-                int length = context.genericID().Stop.ByteStopIndex() - start + 1;
-                RegisterTooltip(start, length, $"{varInfo}");
-            }
-        }
-        
-        /// <summary>
-        /// Handles properties with direct access
-        /// </summary>
-        public override void EnterPropertyDirect([NotNull] PeopleCode.PeopleCodeParser.PropertyDirectContext context)
-        {
-            if (context.genericID() != null && context.typeT() != null)
-            {
-                var propertyName = context.genericID().GetText();
-                var typeName = context.typeT().GetText();
-                bool isReadOnly = context.READONLY() != null;
-                bool isAbstract = context.ABSTRACT() != null;
-                
-                var varInfo = new VariableInfo
-                {
-                    Name = propertyName,
-                    Type = typeName,
-                    Scope = isAbstract ? "Abstract Property" : "Property",
-                    IsProperty = true,
-                    IsReadOnly = isReadOnly,
-                    AccessModifier = currentAccessModifier
-                };
-                
-                // Store property info under both access patterns
-                string thisPropertyKey = "%This." + propertyName;
-                string varPropertyKey = "&" + propertyName;
-                
-                variableData[thisPropertyKey] = varInfo;
-                variableData[varPropertyKey] = varInfo;
-                
-                // Map property name to variable patterns for dotAccess resolution
-                propertyNameToVariableName[propertyName.ToLowerInvariant()] = thisPropertyKey;
-                
-                // Register tooltip for the property name in the declaration
-                // Use token indexes to register the tooltip
-                int start = context.genericID().Start.ByteStartIndex();
-                int length = context.genericID().Stop.ByteStopIndex() - start + 1;
-                RegisterTooltip(start, length, $"{varInfo}");
-            }
-        }
-        
-        /// <summary>
-        /// Handles global variable declarations
-        /// </summary>
-        public override void EnterNonLocalVarDeclaration([NotNull] PeopleCode.PeopleCodeParser.NonLocalVarDeclarationContext context)
-        {
-            if (context.typeT() != null && context.USER_VARIABLE() != null)
-            {
-                var typeName = context.typeT().GetText();
-                string scope = context.COMPONENT() != null ? "Component Variable" : "Global Variable";
-                
-                foreach (var userVariable in context.USER_VARIABLE())
-                {
-                    var variableName = userVariable.GetText();
-                    
-                    var varInfo = new VariableInfo
-                    {
-                        Name = variableName,
-                        Type = typeName,
-                        Scope = scope
-                    };
-                    
-                    variableData[variableName] = varInfo;
-                    RegisterTooltip(userVariable.Symbol, $"{varInfo}");
-                }
-            }
-        }
-        
-        /// <summary>
-        /// Handles method arguments for extracted type information
-        /// </summary>
-        public override void EnterMethodArgument([NotNull] PeopleCode.PeopleCodeParser.MethodArgumentContext context)
-        {
-            if (context.USER_VARIABLE() != null && context.typeT() != null)
-            {
-                var variableName = context.USER_VARIABLE().GetText();
-                var typeName = context.typeT().GetText();
-                var direction = context.OUT() != null ? "out" : "in";
-                
-                var varInfo = new VariableInfo
-                {
-                    Name = variableName,
-                    Type = typeName,
-                    Scope = "Method Parameter",
-                    Direction = direction
-                };
-                
-                variableData[variableName] = varInfo;
-                RegisterTooltip(context.USER_VARIABLE().Symbol, $"{varInfo}");
-            }
-        }
-        
-        /// <summary>
-        /// Handles function arguments
-        /// </summary>
-        public override void EnterFunctionArgument([NotNull] PeopleCode.PeopleCodeParser.FunctionArgumentContext context)
-        {
-            if (context.USER_VARIABLE() != null)
-            {
-                var variableName = context.USER_VARIABLE().GetText();
-                var typeName = context.typeT() != null ? context.typeT().GetText() : "any";
-                
-                var varInfo = new VariableInfo
-                {
-                    Name = variableName,
-                    Type = typeName,
-                    Scope = "Function Parameter"
-                };
-                
-                variableData[variableName] = varInfo;
-                RegisterTooltip(context.USER_VARIABLE().Symbol, $"{varInfo}");
-            }
-        }
-        
-        /// <summary>
-        /// Handles user variable references in expressions
-        /// </summary>
-        public override void EnterIdentUserVariable([NotNull] PeopleCode.PeopleCodeParser.IdentUserVariableContext context)
-        {
-            var variableName = context.USER_VARIABLE().GetText();
-            
-            // Check if we know the type of this variable
-            if (variableData.TryGetValue(variableName, out var varInfo))
-            {
-                RegisterTooltip(context.USER_VARIABLE().Symbol, $"{varInfo}");
-            }
-        }
-        
-        /// <summary>
-        /// Handles dot access expressions like %This.PropertyName
-        /// </summary>
-        public override void EnterDotAccessExpr([NotNull] PeopleCode.PeopleCodeParser.DotAccessExprContext context)
-        {
-            var dotAccessList = context.dotAccess();
-            if (dotAccessList != null && dotAccessList.Length > 0)
-            {
-                foreach (var dotAccess in dotAccessList)
-                {
-                    if (dotAccess.genericID() != null)
-                    {
-                        string propertyName = dotAccess.genericID().GetText();
-                        
-                        // Check if we know this as a property
-                        if (propertyNameToVariableName.TryGetValue(propertyName.ToLowerInvariant(), out var varKey) &&
-                            variableData.TryGetValue(varKey, out var varInfo))
-                        {
-                            // Use token indexes to register the tooltip
-                            int start = dotAccess.genericID().Start.ByteStartIndex();
-                            int length = dotAccess.genericID().Stop.ByteStopIndex() - start + 1;
-                            RegisterTooltip(start, length, $"{varInfo}");
-                        }
-                    }
-                }
-            }
-        }
-        
-        /// <summary>
-        /// Process generic ID tokens which might be property references
-        /// </summary>
-        public override void EnterIdentGenericID([NotNull] PeopleCode.PeopleCodeParser.IdentGenericIDContext context)
-        {
-            if (context.genericID() != null)
-            {
-                string idName = context.genericID().GetText();
-                
-                // Check if we know this as a property
-                if (propertyNameToVariableName.TryGetValue(idName.ToLowerInvariant(), out var varKey) &&
-                    variableData.TryGetValue(varKey, out var varInfo))
-                {
-                    // Use token indexes to register the tooltip
-                    int start = context.genericID().Start.ByteStartIndex();
-                    int length = context.genericID().Stop.ByteStopIndex() - start + 1;
-                    RegisterTooltip(start, length, $"{varInfo}");
-                }
+                // Try to infer from naming conventions
+                if (variableName.Contains("array", StringComparison.OrdinalIgnoreCase))
+                    return "Array";
+                if (variableName.Contains("list", StringComparison.OrdinalIgnoreCase))
+                    return "List";
+                if (variableName.Contains("string", StringComparison.OrdinalIgnoreCase))
+                    return "String";
+                if (variableName.Contains("number", StringComparison.OrdinalIgnoreCase) ||
+                    variableName.Contains("num", StringComparison.OrdinalIgnoreCase))
+                    return "Number";
+                if (variableName.Contains("date", StringComparison.OrdinalIgnoreCase))
+                    return "Date";
+                if (variableName.Contains("time", StringComparison.OrdinalIgnoreCase))
+                    return "Time";
+
+                return "Unknown type";
             }
         }
     }
-} 
+}

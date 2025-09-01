@@ -2,24 +2,29 @@ using System;
 using System.Collections.Generic;
 using System.Text;
 using System.Linq;
-using Antlr4.Runtime;
-using Antlr4.Runtime.Misc;
-using Antlr4.Runtime.Tree;
-using AppRefiner;
-using AppRefiner.PeopleCode;
+using PeopleCodeParser.SelfHosted;
+using PeopleCodeParser.SelfHosted.Nodes;
+using PeopleCodeParser.SelfHosted.Lexing;
+using PeopleCodeParser.SelfHosted.Visitors.Models;
 
 namespace AppRefiner.TooltipProviders
 {
     /// <summary>
     /// Provides tooltips showing the containing scope hierarchy for a line of code.
     /// Shows function/method, if/else, for/while, and evaluate blocks that contain the current line.
+    /// This is the self-hosted equivalent of the ANTLR-based ScopeTooltipProvider.
     /// </summary>
-    public class ScopeTooltipProvider : ParseTreeTooltipProvider
+    public class ScopeTooltipProvider : ScopedAstTooltipProvider
     {
+        /// <summary>
+        /// Current line number in the document, provided by the editor
+        /// </summary>
+        public int LineNumber { get; set; } = -1;
+
         private List<ScopeInfo> containingScopes = new List<ScopeInfo>();
 
         // Map from line number to first token on that line
-        private Dictionary<int, IToken> firstTokensOnLine = new Dictionary<int, IToken>();
+        private Dictionary<int, Token> firstTokensOnLine = new Dictionary<int, Token>();
 
         // Map from method name to parameter signature
         private Dictionary<string, string> methodParameterMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -41,11 +46,6 @@ namespace AppRefiner.TooltipProviders
         public override int Priority => 80;
 
         /// <summary>
-        /// This provider accepts all token types, but filters by position during processing
-        /// </summary>
-        public override int[]? TokenTypes => null;
-
-        /// <summary>
         /// Resets the internal state of the tooltip provider.
         /// </summary>
         public override void Reset()
@@ -58,289 +58,188 @@ namespace AppRefiner.TooltipProviders
         }
 
         /// <summary>
-        /// When a token stream is set in TooltipManager, determine all the first tokens on each line
+        /// Processes the AST to collect scope information
         /// </summary>
-        public void InitializeWithTokenStream(CommonTokenStream tokenStream)
+        public override void ProcessProgram(ProgramNode program)
         {
-            if (tokenStream == null || LineNumber <= 0)
-                return;
+            // Reset state
+            containingScopes.Clear();
+            firstTokensOnLine.Clear();
+            methodParameterMap.Clear();
+            methodReturnsMap.Clear();
 
-            // Make sure we have all tokens
-            tokenStream.Fill();
-            var tokens = tokenStream.GetTokens();
+            base.ProcessProgram(program);
+        }
 
-            // Track the current line and the first token on that line
-            int currentLine = -1;
+        /// <summary>
+        /// Override to process method declarations
+        /// </summary>
+        public override void VisitMethod(MethodNode node)
+        {
+            // Capture method signature information
+            string methodName = node.Name;
 
-            // Process all tokens to find first tokens on each line
-            // Only need to track tokens up to and including our target LineNumber
-            foreach (var token in tokens)
+            // Build parameter signature
+            var parameters = new List<string>();
+            foreach (var param in node.Parameters)
             {
-                // Skip tokens on lines after our target line number - we don't need them
-                if (token.Line > LineNumber)
-                    break;
+                string paramType = param.Type?.TypeName ?? "any";
+                string direction = param.IsOut ? "out" : "in";
+                parameters.Add($"{param.Name} as {paramType}");
+            }
+            methodParameterMap[methodName] = string.Join(", ", parameters);
 
-                // Skip hidden channel tokens (comments, whitespace)
-                if (token.Channel == Lexer.Hidden)
-                    continue;
+            // Capture return type if present
+            if (node.ReturnType != null)
+            {
+                methodReturnsMap[methodName] = node.ReturnType.TypeName;
+            }
 
-                // Skip EOF token
-                if (token.Type == TokenConstants.EOF)
-                    continue;
+            // Process as a scope if it contains our target line
+            ProcessScope(node, "method");
 
-                // If this token is on a new line, it's the first token on that line
-                if (token.Line > currentLine)
+            base.VisitMethod(node);
+        }
+
+        /// <summary>
+        /// Override to process function declarations
+        /// </summary>
+        public override void VisitFunction(FunctionNode node)
+        {
+            // Build parameter signature
+            var parameters = new List<string>();
+            foreach (var param in node.Parameters)
+            {
+                string paramType = param.Type?.TypeName ?? "any";
+                parameters.Add($"{param.Name} as {paramType}");
+            }
+
+            // Process as a scope if it contains our target line
+            ProcessScope(node, "function");
+
+            base.VisitFunction(node);
+        }
+
+        /// <summary>
+        /// Override to process app class declarations
+        /// </summary>
+        public override void VisitAppClass(AppClassNode node)
+        {
+            // Process property getters and setters from the class
+            foreach (var property in node.PropertyGetters)
+            {
+                if (property.GetterBody != null)
                 {
-                    currentLine = token.Line;
-                    firstTokensOnLine[currentLine] = token;
+                    ProcessScope(property, "get");
                 }
             }
 
-            Debug.Log($"Found {firstTokensOnLine.Count} first tokens on lines (up to line {LineNumber})");
-        }
-
-        /// <summary>
-        /// Processes a specific token to determine if it should trigger a scope tooltip
-        /// </summary>
-        public override bool CanProvideTooltipForToken(IToken token, int position)
-        {
-            // Only process if it's the first token on the line
-            return token != null && firstTokensOnLine.ContainsValue(token);
-        }
-
-        /// <summary>
-        /// Handles function definitions
-        /// </summary>
-        public override void EnterFunctionDefinition([NotNull] PeopleCode.PeopleCodeParser.FunctionDefinitionContext context)
-        {
-            ProcessScope(context, "function");
-        }
-
-        /// <summary>
-        /// Handle class method declarations to capture parameter signatures
-        /// </summary>
-        public override void EnterMethodHeader([NotNull] PeopleCode.PeopleCodeParser.MethodHeaderContext context)
-        {
-            if (context == null || context.Start == null)
-                return;
-
-            // Extract method name
-            string methodName = "";
-            if (context.genericID() != null)
+            foreach (var property in node.PropertySetters)
             {
-                methodName = context.genericID().GetText();
-            }
-
-            if (string.IsNullOrEmpty(methodName))
-                return;
-
-            string declarationLine = context.GetText();
-
-            if (context.methodArguments() is PeopleCode.PeopleCodeParser.MethodArgumentsContext argsContext)
-            {
-                var parameters = new List<string>();
-
-                foreach (var arg in argsContext.methodArgument())
+                if (property.SetterBody != null)
                 {
-                    // Extract parameter name and type
-                    string paramName = arg.USER_VARIABLE().GetText();
-                    if (arg.typeT() is PeopleCode.PeopleCodeParser.ArrayTypeContext array)
-                    {
-                        var arrayDim = array.ARRAY().Count();
-                        parameters.Add($"{paramName} as Array{arrayDim} of {array.typeT().GetText()}");
-                    }
-                    else
-                    {
-                        string paramType = arg.typeT().GetText();
-                        parameters.Add($"{paramName} as {paramType}");
-                    }
-
-                    methodParameterMap[methodName] = string.Join(", ", parameters);
+                    ProcessScope(property, "set");
                 }
-
             }
 
-            // Check if the method has a return type
-            if (context.RETURNS() != null && context.typeT() != null)
-            {
-                string returnType = context.typeT().GetText();
-                methodReturnsMap[methodName] = returnType;
-            }
+            base.VisitAppClass(node);
         }
 
         /// <summary>
-        /// Handles method implementations
+        /// Override to process if statements
         /// </summary>
-        public override void EnterMethod([NotNull] PeopleCode.PeopleCodeParser.MethodContext context)
-        {
-            ProcessScope(context, "method");
-        }
-
-        public override void EnterGetter([NotNull] PeopleCode.PeopleCodeParser.GetterContext context)
-        {
-            ProcessScope(context, "get");
-        }
-
-        public override void EnterSetter([NotNull] PeopleCode.PeopleCodeParser.SetterContext context)
-        {
-            ProcessScope(context, "set");
-        }
-
-        /// <summary>
-        /// Handles if statements
-        /// </summary>
-        public override void EnterIfStatement([NotNull] PeopleCode.PeopleCodeParser.IfStatementContext context)
+        public override void VisitIf(IfStatementNode node)
         {
             // Skip if this scope starts after our target line
-            if (context.Start.Line > LineNumber)
+            if (node.SourceSpan.Start.Line > LineNumber)
                 return;
 
-            ProcessScope(context, "If");
+            ProcessScope(node, "If");
 
-            // Check for Else branch and add it as a separate scope if it contains our line
-            if (context.children != null)
+            // Handle else block if it exists and contains our target line
+            if (node.ElseBlock != null && node.ElseBlock.SourceSpan.Start.Line <= LineNumber &&
+                LineNumber <= node.ElseBlock.SourceSpan.End.Line)
             {
-                bool foundElse = false;
-                ParserRuleContext? elseBlock = null;
-                int elseStartLine = -1;
-
-                // Look for the ELSE token
-                for (int i = 0; i < context.children.Count; i++)
+                var elseScope = new ScopeInfo
                 {
-                    var child = context.children[i];
+                    ScopeType = "Else",
+                    StartLine = node.ElseBlock.SourceSpan.Start.Line,
+                    EndLine = node.ElseBlock.SourceSpan.End.Line,
+                    Context = node.ElseBlock,
+                    HeaderText = "Else",
+                    ParentScopeStartLine = node.SourceSpan.Start.Line,
+                    IsElseBlock = true
+                };
 
-                    // Found the ELSE token
-                    if (child.GetText().Equals("else", StringComparison.OrdinalIgnoreCase))
-                    {
-                        foundElse = true;
-
-                        if (child is Antlr4.Runtime.Tree.ITerminalNode elseNode)
-                        {
-                            elseStartLine = elseNode.Symbol.Line;
-                        }
-
-                        // The next child after ELSE should be the else block
-                        if (i + 1 < context.children.Count && context.children[i + 1] is ParserRuleContext elseContent)
-                        {
-                            elseBlock = elseContent;
-                            break;
-                        }
-                    }
-                }
-
-                // If we found an ELSE block, process it if it contains our target line
-                if (foundElse && elseBlock != null && elseBlock.Stop != null)
-                {
-                    // If elseStartLine wasn't found, use the elseBlock's start line
-                    if (elseStartLine == -1 && elseBlock.Start != null)
-                    {
-                        elseStartLine = elseBlock.Start.Line;
-                    }
-
-                    // Check if our target line is within the Else block
-                    if (elseStartLine <= LineNumber && LineNumber <= elseBlock.Stop.Line)
-                    {
-                        var elseScope = new ScopeInfo
-                        {
-                            ScopeType = "Else",
-                            StartLine = elseStartLine,
-                            EndLine = elseBlock.Stop.Line,
-                            Context = elseBlock,
-                            HeaderText = "Else", // Simple header for Else
-                            ParentScopeStartLine = context.Start.Line, // Link to parent If
-                            IsElseBlock = true
-                        };
-
-                        // Add this scope to our list if it contains our target line
-                        containingScopes.Add(elseScope);
-                    }
-                }
+                containingScopes.Add(elseScope);
             }
+
+            base.VisitIf(node);
         }
 
         /// <summary>
-        /// Handles for statements
+        /// Override to process for statements
         /// </summary>
-        public override void EnterForStatement([NotNull] PeopleCode.PeopleCodeParser.ForStatementContext context)
+        public override void VisitFor(ForStatementNode node)
         {
-            ProcessScope(context, "For");
+            ProcessScope(node, "For");
+            base.VisitFor(node);
         }
 
         /// <summary>
-        /// Handles while statements
+        /// Override to process while statements
         /// </summary>
-        public override void EnterWhileStatement([NotNull] PeopleCode.PeopleCodeParser.WhileStatementContext context)
+        public override void VisitWhile(WhileStatementNode node)
         {
-            ProcessScope(context, "While");
+            ProcessScope(node, "While");
+            base.VisitWhile(node);
         }
 
         /// <summary>
-        /// Handles evaluate statements
+        /// Override to process evaluate statements
         /// </summary>
-        public override void EnterEvaluateStatement([NotNull] PeopleCode.PeopleCodeParser.EvaluateStatementContext context)
+        public override void VisitEvaluate(EvaluateStatementNode node)
         {
             // Skip if this scope starts after our target line
-            if (context.Start.Line > LineNumber)
+            if (node.SourceSpan.Start.Line > LineNumber)
                 return;
 
-            ProcessScope(context, "Evaluate");
+            ProcessScope(node, "Evaluate");
 
-            // Process each WHEN clause as a nested scope within Evaluate if it contains our line
-            if (context.children != null)
-            {
-                foreach (var child in context.children)
-                {
-                    if (child is PeopleCode.PeopleCodeParser.WhenClauseContext whenClause && whenClause.Start != null && whenClause.Stop != null)
-                    {
-                        // Only process if our line is within this When clause
-                        if (whenClause.Start.Line <= LineNumber && LineNumber <= whenClause.Stop.Line)
-                        {
-                            // Create a scope info object for the when clause
-                            var scopeInfo = new ScopeInfo
-                            {
-                                ScopeType = "When",
-                                StartLine = whenClause.Start.Line,
-                                EndLine = whenClause.Stop.Line,
-                                Context = whenClause,
-                                // Since When statements are always 1 line, just use the raw text
-                                HeaderText = whenClause.GetText().Trim(),
-                            };
+            // Note: WhenClause doesn't have SourceSpan since it doesn't inherit from AstNode
+            // For now, we'll skip processing individual when clauses
+            // This is a limitation of the current AST structure
 
-                            // Add this scope to our list
-                            containingScopes.Add(scopeInfo);
-                        }
-                    }
-                }
-            }
+            base.VisitEvaluate(node);
         }
 
         /// <summary>
         /// Common handler for scope contexts
         /// </summary>
-        private void ProcessScope(ParserRuleContext context, string scopeType)
+        private void ProcessScope(AstNode node, string scopeType)
         {
-            if (context == null || context.Start == null || context.Stop == null)
+            if (node == null || !node.SourceSpan.IsValid)
                 return;
 
             // Skip if this scope starts after our target line
-            if (context.Start.Line > LineNumber)
+            if (node.SourceSpan.Start.Line > LineNumber)
                 return;
 
             // Skip if this scope ends before our target line
-            if (context.Stop.Line < LineNumber)
+            if (node.SourceSpan.End.Line < LineNumber)
                 return;
 
             // Create a scope info object only if our target line is within this scope
             var scopeInfo = new ScopeInfo
             {
                 ScopeType = scopeType,
-                StartLine = context.Start.Line,
-                EndLine = context.Stop.Line,
-                Context = context
+                StartLine = node.SourceSpan.Start.Line,
+                EndLine = node.SourceSpan.End.Line,
+                Context = node
             };
 
             // Get the text for this scope's header line
-            string headerLine = GetContextHeaderLine(context);
+            string headerLine = GetNodeHeaderLine(node, scopeType);
             if (!string.IsNullOrEmpty(headerLine))
             {
                 scopeInfo.HeaderText = headerLine.Trim();
@@ -351,84 +250,44 @@ namespace AppRefiner.TooltipProviders
         }
 
         /// <summary>
-        /// Gets the header line text for a context
+        /// Gets the header line text for a node
         /// </summary>
-        private string GetContextHeaderLine(ParserRuleContext context)
+        private string GetNodeHeaderLine(AstNode node, string scopeType)
         {
-            if (context == null || context.Start == null)
+            if (node == null || !node.SourceSpan.IsValid)
                 return string.Empty;
 
-            if (context is PeopleCode.PeopleCodeParser.GetterContext getterContext)
+            // Note: PropertyGetterNode and PropertySetterNode don't exist in self-hosted parser
+            // Property getters and setters are handled in VisitAppClass method instead
+            else if (node is IfStatementNode ifNode)
             {
-                // Getter implementation - use the first line of the context
-                return $"get {getterContext.genericID().GetText()}";
+                return $"If {ifNode.Condition?.ToString() ?? ""}";
             }
-            else if (context is PeopleCode.PeopleCodeParser.SetterContext setterContext)
+            else if (node is ForStatementNode forNode)
             {
-                // Setter implementation - use the first line of the context
-                return $"set {setterContext.genericID().GetText()}";
+                return $"For {forNode.Variable} = {forNode.FromValue} To {forNode.ToValue}";
             }
-
-            // Handle different context types to capture the complete header
-            if (context is PeopleCode.PeopleCodeParser.IfStatementContext ifContext)
+            else if (node is WhileStatementNode whileNode)
             {
-                var expression = ifContext.expression();
-
-                var expressionLines = expression.GetText().Split(new[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries)
-                    .Select(line => line.Trim())
-                    .ToArray();
-
-                var expressionText = string.Join(" ", expressionLines);
-
-                return $"{ifContext.IF().GetText()} {expressionText}";
+                return $"While {whileNode.Condition?.ToString() ?? ""}";
             }
-            else if (context is PeopleCode.PeopleCodeParser.ForStatementContext forContext)
+            else if (node is EvaluateStatementNode evalNode)
             {
-                // For statements include the variable, range, and step
-                /* FOR USER_VARIABLE EQ expression TO expression (STEP expression)? SEMI* statementBlock? END_FOR*/
-
-                var variable = forContext.USER_VARIABLE().GetText();
-                var range = forContext.expression(0).GetText();
-                var to = forContext.TO().GetText();
-                var step = forContext.STEP() != null ? forContext.STEP().GetText() : string.Empty;
-                var stepExpression = forContext.expression(1)?.GetText() ?? string.Empty;
-                var stepText = string.IsNullOrEmpty(step) ? string.Empty : $"{step} {stepExpression}";
-                var forText = $"{forContext.FOR().GetText()} {variable} {forContext.EQ().GetText()} {range} {to} {stepText}".Trim();
-                return forText;
+                return $"Evaluate {evalNode.Expression?.ToString() ?? ""}";
             }
-            else if (context is PeopleCode.PeopleCodeParser.WhileStatementContext whileContext)
+            else if (node is MethodNode methodNode)
             {
-                var expressionLines = whileContext.expression().GetText().Split(new[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries)
-                    .Select(line => line.Trim())
-                    .ToArray();
-
-                var expressionText = string.Join(" ", expressionLines);
-                return $"{whileContext.WHILE().GetText()} {expressionText}";
-            }
-            else if (context is PeopleCode.PeopleCodeParser.EvaluateStatementContext evalContext)
-            {
-                // For Evaluate statements, we assume they're always one line
-                return $"{evalContext.EVALUATE().GetText()} {evalContext.expression().GetText()}";
-            }
-            else if (context is PeopleCode.PeopleCodeParser.MethodContext methodContext)
-            {
-                // Get the first line of the method declaration (the METHOD keyword line)
-                int lineIndex = context.Start.Line - 1;
-                if (lineIndex < 0)
-                    return string.Empty;
-
-                var methodName = methodContext.genericID().GetText().Trim();
-                var methodLine = $"{methodContext.METHOD().GetText().Trim()} {methodName}";
+                var methodName = methodNode.Name;
+                var methodLine = $"Method {methodName}";
 
                 // Check if we have parameter information for this method
                 if (!string.IsNullOrEmpty(methodName) && methodParameterMap.TryGetValue(methodName, out var parameters))
                 {
-                    // If we found parameters, append them to the method name
                     methodLine += $"({parameters})";
                 }
                 else
                 {
-                    methodLine += $"()";
+                    methodLine += "()";
                 }
 
                 // Check if we have a return type
@@ -438,51 +297,33 @@ namespace AppRefiner.TooltipProviders
                 }
 
                 return methodLine;
-
             }
-            else if (context is PeopleCode.PeopleCodeParser.FunctionDefinitionContext funcContext)
+            else if (node is FunctionNode funcNode)
             {
-                // Get the first line of the function declaration (the FUNCTION keyword line)
-                int lineIndex = context.Start.Line - 1;
-                if (lineIndex < 0)
-                    return string.Empty;
-                var functionLine = $"{funcContext.FUNCTION().GetText()} {funcContext.allowableFunctionName().GetText()}";
+                var functionLine = $"Function {funcNode.Name}";
 
-                if (funcContext.functionArguments() is PeopleCode.PeopleCodeParser.FunctionArgumentsContext argsContext)
+                // Add parameters
+                var parameters = new List<string>();
+                foreach (var param in funcNode.Parameters)
                 {
-                    var parameters = new List<string>();
-                    foreach (var arg in argsContext.functionArgument())
-                    {
-                        // Extract parameter name and type
-                        string paramName = arg.USER_VARIABLE().GetText();
-                        if (arg.typeT() is PeopleCode.PeopleCodeParser.ArrayTypeContext array)
-                        {
-                            var arrayDim = array.ARRAY().Count();
-                            parameters.Add($"{paramName} as Array{arrayDim} of {array.typeT().GetText().Trim()}");
-                        }
-                        else
-                        {
-                            string paramType = arg.typeT().GetText();
-                            parameters.Add($"{paramName} as {paramType}");
-                        }
-                    }
-                    functionLine += $"({string.Join(", ", parameters)})";
+                    string paramType = param.Type?.TypeName ?? "any";
+                    parameters.Add($"{param.Name} as {paramType}");
                 }
+                functionLine += $"({string.Join(", ", parameters)})";
 
-                if (funcContext.RETURNS() != null)
+                // Add return type if present
+                if (funcNode.ReturnType != null)
                 {
-                    functionLine += $" returns {funcContext.typeT().GetText().Trim()}";
+                    functionLine += $" returns {funcNode.ReturnType.TypeName}";
                 }
 
                 return functionLine;
             }
             else
             {
-
-                return context.GetText().Trim();
+                return $"{scopeType} statement";
             }
         }
-
 
         /// <summary>
         /// Attempts to get a tooltip for the current position in the editor.
@@ -492,14 +333,8 @@ namespace AppRefiner.TooltipProviders
             if (editor == null || !editor.IsValid())
                 return null;
 
-
             // Always use the provided line number from the base class
             if (LineNumber <= 0)
-                return null;
-
-            // Check if the cursor is at the beginning of a line by checking if it's inside or adjacent to
-            // a first token on a line
-            if (!IsPositionAtFirstToken(position))
                 return null;
 
             // Check if we have any scopes containing our target line
@@ -508,8 +343,8 @@ namespace AppRefiner.TooltipProviders
 
             // Skip scopes that start on the current line
             var relevantScopes = containingScopes
-            .Where(s => s.StartLine != LineNumber)
-            .ToList();
+                .Where(s => s.StartLine != LineNumber)
+                .ToList();
 
             // No scopes to display
             if (relevantScopes.Count == 0)
@@ -517,16 +352,16 @@ namespace AppRefiner.TooltipProviders
 
             // First sort by scope type (methods/functions first), then by nesting level
             var methodScopes = relevantScopes
-            .Where(s => s.ScopeType.Equals("method", StringComparison.OrdinalIgnoreCase) ||
-                        s.ScopeType.Equals("function", StringComparison.OrdinalIgnoreCase))
-            .OrderBy(s => s.StartLine)
-            .ToList();
+                .Where(s => s.ScopeType.Equals("method", StringComparison.OrdinalIgnoreCase) ||
+                            s.ScopeType.Equals("function", StringComparison.OrdinalIgnoreCase))
+                .OrderBy(s => s.StartLine)
+                .ToList();
 
             // Then get all control flow scopes
             var controlScopes = relevantScopes
-            .Where(s => !s.ScopeType.Equals("method", StringComparison.OrdinalIgnoreCase) &&
-                        !s.ScopeType.Equals("function", StringComparison.OrdinalIgnoreCase))
-            .ToList();
+                .Where(s => !s.ScopeType.Equals("method", StringComparison.OrdinalIgnoreCase) &&
+                            !s.ScopeType.Equals("function", StringComparison.OrdinalIgnoreCase))
+                .ToList();
 
             // Process Else blocks to reorganize them after their parent If blocks
             var processedControlScopes = ReorganizeControlScopes(controlScopes);
@@ -630,27 +465,6 @@ namespace AppRefiner.TooltipProviders
         }
 
         /// <summary>
-        /// Checks if the given position is at or near a first token on a line
-        /// </summary>
-        private bool IsPositionAtFirstToken(int position)
-        {
-            // If we're in an empty file or have no first tokens, return false
-            if (firstTokensOnLine.Count == 0 || LineNumber <= 0)
-                return false;
-
-            // Since we only tracked tokens up to the target line, we should
-            // only have one relevant token to check - the first token on the current line
-            if (firstTokensOnLine.TryGetValue(LineNumber, out var firstToken))
-            {
-                // Check if position is at or before the first non-whitespace token
-                return (position >= firstToken.ByteStartIndex() && position <= firstToken.ByteStopIndex() + 1);
-            }
-
-
-            return false;
-        }
-
-        /// <summary>
         /// Stores information about a scope for generating tooltips
         /// </summary>
         private class ScopeInfo
@@ -659,7 +473,7 @@ namespace AppRefiner.TooltipProviders
             public int StartLine { get; set; }
             public int EndLine { get; set; }
             public string HeaderText { get; set; } = "";
-            public ParserRuleContext? Context { get; set; }
+            public AstNode? Context { get; set; }
 
             /// <summary>
             /// For Else blocks, stores the start line of the parent If statement

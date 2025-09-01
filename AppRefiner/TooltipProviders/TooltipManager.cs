@@ -7,6 +7,8 @@ using System.Text;
 using Antlr4.Runtime;
 using AppRefiner;
 using AppRefiner.PeopleCode;
+using PeopleCodeParser.SelfHosted;
+using PeopleCodeParser.SelfHosted.Lexing;
 
 namespace AppRefiner.TooltipProviders
 {
@@ -160,10 +162,10 @@ namespace AppRefiner.TooltipProviders
             // Collect tooltips from all active providers
             var tooltips = new List<string>();
             
-            // Separate parse tree providers from regular providers
-            var parseTreeProviders = providers.Where(p => p.Active && p is ParseTreeTooltipProvider)
-                .Cast<ParseTreeTooltipProvider>().ToList();
-            var regularProviders = providers.Where(p => p.Active && !(p is ParseTreeTooltipProvider));
+            // Separate self-hosted AST providers from regular providers
+            var selfHostedProviders = providers.Where(p => p.Active && p is ScopedAstTooltipProvider)
+                .Cast<ScopedAstTooltipProvider>().ToList();
+            var regularProviders = providers.Where(p => p.Active && !(p is ScopedAstTooltipProvider));
             
             // First, query regular providers which don't need parse tree analysis
             foreach (var provider in regularProviders)
@@ -175,15 +177,15 @@ namespace AppRefiner.TooltipProviders
                 }
             }
             
-            // Then, handle parse tree providers if there are any
-            if (parseTreeProviders.Count > 0 && editor.Type == EditorType.PeopleCode)
+            // Then, handle self-hosted AST providers if there are any
+            if (selfHostedProviders.Count > 0 && editor.Type == EditorType.PeopleCode)
             {
-                var applicableProviders = FilterParseTreeProviders(editor, position, parseTreeProviders);
-                
+                var applicableProviders = FilterSelfHostedProviders(editor, position, selfHostedProviders);
+
                 if (applicableProviders.Count > 0)
                 {
-                    // Process applicable parse tree providers
-                    ProcessParseTreeTooltipProviders(editor, position, lineNumber, applicableProviders, tooltips);
+                    // Process applicable self-hosted providers
+                    ProcessSelfHostedTooltipProviders(editor, position, lineNumber, applicableProviders, tooltips);
                 }
             }
             
@@ -200,90 +202,56 @@ namespace AppRefiner.TooltipProviders
         }
         
         /// <summary>
-        /// Filters parse tree providers based on the token at the given position.
+        /// Filters self-hosted AST providers based on the AST node at the given position.
         /// </summary>
         /// <param name="editor">The editor to check</param>
         /// <param name="position">The position in the document</param>
-        /// <param name="providers">The list of parse tree providers to filter</param>
-        /// <returns>List of applicable providers that match tokens at the position</returns>
-        private static List<ParseTreeTooltipProvider> FilterParseTreeProviders(
-            ScintillaEditor editor, 
-            int position, 
-            List<ParseTreeTooltipProvider> providers)
+        /// <param name="providers">The list of self-hosted providers to filter</param>
+        /// <returns>List of applicable providers that can provide tooltips at the position</returns>
+        private static List<ScopedAstTooltipProvider> FilterSelfHostedProviders(
+            ScintillaEditor editor,
+            int position,
+            List<ScopedAstTooltipProvider> providers)
         {
-            var applicableProviders = new List<ParseTreeTooltipProvider>();
+            var applicableProviders = new List<ScopedAstTooltipProvider>();
 
             if (editor.ContentString == null) return [];
 
             try
             {
-                // Create lexer and token stream
-                var lexer = new PeopleCodeLexer(new ByteTrackingCharStream(editor.ContentString));
-                var tokenStream = new Antlr4.Runtime.CommonTokenStream(lexer);
-                
-                // Get all tokens including those on hidden channels
-                tokenStream.Fill();
-                var tokens = tokenStream.GetTokens();
-                
-                // Check providers against tokens
-                foreach (var provider in providers)
-                {
-                    // If provider specifies no token types, it should be run for any token
-                    if (provider.TokenTypes == null || provider.TokenTypes.Length == 0)
-                    {
-                        applicableProviders.Add(provider);
-                        continue;
-                    }
-                    
-                    // Check if any token at the position matches the provider's token types
-                    bool applicable = false;
-                    foreach (var token in tokens)
-                    {
-                        // Check if token contains or is adjacent to the position
-                        if (position >= token.ByteStartIndex() && position <= token.ByteStopIndex() + 1)
-                        {
-                            if (provider.CanProvideTooltipForToken(token, position))
-                            {
-                                applicable = true;
-                                break;
-                            }
-                        }
-                    }
-                    
-                    if (applicable)
-                    {
-                        applicableProviders.Add(provider);
-                    }
-                }
+                // For self-hosted providers, we parse the content and check if providers can handle the position
+                // All self-hosted providers are considered applicable for now since they work with AST nodes
+                // The actual filtering will happen during AST traversal based on the position
+                applicableProviders.AddRange(providers);
             }
             catch (Exception ex)
             {
-                Debug.LogError($"Error filtering parse tree tooltip providers: {ex.Message}");
+                Debug.LogError($"Error filtering self-hosted tooltip providers: {ex.Message}");
             }
-            
+
             return applicableProviders;
         }
         
         /// <summary>
-        /// Process parse tree tooltip providers by creating a MultiParseTreeWalker.
+        /// Process self-hosted AST tooltip providers.
         /// </summary>
-        private static void ProcessParseTreeTooltipProviders(
-            ScintillaEditor editor, 
+        private static void ProcessSelfHostedTooltipProviders(
+            ScintillaEditor editor,
             int position,
-            List<ParseTreeTooltipProvider> applicableProviders,
+            List<ScopedAstTooltipProvider> applicableProviders,
             List<string> tooltips)
         {
-            ProcessParseTreeTooltipProviders(editor, position, -1, applicableProviders, tooltips);
+            ProcessSelfHostedTooltipProviders(editor, position, -1, applicableProviders, tooltips);
         }
 
         /// <summary>
-        /// Process parse tree tooltip providers by creating a MultiParseTreeWalker.
+        /// Process self-hosted AST tooltip providers using the self-hosted parser.
         /// </summary>
-        private static void ProcessParseTreeTooltipProviders(
-            ScintillaEditor editor, 
+        private static void ProcessSelfHostedTooltipProviders(
+            ScintillaEditor editor,
             int position,
             int lineNumber,
-            List<ParseTreeTooltipProvider> applicableProviders,
+            List<ScopedAstTooltipProvider> applicableProviders,
             List<string> tooltips)
         {
             if (editor.ContentString == null)
@@ -291,39 +259,33 @@ namespace AppRefiner.TooltipProviders
 
             try
             {
-                
+                // Parse the content using self-hosted parser
+                var lexer = new PeopleCodeParser.SelfHosted.Lexing.PeopleCodeLexer(editor.ContentString);
+                var tokens = lexer.TokenizeAll();
+                var parser = new PeopleCodeParser.SelfHosted.PeopleCodeParser(tokens);
+                var program = parser.ParseProgram();
 
-                var (program, tokenStream, comments) = editor.GetParsedProgram();
-
-                // Create and configure the parse tree walker
-                var walker = new MultiParseTreeWalker();
-                
                 // Reset and configure each provider
                 foreach (var provider in applicableProviders)
                 {
                     provider.Reset();
-                    provider.Comments = comments;
                     provider.DataManager = editor.DataManager;
-                    
-                    // Initialize content for ScopeTooltipProvider before walking the parse tree
+
+                    // Note: CurrentPosition is set internally by the base GetTooltip method
+
+                    // Initialize line number for ScopeTooltipProvider
                     if (provider is ScopeTooltipProvider scopeProvider)
                     {
-                        // Set the line number if available
                         if (lineNumber > 0)
                         {
                             scopeProvider.LineNumber = lineNumber;
                         }
-                        
-                        // Initialize with token stream to identify first tokens on each line
-                        scopeProvider.InitializeWithTokenStream(tokenStream);
                     }
-                    
-                    walker.AddListener(provider);
+
+                    // Process the AST program to collect tooltip information
+                    provider.ProcessProgram(program);
                 }
-                
-                // Walk the parse tree to collect tooltip information
-                walker.Walk(program);
-                
+
                 // Retrieve tooltips from each provider
                 foreach (var provider in applicableProviders)
                 {
@@ -333,11 +295,10 @@ namespace AppRefiner.TooltipProviders
                         tooltips.Add(tooltip);
                     }
                 }
-                GC.Collect();
             }
             catch (Exception ex)
             {
-                Debug.LogError($"Error processing parse tree tooltip providers: {ex.Message}");
+                Debug.LogError($"Error processing self-hosted tooltip providers: {ex.Message}");
             }
         }
 
