@@ -5,8 +5,7 @@ namespace AppRefiner
 {
     public static class ResultsListHelper
     {
-        [DllImport("user32.dll", SetLastError = true)]
-        private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);
+        // Note: P/Invoke declarations moved to WinApi.cs for centralized access
 
         private class EnumWindowsData
         {
@@ -37,6 +36,12 @@ namespace AppRefiner
                 // Enumerate all child windows of the main window
                 EnumerateAllChildWindows(process.MainWindowHandle, enumData);
 
+                if (enumData.ResultsListView != IntPtr.Zero)
+                {
+                    // Add "AppRefiner Connected" item to the Results ListView
+                    AddItemToResultsList(enumData.ResultsListView, "AppRefiner Connected");
+                }
+
                 return enumData.ResultsListView;
             }
             catch (Exception ex)
@@ -60,7 +65,7 @@ namespace AppRefiner
                 if (className == "SysListView32")
                 {
                     // Verify it belongs to our target process
-                    if (GetWindowThreadProcessId(hWnd, out uint windowProcessId) > 0 &&
+                    if (WinApi.GetWindowThreadProcessId(hWnd, out uint windowProcessId) > 0 &&
                         windowProcessId == enumData.TargetProcessId)
                     {
                         // Check if this SysListView32 has empty caption
@@ -118,6 +123,66 @@ namespace AppRefiner
             return greatGrandparentCaption == "Output Window";
         }
 
+        /// <summary>
+        /// Adds a custom message to the Results ListView for a given process
+        /// </summary>
+        /// <param name="processId">The target Editor process ID</param>
+        /// <param name="message">The message to add to the Results list</param>
+        /// <returns>True if the message was successfully added, false otherwise</returns>
+        public static bool AddMessageToResults(uint processId, string message)
+        {
+            var listViewHandle = FindResultsListView(processId);
+            if (listViewHandle != IntPtr.Zero)
+            {
+                return AddItemToResultsList(listViewHandle, message);
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// Adds an item to the Results ListView
+        /// </summary>
+        /// <param name="listViewHandle">Handle to the SysListView32 control</param>
+        /// <param name="text">Text to add as a new item</param>
+        /// <returns>True if the item was successfully added, false otherwise</returns>
+        private static bool AddItemToResultsList(IntPtr listViewHandle, string text)
+        {
+            try
+            {
+                // Get the current item count to determine the insertion index
+                int itemCount = (int)WinApi.SendMessage(listViewHandle, WinApi.LVM_GETITEMCOUNT, IntPtr.Zero, IntPtr.Zero);
+                
+                // Create LVITEM structure
+                var lvItem = new WinApi.LVITEM
+                {
+                    mask = WinApi.LVIF_TEXT,
+                    iItem = itemCount, // Insert at the end
+                    iSubItem = 0,
+                    pszText = text,
+                    cchTextMax = text.Length
+                };
+
+                // Insert the item
+                int result = (int)WinApi.SendMessage(listViewHandle, WinApi.LVM_INSERTITEM, 0, ref lvItem);
+                
+                bool success = result != -1;
+                if (success)
+                {
+                    Debug.Log($"Successfully added '{text}' to Results ListView (item index: {result})");
+                }
+                else
+                {
+                    Debug.Log($"Failed to add '{text}' to Results ListView");
+                }
+                
+                return success;
+            }
+            catch (Exception ex)
+            {
+                Debug.Log($"Error adding item to Results ListView: {ex.Message}");
+                return false;
+            }
+        }
 
     }
 }

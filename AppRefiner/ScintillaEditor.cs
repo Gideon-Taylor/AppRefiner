@@ -1,4 +1,5 @@
 ﻿using AppRefiner.Database;
+using AppRefiner.Dialogs;
 using AppRefiner.Linters;
 using AppRefiner.Stylers;
 using PeopleCodeParser.SelfHosted;
@@ -122,12 +123,7 @@ namespace AppRefiner
 
     public class ScintillaEditor
     {
-        [DllImport("user32.dll", CharSet = CharSet.Auto)]
-        private static extern IntPtr SendMessage(IntPtr hWnd, int Msg, IntPtr wParam, IntPtr lParam);
-
-        [DllImport("user32.dll")]
-        [return: MarshalAs(UnmanagedType.Bool)]
-        static extern bool IsWindow(IntPtr hWnd);
+        // Note: P/Invoke declarations moved to WinApi.cs for centralized access
 
         public IntPtr hWnd;
         public IntPtr hProc;
@@ -136,9 +132,10 @@ namespace AppRefiner
         public EventMapInfo? EventMapInfo = null;
         public string ClassPath = string.Empty;
         private string? _caption = null;
-
+        public bool ExpectingSavePoint { get; set; }
         public event CaptionChangedEventHandler? CaptionChanged;
         public IntPtr ResultsListView;
+        public BetterFindDialog? ActiveSearchDialog;
         protected virtual void OnCaptionChanged(CaptionChangedEventArgs e)
         {
             CaptionChanged?.Invoke(this, e);
@@ -292,6 +289,7 @@ namespace AppRefiner
         public List<List<int>> CollapsedFoldPaths { get; set; } = [];
 
         public IReadOnlyList<ParseError> ParserErrors { get; set; } = [];
+        internal AppDesignerProcess AppDesignerProcess { get; set; }
 
 
 
@@ -463,22 +461,22 @@ namespace AppRefiner
             }
         }
 
-        public ScintillaEditor(IntPtr hWnd, uint procID, uint threadID, string caption)
+        public ScintillaEditor(AppDesignerProcess appProc, IntPtr hWnd, uint procID, uint threadID, string caption)
         {
             this.hWnd = hWnd;
 
             PopulateEditorDBName();
-
+            AppDesignerProcess = appProc;
             ProcessId = procID;
             ThreadID = threadID;
             Caption = caption;
-
+            AppDesignerProcess = null;
         }
 
         public IntPtr SendMessage(int Msg, IntPtr wParam, IntPtr lParam)
         {
             //Debug.Log($"Sending message {Msg} to {hWnd:X} - {wParam:X} -- {lParam:X}");
-            return SendMessage(hWnd, Msg, wParam, lParam);
+            return WinApi.SendMessage(hWnd, Msg, wParam, lParam);
         }
 
         public void SetLinterReports(List<Report> reports)
@@ -503,7 +501,7 @@ namespace AppRefiner
 
         public bool IsValid()
         {
-            return IsWindow(hWnd);
+            return WinApi.IsWindow(hWnd);
         }
 
         /// <summary>
@@ -519,7 +517,7 @@ namespace AppRefiner
             while (hwnd != IntPtr.Zero)
             {
                 StringBuilder caption = new(256);
-                NativeMethods.GetWindowText(hwnd, caption, caption.Capacity); // Use NativeMethods
+                WinApi.GetWindowText(hwnd, caption, caption.Capacity);
                 string windowTitle = caption.ToString();
 
                 // Check if this is the Application Designer window
@@ -538,7 +536,7 @@ namespace AppRefiner
                 }
 
                 // Get the parent window
-                hwnd = NativeMethods.GetParent(hwnd); // Use NativeMethods
+                hwnd = WinApi.GetParent(hwnd);
             }
         }
 
@@ -620,14 +618,14 @@ namespace AppRefiner
                 IntPtr hwnd = this.hWnd;
 
                 // Get the grandparent window to examine its caption
-                IntPtr parentHwnd = NativeMethods.GetParent(hwnd); // Use NativeMethods
+                IntPtr parentHwnd = WinApi.GetParent(hwnd);
                 if (parentHwnd != IntPtr.Zero)
                 {
-                    IntPtr grandparentHwnd = NativeMethods.GetParent(parentHwnd); // Use NativeMethods
+                    IntPtr grandparentHwnd = WinApi.GetParent(parentHwnd);
                     if (grandparentHwnd != IntPtr.Zero)
                     {
                         StringBuilder caption = new(512);
-                        NativeMethods.GetWindowText(grandparentHwnd, caption, caption.Capacity); // Use NativeMethods
+                        WinApi.GetWindowText(grandparentHwnd, caption, caption.Capacity);
                         string windowTitle = caption.ToString().Trim();
 
                         Debug.Log($"Editor grandparent window title: {windowTitle}");
@@ -824,5 +822,42 @@ namespace AppRefiner
             return cssPath;
         }
 
+        public void Cleanup()
+        {
+            /* Free all annotation strings */
+            foreach (var v in AnnotationPointers.Values)
+            {
+                if (v != IntPtr.Zero)
+                {
+                    WinApi.VirtualFreeEx(hProc, v, 0, WinApi.MEM_RELEASE);
+                }
+            }
+            foreach (var v in PropertyBuffers)
+            {
+                if (v != IntPtr.Zero)
+                {
+                    WinApi.VirtualFreeEx(hProc, v, 0, WinApi.MEM_RELEASE);
+                }
+            }
+
+            // Free autocompletion pointer if exists
+            if (AutoCompletionPointer != IntPtr.Zero)
+            {
+                WinApi.VirtualFreeEx(hProc, AutoCompletionPointer, 0, WinApi.MEM_RELEASE);
+                AutoCompletionPointer = IntPtr.Zero;
+            }
+
+            // Free user list pointer if exists
+            if (UserListPointer != IntPtr.Zero)
+            {
+                WinApi.VirtualFreeEx(hProc, UserListPointer, 0, WinApi.MEM_RELEASE);
+                UserListPointer = IntPtr.Zero;
+            }
+
+            AnnotationPointers.Clear();
+            PropertyBuffers.Clear();
+            Caption = null;
+            ContentString = null;
+        }
     }
 }

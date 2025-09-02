@@ -197,7 +197,7 @@ namespace AppRefiner.Events
                 int charCount = openTarget.Length;
                 uint bufferSize = (uint)(charCount + 1) * 2; // +1 for null terminator, *2 for wide chars
 
-                IntPtr remoteBuffer = ScintillaManager.GetStandaloneProcessBuffer(editor, bufferSize);
+                IntPtr remoteBuffer = editor.AppDesignerProcess.GetStandaloneProcessBuffer(bufferSize);
                 if (remoteBuffer == IntPtr.Zero)
                 {
                     return false;
@@ -207,7 +207,7 @@ namespace AppRefiner.Events
                 bool writeSuccess = ScintillaManager.WriteWideStringToProcess(editor, remoteBuffer, openTarget);
                 if (!writeSuccess)
                 {
-                    ScintillaManager.FreeStandaloneProcessBuffer(editor, remoteBuffer);
+                    editor.AppDesignerProcess.FreeStandaloneProcessBuffer(remoteBuffer);
                     return false;
                 }
 
@@ -224,14 +224,14 @@ namespace AppRefiner.Events
                     bool doubleClickSuccess = SendMessage(resultsListView, WM_LBUTTONDBLCLK, MK_LBUTTON, lParam) > 0;
 
                     // Free the buffer after use
-                    ScintillaManager.FreeStandaloneProcessBuffer(editor, remoteBuffer);
+                    editor.AppDesignerProcess.FreeStandaloneProcessBuffer(remoteBuffer);
 
                     return doubleClickSuccess;
                 }
                 else
                 {
                     // Free the buffer if set target failed
-                    ScintillaManager.FreeStandaloneProcessBuffer(editor, remoteBuffer);
+                    editor.AppDesignerProcess.FreeStandaloneProcessBuffer(remoteBuffer);
                     return false;
                 }
             }

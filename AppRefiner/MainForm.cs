@@ -28,7 +28,7 @@ namespace AppRefiner
         private RefactorManager? refactorManager; // Added RefactorManager
         private SettingsService? settingsService; // Added SettingsService
         private ScintillaEditor? activeEditor = null;
-
+        private Dictionary<uint, AppDesignerProcess> AppDesignerProcesses = [];
         /// <summary>
         /// Gets the currently active editor
         /// </summary>
@@ -1322,10 +1322,17 @@ namespace AppRefiner
                 // This is a different editor or we didn't have one before
                 try
                 {
-                    var editor = ScintillaManager.GetEditor(hwnd);
-                    activeEditor = editor;
+                    WinApi.GetWindowThreadProcessId(hwnd, out uint pid);
 
-                    return editor;
+                    if (AppDesignerProcesses.TryGetValue(pid, out var process))
+                    {
+                        return process.GetOrInitEditor(hwnd);
+                    } else
+                    {
+                        var newProcess = new AppDesignerProcess(pid);
+                        AppDesignerProcesses.Add(pid, newProcess);
+                        return newProcess.GetOrInitEditor(hwnd);
+                    }
                 }
                 catch (Exception ex)
                 {
@@ -1970,7 +1977,7 @@ namespace AppRefiner
 
             if (!editor.IsValid())
             {
-                ScintillaManager.CleanupEditor(editor);
+                editor.Cleanup();
                 return;
             }
 
@@ -2207,12 +2214,12 @@ namespace AppRefiner
 
 
                         Debug.Log($"Processing debounced SAVEPOINTREACHED for {editorToSave.RelativePath}");
-                        lock (ScintillaManager.editorsExpectingSavePoint)
+                        lock (editorToSave)
                         {
-                            if (ScintillaManager.editorsExpectingSavePoint.Contains(editorToSave.hWnd))
+                            if (editorToSave.ExpectingSavePoint)
                             {
                                 // Remove the editor from the list of expecting save points
-                                ScintillaManager.editorsExpectingSavePoint.Remove(editorToSave.hWnd);
+                                editorToSave.ExpectingSavePoint = false;
                                 return;
                             }
                         }
