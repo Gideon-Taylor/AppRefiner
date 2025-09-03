@@ -1,8 +1,7 @@
 using ParserComparison.Models;
 using ParserComparison.Tests;
 using ParserComparison.Utils;
-using PeopleCodeParser.SelfHosted.Visitors.Examples;
-using SharpCompress.Common;
+using System.Diagnostics;
 
 namespace ParserComparison;
 
@@ -24,22 +23,11 @@ class Program
 
             if (!string.IsNullOrEmpty(config.SingleFilePath))
             {
-                RunSingleFileTest(config.SingleFilePath);
+                RunSingleFileTest(config);
             }
             else if (!string.IsNullOrEmpty(config.DirectoryPath))
             {
-                if (config.SelfHostedOnlyMode)
-                {
-                    RunSelfHostedOnlyBulkTest(config);
-                }
-                else if (config.AntlrOnlyMode)
-                {
-                    RunAntlrOnlyBulkTest(config);
-                }
-                else
-                {
-                    RunBulkDirectoryTest(config);
-                }
+                RunBulkDirectoryTest(config);
             }
             else
             {
@@ -99,17 +87,15 @@ class Program
                         config.ProgressInterval = interval;
                     break;
                 
-                case "--self-hosted-only":
-                    config.SelfHostedOnlyMode = true;
-                    break;
-                
-                case "--antlr-only":
-                    config.AntlrOnlyMode = true;
-                    break;
+
                 
                 case "--failed-dir":
                     if (i + 1 < args.Length)
                         config.FailedFilesDirectory = args[++i];
+                    break;
+
+                case "--debug-on-error":
+                    config.DebugOnError = true;
                     break;
                 
                 case "-h":
@@ -121,11 +107,11 @@ class Program
         return config;
     }
 
-    private static void RunSingleFileTest(string filePath)
+    private static void RunSingleFileTest(TestConfiguration config)
     {
-        var result = SingleFileTest.RunTest(filePath);
-        
-        if (!result.BothSuccessful)
+        var result = SingleFileTest.RunTest(config.SingleFilePath!, config.DebugOnError);
+
+        if (!result.SelfHostedResult.Success)
         {
             Environment.ExitCode = 1;
         }
@@ -134,7 +120,7 @@ class Program
     private static void RunBulkDirectoryTest(TestConfiguration config)
     {
         var results = BulkDirectoryTest.RunTest(config);
-        
+
         var failures = results.Where(r => !r.SelfHostedResult.Success).ToList();
         if (failures.Any())
         {
@@ -153,41 +139,33 @@ class Program
         }
     }
 
-    private static void RunAntlrOnlyBulkTest(TestConfiguration config)
-    {
-        var results = AntlrOnlyBulkTest.RunTest(config);
-        
-        var failures = results.Where(r => !r.AntlrResult.Success).ToList();
-        if (failures.Any())
-        {
-            Environment.ExitCode = 1;
-        }
-    }
+
+
+
 
     private static void ShowUsage()
     {
         Console.WriteLine("Usage:");
         Console.WriteLine("  ParserComparison -f <file-path>              # Test single file");
-        Console.WriteLine("  ParserComparison -d <directory-path>         # Test all .pcode files in directory");
+        Console.WriteLine("  ParserComparison -d <directory-path>         # Test all .pcode files in directory (self-hosted parser only)");
         Console.WriteLine();
         Console.WriteLine("Options:");
         Console.WriteLine("  -f, --file <path>         Parse a single .pcode file");
         Console.WriteLine("  -d, --directory <path>    Parse all .pcode files in directory (recursive)");
         Console.WriteLine("  -v, --verbose             Show progress during bulk testing");
-        Console.WriteLine("  --continue-on-error       Continue parsing even if self-hosted parser fails");
+        Console.WriteLine("  --continue-on-error       Continue parsing even if parser fails");
         Console.WriteLine("  --max-files <n>           Limit number of files to process in bulk test");
         Console.WriteLine("  --no-memory               Skip memory usage analysis");
         Console.WriteLine("  --progress-interval <n>   Show status every n files (default: 1000)");
-        Console.WriteLine("  --self-hosted-only        Run only self-hosted parser and copy failed files");
-        Console.WriteLine("  --antlr-only              Run only ANTLR parser and copy failed files");
         Console.WriteLine("  --failed-dir <path>       Directory for failed files (default: 'failed')");
+        Console.WriteLine("  --debug-on-error          Enable interactive debugging when parsing fails");
         Console.WriteLine("  -h, --help                Show this help message");
         Console.WriteLine();
         Console.WriteLine("Examples:");
         Console.WriteLine("  ParserComparison -f \"C:\\code\\sample.pcode\"");
         Console.WriteLine("  ParserComparison -d \"C:\\PeopleCode\\\" -v");
         Console.WriteLine("  ParserComparison -d \"C:\\PeopleCode\\\" --max-files 100 --continue-on-error");
-        Console.WriteLine("  ParserComparison -d \"C:\\PeopleCode\\\" --self-hosted-only --failed-dir errors");
-        Console.WriteLine("  ParserComparison -d \"C:\\PeopleCode\\\" --antlr-only --failed-dir errors");
+        Console.WriteLine("  ParserComparison -d \"C:\\PeopleCode\\\" --debug-on-error");
+        Console.WriteLine("  ParserComparison -d \"C:\\PeopleCode\\\" --failed-dir errors");
     }
 }

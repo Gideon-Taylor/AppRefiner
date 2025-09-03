@@ -36,12 +36,6 @@ namespace AppRefiner
                 // Enumerate all child windows of the main window
                 EnumerateAllChildWindows(process.MainWindowHandle, enumData);
 
-                if (enumData.ResultsListView != IntPtr.Zero)
-                {
-                    // Add "AppRefiner Connected" item to the Results ListView
-                    AddItemToResultsList(enumData.ResultsListView, "AppRefiner Connected");
-                }
-
                 return enumData.ResultsListView;
             }
             catch (Exception ex)
@@ -126,44 +120,135 @@ namespace AppRefiner
         /// <summary>
         /// Adds a custom message to the Results ListView for a given process
         /// </summary>
-        /// <param name="processId">The target Editor process ID</param>
+        /// <param name="process">The AppDesignerProcess instance for the target process</param>
         /// <param name="message">The message to add to the Results list</param>
         /// <returns>True if the message was successfully added, false otherwise</returns>
-        public static bool AddMessageToResults(uint processId, string message)
+        public static bool AddMessageToResults(AppDesignerProcess process, string message)
         {
-            var listViewHandle = FindResultsListView(processId);
+            var listViewHandle = FindResultsListView(process.ProcessId);
             if (listViewHandle != IntPtr.Zero)
             {
-                return AddItemToResultsList(listViewHandle, message);
+                return AddItemToResultsList(process, listViewHandle, message);
             }
             return false;
         }
 
         /// <summary>
-        /// Adds an item to the Results ListView
+        /// Adds a message to the Results ListView after a specified delay.
+        /// Useful for ensuring the Application Designer UI is fully loaded before showing connection messages.
         /// </summary>
+        /// <param name="process">The AppDesignerProcess instance for the target process</param>
+        /// <param name="listViewHandle">Handle to the SysListView32 control</param>
+        /// <param name="message">The message to add to the Results list</param>
+        /// <param name="delayMs">Delay in milliseconds before adding the message (default: 2000ms)</param>
+        /// <returns>Task that completes when the message has been added or the operation fails</returns>
+        public static async Task<bool> AddDelayedMessageToResultsList(AppDesignerProcess process, IntPtr listViewHandle, string message, int delayMs = 2000)
+        {
+            try
+            {
+                Debug.Log($"Scheduling delayed message '{message}' to Results ListView in {delayMs}ms");
+                await Task.Delay(delayMs);
+                
+                if (listViewHandle != IntPtr.Zero)
+                {
+                    return AddItemToResultsList(process, listViewHandle, message);
+                }
+                else
+                {
+                    Debug.Log($"Cannot add delayed message '{message}': ListView handle is zero");
+                    return false;
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.Log($"Error adding delayed message to Results ListView: {ex.Message}");
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Adds an item to the Results ListView using cross-process memory allocation
+        /// </summary>
+        /// <param name="process">The AppDesignerProcess instance for the target process</param>
         /// <param name="listViewHandle">Handle to the SysListView32 control</param>
         /// <param name="text">Text to add as a new item</param>
         /// <returns>True if the item was successfully added, false otherwise</returns>
-        private static bool AddItemToResultsList(IntPtr listViewHandle, string text)
+        private static bool AddItemToResultsList(AppDesignerProcess process, IntPtr listViewHandle, string text)
         {
             try
             {
                 // Get the current item count to determine the insertion index
                 int itemCount = (int)WinApi.SendMessage(listViewHandle, WinApi.LVM_GETITEMCOUNT, IntPtr.Zero, IntPtr.Zero);
                 
-                // Create LVITEM structure
+                // Allocate buffer in target process for the ANSI string
+                int charCount = text.Length;
+                uint bufferSize = (uint)(charCount + 1); // +1 for null terminator
+
+                IntPtr remoteTextBuffer = process.GetStandaloneProcessBuffer(bufferSize);
+                if (remoteTextBuffer == IntPtr.Zero)
+                {
+                    Debug.Log($"Failed to allocate remote buffer for text '{text}'");
+                    return false;
+                }
+
+                // Write the ANSI string to the remote buffer
+                byte[] textBytes = System.Text.Encoding.Default.GetBytes(text + '\0');
+                bool writeSuccess = WinApi.WriteProcessMemory(process.ProcessHandle, remoteTextBuffer, textBytes, (int)textBytes.Length, out _);
+                if (!writeSuccess)
+                {
+                    Debug.Log($"Failed to write text '{text}' to remote buffer");
+                    process.FreeStandaloneProcessBuffer(remoteTextBuffer);
+                    return false;
+                }
+
+                // Allocate buffer for LVITEM structure in target process
+                uint lvItemSize = (uint)Marshal.SizeOf<WinApi.LVITEM>();
+                IntPtr remoteLvItemBuffer = process.GetStandaloneProcessBuffer(lvItemSize);
+                if (remoteLvItemBuffer == IntPtr.Zero)
+                {
+                    Debug.Log($"Failed to allocate remote buffer for LVITEM structure");
+                    process.FreeStandaloneProcessBuffer(remoteTextBuffer);
+                    return false;
+                }
+
+                // Create LVITEM structure with remote text pointer
                 var lvItem = new WinApi.LVITEM
                 {
                     mask = WinApi.LVIF_TEXT,
                     iItem = itemCount, // Insert at the end
                     iSubItem = 0,
-                    pszText = text,
+                    pszText = remoteTextBuffer, // Point to remote buffer
                     cchTextMax = text.Length
                 };
 
-                // Insert the item
-                int result = (int)WinApi.SendMessage(listViewHandle, WinApi.LVM_INSERTITEM, 0, ref lvItem);
+                // Write LVITEM structure to remote buffer
+                IntPtr processHandle = process.ProcessHandle;
+                byte[] lvItemBytes = new byte[lvItemSize];
+                IntPtr lvItemPtr = Marshal.AllocHGlobal((int)lvItemSize);
+                
+                try
+                {
+                    Marshal.StructureToPtr(lvItem, lvItemPtr, false);
+                    Marshal.Copy(lvItemPtr, lvItemBytes, 0, (int)lvItemSize);
+                    
+                    bool writeStructSuccess = WinApi.WriteProcessMemory(processHandle, remoteLvItemBuffer, lvItemBytes, (int)lvItemSize, out _);
+                    if (!writeStructSuccess)
+                    {
+                        Debug.Log($"Failed to write LVITEM structure to remote buffer");
+                        return false;
+                    }
+                }
+                finally
+                {
+                    Marshal.FreeHGlobal(lvItemPtr);
+                }
+
+                // Insert the item using remote LVITEM buffer
+                int result = (int)WinApi.SendMessage(listViewHandle, WinApi.LVM_INSERTITEM, 0, remoteLvItemBuffer);
+                
+                // Free the allocated buffers
+                //process.FreeStandaloneProcessBuffer(remoteTextBuffer);
+               // process.FreeStandaloneProcessBuffer(remoteLvItemBuffer);
                 
                 bool success = result != -1;
                 if (success)

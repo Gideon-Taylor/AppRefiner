@@ -414,7 +414,6 @@ namespace AppRefiner.Dialogs
         private readonly Label headerLabel;
         private readonly DataGridView indicatorGrid;
         private readonly Button refreshButton;
-        private readonly Button exportButton;
         private readonly TextBox filterTextBox;
         private readonly ComboBox stylerFilterCombo;
         private readonly ComboBox typeFilterCombo;
@@ -436,7 +435,6 @@ namespace AppRefiner.Dialogs
             this.headerLabel = new Label();
             this.indicatorGrid = new DataGridView();
             this.refreshButton = new Button();
-            this.exportButton = new Button();
             this.filterTextBox = new TextBox();
             this.stylerFilterCombo = new ComboBox();
             this.typeFilterCombo = new ComboBox();
@@ -623,65 +621,6 @@ namespace AppRefiner.Dialogs
             }
         }
 
-        private void ExportIndicatorData()
-        {
-            using SaveFileDialog saveFileDialog = new();
-            saveFileDialog.Filter = "CSV files (*.csv)|*.csv|Text files (*.txt)|*.txt|All files (*.*)|*.*";
-            saveFileDialog.DefaultExt = "csv";
-            saveFileDialog.FileName = $"AppRefiner_Indicators_{DateTime.Now:yyyyMMdd_HHmmss}.csv";
-
-            if (saveFileDialog.ShowDialog() == DialogResult.OK)
-            {
-                try
-                {
-                    StringBuilder sb = new();
-
-                    // Header
-                    sb.AppendLine("Styler,Type,Start,End,Length,Color,Tooltip,QuickFixes");
-
-                    // Data rows
-                    foreach (DataGridViewRow row in indicatorGrid.Rows)
-                    {
-                        if (row.IsNewRow || !row.Visible) continue;
-
-                        var values = new string[8];
-                        for (int i = 0; i < 8; i++)
-                        {
-                            values[i] = row.Cells[i].Value?.ToString() ?? "";
-                            // Escape commas and quotes for CSV
-                            if (values[i].Contains(",") || values[i].Contains("\""))
-                            {
-                                values[i] = "\"" + values[i].Replace("\"", "\"\"") + "\"";
-                            }
-                        }
-                        sb.AppendLine(string.Join(",", values));
-                    }
-
-                    File.WriteAllText(saveFileDialog.FileName, sb.ToString());
-
-                    Task.Delay(100).ContinueWith(_ =>
-                    {
-                        var processId = mainForm.ActiveEditor?.ProcessId ?? 0;
-                        var mainHandle = Process.GetProcessById((int)processId).MainWindowHandle;
-                        var handleWrapper = new WindowWrapper(mainHandle);
-                        new MessageBoxDialog("Indicator data exported successfully.", "Export Complete",
-                            MessageBoxButtons.OK, mainHandle).ShowDialog(handleWrapper);
-                    });
-                }
-                catch (Exception ex)
-                {
-                    Task.Delay(100).ContinueWith(_ =>
-                    {
-                        var processId = mainForm.ActiveEditor?.ProcessId ?? 0;
-                        var mainHandle = Process.GetProcessById((int)processId).MainWindowHandle;
-                        var handleWrapper = new WindowWrapper(mainHandle);
-                        new MessageBoxDialog($"Failed to export indicator data: {ex.Message}", "Export Failed",
-                            MessageBoxButtons.OK, mainHandle).ShowDialog(handleWrapper);
-                    });
-                }
-            }
-        }
-
         private void OnIndicatorRowClick(object sender, DataGridViewCellEventArgs e)
         {
             if (e.RowIndex >= 0 && !indicatorGrid.Rows[e.RowIndex].IsNewRow)
@@ -778,12 +717,6 @@ namespace AppRefiner.Dialogs
             this.refreshButton.Width = 100;
             this.refreshButton.Click += (sender, e) => RefreshIndicatorData();
             buttonPanel.Controls.Add(this.refreshButton);
-
-            this.exportButton.Text = "Export";
-            this.exportButton.Dock = DockStyle.Right;
-            this.exportButton.Width = 100;
-            this.exportButton.Click += (sender, e) => ExportIndicatorData();
-            buttonPanel.Controls.Add(this.exportButton);
 
             // Data grid
             this.indicatorGrid.Dock = DockStyle.Fill;

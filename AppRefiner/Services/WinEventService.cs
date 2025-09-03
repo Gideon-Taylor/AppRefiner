@@ -15,6 +15,12 @@ namespace AppRefiner.Services
         /// </summary>
         public event EventHandler<nint>? WindowFocused;
 
+        /// <summary>
+        /// Event raised when a window is created, potentially an Application Designer window.
+        /// The event is invoked on the synchronization context captured during Start.
+        /// </summary>
+        public event EventHandler<nint>? WindowCreated;
+
         public WinEventService()
         {
             // Capture synchronization context for marshalling events back to the UI thread
@@ -32,7 +38,7 @@ namespace AppRefiner.Services
             winEventDelegate = new NativeMethods.WinEventDelegate(InternalWinEventProc);
 
             winEventHook = NativeMethods.SetWinEventHook(
-                NativeMethods.EVENT_OBJECT_FOCUS,       // Event Min
+                NativeMethods.EVENT_OBJECT_CREATE,      // Event Min
                 NativeMethods.EVENT_OBJECT_FOCUS,       // Event Max
                 nint.Zero,                            // hmodWinEventProc
                 winEventDelegate,                       // lpfnWinEventProc
@@ -48,7 +54,7 @@ namespace AppRefiner.Services
             }
             else
             {
-                Debug.Log("Successfully set up WinEvent hook for focus events.");
+                Debug.Log("Successfully set up WinEvent hook for creation and focus events.");
             }
         }
 
@@ -69,7 +75,9 @@ namespace AppRefiner.Services
         // Internal callback for WinEvents
         private void InternalWinEventProc(nint hWinEventHook, uint eventType, nint hwnd, int idObject, int idChild, uint dwEventThread, uint dwmsEventTime)
         {
-            if (eventType == NativeMethods.EVENT_OBJECT_FOCUS && hwnd != nint.Zero)
+            if (hwnd == nint.Zero) return;
+
+            if (eventType == NativeMethods.EVENT_OBJECT_FOCUS)
             {
                 // Optional: Perform a quick check here if desired (e.g., basic class name check)
                 // However, detailed processing should happen in the event handler
@@ -85,11 +93,29 @@ namespace AppRefiner.Services
                     OnWindowFocused(hwnd);
                 }
             }
+            else if (eventType == NativeMethods.EVENT_OBJECT_CREATE)
+            {
+                // Raise the window creation event, marshalling to the captured context (usually UI thread)
+                if (syncContext != null)
+                {
+                    syncContext.Post(_ => OnWindowCreated(hwnd), null);
+                }
+                else
+                {
+                    // If no context, raise directly (might be on a background thread)
+                    OnWindowCreated(hwnd);
+                }
+            }
         }
 
         protected virtual void OnWindowFocused(nint hwnd)
         {
             WindowFocused?.Invoke(this, hwnd);
+        }
+
+        protected virtual void OnWindowCreated(nint hwnd)
+        {
+            WindowCreated?.Invoke(this, hwnd);
         }
 
         public void Dispose()

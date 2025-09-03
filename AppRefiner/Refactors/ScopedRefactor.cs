@@ -118,7 +118,7 @@ namespace AppRefiner.Refactors
         /// </summary>
         public IntPtr GetEditorMainWindowHandle()
         {
-            return Process.GetProcessById((int)Editor.ProcessId).MainWindowHandle;
+            return Editor.AppDesignerProcess.MainWindowHandle;
         }
 
         /// <summary>

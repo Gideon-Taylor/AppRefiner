@@ -128,7 +128,7 @@ namespace AppRefiner
             Task.Delay(100).ContinueWith(_ =>
             {
                 // Show message box with specific error
-                var mainHandle = Process.GetProcessById((int)activeEditor.ProcessId).MainWindowHandle;
+                var mainHandle = activeEditor.AppDesignerProcess.MainWindowHandle;
                 var handleWrapper = new WindowWrapper(mainHandle);
                 new MessageBoxDialog(message, caption, buttons, mainHandle, callback).ShowDialog(handleWrapper);
             });

@@ -126,9 +126,6 @@ namespace AppRefiner
         // Note: P/Invoke declarations moved to WinApi.cs for centralized access
 
         public IntPtr hWnd;
-        public IntPtr hProc;
-        public uint ProcessId;
-        public uint ThreadID;
         public EventMapInfo? EventMapInfo = null;
         public string ClassPath = string.Empty;
         private string? _caption = null;
@@ -290,7 +287,6 @@ namespace AppRefiner
 
         public IReadOnlyList<ParseError> ParserErrors { get; set; } = [];
         internal AppDesignerProcess AppDesignerProcess { get; set; }
-
 
 
         /// <summary>
@@ -461,14 +457,12 @@ namespace AppRefiner
             }
         }
 
-        public ScintillaEditor(AppDesignerProcess appProc, IntPtr hWnd, uint procID, uint threadID, string caption)
+        public ScintillaEditor(AppDesignerProcess appProc, IntPtr hWnd, string caption)
         {
             this.hWnd = hWnd;
 
             PopulateEditorDBName();
             AppDesignerProcess = appProc;
-            ProcessId = procID;
-            ThreadID = threadID;
             Caption = caption;
             AppDesignerProcess = null;
         }
@@ -824,6 +818,8 @@ namespace AppRefiner
 
         public void Cleanup()
         {
+            var hProc = AppDesignerProcess.ProcessHandle;
+
             /* Free all annotation strings */
             foreach (var v in AnnotationPointers.Values)
             {
@@ -859,5 +855,7 @@ namespace AppRefiner
             Caption = null;
             ContentString = null;
         }
+
     }
+    
 }

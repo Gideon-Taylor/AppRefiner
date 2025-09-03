@@ -49,7 +49,7 @@ namespace AppRefiner
             public int iSubItem;
             public uint state;
             public uint stateMask;
-            public string pszText;
+            public IntPtr pszText;
             public int cchTextMax;
             public int iImage;
             public IntPtr lParam;

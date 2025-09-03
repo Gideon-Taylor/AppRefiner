@@ -9,7 +9,6 @@ public class TestConfiguration
     public int MaxFiles { get; set; } = int.MaxValue;
     public bool IncludeMemoryAnalysis { get; set; } = true;
     public int ProgressInterval { get; set; } = 1000;
-    public bool SelfHostedOnlyMode { get; set; } = false;
-    public bool AntlrOnlyMode { get; set; } = false;
+    public bool DebugOnError { get; set; } = false;
     public string? FailedFilesDirectory { get; set; } = "failed";
 }

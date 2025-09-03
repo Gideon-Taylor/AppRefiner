@@ -666,6 +666,15 @@ LRESULT CALLBACK KeyboardHook(int nCode, WPARAM wParam, LPARAM lParam) {
                     // F3 (with or without Shift for Find Next/Previous)
                     shouldIntercept = true;
                 }
+                else if (!hasCtrl && !hasAlt && wParam == VK_F12) {
+                    // F12 for "go to definition"
+                    shouldIntercept = true;
+                }
+                else if (hasCtrl && hasShift && wParam == 'P') {
+                    // Ctrl Shift P is for opening the command palette
+                    shouldIntercept = true;
+                }
+
                 
                 if (shouldIntercept) {
                     // Pack modifier flags into high word of wParam, virtual key code in low word
@@ -729,7 +738,7 @@ LRESULT CALLBACK GetMsgHook(int nCode, WPARAM wParam, LPARAM lParam) {
             msg->message = WM_NULL;
         }
         // Check if this is our message to subclass a window
-        else if (msg->message == WM_SUBCLASS_WINDOW) {
+        else if (msg->message == WM_SUBCLASS_SCINTILLA_PARENT_WINDOW) {
             HWND hWndToSubclass = (HWND)msg->wParam;
             HWND callbackWindow = (HWND)msg->lParam;
             

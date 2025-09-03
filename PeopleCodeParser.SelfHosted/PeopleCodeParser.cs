@@ -644,7 +644,7 @@ public class PeopleCodeParser
     private bool IsProgramPreambleToken()
     {
         return Check(TokenType.Function, TokenType.PeopleCode, TokenType.Library, TokenType.Declare,
-                    TokenType.Global, TokenType.Component, TokenType.Constant);
+                    TokenType.Global, TokenType.Component, TokenType.Constant, TokenType.Local);
     }
 
     /// <summary>
@@ -1745,6 +1745,8 @@ public class PeopleCodeParser
             // In PeopleCode, many keywords can be used as identifiers in certain contexts
             if (Current.Type switch
             {
+                TokenType.Any => true,
+                TokenType.Abstract => true,
                 TokenType.Boolean => true,
                 TokenType.Catch => true,
                 TokenType.Class => true,
@@ -1757,6 +1759,7 @@ public class PeopleCodeParser
                 TokenType.Exception => true,
                 TokenType.Extends => true,
                 TokenType.Get => true,
+                TokenType.Global => true,
                 TokenType.Import => true,
                 TokenType.Instance => true,
                 TokenType.Integer => true,
@@ -1776,6 +1779,7 @@ public class PeopleCodeParser
                 TokenType.Value => true,
                 TokenType.GenericId => true,
                 TokenType.GenericIdLimited => true,
+
                 _ when Current.Type.IsIdentifier() => true,
                 _ => false
             })
@@ -2768,14 +2772,14 @@ public class PeopleCodeParser
         try
         {
             EnterRule("interfaceHeader");
-
+            var hasEnteredProtected = false;
             // In interfaces, all methods are implicitly public
             // Parse method headers until END-INTERFACE
             while (!IsAtEnd && !Check(TokenType.EndInterface))
             {
                 if (Check(TokenType.Method))
                 {
-                    var methodHeader = ParseMethodHeader(VisibilityModifier.Public);
+                    var methodHeader = ParseMethodHeader(!hasEnteredProtected ? VisibilityModifier.Public : VisibilityModifier.Protected);
                     if (methodHeader is MethodNode methodNode)
                     {
                         // All interface methods are abstract by definition
@@ -2797,6 +2801,10 @@ public class PeopleCodeParser
                 else if (Match(TokenType.Semicolon))
                 {
                     // Allow stray semicolons
+                }
+                else if (Match(TokenType.Protected))
+                {
+                    hasEnteredProtected = true;
                 }
                 else
                 {
@@ -3816,7 +3824,7 @@ public class PeopleCodeParser
             return null;
 
         ExpressionNode? value = null;
-        if (!Check(TokenType.Semicolon) && !StatementSyncTokens.Contains(Current.Type))
+        if (!Check(TokenType.Semicolon) && !StatementSyncTokens.Contains(Current.Type) && !BlockSyncTokens.Contains(Current.Type))
         {
             value = ParseExpression();
         }

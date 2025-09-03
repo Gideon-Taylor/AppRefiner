@@ -254,7 +254,7 @@ namespace AppRefiner.Refactors
                     Task.Delay(100).ContinueWith(_ =>
                     {
                         // Show message box with specific error
-                        var mainHandle = Process.GetProcessById((int)activeEditor.ProcessId).MainWindowHandle;
+                        var mainHandle = activeEditor.AppDesignerProcess.MainWindowHandle;
                         var handleWrapper = new WindowWrapper(mainHandle);
                         new MessageBoxDialog("Refactoring failed", "Refactoring Failed", MessageBoxButtons.OK, mainHandle).ShowDialog(handleWrapper);
                     });
@@ -285,7 +285,7 @@ namespace AppRefiner.Refactors
                     {
                         Task.Delay(100).ContinueWith(_ =>
                         {
-                            var mainHandle = Process.GetProcessById((int)activeEditor.ProcessId).MainWindowHandle;
+                            var mainHandle = activeEditor.AppDesignerProcess.MainWindowHandle;
                             var handleWrapper = new WindowWrapper(mainHandle);
                             new MessageBoxDialog($"The refactor '{refactorClass.GetType().Name}' cannot run because there are syntax errors in the code.\n\n" +
                                 "Please fix the syntax errors first, then try the refactor again.",
@@ -313,7 +313,7 @@ namespace AppRefiner.Refactors
                     {
                         Task.Delay(100).ContinueWith(_ =>
                         {
-                            var mainHandle = Process.GetProcessById((int)activeEditor.ProcessId).MainWindowHandle;
+                            var mainHandle = activeEditor.AppDesignerProcess.MainWindowHandle;
                             var handleWrapper = new WindowWrapper(mainHandle);
                             new MessageBoxDialog($"The refactor {refactorClass.GetType().Name} cannot be executed because it does not implement IAstVisitor.",
                                 "Refactor Error", MessageBoxButtons.OK, mainHandle).ShowDialog(handleWrapper);
@@ -332,7 +332,7 @@ namespace AppRefiner.Refactors
                     Task.Delay(100).ContinueWith(_ =>
                     {
                         // Show message box with specific error
-                        var mainHandle = Process.GetProcessById((int)activeEditor.ProcessId).MainWindowHandle;
+                        var mainHandle = activeEditor.AppDesignerProcess.MainWindowHandle;
                         var handleWrapper = new WindowWrapper(mainHandle);
                         new MessageBoxDialog(result.Message ?? "Refactoring failed", "Refactoring Failed", MessageBoxButtons.OK, mainHandle).ShowDialog(handleWrapper);
                     });
@@ -364,7 +364,7 @@ namespace AppRefiner.Refactors
                         // Show success message if provided
                         Task.Delay(100).ContinueWith(_ =>
                         {
-                            var mainHandle = Process.GetProcessById((int)activeEditor.ProcessId).MainWindowHandle;
+                            var mainHandle = activeEditor.AppDesignerProcess.MainWindowHandle;
                             var handleWrapper = new WindowWrapper(mainHandle);
                             new MessageBoxDialog(refactorResult.Message, "Refactoring Note", MessageBoxButtons.OK, mainHandle).ShowDialog(handleWrapper);
                         });
@@ -396,7 +396,7 @@ namespace AppRefiner.Refactors
                             {
                                 Task.Delay(100).ContinueWith(_ =>
                                 {
-                                    var mainHandle = Process.GetProcessById((int)activeEditor.ProcessId).MainWindowHandle;
+                                    var mainHandle = activeEditor.AppDesignerProcess.MainWindowHandle;
                                     var handleWrapper = new WindowWrapper(mainHandle);
                                     new MessageBoxDialog($"Could not start follow-up refactor: {followUpType.Name}", "Follow-up Error", MessageBoxButtons.OK, mainHandle).ShowDialog(handleWrapper);
                                 });
@@ -410,7 +410,7 @@ namespace AppRefiner.Refactors
                         {
                             Task.Delay(100).ContinueWith(_ =>
                             {
-                                var mainHandle = Process.GetProcessById((int)activeEditor.ProcessId).MainWindowHandle;
+                                var mainHandle = activeEditor.AppDesignerProcess.MainWindowHandle;
                                 var handleWrapper = new WindowWrapper(mainHandle);
                                 new MessageBoxDialog($"An error occurred during the follow-up refactor: {followUpType.Name}\n\n{followUpEx.Message}", "Follow-up Error", MessageBoxButtons.OK, mainHandle).ShowDialog(handleWrapper);
                             });
@@ -422,7 +422,7 @@ namespace AppRefiner.Refactors
                     // Show success message if provided
                     Task.Delay(100).ContinueWith(_ =>
                     {
-                        var mainHandle = Process.GetProcessById((int)activeEditor.ProcessId).MainWindowHandle;
+                        var mainHandle = activeEditor.AppDesignerProcess.MainWindowHandle;
                         var handleWrapper = new WindowWrapper(mainHandle);
                         new MessageBoxDialog(result.Message, "Refactoring Complete", MessageBoxButtons.OK, mainHandle).ShowDialog(handleWrapper);
                     });
@@ -435,7 +435,7 @@ namespace AppRefiner.Refactors
                 Task.Delay(100).ContinueWith(_ =>
                 {
                     // Show message box with specific error
-                    var mainHandle = Process.GetProcessById((int)activeEditor.ProcessId).MainWindowHandle;
+                    var mainHandle = activeEditor.AppDesignerProcess.MainWindowHandle;
                     var handleWrapper = new WindowWrapper(mainHandle);
                     new MessageBoxDialog($"Execption during refactor: {ex.ToString()}", "Refactoring Failed", MessageBoxButtons.OK, mainHandle).ShowDialog(handleWrapper);
                 });

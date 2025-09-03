@@ -17,7 +17,7 @@
 // Message to toggle auto-pairing feature
 #define WM_TOGGLE_AUTO_PAIRING (WM_USER + 1002)
 // Message to subclass a window
-#define WM_SUBCLASS_WINDOW (WM_USER + 1003)
+#define WM_SUBCLASS_SCINTILLA_PARENT_WINDOW (WM_USER + 1003)
 // Message to toggle main window shortcuts feature
 #define WM_TOGGLE_MAIN_WINDOW_SHORTCUTS (WM_USER + 1006)
 // Message to subclass main window

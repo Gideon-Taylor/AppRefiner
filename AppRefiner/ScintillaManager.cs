@@ -299,7 +299,7 @@ namespace AppRefiner
 
             // Read the text from the remote process into a local buffer.
             byte[] buffer = new byte[neededSize];
-            if (!WinApi.ReadProcessMemory(editor.hProc, remoteBuffer, buffer, neededSize, out int bytesRead) || bytesRead == 0)
+            if (!WinApi.ReadProcessMemory(editor.AppDesignerProcess.ProcessHandle, remoteBuffer, buffer, neededSize, out int bytesRead) || bytesRead == 0)
                 return null;
 
             // Convert the retrieved bytes into a string (up to the first null terminator).
@@ -330,7 +330,7 @@ namespace AppRefiner
             buffer[neededSize - 1] = 0;  // Ensure null termination.
 
             // Write the text into the remote process's memory.
-            if (!WinApi.WriteProcessMemory(editor.hProc, remoteBuffer, buffer, neededSize, out int bytesWritten) || bytesWritten != neededSize)
+            if (!WinApi.WriteProcessMemory(editor.AppDesignerProcess.ProcessHandle, remoteBuffer, buffer, neededSize, out int bytesWritten) || bytesWritten != neededSize)
                 return false;
 
             // Use SCI_SETTEXT to replace the document text.
@@ -364,7 +364,7 @@ namespace AppRefiner
             buffer[neededSize - 1] = 0;  // Ensure null termination.
 
             // Write the text into the remote process's memory.
-            if (!WinApi.WriteProcessMemory(editor.hProc, remoteBuffer, buffer, neededSize, out int bytesWritten) || bytesWritten != neededSize)
+            if (!WinApi.WriteProcessMemory(editor.AppDesignerProcess.ProcessHandle, remoteBuffer, buffer, neededSize, out int bytesWritten) || bytesWritten != neededSize)
                 return false;
 
             // Use SCI_REPLACESEL to insert text at the current cursor position
@@ -449,7 +449,7 @@ namespace AppRefiner
             buffer[neededSize - 1] = 0;  // Ensure null termination.
 
             // Write the text into the remote process's memory.
-            if (!WinApi.WriteProcessMemory(editor.hProc, remoteBuffer, buffer, neededSize, out int bytesWritten) || bytesWritten != neededSize)
+            if (!WinApi.WriteProcessMemory(editor.AppDesignerProcess.ProcessHandle, remoteBuffer, buffer, neededSize, out int bytesWritten) || bytesWritten != neededSize)
                 return false;
 
             // Replace the target with the new text
@@ -478,16 +478,16 @@ namespace AppRefiner
             combinedBuffer[combinedSize - 1] = 0; // Ensure last byte is null.
 
             // Allocate a single remote memory block for the combined buffer.
-            IntPtr remoteCombined = WinApi.VirtualAllocEx(editor.hProc, IntPtr.Zero, (uint)combinedSize, WinApi.MEM_COMMIT, WinApi.PAGE_READWRITE);
+            IntPtr remoteCombined = WinApi.VirtualAllocEx(editor.AppDesignerProcess.ProcessHandle, IntPtr.Zero, (uint)combinedSize, WinApi.MEM_COMMIT, WinApi.PAGE_READWRITE);
             if (remoteCombined == IntPtr.Zero)
             {
                 return;
             }
 
             // Write the combined buffer into the remote process.
-            if (!WinApi.WriteProcessMemory(editor.hProc, remoteCombined, combinedBuffer, combinedSize, out int bytesWritten) || bytesWritten != combinedSize)
+            if (!WinApi.WriteProcessMemory(editor.AppDesignerProcess.ProcessHandle, remoteCombined, combinedBuffer, combinedSize, out int bytesWritten) || bytesWritten != combinedSize)
             {
-                WinApi.VirtualFreeEx(editor.hProc, remoteCombined, 0, WinApi.MEM_RELEASE);
+                WinApi.VirtualFreeEx(editor.AppDesignerProcess.ProcessHandle, remoteCombined, 0, WinApi.MEM_RELEASE);
                 return;
             }
 
@@ -833,7 +833,10 @@ namespace AppRefiner
         internal static void SetFoldRegions(ScintillaEditor editor)
         {
 
-            if (editor.ContentString == null) return;
+            if (editor.ContentString == null)
+            {
+                editor.ContentString = ScintillaManager.GetScintillaText(editor);
+            }
 
             // Split the document text into lines.
             // This handles both Windows (CRLF) and Unix (LF) line endings.
@@ -1047,14 +1050,14 @@ namespace AppRefiner
                 // Clean up existing call tip if any
                 if (editor.CallTipPointer != IntPtr.Zero)
                 {
-                    WinApi.VirtualFreeEx(editor.hProc, editor.CallTipPointer, 0, WinApi.MEM_RELEASE);
+                    WinApi.VirtualFreeEx(editor.AppDesignerProcess.ProcessHandle, editor.CallTipPointer, 0, WinApi.MEM_RELEASE);
                     editor.CallTipPointer = IntPtr.Zero;
                 }
 
                 // Allocate memory for new call tip text
                 var textBytes = Encoding.Default.GetBytes(text);
                 var neededSize = textBytes.Length + 1;
-                var remoteBuffer = WinApi.VirtualAllocEx(editor.hProc, IntPtr.Zero, (uint)neededSize, WinApi.MEM_COMMIT, WinApi.PAGE_READWRITE);
+                var remoteBuffer = WinApi.VirtualAllocEx(editor.AppDesignerProcess.ProcessHandle, IntPtr.Zero, (uint)neededSize, WinApi.MEM_COMMIT, WinApi.PAGE_READWRITE);
 
                 if (remoteBuffer == IntPtr.Zero)
                 {
@@ -1062,9 +1065,9 @@ namespace AppRefiner
                     return;
                 }
 
-                if (!WinApi.WriteProcessMemory(editor.hProc, remoteBuffer, textBytes, neededSize, out int bytesWritten) || bytesWritten != neededSize)
+                if (!WinApi.WriteProcessMemory(editor.AppDesignerProcess.ProcessHandle, remoteBuffer, textBytes, neededSize, out int bytesWritten) || bytesWritten != neededSize)
                 {
-                    WinApi.VirtualFreeEx(editor.hProc, remoteBuffer, 0, WinApi.MEM_RELEASE);
+                    WinApi.VirtualFreeEx(editor.AppDesignerProcess.ProcessHandle, remoteBuffer, 0, WinApi.MEM_RELEASE);
                     Debug.LogError($"Failed to write call tip text to memory: {Marshal.GetLastWin32Error()}");
                     return;
                 }
@@ -1094,7 +1097,7 @@ namespace AppRefiner
                 // Free memory used by the call tip
                 if (editor.CallTipPointer != IntPtr.Zero)
                 {
-                    WinApi.VirtualFreeEx(editor.hProc, editor.CallTipPointer, 0, WinApi.MEM_RELEASE);
+                    WinApi.VirtualFreeEx(editor.AppDesignerProcess.ProcessHandle, editor.CallTipPointer, 0, WinApi.MEM_RELEASE);
                     editor.CallTipPointer = IntPtr.Zero;
                 }
             }
@@ -1107,11 +1110,6 @@ namespace AppRefiner
 
         internal static void SetAnnotation(ScintillaEditor editor, int line, string text, AnnotationStyle style = AnnotationStyle.Gray)
         {
-            if (!editor.AnnotationsInitialized)
-            {
-                InitAnnotationStyles(editor);
-            }
-
             try
             {
                 // If pointer for this exact text exists, use it
@@ -1126,7 +1124,7 @@ namespace AppRefiner
                 // Allocate memory for new annotation text
                 var textBytes = Encoding.Default.GetBytes(text);
                 var neededSize = textBytes.Length + 1;
-                var remoteBuffer = WinApi.VirtualAllocEx(editor.hProc, IntPtr.Zero, (uint)neededSize, WinApi.MEM_COMMIT, WinApi.PAGE_READWRITE);
+                var remoteBuffer = WinApi.VirtualAllocEx(editor.AppDesignerProcess.ProcessHandle, IntPtr.Zero, (uint)neededSize, WinApi.MEM_COMMIT, WinApi.PAGE_READWRITE);
 
                 if (remoteBuffer == IntPtr.Zero)
                 {
@@ -1134,9 +1132,9 @@ namespace AppRefiner
                     return;
                 }
 
-                if (!WinApi.WriteProcessMemory(editor.hProc, remoteBuffer, textBytes, neededSize, out int bytesWritten) || bytesWritten != neededSize)
+                if (!WinApi.WriteProcessMemory(editor.AppDesignerProcess.ProcessHandle, remoteBuffer, textBytes, neededSize, out int bytesWritten) || bytesWritten != neededSize)
                 {
-                    WinApi.VirtualFreeEx(editor.hProc, remoteBuffer, 0, WinApi.MEM_RELEASE);
+                    WinApi.VirtualFreeEx(editor.AppDesignerProcess.ProcessHandle, remoteBuffer, 0, WinApi.MEM_RELEASE);
                     Debug.LogError($"Failed to write annotation text to memory: {Marshal.GetLastWin32Error()}");
                     return;
                 }
@@ -1214,7 +1212,7 @@ namespace AppRefiner
             {
                 if (pointer != IntPtr.Zero)
                 {
-                    WinApi.VirtualFreeEx(editor.hProc, pointer, 0, WinApi.MEM_RELEASE);
+                    WinApi.VirtualFreeEx(editor.AppDesignerProcess.ProcessHandle, pointer, 0, WinApi.MEM_RELEASE);
                 }
             }
 
@@ -1236,8 +1234,6 @@ namespace AppRefiner
             {
                 throw new ArgumentException("Number of annotations must match number of styles");
             }
-
-            InitAnnotationStyles(editor);
 
             try
             {
@@ -1274,7 +1270,7 @@ namespace AppRefiner
                 styleBytes[neededSize - 1] = styleBytes[Math.Max(0, neededSize - 2)];
 
                 // Allocate and write the annotation text buffer
-                var remoteTextBuffer = WinApi.VirtualAllocEx(editor.hProc, IntPtr.Zero, (uint)neededSize, WinApi.MEM_COMMIT, WinApi.PAGE_READWRITE);
+                var remoteTextBuffer = WinApi.VirtualAllocEx(editor.AppDesignerProcess.ProcessHandle, IntPtr.Zero, (uint)neededSize, WinApi.MEM_COMMIT, WinApi.PAGE_READWRITE);
 
                 if (remoteTextBuffer == IntPtr.Zero)
                 {
@@ -1282,19 +1278,19 @@ namespace AppRefiner
                 }
 
                 // Allocate and write the styles buffer
-                var remoteStyleBuffer = WinApi.VirtualAllocEx(editor.hProc, IntPtr.Zero, (uint)neededSize, WinApi.MEM_COMMIT, WinApi.PAGE_READWRITE);
+                var remoteStyleBuffer = WinApi.VirtualAllocEx(editor.AppDesignerProcess.ProcessHandle, IntPtr.Zero, (uint)neededSize, WinApi.MEM_COMMIT, WinApi.PAGE_READWRITE);
                 if (remoteStyleBuffer == IntPtr.Zero)
                 {
-                    WinApi.VirtualFreeEx(editor.hProc, remoteTextBuffer, 0, WinApi.MEM_RELEASE);
+                    WinApi.VirtualFreeEx(editor.AppDesignerProcess.ProcessHandle, remoteTextBuffer, 0, WinApi.MEM_RELEASE);
                     throw new Exception($"Failed to allocate style buffer: {Marshal.GetLastWin32Error()}");
                 }
 
                 // Write the text and styles to remote buffers
-                if (!WinApi.WriteProcessMemory(editor.hProc, remoteTextBuffer, textBytes, neededSize, out int bytesWritten) ||
-                    !WinApi.WriteProcessMemory(editor.hProc, remoteStyleBuffer, styleBytes, neededSize, out int stylesBytesWritten))
+                if (!WinApi.WriteProcessMemory(editor.AppDesignerProcess.ProcessHandle, remoteTextBuffer, textBytes, neededSize, out int bytesWritten) ||
+                    !WinApi.WriteProcessMemory(editor.AppDesignerProcess.ProcessHandle, remoteStyleBuffer, styleBytes, neededSize, out int stylesBytesWritten))
                 {
-                    WinApi.VirtualFreeEx(editor.hProc, remoteTextBuffer, 0, WinApi.MEM_RELEASE);
-                    WinApi.VirtualFreeEx(editor.hProc, remoteStyleBuffer, 0, WinApi.MEM_RELEASE);
+                    WinApi.VirtualFreeEx(editor.AppDesignerProcess.ProcessHandle, remoteTextBuffer, 0, WinApi.MEM_RELEASE);
+                    WinApi.VirtualFreeEx(editor.AppDesignerProcess.ProcessHandle, remoteStyleBuffer, 0, WinApi.MEM_RELEASE);
                     throw new Exception("Failed to write to remote buffers");
                 }
 
@@ -1341,7 +1337,7 @@ namespace AppRefiner
         public static string GetProjectName(ScintillaEditor editor)
         {
             // Get the caption from the main window of the editor's process
-            string caption = WindowHelper.GetMainWindowCaption(editor.ProcessId);
+            string caption = WindowHelper.GetMainWindowCaption(editor.AppDesignerProcess.ProcessId);
 
             if (!string.IsNullOrEmpty(caption))
             {
@@ -1601,7 +1597,7 @@ namespace AppRefiner
         /// <returns>True if the user list was shown successfully</returns>
         public static bool ShowUserList(ScintillaEditor editor, UserListType listType, int position, List<string> options, bool acceptSingle = true)
         {
-            if (editor == null || editor.hProc == IntPtr.Zero || options == null || options.Count == 0)
+            if (editor == null || editor.AppDesignerProcess.ProcessHandle == IntPtr.Zero || options == null || options.Count == 0)
             {
                 Debug.Log("ShowUserList: Invalid parameters");
                 return false;
@@ -1620,7 +1616,7 @@ namespace AppRefiner
 
                 // Allocate memory in the target process for storing the options
                 IntPtr remoteBuffer = WinApi.VirtualAllocEx(
-                    editor.hProc,
+                    editor.AppDesignerProcess.ProcessHandle,
                     IntPtr.Zero,
                     (uint)bufferSize,
                     WinApi.MEM_COMMIT,
@@ -1643,7 +1639,7 @@ namespace AppRefiner
                 // Write the options to the remote process memory
                 int bytesWritten;
                 bool result = WinApi.WriteProcessMemory(
-                    editor.hProc,
+                    editor.AppDesignerProcess.ProcessHandle,
                     remoteBuffer,
                     buffer,
                     bufferSize,
@@ -1652,7 +1648,7 @@ namespace AppRefiner
                 if (!result || bytesWritten != bufferSize)
                 {
                     Debug.Log($"ShowUserList: Failed to write to remote process memory. Written {bytesWritten} of {bufferSize} bytes");
-                    WinApi.VirtualFreeEx(editor.hProc, remoteBuffer, 0, WinApi.MEM_RELEASE);
+                    WinApi.VirtualFreeEx(editor.AppDesignerProcess.ProcessHandle, remoteBuffer, 0, WinApi.MEM_RELEASE);
                     editor.UserListPointer = IntPtr.Zero;
                     return false;
                 }
@@ -1669,7 +1665,7 @@ namespace AppRefiner
                 // Clean up on exception
                 if (editor.UserListPointer != IntPtr.Zero)
                 {
-                    WinApi.VirtualFreeEx(editor.hProc, editor.UserListPointer, 0, WinApi.MEM_RELEASE);
+                    WinApi.VirtualFreeEx(editor.AppDesignerProcess.ProcessHandle, editor.UserListPointer, 0, WinApi.MEM_RELEASE);
                     editor.UserListPointer = IntPtr.Zero;
                 }
 
@@ -1696,7 +1692,7 @@ namespace AppRefiner
                 // Free the memory used for user list options
                 if (editor.UserListPointer != IntPtr.Zero)
                 {
-                    WinApi.VirtualFreeEx(editor.hProc, editor.UserListPointer, 0, WinApi.MEM_RELEASE);
+                    WinApi.VirtualFreeEx(editor.AppDesignerProcess.ProcessHandle, editor.UserListPointer, 0, WinApi.MEM_RELEASE);
                     editor.UserListPointer = IntPtr.Zero;
                 }
             }
@@ -1721,7 +1717,7 @@ namespace AppRefiner
             try
             {
                 // Get process handle for the editor
-                if (editor.hProc == IntPtr.Zero)
+                if (editor.AppDesignerProcess.ProcessHandle == IntPtr.Zero)
                 {
                     Debug.Log($"Cannot read memory: Process handle is null");
                     return null;
@@ -1732,7 +1728,7 @@ namespace AppRefiner
                 int bytesRead = 0;
 
                 // Read memory from the process
-                if (!WinApi.ReadProcessMemory(editor.hProc, address, buffer, maxLength, out bytesRead))
+                if (!WinApi.ReadProcessMemory(editor.AppDesignerProcess.ProcessHandle, address, buffer, maxLength, out bytesRead))
                 {
                     int error = Marshal.GetLastWin32Error();
                     Debug.Log($"ReadProcessMemory failed with error code: {error}");
@@ -1791,7 +1787,7 @@ namespace AppRefiner
             buffer[neededSize - 1] = 0;  // Ensure null termination.
 
             // Write the text into the remote process's memory.
-            if (!WinApi.WriteProcessMemory(editor.hProc, remoteBuffer, buffer, neededSize, out int bytesWritten) || bytesWritten != neededSize)
+            if (!WinApi.WriteProcessMemory(editor.AppDesignerProcess.ProcessHandle, remoteBuffer, buffer, neededSize, out int bytesWritten) || bytesWritten != neededSize)
                 return false;
 
             // Use SCI_REPLACESEL to insert text at the current cursor position
@@ -1849,7 +1845,7 @@ namespace AppRefiner
             {
                 try
                 {
-                    var mainHandle = Process.GetProcessById((int)editor.ProcessId).MainWindowHandle;
+                    var mainHandle = editor.AppDesignerProcess.MainWindowHandle;
                     var handleWrapper = new WindowWrapper(0);
 
                     var dialog = new BetterFindDialog(editor, 0, enableReplaceMode);
@@ -2124,7 +2120,7 @@ namespace AppRefiner
             buffer[neededSize - 1] = 0; // Ensure null termination
 
             // Write to remote process memory
-            if (!WinApi.WriteProcessMemory(editor.hProc, remoteBuffer, buffer, neededSize, out int bytesWritten) || bytesWritten != neededSize)
+            if (!WinApi.WriteProcessMemory(editor.AppDesignerProcess.ProcessHandle, remoteBuffer, buffer, neededSize, out int bytesWritten) || bytesWritten != neededSize)
                 return false;
 
             // Perform the search
@@ -2191,7 +2187,7 @@ namespace AppRefiner
             Buffer.BlockCopy(replaceBytes, 0, buffer, 0, replaceBytes.Length);
             buffer[neededSize - 1] = 0;
 
-            if (!WinApi.WriteProcessMemory(editor.hProc, remoteBuffer, buffer, neededSize, out int bytesWritten) || bytesWritten != neededSize)
+            if (!WinApi.WriteProcessMemory(editor.AppDesignerProcess.ProcessHandle, remoteBuffer, buffer, neededSize, out int bytesWritten) || bytesWritten != neededSize)
                 return false;
 
             var replacementLength = replaceText.Length;
@@ -2275,7 +2271,7 @@ namespace AppRefiner
             Buffer.BlockCopy(searchBytes, 0, searchBufferData, 0, searchBytes.Length);
             searchBufferData[searchSize - 1] = 0;
 
-            if (!WinApi.WriteProcessMemory(editor.hProc, searchBuffer, searchBufferData, searchSize, out int searchBytesWritten) ||
+            if (!WinApi.WriteProcessMemory(editor.AppDesignerProcess.ProcessHandle, searchBuffer, searchBufferData, searchSize, out int searchBytesWritten) ||
                 searchBytesWritten != searchSize)
                 return 0;
 
@@ -2296,7 +2292,7 @@ namespace AppRefiner
             Buffer.BlockCopy(replaceBytes, 0, buffer, 0, replaceBytes.Length);
             buffer[neededSize - 1] = 0;
 
-            if (!WinApi.WriteProcessMemory(editor.hProc, replaceTextBuffer, buffer, neededSize, out int bytesWritten) || bytesWritten != neededSize)
+            if (!WinApi.WriteProcessMemory(editor.AppDesignerProcess.ProcessHandle, replaceTextBuffer, buffer, neededSize, out int bytesWritten) || bytesWritten != neededSize)
                 return (0);
 
             try
@@ -2379,7 +2375,7 @@ namespace AppRefiner
             Buffer.BlockCopy(searchBytes, 0, searchBufferData, 0, searchBytes.Length);
             searchBufferData[searchSize - 1] = 0;
 
-            if (!WinApi.WriteProcessMemory(editor.hProc, searchBuffer, searchBufferData, searchSize, out int searchBytesWritten) ||
+            if (!WinApi.WriteProcessMemory(editor.AppDesignerProcess.ProcessHandle, searchBuffer, searchBufferData, searchSize, out int searchBytesWritten) ||
                 searchBytesWritten != searchSize)
                 return 0;
 
@@ -2454,7 +2450,7 @@ namespace AppRefiner
             Buffer.BlockCopy(searchBytes, 0, searchBufferData, 0, searchBytes.Length);
             searchBufferData[searchSize - 1] = 0;
 
-            if (!WinApi.WriteProcessMemory(editor.hProc, searchBuffer, searchBufferData, searchSize, out int searchBytesWritten) ||
+            if (!WinApi.WriteProcessMemory(editor.AppDesignerProcess.ProcessHandle, searchBuffer, searchBufferData, searchSize, out int searchBytesWritten) ||
                 searchBytesWritten != searchSize)
                 return 0;
 
@@ -2534,7 +2530,7 @@ namespace AppRefiner
             Buffer.BlockCopy(searchBytes, 0, searchBufferData, 0, searchBytes.Length);
             searchBufferData[searchSize - 1] = 0;
 
-            if (!WinApi.WriteProcessMemory(editor.hProc, searchBuffer, searchBufferData, searchSize, out int searchBytesWritten) ||
+            if (!WinApi.WriteProcessMemory(editor.AppDesignerProcess.ProcessHandle, searchBuffer, searchBufferData, searchSize, out int searchBytesWritten) ||
                 searchBytesWritten != searchSize)
                 return matches;
 
@@ -2597,7 +2593,7 @@ namespace AppRefiner
                             if (lineResult > 0)
                             {
                                 byte[] lineData = new byte[lineLength];
-                                if (WinApi.ReadProcessMemory(editor.hProc, lineBuffer, lineData, lineLength, out int lineRead) && lineRead == lineLength)
+                                if (WinApi.ReadProcessMemory(editor.AppDesignerProcess.ProcessHandle, lineBuffer, lineData, lineLength, out int lineRead) && lineRead == lineLength)
                                 {
                                     lineText = Encoding.Default.GetString(lineData).TrimEnd('\r', '\n');
                                     match.LineText = lineText;
@@ -2809,7 +2805,7 @@ namespace AppRefiner
             buffer[neededSize - 2] = 0; // Ensure null termination
             buffer[neededSize - 1] = 0; // Ensure null termination
             // Write to remote process memory
-            return WinApi.WriteProcessMemory(editor.hProc, remoteBuffer, buffer, neededSize, out int bytesWritten) && bytesWritten == neededSize;
+            return WinApi.WriteProcessMemory(editor.AppDesignerProcess.ProcessHandle, remoteBuffer, buffer, neededSize, out int bytesWritten) && bytesWritten == neededSize;
 
         }
 

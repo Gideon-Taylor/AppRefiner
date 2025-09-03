@@ -7,16 +7,34 @@ namespace ParserComparison.Tests;
 
 public class BulkDirectoryTest
 {
-    public static List<ComparisonResult> RunTest(TestConfiguration config)
+    public static List<SelfHostedOnlyResult> RunTest(TestConfiguration config)
     {
         if (string.IsNullOrEmpty(config.DirectoryPath))
             throw new ArgumentException("Directory path is required");
 
-        ConsoleLogger.WriteSubHeader($"Bulk Directory Test: {config.DirectoryPath}");
+        ConsoleLogger.WriteSubHeader($"Directory Test: {config.DirectoryPath}");
 
         if (!Directory.Exists(config.DirectoryPath))
         {
             throw new DirectoryNotFoundException($"Directory not found: {config.DirectoryPath}");
+        }
+
+        // Create failed files directory if it doesn't exist
+        var failedDir = Path.Combine(Directory.GetCurrentDirectory(), config.FailedFilesDirectory ?? "failed");
+        if (Directory.Exists(failedDir))
+        {
+            // Clear existing failed files
+            var existingFiles = Directory.GetFiles(failedDir, "*.pcode");
+            foreach (var file in existingFiles)
+            {
+                File.Delete(file);
+            }
+            Console.WriteLine($"Cleared {existingFiles.Length} existing files from failed directory: {failedDir}");
+        }
+        else
+        {
+            Directory.CreateDirectory(failedDir);
+            Console.WriteLine($"Created failed files directory: {failedDir}");
         }
 
         var pcodeFiles = Directory.GetFiles(config.DirectoryPath, "*.pcode", SearchOption.AllDirectories)
@@ -24,16 +42,17 @@ public class BulkDirectoryTest
                                  .ToList();
 
         Console.WriteLine($"Found {pcodeFiles.Count} .pcode files");
+        Console.WriteLine($"Failed files will be copied to: {failedDir}");
         Console.WriteLine();
 
-        var results = new List<ComparisonResult>();
-        var antlrParser = new AntlrParserWrapper();
+        var results = new List<SelfHostedOnlyResult>();
         var selfHostedParser = new SelfHostedParserWrapper();
+        var failedCount = 0;
 
         for (int i = 0; i < pcodeFiles.Count; i++)
         {
             var filePath = pcodeFiles[i];
-            
+
             if (config.VerboseOutput)
             {
                 ConsoleLogger.WriteProgress(i + 1, pcodeFiles.Count, filePath);
@@ -46,30 +65,75 @@ public class BulkDirectoryTest
                 /* For now, we are going to strip out any directive peoplecode */
 
                 var fileSize = sourceCode.Length;
-
-                var antlrResult = antlrParser.Parse(sourceCode, filePath);
-                if (antlrResult.ErrorCount > 0)
-                {
-                    Console.WriteLine();
-                    Console.WriteLine($"ANTLR failed for file: {filePath}");
-                }
-
                 var selfHostedResult = selfHostedParser.Parse(sourceCode, filePath);
 
-                var comparison = new ComparisonResult
+                var result = new SelfHostedOnlyResult
                 {
-                    AntlrResult = antlrResult,
                     SelfHostedResult = selfHostedResult,
                     FilePath = filePath,
-                    FileSize = fileSize
+                    FileSize = fileSize,
+                    WasCopiedToFailed = false
                 };
 
-                results.Add(comparison);
+                // If parsing failed, copy file to failed directory
+                if (!selfHostedResult.Success)
+                {
+                    try
+                    {
+                        var fileName = Path.GetFileName(filePath);
+                        var failedFilePath = Path.Combine(failedDir, fileName);
+
+                        // Handle duplicate file names by appending a number
+                        var counter = 1;
+                        var originalFailedFilePath = failedFilePath;
+                        while (File.Exists(failedFilePath))
+                        {
+                            var nameWithoutExt = Path.GetFileNameWithoutExtension(originalFailedFilePath);
+                            var extension = Path.GetExtension(originalFailedFilePath);
+                            failedFilePath = Path.Combine(failedDir, $"{nameWithoutExt}_{counter}{extension}");
+                            counter++;
+                        }
+
+                        File.Copy(filePath, failedFilePath);
+                        result.WasCopiedToFailed = true;
+                        result.FailedFilePath = failedFilePath;
+                        failedCount++;
+
+                        if (config.VerboseOutput)
+                        {
+                            Console.WriteLine();
+                            Console.WriteLine($"FAILED: Copied {fileName} to failed directory");
+                        }
+                    }
+                    catch (Exception copyEx)
+                    {
+                        Console.WriteLine();
+                        Console.WriteLine($"Failed to copy file {filePath} to failed directory: {copyEx.Message}");
+                    }
+
+                    // Interactive debugging if enabled
+                    if (config.DebugOnError)
+                    {
+                        var debug = ConsoleLogger.AskForDebug(filePath, selfHostedResult.ErrorMessage ?? "Unknown error");
+                        if (debug)
+                        {
+                            ConsoleLogger.DebugFile(filePath, sourceCode);
+
+                            var validate = ConsoleLogger.AskForValidation();
+                            if (validate)
+                            {
+                                ConsoleLogger.ValidateFix(filePath, sourceCode);
+                            }
+                        }
+                    }
+                }
+
+                results.Add(result);
 
                 // Show periodic status update
                 if ((i + 1) % config.ProgressInterval == 0)
                 {
-                    ConsoleLogger.WritePeriodicStatus(results, i + 1, pcodeFiles.Count);
+                    ConsoleLogger.WriteSelfHostedOnlyPeriodicStatus(results, i + 1, pcodeFiles.Count, failedCount);
                 }
 
                 // Stop on first self-hosted parser failure if configured
@@ -77,8 +141,9 @@ public class BulkDirectoryTest
                 {
                     Console.WriteLine();
                     Console.WriteLine();
-                    Console.WriteLine($"STOPPING: Self-hosted parser failed on file: {filePath}");
+                    Console.WriteLine($"STOPPING: Parser failed on file: {filePath}");
                     Console.WriteLine($"Error: {selfHostedResult.ErrorMessage}");
+                    Console.WriteLine($"File copied to: {result.FailedFilePath}");
                     break;
                 }
             }
@@ -86,7 +151,7 @@ public class BulkDirectoryTest
             {
                 Console.WriteLine();
                 Console.WriteLine($"Failed to process file {filePath}: {ex.Message}");
-                
+
                 if (config.StopOnFirstError)
                 {
                     Console.WriteLine("Stopping due to file processing error.");
@@ -101,7 +166,7 @@ public class BulkDirectoryTest
             Console.WriteLine();
         }
 
-        ConsoleLogger.WriteBulkResults(results);
+        ConsoleLogger.WriteSelfHostedOnlyResults(results, failedDir, failedCount);
 
         return results;
     }

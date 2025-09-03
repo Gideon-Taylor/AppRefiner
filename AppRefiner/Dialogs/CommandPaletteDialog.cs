@@ -1,3 +1,5 @@
+using PeopleCodeParser.SelfHosted.Nodes;
+
 namespace AppRefiner.Dialogs
 {
     // CommandAction delegate removed - all commands now use simple Action
@@ -8,7 +10,7 @@ namespace AppRefiner.Dialogs
         private string _description = "";
         private Func<string>? _dynamicDescription;
         public Action? Execute { get; set; }
-
+        public bool RequiresActiveEditor = true;
         // New properties for enabled state
         private bool _isEnabled = true;
         private Func<bool>? _dynamicEnabled;

@@ -7,7 +7,7 @@ namespace ParserComparison.Tests;
 
 public class SingleFileTest
 {
-    public static ComparisonResult RunTest(string filePath)
+    public static SelfHostedOnlyResult RunTest(string filePath, bool debugOnError = false)
     {
         ConsoleLogger.WriteSubHeader($"Single File Test: {Path.GetFileName(filePath)}");
 
@@ -20,25 +20,37 @@ public class SingleFileTest
         var fileSize = sourceCode.Length;
 
         Console.WriteLine($"File size: {fileSize:N0} characters");
-        Console.WriteLine("Parsing with both parsers...");
+        Console.WriteLine("Parsing with self-hosted parser...");
         Console.WriteLine();
 
-        var antlrParser = new AntlrParserWrapper();
         var selfHostedParser = new SelfHostedParserWrapper();
-
-        var antlrResult = antlrParser.Parse(sourceCode, filePath);
         var selfHostedResult = selfHostedParser.Parse(sourceCode, filePath);
 
-        var comparison = new ComparisonResult
+        var result = new SelfHostedOnlyResult
         {
-            AntlrResult = antlrResult,
             SelfHostedResult = selfHostedResult,
             FilePath = filePath,
             FileSize = fileSize
         };
 
-        ConsoleLogger.WriteComparisonResult(comparison);
+        ConsoleLogger.WriteSingleFileResult(result);
 
-        return comparison;
+        // Interactive debugging if enabled and file failed
+        if (debugOnError && !selfHostedResult.Success)
+        {
+            var debug = ConsoleLogger.AskForDebug(filePath, selfHostedResult.ErrorMessage ?? "Unknown error");
+            if (debug)
+            {
+                ConsoleLogger.DebugFile(filePath, sourceCode);
+
+                var validate = ConsoleLogger.AskForValidation();
+                if (validate)
+                {
+                    ConsoleLogger.ValidateFix(filePath, sourceCode);
+                }
+            }
+        }
+
+        return result;
     }
 }

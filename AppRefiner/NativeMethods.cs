@@ -9,6 +9,7 @@ namespace AppRefiner
         internal delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
 
         // WinEvent constants
+        internal const uint EVENT_OBJECT_CREATE = 0x8000;
         internal const uint EVENT_OBJECT_FOCUS = 0x8005;
         internal const uint WINEVENT_OUTOFCONTEXT = 0x0000;
         internal const uint WINEVENT_SKIPOWNPROCESS = 0x0002;
