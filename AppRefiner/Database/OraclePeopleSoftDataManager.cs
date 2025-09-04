@@ -1191,7 +1191,7 @@ namespace AppRefiner.Database
             return results;
         }
 
-        public List<OpenTarget> GetOpenTargets(string searchTerm, int maxResults)
+        public List<OpenTarget> GetOpenTargets(string searchTerm, OpenTargetSearchOptions options)
         {
             if (!IsConnected)
             {
@@ -1202,18 +1202,44 @@ namespace AppRefiner.Database
 
             try
             {
-                // Search Projects
-                var projectResults = SearchProjects(searchTerm, maxResults / 2);
-                results.AddRange(projectResults);
-
-                // Search Pages
-                var pageResults = SearchPages(searchTerm, maxResults / 2);
-                results.AddRange(pageResults);
-
-                // Limit total results
-                if (results.Count > maxResults)
+                // Build the unified UNION ALL query based on enabled types
+                string unifiedQuery = BuildUnifiedQuery(options.EnabledTypes);
+                
+                if (string.IsNullOrEmpty(unifiedQuery))
                 {
-                    results = results.Take(maxResults).ToList();
+                    return results; // No enabled types
+                }
+
+                // Escape wildcards in search term for LIKE query
+                string escapedSearchTerm = searchTerm.Replace("_", "\\_");
+                
+                var parameters = new Dictionary<string, object>
+                {
+                    [":search_text"] = escapedSearchTerm,
+                    [":max_rows_per_type"] = options.MaxRowsPerType,
+                    [":sort_by_date"] = options.SortByDate ? "Y" : "N"
+                };
+
+                DataTable data = _connection.ExecuteQuery(unifiedQuery, parameters);
+
+                foreach (DataRow row in data.Rows)
+                {
+                    string defnType = row["DEFN_TYPE"]?.ToString() ?? string.Empty;
+                    string id = row["ID"]?.ToString() ?? string.Empty;
+                    string description = row["DESCR"]?.ToString() ?? string.Empty;
+
+                    // Map definition type string to OpenTargetType enum
+                    if (TryMapDefnTypeToEnum(defnType, out OpenTargetType targetType))
+                    {
+                        // Map to appropriate PSCLASSID and create object pairs
+                        var objectPairs = CreateObjectPairs(targetType, id);
+                        
+                        results.Add(new OpenTarget(
+                            targetType,
+                            id,
+                            description,
+                            objectPairs));
+                    }
                 }
             }
             catch (Exception ex)
@@ -1224,110 +1250,324 @@ namespace AppRefiner.Database
             return results;
         }
 
-        private List<OpenTarget> SearchProjects(string searchTerm, int maxResults)
+        private string BuildUnifiedQuery(HashSet<OpenTargetType> enabledTypes)
         {
-            var results = new List<OpenTarget>();
+            var unionClauses = new List<string>();
 
-            try
+            foreach (var type in enabledTypes)
             {
-                string query = @"
-                    SELECT PROJECTNAME, PROJECTDESCR 
-                    FROM PSPROJECTDEFN 
-                    WHERE UPPER(PROJECTNAME) LIKE UPPER(:searchTerm) ESCAPE '\'
-                       OR UPPER(PROJECTDESCR) LIKE UPPER(:searchTerm) ESCAPE '\'
-                    ORDER BY PROJECTNAME";
-
-                // Escape wildcards in search term for LIKE query
-                string escapedSearchTerm = searchTerm.Replace("_", "\\_").Replace("%", "\\%");
-                
-                var parameters = new Dictionary<string, object>
+                string clause = GetUnionClauseForType(type);
+                if (!string.IsNullOrEmpty(clause))
                 {
-                    [":searchTerm"] = $"%{escapedSearchTerm}%"
-                };
-
-                DataTable data = _connection.ExecuteQuery(query, parameters);
-
-                int count = 0;
-                foreach (DataRow row in data.Rows)
-                {
-                    if (count >= maxResults) break;
-
-                    string projectName = row["PROJECTNAME"]?.ToString() ?? string.Empty;
-                    string description = row["PROJECTDESCR"]?.ToString() ?? string.Empty;
-
-                    var objectPairs = new List<(PSCLASSID, string)>
-                    {
-                        (PSCLASSID.PROJECT, projectName)
-                    };
-
-                    results.Add(new OpenTarget(
-                        OpenTargetType.Project,
-                        projectName,
-                        description,
-                        objectPairs));
-
-                    count++;
+                    unionClauses.Add(clause);
                 }
             }
-            catch (Exception ex)
+
+            if (unionClauses.Count == 0)
             {
-                Debug.Log($"Error searching projects: {ex.Message}");
+                return string.Empty;
             }
 
-            return results;
+            // Build the complete query with CTE and ranking (Oracle syntax)
+            var query = $@"
+WITH U AS (
+{string.Join("\n\nUNION ALL\n\n", unionClauses)}
+)
+SELECT DEFN_TYPE, ID, DESCR, LASTUPDDTTM
+FROM (
+  SELECT U.*,
+         ROW_NUMBER() OVER (
+           PARTITION BY DEFN_TYPE
+           ORDER BY CASE
+                      WHEN INSTR(UPPER(ID), UPPER(:search_text)) > 0 AND INSTR(UPPER(DESCR), UPPER(:search_text)) > 0 
+                      THEN LEAST(INSTR(UPPER(ID), UPPER(:search_text)), INSTR(UPPER(DESCR), UPPER(:search_text)))
+                      WHEN INSTR(UPPER(ID), UPPER(:search_text)) > 0 
+                      THEN INSTR(UPPER(ID), UPPER(:search_text))
+                      WHEN INSTR(UPPER(DESCR), UPPER(:search_text)) > 0 
+                      THEN INSTR(UPPER(DESCR), UPPER(:search_text))
+                      ELSE 999999
+                    END,
+                    ID
+         ) AS RN
+  FROM U
+)
+WHERE RN <= :max_rows_per_type
+ORDER BY DEFN_TYPE ASC, ID ASC, CASE WHEN :sort_by_date = 'Y' THEN LASTUPDDTTM END DESC";
+
+            return query;
         }
 
-        private List<OpenTarget> SearchPages(string searchTerm, int maxResults)
+        private string GetUnionClauseForType(OpenTargetType type)
         {
-            var results = new List<OpenTarget>();
-
-            try
+            return type switch
             {
-                string query = @"
-                    SELECT PNLNAME, DESCR 
-                    FROM PSPNLDEFN 
-                    WHERE UPPER(PNLNAME) LIKE UPPER(:searchTerm) ESCAPE '\'
-                       OR UPPER(DESCR) LIKE UPPER(:searchTerm) ESCAPE '\'
-                    ORDER BY PNLNAME";
+                OpenTargetType.Activity => @"
+  SELECT 'Activity' AS DEFN_TYPE, ACTIVITYNAME AS ID, DESCR60 AS DESCR, LASTUPDDTTM
+  FROM   PSACTIVITYDEFN
+  WHERE  UPPER(ACTIVITYNAME) LIKE UPPER('%' || :search_text || '%') ESCAPE '\'
+     OR  UPPER(DESCR60)      LIKE UPPER('%' || :search_text || '%') ESCAPE '\'",
 
-                // Escape wildcards in search term for LIKE query
-                string escapedSearchTerm = searchTerm.Replace("_", "\\_").Replace("%", "\\%");
-                
-                var parameters = new Dictionary<string, object>
-                {
-                    [":searchTerm"] = $"%{escapedSearchTerm}%"
-                };
+                OpenTargetType.AppEngineProgram => @"
+  SELECT 'App Engine Program' AS DEFN_TYPE, AE_APPLID AS ID, TO_CHAR(DESCR) AS DESCR, LASTUPDDTTM
+  FROM PSAEAPPLDEFN
+  WHERE  UPPER(AE_APPLID) LIKE UPPER('%' || :search_text || '%') ESCAPE '\'
+     OR  UPPER(DESCR)     LIKE UPPER('%' || :search_text || '%') ESCAPE '\'",
 
-                DataTable data = _connection.ExecuteQuery(query, parameters);
+                OpenTargetType.ApplicationPackage => @"
+  SELECT 'Application Package' AS DEFN_TYPE, 
+         PACKAGEID AS ID, 
+         TO_CHAR(DESCRLONG) AS DESCR, LASTUPDDTTM
+  FROM   PSPACKAGEDEFN
+  WHERE  UPPER(PACKAGEID) LIKE UPPER('%' || :search_text || '%') ESCAPE '\'",
 
-                int count = 0;
-                foreach (DataRow row in data.Rows)
-                {
-                    if (count >= maxResults) break;
+                OpenTargetType.ApplicationClass => @"
+  SELECT 'Application Class' AS DEFN_TYPE, 
+         PACKAGEROOT || CASE WHEN QUALIFYPATH = ':' THEN '' ELSE ':' || QUALIFYPATH END || ':' || APPCLASSID AS ID, 
+         DESCR AS DESCR, SYSDATE AS LASTUPDDTTM
+  FROM PSAPPCLASSDEFN
+  WHERE UPPER(PACKAGEROOT || CASE WHEN QUALIFYPATH = ':' THEN '' ELSE ':' || QUALIFYPATH END || ':' || APPCLASSID) LIKE UPPER('%' || :search_text || '%') ESCAPE '\'",
 
-                    string pageName = row["PNLNAME"]?.ToString() ?? string.Empty;
-                    string description = row["DESCR"]?.ToString() ?? string.Empty;
+                OpenTargetType.ApprovalRuleSet => @"
+  SELECT 'Approval Rule Set' AS DEFN_TYPE, APPR_RULE_SET AS ID, DESCR60 AS DESCR, LASTUPDDTTM
+  FROM PS_APPR_RULE_HDR
+  WHERE  UPPER(APPR_RULE_SET) LIKE UPPER('%' || :search_text || '%') ESCAPE '\'
+     OR  UPPER(DESCR60)       LIKE UPPER('%' || :search_text || '%') ESCAPE '\'",
 
-                    var objectPairs = new List<(PSCLASSID, string)>
+                OpenTargetType.BusinessInterlink => @"
+  SELECT 'Business Interlink' AS DEFN_TYPE, IONAME AS ID, IODESCR AS DESCR, LASTUPDDTTM
+  FROM PSIODEFN
+  WHERE  UPPER(IONAME)  LIKE UPPER('%' || :search_text || '%') ESCAPE '\'
+     OR  UPPER(IODESCR) LIKE UPPER('%' || :search_text || '%') ESCAPE '\'",
+
+                OpenTargetType.BusinessProcess => @"
+  SELECT 'Business Process' AS DEFN_TYPE, BUSPROCNAME AS ID, DESCR60 AS DESCR, LASTUPDDTTM
+  FROM   PSBUSPROCDEFN
+  WHERE  UPPER(BUSPROCNAME) LIKE UPPER('%' || :search_text || '%') ESCAPE '\'
+     OR  UPPER(DESCR60)     LIKE UPPER('%' || :search_text || '%') ESCAPE '\'",
+
+                OpenTargetType.Component => @"
+  SELECT 'Component' AS DEFN_TYPE, PNLGRPNAME AS ID, DESCR AS DESCR, LASTUPDDTTM
+  FROM   PSPNLGRPDEFN
+  WHERE  UPPER(PNLGRPNAME) LIKE UPPER('%' || :search_text || '%') ESCAPE '\'
+     OR  UPPER(DESCR)      LIKE UPPER('%' || :search_text || '%') ESCAPE '\'",
+
+                OpenTargetType.ComponentInterface => @"
+  SELECT 'Component Interface' AS DEFN_TYPE, BCNAME AS ID, DESCR AS DESCR, LASTUPDDTTM
+  FROM   PSBCDEFN
+  WHERE  UPPER(BCNAME) LIKE UPPER('%' || :search_text || '%') ESCAPE '\'
+     OR  UPPER(DESCR)  LIKE UPPER('%' || :search_text || '%') ESCAPE '\'",
+
+                OpenTargetType.Field => @"
+  SELECT 'Field' AS DEFN_TYPE, FIELDNAME AS ID, TO_CHAR(DESCRLONG) AS DESCR, LASTUPDDTTM
+  FROM   PSDBFIELD
+  WHERE  UPPER(FIELDNAME) LIKE UPPER('%' || :search_text || '%') ESCAPE '\'
+     OR  UPPER(DESCRLONG) LIKE UPPER('%' || :search_text || '%') ESCAPE '\'",
+
+                OpenTargetType.FileLayout => @"
+  SELECT 'File Layout' AS DEFN_TYPE, FLDDEFNNAME AS ID, DESCR AS DESCR, LASTUPDDTTM
+  FROM   PSFLDDEFN
+  WHERE  UPPER(FLDDEFNNAME) LIKE UPPER('%' || :search_text || '%') ESCAPE '\'
+     OR  UPPER(DESCR)       LIKE UPPER('%' || :search_text || '%') ESCAPE '\'",
+
+                OpenTargetType.FileReference => @"
+  SELECT 'File Reference' AS DEFN_TYPE, FILEREFNAME AS ID, TO_CHAR(DESCRLONG) AS DESCR, LASTUPDDTTM
+  FROM PSFILEREDEFN
+  WHERE  UPPER(FILEREFNAME)    LIKE UPPER('%' || :search_text || '%') ESCAPE '\'
+     OR  UPPER(TO_CHAR(DESCRLONG)) LIKE UPPER('%' || :search_text || '%') ESCAPE '\'",
+
+                OpenTargetType.HTML => @"
+  SELECT 'HTML' AS DEFN_TYPE, CONTNAME AS ID, DESCR AS DESCR, LASTUPDDTTM
+  FROM   PSCONTDEFN
+  WHERE  CONTTYPE = 4 AND (UPPER(CONTNAME) LIKE UPPER('%' || :search_text || '%') ESCAPE '\'
+     OR  UPPER(DESCR) LIKE UPPER('%' || :search_text || '%') ESCAPE '\')",
+
+                OpenTargetType.Image => @"
+  SELECT 'Image' AS DEFN_TYPE, CONTNAME AS ID, DESCR AS DESCR, LASTUPDDTTM
+  FROM   PSCONTDEFN
+  WHERE  CONTTYPE = 1 AND (UPPER(CONTNAME) LIKE UPPER('%' || :search_text || '%') ESCAPE '\'
+     OR  UPPER(DESCR) LIKE UPPER('%' || :search_text || '%') ESCAPE '\')",
+
+                OpenTargetType.Menu => @"
+  SELECT 'Menu' AS DEFN_TYPE, MENUNAME AS ID, DESCR AS DESCR, LASTUPDDTTM
+  FROM   PSMENUDEFN
+  WHERE  UPPER(MENUNAME) LIKE UPPER('%' || :search_text || '%') ESCAPE '\'
+     OR  UPPER(DESCR)    LIKE UPPER('%' || :search_text || '%') ESCAPE '\'",
+
+                OpenTargetType.Message => @"
+  SELECT 'Message' AS DEFN_TYPE, MSGNAME AS ID, DESCR AS DESCR, LASTUPDDTTM
+  FROM   PSMSGDEFN
+  WHERE  UPPER(MSGNAME) LIKE UPPER('%' || :search_text || '%') ESCAPE '\'
+     OR  UPPER(DESCR)   LIKE UPPER('%' || :search_text || '%') ESCAPE '\'",
+
+                OpenTargetType.Page => @"
+  SELECT 'Page' AS DEFN_TYPE, PNLNAME AS ID, DESCR AS DESCR, LASTUPDDTTM
+  FROM   PSPNLDEFN
+  WHERE  PNLTYPE <> 7 AND (UPPER(PNLNAME) LIKE UPPER('%' || :search_text || '%') ESCAPE '\'
+     OR  UPPER(DESCR) LIKE UPPER('%' || :search_text || '%') ESCAPE '\')",
+
+                OpenTargetType.PageFluid => @"
+  SELECT 'Page (Fluid)' AS DEFN_TYPE, PNLNAME AS ID, DESCR AS DESCR, LASTUPDDTTM
+  FROM   PSPNLDEFN
+  WHERE  PNLTYPE = 7
+    AND (UPPER(PNLNAME) LIKE UPPER('%' || :search_text || '%') ESCAPE '\'
+      OR UPPER(DESCR)   LIKE UPPER('%' || :search_text || '%') ESCAPE '\')",
+
+                OpenTargetType.Project => @"
+  SELECT 'Project' AS DEFN_TYPE, PROJECTNAME AS ID, PROJECTDESCR AS DESCR, LASTUPDDTTM
+  FROM   PSPROJECTDEFN
+  WHERE  UPPER(PROJECTNAME)  LIKE UPPER('%' || :search_text || '%') ESCAPE '\'
+     OR  UPPER(PROJECTDESCR) LIKE UPPER('%' || :search_text || '%') ESCAPE '\'",
+
+                OpenTargetType.Record => @"
+  SELECT 'Record' AS DEFN_TYPE, RECNAME AS ID, RECDESCR AS DESCR, LASTUPDDTTM
+  FROM   PSRECDEFN
+  WHERE  UPPER(RECNAME)  LIKE UPPER('%' || :search_text || '%') ESCAPE '\'
+     OR  UPPER(RECDESCR) LIKE UPPER('%' || :search_text || '%') ESCAPE '\'",
+
+                OpenTargetType.SQL => @"
+  SELECT 'SQL' AS DEFN_TYPE, SQLID AS ID, ' ' AS DESCR, LASTUPDDTTM
+  FROM   PSSQLDEFN
+  WHERE  UPPER(SQLID) LIKE UPPER('%' || :search_text || '%') ESCAPE '\'",
+
+                OpenTargetType.StyleSheet => @"
+  SELECT 'Style Sheet' AS DEFN_TYPE, CONTNAME AS ID, DESCR AS DESCR, LASTUPDDTTM
+  FROM   PSCONTDEFN
+  WHERE  CONTTYPE = 9 AND (UPPER(CONTNAME) LIKE UPPER('%' || :search_text || '%') ESCAPE '\'
+     OR  UPPER(DESCR) LIKE UPPER('%' || :search_text || '%') ESCAPE '\')",
+
+                _ => string.Empty
+            };
+        }
+
+        private bool TryMapDefnTypeToEnum(string defnType, out OpenTargetType targetType)
+        {
+            targetType = defnType switch
+            {
+                "Activity" => OpenTargetType.Activity,
+                "App Engine Program" => OpenTargetType.AppEngineProgram,
+                "Application Package" => OpenTargetType.ApplicationPackage,
+                "Application Class" => OpenTargetType.ApplicationClass,
+                "Approval Rule Set" => OpenTargetType.ApprovalRuleSet,
+                "Business Interlink" => OpenTargetType.BusinessInterlink,
+                "Business Process" => OpenTargetType.BusinessProcess,
+                "Component" => OpenTargetType.Component,
+                "Component Interface" => OpenTargetType.ComponentInterface,
+                "Field" => OpenTargetType.Field,
+                "File Layout" => OpenTargetType.FileLayout,
+                "File Reference" => OpenTargetType.FileReference,
+                "HTML" => OpenTargetType.HTML,
+                "Image" => OpenTargetType.Image,
+                "Menu" => OpenTargetType.Menu,
+                "Message" => OpenTargetType.Message,
+                "Page" => OpenTargetType.Page,
+                "Page (Fluid)" => OpenTargetType.PageFluid,
+                "Project" => OpenTargetType.Project,
+                "Record" => OpenTargetType.Record,
+                "SQL" => OpenTargetType.SQL,
+                "Style Sheet" => OpenTargetType.StyleSheet,
+                _ => OpenTargetType.UNKNOWN // Default fallback
+            };
+
+            return defnType != null || targetType != OpenTargetType.UNKNOWN;
+        }
+
+        private List<(PSCLASSID, string)> CreateObjectPairs(OpenTargetType targetType, string id)
+        {
+            var pairs = new List<(PSCLASSID, string)>();
+
+            switch (targetType)
+            {
+                case OpenTargetType.Project:
+                    pairs.Add((PSCLASSID.PROJECT, id));
+                    break;
+                case OpenTargetType.Page:
+                case OpenTargetType.PageFluid:
+                    pairs.Add((PSCLASSID.PAGE, id));
+                    break;
+                case OpenTargetType.Activity:
+                    pairs.Add((PSCLASSID.ACTIVITYNAME, id));
+                    break;
+                case OpenTargetType.AnalyticModel:
+                    pairs.Add((PSCLASSID.ANALYTIC_MODEL_ID, id));
+                    break;
+                case OpenTargetType.AnalyticType:
+                    pairs.Add((PSCLASSID.NONE, id)); // No specific PSCLASSID for analytic types
+                    break;
+                case OpenTargetType.AppEngineProgram:
+                    pairs.Add((PSCLASSID.AEAPPLICATIONID, id));
+                    break;
+                case OpenTargetType.ApplicationPackage:
+                    // Application packages use a hierarchical structure
+                    pairs.Add((PSCLASSID.APPLICATION_PACKAGE, id));
+                    break;
+                case OpenTargetType.ApplicationClass:
+                    // Application classes use package root, qualify path, and class name
+                    string[] classParts = id.Split(':');
+                    var currentClassID = PSCLASSID.APPLICATION_PACKAGE;
+                    for (var x = 0; x < classParts.Length; x++)
                     {
-                        (PSCLASSID.PAGE, pageName)
-                    };
+                        pairs.Add(((PSCLASSID)currentClassID++, classParts[x]));
+                    }
 
-                    results.Add(new OpenTarget(
-                        OpenTargetType.Page,
-                        pageName,
-                        description,
-                        objectPairs));
-
-                    count++;
-                }
+                    /* Last one is always APPLICATION_CLASS */
+                    pairs[pairs.Count - 1] = (PSCLASSID.APPLICATION_CLASS, pairs[pairs.Count - 1].Item2);
+                    pairs.Add((PSCLASSID.METHOD, "OnExecute"));
+                    break;
+                case OpenTargetType.ApprovalRuleSet:
+                    pairs.Add((PSCLASSID.APPRRULESET, id));
+                    break;
+                case OpenTargetType.BusinessInterlink:
+                    pairs.Add((PSCLASSID.NONE, id)); // No specific PSCLASSID for business interlinks
+                    break;
+                case OpenTargetType.BusinessProcess:
+                    pairs.Add((PSCLASSID.BUSINESSPROCESS, id));
+                    break;
+                case OpenTargetType.Component:
+                    pairs.Add((PSCLASSID.COMPONENT, id));
+                    break;
+                case OpenTargetType.ComponentInterface:
+                    pairs.Add((PSCLASSID.COMPONENTINTERFACE, id));
+                    break;
+                case OpenTargetType.Field:
+                    pairs.Add((PSCLASSID.FIELD, id));
+                    break;
+                case OpenTargetType.FileLayout:
+                    pairs.Add((PSCLASSID.FILELAYOUT, id));
+                    break;
+                case OpenTargetType.FileReference:
+                    pairs.Add((PSCLASSID.FILEREFERENCE, id));
+                    break;
+                case OpenTargetType.HTML:
+                    pairs.Add((PSCLASSID.HTML, id));
+                    break;
+                case OpenTargetType.Image:
+                    pairs.Add((PSCLASSID.IMAGE, id));
+                    break;
+                case OpenTargetType.Menu:
+                    pairs.Add((PSCLASSID.MENU, id));
+                    break;
+                case OpenTargetType.Message:
+                    pairs.Add((PSCLASSID.MESSAGE, id));
+                    break;
+                case OpenTargetType.OptimizationModel:
+                    pairs.Add((PSCLASSID.OPTMODEL, id));
+                    break;
+                case OpenTargetType.Record:
+                    pairs.Add((PSCLASSID.RECORD, id));
+                    break;
+                case OpenTargetType.SQL:
+                    pairs.Add((PSCLASSID.SQL, id));
+                    break;
+                case OpenTargetType.StyleSheet:
+                    pairs.Add((PSCLASSID.STYLESHEET, id));
+                    break;
+                default:
+                    // For any remaining types without specific PSCLASSID mapping
+                    pairs.Add((PSCLASSID.NONE, id));
+                    break;
             }
-            catch (Exception ex)
-            {
-                Debug.Log($"Error searching pages: {ex.Message}");
-            }
 
-            return results;
+            return pairs;
         }
     }
 }

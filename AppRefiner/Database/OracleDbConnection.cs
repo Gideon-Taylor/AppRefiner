@@ -96,6 +96,7 @@ namespace AppRefiner.Database
         {
             using var command = _connection.CreateCommand();
             command.CommandText = sql;
+            command.BindByName = true;
 
             if (parameters != null)
             {
@@ -124,6 +125,7 @@ namespace AppRefiner.Database
         {
             using var command = _connection.CreateCommand();
             command.CommandText = sql;
+            command.BindByName = true;
 
             if (parameters != null)
             {

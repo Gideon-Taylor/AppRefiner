@@ -48,10 +48,10 @@ namespace AppRefiner
         private ScintillaEditor? activeEditor = null;
         private AppDesignerProcess? activeAppDesigner = null;
         private Dictionary<uint, AppDesignerProcess> AppDesignerProcesses = [];
-        
+
         // Current shortcut flags state - tracks which shortcuts are enabled
         private EventHookInstaller.ShortcutType currentShortcutFlags = EventHookInstaller.ShortcutType.All;
-        
+
         /// <summary>
         /// Gets the currently active editor
         /// </summary>
@@ -253,13 +253,17 @@ namespace AppRefiner
         private void GeneralSetting_Changed(object? sender, EventArgs e)
         {
             if (isLoadingSettings) return;
-            
+
             // Check if this is a shortcut-related checkbox change
             if (sender == chkOverrideOpen || sender == chkOverrideFindReplace)
             {
                 UpdateShortcutFlags();
             }
-            
+            if (sender == chkOverrideOpen)
+            {
+                btnConfigSmartOpen.Enabled = chkOverrideOpen.Checked;
+            }
+
             SaveSettings(); // Call the consolidated SaveSettings method
         }
 
@@ -267,19 +271,19 @@ namespace AppRefiner
         {
             // Start with Command Palette always enabled
             currentShortcutFlags = EventHookInstaller.ShortcutType.CommandPalette;
-            
+
             // Add Open shortcut if checkbox is checked
             if (chkOverrideOpen.Checked)
             {
                 currentShortcutFlags |= EventHookInstaller.ShortcutType.Open;
             }
-            
+
             // Add Search shortcut if checkbox is checked
             if (chkOverrideFindReplace.Checked)
             {
                 currentShortcutFlags |= EventHookInstaller.ShortcutType.Search;
             }
-            
+
             // Notify all processes of the change
             NotifyMainWindowShortcutsChange(currentShortcutFlags);
         }
@@ -288,19 +292,19 @@ namespace AppRefiner
         {
             // Start with Command Palette always enabled
             currentShortcutFlags = EventHookInstaller.ShortcutType.CommandPalette;
-            
+
             // Add Open shortcut if checkbox is checked
             if (chkOverrideOpen.Checked)
             {
                 currentShortcutFlags |= EventHookInstaller.ShortcutType.Open;
             }
-            
+
             // Add Search shortcut if checkbox is checked
             if (chkOverrideFindReplace.Checked)
             {
                 currentShortcutFlags |= EventHookInstaller.ShortcutType.Search;
             }
-            
+
             // Don't notify processes during initialization - they will be notified when they connect
         }
 
@@ -933,7 +937,7 @@ namespace AppRefiner
                     if (mainHandle != IntPtr.Zero)
                     {
                         var handleWrapper = new WindowWrapper(mainHandle);
-                        new MessageBoxDialog("Smart Open requires a database connection. Please connect to database first.", 
+                        new MessageBoxDialog("Smart Open requires a database connection. Please connect to database first.",
                             "Database Required", MessageBoxButtons.OK, mainHandle).ShowDialog(handleWrapper);
                     }
                 });
@@ -942,7 +946,7 @@ namespace AppRefiner
 
             var dataManager = activeAppDesigner.DataManager;
             var dialog = new SmartOpenDialog(
-                (searchTerm, maxResults) => dataManager.GetOpenTargets(searchTerm, maxResults),
+                (searchTerm, options) => dataManager.GetOpenTargets(searchTerm, options),
                 activeAppDesigner?.MainWindowHandle ?? IntPtr.Zero,
                 BypassSmartOpen);
 
@@ -997,7 +1001,7 @@ namespace AppRefiner
                 if (mainWindowHandle != IntPtr.Zero)
                 {
                     Debug.Log($"BypassSmartOpen: Sending Ctrl+O to App Designer window {mainWindowHandle:X}");
-                    
+
                     // Send the key combination using keybd_event for global effect
                     keybd_event(VK_CONTROL, 0, 0, 0); // Ctrl down
                     keybd_event(VK_O, 0, 0, 0);       // O down  
@@ -1028,18 +1032,19 @@ namespace AppRefiner
         private string BuildOpenTargetString(OpenTarget target)
         {
             // Build the target string based on the type
-            switch (target.Type)
+            StringBuilder sb = new();
+            for(var x = 0; x < target.ObjectIDs.Length; x++)
             {
-                case OpenTargetType.Project:
-                    return $"PROJECT.{target.Name}";
-                
-                case OpenTargetType.Page:
-                    return $"PAGE.{target.Name}";
-                
-                default:
-                    // Fallback to the path
-                    return target.Path;
+                if (target.ObjectIDs[x] == PSCLASSID.NONE) break;
+                if (x > 0)
+                {
+                    sb.Append('.');
+                }
+                sb.Append(Enum.GetName(typeof(PSCLASSID), target.ObjectIDs[x]));
+                sb.Append('.');
+                sb.Append(target.ObjectValues[x]);
             }
+            return sb.ToString();
         }
 
         private void RegisterCommands()
@@ -1215,7 +1220,7 @@ namespace AppRefiner
                             if (manager != null)
                             {
                                 activeAppDesigner.DataManager = manager;
-                                foreach(var editor in activeAppDesigner.Editors.Values)
+                                foreach (var editor in activeAppDesigner.Editors.Values)
                                 {
                                     editor.DataManager = manager;
                                 }
@@ -2781,6 +2786,38 @@ namespace AppRefiner
 
         }
 
+        private void btnConfigSmartOpen_Click(object sender, EventArgs e)
+        {
+            try
+            {
+                // Load current Smart Open configuration
+                var currentConfig = settingsService?.LoadSmartOpenConfig() ?? SmartOpenConfig.GetDefault();
+
+                // Create and show the configuration dialog
+                using var dialog = new SmartOpenConfigDialog(currentConfig);
+                dialog.StartPosition = FormStartPosition.CenterParent;
+
+                if (dialog.ShowDialog(this) == DialogResult.OK)
+                {
+                    // Save the updated configuration
+                    settingsService?.SaveSmartOpenConfig(dialog.Configuration);
+                    settingsService?.SaveChanges();
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.LogException(ex, "Error showing Smart Open configuration dialog");
+                
+                // Show error message to user
+                Task.Delay(100).ContinueWith(_ =>
+                {
+                    var mainHandle = this.Handle;
+                    var handleWrapper = new WindowWrapper(mainHandle);
+                    new MessageBoxDialog($"Error opening Smart Open configuration: {ex.Message}", 
+                        "Configuration Error", MessageBoxButtons.OK, mainHandle).ShowDialog(handleWrapper);
+                });
+            }
+        }
     }
 }
 

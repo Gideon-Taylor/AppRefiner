@@ -52,6 +52,7 @@ namespace AppRefiner
             btnTNSADMIN = new Button();
             btnDebugLog = new Button();
             grpEditorSettings = new GroupBox();
+            btnConfigSmartOpen = new Button();
             chkOverrideOpen = new CheckBox();
             chkOverrideFindReplace = new CheckBox();
             chkRememberFolds = new CheckBox();
@@ -289,6 +290,7 @@ namespace AppRefiner
             // 
             // grpEditorSettings
             // 
+            grpEditorSettings.Controls.Add(btnConfigSmartOpen);
             grpEditorSettings.Controls.Add(chkOverrideOpen);
             grpEditorSettings.Controls.Add(chkOverrideFindReplace);
             grpEditorSettings.Controls.Add(chkRememberFolds);
@@ -306,6 +308,16 @@ namespace AppRefiner
             grpEditorSettings.TabIndex = 20;
             grpEditorSettings.TabStop = false;
             grpEditorSettings.Text = "Settings";
+            // 
+            // btnConfigSmartOpen
+            // 
+            btnConfigSmartOpen.Location = new Point(432, 43);
+            btnConfigSmartOpen.Name = "btnConfigSmartOpen";
+            btnConfigSmartOpen.Size = new Size(110, 23);
+            btnConfigSmartOpen.TabIndex = 33;
+            btnConfigSmartOpen.Text = "Config Open...";
+            btnConfigSmartOpen.UseVisualStyleBackColor = true;
+            btnConfigSmartOpen.Click += btnConfigSmartOpen_Click;
             // 
             // chkOverrideOpen
             // 
@@ -841,5 +853,6 @@ namespace AppRefiner
         private DataGridViewButtonColumn dataGridViewButtonColumn1;
         private CheckBox chkOverrideFindReplace;
         private CheckBox chkOverrideOpen;
+        private Button btnConfigSmartOpen;
     }
 }

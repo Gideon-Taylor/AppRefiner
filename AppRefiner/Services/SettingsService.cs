@@ -273,5 +273,53 @@ namespace AppRefiner
                 Debug.LogException(ex, "Error saving tooltip states");
             }
         }
+
+        // --- Smart Open Configuration --- 
+
+        /// <summary>
+        /// Loads the Smart Open configuration from settings
+        /// </summary>
+        /// <returns>SmartOpenConfig object with current settings or default if not found</returns>
+        public SmartOpenConfig LoadSmartOpenConfig()
+        {
+            try
+            {
+                var configJson = Properties.Settings.Default.smartOpenConfig;
+                
+                if (string.IsNullOrEmpty(configJson))
+                {
+                    return SmartOpenConfig.GetDefault();
+                }
+
+                var config = JsonSerializer.Deserialize<SmartOpenConfig>(configJson);
+                return config ?? SmartOpenConfig.GetDefault();
+            }
+            catch (JsonException ex)
+            {
+                Debug.LogException(ex, "Error deserializing SmartOpenConfig - using defaults.");
+                return SmartOpenConfig.GetDefault();
+            }
+            catch (Exception ex)
+            {
+                Debug.LogException(ex, "Error loading Smart Open configuration");
+                return SmartOpenConfig.GetDefault();
+            }
+        }
+
+        /// <summary>
+        /// Saves the Smart Open configuration to settings
+        /// </summary>
+        /// <param name="config">The SmartOpenConfig to save</param>
+        public void SaveSmartOpenConfig(SmartOpenConfig config)
+        {
+            try
+            {
+                Properties.Settings.Default.smartOpenConfig = JsonSerializer.Serialize(config);
+            }
+            catch (Exception ex)
+            {
+                Debug.LogException(ex, "Error saving Smart Open configuration");
+            }
+        }
     }
 }

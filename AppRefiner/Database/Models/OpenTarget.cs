@@ -3,7 +3,31 @@ namespace AppRefiner.Database.Models
     public enum OpenTargetType
     {
         Project,
-        Page
+        Page,
+        Activity,
+        AnalyticModel,
+        AnalyticType,
+        AppEngineProgram,
+        ApplicationPackage,
+        ApplicationClass,
+        ApprovalRuleSet,
+        BusinessInterlink,
+        BusinessProcess,
+        Component,
+        ComponentInterface,
+        Field,
+        FileLayout,
+        FileReference,
+        HTML,
+        Image,
+        Menu,
+        Message,
+        OptimizationModel,
+        PageFluid,
+        Record,
+        SQL,
+        StyleSheet,
+        UNKNOWN
     }
 
     /// <summary>

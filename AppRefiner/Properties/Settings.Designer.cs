@@ -310,5 +310,17 @@ namespace AppRefiner.Properties {
                 this["overrideOpen"] = value;
             }
         }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("")]
+        public string smartOpenConfig {
+            get {
+                return ((string)(this["smartOpenConfig"]));
+            }
+            set {
+                this["smartOpenConfig"] = value;
+            }
+        }
     }
 }

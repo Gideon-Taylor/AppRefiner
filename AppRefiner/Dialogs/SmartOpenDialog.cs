@@ -3,68 +3,90 @@ using System.Runtime.InteropServices;
 
 namespace AppRefiner.Dialogs
 {
-    public partial class SmartOpenDialog : Form
+    /// <summary>
+    /// Dialog for searching and opening PeopleSoft definitions using Smart Open functionality
+    /// </summary>
+    public class SmartOpenDialog : Form
     {
+        #region Private Fields
+
+        // Win32 API imports for keyboard events
+        [DllImport("user32.dll")]
+        private static extern void keybd_event(byte bVk, byte bScan, int dwFlags, int dwExtraInfo);
+
+        private const int VK_CONTROL = 0x11;
+        private const int VK_O = 0x4F;
+        
         private readonly Panel headerPanel;
         private readonly Label headerLabel;
         private readonly TextBox searchBox;
-        private readonly ListView targetListView;
-        private readonly Func<string, int, List<OpenTarget>> searchFunction;
-        private readonly Action? bypassCallback;
-        private List<OpenTarget> currentTargets;
-        private OpenTarget? selectedTarget;
+        private readonly TreeView targetsTreeView;
+        private readonly Func<string, OpenTargetSearchOptions, List<OpenTarget>> searchFunction;
+        private readonly Action bypassAction;
+        private readonly IntPtr owner;
         private DialogHelper.ModalDialogMouseHandler? mouseHandler;
-        private IntPtr owner;
-        private System.Threading.Timer? searchTimer;
+        
+        // Timer for implementing typing delay
+        private readonly System.Windows.Forms.Timer searchTimer;
+        
+        private List<OpenTarget> allTargets = new List<OpenTarget>();
+        private List<OpenTarget> filteredTargets = new List<OpenTarget>();
+        private OpenTarget? selectedTarget;
+        private SmartOpenConfig config;
 
-        private const int SEARCH_DELAY_MS = 300;
-        private const int DEFAULT_MAX_RESULTS = 50;
+        #endregion
 
-        // P/Invoke declarations for enabling collapsible groups
-        [DllImport("user32.dll", CharSet = CharSet.Auto)]
-        private static extern IntPtr SendMessage(IntPtr hWnd, int msg, IntPtr wParam, IntPtr lParam);
+        #region Properties
 
-        private const int LVM_ENABLEGROUPVIEW = 0x109D;
-        private const int LVM_SETEXTENDEDLISTVIEWSTYLE = 0x1036;
-        private const int LVS_EX_DOUBLEBUFFER = 0x00010000;
-        private const int LVM_SETGROUPINFO = 0x1093;
-        private const int LVGF_STATE = 0x4;
-        private const int LVGS_COLLAPSIBLE = 0x8;
-        private const int LVGS_COLLAPSED = 0x1;
+        /// <summary>
+        /// Gets the selected target after dialog closes
+        /// </summary>
+        public OpenTarget? SelectedTarget => selectedTarget;
 
-        [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
-        private struct LVGROUP
+        #endregion
+
+        #region Constructor
+
+        /// <summary>
+        /// Initializes a new instance of SmartOpenDialog
+        /// </summary>
+        /// <param name="searchFunction">Function to search for targets</param>
+        /// <param name="owner">Owner window handle</param>
+        /// <param name="bypassAction">Action to call for bypassing smart open</param>
+        public SmartOpenDialog(
+            Func<string, OpenTargetSearchOptions, List<OpenTarget>> searchFunction, 
+            IntPtr owner,
+            Action bypassAction)
         {
-            public int cbSize;
-            public int mask;
-            public IntPtr pszHeader;
-            public int cchHeader;
-            public IntPtr pszFooter;
-            public int cchFooter;
-            public int iGroupId;
-            public int stateMask;
-            public int state;
-            public int uAlign;
-        }
+            this.searchFunction = searchFunction ?? throw new ArgumentNullException(nameof(searchFunction));
+            this.bypassAction = bypassAction ?? throw new ArgumentNullException(nameof(bypassAction));
+            this.owner = owner;
 
-        public SmartOpenDialog(Func<string, int, List<OpenTarget>> searchFunction, IntPtr owner, Action? bypassCallback = null)
-        {
-            this.searchFunction = searchFunction;
-            this.bypassCallback = bypassCallback;
-            this.currentTargets = new List<OpenTarget>();
+            // Load SmartOpen configuration
+            var settingsService = new SettingsService();
+            config = settingsService.LoadSmartOpenConfig();
+
+            // Initialize UI components
             this.headerPanel = new Panel();
             this.headerLabel = new Label();
             this.searchBox = new TextBox();
-            this.targetListView = new ListView();
-            this.owner = owner;
+            this.targetsTreeView = new TreeView();
+            
+            // Initialize search timer
+            this.searchTimer = new System.Windows.Forms.Timer();
+            this.searchTimer.Interval = 300; // 300ms delay
+            this.searchTimer.Tick += SearchTimer_Tick;
+
             InitializeComponent();
             ConfigureForm();
+            
+            // Initialize with helpful placeholder message
+            ShowPlaceholderMessage();
         }
 
-        public OpenTarget? GetSelectedTarget()
-        {
-            return selectedTarget;
-        }
+        #endregion
+
+        #region UI Initialization
 
         private void InitializeComponent()
         {
@@ -74,13 +96,13 @@ namespace AppRefiner.Dialogs
             // headerPanel
             this.headerPanel.BackColor = Color.FromArgb(50, 50, 60);
             this.headerPanel.Dock = DockStyle.Top;
-            this.headerPanel.Height = 30;
+            this.headerPanel.Height = 35;
             this.headerPanel.Controls.Add(this.headerLabel);
 
             // headerLabel
             this.headerLabel.Text = "AppRefiner - Smart Open";
             this.headerLabel.ForeColor = Color.White;
-            this.headerLabel.Font = new Font("Segoe UI", 9F, FontStyle.Regular, GraphicsUnit.Point);
+            this.headerLabel.Font = new Font("Segoe UI", 10F, FontStyle.Regular, GraphicsUnit.Point);
             this.headerLabel.Dock = DockStyle.Fill;
             this.headerLabel.TextAlign = ContentAlignment.MiddleCenter;
 
@@ -88,48 +110,45 @@ namespace AppRefiner.Dialogs
             this.searchBox.BorderStyle = BorderStyle.FixedSingle;
             this.searchBox.Dock = DockStyle.Top;
             this.searchBox.Font = new Font("Segoe UI", 11F, FontStyle.Regular, GraphicsUnit.Point);
-            this.searchBox.Location = new Point(0, 0);
+            this.searchBox.Location = new Point(0, 35);
             this.searchBox.Margin = new Padding(0);
             this.searchBox.Name = "searchBox";
-            this.searchBox.Size = new Size(550, 32);
+            this.searchBox.Size = new Size(600, 27);
             this.searchBox.TabIndex = 0;
-            this.searchBox.TextChanged += new EventHandler(this.SearchBox_TextChanged);
-            this.searchBox.KeyDown += new KeyEventHandler(this.SearchBox_KeyDown);
+            this.searchBox.PlaceholderText = "Search for projects, pages, and other definitions...";
+            this.searchBox.TextChanged += SearchBox_TextChanged;
+            this.searchBox.KeyDown += SearchBox_KeyDown;
 
-            // targetListView
-            this.targetListView.BorderStyle = BorderStyle.None;
-            this.targetListView.Dock = DockStyle.Fill;
-            this.targetListView.Font = new Font("Segoe UI", 10F, FontStyle.Regular, GraphicsUnit.Point);
-            this.targetListView.FullRowSelect = true;
-            this.targetListView.HeaderStyle = ColumnHeaderStyle.None;
-            this.targetListView.HideSelection = false;
-            this.targetListView.Location = new Point(0, 32);
-            this.targetListView.Name = "targetListView";
-            this.targetListView.Size = new Size(550, 318);
-            this.targetListView.TabIndex = 1;
-            this.targetListView.UseCompatibleStateImageBehavior = false;
-            this.targetListView.View = View.Tile;
-            this.targetListView.MouseDoubleClick += new MouseEventHandler(this.TargetListView_MouseDoubleClick);
-            this.targetListView.KeyDown += new KeyEventHandler(this.TargetListView_KeyDown);
+            // targetsTreeView
+            this.targetsTreeView.BorderStyle = BorderStyle.None;
+            this.targetsTreeView.Dock = DockStyle.Fill;
+            this.targetsTreeView.Font = new Font("Segoe UI", 10F, FontStyle.Regular, GraphicsUnit.Point);
+            this.targetsTreeView.Location = new Point(0, 62);
+            this.targetsTreeView.Name = "targetsTreeView";
+            this.targetsTreeView.Size = new Size(600, 338);
+            this.targetsTreeView.TabIndex = 1;
+            this.targetsTreeView.ShowNodeToolTips = true;
+            this.targetsTreeView.HideSelection = false;
+            this.targetsTreeView.ItemHeight = 22;
+            this.targetsTreeView.ShowLines = true;
+            this.targetsTreeView.ShowPlusMinus = true;
+            this.targetsTreeView.ShowRootLines = true;
+            this.targetsTreeView.FullRowSelect = true;
+            this.targetsTreeView.DoubleClick += TargetsTreeView_DoubleClick;
+            this.targetsTreeView.KeyDown += TargetsTreeView_KeyDown;
+            this.targetsTreeView.AfterSelect += TargetsTreeView_AfterSelect;
 
             // SmartOpenDialog
-            this.ClientSize = new Size(550, 380);
-            this.Controls.Add(this.targetListView);
+            this.ClientSize = new Size(600, 400);
+            this.Controls.Add(this.targetsTreeView);
             this.Controls.Add(this.searchBox);
             this.Controls.Add(this.headerPanel);
             this.FormBorderStyle = FormBorderStyle.None;
-            this.StartPosition = FormStartPosition.CenterParent;
+            this.StartPosition = FormStartPosition.Manual;
             this.Text = "Smart Open";
             this.ShowInTaskbar = false;
-
-            // Add background color to make dialog stand out
             this.BackColor = Color.FromArgb(240, 240, 245);
-
-            // Add a 1-pixel border to make the dialog visually distinct
             this.Padding = new Padding(1);
-
-            // Add resize event handler to update tile size when form is resized
-            this.Resize += new EventHandler(this.SmartOpenDialog_Resize);
 
             this.headerPanel.ResumeLayout(false);
             this.ResumeLayout(false);
@@ -138,400 +157,424 @@ namespace AppRefiner.Dialogs
 
         private void ConfigureForm()
         {
-            // Change the view to TileView to show both title and description
-            targetListView.View = View.Tile;
-            targetListView.TileSize = new Size(targetListView.Width - 25, 50);
-
-            // Configure the list view for title and description
-            targetListView.Columns.Add("Name", 300);
-            targetListView.Columns.Add("Description", 200);
-
-            // Show item tooltips
-            targetListView.ShowItemToolTips = true;
-
-            // Enable grouping
-            targetListView.ShowGroups = true;
-            targetListView.GroupImageList = null; // No group images needed
-
-            // Enable collapsible groups and double buffering for better performance
-            EnableCollapsibleGroups();
+            // Add context menu for bypassing smart open
+            var contextMenu = new ContextMenuStrip();
+            var bypassItem = new ToolStripMenuItem("Use Application Designer Open Dialog...");
+            bypassItem.Click += (s, e) =>
+            {
+                this.DialogResult = DialogResult.Cancel;
+                this.Hide();
+                bypassAction?.Invoke();
+                this.Close();
+            };
+            contextMenu.Items.Add(bypassItem);
+            
+            var separatorItem = new ToolStripSeparator();
+            contextMenu.Items.Add(separatorItem);
+            
+            var configItem = new ToolStripMenuItem("Smart Open Settings...");
+            configItem.Click += (s, e) =>
+            {
+                // TODO: Open SmartOpenConfigDialog
+                // For now, just close this dialog
+                this.DialogResult = DialogResult.Cancel;
+                this.Close();
+            };
+            contextMenu.Items.Add(configItem);
+            
+            this.ContextMenuStrip = contextMenu;
+            targetsTreeView.ContextMenuStrip = contextMenu;
         }
 
-        private void EnableCollapsibleGroups()
+        #endregion
+
+        #region Public Methods
+
+        /// <summary>
+        /// Gets the selected target from the dialog
+        /// </summary>
+        /// <returns>The selected OpenTarget, or null if none selected</returns>
+        public OpenTarget? GetSelectedTarget()
         {
-            if (targetListView.Handle != IntPtr.Zero)
-            {
-                // Enable group view
-                SendMessage(targetListView.Handle, LVM_ENABLEGROUPVIEW, new IntPtr(1), IntPtr.Zero);
-                
-                // Enable double buffering for smoother rendering
-                SendMessage(targetListView.Handle, LVM_SETEXTENDEDLISTVIEWSTYLE, new IntPtr(LVS_EX_DOUBLEBUFFER), new IntPtr(LVS_EX_DOUBLEBUFFER));
-            }
+            return selectedTarget;
         }
 
-        private void CreateGroupsFromTargets()
-        {
-            targetListView.Groups.Clear();
+        #endregion
 
-            // Get distinct types from current targets
-            var distinctTypes = currentTargets
-                .Select(t => t.Type)
-                .Distinct()
-                .OrderBy(t => t)
-                .ToList();
-
-            // Create a group for each type
-            int groupId = 0;
-            foreach (var type in distinctTypes)
-            {
-                var group = new ListViewGroup(type.ToString(), type.ToString())
-                {
-                    HeaderAlignment = HorizontalAlignment.Left,
-                    CollapsedState = ListViewGroupCollapsedState.Expanded // Start expanded
-                };
-                
-                // Set a unique group ID - this is important for Win32 API calls
-                group.Tag = groupId;
-                targetListView.Groups.Add(group);
-                groupId++;
-            }
-        }
-
-        private void PopulateTargetList()
-        {
-            targetListView.Items.Clear();
-
-            // Create groups first
-            CreateGroupsFromTargets();
-
-            foreach (var target in currentTargets)
-            {
-                var item = new ListViewItem(target.ToString());
-                item.SubItems.Add(target.Description);
-                item.Tag = target;
-
-                // Add tooltip with full information
-                item.ToolTipText = $"{target.Type}: {target.Name}\nPath: {target.Path}\n{target.Description}";
-
-                // Find the appropriate group for this target's type
-                var group = targetListView.Groups.Cast<ListViewGroup>()
-                    .FirstOrDefault(g => g.Name == target.Type.ToString());
-
-                if (group != null)
-                {
-                    item.Group = group;
-                }
-
-                targetListView.Items.Add(item);
-            }
-
-            if (targetListView.Items.Count > 0)
-            {
-                targetListView.Items[0].Selected = true;
-            }
-        }
+        #region Search and Filtering
 
         private void PerformSearch(string searchTerm)
         {
-            if (string.IsNullOrWhiteSpace(searchTerm))
+            try
             {
-                currentTargets.Clear();
+                // Convert SmartOpenConfig to OpenTargetSearchOptions
+                var searchOptions = CreateSearchOptionsFromConfig();
+                
+                // Get results from the search function
+                allTargets = searchFunction(searchTerm, searchOptions);
+                
+                // No need to filter anymore since the database query handles filtering
+                filteredTargets = allTargets.ToList();
+                
+                // Populate the tree view
+                PopulateTargetsTree();
             }
-            else
+            catch (Exception ex)
             {
-                try
-                {
-                    currentTargets = searchFunction(searchTerm, DEFAULT_MAX_RESULTS);
-                }
-                catch (Exception ex)
-                {
-                    Debug.Log($"Error performing search: {ex.Message}");
-                    currentTargets = new List<OpenTarget>();
-                }
+                Debug.LogException(ex, "Error performing Smart Open search");
+                
+                // Clear the tree and show error
+                targetsTreeView.Nodes.Clear();
+                var errorNode = new TreeNode($"Error: {ex.Message}");
+                errorNode.ForeColor = Color.Red;
+                targetsTreeView.Nodes.Add(errorNode);
             }
-
-            PopulateTargetList();
-
-            if (targetListView.Items.Count > 0)
-            {
-                targetListView.Items[0].Selected = true;
-                targetListView.EnsureVisible(0);
-            }
-
-            // Ensure focus stays in the search box
-            searchBox.Focus();
         }
+
+        private OpenTargetSearchOptions CreateSearchOptionsFromConfig()
+        {
+            // Convert enabled type strings to OpenTargetType enum values
+            var enabledTypes = new HashSet<OpenTargetType>();
+            
+            foreach (var (typeName, isEnabled) in config.EnabledTypes)
+            {
+                if (isEnabled && TryMapStringToTargetType(typeName, out OpenTargetType targetType))
+                {
+                    enabledTypes.Add(targetType);
+                }
+            }
+            
+            return new OpenTargetSearchOptions(
+                enabledTypes,
+                config.MaxResultsPerType,
+                config.SortByLastUpdate);
+        }
+
+        private bool TryMapStringToTargetType(string typeName, out OpenTargetType targetType)
+        {
+            targetType = typeName switch
+            {
+                "Activity" => OpenTargetType.Activity,
+                "Analytic Model" => OpenTargetType.AnalyticModel,
+                "Analytic Type" => OpenTargetType.AnalyticType,
+                "App Engine Program" => OpenTargetType.AppEngineProgram,
+                "Application Package" => OpenTargetType.ApplicationPackage,
+                "Application Class" => OpenTargetType.ApplicationClass,
+                "Approval Rule Set" => OpenTargetType.ApprovalRuleSet,
+                "Business Interlink" => OpenTargetType.BusinessInterlink,
+                "Business Process" => OpenTargetType.BusinessProcess,
+                "Component" => OpenTargetType.Component,
+                "Component Interface" => OpenTargetType.ComponentInterface,
+                "Field" => OpenTargetType.Field,
+                "File Layout" => OpenTargetType.FileLayout,
+                "File Reference" => OpenTargetType.FileReference,
+                "HTML" => OpenTargetType.HTML,
+                "Image" => OpenTargetType.Image,
+                "Menu" => OpenTargetType.Menu,
+                "Message" => OpenTargetType.Message,
+                "Optimization Model" => OpenTargetType.OptimizationModel,
+                "Page" => OpenTargetType.Page,
+                "Page (Fluid)" => OpenTargetType.PageFluid,
+                "Project" => OpenTargetType.Project,
+                "Record" => OpenTargetType.Record,
+                "SQL" => OpenTargetType.SQL,
+                "Style Sheet" => OpenTargetType.StyleSheet,
+                _ => OpenTargetType.Project
+            };
+
+            return !typeName.Equals("Unknown", StringComparison.OrdinalIgnoreCase);
+        }
+
+
+        #endregion
+
+        #region Tree View Population
+
+        private void ShowPlaceholderMessage()
+        {
+            targetsTreeView.BeginUpdate();
+            targetsTreeView.Nodes.Clear();
+            
+            var placeholderNode = new TreeNode("Start typing to search for definitions...");
+            placeholderNode.ForeColor = Color.Gray;
+            targetsTreeView.Nodes.Add(placeholderNode);
+            
+            targetsTreeView.EndUpdate();
+        }
+
+        private void PopulateTargetsTree()
+        {
+            targetsTreeView.BeginUpdate();
+            targetsTreeView.Nodes.Clear();
+
+            if (filteredTargets.Count == 0)
+            {
+                var noResultsNode = new TreeNode("No results found");
+                noResultsNode.ForeColor = Color.Gray;
+                targetsTreeView.Nodes.Add(noResultsNode);
+                targetsTreeView.EndUpdate();
+                return;
+            }
+
+            // Group targets by type
+            var groupedTargets = filteredTargets
+                .GroupBy(t => t.Type)
+                .OrderBy(g => g.Key.ToString());
+
+            foreach (var group in groupedTargets)
+            {
+                // Create group node
+                var groupName = group.Key.ToString();
+                var groupNode = new TreeNode($"{groupName} ({group.Count()})");
+                groupNode.Tag = null; // Group nodes have no target data
+                groupNode.NodeFont = new Font(targetsTreeView.Font, FontStyle.Bold);
+
+                // Add individual target nodes
+                var sortedTargets = config.SortByLastUpdate 
+                    ? group.OrderByDescending(t => GetTargetLastUpdate(t))
+                    : group.OrderBy(t => t.Name);
+
+                var limitedTargets = sortedTargets.Take(config.MaxResultsPerType);
+
+                foreach (var target in limitedTargets)
+                {
+                    var targetNode = new TreeNode(target.Name);
+                    targetNode.Tag = target;
+                    targetNode.ToolTipText = !string.IsNullOrEmpty(target.Description) 
+                        ? $"{target.Name}\n{target.Description}\nPath: {target.Path}"
+                        : $"{target.Name}\nPath: {target.Path}";
+                    
+                    groupNode.Nodes.Add(targetNode);
+                }
+
+                targetsTreeView.Nodes.Add(groupNode);
+            }
+
+            // Expand all groups initially
+            targetsTreeView.ExpandAll();
+
+            // Select first target node if available
+            SelectFirstTargetNode();
+
+            targetsTreeView.EndUpdate();
+        }
+
+        private DateTime GetTargetLastUpdate(OpenTarget target)
+        {
+            // TODO: If we had last update information, we'd use it here
+            // For now, return a default value
+            return DateTime.MinValue;
+        }
+
+        private void SelectFirstTargetNode()
+        {
+            foreach (TreeNode groupNode in targetsTreeView.Nodes)
+            {
+                if (groupNode.Nodes.Count > 0)
+                {
+                    targetsTreeView.SelectedNode = groupNode.Nodes[0];
+                    return;
+                }
+            }
+        }
+
+        #endregion
+
+        #region Event Handlers
 
         private void SearchBox_TextChanged(object? sender, EventArgs e)
         {
-            // Cancel any existing timer
-            searchTimer?.Dispose();
+            // Reset the timer - this implements the 300ms typing delay
+            searchTimer.Stop();
+            searchTimer.Start();
+        }
 
-            // Start a new timer for delayed search
-            searchTimer = new System.Threading.Timer(_ =>
-            {
-                // Execute search on UI thread
-                this.Invoke(() => PerformSearch(searchBox.Text));
-            }, null, SEARCH_DELAY_MS, Timeout.Infinite);
+        private void SearchTimer_Tick(object? sender, EventArgs e)
+        {
+            // Stop the timer and perform the search
+            searchTimer.Stop();
+            PerformSearch(searchBox.Text);
         }
 
         private void SearchBox_KeyDown(object? sender, KeyEventArgs e)
         {
-            if (e.KeyCode == Keys.Down)
+            switch (e.KeyCode)
             {
-                if (targetListView.Items.Count > 0)
-                {
-                    int index = 0;
-                    if (targetListView.SelectedIndices.Count > 0)
-                    {
-                        index = targetListView.SelectedIndices[0] + 1;
-                        if (index >= targetListView.Items.Count)
-                            index = 0;
-                    }
-                    targetListView.SelectedIndices.Clear();
-                    targetListView.Items[index].Selected = true;
-                    targetListView.EnsureVisible(index);
-                }
-                e.Handled = true;
-            }
-            else if (e.KeyCode == Keys.Up)
-            {
-                if (targetListView.Items.Count > 0)
-                {
-                    int index = targetListView.Items.Count - 1;
-                    if (targetListView.SelectedIndices.Count > 0)
-                    {
-                        index = targetListView.SelectedIndices[0] - 1;
-                        if (index < 0)
-                            index = targetListView.Items.Count - 1;
-                    }
-                    targetListView.SelectedIndices.Clear();
-                    targetListView.Items[index].Selected = true;
-                    targetListView.EnsureVisible(index);
-                }
-                e.Handled = true;
-            }
-            else if (e.KeyCode == Keys.Enter)
-            {
-                SelectTarget();
-                e.Handled = true;
-            }
-            else if (e.KeyCode == Keys.Left)
-            {
-                // Collapse the group of the currently selected item
-                CollapseSelectedItemGroup();
-                e.Handled = true;
-            }
-            else if (e.KeyCode == Keys.Right)
-            {
-                // Expand the group of the currently selected item
-                ExpandSelectedItemGroup();
-                e.Handled = true;
-            }
-            else if (e.KeyCode == Keys.Escape)
-            {
-                this.Close();
-                e.Handled = true;
+                case Keys.Down:
+                    targetsTreeView.Focus();
+                    e.Handled = true;
+                    break;
+                    
+                case Keys.Enter:
+                    SelectTarget();
+                    e.Handled = true;
+                    break;
+                    
+                case Keys.Escape:
+                    this.DialogResult = DialogResult.Cancel;
+                    this.Close();
+                    e.Handled = true;
+                    break;
             }
         }
 
-        private void TargetListView_MouseDoubleClick(object? sender, MouseEventArgs e)
+        private void TargetsTreeView_DoubleClick(object? sender, EventArgs e)
         {
             SelectTarget();
         }
 
-        private void TargetListView_KeyDown(object? sender, KeyEventArgs e)
+        private void TargetsTreeView_KeyDown(object? sender, KeyEventArgs e)
         {
-            if (e.KeyCode == Keys.Enter)
+            switch (e.KeyCode)
             {
-                SelectTarget();
-                e.Handled = true;
-            }
-            else if (e.KeyCode == Keys.Escape)
-            {
-                this.DialogResult = DialogResult.Cancel;
-                this.Close();
-                e.Handled = true;
-            }
-            else if (e.KeyCode == Keys.Left)
-            {
-                // Collapse the group of the currently selected item
-                CollapseSelectedItemGroup();
-                e.Handled = true;
-            }
-            else if (e.KeyCode == Keys.Right)
-            {
-                // Expand the group of the currently selected item
-                ExpandSelectedItemGroup();
-                e.Handled = true;
-            }
-            else if (e.KeyData == Keys.Tab || e.KeyData == (Keys.Tab | Keys.Shift))
-            {
-                // Send focus back to search box
-                searchBox.Focus();
-                e.Handled = true;
+                case Keys.Enter:
+                    SelectTarget();
+                    e.Handled = true;
+                    break;
+                    
+                case Keys.Escape:
+                    this.DialogResult = DialogResult.Cancel;
+                    this.Close();
+                    e.Handled = true;
+                    break;
+                    
+                case Keys.Tab:
+                case Keys.Tab | Keys.Shift:
+                    searchBox.Focus();
+                    e.Handled = true;
+                    break;
+                    
+                case Keys.Left:
+                    HandleLeftArrowNavigation();
+                    e.Handled = true;
+                    break;
             }
         }
+
+        private void TargetsTreeView_AfterSelect(object? sender, TreeViewEventArgs e)
+        {
+            // If we selected a group node, expand/collapse it
+            if (e.Node?.Tag == null && e.Action == TreeViewAction.ByMouse && e.Node != null)
+            {
+                if (e.Node.IsExpanded)
+                    e.Node.Collapse();
+                else
+                    e.Node.Expand();
+            }
+        }
+
+        #endregion
+
+        #region Navigation Methods
+
+        private void HandleLeftArrowNavigation()
+        {
+            var selectedNode = targetsTreeView.SelectedNode;
+            if (selectedNode == null) return;
+
+            // If this is a target node (has Tag), collapse its parent group
+            if (selectedNode.Tag is OpenTarget)
+            {
+                var parentNode = selectedNode.Parent;
+                if (parentNode != null && parentNode.IsExpanded)
+                {
+                    parentNode.Collapse();
+                    
+                    // Move selection to next visible item
+                    var nextVisibleNode = GetNextVisibleNode(parentNode);
+                    if (nextVisibleNode != null)
+                    {
+                        targetsTreeView.SelectedNode = nextVisibleNode;
+                    }
+                }
+            }
+            // If this is a group node, just collapse it
+            else if (selectedNode.IsExpanded)
+            {
+                selectedNode.Collapse();
+            }
+        }
+
+        private TreeNode? GetNextVisibleNode(TreeNode currentNode)
+        {
+            // Find the next visible node after the current one
+            var allNodes = GetAllVisibleNodes();
+            var currentIndex = allNodes.IndexOf(currentNode);
+            
+            if (currentIndex >= 0 && currentIndex < allNodes.Count - 1)
+            {
+                return allNodes[currentIndex + 1];
+            }
+            
+            return null;
+        }
+
+        private List<TreeNode> GetAllVisibleNodes()
+        {
+            var visibleNodes = new List<TreeNode>();
+            
+            foreach (TreeNode rootNode in targetsTreeView.Nodes)
+            {
+                visibleNodes.Add(rootNode);
+                if (rootNode.IsExpanded)
+                {
+                    foreach (TreeNode childNode in rootNode.Nodes)
+                    {
+                        visibleNodes.Add(childNode);
+                    }
+                }
+            }
+            
+            return visibleNodes;
+        }
+
+        #endregion
+
+        #region Selection and Dialog Management
 
         private void SelectTarget()
         {
-            if (targetListView.SelectedItems.Count > 0)
+            var selectedNode = targetsTreeView.SelectedNode;
+            if (selectedNode?.Tag is OpenTarget target)
             {
-                var target = (OpenTarget?)targetListView.SelectedItems[0].Tag;
-                if (target != null)
-                {
-                    selectedTarget = target;
-                    this.DialogResult = DialogResult.OK;
-                    this.Hide();
-                    this.Close();
-                }
+                selectedTarget = target;
+                this.DialogResult = DialogResult.OK;
+                this.Hide();
+                this.Close();
             }
         }
 
-        private void CollapseSelectedItemGroup()
-        {
-            if (targetListView.SelectedItems.Count > 0)
-            {
-                var selectedItem = targetListView.SelectedItems[0];
-                Debug.Log($"CollapseSelectedItemGroup: Selected item = {selectedItem.Text}");
-                
-                if (selectedItem.Group != null)
-                {
-                    Debug.Log($"CollapseSelectedItemGroup: Group = {selectedItem.Group.Name}");
-                    
-                    // Store the current group index before collapsing
-                    int currentGroupIndex = targetListView.Groups.IndexOf(selectedItem.Group);
-                    Debug.Log($"CollapseSelectedItemGroup: Group index = {currentGroupIndex}");
-                    
-                    // Collapse the group
-                    SetGroupCollapsedState(selectedItem.Group, true);
-                    
-                    // Find the next visible item to select after collapsing
-                    MoveSelectionToNextVisibleItem(currentGroupIndex);
-                }
-                else
-                {
-                    Debug.Log("CollapseSelectedItemGroup: Selected item has no group");
-                }
-            }
-            else
-            {
-                Debug.Log("CollapseSelectedItemGroup: No selected items");
-            }
-        }
+        #endregion
 
-        private void ExpandSelectedItemGroup()
-        {
-            if (targetListView.SelectedItems.Count > 0)
-            {
-                var selectedItem = targetListView.SelectedItems[0];
-                if (selectedItem.Group != null)
-                {
-                    SetGroupCollapsedState(selectedItem.Group, false);
-                }
-            }
-        }
+        #region Bypass functionality
 
-        private void SetGroupCollapsedState(ListViewGroup group, bool collapsed)
+        private void BypassToOriginalOpenDialog()
         {
-            Debug.Log($"Setting group ({group.Name}) collapsed state to: {collapsed}");
-
             try
             {
-                // Try using the .NET CollapsedState property first
-                group.CollapsedState = collapsed ? ListViewGroupCollapsedState.Collapsed : ListViewGroupCollapsedState.Expanded;
-                Debug.Log($"Successfully set .NET CollapsedState for group {group.Name}");
+                // Close this dialog first
+                this.DialogResult = DialogResult.Cancel;
+                this.Hide();
+                
+                // Call the bypass action passed from MainForm
+                bypassAction?.Invoke();
+                
+                // Close the dialog completely
+                this.Close();
             }
             catch (Exception ex)
             {
-                Debug.Log($"Failed to set .NET CollapsedState: {ex.Message}");
+                Debug.LogException(ex, "Error during Smart Open bypass");
                 
-                // Fallback to Win32 API if .NET property fails
-                SetGroupCollapsedStateWin32(group, collapsed);
+                // Ensure dialog is closed even if bypass fails
+                this.DialogResult = DialogResult.Cancel;
+                this.Close();
             }
         }
 
-        private void SetGroupCollapsedStateWin32(ListViewGroup group, bool collapsed)
-        {
-            if (targetListView.Handle == IntPtr.Zero)
-                return;
+        #endregion
 
-            // Find the group index
-            int groupIndex = targetListView.Groups.IndexOf(group);
-            if (groupIndex < 0)
-            {
-                Debug.Log($"Group not found in collection: {group.Name}");
-                return;
-            }
-
-            Debug.Log($"Using Win32 API for group {groupIndex} ({group.Name}) collapsed state: {collapsed}");
-
-            // The group ID needs to be set properly for the Win32 API
-            var lvGroup = new LVGROUP
-            {
-                cbSize = Marshal.SizeOf<LVGROUP>(),
-                mask = LVGF_STATE,
-                stateMask = LVGS_COLLAPSIBLE | LVGS_COLLAPSED,
-                state = LVGS_COLLAPSIBLE | (collapsed ? LVGS_COLLAPSED : 0),
-                iGroupId = groupIndex
-            };
-
-            // Send the message to update the group state
-            var ptr = Marshal.AllocHGlobal(lvGroup.cbSize);
-            try
-            {
-                Marshal.StructureToPtr(lvGroup, ptr, false);
-                var result = SendMessage(targetListView.Handle, LVM_SETGROUPINFO, new IntPtr(groupIndex), ptr);
-                Debug.Log($"LVM_SETGROUPINFO result for group {groupIndex}: {result}");
-            }
-            finally
-            {
-                Marshal.FreeHGlobal(ptr);
-            }
-        }
-
-        private void MoveSelectionToNextVisibleItem(int collapsedGroupIndex)
-        {
-            // Clear current selection
-            targetListView.SelectedItems.Clear();
-
-            // Look for the next expanded group after the collapsed one
-            for (int groupIndex = collapsedGroupIndex + 1; groupIndex < targetListView.Groups.Count; groupIndex++)
-            {
-                var group = targetListView.Groups[groupIndex];
-                
-                // Check if this group has visible items (expanded groups will have items)
-                var firstItemInGroup = group.Items.Cast<ListViewItem>().FirstOrDefault();
-                if (firstItemInGroup != null)
-                {
-                    // Select the first item in this group
-                    firstItemInGroup.Selected = true;
-                    firstItemInGroup.Focused = true;
-                    targetListView.EnsureVisible(firstItemInGroup.Index);
-                    return;
-                }
-            }
-
-            // If no group found after the collapsed one, look before it
-            for (int groupIndex = collapsedGroupIndex - 1; groupIndex >= 0; groupIndex--)
-            {
-                var group = targetListView.Groups[groupIndex];
-                
-                // Check if this group has visible items
-                var firstItemInGroup = group.Items.Cast<ListViewItem>().FirstOrDefault();
-                if (firstItemInGroup != null)
-                {
-                    // Select the first item in this group
-                    firstItemInGroup.Selected = true;
-                    firstItemInGroup.Focused = true;
-                    targetListView.EnsureVisible(firstItemInGroup.Index);
-                    return;
-                }
-            }
-
-            // If no visible items found at all, focus back to search box
-            searchBox.Focus();
-        }
+        #region Form Events
 
         protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
         {
@@ -541,54 +584,15 @@ namespace AppRefiner.Dialogs
                 this.Close();
                 return true;
             }
-            else if (keyData == (Keys.Control | Keys.O))
-            {
-                // Ctrl+O pressed within SmartOpen - bypass to native App Designer open
-                if (bypassCallback != null)
-                {
-                    this.DialogResult = DialogResult.Cancel;
-                    this.Hide(); // Hide immediately for responsiveness
-                    
-                    // Execute the bypass callback
-                    bypassCallback();
-                    
-                    this.Close();
-                    return true;
-                }
-            }
-            return base.ProcessCmdKey(ref msg, keyData);
-        }
-
-        protected override void OnHandleCreated(EventArgs e)
-        {
-            base.OnHandleCreated(e);
             
-            // Enable collapsible groups now that the handle exists
-            EnableCollapsibleGroups();
-        }
-
-        protected override void OnShown(EventArgs e)
-        {
-            base.OnShown(e);
-            searchBox.Focus();
-
-            // Create the mouse handler if this is a modal dialog
-            if (this.Modal && owner != IntPtr.Zero)
+            // Handle Ctrl+O to bypass Smart Open and use the original App Designer Open dialog
+            if (keyData == (Keys.Control | Keys.O))
             {
-                mouseHandler = new DialogHelper.ModalDialogMouseHandler(this, headerPanel, owner);
+                BypassToOriginalOpenDialog();
+                return true;
             }
-        }
-
-        protected override CreateParams CreateParams
-        {
-            get
-            {
-                // Add drop shadow effect to the form
-                const int CS_DROPSHADOW = 0x00020000;
-                CreateParams cp = base.CreateParams;
-                cp.ClassStyle |= CS_DROPSHADOW;
-                return cp;
-            }
+            
+            return base.ProcessCmdKey(ref msg, keyData);
         }
 
         protected override void OnPaint(PaintEventArgs e)
@@ -597,30 +601,58 @@ namespace AppRefiner.Dialogs
 
             // Draw a border around the form
             ControlPaint.DrawBorder(e.Graphics, ClientRectangle,
-                Color.FromArgb(100, 100, 120), // Border color
-                1, ButtonBorderStyle.Solid,    // Left
-                Color.FromArgb(100, 100, 120), // Border color
-                1, ButtonBorderStyle.Solid,    // Top
-                Color.FromArgb(100, 100, 120), // Border color
-                1, ButtonBorderStyle.Solid,    // Right
-                Color.FromArgb(100, 100, 120), // Border color
-                1, ButtonBorderStyle.Solid);   // Bottom
+                Color.FromArgb(100, 100, 120), 1, ButtonBorderStyle.Solid,
+                Color.FromArgb(100, 100, 120), 1, ButtonBorderStyle.Solid,
+                Color.FromArgb(100, 100, 120), 1, ButtonBorderStyle.Solid,
+                Color.FromArgb(100, 100, 120), 1, ButtonBorderStyle.Solid);
         }
 
-        private void SmartOpenDialog_Resize(object? sender, EventArgs e)
+        protected override void OnShown(EventArgs e)
         {
-            // Update tile size when form is resized to prevent horizontal scrolling
-            targetListView.TileSize = new Size(targetListView.Width - 25, 50);
+            base.OnShown(e);
+            searchBox.Focus();
+
+            // Center on owner window
+            if (owner != IntPtr.Zero)
+            {
+                WindowHelper.CenterFormOnWindow(this, owner);
+            }
+
+            // Create the mouse handler if this is a modal dialog
+            if (this.Modal && owner != IntPtr.Zero)
+            {
+                mouseHandler = new DialogHelper.ModalDialogMouseHandler(this, headerPanel, owner);
+            }
         }
 
         protected override void OnFormClosed(FormClosedEventArgs e)
         {
             base.OnFormClosed(e);
 
-            // Dispose resources
-            searchTimer?.Dispose();
+            // Dispose the mouse handler
             mouseHandler?.Dispose();
             mouseHandler = null;
         }
+
+        #endregion
+
+        #region Disposal
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
+                // Stop and dispose the search timer
+                searchTimer?.Stop();
+                searchTimer?.Dispose();
+                
+                // Dispose the mouse handler
+                mouseHandler?.Dispose();
+            }
+            
+            base.Dispose(disposing);
+        }
+
+        #endregion
     }
 }
