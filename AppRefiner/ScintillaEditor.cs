@@ -232,9 +232,6 @@ namespace AppRefiner
         public IntPtr AnnotationStyleOffset = IntPtr.Zero;
         public IDataManager? DataManager = null;
 
-        // Database name associated with this editor
-        public string? DBName { get; set; }
-
         /// <summary>
         /// Gets whether the last parse operation was successful (no syntax errors)
         /// </summary>
@@ -461,7 +458,6 @@ namespace AppRefiner
         {
             this.hWnd = hWnd;
 
-            PopulateEditorDBName();
             AppDesignerProcess = appProc;
             Caption = caption;
             AppDesignerProcess = null;
@@ -498,41 +494,6 @@ namespace AppRefiner
             return WinApi.IsWindow(hWnd);
         }
 
-        /// <summary>
-        /// Populates the DBName property of a ScintillaEditor based on its context
-        /// </summary>
-        /// <param name="editor">The editor to populate the DBName for</param>
-        private void PopulateEditorDBName()
-        {
-            // Start with the editor's handle
-            IntPtr hwnd = this.hWnd;
-
-            // Walk up the parent chain until we find the Application Designer window
-            while (hwnd != IntPtr.Zero)
-            {
-                StringBuilder caption = new(256);
-                WinApi.GetWindowText(hwnd, caption, caption.Capacity);
-                string windowTitle = caption.ToString();
-
-                // Check if this is the Application Designer window
-                if (windowTitle.StartsWith("Application Designer"))
-                {
-                    // Split the title by " - " and get the second part (DB name)
-                    string[] parts = windowTitle.Split(new[] { " - " }, StringSplitOptions.None);
-                    if (parts.Length >= 2)
-                    {
-                        this.DBName = parts[1].Trim();
-                        Debug.Log($"Set editor DBName to: {this.DBName}");
-
-                        // Now determine the relative file path based on the database name
-                        break;
-                    }
-                }
-
-                // Get the parent window
-                hwnd = WinApi.GetParent(hwnd);
-            }
-        }
 
         private void SetClassPath()
         {
@@ -625,7 +586,7 @@ namespace AppRefiner
                         Debug.Log($"Editor grandparent window title: {windowTitle}");
 
                         // Determine editor type and generate appropriate relative path
-                        string? relativePath = DetermineRelativePathFromCaption(windowTitle, this.DBName);
+                        string? relativePath = DetermineRelativePathFromCaption(windowTitle, AppDesignerProcess.DBName);
 
                         if (!string.IsNullOrEmpty(relativePath))
                         {

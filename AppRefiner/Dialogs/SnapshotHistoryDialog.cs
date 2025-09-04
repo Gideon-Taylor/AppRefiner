@@ -50,7 +50,7 @@ namespace AppRefiner.Dialogs
             // Get commit history for the file
             if (!string.IsNullOrEmpty(editor.RelativePath))
             {
-                snapshotHistory = snapshotManager.GetFileHistory(editor.RelativePath, editor.DBName);
+                snapshotHistory = snapshotManager.GetFileHistory(editor.RelativePath, editor.AppDesignerProcess.DBName);
             }
             else
             {

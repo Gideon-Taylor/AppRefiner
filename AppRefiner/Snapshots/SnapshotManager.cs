@@ -124,7 +124,7 @@ namespace AppRefiner.Snapshots
                 // Create a new snapshot in the database
                 return SaveSnapshot(new Snapshot
                 {
-                    DBName = editor.DBName,
+                    DBName = editor.AppDesignerProcess.DBName,
                     FilePath = filePath,
                     Caption = caption,
                     CreatedAt = DateTime.Now,
