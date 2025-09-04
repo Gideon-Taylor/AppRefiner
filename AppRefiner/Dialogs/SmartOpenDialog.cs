@@ -19,9 +19,13 @@ namespace AppRefiner.Dialogs
         
         private readonly Panel headerPanel;
         private readonly Label headerLabel;
-        private readonly TextBox searchBox;
+        private readonly TableLayoutPanel searchPanel;
+        private readonly Label idSearchLabel;
+        private readonly TextBox idSearchBox;
+        private readonly Label descrSearchLabel;
+        private readonly TextBox descrSearchBox;
         private readonly TreeView targetsTreeView;
-        private readonly Func<string, OpenTargetSearchOptions, List<OpenTarget>> searchFunction;
+        private readonly Func<OpenTargetSearchOptions, List<OpenTarget>> searchFunction;
         private readonly Action bypassAction;
         private readonly IntPtr owner;
         private DialogHelper.ModalDialogMouseHandler? mouseHandler;
@@ -54,7 +58,7 @@ namespace AppRefiner.Dialogs
         /// <param name="owner">Owner window handle</param>
         /// <param name="bypassAction">Action to call for bypassing smart open</param>
         public SmartOpenDialog(
-            Func<string, OpenTargetSearchOptions, List<OpenTarget>> searchFunction, 
+            Func<OpenTargetSearchOptions, List<OpenTarget>> searchFunction, 
             IntPtr owner,
             Action bypassAction)
         {
@@ -69,7 +73,11 @@ namespace AppRefiner.Dialogs
             // Initialize UI components
             this.headerPanel = new Panel();
             this.headerLabel = new Label();
-            this.searchBox = new TextBox();
+            this.searchPanel = new TableLayoutPanel();
+            this.idSearchLabel = new Label();
+            this.idSearchBox = new TextBox();
+            this.descrSearchLabel = new Label();
+            this.descrSearchBox = new TextBox();
             this.targetsTreeView = new TreeView();
             
             // Initialize search timer
@@ -106,27 +114,79 @@ namespace AppRefiner.Dialogs
             this.headerLabel.Dock = DockStyle.Fill;
             this.headerLabel.TextAlign = ContentAlignment.MiddleCenter;
 
-            // searchBox
-            this.searchBox.BorderStyle = BorderStyle.FixedSingle;
-            this.searchBox.Dock = DockStyle.Top;
-            this.searchBox.Font = new Font("Segoe UI", 11F, FontStyle.Regular, GraphicsUnit.Point);
-            this.searchBox.Location = new Point(0, 35);
-            this.searchBox.Margin = new Padding(0);
-            this.searchBox.Name = "searchBox";
-            this.searchBox.Size = new Size(600, 27);
-            this.searchBox.TabIndex = 0;
-            this.searchBox.PlaceholderText = "Search for projects, pages, and other definitions...";
-            this.searchBox.TextChanged += SearchBox_TextChanged;
-            this.searchBox.KeyDown += SearchBox_KeyDown;
+            // searchPanel
+            this.searchPanel.ColumnCount = 4;
+            this.searchPanel.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            this.searchPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50F));
+            this.searchPanel.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            this.searchPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50F));
+            this.searchPanel.Dock = DockStyle.Top;
+            this.searchPanel.Location = new Point(0, 35);
+            this.searchPanel.Name = "searchPanel";
+            this.searchPanel.RowCount = 1;
+            this.searchPanel.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            this.searchPanel.Size = new Size(600, 35);
+            this.searchPanel.TabIndex = 0;
+            this.searchPanel.Padding = new Padding(8, 6, 8, 6);
+
+            // idSearchLabel
+            this.idSearchLabel.Anchor = AnchorStyles.Left;
+            this.idSearchLabel.AutoSize = true;
+            this.idSearchLabel.Location = new Point(8, 12);
+            this.idSearchLabel.Margin = new Padding(0, 0, 8, 0);
+            this.idSearchLabel.Name = "idSearchLabel";
+            this.idSearchLabel.Size = new Size(21, 15);
+            this.idSearchLabel.TabIndex = 0;
+            this.idSearchLabel.Text = "ID:";
+
+            // idSearchBox
+            this.idSearchBox.Anchor = AnchorStyles.Left | AnchorStyles.Right;
+            this.idSearchBox.BorderStyle = BorderStyle.FixedSingle;
+            this.idSearchBox.Font = new Font("Segoe UI", 9F, FontStyle.Regular, GraphicsUnit.Point);
+            this.idSearchBox.Location = new Point(37, 8);
+            this.idSearchBox.Name = "idSearchBox";
+            this.idSearchBox.PlaceholderText = "Search ID...";
+            this.idSearchBox.Size = new Size(260, 23);
+            this.idSearchBox.TabIndex = 1;
+            this.idSearchBox.TextChanged += SearchBox_TextChanged;
+            this.idSearchBox.KeyDown += SearchBox_KeyDown;
+
+            // descrSearchLabel
+            this.descrSearchLabel.Anchor = AnchorStyles.Left;
+            this.descrSearchLabel.AutoSize = true;
+            this.descrSearchLabel.Location = new Point(305, 12);
+            this.descrSearchLabel.Margin = new Padding(8, 0, 8, 0);
+            this.descrSearchLabel.Name = "descrSearchLabel";
+            this.descrSearchLabel.Size = new Size(70, 15);
+            this.descrSearchLabel.TabIndex = 2;
+            this.descrSearchLabel.Text = "Description:";
+
+            // descrSearchBox
+            this.descrSearchBox.Anchor = AnchorStyles.Left | AnchorStyles.Right;
+            this.descrSearchBox.BorderStyle = BorderStyle.FixedSingle;
+            this.descrSearchBox.Font = new Font("Segoe UI", 9F, FontStyle.Regular, GraphicsUnit.Point);
+            this.descrSearchBox.Location = new Point(383, 8);
+            this.descrSearchBox.Name = "descrSearchBox";
+            this.descrSearchBox.PlaceholderText = "Search description...";
+            this.descrSearchBox.Size = new Size(209, 23);
+            this.descrSearchBox.TabIndex = 3;
+            this.descrSearchBox.TextChanged += SearchBox_TextChanged;
+            this.descrSearchBox.KeyDown += SearchBox_KeyDown;
+
+            // Add controls to searchPanel
+            this.searchPanel.Controls.Add(this.idSearchLabel, 0, 0);
+            this.searchPanel.Controls.Add(this.idSearchBox, 1, 0);
+            this.searchPanel.Controls.Add(this.descrSearchLabel, 2, 0);
+            this.searchPanel.Controls.Add(this.descrSearchBox, 3, 0);
 
             // targetsTreeView
             this.targetsTreeView.BorderStyle = BorderStyle.None;
             this.targetsTreeView.Dock = DockStyle.Fill;
             this.targetsTreeView.Font = new Font("Segoe UI", 10F, FontStyle.Regular, GraphicsUnit.Point);
-            this.targetsTreeView.Location = new Point(0, 62);
+            this.targetsTreeView.Location = new Point(0, 70);
             this.targetsTreeView.Name = "targetsTreeView";
-            this.targetsTreeView.Size = new Size(600, 338);
-            this.targetsTreeView.TabIndex = 1;
+            this.targetsTreeView.Size = new Size(600, 330);
+            this.targetsTreeView.TabIndex = 4;
             this.targetsTreeView.ShowNodeToolTips = true;
             this.targetsTreeView.HideSelection = false;
             this.targetsTreeView.ItemHeight = 22;
@@ -141,7 +201,7 @@ namespace AppRefiner.Dialogs
             // SmartOpenDialog
             this.ClientSize = new Size(600, 400);
             this.Controls.Add(this.targetsTreeView);
-            this.Controls.Add(this.searchBox);
+            this.Controls.Add(this.searchPanel);
             this.Controls.Add(this.headerPanel);
             this.FormBorderStyle = FormBorderStyle.None;
             this.StartPosition = FormStartPosition.Manual;
@@ -203,15 +263,17 @@ namespace AppRefiner.Dialogs
 
         #region Search and Filtering
 
-        private void PerformSearch(string searchTerm)
+        private void PerformSearch()
         {
             try
             {
-                // Convert SmartOpenConfig to OpenTargetSearchOptions
+                // Convert SmartOpenConfig to OpenTargetSearchOptions with search terms
                 var searchOptions = CreateSearchOptionsFromConfig();
+                searchOptions.IDSearchTerm = idSearchBox.Text;
+                searchOptions.DescriptionSearchTerm = descrSearchBox.Text;
                 
                 // Get results from the search function
-                allTargets = searchFunction(searchTerm, searchOptions);
+                allTargets = searchFunction(searchOptions);
                 
                 // No need to filter anymore since the database query handles filtering
                 filteredTargets = allTargets.ToList();
@@ -393,7 +455,7 @@ namespace AppRefiner.Dialogs
         {
             // Stop the timer and perform the search
             searchTimer.Stop();
-            PerformSearch(searchBox.Text);
+            PerformSearch();
         }
 
         private void SearchBox_KeyDown(object? sender, KeyEventArgs e)
@@ -406,7 +468,16 @@ namespace AppRefiner.Dialogs
                     break;
                     
                 case Keys.Enter:
-                    SelectTarget();
+                    // If there's text in either search box, perform immediate search, otherwise select target
+                    if (!string.IsNullOrEmpty(idSearchBox.Text) || !string.IsNullOrEmpty(descrSearchBox.Text))
+                    {
+                        searchTimer.Stop();
+                        PerformSearch();
+                    }
+                    else
+                    {
+                        SelectTarget();
+                    }
                     e.Handled = true;
                     break;
                     
@@ -440,7 +511,7 @@ namespace AppRefiner.Dialogs
                     
                 case Keys.Tab:
                 case Keys.Tab | Keys.Shift:
-                    searchBox.Focus();
+                    idSearchBox.Focus();
                     e.Handled = true;
                     break;
                     
@@ -610,7 +681,7 @@ namespace AppRefiner.Dialogs
         protected override void OnShown(EventArgs e)
         {
             base.OnShown(e);
-            searchBox.Focus();
+            idSearchBox.Focus();
 
             // Center on owner window
             if (owner != IntPtr.Zero)

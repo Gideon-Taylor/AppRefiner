@@ -1189,7 +1189,7 @@ namespace AppRefiner.Database
             return results;
         }
 
-        public List<OpenTarget> GetOpenTargets(string searchTerm, OpenTargetSearchOptions options)
+        public List<OpenTarget> GetOpenTargets(OpenTargetSearchOptions options)
         {
             if (!IsConnected)
             {
@@ -1208,12 +1208,14 @@ namespace AppRefiner.Database
                     return results; // No enabled types
                 }
 
-                // Escape wildcards in search term for LIKE query
-                string escapedSearchTerm = searchTerm.Replace("_", "\\_").Replace("%", "\\%");
+                // Escape wildcards in search terms for LIKE queries
+                string escapedIdTerm = options.IDSearchTerm.Replace("_", "\\_").Replace("%", "\\%");
+                string escapedDescriptionTerm = options.DescriptionSearchTerm.Replace("_", "\\_").Replace("%", "\\%");
                 
                 var parameters = new Dictionary<string, object>
                 {
-                    ["search_text"] = escapedSearchTerm,
+                    ["id_search"] = escapedIdTerm,
+                    ["descr_search"] = escapedDescriptionTerm,
                     ["max_rows_per_type"] = options.MaxRowsPerType,
                     ["sort_by_date"] = options.SortByDate ? "Y" : "N"
                 };
@@ -1277,22 +1279,23 @@ FROM (
          ROW_NUMBER() OVER (
            PARTITION BY DEFN_TYPE
            ORDER BY CASE
-                      WHEN CHARINDEX(UPPER(?), UPPER(ID)) > 0 AND CHARINDEX(UPPER(?), UPPER(DESCR)) > 0 
-                      THEN CASE WHEN CHARINDEX(UPPER(?), UPPER(ID)) <= CHARINDEX(UPPER(?), UPPER(DESCR)) 
-                               THEN CHARINDEX(UPPER(?), UPPER(ID)) 
-                               ELSE CHARINDEX(UPPER(?), UPPER(DESCR)) END
-                      WHEN CHARINDEX(UPPER(?), UPPER(ID)) > 0 
-                      THEN CHARINDEX(UPPER(?), UPPER(ID))
-                      WHEN CHARINDEX(UPPER(?), UPPER(DESCR)) > 0 
-                      THEN CHARINDEX(UPPER(?), UPPER(DESCR))
+                      WHEN (LEN(@id_search) > 0 AND CHARINDEX(UPPER(@id_search), UPPER(ID)) > 0) AND 
+                           (LEN(@descr_search) > 0 AND CHARINDEX(UPPER(@descr_search), UPPER(DESCR)) > 0)
+                      THEN CASE WHEN CHARINDEX(UPPER(@id_search), UPPER(ID)) <= CHARINDEX(UPPER(@descr_search), UPPER(DESCR)) 
+                               THEN CHARINDEX(UPPER(@id_search), UPPER(ID)) 
+                               ELSE CHARINDEX(UPPER(@descr_search), UPPER(DESCR)) END
+                      WHEN LEN(@id_search) > 0 AND CHARINDEX(UPPER(@id_search), UPPER(ID)) > 0 
+                      THEN CHARINDEX(UPPER(@id_search), UPPER(ID))
+                      WHEN LEN(@descr_search) > 0 AND CHARINDEX(UPPER(@descr_search), UPPER(DESCR)) > 0 
+                      THEN CHARINDEX(UPPER(@descr_search), UPPER(DESCR))
                       ELSE 999999
                     END,
                     ID
          ) AS RN
   FROM U
 )
-WHERE RN <= ?
-ORDER BY DEFN_TYPE ASC, ID ASC, CASE WHEN ? = 'Y' THEN LASTUPDDTTM END DESC";
+WHERE RN <= @max_rows_per_type
+ORDER BY DEFN_TYPE ASC, ID ASC, CASE WHEN @sort_by_date = 'Y' THEN LASTUPDDTTM END DESC";
 
             return query;
         }
@@ -1304,148 +1307,186 @@ ORDER BY DEFN_TYPE ASC, ID ASC, CASE WHEN ? = 'Y' THEN LASTUPDDTTM END DESC";
                 OpenTargetType.Activity => @"
   SELECT 'Activity' AS DEFN_TYPE, ACTIVITYNAME AS ID, DESCR60 AS DESCR, LASTUPDDTTM
   FROM   PSACTIVITYDEFN
-  WHERE  UPPER(ACTIVITYNAME) LIKE UPPER('%' + ? + '%') ESCAPE '\'
-     OR  UPPER(DESCR60)      LIKE UPPER('%' + ? + '%') ESCAPE '\'",
+  WHERE  (LEN(@id_search) = 0 OR UPPER(ACTIVITYNAME) LIKE UPPER(@id_search + '%') ESCAPE '\')
+     AND (LEN(@descr_search) = 0 OR UPPER(DESCR60) LIKE UPPER('%' + @descr_search + '%') ESCAPE '\')
+     AND (LEN(@id_search) > 0 OR LEN(@descr_search) > 0)",
 
                 OpenTargetType.AppEngineProgram => @"
   SELECT 'App Engine Program' AS DEFN_TYPE, AE_APPLID AS ID, CAST(DESCR AS NVARCHAR(254)) AS DESCR, LASTUPDDTTM
   FROM PSAEAPPLDEFN
-  WHERE  UPPER(AE_APPLID) LIKE UPPER('%' + ? + '%') ESCAPE '\'
-     OR  UPPER(DESCR)     LIKE UPPER('%' + ? + '%') ESCAPE '\'",
+  WHERE  (LEN(@id_search) = 0 OR UPPER(AE_APPLID) LIKE UPPER(@id_search + '%') ESCAPE '\')
+     AND (LEN(@descr_search) = 0 OR UPPER(DESCR) LIKE UPPER('%' + @descr_search + '%') ESCAPE '\')
+     AND (LEN(@id_search) > 0 OR LEN(@descr_search) > 0)",
 
                 OpenTargetType.ApplicationPackage => @"
   SELECT 'Application Package' AS DEFN_TYPE, 
          PACKAGEID AS ID, 
          CAST(DESCRLONG AS NVARCHAR(254)) AS DESCR, LASTUPDDTTM
   FROM   PSPACKAGEDEFN
-  WHERE  UPPER(PACKAGEID) LIKE UPPER('%' + ? + '%') ESCAPE '\'",
+  WHERE  (LEN(@id_search) = 0 OR UPPER(PACKAGEID) LIKE UPPER(@id_search + '%') ESCAPE '\')
+     AND (LEN(@descr_search) = 0 OR UPPER(CAST(DESCRLONG AS NVARCHAR(254))) LIKE UPPER('%' + @descr_search + '%') ESCAPE '\')
+     AND (LEN(@id_search) > 0 OR LEN(@descr_search) > 0)",
 
                 OpenTargetType.ApplicationClass => @"
   SELECT 'Application Class' AS DEFN_TYPE, 
          PACKAGEROOT + CASE WHEN QUALIFYPATH = ':' THEN '' ELSE ':' + QUALIFYPATH END + ':' + APPCLASSID AS ID, 
-         DESCR AS DESCR, GETDATE() AS LASTUPDDTTM
+         DESCR AS DESCR, LASTUPDDTTM
   FROM PSAPPCLASSDEFN
-  WHERE UPPER(PACKAGEROOT + CASE WHEN QUALIFYPATH = ':' THEN '' ELSE ':' + QUALIFYPATH END + ':' + APPCLASSID) LIKE UPPER('%' + ? + '%') ESCAPE '\'",
+  WHERE  (LEN(@id_search) = 0 OR UPPER(APPCLASSID) LIKE UPPER(@id_search + '%') ESCAPE '\')
+     AND (LEN(@descr_search) = 0 OR UPPER(DESCR) LIKE UPPER('%' + @descr_search + '%') ESCAPE '\')
+     AND (LEN(@id_search) > 0 OR LEN(@descr_search) > 0)",
 
                 OpenTargetType.ApprovalRuleSet => @"
   SELECT 'Approval Rule Set' AS DEFN_TYPE, APPR_RULE_SET AS ID, DESCR60 AS DESCR, LASTUPDDTTM
   FROM PS_APPR_RULE_HDR
-  WHERE  UPPER(APPR_RULE_SET) LIKE UPPER('%' + ? + '%') ESCAPE '\'
-     OR  UPPER(DESCR60)       LIKE UPPER('%' + ? + '%') ESCAPE '\'",
+  WHERE  (LEN(@id_search) = 0 OR UPPER(APPR_RULE_SET) LIKE UPPER(@id_search + '%') ESCAPE '\')
+     AND (LEN(@descr_search) = 0 OR UPPER(DESCR60) LIKE UPPER('%' + @descr_search + '%') ESCAPE '\')
+     AND (LEN(@id_search) > 0 OR LEN(@descr_search) > 0)",
 
                 OpenTargetType.BusinessInterlink => @"
   SELECT 'Business Interlink' AS DEFN_TYPE, IONAME AS ID, IODESCR AS DESCR, LASTUPDDTTM
   FROM PSIODEFN
-  WHERE  UPPER(IONAME)  LIKE UPPER('%' + ? + '%') ESCAPE '\'
-     OR  UPPER(IODESCR) LIKE UPPER('%' + ? + '%') ESCAPE '\'",
+  WHERE  (LEN(@id_search) = 0 OR UPPER(IONAME) LIKE UPPER(@id_search + '%') ESCAPE '\')
+     AND (LEN(@descr_search) = 0 OR UPPER(IODESCR) LIKE UPPER('%' + @descr_search + '%') ESCAPE '\')
+     AND (LEN(@id_search) > 0 OR LEN(@descr_search) > 0)",
 
                 OpenTargetType.BusinessProcess => @"
   SELECT 'Business Process' AS DEFN_TYPE, BUSPROCNAME AS ID, DESCR60 AS DESCR, LASTUPDDTTM
   FROM   PSBUSPROCDEFN
-  WHERE  UPPER(BUSPROCNAME) LIKE UPPER('%' + ? + '%') ESCAPE '\'
-     OR  UPPER(DESCR60)     LIKE UPPER('%' + ? + '%') ESCAPE '\'",
+  WHERE  (LEN(@id_search) = 0 OR UPPER(BUSPROCNAME) LIKE UPPER(@id_search + '%') ESCAPE '\')
+     AND (LEN(@descr_search) = 0 OR UPPER(DESCR60) LIKE UPPER('%' + @descr_search + '%') ESCAPE '\')
+     AND (LEN(@id_search) > 0 OR LEN(@descr_search) > 0)",
 
                 OpenTargetType.Component => @"
   SELECT 'Component' AS DEFN_TYPE, PNLGRPNAME AS ID, DESCR AS DESCR, LASTUPDDTTM
   FROM   PSPNLGRPDEFN
-  WHERE  UPPER(PNLGRPNAME) LIKE UPPER('%' + ? + '%') ESCAPE '\'
-     OR  UPPER(DESCR)      LIKE UPPER('%' + ? + '%') ESCAPE '\'",
+  WHERE  (LEN(@id_search) = 0 OR UPPER(PNLGRPNAME) LIKE UPPER(@id_search + '%') ESCAPE '\')
+     AND (LEN(@descr_search) = 0 OR UPPER(DESCR) LIKE UPPER('%' + @descr_search + '%') ESCAPE '\')
+     AND (LEN(@id_search) > 0 OR LEN(@descr_search) > 0)",
 
                 OpenTargetType.ComponentInterface => @"
   SELECT 'Component Interface' AS DEFN_TYPE, BCNAME AS ID, DESCR AS DESCR, LASTUPDDTTM
   FROM   PSBCDEFN
-  WHERE  UPPER(BCNAME) LIKE UPPER('%' + ? + '%') ESCAPE '\'
-     OR  UPPER(DESCR)  LIKE UPPER('%' + ? + '%') ESCAPE '\'",
+  WHERE  (LEN(@id_search) = 0 OR UPPER(BCNAME) LIKE UPPER(@id_search + '%') ESCAPE '\')
+     AND (LEN(@descr_search) = 0 OR UPPER(DESCR) LIKE UPPER('%' + @descr_search + '%') ESCAPE '\')
+     AND (LEN(@id_search) > 0 OR LEN(@descr_search) > 0)",
 
                 OpenTargetType.Field => @"
   SELECT 'Field' AS DEFN_TYPE, FIELDNAME AS ID, CAST(DESCRLONG AS NVARCHAR(254)) AS DESCR, LASTUPDDTTM
   FROM   PSDBFIELD
-  WHERE  UPPER(FIELDNAME) LIKE UPPER('%' + ? + '%') ESCAPE '\'
-     OR  UPPER(DESCRLONG) LIKE UPPER('%' + ? + '%') ESCAPE '\'",
+  WHERE  (LEN(@id_search) = 0 OR UPPER(FIELDNAME) LIKE UPPER(@id_search + '%') ESCAPE '\')
+     AND (LEN(@descr_search) = 0 OR UPPER(DESCRLONG) LIKE UPPER('%' + @descr_search + '%') ESCAPE '\')
+     AND (LEN(@id_search) > 0 OR LEN(@descr_search) > 0)",
 
                 OpenTargetType.FileLayout => @"
   SELECT 'File Layout' AS DEFN_TYPE, FLDDEFNNAME AS ID, DESCR AS DESCR, LASTUPDDTTM
   FROM   PSFLDDEFN
-  WHERE  UPPER(FLDDEFNNAME) LIKE UPPER('%' + ? + '%') ESCAPE '\'
-     OR  UPPER(DESCR)       LIKE UPPER('%' + ? + '%') ESCAPE '\'",
+  WHERE  (LEN(@id_search) = 0 OR UPPER(FLDDEFNNAME) LIKE UPPER(@id_search + '%') ESCAPE '\')
+     AND (LEN(@descr_search) = 0 OR UPPER(DESCR) LIKE UPPER('%' + @descr_search + '%') ESCAPE '\')
+     AND (LEN(@id_search) > 0 OR LEN(@descr_search) > 0)",
 
                 OpenTargetType.FileReference => @"
   SELECT 'File Reference' AS DEFN_TYPE, FILEREFNAME AS ID, CAST(DESCRLONG AS NVARCHAR(254)) AS DESCR, LASTUPDDTTM
   FROM PSFILEREDEFN
-  WHERE  UPPER(FILEREFNAME)    LIKE UPPER('%' + ? + '%') ESCAPE '\'
-     OR  UPPER(CAST(DESCRLONG AS NVARCHAR(254))) LIKE UPPER('%' + ? + '%') ESCAPE '\'",
+  WHERE  (LEN(@id_search) = 0 OR UPPER(FILEREFNAME) LIKE UPPER(@id_search + '%') ESCAPE '\')
+     AND (LEN(@descr_search) = 0 OR UPPER(CAST(DESCRLONG AS NVARCHAR(254))) LIKE UPPER('%' + @descr_search + '%') ESCAPE '\')
+     AND (LEN(@id_search) > 0 OR LEN(@descr_search) > 0)",
 
                 OpenTargetType.HTML => @"
   SELECT 'HTML' AS DEFN_TYPE, CONTNAME AS ID, DESCR AS DESCR, LASTUPDDTTM
   FROM   PSCONTDEFN
-  WHERE  CONTTYPE = 4 AND (UPPER(CONTNAME) LIKE UPPER('%' + ? + '%') ESCAPE '\'
-     OR  UPPER(DESCR) LIKE UPPER('%' + ? + '%') ESCAPE '\')",
+  WHERE  CONTTYPE = 4
+     AND (LEN(@id_search) = 0 OR UPPER(CONTNAME) LIKE UPPER(@id_search + '%') ESCAPE '\')
+     AND (LEN(@descr_search) = 0 OR UPPER(DESCR) LIKE UPPER('%' + @descr_search + '%') ESCAPE '\')
+     AND (LEN(@id_search) > 0 OR LEN(@descr_search) > 0)",
 
                 OpenTargetType.Image => @"
   SELECT 'Image' AS DEFN_TYPE, CONTNAME AS ID, DESCR AS DESCR, LASTUPDDTTM
   FROM   PSCONTDEFN
-  WHERE  CONTTYPE = 1 AND (UPPER(CONTNAME) LIKE UPPER('%' + ? + '%') ESCAPE '\'
-     OR  UPPER(DESCR) LIKE UPPER('%' + ? + '%') ESCAPE '\')",
+  WHERE  CONTTYPE = 1
+     AND (LEN(@id_search) = 0 OR UPPER(CONTNAME) LIKE UPPER(@id_search + '%') ESCAPE '\')
+     AND (LEN(@descr_search) = 0 OR UPPER(DESCR) LIKE UPPER('%' + @descr_search + '%') ESCAPE '\')
+     AND (LEN(@id_search) > 0 OR LEN(@descr_search) > 0)",
 
                 OpenTargetType.Menu => @"
   SELECT 'Menu' AS DEFN_TYPE, MENUNAME AS ID, DESCR AS DESCR, LASTUPDDTTM
   FROM   PSMENUDEFN
-  WHERE  UPPER(MENUNAME) LIKE UPPER('%' + ? + '%') ESCAPE '\'
-     OR  UPPER(DESCR)    LIKE UPPER('%' + ? + '%') ESCAPE '\'",
+  WHERE  (LEN(@id_search) = 0 OR UPPER(MENUNAME) LIKE UPPER(@id_search + '%') ESCAPE '\')
+     AND (LEN(@descr_search) = 0 OR UPPER(DESCR) LIKE UPPER('%' + @descr_search + '%') ESCAPE '\')
+     AND (LEN(@id_search) > 0 OR LEN(@descr_search) > 0)",
 
                 OpenTargetType.Message => @"
   SELECT 'Message' AS DEFN_TYPE, MSGNAME AS ID, DESCR AS DESCR, LASTUPDDTTM
   FROM   PSMSGDEFN
-  WHERE  UPPER(MSGNAME) LIKE UPPER('%' + ? + '%') ESCAPE '\'
-     OR  UPPER(DESCR)   LIKE UPPER('%' + ? + '%') ESCAPE '\'",
+  WHERE  (LEN(@id_search) = 0 OR UPPER(MSGNAME) LIKE UPPER(@id_search + '%') ESCAPE '\')
+     AND (LEN(@descr_search) = 0 OR UPPER(DESCR) LIKE UPPER('%' + @descr_search + '%') ESCAPE '\')
+     AND (LEN(@id_search) > 0 OR LEN(@descr_search) > 0)",
 
                 OpenTargetType.Page => @"
   SELECT 'Page' AS DEFN_TYPE, PNLNAME AS ID, DESCR AS DESCR, LASTUPDDTTM
   FROM   PSPNLDEFN
-  WHERE  PNLTYPE <> 7 AND (UPPER(PNLNAME) LIKE UPPER('%' + ? + '%') ESCAPE '\'
-     OR  UPPER(DESCR) LIKE UPPER('%' + ? + '%') ESCAPE '\')",
+  WHERE  PNLTYPE <> 7
+     AND (LEN(@id_search) = 0 OR UPPER(PNLNAME) LIKE UPPER(@id_search + '%') ESCAPE '\')
+     AND (LEN(@descr_search) = 0 OR UPPER(DESCR) LIKE UPPER('%' + @descr_search + '%') ESCAPE '\')
+     AND (LEN(@id_search) > 0 OR LEN(@descr_search) > 0)",
 
                 OpenTargetType.PageFluid => @"
   SELECT 'Page (Fluid)' AS DEFN_TYPE, PNLNAME AS ID, DESCR AS DESCR, LASTUPDDTTM
   FROM   PSPNLDEFN
   WHERE  PNLTYPE = 7
-    AND (UPPER(PNLNAME) LIKE UPPER('%' + ? + '%') ESCAPE '\'
-      OR UPPER(DESCR)   LIKE UPPER('%' + ? + '%') ESCAPE '\')",
+     AND (LEN(@id_search) = 0 OR UPPER(PNLNAME) LIKE UPPER(@id_search + '%') ESCAPE '\')
+     AND (LEN(@descr_search) = 0 OR UPPER(DESCR) LIKE UPPER('%' + @descr_search + '%') ESCAPE '\')
+     AND (LEN(@id_search) > 0 OR LEN(@descr_search) > 0)",
 
                 OpenTargetType.Project => @"
   SELECT 'Project' AS DEFN_TYPE, PROJECTNAME AS ID, PROJECTDESCR AS DESCR, LASTUPDDTTM
   FROM   PSPROJECTDEFN
-  WHERE  UPPER(PROJECTNAME)  LIKE UPPER('%' + ? + '%') ESCAPE '\'
-     OR  UPPER(PROJECTDESCR) LIKE UPPER('%' + ? + '%') ESCAPE '\'",
+  WHERE  (LEN(@id_search) = 0 OR UPPER(PROJECTNAME) LIKE UPPER(@id_search + '%') ESCAPE '\')
+     AND (LEN(@descr_search) = 0 OR UPPER(PROJECTDESCR) LIKE UPPER('%' + @descr_search + '%') ESCAPE '\')
+     AND (LEN(@id_search) > 0 OR LEN(@descr_search) > 0)",
 
                 OpenTargetType.Record => @"
   SELECT 'Record' AS DEFN_TYPE, RECNAME AS ID, RECDESCR AS DESCR, LASTUPDDTTM
   FROM   PSRECDEFN
-  WHERE  UPPER(RECNAME)  LIKE UPPER('%' + ? + '%') ESCAPE '\'
-     OR  UPPER(RECDESCR) LIKE UPPER('%' + ? + '%') ESCAPE '\'",
+  WHERE  (LEN(@id_search) = 0 OR UPPER(RECNAME) LIKE UPPER(@id_search + '%') ESCAPE '\')
+     AND (LEN(@descr_search) = 0 OR UPPER(RECDESCR) LIKE UPPER('%' + @descr_search + '%') ESCAPE '\')
+     AND (LEN(@id_search) > 0 OR LEN(@descr_search) > 0)",
 
                 OpenTargetType.SQL => @"
   SELECT 'SQL' AS DEFN_TYPE, SQLID AS ID, ' ' AS DESCR, LASTUPDDTTM
   FROM   PSSQLDEFN
-  WHERE  UPPER(SQLID) LIKE UPPER('%' + ? + '%') ESCAPE '\'",
+  WHERE  (LEN(@id_search) = 0 OR UPPER(SQLID) LIKE UPPER(@id_search + '%') ESCAPE '\')
+     AND (LEN(@descr_search) = 0 OR ' ' LIKE UPPER('%' + @descr_search + '%') ESCAPE '\')
+     AND (LEN(@id_search) > 0 OR LEN(@descr_search) > 0)",
 
                 OpenTargetType.StyleSheet => @"
   SELECT 'Style Sheet' AS DEFN_TYPE, CONTNAME AS ID, DESCR AS DESCR, LASTUPDDTTM
   FROM   PSCONTDEFN
-  WHERE  CONTTYPE = 9 AND (UPPER(CONTNAME) LIKE UPPER('%' + ? + '%') ESCAPE '\'
-     OR  UPPER(DESCR) LIKE UPPER('%' + ? + '%') ESCAPE '\')",
+  WHERE  CONTTYPE = 9
+     AND (LEN(@id_search) = 0 OR UPPER(CONTNAME) LIKE UPPER(@id_search + '%') ESCAPE '\')
+     AND (LEN(@descr_search) = 0 OR UPPER(DESCR) LIKE UPPER('%' + @descr_search + '%') ESCAPE '\')
+     AND (LEN(@id_search) > 0 OR LEN(@descr_search) > 0)",
 
                 OpenTargetType.AnalyticModel => @"
-  SELECT 'Analytic Model' AS DEFN_TYPE, '' AS ID, '' AS DESCR, GETDATE() AS LASTUPDDTTM
-  WHERE 1 = 0", // Placeholder - no specific table for analytic models in standard PeopleSoft
+  SELECT 'Analytic Model' AS DEFN_TYPE, ACEMODELID AS ID, DESCR AS DESCR, LASTUPDDTTM
+  FROM   PSACEMDLDEFN
+  WHERE  (LEN(@id_search) = 0 OR UPPER(ACEMODELID) LIKE UPPER(@id_search + '%') ESCAPE '\')
+     AND (LEN(@descr_search) = 0 OR UPPER(DESCR) LIKE UPPER('%' + @descr_search + '%') ESCAPE '\')
+     AND (LEN(@id_search) > 0 OR LEN(@descr_search) > 0)",
 
                 OpenTargetType.AnalyticType => @"
-  SELECT 'Analytic Type' AS DEFN_TYPE, '' AS ID, '' AS DESCR, GETDATE() AS LASTUPDDTTM
-  WHERE 1 = 0", // Placeholder - no specific table for analytic types in standard PeopleSoft
+  SELECT 'Analytic Type' AS DEFN_TYPE, PROBTYPE AS ID, DESCR AS DESCR, LASTUPDDTTM
+  FROM   PSOPTPRBTYPE
+  WHERE  (LEN(@id_search) = 0 OR UPPER(PROBTYPE) LIKE UPPER(@id_search + '%') ESCAPE '\')
+     AND (LEN(@descr_search) = 0 OR UPPER(DESCR) LIKE UPPER('%' + @descr_search + '%') ESCAPE '\')
+     AND (LEN(@id_search) > 0 OR LEN(@descr_search) > 0)",
 
                 OpenTargetType.OptimizationModel => @"
-  SELECT 'Optimization Model' AS DEFN_TYPE, '' AS ID, '' AS DESCR, GETDATE() AS LASTUPDDTTM
-  WHERE 1 = 0", // Placeholder - no specific table for optimization models in standard PeopleSoft
+  SELECT 'Optimization Model' AS DEFN_TYPE, PAMS_MODEL_NAME AS ID, DESCR AS DESCR, LASTUPDDTTM
+  FROM   PSOPTMODEL
+  WHERE  (LEN(@id_search) = 0 OR UPPER(PAMS_MODEL_NAME) LIKE UPPER(@id_search + '%') ESCAPE '\')
+     AND (LEN(@descr_search) = 0 OR UPPER(DESCR) LIKE UPPER('%' + @descr_search + '%') ESCAPE '\')
+     AND (LEN(@id_search) > 0 OR LEN(@descr_search) > 0)",
 
                 _ => string.Empty
             };

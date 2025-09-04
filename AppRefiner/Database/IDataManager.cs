@@ -261,11 +261,10 @@ namespace AppRefiner.Database
         List<EventMapInfo> GetEventMapXrefs(string classPath);
 
         /// <summary>
-        /// Gets targets that can be opened based on a search term and options
+        /// Gets targets that can be opened based on search options including separate ID and description search terms
         /// </summary>
-        /// <param name="searchTerm">The search term to filter targets by name or description</param>
-        /// <param name="options">Search options including enabled types and limits</param>
+        /// <param name="options">Search options including enabled types, limits, and search terms for ID and description</param>
         /// <returns>List of OpenTarget objects matching the search criteria</returns>
-        List<OpenTarget> GetOpenTargets(string searchTerm, OpenTargetSearchOptions options);
+        List<OpenTarget> GetOpenTargets(OpenTargetSearchOptions options);
     }
 }

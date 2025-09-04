@@ -946,7 +946,7 @@ namespace AppRefiner
 
             var dataManager = activeAppDesigner.DataManager;
             var dialog = new SmartOpenDialog(
-                (searchTerm, options) => dataManager.GetOpenTargets(searchTerm, options),
+                (options) => dataManager.GetOpenTargets(options),
                 activeAppDesigner?.MainWindowHandle ?? IntPtr.Zero,
                 BypassSmartOpen);
 
