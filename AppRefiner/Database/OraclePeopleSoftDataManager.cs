@@ -1190,5 +1190,144 @@ namespace AppRefiner.Database
 
             return results;
         }
+
+        public List<OpenTarget> GetOpenTargets(string searchTerm, int maxResults)
+        {
+            if (!IsConnected)
+            {
+                throw new InvalidOperationException("Database connection is not open");
+            }
+
+            var results = new List<OpenTarget>();
+
+            try
+            {
+                // Search Projects
+                var projectResults = SearchProjects(searchTerm, maxResults / 2);
+                results.AddRange(projectResults);
+
+                // Search Pages
+                var pageResults = SearchPages(searchTerm, maxResults / 2);
+                results.AddRange(pageResults);
+
+                // Limit total results
+                if (results.Count > maxResults)
+                {
+                    results = results.Take(maxResults).ToList();
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.Log($"Error retrieving open targets: {ex.Message}");
+            }
+
+            return results;
+        }
+
+        private List<OpenTarget> SearchProjects(string searchTerm, int maxResults)
+        {
+            var results = new List<OpenTarget>();
+
+            try
+            {
+                string query = @"
+                    SELECT PROJECTNAME, PROJECTDESCR 
+                    FROM PSPROJECTDEFN 
+                    WHERE UPPER(PROJECTNAME) LIKE UPPER(:searchTerm) ESCAPE '\'
+                       OR UPPER(PROJECTDESCR) LIKE UPPER(:searchTerm) ESCAPE '\'
+                    ORDER BY PROJECTNAME";
+
+                // Escape wildcards in search term for LIKE query
+                string escapedSearchTerm = searchTerm.Replace("_", "\\_").Replace("%", "\\%");
+                
+                var parameters = new Dictionary<string, object>
+                {
+                    [":searchTerm"] = $"%{escapedSearchTerm}%"
+                };
+
+                DataTable data = _connection.ExecuteQuery(query, parameters);
+
+                int count = 0;
+                foreach (DataRow row in data.Rows)
+                {
+                    if (count >= maxResults) break;
+
+                    string projectName = row["PROJECTNAME"]?.ToString() ?? string.Empty;
+                    string description = row["PROJECTDESCR"]?.ToString() ?? string.Empty;
+
+                    var objectPairs = new List<(PSCLASSID, string)>
+                    {
+                        (PSCLASSID.PROJECT, projectName)
+                    };
+
+                    results.Add(new OpenTarget(
+                        OpenTargetType.Project,
+                        projectName,
+                        description,
+                        objectPairs));
+
+                    count++;
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.Log($"Error searching projects: {ex.Message}");
+            }
+
+            return results;
+        }
+
+        private List<OpenTarget> SearchPages(string searchTerm, int maxResults)
+        {
+            var results = new List<OpenTarget>();
+
+            try
+            {
+                string query = @"
+                    SELECT PNLNAME, DESCR 
+                    FROM PSPNLDEFN 
+                    WHERE UPPER(PNLNAME) LIKE UPPER(:searchTerm) ESCAPE '\'
+                       OR UPPER(DESCR) LIKE UPPER(:searchTerm) ESCAPE '\'
+                    ORDER BY PNLNAME";
+
+                // Escape wildcards in search term for LIKE query
+                string escapedSearchTerm = searchTerm.Replace("_", "\\_").Replace("%", "\\%");
+                
+                var parameters = new Dictionary<string, object>
+                {
+                    [":searchTerm"] = $"%{escapedSearchTerm}%"
+                };
+
+                DataTable data = _connection.ExecuteQuery(query, parameters);
+
+                int count = 0;
+                foreach (DataRow row in data.Rows)
+                {
+                    if (count >= maxResults) break;
+
+                    string pageName = row["PNLNAME"]?.ToString() ?? string.Empty;
+                    string description = row["DESCR"]?.ToString() ?? string.Empty;
+
+                    var objectPairs = new List<(PSCLASSID, string)>
+                    {
+                        (PSCLASSID.PAGE, pageName)
+                    };
+
+                    results.Add(new OpenTarget(
+                        OpenTargetType.Page,
+                        pageName,
+                        description,
+                        objectPairs));
+
+                    count++;
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.Log($"Error searching pages: {ex.Message}");
+            }
+
+            return results;
+        }
     }
 }

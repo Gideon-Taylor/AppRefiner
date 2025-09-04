@@ -259,5 +259,13 @@ namespace AppRefiner.Database
         List<EventMapItem> GetEventMapItems(EventMapInfo eventMapInfo);
 
         List<EventMapInfo> GetEventMapXrefs(string classPath);
+
+        /// <summary>
+        /// Gets targets that can be opened based on a search term
+        /// </summary>
+        /// <param name="searchTerm">The search term to filter targets by name or description</param>
+        /// <param name="maxResults">Maximum number of results to return</param>
+        /// <returns>List of OpenTarget objects matching the search criteria</returns>
+        List<OpenTarget> GetOpenTargets(string searchTerm, int maxResults);
     }
 }
