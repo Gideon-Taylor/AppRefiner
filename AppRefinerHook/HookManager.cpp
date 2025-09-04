@@ -5,7 +5,7 @@ HHOOK g_getMsgHook = NULL;
 HHOOK g_keyboardHook = NULL;
 HMODULE g_hModule = NULL;
 bool g_enableAutoPairing = false;  // Flag to control auto-pairing feature
-bool g_enableMainWindowShortcuts = false;  // Flag to control main window shortcuts feature
+unsigned int g_enabledShortcuts = SHORTCUT_NONE;  // Bit field to control which shortcuts are enabled
 HWND g_lastEditorHwnd = NULL;      // Track the last editor HWND that received SCN_CHARADDED
 HMODULE g_dllSelfReference = NULL; // Self-reference to prevent DLL unloading
 HWND g_callbackWindow = NULL;      // Store callback window for keyboard hook
@@ -458,8 +458,66 @@ LRESULT CALLBACK MainWindowSubclassProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPA
         // Get the callback window from dwRefData
         HWND callbackWindow = (HWND)dwRefData;
 
-        // Only process if main window shortcuts are enabled
-        if (!g_enableMainWindowShortcuts) {
+        // Handle WM_AR_SET_OPEN_TARGET message for Results list interception
+        if (uMsg == WM_AR_SET_OPEN_TARGET) {
+            // wParam contains a pointer to the wide string in the remote process buffer
+            // lParam contains the character count
+            wchar_t* remoteWideString = (wchar_t*)wParam;
+            int characterCount = (int)lParam;
+            
+            // Safety check: ensure character count doesn't exceed buffer size
+            if (characterCount > 0 && characterCount < OPEN_TARGET_BUFFER_SIZE && remoteWideString) {
+                // Clear the buffer first
+                memset(g_openTargetBuffer, 0, sizeof(g_openTargetBuffer));
+                
+                // Copy the string to our thread-local buffer
+                wcsncpy_s(g_openTargetBuffer, OPEN_TARGET_BUFFER_SIZE, remoteWideString, characterCount);
+                g_openTargetBuffer[characterCount] = L'\0';
+                
+                char debugMsg[300];
+                sprintf_s(debugMsg, "Open target set: %d characters copied to buffer\n", characterCount);
+                OutputDebugStringA(debugMsg);
+                
+                // Return 1 to indicate success
+                return 1;
+            } else {
+                // Invalid input - clear the buffer
+                memset(g_openTargetBuffer, 0, sizeof(g_openTargetBuffer));
+                OutputDebugStringA("Invalid open target parameters - buffer cleared");
+                
+                // Return 0 to indicate failure
+                return 0;
+            }
+        }
+
+        // Handle WM_SET_MAIN_WINDOW_SHORTCUTS message for setting shortcut flags
+        if (uMsg == WM_SET_MAIN_WINDOW_SHORTCUTS) {
+            g_enabledShortcuts = (unsigned int)wParam;
+            char debugMsg[200];
+            sprintf_s(debugMsg, "Main window shortcuts set to: %u (CommandPalette: %s, Open: %s, Search: %s)\n", 
+                      g_enabledShortcuts,
+                      (g_enabledShortcuts & SHORTCUT_COMMAND_PALETTE) ? "On" : "Off",
+                      (g_enabledShortcuts & SHORTCUT_OPEN) ? "On" : "Off",
+                      (g_enabledShortcuts & SHORTCUT_SEARCH) ? "On" : "Off");
+            OutputDebugStringA(debugMsg);
+            
+            // Return 1 to indicate success
+            return 1;
+        }
+
+        // Handle WM_TOGGLE_AUTO_PAIRING message for toggling auto-pairing feature
+        if (uMsg == WM_TOGGLE_AUTO_PAIRING) {
+            g_enableAutoPairing = (wParam != 0);
+            char debugMsg[100];
+            sprintf_s(debugMsg, "Auto-pairing %s\n", g_enableAutoPairing ? "enabled" : "disabled");
+            OutputDebugStringA(debugMsg);
+            
+            // Return 1 to indicate success
+            return 1;
+        }
+
+        // Only process if any shortcuts are enabled
+        if (g_enabledShortcuts == SHORTCUT_NONE) {
             return DefSubclassProc(hWnd, uMsg, wParam, lParam);
         }
 
@@ -472,14 +530,17 @@ LRESULT CALLBACK MainWindowSubclassProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPA
             bool shouldIntercept = false;
             char commandType = 0;
             
-            // Common MFC command IDs for Find/Replace
-            if (commandId == 57636 || commandId == 0xE110) { // ID_EDIT_FIND variants
+            // Common MFC command IDs for Find/Replace - only intercept if SHORTCUT_SEARCH is enabled
+            if ((g_enabledShortcuts & SHORTCUT_SEARCH) && 
+                (commandId == 57636 || commandId == 0xE110)) { // ID_EDIT_FIND variants
                 shouldIntercept = true;
                 commandType = 'F';
-            } else if (commandId == 57637 || commandId == 0xE111) { // ID_EDIT_REPLACE variants
+            } else if ((g_enabledShortcuts & SHORTCUT_SEARCH) && 
+                      (commandId == 57637 || commandId == 0xE111)) { // ID_EDIT_REPLACE variants
                 shouldIntercept = true;
                 commandType = 'H';
-            } else if (commandId == 57638 || commandId == 0xE112) { // ID_EDIT_REPEAT variants (F3)
+            } else if ((g_enabledShortcuts & SHORTCUT_SEARCH) && 
+                      (commandId == 57638 || commandId == 0xE112)) { // ID_EDIT_REPEAT variants (F3)
                 shouldIntercept = true;
                 commandType = VK_F3;
             }
@@ -515,14 +576,20 @@ LRESULT CALLBACK MainWindowSubclassProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPA
             // Check for specific shortcuts we want to intercept
             bool shouldIntercept = false;
             
-            if (hasCtrl && !hasAlt && wParam == 'F') {
+            if ((g_enabledShortcuts & SHORTCUT_SEARCH) && hasCtrl && !hasAlt && wParam == 'F') {
                 // Ctrl+F
                 shouldIntercept = true;
-            } else if (hasCtrl && !hasAlt && wParam == 'H') {
+            } else if ((g_enabledShortcuts & SHORTCUT_SEARCH) && hasCtrl && !hasAlt && wParam == 'H') {
                 // Ctrl+H
                 shouldIntercept = true;
-            } else if (!hasCtrl && !hasAlt && wParam == VK_F3) {
+            } else if ((g_enabledShortcuts & SHORTCUT_SEARCH) && !hasCtrl && !hasAlt && wParam == VK_F3) {
                 // F3 (with or without Shift for Find Next/Previous)
+                shouldIntercept = true;
+            } else if ((g_enabledShortcuts & SHORTCUT_OPEN) && hasCtrl && !hasAlt && wParam == 'O') {
+                // Ctrl+O
+                shouldIntercept = true;
+            } else if ((g_enabledShortcuts & SHORTCUT_COMMAND_PALETTE) && hasCtrl && hasShift && !hasAlt && wParam == 'P') {
+                // Ctrl+Shift+P
                 shouldIntercept = true;
             }
             
@@ -635,8 +702,8 @@ LRESULT CALLBACK KeyboardHook(int nCode, WPARAM wParam, LPARAM lParam) {
     }
     
     try {
-        // Only process if main window shortcuts are enabled and we have a callback window
-        if (!g_enableMainWindowShortcuts || !g_callbackWindow || !IsWindow(g_callbackWindow)) {
+        // Only process if any shortcuts are enabled and we have a callback window
+        if (g_enabledShortcuts == SHORTCUT_NONE || !g_callbackWindow || !IsWindow(g_callbackWindow)) {
             return CallNextHookEx(g_keyboardHook, nCode, wParam, lParam);
         }
 
@@ -656,21 +723,24 @@ LRESULT CALLBACK KeyboardHook(int nCode, WPARAM wParam, LPARAM lParam) {
                 // Check for specific shortcuts we want to intercept
                 bool shouldIntercept = false;
                 
-                if (hasCtrl && !hasAlt && wParam == 'F') {
+                if ((g_enabledShortcuts & SHORTCUT_SEARCH) && hasCtrl && !hasAlt && wParam == 'F') {
                     // Ctrl+F
                     shouldIntercept = true;
-                } else if (hasCtrl && !hasAlt && wParam == 'H') {
+                } else if ((g_enabledShortcuts & SHORTCUT_SEARCH) && hasCtrl && !hasAlt && wParam == 'H') {
                     // Ctrl+H
                     shouldIntercept = true;
-                } else if (!hasCtrl && !hasAlt && wParam == VK_F3) {
+                } else if ((g_enabledShortcuts & SHORTCUT_SEARCH) && !hasCtrl && !hasAlt && wParam == VK_F3) {
                     // F3 (with or without Shift for Find Next/Previous)
+                    shouldIntercept = true;
+                } else if ((g_enabledShortcuts & SHORTCUT_OPEN) && hasCtrl && !hasAlt && wParam == 'O') {
+                    // Ctrl+O
                     shouldIntercept = true;
                 }
                 else if (!hasCtrl && !hasAlt && wParam == VK_F12) {
-                    // F12 for "go to definition"
+                    // F12 for "go to definition" (always intercept if any shortcuts are enabled)
                     shouldIntercept = true;
                 }
-                else if (hasCtrl && hasShift && wParam == 'P') {
+                else if ((g_enabledShortcuts & SHORTCUT_COMMAND_PALETTE) && hasCtrl && hasShift && wParam == 'P') {
                     // Ctrl Shift P is for opening the command palette
                     shouldIntercept = true;
                 }
@@ -727,18 +797,8 @@ LRESULT CALLBACK GetMsgHook(int nCode, WPARAM wParam, LPARAM lParam) {
             return CallNextHookEx(g_getMsgHook, nCode, wParam, lParam);
         }
 
-        // Check if this is our message to toggle auto-pairing
-        if (msg->message == WM_TOGGLE_AUTO_PAIRING) {
-            g_enableAutoPairing = (msg->wParam != 0);
-            char debugMsg[100];
-            sprintf_s(debugMsg, "Auto-pairing %s\n", g_enableAutoPairing ? "enabled" : "disabled");
-            OutputDebugStringA(debugMsg);
-
-            // Mark the message as handled
-            msg->message = WM_NULL;
-        }
         // Check if this is our message to subclass a window
-        else if (msg->message == WM_SUBCLASS_SCINTILLA_PARENT_WINDOW) {
+        if (msg->message == WM_SUBCLASS_SCINTILLA_PARENT_WINDOW) {
             HWND hWndToSubclass = (HWND)msg->wParam;
             HWND callbackWindow = (HWND)msg->lParam;
             
@@ -780,16 +840,6 @@ LRESULT CALLBACK GetMsgHook(int nCode, WPARAM wParam, LPARAM lParam) {
             // Mark the message as handled
             msg->message = WM_NULL;
         }
-        // Check if this is our message to toggle main window shortcuts
-        else if (msg->message == WM_TOGGLE_MAIN_WINDOW_SHORTCUTS) {
-            g_enableMainWindowShortcuts = (msg->wParam != 0);
-            char debugMsg[100];
-            sprintf_s(debugMsg, "Main window shortcuts %s\n", g_enableMainWindowShortcuts ? "enabled" : "disabled");
-            OutputDebugStringA(debugMsg);
-
-            // Mark the message as handled
-            msg->message = WM_NULL;
-        }
         // Check if this is our message to subclass main window
         else if (msg->message == WM_SUBCLASS_MAIN_WINDOW) {
             HWND hMainWindow = (HWND)msg->wParam;
@@ -826,34 +876,6 @@ LRESULT CALLBACK GetMsgHook(int nCode, WPARAM wParam, LPARAM lParam) {
                 OutputDebugStringA(debugMsg);
             } else {
                 OutputDebugStringA("Invalid Results list view handle for subclassing");
-            }
-
-            // Mark the message as handled
-            msg->message = WM_NULL;
-        }
-        // Check if this is our message to set open target
-        else if (msg->message == WM_AR_SET_OPEN_TARGET) {
-            // wParam contains a pointer to the wide string in the remote process buffer
-            // lParam contains the character count
-            wchar_t* remoteWideString = (wchar_t*)msg->wParam;
-            int characterCount = (int)msg->lParam;
-            
-            // Safety check: ensure character count doesn't exceed buffer size
-            if (characterCount > 0 && characterCount < OPEN_TARGET_BUFFER_SIZE && remoteWideString) {
-                // Clear the buffer first
-                memset(g_openTargetBuffer, 0, sizeof(g_openTargetBuffer));
-                
-                // Copy the string to our thread-local buffer
-                wcsncpy_s(g_openTargetBuffer, OPEN_TARGET_BUFFER_SIZE, remoteWideString, characterCount);
-                g_openTargetBuffer[characterCount] = L'\0';
-                
-                char debugMsg[300];
-                sprintf_s(debugMsg, "Open target set: %d characters copied to buffer\n", characterCount);
-                OutputDebugStringA(debugMsg);
-            } else {
-                // Invalid input - clear the buffer
-                memset(g_openTargetBuffer, 0, sizeof(g_openTargetBuffer));
-                OutputDebugStringA("Invalid open target parameters - buffer cleared");
             }
 
             // Mark the message as handled

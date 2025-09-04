@@ -3,16 +3,27 @@
 namespace AppRefiner.Events
 {
 
-    internal static class EventHookInstaller
+    public static class EventHookInstaller
     {
         private const uint WM_USER = 0x400;
         private const uint WM_TOGGLE_AUTO_PAIRING = WM_USER + 1002;
         private const uint WM_SUBCLASS_SCINTILLA_PARENT_WINDOW = WM_USER + 1003;
         private const uint WM_REMOVE_HOOK = WM_USER + 1004;
         private const uint WM_SUBCLASS_MAIN_WINDOW = WM_USER + 1005;
-        private const uint WM_TOGGLE_MAIN_WINDOW_SHORTCUTS = WM_USER + 1006;
+        private const uint WM_SET_MAIN_WINDOW_SHORTCUTS = WM_USER + 1006;
         private const uint WM_AR_SUBCLASS_RESULTS_LIST = WM_USER + 1007;
         private const uint WM_AR_SET_OPEN_TARGET = WM_USER + 1008;
+
+        // Bit field for shortcut types
+        [Flags]
+        public enum ShortcutType : uint
+        {
+            None = 0,
+            CommandPalette = 1 << 0,  // Always enabled - Ctrl+Shift+P
+            Open = 1 << 1,            // Override Ctrl+O
+            Search = 1 << 2,          // Override Ctrl+F, Ctrl+H, F3
+            All = CommandPalette | Open | Search
+        }
 
         private static Dictionary<uint, IntPtr> _activeHooks = new();
         private static Dictionary<uint, IntPtr> _activeKeyboardHooks = new();
@@ -83,7 +94,7 @@ namespace AppRefiner.Events
         }
 
         // Method to subclass a window
-        public static bool SubclassScintillaParentWindow(uint threadId, IntPtr windowToSubclass, IntPtr callbackWindow, bool autoPairingEnabled)
+        public static bool SubclassScintillaParentWindow(uint threadId, IntPtr windowToSubclass, IntPtr callbackWindow, IntPtr mainWindowHandle, bool autoPairingEnabled)
         {
             // Ensure we have a hook for this thread (should already be installed proactively)
             if (!_activeHooks.ContainsKey(threadId))
@@ -95,10 +106,12 @@ namespace AppRefiner.Events
             // Send the thread message to subclass the window
             bool result = PostThreadMessage(threadId, WM_SUBCLASS_SCINTILLA_PARENT_WINDOW, windowToSubclass, callbackWindow);
 
-            // Toggle auto-pairing if subclassing was successful
-            if (result)
+            // Set auto-pairing if subclassing was successful - now synchronous
+            if (result && mainWindowHandle != IntPtr.Zero)
             {
-                result = PostThreadMessage(threadId, WM_TOGGLE_AUTO_PAIRING, autoPairingEnabled ? 1 : 0, IntPtr.Zero);
+                // Small delay to ensure subclassing completes, then set auto-pairing synchronously
+                Thread.Sleep(5);
+                result = SetAutoPairing(mainWindowHandle, autoPairingEnabled);
             }
 
             return result;
@@ -127,18 +140,17 @@ namespace AppRefiner.Events
             _activeKeyboardHooks.Clear();
         }
 
-        // Method to send auto-pairing toggle to a specific thread
+        // Method to send auto-pairing toggle to a specific main window (deprecated - use SetAutoPairing instead)
         public static bool SendAutoPairingToggle(uint threadId, bool enabled)
         {
-            if (_activeHooks.ContainsKey(threadId))
-            {
-                return PostThreadMessage(threadId, WM_TOGGLE_AUTO_PAIRING, enabled ? 1 : 0, IntPtr.Zero);
-            }
+            // This method is deprecated - callers should use SetAutoPairing with main window handle
+            // For now, return false to indicate the old method no longer works
+            Debug.Log($"Warning: SendAutoPairingToggle is deprecated. Use SetAutoPairing with main window handle instead.");
             return false;
         }
 
         // Method to subclass main window
-        public static bool SubclassMainWindow(AppDesignerProcess appDesigner, IntPtr callbackWindow, bool shortcutsEnabled)
+        public static bool SubclassMainWindow(AppDesignerProcess appDesigner, IntPtr callbackWindow, ShortcutType enabledShortcuts)
         {
             // Ensure we have a hook for this thread (should already be installed proactively)
             if (!_activeHooks.ContainsKey(appDesigner.MainThreadId))
@@ -150,10 +162,21 @@ namespace AppRefiner.Events
             // Send the thread message to subclass the main window
             bool result = PostThreadMessage(appDesigner.MainThreadId, WM_SUBCLASS_MAIN_WINDOW, appDesigner.MainWindowHandle, callbackWindow);
 
-            // Toggle main window shortcuts if subclassing was successful
+            // Set main window shortcuts if subclassing was successful
+            // Since WM_SET_MAIN_WINDOW_SHORTCUTS is now handled synchronously in MainWindowSubclassProc,
+            // we need to ensure the subclassing is complete before calling it
             if (result)
             {
-                result = PostThreadMessage(appDesigner.MainThreadId, WM_TOGGLE_MAIN_WINDOW_SHORTCUTS, shortcutsEnabled ? 1 : 0, IntPtr.Zero);
+                // Retry logic to ensure subclassing is complete before setting shortcuts
+                bool shortcutResult = false;
+                for (int attempt = 0; attempt < 5; attempt++)
+                {
+                    Thread.Sleep(5); // Small delay to allow subclassing to complete
+                    shortcutResult = SetMainWindowShortcuts(appDesigner.MainWindowHandle, enabledShortcuts);
+                    if (shortcutResult)
+                        break;
+                }
+                Debug.Log($"SetMainWindowShortcuts result for process {appDesigner.ProcessId}: {shortcutResult}");
             }
 
             return result;
@@ -181,14 +204,30 @@ namespace AppRefiner.Events
         }
 
 
-        // Method to send main window shortcuts toggle to a specific thread
-        public static bool ToggleMainWindowShortcuts(uint threadId, bool enabled)
+        // Method to set main window shortcuts for a specific main window
+        public static bool SetMainWindowShortcuts(IntPtr mainWindowHandle, ShortcutType enabledShortcuts)
         {
-            if (_activeHooks.ContainsKey(threadId))
+            if (mainWindowHandle != IntPtr.Zero)
             {
-                return PostThreadMessage(threadId, WM_TOGGLE_MAIN_WINDOW_SHORTCUTS, enabled ? 1 : 0, IntPtr.Zero);
+                return WinApi.SendMessage(mainWindowHandle, WM_SET_MAIN_WINDOW_SHORTCUTS, (IntPtr)(uint)enabledShortcuts, IntPtr.Zero) != IntPtr.Zero;
             }
             return false;
+        }
+
+        // Method to set auto-pairing for a specific main window
+        public static bool SetAutoPairing(IntPtr mainWindowHandle, bool enabled)
+        {
+            if (mainWindowHandle != IntPtr.Zero)
+            {
+                return WinApi.SendMessage(mainWindowHandle, (int)WM_TOGGLE_AUTO_PAIRING, enabled ? 1 : 0, IntPtr.Zero) != IntPtr.Zero;
+            }
+            return false;
+        }
+
+        // Helper method to ensure Command Palette is always enabled
+        public static ShortcutType EnsureCommandPaletteEnabled(ShortcutType shortcuts)
+        {
+            return shortcuts | ShortcutType.CommandPalette;
         }
 
         // Method to unhook keyboard hook for a specific thread

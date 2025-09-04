@@ -34,6 +34,7 @@ namespace AppRefiner
         public GeneralSettingsData Settings {  get; set; }
 
         public bool DoNotPromptForDB { get; set; }
+        public string DBName { get; internal set; }
 
         /// <summary>
         /// Updates the Results ListView handle for this process
@@ -44,7 +45,7 @@ namespace AppRefiner
             ResultsListView = resultsListView;
         }
 
-        public AppDesignerProcess(uint pid, IntPtr resultsListView, GeneralSettingsData settings)
+        public AppDesignerProcess(uint pid, IntPtr resultsListView, GeneralSettingsData settings, EventHookInstaller.ShortcutType enabledShortcuts = EventHookInstaller.ShortcutType.All)
         {
             ProcessId = pid;
             ResultsListView = resultsListView;
@@ -70,7 +71,9 @@ namespace AppRefiner
             {
                 Debug.Log($"Warning: Failed to install hooks for AppDesigner process {ProcessId}, thread {MainThreadId}");
             }
-            EventHookInstaller.SubclassMainWindow(this, CallbackWindow, true);
+            // Always enable Command Palette, use the provided shortcuts
+            var shortcuts = EventHookInstaller.EnsureCommandPaletteEnabled(enabledShortcuts);
+            EventHookInstaller.SubclassMainWindow(this, CallbackWindow, shortcuts);
 
             EventHookInstaller.SubclassResultsList(MainThreadId, ResultsListView, IntPtr.Zero);
         }
@@ -112,7 +115,7 @@ namespace AppRefiner
             }
 
             /* This subclasses the parent window for scintilla notifications *and* the scintilla editor itself */
-            EventHookInstaller.SubclassScintillaParentWindow(threadId, WindowHelper.GetParentWindow(hWnd), CallbackWindow, true);
+            EventHookInstaller.SubclassScintillaParentWindow(threadId, WindowHelper.GetParentWindow(hWnd), CallbackWindow, MainWindowHandle, true);
 
 
             ScintillaManager.SetMouseDwellTime(editor, 1000);
@@ -197,8 +200,6 @@ namespace AppRefiner
             [DllImport("user32.dll", CharSet = CharSet.Auto)]
             static extern IntPtr SendMessage(IntPtr hWnd, int Msg, IntPtr wParam, IntPtr lParam);
 
-            [DllImport("user32.dll")]
-            static extern bool PostThreadMessage(uint threadId, uint msg, IntPtr wParam, IntPtr lParam);
 
             // Constants from EventHookInstaller
             const uint WM_USER = 0x400;
@@ -226,38 +227,44 @@ namespace AppRefiner
                 uint bufferSize = (uint)(charCount + 1) * 2; // +1 for null terminator, *2 for wide chars
 
                 IntPtr remoteBuffer = GetStandaloneProcessBuffer(bufferSize);
+                Debug.Log($"SetOpenTarget Got remote buffer: 0x{remoteBuffer:X}");
                 if (remoteBuffer == IntPtr.Zero)
                 {
+                    Debug.Log($"SetOpenTarget Remote Buffer was 0");
                     return false;
                 }
 
                 // Write the wide string to the remote buffer
                 bool writeSuccess = WriteWideStringToProcess(remoteBuffer, openTarget);
+                Debug.Log($"SetOpenTarget Write Success: {writeSuccess}");
                 if (!writeSuccess)
                 {
+                    Debug.Log("SetOpenTarget Since we didn't succeed, freeing the buffer!");
                     FreeStandaloneProcessBuffer(remoteBuffer);
                     return false;
                 }
 
                 // Send the set open target message with the remote buffer pointer and character count
-                bool setTargetSuccess = PostThreadMessage(MainThreadId, WM_AR_SET_OPEN_TARGET, remoteBuffer, charCount);
-
+                Debug.Log($"SetOpenTarget Sending the message with buffer: 0x{remoteBuffer:X}");
+                bool setTargetSuccess = SendMessage(MainWindowHandle, (int)WM_AR_SET_OPEN_TARGET, remoteBuffer, charCount) != IntPtr.Zero;
+                Debug.Log($"SetOpenTarget setTargetSuccess: {setTargetSuccess}");
                 if (setTargetSuccess)
                 {
                     // Send synthetic double-click to trigger IDE behavior
                     const int WM_LBUTTONDBLCLK = 0x0203;
                     const int MK_LBUTTON = 0x0001;
                     IntPtr lParam = IntPtr.Zero; // MAKELONG(0, 0) - coordinates (0,0)
-
+                    Debug.Log("SetOpenTarget Sending Double Click.");
                     bool doubleClickSuccess = SendMessage(ResultsListView, WM_LBUTTONDBLCLK, MK_LBUTTON, lParam) != IntPtr.Zero;
-
+                    Debug.Log($"SetOpenTarget Double Click Success: {doubleClickSuccess}");
                     // Free the buffer after use
                     FreeStandaloneProcessBuffer(remoteBuffer);
-
+                    Debug.Log($"SetOpenTarget Freed buffer 0x{remoteBuffer:X} after double click");
                     return doubleClickSuccess;
                 }
                 else
                 {
+                    Debug.Log("SetOpenTarget Freeing buffer because setTargetSuccess was false");
                     // Free the buffer if set target failed
                     FreeStandaloneProcessBuffer(remoteBuffer);
                     return false;
@@ -290,6 +297,19 @@ namespace AppRefiner
             buffer[neededSize - 1] = 0; // Ensure null termination
             // Write to remote process memory
             return WinApi.WriteProcessMemory(ProcessHandle, remoteBuffer, buffer, neededSize, out int bytesWritten) && bytesWritten == neededSize;
+        }
+
+        /// <summary>
+        /// Updates the enabled shortcuts for this AppDesigner process.
+        /// Note: Command Palette shortcut is always enabled and cannot be disabled.
+        /// </summary>
+        /// <param name="enabledShortcuts">The shortcuts to enable</param>
+        /// <returns>True if the update was successful</returns>
+        public bool UpdateShortcuts(EventHookInstaller.ShortcutType enabledShortcuts)
+        {
+            // Always ensure Command Palette is enabled
+            var shortcuts = EventHookInstaller.EnsureCommandPaletteEnabled(enabledShortcuts);
+            return EventHookInstaller.SetMainWindowShortcuts(MainWindowHandle, shortcuts);
         }
 
     }
