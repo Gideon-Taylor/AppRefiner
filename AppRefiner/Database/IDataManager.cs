@@ -242,6 +242,8 @@ namespace AppRefiner.Database
         /// <returns>The source code of the application class if found, otherwise null</returns>
         string? GetAppClassSourceByPath(string appClassPath);
 
+        string? GetPeopleCodeProgram(OpenTarget openTarget);
+
         /// <summary>
         /// Retrieves field information for a specified PeopleSoft record.
         /// </summary>
@@ -266,5 +268,11 @@ namespace AppRefiner.Database
         /// <param name="options">Search options including enabled types, limits, and search terms for ID and description</param>
         /// <returns>List of OpenTarget objects matching the search criteria</returns>
         List<OpenTarget> GetOpenTargets(OpenTargetSearchOptions options);
+
+        /// <summary>
+        /// Gets programs from PSPCMPROG that may contain function definitions
+        /// </summary>
+        /// <returns>List of OpenTarget objects representing programs that may contain function definitions</returns>
+        List<OpenTarget> GetFunctionDefiningPrograms();
     }
 }

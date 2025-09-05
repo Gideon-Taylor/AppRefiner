@@ -49,11 +49,11 @@ namespace AppRefiner
             chkEventMapping = new CheckBox();
             groupBox1 = new GroupBox();
             btnReportDirectory = new Button();
+            chkOverrideOpen = new CheckBox();
             btnTNSADMIN = new Button();
             btnDebugLog = new Button();
             grpEditorSettings = new GroupBox();
             btnConfigSmartOpen = new Button();
-            chkOverrideOpen = new CheckBox();
             chkOverrideFindReplace = new CheckBox();
             chkRememberFolds = new CheckBox();
             chkCodeFolding = new CheckBox();
@@ -268,6 +268,16 @@ namespace AppRefiner
             btnReportDirectory.UseVisualStyleBackColor = true;
             btnReportDirectory.Click += btnReportDirectory_Click;
             // 
+            // chkOverrideOpen
+            // 
+            chkOverrideOpen.AutoSize = true;
+            chkOverrideOpen.Location = new Point(432, 72);
+            chkOverrideOpen.Name = "chkOverrideOpen";
+            chkOverrideOpen.Size = new Size(103, 19);
+            chkOverrideOpen.TabIndex = 32;
+            chkOverrideOpen.Text = "Override Open";
+            chkOverrideOpen.UseVisualStyleBackColor = true;
+            // 
             // btnTNSADMIN
             // 
             btnTNSADMIN.Location = new Point(6, 51);
@@ -318,16 +328,6 @@ namespace AppRefiner
             btnConfigSmartOpen.Text = "Config Open...";
             btnConfigSmartOpen.UseVisualStyleBackColor = true;
             btnConfigSmartOpen.Click += btnConfigSmartOpen_Click;
-            // 
-            // chkOverrideOpen
-            // 
-            chkOverrideOpen.AutoSize = true;
-            chkOverrideOpen.Location = new Point(432, 69);
-            chkOverrideOpen.Name = "chkOverrideOpen";
-            chkOverrideOpen.Size = new Size(103, 19);
-            chkOverrideOpen.TabIndex = 32;
-            chkOverrideOpen.Text = "Override Open";
-            chkOverrideOpen.UseVisualStyleBackColor = true;
             // 
             // chkOverrideFindReplace
             // 

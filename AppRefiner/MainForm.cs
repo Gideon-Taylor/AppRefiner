@@ -11,6 +11,7 @@ using AppRefiner.Snapshots;
 using AppRefiner.Stylers;
 using AppRefiner.Templates;
 using AppRefiner.TooltipProviders;
+using PeopleCodeParser.SelfHosted.Lexing;
 using System.Data;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
@@ -45,6 +46,7 @@ namespace AppRefiner
         private AutoCompleteService? autoCompleteService; // Added AutoCompleteService
         private RefactorManager? refactorManager; // Added RefactorManager
         private SettingsService? settingsService; // Added SettingsService
+        private FunctionCacheManager? functionCacheManager; 
         private ScintillaEditor? activeEditor = null;
         private AppDesignerProcess? activeAppDesigner = null;
         private Dictionary<uint, AppDesignerProcess> AppDesignerProcesses = [];
@@ -61,7 +63,7 @@ namespace AppRefiner
         /// </summary>
         public AppDesignerProcess? ActiveAppDesigner => activeAppDesigner;
 
-        private List<ITooltipProvider> tooltipProviders = new();
+        private List<BaseTooltipProvider> tooltipProviders = new();
 
         // Static list of available commands
         public static List<Command> AvailableCommands = new();
@@ -213,6 +215,9 @@ namespace AppRefiner
 
             // Initialize snapshot manager
             snapshotManager = SnapshotManager.CreateFromSettings();
+
+            // Instantiate FunctionCacheManager
+            functionCacheManager = FunctionCacheManager.CreateFromSettings();
 
             // Attach event handlers for immediate save
             AttachEventHandlersForImmediateSave();
@@ -604,7 +609,7 @@ namespace AppRefiner
             {
                 return;
             }
-            if (dataGridViewTooltips.Rows[e.RowIndex].Tag is ITooltipProvider provider)
+            if (dataGridViewTooltips.Rows[e.RowIndex].Tag is BaseTooltipProvider provider)
             {
                 provider.Active = (bool)dataGridViewTooltips.Rows[e.RowIndex].Cells[0].Value;
                 SaveSettings(); // Call the consolidated SaveSettings method
@@ -926,6 +931,71 @@ namespace AppRefiner
             templateManager.ApplyActiveTemplateToEditor(activeEditor);
         }
 
+        private void ShowDeclareFunctionDialog()
+        {
+            if (activeAppDesigner?.DataManager == null)
+            {
+                // Show message that database connection is required
+                Task.Delay(100).ContinueWith(_ =>
+                {
+                    var mainHandle = activeAppDesigner?.MainWindowHandle ?? IntPtr.Zero;
+                    if (mainHandle != IntPtr.Zero)
+                    {
+                        var handleWrapper = new WindowWrapper(mainHandle);
+                        new MessageBoxDialog("Smart Open requires a database connection. Please connect to database first.",
+                            "Database Required", MessageBoxButtons.OK, mainHandle).ShowDialog(handleWrapper);
+                    }
+                });
+                return;
+            }
+
+            if (functionCacheManager == null)
+            {
+                // Show message that database connection is required
+                Task.Delay(100).ContinueWith(_ =>
+                {
+                    var mainHandle = activeAppDesigner?.MainWindowHandle ?? IntPtr.Zero;
+                    if (mainHandle != IntPtr.Zero)
+                    {
+                        var handleWrapper = new WindowWrapper(mainHandle);
+                        new MessageBoxDialog("There was an issue initializing the FunctionCacheManager. ",
+                            "Function Cache Manager Failure", MessageBoxButtons.OK, mainHandle).ShowDialog(handleWrapper);
+                    }
+                });
+                return;
+            }
+
+            var dataManager = activeAppDesigner.DataManager;
+            var dialog = new DeclareFunctionDialog(functionCacheManager, activeAppDesigner,
+                activeAppDesigner?.MainWindowHandle ?? IntPtr.Zero);
+
+            try
+            {
+                var mainHandle = activeAppDesigner?.MainWindowHandle ?? IntPtr.Zero;
+                var handleWrapper = new WindowWrapper(mainHandle);
+                var result = dialog.ShowDialog(handleWrapper);
+                if (result == DialogResult.OK)
+                {
+                 /*   var selectedTarget = dialog.GetSelectedTarget();
+                    if (selectedTarget != null && activeAppDesigner != null)
+                    {
+                        // Build the open target string based on the target type and object data
+                        string openTargetString = BuildOpenTargetString(selectedTarget);
+                        activeAppDesigner.SetOpenTarget(openTargetString);
+                    }
+                 */
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.Log($"Error showing Smart Open dialog: {ex.Message}");
+            }
+            finally
+            {
+                dialog?.Dispose();
+            }
+        }
+
         private void ShowSmartOpenDialog()
         {
             if (activeAppDesigner?.DataManager == null)
@@ -1054,13 +1124,9 @@ namespace AppRefiner
 
             /* Main "open" command for future development now that we  can open arbitrary definitions! */
             AvailableCommands.Add(new Command(
-                "Open: Open Defintion",
-                "Open a definition",
-                () =>
-                {
-                    if (activeAppDesigner == null) return;
-                    activeAppDesigner.SetOpenTarget("PROJECT.PATCH861");
-                }
+                "Declare Function",
+                "Declare an external function",
+                ShowDeclareFunctionDialog
             )
             { RequiresActiveEditor = false });
 

@@ -322,5 +322,17 @@ namespace AppRefiner.Properties {
                 this["smartOpenConfig"] = value;
             }
         }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("")]
+        public string FunctionCacheDatabasePath {
+            get {
+                return ((string)(this["FunctionCacheDatabasePath"]));
+            }
+            set {
+                this["FunctionCacheDatabasePath"] = value;
+            }
+        }
     }
 }

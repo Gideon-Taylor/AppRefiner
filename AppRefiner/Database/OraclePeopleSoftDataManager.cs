@@ -1346,7 +1346,7 @@ ORDER BY DEFN_TYPE ASC, ID ASC, CASE WHEN :sort_by_date = 'Y' THEN LASTUPDDTTM E
          PACKAGEROOT || CASE WHEN QUALIFYPATH = ':' THEN '' ELSE ':' || QUALIFYPATH END || ':' || APPCLASSID AS ID, 
          DESCR AS DESCR, SYSDATE AS LASTUPDDTTM
   FROM PSAPPCLASSDEFN
-  WHERE  (LENGTH(:id_search) = 0 OR UPPER(APPCLASSID) LIKE UPPER(:id_search || '%') ESCAPE '\')
+  WHERE  (LENGTH(:id_search) = 0 OR UPPER(PACKAGEROOT || CASE WHEN QUALIFYPATH = ':' THEN '' ELSE ':' || QUALIFYPATH END || ':' || APPCLASSID) LIKE UPPER('%' || :id_search || '%') ESCAPE '\')
      AND (LENGTH(:descr_search) = 0 OR UPPER(DESCR) LIKE UPPER('%' || :descr_search || '%') ESCAPE '\')
      AND (LENGTH(:id_search) > 0 OR LENGTH(:descr_search) > 0)",
 
@@ -1624,6 +1624,132 @@ ORDER BY DEFN_TYPE ASC, ID ASC, CASE WHEN :sort_by_date = 'Y' THEN LASTUPDDTTM E
             }
 
             return pairs;
+        }
+
+        /// <summary>
+        /// Gets programs from PSPCMPROG that may contain function definitions
+        /// </summary>
+        /// <returns>List of OpenTarget objects representing programs that may contain function definitions</returns>
+        public List<OpenTarget> GetFunctionDefiningPrograms()
+        {
+            if (!IsConnected)
+            {
+                throw new InvalidOperationException("Database connection is not open");
+            }
+
+            var results = new List<OpenTarget>();
+
+            try
+            {
+                // Base query to find programs in PSPCMPROG
+                // TODO: Add specific filtering logic based on queryFilter parameter
+                string sql = @"
+                    SELECT DISTINCT 
+                        OBJECTID1, OBJECTVALUE1,
+                        OBJECTID2, OBJECTVALUE2, 
+                        OBJECTID3, OBJECTVALUE3,
+                        OBJECTID4, OBJECTVALUE4,
+                        OBJECTID5, OBJECTVALUE5,
+                        OBJECTID6, OBJECTVALUE6,
+                        OBJECTID7, OBJECTVALUE7
+                    FROM PSPCMPROG
+                    WHERE OBJECTID1 = 1
+                    AND OBJECTID2 = 2
+                    AND OBJECTID3 = 12 AND OBJECTVALUE3 = 'FieldFormula'";
+
+                using var command = _connection.CreateCommand();
+                command.CommandText = sql;
+
+                using var reader = command.ExecuteReader();
+                while (reader.Read())
+                {
+                    var objectPairs = new List<(PSCLASSID ObjectID, string ObjectValue)>();
+
+                    // Read all 7 object ID/value pairs
+                    for (int i = 0; i < 7; i++)
+                    {
+                        int objIdIndex = i * 2;
+                        int objValueIndex = objIdIndex + 1;
+
+                        if (!reader.IsDBNull(objIdIndex) && !reader.IsDBNull(objValueIndex))
+                        {
+                            var objectId = (PSCLASSID)reader.GetInt32(objIdIndex);
+                            var objectValue = reader.GetString(objValueIndex);
+                            
+                            if (objectId != PSCLASSID.NONE && !string.IsNullOrEmpty(objectValue))
+                            {
+                                objectPairs.Add((objectId, objectValue));
+                            }
+                        }
+                    }
+
+                    if (objectPairs.Count > 0)
+                    {
+                        // Create OpenTarget - for programs we'll use a generic name and description
+                        var name = BuildProgramName(objectPairs);
+                        results.Add(new OpenTarget(
+                            OpenTargetType.UNKNOWN, // Programs don't have a specific OpenTargetType
+                            name,
+                            "PeopleCode Program",
+                            objectPairs
+                        ));
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.Log($"Error getting function defining programs: {ex.Message}");
+            }
+
+            return results;
+        }
+
+        /// <summary>
+        /// Builds a descriptive name for a program based on its object pairs
+        /// </summary>
+        /// <param name="objectPairs">The object ID/value pairs</param>
+        /// <returns>A descriptive name for the program</returns>
+        private static string BuildProgramName(List<(PSCLASSID ObjectID, string ObjectValue)> objectPairs)
+        {
+            // TODO: Enhance this method to create meaningful program names based on object types
+            var values = objectPairs.Where(o => o.ObjectID != PSCLASSID.NONE).Select(p => p.ObjectValue).Where(v => !string.IsNullOrEmpty(v));
+            return string.Join(".", values);
+        }
+
+        /// <summary>
+        /// Gets the PeopleCode program text for a given OpenTarget
+        /// </summary>
+        /// <param name="openTarget">The OpenTarget representing the program</param>
+        /// <returns>The program text as a string, or null if not found</returns>
+        public string? GetPeopleCodeProgram(OpenTarget openTarget)
+        {
+            if (!IsConnected)
+            {
+                throw new InvalidOperationException("Database connection is not open");
+            }
+
+            try
+            {
+                // Create PeopleCodeItem from OpenTarget
+                var item = new PeopleCodeItem(
+                    [.. openTarget.ObjectIDs.Select(a => (int)a)],
+                    [.. openTarget.ObjectValues.Select(a => a ?? " ")],
+                    Array.Empty<byte>(),
+                    new List<NameReference>()
+                );
+
+                // Load the program content
+                if (LoadPeopleCodeItemContent(item))
+                {
+                    return item.GetProgramTextAsString();
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.Log($"Error getting PeopleCode program: {ex.Message}");
+            }
+
+            return null;
         }
     }
 }
