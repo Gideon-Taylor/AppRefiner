@@ -1,4 +1,5 @@
 ﻿using AppRefiner.Database.Models;
+using Oracle.ManagedDataAccess.Client;
 using System.Diagnostics;
 using System.Numerics;
 using System.Text;
@@ -45,8 +46,8 @@ namespace AppRefiner
         bool isInsideIf = false;
         bool isCompOrGblDefn = false;
         int unMatchedParens;
-        MemoryStream? ms;
-        Stack<BooleanFrame> booleanFrames = new();
+        MemoryStream ms;
+        Stack<BooleanFrame> booleanFrames = new Stack<BooleanFrame>();
 
         BooleanFrame currentBoolFrame
         {
@@ -56,8 +57,8 @@ namespace AppRefiner
             }
         }
 
-        StringBuilder OutputText = new();
-        List<NameReference>? References;
+        StringBuilder OutputText = new StringBuilder();
+        List<NameReference> References;
         private static string[] refKeywords = new string[] {"Component","Panel","RecName", "Scroll", "MenuName", "BarName", "ItemName", "CompIntfc",
                 "Image", "Interlink", "StyleSheet", "FileLayout", "Page", "PanelGroup", "Message", "BusProcess", "BusEvent", "BusActivity",
                 "Field", "Record","Operation","Portal","Node"};
@@ -81,8 +82,7 @@ namespace AppRefiner
 
         private string ReadPureString()
         {
-            if (ms == null) { return ""; }
-            MemoryStream bytesRead = new();
+            MemoryStream bytesRead = new MemoryStream();
             byte[] currentChar = new byte[2];
 
             ms.Read(currentChar, 0, 2);
@@ -106,7 +106,7 @@ namespace AppRefiner
             {
                 Write("\r\n");
             }*/
-            if (OutputText.Length > 0 && OutputText[^1] != '\n')
+            if (OutputText.Length > 0 && OutputText[OutputText.Length - 1] != '\n')
             {
                 bool onlyWhitespace = true;
                 var x = OutputText.Length - 1;
@@ -127,7 +127,6 @@ namespace AppRefiner
         }
         private string ReadNumber()
         {
-            if (ms == null) { return ""; }
             int numBytes = 18;
 
             int firstByte = ms.ReadByte();
@@ -148,7 +147,7 @@ namespace AppRefiner
                 {
                     number = "0" + number;
                 }
-                number = number.Insert(number.Length - decimalPlace, ".");
+                number = number.Insert(number.Length - (decimalPlace), ".");
             }
             if (number.StartsWith("."))
             {
@@ -163,8 +162,7 @@ namespace AppRefiner
 
         private string ReadReference()
         {
-            if (References == null) { return ""; }
-            if (ms == null) { return ""; }
+
 
             var index1 = ms.ReadByte();
             var index2 = ms.ReadByte();
@@ -193,9 +191,13 @@ namespace AppRefiner
             {
                 return ReferenceName;
             }
+            else if (nextByte == 72)
+            {
+                return $"{RecordName}.\"{ReferenceName.Trim()}\"";
+            }
             else
             {
-                return nextByte == 72 ? $"{RecordName}.\"{ReferenceName.Trim()}\"" : "";
+                return "";
             }
 
         }
@@ -204,8 +206,6 @@ namespace AppRefiner
         {
             const int WIDE_AND = 0xff;
             const int COMM_LEN_BYTE2_MULTIPLIER = 256;
-
-            if (ms == null) { return ""; }
 
             int commLen = ms.ReadByte() & WIDE_AND;
             commLen += (ms.ReadByte() & WIDE_AND) * COMM_LEN_BYTE2_MULTIPLIER;
@@ -226,6 +226,17 @@ namespace AppRefiner
                 {
                     Write("   ");
                 }
+            }
+        }
+        private void WriteNewLineBeforeBlockEnd()
+        {
+            while (OutputText.Length > 0 && OutputText[OutputText.Length - 1] == ' ')
+            {
+                OutputText.Length--;
+            }
+            if (OutputText.Length > 0 && OutputText[OutputText.Length - 1] != '\n')
+            {
+                Write("\r\n");
             }
         }
         private void WriteOperatorSpaceBefore()
@@ -552,14 +563,7 @@ namespace AppRefiner
                         nIndent++;
                         break;
                     case 38:
-                        while (OutputText[OutputText.Length - 1] == ' ')
-                        {
-                            OutputText.Length--;
-                        }
-                        if (OutputText[OutputText.Length - 1] != '\n')
-                        {
-                            Write("\r\n");
-                        }
+                        WriteNewLineBeforeBlockEnd();
                         nIndent--;
                         WritePadding();
                         Write("End-While");
@@ -608,15 +612,7 @@ namespace AppRefiner
                         Write(" ");
                         break;
                     case 44:
-                        /* rewind any padding to check for newline */
-                        while (OutputText[OutputText.Length - 1] == ' ')
-                        {
-                            OutputText.Length--;
-                        }
-                        if (OutputText[OutputText.Length - 1] != '\n')
-                        {
-                            Write("\r\n");
-                        }
+                        WriteNewLineBeforeBlockEnd();
                         nIndent--;
                         WritePadding();
                         Write("End-For");
@@ -703,12 +699,9 @@ namespace AppRefiner
                         Write(" ");
                         break;
                     case 55:
-                        WriteNewLineBefore();
+                        WriteNewLineBeforeBlockEnd();
                         nIndent = 0;
-                        while (OutputText[OutputText.Length - 1] == ' ')
-                        {
-                            OutputText.Length--;
-                        }
+                        WritePadding();
                         Write("End-Function");
                         break;
                     case 56:
@@ -737,28 +730,21 @@ namespace AppRefiner
                         nIndent++;
                         break;
                     case 61:
-                        WriteNewLineBefore();
+                        WriteNewLineBeforeBlockEnd();
                         WritePadding();
                         Write("When");
                         Write(" ");
                         nIndent++;
                         break;
                     case 62:
-                        while (OutputText[OutputText.Length - 1] == ' ')
-                        {
-                            OutputText.Length--;
-                        }
-                        if (OutputText[OutputText.Length - 1] != '\n')
-                        {
-                            Write("\r\n");
-                        }
+                        WriteNewLineBeforeBlockEnd();
                         WritePadding();
                         Write("When-Other");
                         Write("\r\n");
                         nIndent++;
                         break;
                     case 63:
-                        WriteNewLineBefore();
+                        WriteNewLineBeforeBlockEnd();
                         WritePadding();
                         Write("End-Evaluate");
                         break;
@@ -868,7 +854,7 @@ namespace AppRefiner
                         {
                             Write("\r\n");
                         }*/
-                        if (isInsideIf && lastByte != 24 && lastByte != 30 || (isAppClass && afterClassDefn == false && unMatchedParens > 0))
+                        if (isInsideIf && (lastByte != 24 && lastByte != 30) || (isAppClass && afterClassDefn == false && unMatchedParens > 0))
                         {
                             /* do nothing */
                         }
@@ -981,10 +967,7 @@ namespace AppRefiner
                         Write(" ");
                         break;
                     case 97:
-                        while (OutputText[OutputText.Length - 1] == ' ')
-                        {
-                            OutputText.Length--;
-                        }
+                        WriteNewLineBeforeBlockEnd();
                         nIndent--;
                         WritePadding();
                         Write("private");
@@ -1007,14 +990,7 @@ namespace AppRefiner
                         }
                         break;
                     case 100:
-                        while (OutputText[OutputText.Length - 1] == ' ')
-                        {
-                            OutputText.Length--;
-                        }
-                        if (OutputText[OutputText.Length - 1] != '\n')
-                        {
-                            Write("\r\n");
-                        }
+                        WriteNewLineBeforeBlockEnd();
                         nIndent--;
                         WritePadding();
                         Write("end-method");
@@ -1027,10 +1003,7 @@ namespace AppRefiner
                         WritePadding();
                         break;
                     case 102:
-                        while (OutputText[OutputText.Length - 1] == ' ')
-                        {
-                            OutputText.Length--;
-                        }
+                        WriteNewLineBeforeBlockEnd();
                         nIndent--;
                         WritePadding();
                         Write("catch");
@@ -1038,18 +1011,10 @@ namespace AppRefiner
                         nIndent++;
                         break;
                     case 103:
-                        while (OutputText[OutputText.Length - 1] == ' ')
-                        {
-                            OutputText.Length--;
-                        }
-                        if (OutputText[OutputText.Length - 1] != '\n')
-                        {
-                            Write("\r\n");
-                        }
+                        WriteNewLineBeforeBlockEnd();
                         nIndent--;
                         WritePadding();
                         Write("end-try");
-                        //Write(" ");
                         break;
                     case 104:
                         WriteSpaceBefore();
@@ -1130,10 +1095,7 @@ namespace AppRefiner
                         nIndent++;
                         break;
                     case 113:
-                        while (OutputText[OutputText.Length - 1] == ' ')
-                        {
-                            OutputText.Length--;
-                        }
+                        WriteNewLineBeforeBlockEnd();
                         nIndent--;
                         WritePadding();
                         Write("end-interface");
@@ -1145,10 +1107,7 @@ namespace AppRefiner
                         Write(" ");
                         break;
                     case 115:
-                        while (OutputText[OutputText.Length - 1] == ' ')
-                        {
-                            OutputText.Length--;
-                        }
+                        WriteNewLineBeforeBlockEnd();
                         nIndent--;
                         WritePadding();
                         Write("protected");
@@ -1186,12 +1145,8 @@ namespace AppRefiner
                         nIndent++;
                         break;
                     case 119:
-                        while (OutputText[OutputText.Length - 1] == ' ')
-                        {
-                            OutputText.Length--;
-                        }
                         nIndent--;
-                        WritePadding();
+
 
                         shortLen = new byte[2];
                         ms.Read(shortLen, 0, 2);
@@ -1199,17 +1154,26 @@ namespace AppRefiner
                         stringData = new byte[stringLength];
                         ms.Read(stringData, 0, stringLength);
                         str = Encoding.Unicode.GetString(stringData).Replace("\n", "\r\n");
+
+                        /* Special handling for #Else because it isn't a seperate "token" but lumped together with the commented out code */
+                        if (str.StartsWith("#Else") && char.IsWhiteSpace(str[5]))
+                        {
+                            WriteNewLineBeforeBlockEnd();
+                        }
+
+                        /* Not sure by just in case the #If turns into one of these in the event that the "else" is the compiled side of the directive */
+                        if (str.StartsWith("#If") && char.IsWhiteSpace(str[3]))
+                        {
+                            WriteNewLineBeforeBlockEnd();
+                        }
+
+                        WritePadding();
                         Write(str);
                         Write("\r\n");
                         nIndent++;
                         break;
                     case 120:
-                        while (OutputText[OutputText.Length - 1] == ' ')
-                        {
-                            OutputText.Length--;
-                        }
                         nIndent--;
-                        WritePadding();
 
                         shortLen = new byte[2];
                         ms.Read(shortLen, 0, 2);
@@ -1217,6 +1181,13 @@ namespace AppRefiner
                         stringData = new byte[stringLength];
                         ms.Read(stringData, 0, stringLength);
                         str = Encoding.Unicode.GetString(stringData).Replace("\n", "\r\n");
+
+                        if (str == "#If" || str == "#Else" || str == "#End-If")
+                        {
+                            WriteNewLineBeforeBlockEnd();
+                        }
+
+                        WritePadding();
                         Write(str);
                         Write("\r\n");
                         WritePadding();
@@ -1236,6 +1207,12 @@ namespace AppRefiner
 
             }
 
+
+            /*ProgramElement p = new ProgramElement();
+            p.Parse(ms, state);
+            
+
+            return p;*/
             return OutputText.ToString().Trim();
         }
     }
