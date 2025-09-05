@@ -34,7 +34,7 @@ namespace AppRefiner.Stylers
         {
             // Find declared methods without implementations (excluding constructors)
             var unimplementedMethods = node.Methods
-                .Where(m => m.Body == null && !IsConstructor(m, node.Name));
+                .Where(m => m.Body == null && !IsConstructor(m, node.Name) && !m.IsAbstract);
 
             // Add indicators for missing implementations
             foreach (var method in unimplementedMethods)
