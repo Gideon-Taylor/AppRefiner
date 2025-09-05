@@ -73,7 +73,7 @@ public class MethodNode : DeclarationNode
     /// <summary>
     /// True if this is a constructor
     /// </summary>
-    public bool IsConstructor => Name.Equals("constructor", StringComparison.OrdinalIgnoreCase);
+    public bool IsConstructor { get; set; }
 
     /// <summary>
     /// True if this is a method implementation (has an implementation)

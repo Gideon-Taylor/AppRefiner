@@ -890,6 +890,11 @@ public class PeopleCodeParser
                     {
                         // Method headers are allowed in all visibility sections
                         member = ParseMethodHeader(visibility);
+                        if (member != null && member is MethodNode method)
+                        {
+                            method.IsConstructor = (method.Name == classNode.Name);
+                        }
+
                     }
                     else if (Check(TokenType.Property))
                     {
