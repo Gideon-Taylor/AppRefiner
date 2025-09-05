@@ -7,7 +7,7 @@ namespace AppRefiner.TooltipProviders
     /// </summary>
     public static class TooltipManager
     {
-        private static readonly List<ITooltipProvider> providers = new();
+        private static readonly List<BaseTooltipProvider> providers = new();
         private static bool initialized = false;
 
         /// <summary>
@@ -41,16 +41,16 @@ namespace AppRefiner.TooltipProviders
             {
                 var currentAssembly = Assembly.GetExecutingAssembly();
 
-                // Find all non-abstract types that implement ITooltipProvider
+                // Find all non-abstract types that implement BaseTooltipProvider
                 var tooltipProviderTypes = currentAssembly.GetTypes()
-                    .Where(t => typeof(ITooltipProvider).IsAssignableFrom(t) && !t.IsAbstract && !t.IsInterface);
+                    .Where(t => typeof(BaseTooltipProvider).IsAssignableFrom(t) && !t.IsAbstract && !t.IsInterface);
 
                 foreach (var type in tooltipProviderTypes)
                 {
                     try
                     {
                         // Create an instance of the tooltip provider and register it
-                        var provider = Activator.CreateInstance(type) as ITooltipProvider;
+                        var provider = Activator.CreateInstance(type) as BaseTooltipProvider;
                         if (provider != null)
                         {
                             RegisterProvider(provider);
@@ -85,7 +85,7 @@ namespace AppRefiner.TooltipProviders
                     try
                     {
                         // Create an instance of the tooltip provider and register it
-                        var provider = Activator.CreateInstance(type) as ITooltipProvider;
+                        var provider = Activator.CreateInstance(type) as BaseTooltipProvider;
                         if (provider != null)
                         {
                             RegisterProvider(provider);
@@ -109,7 +109,7 @@ namespace AppRefiner.TooltipProviders
         /// Registers a tooltip provider with the manager.
         /// </summary>
         /// <param name="provider">The tooltip provider to register.</param>
-        public static void RegisterProvider(ITooltipProvider provider)
+        public static void RegisterProvider(BaseTooltipProvider provider)
         {
             if (provider == null)
                 throw new ArgumentNullException(nameof(provider));
@@ -124,7 +124,7 @@ namespace AppRefiner.TooltipProviders
         /// <summary>
         /// Gets all registered tooltip providers.
         /// </summary>
-        public static IReadOnlyList<ITooltipProvider> Providers => providers.AsReadOnly();
+        public static IReadOnlyList<BaseTooltipProvider> Providers => providers.AsReadOnly();
 
         /// <summary>
         /// Shows a tooltip for the given position in the editor by querying all active providers.
@@ -152,31 +152,13 @@ namespace AppRefiner.TooltipProviders
             // Collect tooltips from all active providers
             var tooltips = new List<string>();
 
-            // Separate self-hosted AST providers from regular providers
-            var selfHostedProviders = providers.Where(p => p.Active && p is ScopedAstTooltipProvider)
-                .Cast<ScopedAstTooltipProvider>().ToList();
-            var regularProviders = providers.Where(p => p.Active && !(p is ScopedAstTooltipProvider));
+            var tooltipProviders = providers.Where(p => p.Active && p.GetType().IsAssignableTo(typeof(BaseTooltipProvider)))
+                .ToList();
 
-            // First, query regular providers which don't need parse tree analysis
-            foreach (var provider in regularProviders)
+            // Then, handle AST providers if there are any and this is PeopleCode
+            if (tooltipProviders.Count > 0 && editor.Type == EditorType.PeopleCode)
             {
-                var tooltip = provider.GetTooltip(editor, position);
-                if (!string.IsNullOrEmpty(tooltip))
-                {
-                    tooltips.Add(tooltip);
-                }
-            }
-
-            // Then, handle self-hosted AST providers if there are any
-            if (selfHostedProviders.Count > 0 && editor.Type == EditorType.PeopleCode)
-            {
-                var applicableProviders = FilterSelfHostedProviders(editor, position, selfHostedProviders);
-
-                if (applicableProviders.Count > 0)
-                {
-                    // Process applicable self-hosted providers
-                    ProcessSelfHostedTooltipProviders(editor, position, lineNumber, applicableProviders, tooltips);
-                }
+                ProcessTooltipProviders(editor, position, lineNumber, tooltipProviders, tooltips);
             }
 
             // If no tooltips were found, return false
@@ -192,56 +174,14 @@ namespace AppRefiner.TooltipProviders
         }
 
         /// <summary>
-        /// Filters self-hosted AST providers based on the AST node at the given position.
+        /// Process AST-based tooltip providers using the self-hosted parser.
+        /// Handles both AstTooltipProvider and ScopedAstTooltipProvider types.
         /// </summary>
-        /// <param name="editor">The editor to check</param>
-        /// <param name="position">The position in the document</param>
-        /// <param name="providers">The list of self-hosted providers to filter</param>
-        /// <returns>List of applicable providers that can provide tooltips at the position</returns>
-        private static List<ScopedAstTooltipProvider> FilterSelfHostedProviders(
-            ScintillaEditor editor,
-            int position,
-            List<ScopedAstTooltipProvider> providers)
-        {
-            var applicableProviders = new List<ScopedAstTooltipProvider>();
-
-            if (editor.ContentString == null) return [];
-
-            try
-            {
-                // For self-hosted providers, we parse the content and check if providers can handle the position
-                // All self-hosted providers are considered applicable for now since they work with AST nodes
-                // The actual filtering will happen during AST traversal based on the position
-                applicableProviders.AddRange(providers);
-            }
-            catch (Exception ex)
-            {
-                Debug.LogError($"Error filtering self-hosted tooltip providers: {ex.Message}");
-            }
-
-            return applicableProviders;
-        }
-
-        /// <summary>
-        /// Process self-hosted AST tooltip providers.
-        /// </summary>
-        private static void ProcessSelfHostedTooltipProviders(
-            ScintillaEditor editor,
-            int position,
-            List<ScopedAstTooltipProvider> applicableProviders,
-            List<string> tooltips)
-        {
-            ProcessSelfHostedTooltipProviders(editor, position, -1, applicableProviders, tooltips);
-        }
-
-        /// <summary>
-        /// Process self-hosted AST tooltip providers using the self-hosted parser.
-        /// </summary>
-        private static void ProcessSelfHostedTooltipProviders(
+        private static void ProcessTooltipProviders(
             ScintillaEditor editor,
             int position,
             int lineNumber,
-            List<ScopedAstTooltipProvider> applicableProviders,
+            List<BaseTooltipProvider> tooltipProviders,
             List<string> tooltips)
         {
             if (editor.ContentString == null)
@@ -256,28 +196,19 @@ namespace AppRefiner.TooltipProviders
                 var program = parser.ParseProgram();
 
                 // Reset and configure each provider
-                foreach (var provider in applicableProviders)
+                foreach (var provider in tooltipProviders)
                 {
                     provider.Reset();
                     provider.DataManager = editor.DataManager;
 
-                    // Note: CurrentPosition is set internally by the base GetTooltip method
-
-                    // Initialize line number for ScopeTooltipProvider
-                    if (provider is ScopeTooltipProvider scopeProvider)
+                    if (provider.CanProvideTooltipAt(editor, program, tokens, position, lineNumber))
                     {
-                        if (lineNumber > 0)
-                        {
-                            scopeProvider.LineNumber = lineNumber;
-                        }
+                        provider.ProcessProgram(program, position, lineNumber);
                     }
-
-                    // Process the AST program to collect tooltip information
-                    provider.ProcessProgram(program);
                 }
 
                 // Retrieve tooltips from each provider
-                foreach (var provider in applicableProviders)
+                foreach (var provider in tooltipProviders)
                 {
                     var tooltip = provider.GetTooltip(editor, position);
                     if (!string.IsNullOrEmpty(tooltip))
@@ -288,7 +219,7 @@ namespace AppRefiner.TooltipProviders
             }
             catch (Exception ex)
             {
-                Debug.LogError($"Error processing self-hosted tooltip providers: {ex.Message}");
+                Debug.LogError($"Error processing AST tooltip providers: {ex.Message}");
             }
         }
 

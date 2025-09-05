@@ -67,6 +67,7 @@ public static class AstTypeExtractor
             TypeCastNode cast => GetTypeFromNode(cast.TargetType),
             _ => "any"
         };
+
     }
 
     private static string GetLiteralType(LiteralNode literal)

@@ -172,12 +172,17 @@ public class ImportNode : AstNode
     /// <summary>
     /// True if this is a wildcard import (package:*)
     /// </summary>
-    public bool IsWildcard => ClassName == null;
+    public bool IsWildcard => ImportedType is AppPackageWildcardTypeNode;
 
     /// <summary>
     /// Full import path as it appears in source (e.g., "MyPackage:Utilities:*")
     /// </summary>
     public string FullPath { get; }
+
+    /// <summary>
+    /// The imported type node - either AppClassTypeNode for specific class imports or AppPackageWildcardTypeNode for wildcard imports
+    /// </summary>
+    public TypeNode ImportedType { get; }
 
     public ImportNode(IEnumerable<string> packagePath, string? className = null)
     {
@@ -189,6 +194,20 @@ public class ImportNode : AstNode
         ClassName = className;
 
         FullPath = string.Join(":", pathList) + (IsWildcard ? ":*" : $":{className}");
+
+        // Create appropriate type node
+        if (className == null)
+        {
+            // Wildcard import
+            ImportedType = new AppPackageWildcardTypeNode(pathList);
+        }
+        else
+        {
+            // Specific class import
+            ImportedType = new AppClassTypeNode(pathList, className);
+        }
+
+        AddChild(ImportedType);
     }
 
     public ImportNode(string fullPath)
@@ -207,13 +226,17 @@ public class ImportNode : AstNode
             // Wildcard import
             PackagePath = parts.Take(parts.Length - 1).ToArray();
             ClassName = null;
+            ImportedType = new AppPackageWildcardTypeNode(fullPath);
         }
         else
         {
             // Specific class import
             PackagePath = parts.Take(parts.Length - 1).ToArray();
             ClassName = parts[^1];
+            ImportedType = new AppClassTypeNode(fullPath);
         }
+
+        AddChild(ImportedType);
     }
 
     public override void Accept(IAstVisitor visitor)
@@ -228,7 +251,7 @@ public class ImportNode : AstNode
 
     public override string ToString()
     {
-        return $"Import {FullPath}";
+        return $"import {FullPath}";
     }
 }
 

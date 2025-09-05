@@ -56,9 +56,14 @@ public class MethodNode : DeclarationNode
     public TypeNode? ReturnType { get; set; }
 
     /// <summary>
-    /// Method body (null for declarations)
+    /// Method implementation (null for declarations)
     /// </summary>
-    public BlockNode? Body { get; set; }
+    public MethodImplNode? Implementation { get; set; }
+
+    /// <summary>
+    /// Method body (compatibility property - returns Implementation?.Body)
+    /// </summary>
+    public BlockNode? Body => Implementation?.Body;
 
     /// <summary>
     /// True if this method is abstract
@@ -71,14 +76,14 @@ public class MethodNode : DeclarationNode
     public bool IsConstructor => Name.Equals("constructor", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
-    /// True if this is a method implementation (has a body)
+    /// True if this is a method implementation (has an implementation)
     /// </summary>
-    public bool IsImplementation => Body != null;
+    public bool IsImplementation => Implementation != null;
 
     /// <summary>
-    /// True if this is a declaration only (no body)
+    /// True if this is a declaration only (no implementation)
     /// </summary>
-    public bool IsDeclaration => Body == null;
+    public bool IsDeclaration => Implementation == null;
 
     /// <summary>
     /// Class this method belongs to (for implementations outside class)
@@ -126,14 +131,34 @@ public class MethodNode : DeclarationNode
             AddChild(returnType);
     }
 
+    public void SetImplementation(MethodImplNode implementation)
+    {
+        if (Implementation != null)
+        {
+            RemoveChild(Implementation);
+            Implementation.Declaration = null; // Clear the back-reference
+        }
+
+        Implementation = implementation;
+        if (implementation != null)
+        {
+            AddChild(implementation);
+            implementation.Declaration = this; // Establish the back-reference
+        }
+    }
+
     public void SetBody(BlockNode body)
     {
-        if (Body != null)
-            RemoveChild(Body);
-
-        Body = body;
+        // For backward compatibility, create a MethodImplNode with the body
         if (body != null)
-            AddChild(body);
+        {
+            var methodImpl = new MethodImplNode(Name, NameToken, body);
+            SetImplementation(methodImpl);
+        }
+        else
+        {
+            SetImplementation(null!);
+        }
     }
 
     public override void Accept(IAstVisitor visitor)
@@ -149,7 +174,7 @@ public class MethodNode : DeclarationNode
     public override string ToString()
     {
         var className = ClassName != null ? $"{ClassName}." : "";
-        var returnType = ReturnType != null ? $" RETURNS {ReturnType}" : "";
+        var returnType = ReturnType != null ? $" Returns {ReturnType}" : "";
         var paramStr = string.Join(", ", Parameters);
         var impl = IsImplementation ? " (impl)" : "";
         return $"{className}{Name}({paramStr}){returnType}{impl}";
@@ -200,12 +225,12 @@ public class PropertyNode : DeclarationNode
     /// <summary>
     /// Class or Interface this property implements
     /// </summary>
-    public TypeNode ImplementedInterface { get; set; }
+    public TypeNode? ImplementedInterface { get; set; }
 
     /// <summary>
     /// Gets or sets the name of the implemented property.
     /// </summary>
-    public string ImplementedPropertyName { get; set; }
+    public string? ImplementedPropertyName { get; set; }
 
     /// <summary>
     /// Property getter body (for implementations)
@@ -278,10 +303,10 @@ public class PropertyNode : DeclarationNode
         var className = ClassName != null ? $"{ClassName}." : "";
         var access = (HasGet, HasSet, IsReadOnly) switch
         {
-            (true, true, false) => " GET SET",
-            (true, false, _) => " GET",
-            (false, true, false) => " SET",
-            (true, _, true) => " READONLY",
+            (true, true, false) => " get set",
+            (true, false, _) => " get",
+            (false, true, false) => " set",
+            (true, _, true) => " readonly",
             _ => ""
         };
         var impl = IsImplementation ? " (impl)" : "";
@@ -393,7 +418,7 @@ public class ConstantNode : DeclarationNode
 
     public override string ToString()
     {
-        return $"CONSTANT &{Name} = {Value}";
+        return $"Constant &{Name} = {Value}";
     }
 }
 
@@ -507,16 +532,16 @@ public class FunctionNode : DeclarationNode
 
     public override string ToString()
     {
-        var returnType = ReturnType != null ? $" RETURNS {ReturnType}" : "";
+        var returnType = ReturnType != null ? $" Returns {ReturnType}" : "";
         var paramStr = string.Join(", ", Parameters);
         var impl = IsImplementation ? " (impl)" : "";
 
         return FunctionType switch
         {
-            FunctionType.PeopleCode => $"FUNCTION {Name}({paramStr}){returnType} PEOPLECODE {RecordName}.{FieldName} {RecordEvent}{impl}",
-            FunctionType.Library => $"FUNCTION {Name}({paramStr}){returnType} LIBRARY {LibraryName}{impl}",
-            FunctionType.UserDefined => $"FUNCTION {Name}({paramStr}){returnType}{impl}",
-            _ => $"FUNCTION {Name}({paramStr}){returnType}{impl}"
+            FunctionType.PeopleCode => $"Function {Name}({paramStr}){returnType} PeopleCode {RecordName}.{FieldName} {RecordEvent}{impl}",
+            FunctionType.Library => $"Function {Name}({paramStr}){returnType} Library {LibraryName}{impl}",
+            FunctionType.UserDefined => $"Function {Name}({paramStr}){returnType}{impl}",
+            _ => $"Function {Name}({paramStr}){returnType}{impl}"
         };
     }
 }
@@ -569,9 +594,146 @@ public class ParameterNode : AstNode
     public override string ToString()
     {
         var name = Name.StartsWith("&") ? Name : $"&{Name}";
-        var mode = Mode != ParameterMode.Value ? $" {Mode.ToString().ToUpper()}" : "";
-        var outStr = IsOut ? " OUT" : "";
-        return $"{name} AS {Type}{mode}{outStr}";
+        var mode = Mode != ParameterMode.Value ? $" {Mode.ToString()}" : "";
+        var outStr = IsOut ? " out" : "";
+        return $"{name} As {Type}{mode}{outStr}";
+    }
+}
+
+/// <summary>
+/// Method implementation node - captures the complete method implementation structure 
+/// from 'method' to 'end-method' including annotations and body
+/// </summary>
+public class MethodImplNode : AstNode
+{
+    /// <summary>
+    /// Method name from the implementation
+    /// </summary>
+    public string Name { get; }
+
+    /// <summary>
+    /// Method name token from the implementation
+    /// </summary>
+    public Token NameToken { get; }
+
+    /// <summary>
+    /// Parameter annotations parsed from /+ ... +/ comments in method implementation
+    /// </summary>
+    public List<ParameterNode> ParameterAnnotations { get; } = new();
+
+    /// <summary>
+    /// Return type annotation from implementation (if specified in annotations)
+    /// </summary>
+    public TypeNode? ReturnTypeAnnotation { get; set; }
+
+    /// <summary>
+    /// The actual method body (statement block)
+    /// </summary>
+    public BlockNode Body { get; }
+
+    /// <summary>
+    /// Token marking the start of the method body statements (after annotations)
+    /// </summary>
+    public Token? BodyStartToken { get; set; }
+
+    /// <summary>
+    /// Token marking the end of the method body statements (before end-method)
+    /// </summary>
+    public Token? BodyEndToken { get; set; }
+
+    /// <summary>
+    /// Implemented interfaces (from EXTENDS/IMPLEMENTS annotation)
+    /// </summary>
+    public List<TypeNode> ImplementedInterfaces { get; } = new();
+
+    /// <summary>
+    /// Implemented method name (from EXTENDS/IMPLEMENTS annotation)
+    /// </summary>
+    public string? ImplementedMethodName { get; set; }
+
+    /// <summary>
+    /// Reference back to the method declaration that this implementation belongs to
+    /// </summary>
+    public MethodNode? Declaration { get; set; }
+
+    public MethodImplNode(string name, Token nameToken, BlockNode body)
+    {
+        Name = name ?? throw new ArgumentNullException(nameof(name));
+        NameToken = nameToken;
+        Body = body ?? throw new ArgumentNullException(nameof(body));
+        AddChild(body);
+    }
+
+    public void AddParameterAnnotation(ParameterNode parameter)
+    {
+        ParameterAnnotations.Add(parameter);
+        AddChild(parameter);
+    }
+
+    public void SetReturnTypeAnnotation(TypeNode returnType)
+    {
+        if (ReturnTypeAnnotation != null)
+            RemoveChild(ReturnTypeAnnotation);
+
+        ReturnTypeAnnotation = returnType;
+        if (returnType != null)
+            AddChild(returnType);
+    }
+
+    public void AddImplementedInterface(TypeNode interfaceType)
+    {
+        ImplementedInterfaces.Add(interfaceType);
+        AddChild(interfaceType);
+    }
+
+    /// <summary>
+    /// Convenience property to get method parameters from the declaration
+    /// </summary>
+    public IReadOnlyList<ParameterNode> Parameters => Declaration?.Parameters ?? new List<ParameterNode>();
+
+    /// <summary>
+    /// Convenience property to get method return type from the declaration
+    /// </summary>
+    public TypeNode? ReturnType => Declaration?.ReturnType;
+
+    /// <summary>
+    /// Convenience property to get method visibility from the declaration
+    /// </summary>
+    public VisibilityModifier Visibility => Declaration?.Visibility ?? VisibilityModifier.Public;
+
+    /// <summary>
+    /// Convenience property to check if this is an abstract method from the declaration
+    /// </summary>
+    public bool IsAbstract => Declaration?.IsAbstract ?? false;
+
+    /// <summary>
+    /// Convenience property to check if this is a constructor from the declaration
+    /// </summary>
+    public bool IsConstructor => Declaration?.IsConstructor ?? false;
+
+    public override void Accept(IAstVisitor visitor)
+    {
+        visitor.VisitMethodImpl(this);
+    }
+
+    public override TResult Accept<TResult>(IAstVisitor<TResult> visitor)
+    {
+        return visitor.VisitMethodImpl(this);
+    }
+
+    public override string ToString()
+    {
+        // Use declaration info if available, fall back to annotation info
+        var parameters = Declaration?.Parameters ?? new List<ParameterNode>();
+        var returnType = Declaration?.ReturnType ?? ReturnTypeAnnotation;
+        var visibility = Declaration?.Visibility ?? VisibilityModifier.Public;
+        
+        var paramStr = parameters.Count > 0 ? $"({string.Join(", ", parameters)})" : "()";
+        var returnStr = returnType != null ? $" Returns {returnType}" : "";
+        var visStr = visibility != VisibilityModifier.Public ? $"{visibility} " : "";
+        var annotationCount = ParameterAnnotations.Count > 0 ? $" [{ParameterAnnotations.Count} annotations]" : "";
+        
+        return $"{visStr}Method {Name}{paramStr}{returnStr} impl{annotationCount}";
     }
 }
 

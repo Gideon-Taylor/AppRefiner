@@ -409,7 +409,7 @@ public abstract class ScopedAstVisitor<T> : AstVisitorBase
     {
         // Register property in parent scope first
         var nameInfo = new VariableNameInfo(node.Name, node.NameToken);
-        RegisterVariable(nameInfo, "Property", VariableKind.Property, node);
+        RegisterVariable(nameInfo, node.Type.TypeName, VariableKind.Property, node);
 
         EnterScope(EnhancedScopeType.Property, node.Name, node);
 
@@ -534,6 +534,27 @@ public abstract class ScopedAstVisitor<T> : AstVisitorBase
         }
 
         base.VisitMemberAccess(node);
+    }
+
+    /// <summary>
+    /// Visits a catch statement and properly handles exception variable scoping
+    /// Exception variables are scoped to the containing method/function/global scope, not just the catch block
+    /// </summary>
+    public override void VisitCatch(CatchStatementNode node)
+    {
+        // If there's an exception variable, register it in the current scope (method/function/global)
+        if (node.ExceptionVariable != null)
+        {
+
+            // Create variable name info from the exception variable identifier
+            var nameInfo = new VariableNameInfo(node.ExceptionVariable.Name, node.ExceptionVariable.FirstToken);
+
+            // Register the exception variable in the current scope (which is the containing method/function/global scope)
+            RegisterVariable(nameInfo, node.ExceptionType?.TypeName ?? "Exception", VariableKind.Exception, node);
+        }
+
+        // Continue with the base implementation to visit the catch body
+        base.VisitCatch(node);
     }
 
     #endregion

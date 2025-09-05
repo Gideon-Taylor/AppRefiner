@@ -146,9 +146,9 @@ namespace AppRefiner.Plugins
             {
                 try
                 {
-                    // Find all non-abstract types that implement ITooltipProvider
+                    // Find all non-abstract types that implement BaseTooltipProvider
                     var types = assembly.GetTypes()
-                        .Where(t => typeof(ITooltipProvider).IsAssignableFrom(t) && !t.IsAbstract && !t.IsInterface);
+                        .Where(t => typeof(BaseTooltipProvider).IsAssignableFrom(t) && !t.IsAbstract && !t.IsInterface);
 
                     tooltipProviderTypes.AddRange(types);
                 }
@@ -186,7 +186,7 @@ namespace AppRefiner.Plugins
                                t != typeof(Refactors.ScopedRefactor));
 
                     var tooltipProviderCount = assembly.GetTypes()
-                        .Count(t => typeof(ITooltipProvider).IsAssignableFrom(t) && !t.IsAbstract && !t.IsInterface);
+                        .Count(t => typeof(BaseTooltipProvider).IsAssignableFrom(t) && !t.IsAbstract && !t.IsInterface);
 
                     var plugin = new PluginMetadata
                     {

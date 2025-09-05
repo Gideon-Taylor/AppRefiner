@@ -17,9 +17,11 @@ public interface IAstVisitor
     void VisitBuiltInType(BuiltInTypeNode node);
     void VisitArrayType(ArrayTypeNode node);
     void VisitAppClassType(AppClassTypeNode node);
+    void VisitAppPackageWildcardType(AppPackageWildcardTypeNode node);
 
     // Declaration nodes
     void VisitMethod(MethodNode node);
+    void VisitMethodImpl(MethodImplNode node);
     void VisitProperty(PropertyNode node);
     void VisitVariable(VariableNode node);
     void VisitConstant(ConstantNode node);
@@ -77,9 +79,11 @@ public interface IAstVisitor<out TResult>
     TResult VisitBuiltInType(BuiltInTypeNode node);
     TResult VisitArrayType(ArrayTypeNode node);
     TResult VisitAppClassType(AppClassTypeNode node);
+    TResult VisitAppPackageWildcardType(AppPackageWildcardTypeNode node);
 
     // Declaration nodes
     TResult VisitMethod(MethodNode node);
+    TResult VisitMethodImpl(MethodImplNode node);
     TResult VisitProperty(PropertyNode node);
     TResult VisitVariable(VariableNode node);
     TResult VisitConstant(ConstantNode node);
@@ -256,7 +260,12 @@ public abstract class AstVisitorBase : IAstVisitor
             property.Accept(this);
         }
     }
-    public virtual void VisitImport(ImportNode node) => DefaultVisit(node);
+    public virtual void VisitImport(ImportNode node)
+    {
+        // Visit the imported type node
+        node.ImportedType.Accept(this);
+    }
+
     public virtual void VisitBuiltInType(BuiltInTypeNode node) => DefaultVisit(node);
     public virtual void VisitArrayType(ArrayTypeNode node)
     {
@@ -265,6 +274,7 @@ public abstract class AstVisitorBase : IAstVisitor
             node.ElementType.Accept(this);
     }
     public virtual void VisitAppClassType(AppClassTypeNode node) => DefaultVisit(node);
+    public virtual void VisitAppPackageWildcardType(AppPackageWildcardTypeNode node) => DefaultVisit(node);
     public virtual void VisitMethod(MethodNode node)
     {
         // Visit return type first if present
@@ -292,11 +302,34 @@ public abstract class AstVisitorBase : IAstVisitor
             annotation.Accept(this);
         }
 
-        // Visit method body if present (for implementations)
-        if (node.Body != null)
+        // Visit method implementation if present
+        if (node.Implementation != null)
         {
-            node.Body.Accept(this);
+            node.Implementation.Accept(this);
         }
+    }
+    public virtual void VisitMethodImpl(MethodImplNode node)
+    {
+        // Visit parameter annotations
+        foreach (var annotation in node.ParameterAnnotations)
+        {
+            annotation.Type.Accept(this);
+        }
+
+        // Visit return type annotation if present
+        if (node.ReturnTypeAnnotation != null)
+        {
+            node.ReturnTypeAnnotation.Accept(this);
+        }
+
+        // Visit implemented interfaces if any
+        foreach (var interfaceType in node.ImplementedInterfaces)
+        {
+            interfaceType.Accept(this);
+        }
+
+        // Visit method body
+        node.Body.Accept(this);
     }
     public virtual void VisitProperty(PropertyNode node)
     {

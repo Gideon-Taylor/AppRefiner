@@ -35,23 +35,6 @@ public class UndefinedVariables : ScopedStyler
         GenerateIndicatorsForUndefinedVariables();
     }
 
-    public override void VisitMemberAccess(MemberAccessNode node)
-    {
-        base.VisitMemberAccess(node);
-
-        var member = node.MemberName;
-
-        // Check if variable is defined in any accessible scope
-        var curScope = GetCurrentScope();
-        var varsInScope = GetVariablesInScope(curScope);
-        if (!varsInScope.Any(v => v.Name.Equals(member) ||
-            (member.StartsWith('&') && v.Name.Equals(member.Substring(1)) && v.Kind == VariableKind.Property)))
-        {
-            // Track this as an undefined reference
-            undefinedVars.Add((member, node.MemberNameSpan));
-        }
-
-    }
     /// <summary>
     /// Handles identifier references and checks for undefined variables
     /// </summary>

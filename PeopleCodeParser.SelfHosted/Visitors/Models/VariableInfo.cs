@@ -40,7 +40,12 @@ public enum VariableKind
     /// <summary>
     /// Property declaration
     /// </summary>
-    Property
+    Property,
+
+    /// <summary>
+    /// Exception variable introduced by catch statement
+    /// </summary>
+    Exception
 }
 
 /// <summary>

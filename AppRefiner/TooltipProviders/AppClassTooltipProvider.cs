@@ -1,4 +1,5 @@
 using AppRefiner.Database;
+using PeopleCodeParser.SelfHosted.Lexing;
 using PeopleCodeParser.SelfHosted.Nodes;
 using System.Text;
 
@@ -8,7 +9,7 @@ namespace AppRefiner.TooltipProviders
     /// Provides tooltips for Application Class paths, showing public/protected members.
     /// This is the self-hosted equivalent of the ANTLR-based AppClassTooltipProvider.
     /// </summary>
-    public class AppClassTooltipProvider : AstTooltipProvider
+    public class AppClassTooltipProvider : BaseTooltipProvider
     {
         /// <summary>
         /// Name of the tooltip provider.
@@ -25,88 +26,78 @@ namespace AppRefiner.TooltipProviders
         /// </summary>
         public override DataManagerRequirement DatabaseRequirement => DataManagerRequirement.Required;
 
-        private string extendedClassPath = string.Empty;
-        private Dictionary<string, ProgramNode> _programPathToAst = new(StringComparer.OrdinalIgnoreCase);
+        private string extendedClassPath;
 
         /// <summary>
         /// Resets the internal state of the tooltip provider.
         /// </summary>
+        /// 
         public override void Reset()
         {
             base.Reset();
-            _programPathToAst.Clear();
-            extendedClassPath = string.Empty;
         }
 
-        /// <summary>
-        /// Processes the AST to find app class references and register tooltips
-        /// </summary>
-        public override void ProcessProgram(ProgramNode program)
+        public override void VisitAppClass(AppClassNode node)
         {
-            // Capture the extended class path if present
-            if (program.Interface != null)
+            if (node.BaseClass != null)
             {
-                if (program.Interface.BaseInterface != null)
+                if (node.BaseClass is AppClassTypeNode classPath)
                 {
-                    extendedClassPath = program.Interface.BaseInterface.TypeName;
+                    extendedClassPath = classPath.QualifiedName;
+                }
+                else
+                {
+                    extendedClassPath = node.BaseClass.ToString();
                 }
             }
-            else if (program.AppClass != null)
-            {
-                if (program.AppClass.BaseClass != null)
-                {
-                    extendedClassPath = program.AppClass.BaseClass.TypeName;
-                }
-            }
-
-            base.ProcessProgram(program);
+            base.VisitAppClass(node);
         }
 
-        /// <summary>
-        /// Override to process identifiers that might be app class paths
-        /// </summary>
-        public override void VisitIdentifier(IdentifierNode node)
+        public override void VisitInterface(InterfaceNode node)
         {
-            // Check if this identifier represents an app class path (contains colons)
-            if (node.IdentifierType == IdentifierType.Generic && IsAppClassPath(node.Name))
+            if (node.BaseInterface != null)
+            {
+                if (node.BaseInterface is AppClassTypeNode classPath)
+                {
+                    extendedClassPath = classPath.QualifiedName;
+                }
+                else
+                {
+                    extendedClassPath = node.BaseInterface.ToString();
+                }
+            }
+            base.VisitInterface(node);
+        }
+
+        public override void VisitAppClassType(AppClassTypeNode node)
+        {
+            if (node.SourceSpan.ContainsPosition(CurrentPosition))
             {
                 ProcessAppClassPath(node);
             }
-
-            base.VisitIdentifier(node);
+            base.VisitAppClassType(node);
         }
 
-        /// <summary>
-        /// Checks if a string represents an Application Class path (contains colon characters)
-        /// </summary>
-        private static bool IsAppClassPath(string text)
+        public override void VisitImport(ImportNode node)
         {
-            return !string.IsNullOrEmpty(text) && text.Contains(':');
+            base.VisitImport(node);
         }
-
+        
         /// <summary>
         /// Processes an app class path identifier to generate tooltip information
         /// </summary>
-        private void ProcessAppClassPath(IdentifierNode node)
+        private void ProcessAppClassPath(AppClassTypeNode node)
         {
             if (DataManager == null) return;
 
-            string hoveredClassPath = node.Name;
+            string hoveredClassPath = node.QualifiedName;
 
             ProgramNode? appClassProgram = null;
-            if (_programPathToAst.TryGetValue(hoveredClassPath, out ProgramNode? programAst))
-            {
-                appClassProgram = programAst;
-            }
-            else
-            {
-                // Parse the external class
-                appClassProgram = ParseExternalClass(hoveredClassPath);
-                if (appClassProgram != null)
-                {
-                    _programPathToAst[hoveredClassPath] = appClassProgram;
-                }
-            }
+            
+            // Parse the external class
+            appClassProgram = ParseExternalClass(hoveredClassPath);
+              
+            
 
             bool showProtected = string.Equals(hoveredClassPath, extendedClassPath, StringComparison.OrdinalIgnoreCase);
 

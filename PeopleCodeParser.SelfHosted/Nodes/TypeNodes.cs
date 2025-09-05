@@ -30,7 +30,7 @@ public class BuiltInTypeNode : TypeNode
 {
     public BuiltInType Type { get; }
 
-    public override string TypeName => Type.ToString().ToUpper();
+    public override string TypeName => Type.ToString();
     public override bool IsBuiltIn => true;
 
     public BuiltInTypeNode(BuiltInType type)
@@ -73,13 +73,13 @@ public class ArrayTypeNode : TypeNode
     {
         get
         {
-            var arrayName = "ARRAY";
+            var arrayName = "Array";
             for (var x = 2; x <= Dimensions; x++)
             {
-                arrayName += " OF ARRAY";
+                arrayName += " of Array";
             }
 
-            return ElementType != null ? $"{arrayName} OF {ElementType.TypeName}" : arrayName;
+            return ElementType != null ? $"{arrayName} of {ElementType.TypeName}" : arrayName;
         }
     }
 
@@ -177,6 +177,68 @@ public class AppClassTypeNode : TypeNode
     public override string ToString()
     {
         return QualifiedName;
+    }
+}
+
+/// <summary>
+/// Application package wildcard import type (MyPackage:*)
+/// </summary>
+public class AppPackageWildcardTypeNode : TypeNode
+{
+    /// <summary>
+    /// Package path components (e.g., ["MyPackage", "SubPackage"] for "MyPackage:SubPackage:*")
+    /// </summary>
+    public IReadOnlyList<string> PackagePath { get; }
+
+    /// <summary>
+    /// Full wildcard import path (e.g., "MyPackage:SubPackage:*")
+    /// </summary>
+    public string WildcardPath { get; }
+
+    public override string TypeName => WildcardPath;
+    public override bool IsNullable => false; // Package wildcards are not nullable types
+
+    public AppPackageWildcardTypeNode(IEnumerable<string> packagePath)
+    {
+        var packageList = packagePath?.ToList() ?? throw new ArgumentNullException(nameof(packagePath));
+        if (packageList.Count == 0)
+            throw new ArgumentException("Package path cannot be empty", nameof(packagePath));
+
+        PackagePath = packageList.AsReadOnly();
+        WildcardPath = string.Join(":", packageList) + ":*";
+    }
+
+    public AppPackageWildcardTypeNode(string wildcardPath)
+    {
+        if (string.IsNullOrWhiteSpace(wildcardPath))
+            throw new ArgumentException("Wildcard path cannot be empty", nameof(wildcardPath));
+
+        if (!wildcardPath.EndsWith(":*"))
+            throw new ArgumentException("Wildcard path must end with ':*'", nameof(wildcardPath));
+
+        WildcardPath = wildcardPath;
+
+        var parts = wildcardPath.Split(':');
+        if (parts.Length < 2)
+            throw new ArgumentException("Invalid wildcard path format", nameof(wildcardPath));
+
+        // Remove the '*' part to get package path
+        PackagePath = parts.Take(parts.Length - 1).ToArray();
+    }
+
+    public override void Accept(IAstVisitor visitor)
+    {
+        visitor.VisitAppPackageWildcardType(this);
+    }
+
+    public override TResult Accept<TResult>(IAstVisitor<TResult> visitor)
+    {
+        return visitor.VisitAppPackageWildcardType(this);
+    }
+
+    public override string ToString()
+    {
+        return WildcardPath;
     }
 }
 
@@ -339,17 +401,17 @@ public static class BuiltInTypeExtensions
         // For primitive types, return the uppercase keyword
         return type switch
         {
-            // Primitive types (uppercase keywords)
-            BuiltInType.Any => "ANY",
-            BuiltInType.Boolean => "BOOLEAN",
-            BuiltInType.Date => "DATE",
-            BuiltInType.DateTime => "DATETIME",
-            BuiltInType.Exception => "EXCEPTION",
-            BuiltInType.Float => "FLOAT",
-            BuiltInType.Integer => "INTEGER",
-            BuiltInType.Number => "NUMBER",
-            BuiltInType.String => "STRING",
-            BuiltInType.Time => "TIME",
+            // Primitive types (proper casing to match TokenType.GetText())
+            BuiltInType.Any => "any",
+            BuiltInType.Boolean => "boolean",
+            BuiltInType.Date => "Date",
+            BuiltInType.DateTime => "DateTime",
+            BuiltInType.Exception => "Exception",
+            BuiltInType.Float => "float",
+            BuiltInType.Integer => "integer",
+            BuiltInType.Number => "number",
+            BuiltInType.String => "string",
+            BuiltInType.Time => "Time",
 
             // Object types (use enum name directly)
             _ => type.ToString()

@@ -1,7 +1,9 @@
 using AppRefiner.Database;
 using PeopleCodeParser.SelfHosted;
+using PeopleCodeParser.SelfHosted.Lexing;
 using PeopleCodeParser.SelfHosted.Nodes;
 using PeopleCodeParser.SelfHosted.Visitors.Models;
+using System.Reflection;
 using System.Text;
 
 namespace AppRefiner.TooltipProviders
@@ -10,15 +12,11 @@ namespace AppRefiner.TooltipProviders
     /// Provides tooltips showing method parameter information when hovering over method calls.
     /// Specifically focuses on %This.Method() calls and &variable.Method() calls with application class types,
     /// and attempts to find the method definition within the class or its inheritance chain.
-    /// This is the self-hosted equivalent of the ANTLR-based MethodParametersTooltipProvider.
     /// </summary>
-    public class MethodParametersTooltipProvider : ScopedAstTooltipProvider
+    public class MethodParametersTooltipProvider : BaseTooltipProvider
     {
-        private Dictionary<string, MethodInfo> methodData = new(StringComparer.OrdinalIgnoreCase);
-        private string? superClassName;
-        private Dictionary<string, Dictionary<string, MethodInfo>> inheritanceChainMethods =
-            new(StringComparer.OrdinalIgnoreCase);
-        private bool hasProcessedInheritanceChain = false;
+        private AppClassNode? classNode;
+        private string basePackage;
 
         /// <summary>
         /// Name of the tooltip provider.
@@ -40,170 +38,41 @@ namespace AppRefiner.TooltipProviders
         /// </summary>
         public override DataManagerRequirement DatabaseRequirement => DataManagerRequirement.Optional;
 
-        /// <summary>
-        /// Structure to store method information
-        /// </summary>
-        private class MethodInfo
+        public override bool CanProvideTooltipAt(ScintillaEditor editor, ProgramNode program, List<Token> tokens, int cursorPosition, int lineNumber)
         {
-            public string Name { get; set; } = string.Empty;
-            public string ReturnType { get; set; } = string.Empty;
-            public bool IsAbstract { get; set; } = false;
-            public List<ParameterInfo> Parameters { get; set; } = new List<ParameterInfo>();
-            public VisibilityModifier Visibility { get; set; } = VisibilityModifier.Private;
-
-            public override string ToString()
-            {
-                var sb = new StringBuilder();
-
-                // Method name
-                sb.AppendLine($"Method: {Name}");
-
-                // Access modifier
-                string visibilityText = Visibility switch
-                {
-                    VisibilityModifier.Public => "Public",
-                    VisibilityModifier.Protected => "Protected",
-                    VisibilityModifier.Private => "Private",
-                    _ => "Private"
-                };
-                sb.AppendLine($"Access: {visibilityText}");
-
-                // Abstract indicator
-                if (IsAbstract)
-                {
-                    sb.AppendLine("Abstract Method");
-                }
-
-                // Return type
-                if (!string.IsNullOrEmpty(ReturnType))
-                {
-                    sb.AppendLine($"Returns: {FormatArrayType(ReturnType)}");
-                }
-
-                // Parameters
-                if (Parameters.Count > 0)
-                {
-                    sb.AppendLine("Parameters:");
-                    foreach (var param in Parameters)
-                    {
-                        sb.AppendLine($"   {param}");
-                    }
-                }
-                else
-                {
-                    sb.AppendLine("Parameters: None");
-                }
-
-                return sb.ToString().TrimEnd();
-            }
-        }
-
-        /// <summary>
-        /// Structure to store parameter information
-        /// </summary>
-        private class ParameterInfo
-        {
-            public string Name { get; set; } = string.Empty;
-            public string Type { get; set; } = string.Empty;
-            public bool IsOut { get; set; } = false;
-
-            public override string ToString()
-            {
-                var result = Name;
-
-                if (!string.IsNullOrEmpty(Type))
-                {
-                    result += " as " + FormatArrayType(Type);
-                }
-
-                if (IsOut)
-                {
-                    result += " out";
-                }
-
-                return result;
-            }
+            basePackage = editor.ClassPath;
+            return base.CanProvideTooltipAt(editor, program, tokens, cursorPosition, lineNumber);
         }
 
         /// <summary>
         /// Processes the AST to collect method information and register tooltips
         /// </summary>
-        public override void ProcessProgram(ProgramNode program)
+        public override void ProcessProgram(ProgramNode program, int position, int lineNumber)
         {
-            // Capture the superclass name if present
-            if (program.AppClass != null && program.AppClass.BaseClass != null)
+
+            if (program.AppClass != null)
             {
-                superClassName = program.AppClass.BaseClass.TypeName;
+                classNode = program.AppClass;
             }
-
-            // Reset state
-            methodData.Clear();
-            inheritanceChainMethods.Clear();
-            hasProcessedInheritanceChain = false;
-
-            base.ProcessProgram(program);
+            
+            base.ProcessProgram(program, position, lineNumber);
         }
 
-        /// <summary>
-        /// Override to collect method information from method declarations
-        /// </summary>
-        public override void VisitMethod(MethodNode node)
-        {
-            // Store method information
-            var methodInfo = new MethodInfo
-            {
-                Name = node.Name,
-                ReturnType = node.ReturnType?.TypeName ?? string.Empty,
-                IsAbstract = node.IsAbstract,
-                Visibility = node.Visibility,
-                Parameters = node.Parameters.Select(p => new ParameterInfo
-                {
-                    Name = p.Name,
-                    Type = p.Type?.TypeName ?? "any",
-                    IsOut = p.IsOut
-                }).ToList()
-            };
-
-            methodData[node.Name.ToLowerInvariant()] = methodInfo;
-
-            base.VisitMethod(node);
-        }
 
         /// <summary>
         /// Override to process function calls that might be method calls
         /// </summary>
         public override void VisitFunctionCall(FunctionCallNode node)
         {
+            if (!node.SourceSpan.ContainsPosition(CurrentPosition)) return;
             // Check if this is a method call (function is a member access)
             if (node.Function is MemberAccessNode memberAccess)
             {
                 ProcessMethodCall(memberAccess, node);
             }
-            else if (node.Function is IdentifierNode identifier &&
-                     identifier.Name.Equals("%This", StringComparison.OrdinalIgnoreCase))
-            {
-                // This might be a special case - %This() as a function call
-                // Handle if needed
-            }
-
             base.VisitFunctionCall(node);
         }
 
-        /// <summary>
-        /// Override to process member access for property references
-        /// </summary>
-        public override void VisitMemberAccess(MemberAccessNode node)
-        {
-            // Check if this member access is part of a method call
-            if (node.Parent is FunctionCallNode functionCall && functionCall.Function == node)
-            {
-                // This is handled in VisitFunctionCall, so skip here
-                return;
-            }
-
-            // Handle property access for tooltips (if needed in future)
-            base.VisitMemberAccess(node);
-        }
 
         /// <summary>
         /// Processes a method call to register tooltips
@@ -244,74 +113,76 @@ namespace AppRefiner.TooltipProviders
         /// </summary>
         private void HandleThisMethodCall(string methodName, SourceSpan span)
         {
-            // Check if we know this method in the current class
-            if (methodData.TryGetValue(methodName.ToLowerInvariant(), out var methodInfo))
+            if (classNode == null) return;
+
+            var tooltipText = GetMethodTooltipFromClass($"{basePackage}:{classNode.Name}", methodName);
+
+            if (tooltipText != null)
             {
-                // Found in current class
-                RegisterTooltip(span, $"{methodInfo}");
+                RegisterTooltip(span, tooltipText);
             }
-            else if (!string.IsNullOrEmpty(superClassName) && DataManager != null)
+
+        }
+        private string FormatTooltipForMethod(MethodNode method, string fromClass = "")
+        {
+            return "";
+        }
+
+        /* Note that we accept an AppClassNode here since only classes can contain code, which is how you could get a function/method call. */
+        private string? GetMethodTooltipFromClass(string startingTypePath, string methodName)
+        {
+            Stack<string> typeStack = [];
+            typeStack.Push(startingTypePath);
+           
+            while (typeStack.Count > 0)
             {
-                // Not found in current class, process the full inheritance chain
-                if (!hasProcessedInheritanceChain)
+                var type = typeStack.Pop();
+                if (type.Contains(':'))
                 {
-                    ProcessInheritanceChain();
-                }
-
-                bool foundInParent = false;
-
-                // Try to find the method in the inheritance chain
-                foreach (var entry in inheritanceChainMethods)
-                {
-                    string parentClassName = entry.Key;
-                    Dictionary<string, MethodInfo> parentMethods = entry.Value;
-
-                    if (parentMethods.TryGetValue(methodName.ToLowerInvariant(), out var parentMethodInfo))
+                    ProgramNode? typeProgram = null;
+                    /* if it matches our class path, it has to be a class, not an interface, because we trigger on
+                     * function calls, and interfaces can't contain those 
+                     */
+                    if (type.Equals($"{basePackage}:{classNode!.Name}"))
                     {
-                        // Found in a parent class - add the class name to the tooltip
-                        string tooltipWithInheritance = $"Method: {parentMethodInfo.Name} (inherited from {parentClassName})\n" +
-                                                        $"Access: {parentMethodInfo.Visibility}\n";
+                        /* Synthetic program node since that's what used in the "not this" case */
+                        typeProgram = new ProgramNode() { AppClass = classNode };
+                    }
+                    else
+                    {
+                      typeProgram = ParseExternalClass(type);
+                    }
 
-                        // Add the rest of the method info
-                        if (parentMethodInfo.IsAbstract)
-                            tooltipWithInheritance += "Abstract Method\n";
+                    if (typeProgram == null) return null;
 
-                        if (!string.IsNullOrEmpty(parentMethodInfo.ReturnType))
-                            tooltipWithInheritance += $"Returns: {FormatArrayType(parentMethodInfo.ReturnType)}\n";
-
-                        // Parameters
-                        if (parentMethodInfo.Parameters.Count > 0)
+                    if (typeProgram.AppClass != null)
+                    {
+                        var parentMethod = typeProgram.AppClass.Methods.Where(m => m.Name == methodName).FirstOrDefault();
+                        if (parentMethod != null)
                         {
-                            tooltipWithInheritance += "Parameters:\n";
-                            foreach (var param in parentMethodInfo.Parameters)
-                            {
-                                tooltipWithInheritance += $"   {param}\n";
-                            }
-                        }
-                        else
+                            return FormatTooltipForMethod(parentMethod, type);
+                        } else if (typeProgram.AppClass.BaseClass != null)
                         {
-                            tooltipWithInheritance += "Parameters: None\n";
+                            typeStack.Push(typeProgram.AppClass.BaseClass.TypeName);
                         }
+                    }
 
-                        RegisterTooltip(span, tooltipWithInheritance.TrimEnd());
-                        foundInParent = true;
-                        break;
+                    if (typeProgram.Interface != null)
+                    {
+                        var parentMethod = typeProgram.Interface.Methods.Where(m => m.Name == methodName).FirstOrDefault();
+                        if (parentMethod != null)
+                        {
+                            return FormatTooltipForMethod(parentMethod, type);
+                        } else if (typeProgram.Interface.BaseInterface != null)
+                        {
+                            typeStack.Push(typeProgram.Interface.BaseInterface.TypeName);
+                        }
                     }
                 }
+            }
 
-                if (!foundInParent)
-                {
-                    // Not found in any parent class
-                    string stubMessage = $"Method: {methodName}\n(Method definition not found in class hierarchy)";
-                    RegisterTooltip(span, stubMessage);
-                }
-            }
-            else
-            {
-                // No parent class or not found
-                string stubMessage = $"Method: {methodName}\n(Method definition not found in current class)";
-                RegisterTooltip(span, stubMessage);
-            }
+            /* Didn't find this method in the class heirarchy */
+            return null;
         }
 
         /// <summary>
@@ -329,104 +200,14 @@ namespace AppRefiner.TooltipProviders
             }
 
             // Determine if we're dealing with an application class type
-            if (IsAppClassType(varInfo.Type))
+            if (varInfo.Type.Contains(':'))
             {
                 // For app class types, we need to look up the method in that class
-                string classType = varInfo.Type;
-
-                // Use DataManager to process the class and find method
-                if (DataManager != null)
+                var classType = varInfo.Type;
+                string? tooltipText = GetMethodTooltipFromClass(classType, methodName);
+                if (tooltipText != null)
                 {
-                    // Create a dictionary for the class if we haven't processed it yet
-                    if (!inheritanceChainMethods.ContainsKey(classType))
-                    {
-                        Dictionary<string, MethodInfo> classMethods = GetParentClassMethods(classType, out string? nextParent);
-                        inheritanceChainMethods[classType] = classMethods;
-
-                        // If this class also has a parent, process that hierarchy if needed
-                        if (!string.IsNullOrEmpty(nextParent) && !inheritanceChainMethods.ContainsKey(nextParent))
-                        {
-                            HashSet<string> processedParents = new(StringComparer.OrdinalIgnoreCase);
-                            processedParents.Add(classType);
-
-                            string? currentParent = nextParent;
-                            while (!string.IsNullOrEmpty(currentParent) && !processedParents.Contains(currentParent))
-                            {
-                                processedParents.Add(currentParent);
-
-                                Dictionary<string, MethodInfo> parentMethods = GetParentClassMethods(currentParent, out string? nextNextParent);
-                                inheritanceChainMethods[currentParent] = parentMethods;
-
-                                currentParent = nextNextParent;
-                            }
-                        }
-                    }
-
-                    // Check if method exists in the variable's class
-                    if (inheritanceChainMethods.TryGetValue(classType, out var variableClassMethods) &&
-                        variableClassMethods.TryGetValue(methodName.ToLowerInvariant(), out var methodInfo))
-                    {
-                        // Found in the variable's class
-                        RegisterTooltip(span, $"{methodInfo}");
-                        return;
-                    }
-
-                    // If not found in the class, check its parent classes
-                    bool foundInParent = false;
-                    foreach (var entry in inheritanceChainMethods)
-                    {
-                        string parentClassName = entry.Key;
-                        Dictionary<string, MethodInfo> parentMethods = entry.Value;
-
-                        // Skip the current class, we already checked it
-                        if (string.Equals(parentClassName, classType, StringComparison.OrdinalIgnoreCase))
-                            continue;
-
-                        if (parentMethods.TryGetValue(methodName.ToLowerInvariant(), out var parentMethodInfo))
-                        {
-                            // Found in a parent class - add the class name to the tooltip
-                            string tooltipWithInheritance = $"Method: {parentMethodInfo.Name} (inherited from {parentClassName})\n" +
-                                                            $"Access: {parentMethodInfo.Visibility}\n";
-
-                            // Add the rest of the method info
-                            if (parentMethodInfo.IsAbstract)
-                                tooltipWithInheritance += "Abstract Method\n";
-
-                            if (!string.IsNullOrEmpty(parentMethodInfo.ReturnType))
-                                tooltipWithInheritance += $"Returns: {FormatArrayType(parentMethodInfo.ReturnType)}\n";
-
-                            // Parameters
-                            if (parentMethodInfo.Parameters.Count > 0)
-                            {
-                                tooltipWithInheritance += "Parameters:\n";
-                                foreach (var param in parentMethodInfo.Parameters)
-                                {
-                                    tooltipWithInheritance += $"   {param}\n";
-                                }
-                            }
-                            else
-                            {
-                                tooltipWithInheritance += "Parameters: None\n";
-                            }
-
-                            RegisterTooltip(span, tooltipWithInheritance.TrimEnd());
-                            foundInParent = true;
-                            break;
-                        }
-                    }
-
-                    if (!foundInParent)
-                    {
-                        // Method not found in class or its hierarchy
-                        string stubMessage = $"Method: {methodName}\n(Method definition not found in {classType} or its parent classes)";
-                        RegisterTooltip(span, stubMessage);
-                    }
-                }
-                else
-                {
-                    // No DataManager available
-                    string stubMessage = $"Method: {methodName}\n(Cannot access class definition for {varInfo.Type})";
-                    RegisterTooltip(span, stubMessage);
+                    RegisterTooltip(span, tooltipText);
                 }
             }
             else
@@ -437,91 +218,6 @@ namespace AppRefiner.TooltipProviders
             }
         }
 
-        /// <summary>
-        /// Processes the inheritance chain to extract methods from all parent classes
-        /// </summary>
-        private void ProcessInheritanceChain()
-        {
-            if (hasProcessedInheritanceChain || string.IsNullOrEmpty(superClassName) || DataManager == null)
-                return;
-
-            // Track the inheritance chain to avoid circular references
-            HashSet<string> processedClasses = new(StringComparer.OrdinalIgnoreCase);
-            string? currentParent = superClassName;
-
-            while (!string.IsNullOrEmpty(currentParent) && !processedClasses.Contains(currentParent))
-            {
-                processedClasses.Add(currentParent);
-
-                // Get the parent class methods
-                Dictionary<string, MethodInfo> parentMethods = GetParentClassMethods(currentParent, out string? nextParent);
-
-                // Store methods with their parent class
-                inheritanceChainMethods[currentParent] = parentMethods;
-
-                // Move up the chain
-                currentParent = nextParent;
-            }
-
-            hasProcessedInheritanceChain = true;
-        }
-
-        /// <summary>
-        /// Extract methods from a parent class and identify its parent
-        /// </summary>
-        private Dictionary<string, MethodInfo> GetParentClassMethods(string parentClassPath, out string? parentSuperClassName)
-        {
-            var methods = new Dictionary<string, MethodInfo>(StringComparer.OrdinalIgnoreCase);
-            parentSuperClassName = null;
-
-            // Use the DataManager to get the parent class source
-            string? parentClassSource = DataManager?.GetAppClassSourceByPath(parentClassPath);
-
-            if (string.IsNullOrEmpty(parentClassSource))
-                return methods;
-
-            try
-            {
-                // Parse the parent class using the self-hosted parser
-                var externalProgram = ParseExternalClass(parentClassPath);
-                if (externalProgram == null) return methods;
-
-                // Extract superclass name
-                if (externalProgram.AppClass != null && externalProgram.AppClass.BaseClass != null)
-                {
-                    parentSuperClassName = externalProgram.AppClass.BaseClass.TypeName;
-                }
-
-                // Extract methods from the parsed program
-                if (externalProgram.AppClass != null)
-                {
-                    foreach (var method in externalProgram.AppClass.Methods)
-                    {
-                        var methodInfo = new MethodInfo
-                        {
-                            Name = method.Name,
-                            ReturnType = method.ReturnType?.TypeName ?? string.Empty,
-                            IsAbstract = method.IsAbstract,
-                            Visibility = method.Visibility,
-                            Parameters = method.Parameters.Select(p => new ParameterInfo
-                            {
-                                Name = p.Name,
-                                Type = p.Type?.TypeName ?? "any",
-                                IsOut = p.IsOut
-                            }).ToList()
-                        };
-
-                        methods[method.Name.ToLowerInvariant()] = methodInfo;
-                    }
-                }
-            }
-            catch (Exception)
-            {
-                // Silently handle parsing errors
-            }
-
-            return methods;
-        }
 
         /// <summary>
         /// Attempts to find variable information in the current scope
@@ -532,72 +228,5 @@ namespace AppRefiner.TooltipProviders
             return info != null;
         }
 
-        /// <summary>
-        /// Formats array type strings to be more readable.
-        /// Converts "arrayofarrayofstring" to "Array2 of String".
-        /// </summary>
-        /// <param name="type">The original type string</param>
-        /// <returns>A formatted type string</returns>
-        private static string FormatArrayType(string type)
-        {
-            if (string.IsNullOrEmpty(type))
-                return type;
-
-            // Check if it's an array type
-            string lowerType = type.ToLowerInvariant();
-            if (!lowerType.StartsWith("array"))
-                return type; // Not an array type, return as is
-
-            // Count occurrences of "arrayof"
-            int arrayCount = 0;
-
-            // Use regex to count array of occurrences
-            string pattern = @"(array\s*of\s*)";
-            var matches = System.Text.RegularExpressions.Regex.Matches(lowerType, pattern, System.Text.RegularExpressions.RegexOptions.IgnoreCase);
-            arrayCount = matches.Count;
-
-            if (arrayCount == 0)
-            {
-                // If no "array of" patterns were found, it's just a simple array
-                arrayCount = 1;
-
-                // Extract the base type by removing the array part
-                string baseType = System.Text.RegularExpressions.Regex.Replace(type, @"^array\s*of\s*", "", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
-                if (string.IsNullOrEmpty(baseType))
-                    return "Array";
-
-                // Check if there are additional arrays
-                if (baseType.ToLowerInvariant().StartsWith("array"))
-                {
-                    // This is a nested array, format it recursively
-                    string nestedFormat = FormatArrayType(baseType);
-                    return "Array of " + nestedFormat;
-                }
-
-                return "Array of " + baseType;
-            }
-            else
-            {
-                // Find the base type after all the array patterns
-                int lastIndex = 0;
-                foreach (System.Text.RegularExpressions.Match match in matches)
-                {
-                    lastIndex = match.Index + match.Length;
-                }
-
-                string baseType = type.Substring(lastIndex);
-
-                // Use Array1, Array2, Array3 notation
-                return $"Array{arrayCount + 1} of {baseType}";
-            }
-        }
-
-        /// <summary>
-        /// Determines if a type is an Application Class (contains colon characters)
-        /// </summary>
-        private static bool IsAppClassType(string typeName)
-        {
-            return !string.IsNullOrEmpty(typeName) && typeName.Contains(':');
-        }
     }
 }

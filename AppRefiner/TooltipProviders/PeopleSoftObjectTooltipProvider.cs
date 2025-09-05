@@ -10,7 +10,7 @@ namespace AppRefiner.TooltipProviders
     /// Currently supports Record.Name patterns.
     /// This is the self-hosted equivalent of the ANTLR-based PeopleSoftObjectTooltipProvider.
     /// </summary>
-    public class PeopleSoftObjectTooltipProvider : AstTooltipProvider
+    public class PeopleSoftObjectTooltipProvider : BaseTooltipProvider
     {
         /// <summary>
         /// Name of the tooltip provider.
@@ -35,9 +35,9 @@ namespace AppRefiner.TooltipProviders
         /// <summary>
         /// Processes the AST to find Record.Name patterns and register tooltips
         /// </summary>
-        public override void ProcessProgram(ProgramNode program)
+        public override void ProcessProgram(ProgramNode program, int position, int lineNumber)
         {
-            base.ProcessProgram(program);
+            base.ProcessProgram(program, position, lineNumber);
         }
 
         /// <summary>

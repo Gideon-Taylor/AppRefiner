@@ -141,7 +141,7 @@ public class IfStatementNode : StatementNode
 
     public override string ToString()
     {
-        return ElseBlock != null ? "IF-THEN-ELSE" : "IF-THEN";
+        return ElseBlock != null ? "If-Then-Else" : "If-Then";
     }
 }
 
@@ -210,8 +210,8 @@ public class ForStatementNode : StatementNode
 
     public override string ToString()
     {
-        var stepStr = StepValue != null ? $" STEP {StepValue}" : "";
-        return $"FOR {Variable} = {FromValue} TO {ToValue}{stepStr}";
+        var stepStr = StepValue != null ? $" Step {StepValue}" : "";
+        return $"For {Variable} = {FromValue} To {ToValue}{stepStr}";
     }
 }
 
@@ -253,7 +253,7 @@ public class WhileStatementNode : StatementNode
 
     public override string ToString()
     {
-        return $"WHILE {Condition}";
+        return $"While {Condition}";
     }
 }
 
@@ -295,7 +295,7 @@ public class RepeatStatementNode : StatementNode
 
     public override string ToString()
     {
-        return $"REPEAT-UNTIL {Condition}";
+        return $"Repeat-Until {Condition}";
     }
 }
 
@@ -358,7 +358,7 @@ public class EvaluateStatementNode : StatementNode
 
     public override string ToString()
     {
-        return $"EVALUATE {Expression} ({WhenClauses.Count} WHEN clauses)";
+        return $"Evaluate {Expression} ({WhenClauses.Count} When clauses)";
     }
 }
 
@@ -392,7 +392,7 @@ public class WhenClause
     public override string ToString()
     {
         var opStr = Operator?.GetSymbol() ?? "=";
-        return $"WHEN {opStr} {Condition}";
+        return $"When {opStr} {Condition}";
     }
 }
 
@@ -448,7 +448,7 @@ public class TryStatementNode : StatementNode
 
     public override string ToString()
     {
-        return $"TRY ({CatchClauses.Count} catch clauses)";
+        return $"try ({CatchClauses.Count} catch clauses)";
     }
 }
 
@@ -494,7 +494,7 @@ public class ReturnStatementNode : StatementNode
 
     public override string ToString()
     {
-        return Value != null ? $"RETURN {Value}" : "RETURN";
+        return Value != null ? $"Return {Value}" : "Return";
     }
 }
 
@@ -528,7 +528,7 @@ public class ThrowStatementNode : StatementNode
 
     public override string ToString()
     {
-        return $"THROW {Exception}";
+        return $"Throw {Exception}";
     }
 }
 
@@ -551,7 +551,7 @@ public class BreakStatementNode : StatementNode
 
     public override string ToString()
     {
-        return "BREAK";
+        return "break";
     }
 }
 
@@ -574,7 +574,7 @@ public class ContinueStatementNode : StatementNode
 
     public override string ToString()
     {
-        return "CONTINUE";
+        return "Continue";
     }
 }
 
@@ -619,7 +619,7 @@ public class ExitStatementNode : StatementNode
 
     public override string ToString()
     {
-        return ExitCode != null ? $"EXIT {ExitCode}" : "EXIT";
+        return ExitCode != null ? $"Exit {ExitCode}" : "Exit";
     }
 }
 
@@ -653,7 +653,7 @@ public class ErrorStatementNode : StatementNode
 
     public override string ToString()
     {
-        return $"ERROR {Message}";
+        return $"Error {Message}";
     }
 }
 
@@ -685,7 +685,7 @@ public class WarningStatementNode : StatementNode
 
     public override string ToString()
     {
-        return $"WARNING {Message}";
+        return $"Warning {Message}";
     }
 }
 
@@ -768,7 +768,7 @@ public class LocalVariableDeclarationNode : StatementNode
 
     public override string ToString()
     {
-        return $"LOCAL {Type} {string.Join(", ", VariableNames)}";
+        return $"Local {Type} {string.Join(", ", VariableNames)}";
     }
 }
 
@@ -821,7 +821,7 @@ public class LocalVariableDeclarationWithAssignmentNode : StatementNode
 
     public override string ToString()
     {
-        return $"LOCAL {Type} {VariableName} = {InitialValue}";
+        return $"Local {Type} {VariableName} = {InitialValue}";
     }
 }
 
@@ -876,6 +876,6 @@ public class CatchStatementNode : StatementNode
     {
         var typeStr = ExceptionType != null ? $" {ExceptionType}" : "";
         var varStr = ExceptionVariable != null ? $" {ExceptionVariable.Name}" : "";
-        return $"CATCH{typeStr}{varStr}";
+        return $"catch{typeStr}{varStr}";
     }
 }

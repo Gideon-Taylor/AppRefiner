@@ -10,7 +10,7 @@ namespace AppRefiner.TooltipProviders
     /// This is the self-hosted equivalent of the ANTLR-based VariableInfoTooltipProvider
     /// with significantly enhanced capabilities.
     /// </summary>
-    public class VariableInfoTooltipProvider : ScopedAstTooltipProvider
+    public class VariableInfoTooltipProvider : BaseTooltipProvider
     {
         /// <summary>
         /// Name of the tooltip provider.
@@ -30,9 +30,9 @@ namespace AppRefiner.TooltipProviders
         /// <summary>
         /// Processes the AST to register tooltips for all variable references
         /// </summary>
-        public override void ProcessProgram(ProgramNode program)
+        public override void ProcessProgram(ProgramNode program, int position, int lineNumber)
         {
-            base.ProcessProgram(program);
+            base.ProcessProgram(program, position, lineNumber);
         }
 
         /// <summary>

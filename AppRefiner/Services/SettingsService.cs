@@ -219,7 +219,7 @@ namespace AppRefiner
 
         // --- Tooltip Provider States --- 
 
-        public void LoadTooltipStates(IEnumerable<ITooltipProvider> tooltipProviders, DataGridView dataGridView)
+        public void LoadTooltipStates(IEnumerable<BaseTooltipProvider> tooltipProviders, DataGridView dataGridView)
         {
             try
             {
@@ -237,7 +237,7 @@ namespace AppRefiner
                         provider.Active = state.Active;
                         // Update corresponding grid row
                         var row = dataGridView.Rows.Cast<DataGridViewRow>()
-                            .FirstOrDefault(r => r.Tag is ITooltipProvider p && p == provider);
+                            .FirstOrDefault(r => r.Tag is BaseTooltipProvider p && p == provider);
                         if (row != null)
                         {
                             row.Cells[0].Value = state.Active;
@@ -255,7 +255,7 @@ namespace AppRefiner
             }
         }
 
-        public void SaveTooltipStates(IEnumerable<ITooltipProvider> tooltipProviders)
+        public void SaveTooltipStates(IEnumerable<BaseTooltipProvider> tooltipProviders)
         {
             try
             {

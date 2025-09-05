@@ -719,7 +719,15 @@ public class PeopleCodeParser
             {
                 var lastToken = Previous;
 
-                return new ImportNode(string.Join(":", pathParts)) { FirstToken = firstToken, LastToken = lastToken };
+                var importNode = new ImportNode(string.Join(":", pathParts));
+                importNode.FirstToken = firstToken;
+                importNode.LastToken = lastToken;
+                
+                // Set token boundaries on the imported type node
+                importNode.ImportedType.FirstToken = firstToken;
+                importNode.ImportedType.LastToken = lastToken;
+                
+                return importNode;
             }
 
             return null;
@@ -1942,22 +1950,43 @@ public class PeopleCodeParser
     {
         switch (member)
         {
-            case MethodNode implementationMethod:
+            case MethodImplNode methodImplementation:
                 // Try to find matching method declaration
-                if (methodDeclarations.TryGetValue(implementationMethod.Name, out var declarationMethod))
+                if (methodDeclarations.TryGetValue(methodImplementation.Name, out var declarationMethod))
                 {
-                    // Unify: attach body from implementation to existing declaration
+                    // Unify: attach implementation to existing declaration
+                    declarationMethod.SetImplementation(methodImplementation);
+
+                    // Copy any annotations from implementation
+                    // Note: The implementation already contains all annotations, so we don't need to duplicate them
+                    
+                    // The unified method is already in appClass.Methods, so we're done
+                }
+                else
+                {
+                    // Implementation without declaration - report error and add as-is
+                    ReportError($"Method implementation '{methodImplementation.Name}' has no matching declaration");
+                    // Convert MethodImplNode to MethodNode for adding to class
+                    var orphanedMethod = new MethodNode(methodImplementation.Name, methodImplementation.NameToken);
+                    orphanedMethod.SetImplementation(methodImplementation);
+                    appClass.AddMember(orphanedMethod, VisibilityModifier.Public);
+                }
+                break;
+
+            case MethodNode implementationMethod:
+                // Handle legacy MethodNode implementations (for backward compatibility)
+                if (methodDeclarations.TryGetValue(implementationMethod.Name, out var legacyDeclarationMethod))
+                {
+                    // Legacy: attach body from implementation to existing declaration
                     if (implementationMethod.Body != null)
                     {
-                        declarationMethod.SetBody(implementationMethod.Body);
-                        declarationMethod.ParameterAnnotations = implementationMethod.ParameterAnnotations;
+                        legacyDeclarationMethod.SetBody(implementationMethod.Body);
+                        legacyDeclarationMethod.ParameterAnnotations = implementationMethod.ParameterAnnotations;
                     }
 
                     // Copy any annotations from implementation
                     if (!string.IsNullOrEmpty(implementationMethod.Documentation))
-                        declarationMethod.Documentation = implementationMethod.Documentation;
-
-                    // The unified method is already in appClass.Methods, so we're done
+                        legacyDeclarationMethod.Documentation = implementationMethod.Documentation;
                 }
                 else
                 {
@@ -2067,7 +2096,7 @@ public class PeopleCodeParser
     /// Parse method implementation according to ANTLR grammar:
     /// method: METHOD genericID SEMI* methodAnnotations statements? END_METHOD
     /// </summary>
-    private MethodNode? ParseMethodImplementation()
+    private MethodImplNode? ParseMethodImplementation()
     {
         try
         {
@@ -2081,36 +2110,74 @@ public class PeopleCodeParser
 
             // Parse method name
             var methodName = ParseGenericId();
+            var nameToken = Previous;
             if (methodName == null)
             {
                 ReportError("Expected method name after 'METHOD'");
                 return null;
             }
 
-            var methodNode = new MethodNode(methodName, Previous);
-
             // Optional semicolons
             while (Match(TokenType.Semicolon)) { }
 
+            // Track body start position (after annotations)
+            var bodyStartToken = Current;
+
+            // Create a temporary MethodNode for parsing annotations (for compatibility)
+            var tempMethodNode = new MethodNode(methodName, nameToken);
+
             // Parse method annotations (parameter and return type annotations)
-            ParseMethodAnnotations(methodNode);
+            ParseMethodAnnotations(tempMethodNode);
+
+            // Update body start token after annotations
+            bodyStartToken = Current;
 
             // Parse method body statements
+            BlockNode body;
             if (!Check(TokenType.EndMethod))
             {
-                var body = ParseStatementList(TokenType.EndMethod);
-                methodNode.SetBody(body);
+                body = ParseStatementList(TokenType.EndMethod);
             }
             else
             {
                 /* Create an empty body node */
-                methodNode.SetBody(new BlockNode());
+                body = new BlockNode();
             }
+
+            var bodyEndToken = Previous;
 
             // Expect END-METHOD
             Consume(TokenType.EndMethod, "Expected 'END-METHOD' after method implementation");
-            methodNode.LastToken = Previous;
-            return methodNode;
+            var lastToken = Previous;
+
+            // Create MethodImplNode with all the parsed information
+            var methodImpl = new MethodImplNode(methodName, nameToken, body)
+            {
+                FirstToken = firstToken,
+                LastToken = lastToken,
+                BodyStartToken = bodyStartToken,
+                BodyEndToken = bodyEndToken
+            };
+
+            // Transfer annotations from temp method node
+            foreach (var paramAnnotation in tempMethodNode.ParameterAnnotations)
+            {
+                methodImpl.AddParameterAnnotation(paramAnnotation);
+            }
+
+            if (tempMethodNode.ReturnType != null)
+            {
+                methodImpl.SetReturnTypeAnnotation(tempMethodNode.ReturnType);
+            }
+
+            foreach (var implementedInterface in tempMethodNode.ImplementedInterfaces)
+            {
+                methodImpl.AddImplementedInterface(implementedInterface);
+            }
+
+            methodImpl.ImplementedMethodName = tempMethodNode.ImplementedMethodName;
+
+            return methodImpl;
         }
         catch (Exception ex)
         {
@@ -4674,12 +4741,13 @@ public class PeopleCodeParser
             {
                 // Property/method access
                 var member = ParseGenericId();
+                var memberNameSpan = Previous.SourceSpan;
                 if (member != null)
                 {
                     var memberToken = Previous; // Previous token after ParseGenericId consumed it
 
                     // Create member access node
-                    expr = new MemberAccessNode(expr, member)
+                    expr = new MemberAccessNode(expr, member, memberNameSpan)
                     {
                         FirstToken = expr.FirstToken,
                         LastToken = memberToken
@@ -4706,7 +4774,7 @@ public class PeopleCodeParser
                     var memberToken = Current;
                     _position++;
 
-                    expr = new MemberAccessNode(expr, stringMember, isDynamic: true)
+                    expr = new MemberAccessNode(expr, stringMember, memberToken.SourceSpan, isDynamic: true)
                     {
                         FirstToken = expr.FirstToken,
                         LastToken = memberToken

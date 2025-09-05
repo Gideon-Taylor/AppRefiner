@@ -670,7 +670,7 @@ public class MemberAccessNode : ExpressionNode
     /// Member name
     /// </summary>
     public string MemberName { get; }
-
+    public SourceSpan MemberNameSpan { get; }
     /// <summary>
     /// True if this is dynamic member access (obj."string")
     /// </summary>
@@ -679,12 +679,12 @@ public class MemberAccessNode : ExpressionNode
     public override bool IsLValue => true;
     public override bool HasSideEffects => Target.HasSideEffects;
 
-    public MemberAccessNode(ExpressionNode target, string memberName, bool isDynamic = false)
+    public MemberAccessNode(ExpressionNode target, string memberName, SourceSpan memberNameSpan, bool isDynamic = false)
     {
         Target = target ?? throw new ArgumentNullException(nameof(target));
         MemberName = memberName ?? throw new ArgumentNullException(nameof(memberName));
         IsDynamic = isDynamic;
-
+        MemberNameSpan = memberNameSpan;
         AddChild(target);
     }
 

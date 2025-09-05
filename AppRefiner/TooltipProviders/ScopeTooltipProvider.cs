@@ -10,13 +10,8 @@ namespace AppRefiner.TooltipProviders
     /// Shows function/method, if/else, for/while, and evaluate blocks that contain the current line.
     /// This is the self-hosted equivalent of the ANTLR-based ScopeTooltipProvider.
     /// </summary>
-    public class ScopeTooltipProvider : ScopedAstTooltipProvider
+    public class ScopeTooltipProvider : BaseTooltipProvider
     {
-        /// <summary>
-        /// Current line number in the document, provided by the editor
-        /// </summary>
-        public int LineNumber { get; set; } = -1;
-
         private List<ScopeInfo> containingScopes = new();
 
         // Map from line number to first token on that line
@@ -25,6 +20,12 @@ namespace AppRefiner.TooltipProviders
         // Map from method name to parameter signature
         private Dictionary<string, string> methodParameterMap = new(StringComparer.OrdinalIgnoreCase);
         private Dictionary<string, string> methodReturnsMap = new(StringComparer.OrdinalIgnoreCase);
+
+        // Store program for lazy evaluation
+        private ProgramNode? storedProgram = null;
+        private int storedPosition = -1;
+        private int storedLineNumber = -1;
+        private bool hasProcessedAst = false;
 
         /// <summary>
         /// Name of the tooltip provider.
@@ -56,7 +57,7 @@ namespace AppRefiner.TooltipProviders
         /// <summary>
         /// Processes the AST to collect scope information
         /// </summary>
-        public override void ProcessProgram(ProgramNode program)
+        public override void ProcessProgram(ProgramNode program, int position, int lineNumber)
         {
             // Reset state
             containingScopes.Clear();
@@ -64,14 +65,21 @@ namespace AppRefiner.TooltipProviders
             methodParameterMap.Clear();
             methodReturnsMap.Clear();
 
-            base.ProcessProgram(program);
+            base.ProcessProgram(program, position, lineNumber);
         }
+
+
 
         /// <summary>
         /// Override to process method declarations
         /// </summary>
-        public override void VisitMethod(MethodNode node)
+        public override void VisitMethodImpl(MethodImplNode node)
         {
+            // Skip if this scope starts after our target line
+            if (node.SourceSpan.Start.Line > CurrentLine)
+                return;
+            if (node.Declaration is null) return;
+
             // Capture method signature information
             string methodName = node.Name;
 
@@ -94,7 +102,7 @@ namespace AppRefiner.TooltipProviders
             // Process as a scope if it contains our target line
             ProcessScope(node, "method");
 
-            base.VisitMethod(node);
+            base.VisitMethodImpl(node);
         }
 
         /// <summary>
@@ -102,6 +110,10 @@ namespace AppRefiner.TooltipProviders
         /// </summary>
         public override void VisitFunction(FunctionNode node)
         {
+            // Skip if this scope starts after our target line
+            if (node.SourceSpan.Start.Line > CurrentLine)
+                return;
+
             // Build parameter signature
             var parameters = new List<string>();
             foreach (var param in node.Parameters)
@@ -147,14 +159,14 @@ namespace AppRefiner.TooltipProviders
         public override void VisitIf(IfStatementNode node)
         {
             // Skip if this scope starts after our target line
-            if (node.SourceSpan.Start.Line > LineNumber)
+            if (node.SourceSpan.Start.Line > CurrentLine)
                 return;
 
             ProcessScope(node, "If");
 
             // Handle else block if it exists and contains our target line
-            if (node.ElseBlock != null && node.ElseBlock.SourceSpan.Start.Line <= LineNumber &&
-                LineNumber <= node.ElseBlock.SourceSpan.End.Line)
+            if (node.ElseBlock != null && node.ElseBlock.SourceSpan.Start.Line <= CurrentLine &&
+                CurrentLine <= node.ElseBlock.SourceSpan.End.Line)
             {
                 var elseScope = new ScopeInfo
                 {
@@ -178,8 +190,32 @@ namespace AppRefiner.TooltipProviders
         /// </summary>
         public override void VisitFor(ForStatementNode node)
         {
+            // Skip if this scope starts after our target line
+            if (node.SourceSpan.Start.Line > CurrentLine)
+                return;
+
             ProcessScope(node, "For");
             base.VisitFor(node);
+        }
+
+        public override void VisitRepeat(RepeatStatementNode node)
+        {
+            // Skip if this scope starts after our target line
+            if (node.SourceSpan.Start.Line > CurrentLine)
+                return;
+
+            ProcessScope(node, "Repeat");
+            base.VisitRepeat(node);
+        }
+
+        public override void VisitCatch(CatchStatementNode node)
+        {
+            // Skip if this scope starts after our target line
+            if (node.SourceSpan.Start.Line > CurrentLine)
+                return;
+
+            ProcessScope(node, "Catch");
+            base.VisitCatch(node);
         }
 
         /// <summary>
@@ -187,6 +223,10 @@ namespace AppRefiner.TooltipProviders
         /// </summary>
         public override void VisitWhile(WhileStatementNode node)
         {
+            // Skip if this scope starts after our target line
+            if (node.SourceSpan.Start.Line > CurrentLine)
+                return;
+
             ProcessScope(node, "While");
             base.VisitWhile(node);
         }
@@ -197,7 +237,7 @@ namespace AppRefiner.TooltipProviders
         public override void VisitEvaluate(EvaluateStatementNode node)
         {
             // Skip if this scope starts after our target line
-            if (node.SourceSpan.Start.Line > LineNumber)
+            if (node.SourceSpan.Start.Line > CurrentLine)
                 return;
 
             ProcessScope(node, "Evaluate");
@@ -218,11 +258,11 @@ namespace AppRefiner.TooltipProviders
                 return;
 
             // Skip if this scope starts after our target line
-            if (node.SourceSpan.Start.Line > LineNumber)
+            if (node.SourceSpan.Start.Line > CurrentLine)
                 return;
 
             // Skip if this scope ends before our target line
-            if (node.SourceSpan.End.Line < LineNumber)
+            if (node.SourceSpan.End.Line < CurrentLine)
                 return;
 
             // Create a scope info object only if our target line is within this scope
@@ -267,12 +307,19 @@ namespace AppRefiner.TooltipProviders
             {
                 return $"While {whileNode.Condition?.ToString() ?? ""}";
             }
+            else if (node is RepeatStatementNode repeatNode)
+            {
+                return $"Repeat {repeatNode.Condition?.ToString() ?? ""}";
+            }
             else if (node is EvaluateStatementNode evalNode)
             {
                 return $"Evaluate {evalNode.Expression?.ToString() ?? ""}";
             }
-            else if (node is MethodNode methodNode)
+            else if (node is MethodImplNode methodImplNode)
             {
+                if (methodImplNode.Declaration is null) return string.Empty;
+
+                var methodNode = methodImplNode.Declaration;
                 var methodName = methodNode.Name;
                 var methodLine = $"Method {methodName}";
 
@@ -322,6 +369,54 @@ namespace AppRefiner.TooltipProviders
         }
 
         /// <summary>
+        /// Checks if the given position is over leading whitespace on the current line
+        /// </summary>
+        private bool IsPositionOverLeadingWhitespace(ScintillaEditor editor, int position, int lineNumber)
+        {
+            if (editor == null || !editor.IsValid() || lineNumber < 0)
+                return false;
+
+            try
+            {
+                // Get the text of the current line (CurrentLine is 1-based, ScintillaManager methods expect 0-based)
+                string lineText = ScintillaManager.GetLineText(editor, lineNumber - 1);
+                if (string.IsNullOrEmpty(lineText))
+                    return true; // Empty line counts as all whitespace
+                
+                // Get the start position of the current line
+                int lineStartPos = ScintillaManager.GetLineStartIndex(editor, lineNumber - 1);
+                if (lineStartPos == -1)
+                    return false;
+                
+                // Calculate the column position within the line
+                int columnPos = position - lineStartPos;
+                
+                // Check if we're within the line bounds
+                if (columnPos < 0 || columnPos >= lineText.Length)
+                    return false;
+                
+                // Check if all characters from start of line to current position are whitespace
+                for (int i = 0; i <= columnPos; i++)
+                {
+                    if (!char.IsWhiteSpace(lineText[i]))
+                        return false; // Found non-whitespace character, so position is not over leading whitespace
+                }
+                
+                return true;
+            }
+            catch (Exception)
+            {
+                return false;
+            }
+        }
+
+        public override bool CanProvideTooltipAt(ScintillaEditor editor, ProgramNode program, List<Token> tokens, int cursorPosition, int lineNumber)
+        {
+            return IsPositionOverLeadingWhitespace (editor, cursorPosition, lineNumber);
+        }
+
+
+        /// <summary>
         /// Attempts to get a tooltip for the current position in the editor.
         /// </summary>
         public override string? GetTooltip(ScintillaEditor editor, int position)
@@ -330,8 +425,15 @@ namespace AppRefiner.TooltipProviders
                 return null;
 
             // Always use the provided line number from the base class
-            if (LineNumber <= 0)
+            if (CurrentLine <= 0)
                 return null;
+
+            // Only do the expensive AST processing if we're over leading whitespace
+            if (Program != null && containingScopes.Count == 0)
+            {
+                // Do the AST processing now that we know the position is valid
+                Program.Accept(this);
+            }
 
             // Check if we have any scopes containing our target line
             if (containingScopes.Count == 0)
@@ -339,7 +441,7 @@ namespace AppRefiner.TooltipProviders
 
             // Skip scopes that start on the current line
             var relevantScopes = containingScopes
-                .Where(s => s.StartLine != LineNumber)
+                .Where(s => s.StartLine != CurrentLine)
                 .ToList();
 
             // No scopes to display
@@ -361,6 +463,15 @@ namespace AppRefiner.TooltipProviders
 
             // Process Else blocks to reorganize them after their parent If blocks
             var processedControlScopes = ReorganizeControlScopes(controlScopes);
+
+            if (methodScopes.Count > 0)
+            {
+                /* Indent all control scopes by 1 */
+                foreach(var scope in containingScopes)
+                {
+                    scope.IndentLevel++;
+                }
+            }
 
             // Create the tooltip with indentation
             var tooltipBuilder = new StringBuilder();
