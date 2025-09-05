@@ -61,7 +61,7 @@ namespace AppRefiner.TooltipProviders
         {
             // Check if the left side is an identifier with text "RECORD"
             return node.Target is IdentifierNode identifier &&
-                   string.Equals(identifier.Name, "RECORD", StringComparison.OrdinalIgnoreCase);
+                   (string.Equals(identifier.Name, "RECORD", StringComparison.OrdinalIgnoreCase) || string.Equals(identifier.Name, "Scroll", StringComparison.OrdinalIgnoreCase));
         }
 
         /// <summary>

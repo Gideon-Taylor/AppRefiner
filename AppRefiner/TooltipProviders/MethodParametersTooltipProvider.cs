@@ -3,8 +3,10 @@ using PeopleCodeParser.SelfHosted;
 using PeopleCodeParser.SelfHosted.Lexing;
 using PeopleCodeParser.SelfHosted.Nodes;
 using PeopleCodeParser.SelfHosted.Visitors.Models;
+using System;
 using System.Reflection;
 using System.Text;
+using static SqlParser.Ast.RoleOption;
 
 namespace AppRefiner.TooltipProviders
 {
@@ -54,7 +56,7 @@ namespace AppRefiner.TooltipProviders
             {
                 classNode = program.AppClass;
             }
-            
+
             base.ProcessProgram(program, position, lineNumber);
         }
 
@@ -115,7 +117,7 @@ namespace AppRefiner.TooltipProviders
         {
             if (classNode == null) return;
 
-            var tooltipText = GetMethodTooltipFromClass($"{basePackage}:{classNode.Name}", methodName);
+            var tooltipText = GetMethodTooltipFromClass($"{basePackage}", methodName);
 
             if (tooltipText != null)
             {
@@ -125,8 +127,36 @@ namespace AppRefiner.TooltipProviders
         }
         private string FormatTooltipForMethod(MethodNode method, string fromClass = "")
         {
-            return "";
+            bool foundInParent = !($"{basePackage}".Equals(fromClass, StringComparison.OrdinalIgnoreCase));
+
+            // Found in a parent class - add the class name to the tooltip
+            string tooltipText = $"Method: {method.Name} {( foundInParent ? $"(inherited from {fromClass})" : "") }\n" +
+                                            $"Access: {method.Visibility}\n";
+
+            // Add the rest of the method info
+            if (method.IsAbstract)
+                tooltipText += "Abstract Method\n";
+
+            if (method.ReturnType != null)
+                tooltipText += $"Returns: {method.ReturnType.ToString()}\n";
+
+            // Parameters
+            if (method.Parameters.Count > 0)
+            {
+                tooltipText += "Parameters:\n";
+                foreach (var param in method.Parameters)
+                {
+                    tooltipText += $"   {param}\n";
+                }
+            }
+            else
+            {
+                tooltipText += "Parameters: None\n";
+            }
+
+            return tooltipText;
         }
+   
 
         /* Note that we accept an AppClassNode here since only classes can contain code, which is how you could get a function/method call. */
         private string? GetMethodTooltipFromClass(string startingTypePath, string methodName)
@@ -143,7 +173,7 @@ namespace AppRefiner.TooltipProviders
                     /* if it matches our class path, it has to be a class, not an interface, because we trigger on
                      * function calls, and interfaces can't contain those 
                      */
-                    if (type.Equals($"{basePackage}:{classNode!.Name}"))
+                    if (type.Equals($"{basePackage}"))
                     {
                         /* Synthetic program node since that's what used in the "not this" case */
                         typeProgram = new ProgramNode() { AppClass = classNode };
