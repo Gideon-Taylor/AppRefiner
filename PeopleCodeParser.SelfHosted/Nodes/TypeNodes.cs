@@ -384,7 +384,8 @@ public enum BuiltInType
     Course,
     Class,
     Term,
-    Institution
+    Institution,
+    Object
 }
 
 /// <summary>
