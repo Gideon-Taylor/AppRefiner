@@ -1200,7 +1200,7 @@ namespace AppRefiner
                                 try
                                 {
                                     // Create an instance of the refactor
-                                    var refactor = (IRefactor?)Activator.CreateInstance(
+                                    var refactor = (BaseRefactor?)Activator.CreateInstance(
                                             currentRefactorInfo.RefactorType,
                                             [activeEditor] // Assuming constructor takes ScintillaEditor
                                 );
@@ -1578,7 +1578,7 @@ namespace AppRefiner
 
                             try
                             {
-                                var newRefactor = (IRefactor?)Activator.CreateInstance(
+                                var newRefactor = (BaseRefactor?)Activator.CreateInstance(
                                     currentRefactorInfo.RefactorType,
                                     [activeEditor] // Assuming constructor takes ScintillaEditor
                                 );

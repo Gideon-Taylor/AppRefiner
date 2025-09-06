@@ -85,7 +85,7 @@ namespace AppRefiner.Refactors
             // Discover types (similar to MainForm.DiscoverRefactorTypes)
             var refactorTypes = AppDomain.CurrentDomain.GetAssemblies()
                 .SelectMany(s => s.GetTypes())
-                .Where(p => typeof(IRefactor).IsAssignableFrom(p) &&
+                .Where(p => typeof(BaseRefactor).IsAssignableFrom(p) &&
                               !p.IsAbstract &&
                               !p.IsGenericTypeDefinition);
 
@@ -230,7 +230,7 @@ namespace AppRefiner.Refactors
         /// </summary>
         /// <param name="refactorClass">The instantiated refactor class to execute.</param>
         /// <param name="activeEditor">The editor to apply the refactoring to.</param>
-        public void ExecuteRefactor(IRefactor refactorClass, ScintillaEditor? activeEditor, bool showUserMessages = true)
+        public void ExecuteRefactor(BaseRefactor refactorClass, ScintillaEditor? activeEditor, bool showUserMessages = true)
         {
             if (activeEditor == null || !activeEditor.IsValid())
             {
@@ -384,7 +384,7 @@ namespace AppRefiner.Refactors
                     try
                     {
                         // Instantiate the follow-up refactor
-                        if (Activator.CreateInstance(followUpType, activeEditor) is IRefactor followUpRefactor)
+                        if (Activator.CreateInstance(followUpType, activeEditor) is BaseRefactor followUpRefactor)
                         {
                             // Execute it immediately
                             ExecuteRefactor(followUpRefactor, activeEditor); // Recursive call

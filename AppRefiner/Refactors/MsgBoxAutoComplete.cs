@@ -101,18 +101,14 @@ namespace AppRefiner.Refactors
             // Replace MsgBox() with MessageBox(0,"",0,0,"")
             string replacementText = "MessageBox(0,\"\",0,0,\"\")";
 
-            // Check if we need to add a semicolon (if it's a standalone statement)
-            var originalText = GetOriginalText(targetMsgBoxCall);
-            if (!string.IsNullOrEmpty(originalText) && originalText.TrimEnd().EndsWith(")"))
-            {
-                replacementText += ";";
-            }
+            // For simplicity, always add a semicolon since MsgBox calls are typically statements
+            replacementText += ";";
 
             Debug.Log($"MsgBoxAutoComplete: Replacing MsgBox() from pos {targetMsgBoxCall.SourceSpan.Start.ByteIndex} to {targetMsgBoxCall.SourceSpan.End.ByteIndex}");
             Debug.Log($"MsgBoxAutoComplete: Replacement text: '{replacementText}'");
 
-            // Replace the entire MsgBox call with MessageBox expansion
-            ReplaceNode(targetMsgBoxCall, replacementText, RefactorDescription);
+            // Replace the entire MsgBox call with MessageBox expansion using EditText
+            EditText(targetMsgBoxCall.SourceSpan, replacementText, RefactorDescription);
         }
     }
 }

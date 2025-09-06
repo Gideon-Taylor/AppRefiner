@@ -6,7 +6,7 @@ namespace AppRefiner.Refactors
     /// <summary>
     /// Refactoring operation that provides auto-completion for create() statements based on variable types
     /// </summary>
-    public class CreateAutoComplete : ScopedRefactor
+    public class CreateAutoComplete : BaseRefactor
     {
         public new static string RefactorName => "Create Auto Complete";
         public new static string RefactorDescription => "Auto-completes create() statements with appropriate class types";

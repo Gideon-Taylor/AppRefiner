@@ -1,4 +1,4 @@
-using AppRefiner.Refactors; // For BaseRefactor, AddImport, CreateAutoComplete
+using AppRefiner.Refactors; // For ScopedRefactor, AddImport, CreateAutoComplete
 using System.Runtime.InteropServices; // For DllImport
 
 namespace AppRefiner
@@ -265,7 +265,7 @@ namespace AppRefiner
             }
         }
 
-        public IRefactor? HandleQuickFixSelection(ScintillaEditor editor, string selection)
+        public BaseRefactor? HandleQuickFixSelection(ScintillaEditor editor, string selection)
         {
 
             /* Look through active indicators of the editor, find one that contains a QuickFixDescriptions entry that matches the selection
@@ -289,7 +289,7 @@ namespace AppRefiner
                         Debug.Log($"Failed to create instance of refactor type '{refactorType}'");
                         return null;
                     }
-                    return (IRefactor)instance; // Create an instance of the refactor type
+                    return (BaseRefactor)instance; // Create an instance of the refactor type
                 }
             }
 
@@ -302,8 +302,8 @@ namespace AppRefiner
         /// <param name="editor">The active Scintilla editor.</param>
         /// <param name="selection">The raw text selected by the user.</param>
         /// <param name="listType">The type identifier of the list shown (e.g., 1 for App Packages).</param>
-        /// <returns>A BaseRefactor instance if refactoring is needed (e.g., AddImport), otherwise null.</returns>
-        public IRefactor? HandleUserListSelection(ScintillaEditor editor, string selection, UserListType listType)
+        /// <returns>A ScopedRefactor instance if refactoring is needed (e.g., AddImport), otherwise null.</returns>
+        public BaseRefactor? HandleUserListSelection(ScintillaEditor editor, string selection, UserListType listType)
         {
             if (editor == null || !editor.IsValid()) return null;
 
@@ -327,7 +327,7 @@ namespace AppRefiner
         /// <param name="position">The current cursor position where the pattern was completed.</param>
         /// <param name="autoPairingEnabled">Whether auto-pairing is enabled in the editor settings.</param>
         /// <returns>A CreateAutoComplete refactor instance to be processed.</returns>
-        public IRefactor? PrepareCreateAutoCompleteRefactor(ScintillaEditor editor, int position, bool autoPairingEnabled)
+        public BaseRefactor? PrepareCreateAutoCompleteRefactor(ScintillaEditor editor, int position, bool autoPairingEnabled)
         {
             if (editor == null || !editor.IsValid()) return null;
 
@@ -337,7 +337,7 @@ namespace AppRefiner
         }
 
 
-        public IRefactor? PrepareConcatAutoCompleteRefactor(ScintillaEditor editor)
+        public BaseRefactor? PrepareConcatAutoCompleteRefactor(ScintillaEditor editor)
         {
             if (editor == null || !editor.IsValid()) return null;
 

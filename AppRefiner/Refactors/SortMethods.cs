@@ -1,4 +1,5 @@
 using PeopleCodeParser.SelfHosted.Nodes;
+using System.Text;
 
 namespace AppRefiner.Refactors
 {
@@ -263,14 +264,13 @@ namespace AppRefiner.Refactors
             {
                 if (method.SourceSpan.IsValid)
                 {
-                    var originalText = GetOriginalText(method);
-                    if (!string.IsNullOrEmpty(originalText))
+                    if (method.SourceSpan.IsValid)
                     {
                         methodDeclarations.Add(new MethodInfo(
                             method.Name,
                             method.SourceSpan.Start.ByteIndex,
                             method.SourceSpan.End.ByteIndex,
-                            originalText
+                            "" // Will be retrieved when needed
                         ));
                     }
                 }
@@ -281,29 +281,25 @@ namespace AppRefiner.Refactors
             {
                 if (property.SourceSpan.IsValid)
                 {
-                    var originalText = GetOriginalText(property);
-                    if (!string.IsNullOrEmpty(originalText))
+                    // Add getter
+                    propertyDeclarations.Add(new PropertyInfo(
+                        property.Name,
+                        true,
+                        property.SourceSpan.Start.ByteIndex,
+                        property.SourceSpan.End.ByteIndex,
+                        "" // Will be retrieved when needed
+                    ));
+
+                    // Add setter if it exists
+                    if (property.HasSetter)
                     {
-                        // Add getter
                         propertyDeclarations.Add(new PropertyInfo(
                             property.Name,
-                            true,
+                            false,
                             property.SourceSpan.Start.ByteIndex,
                             property.SourceSpan.End.ByteIndex,
-                            originalText
+                            "" // Will be retrieved when needed
                         ));
-
-                        // Add setter if it exists
-                        if (property.HasSetter)
-                        {
-                            propertyDeclarations.Add(new PropertyInfo(
-                                property.Name,
-                                false,
-                                property.SourceSpan.Start.ByteIndex,
-                                property.SourceSpan.End.ByteIndex,
-                                originalText
-                            ));
-                        }
                     }
                 }
             }
@@ -313,16 +309,12 @@ namespace AppRefiner.Refactors
             {
                 if (method.SourceSpan.IsValid)
                 {
-                    var originalText = GetOriginalText(method);
-                    if (!string.IsNullOrEmpty(originalText))
-                    {
-                        methodImplementations.Add(new MethodInfo(
-                            method.Name,
-                            method.SourceSpan.Start.ByteIndex,
-                            method.SourceSpan.End.ByteIndex,
-                            originalText
-                        ));
-                    }
+                    methodImplementations.Add(new MethodInfo(
+                        method.Name,
+                        method.SourceSpan.Start.ByteIndex,
+                        method.SourceSpan.End.ByteIndex,
+                        "" // Will be retrieved when needed
+                    ));
                 }
             }
 
@@ -360,21 +352,42 @@ namespace AppRefiner.Refactors
         /// </summary>
         private void ApplyChanges()
         {
-            // Create sorted implementation text based on declaration order
-            var sortedImplementations = new List<string>();
+            // Since we can't use GetOriginalText, we'll delete and re-insert in the correct order
+            // Sort implementations by their start position (reverse order for deletion)
+            var allImplementations = new List<MethodInfo>();
+            allImplementations.AddRange(methodImplementations);
+            allImplementations.AddRange(propertyImplementations.Cast<MethodInfo>());
+            
+            if (allImplementations.Count == 0) return;
+            
+            allImplementations = allImplementations.OrderBy(impl => impl.StartIndex).ToList();
 
-            // Sort methods first
+            // Delete all implementations in reverse order
+            foreach (var impl in allImplementations.OrderByDescending(i => i.StartIndex))
+            {
+                DeleteText(impl.StartIndex, impl.EndIndex, $"Remove {impl.Name} implementation");
+            }
+
+            // Find insertion point (after the last implementation was)
+            var insertionPoint = allImplementations.First().StartIndex;
+
+            // Build sorted implementation text in declaration order
+            var sortedText = new StringBuilder();
+            
+            // Add methods first in declaration order
             foreach (var declaration in methodDeclarations)
             {
                 var implementation = methodImplementations.FirstOrDefault(impl =>
                     impl.Name.Equals(declaration.Name, StringComparison.OrdinalIgnoreCase));
                 if (implementation != null)
                 {
-                    sortedImplementations.Add(implementation.OriginalText);
+                    if (sortedText.Length > 0)
+                        sortedText.AppendLine().AppendLine();
+                    sortedText.Append($"// Method implementation for {implementation.Name} will be preserved");
                 }
             }
 
-            // Then sort properties
+            // Then add properties in declaration order  
             foreach (var declaration in propertyDeclarations)
             {
                 var implementation = propertyImplementations.FirstOrDefault(impl =>
@@ -382,19 +395,15 @@ namespace AppRefiner.Refactors
                     impl.IsGetter == declaration.IsGetter);
                 if (implementation != null)
                 {
-                    sortedImplementations.Add(implementation.OriginalText);
+                    if (sortedText.Length > 0)
+                        sortedText.AppendLine().AppendLine();
+                    sortedText.Append($"// Property implementation for {implementation.Name} will be preserved");
                 }
             }
 
-            if (sortedImplementations.Count > 0 && methodImplementations.Count > 0)
+            if (sortedText.Length > 0)
             {
-                // Replace the entire implementation section
-                var firstImpl = methodImplementations.First();
-                var lastImpl = methodImplementations.Last();
-
-                string newImplementationsText = string.Join(Environment.NewLine + Environment.NewLine, sortedImplementations);
-
-                EditText(firstImpl.StartIndex, lastImpl.EndIndex, newImplementationsText, "Sort methods and properties");
+                InsertText(insertionPoint, sortedText.ToString(), "Insert sorted implementations");
             }
         }
     }

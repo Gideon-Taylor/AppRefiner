@@ -4,7 +4,7 @@ using PeopleCodeParser.SelfHosted.Visitors.Models;
 
 namespace AppRefiner.Refactors.QuickFixes
 {
-    public class DeleteUnusedVariable : ScopedRefactor
+    public class DeleteUnusedVariable : BaseRefactor
     {
         /// <summary>
         /// Gets the display name of this refactoring operation.

@@ -53,8 +53,8 @@ namespace AppRefiner.Refactors
         {
             if (assignment.LastToken == null) return;
 
-            // Get the target expression (left-hand side)
-            var targetText = GetOriginalText(assignment.Target);
+            // Get the target expression (left-hand side) by reconstructing from the node
+            var targetText = assignment.Target?.ToString();
             if (string.IsNullOrEmpty(targetText))
             {
                 Debug.Log("ConcatAutoComplete: Could not extract target text");

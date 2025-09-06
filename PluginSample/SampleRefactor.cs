@@ -23,7 +23,7 @@ namespace PluginSample
             // Example: Insert a comment before every return statement
             string comment = $"/* Sample Refactor Added Comment {DateTime.Now} */\n"; // Use \n for newline
 
-            // Use helper methods from BaseRefactor to add changes
+            // Use helper methods from ScopedRefactor to add changes
             InsertBefore(context, comment, "Add sample comment");
         }
 

@@ -61,8 +61,8 @@ namespace AppRefiner.Refactors
             // Collect existing imports
             foreach (var import in node.Imports)
             {
-                // Get the full import statement text
-                var importText = GetOriginalText(import)?.Trim();
+                // Get the full import statement text by reconstructing from the import node
+                var importText = import.ToString()?.Trim();
                 if (!string.IsNullOrEmpty(importText))
                 {
                     // Ensure it ends with a semicolon for consistency

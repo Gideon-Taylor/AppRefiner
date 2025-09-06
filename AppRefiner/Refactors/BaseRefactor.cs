@@ -1,27 +1,26 @@
 using PeopleCodeParser.SelfHosted;
 using PeopleCodeParser.SelfHosted.Visitors;
 using System.Diagnostics;
-using System.Text.Json;
 
 namespace AppRefiner.Refactors
 {
     /// <summary>
-    /// Base class for implementing PeopleCode refactoring operations using the self-hosted parser
-    /// without scope tracking. Use this for simple refactors that don't need variable tracking.
+    /// Base class for implementing PeopleCode refactoring operations that need scope and variable tracking.
+    /// This class leverages the ScopedAstVisitor from the SelfHosted parser to provide automatic scope management.
     /// </summary>
-    public abstract class BaseRefactor : AstVisitorBase, IRefactor
+    public abstract class BaseRefactor : ScopedAstVisitor<object>
     {
         #region Static Properties
 
         /// <summary>
         /// Gets the display name for this refactor
         /// </summary>
-        public static string RefactorName => "Base Refactor";
+        public static string RefactorName => "Scoped Refactor";
 
         /// <summary>
         /// Gets the description for this refactor
         /// </summary>
-        public static string RefactorDescription => "Base refactoring operation";
+        public static string RefactorDescription => "Scope-aware refactoring operation";
 
         /// <summary>
         /// Gets whether this refactor should have a keyboard shortcut registered
@@ -112,7 +111,7 @@ namespace AppRefiner.Refactors
             LineNumber = ScintillaManager.GetCurrentLineNumber(editor);
         }
 
-        #region IRefactor Implementation
+        #region Refactor Implementation
 
         /// <summary>
         /// Gets the main window handle for the editor
@@ -181,11 +180,10 @@ namespace AppRefiner.Refactors
             {
                 return edits.Count > 0 ? RefactorResult.Successful : RefactorResult.Failed("No changes to apply");
             }
-            else
-            {
-                // If deferring dialog, always return successful to allow dialog to show
-                return RefactorResult.Successful;
-            }
+
+            // Always successful for deferred dialogs. they will report errors after the dialog runs
+            // this is because some refactors require input from the user before they can generate the changes (like renaming variables).
+            return RefactorResult.Successful;
         }
 
         #endregion
@@ -264,60 +262,29 @@ namespace AppRefiner.Refactors
 
         #endregion
 
+        #region Helper Methods for Variable References
+
+        /// <summary>
+        /// Checks if a position is within a source span
+        /// </summary>
+        protected bool IsPositionInSpan(int position, SourceSpan span)
+        {
+            return position >= span.Start.ByteIndex && position <= span.End.ByteIndex;
+        }
+
+        /// <summary>
+        /// Checks if a node contains the current cursor position
+        /// </summary>
+        protected bool NodeContainsCursor(AstNode node)
+        {
+            return node.SourceSpan.ContainsPosition(CurrentPosition);
+        }
+
+        #endregion
+
         /// <summary>
         /// Gets the list of edits for testing
         /// </summary>
         internal List<TextEdit> GetEdits() => edits;
-
-        #region Backward Compatibility Methods
-
-        /// <summary>
-        /// Gets the original text of a node (for backward compatibility)
-        /// </summary>
-        protected string? GetOriginalText(AstNode node, bool includeChildren = true)
-        {
-            if (node == null) return null;
-
-            var span = node.SourceSpan;
-            if (!span.IsValid) return null;
-
-            int startIndex = span.Start.ByteIndex;
-            int endIndex = span.End.ByteIndex;
-
-            if (startIndex < 0 || endIndex < startIndex || endIndex >= source?.Length) return null;
-
-            return source?.Substring(startIndex, endIndex - startIndex);
-        }
-
-        /// <summary>
-        /// Replaces a node with new text (for backward compatibility)
-        /// </summary>
-        protected void ReplaceNode(AstNode node, string newText, string description)
-        {
-            if (node == null) return;
-
-            var span = node.SourceSpan;
-            if (!span.IsValid) return;
-
-            EditText(span, newText, description);
-        }
-
-        /// <summary>
-        /// Deletes a node (for backward compatibility)
-        /// </summary>
-        protected void DeleteNode(AstNode node, string description)
-        {
-            if (node == null) return;
-
-            var span = node.SourceSpan;
-            if (!span.IsValid) return;
-
-            DeleteText(span, description);
-        }
-
-
-        #endregion
-
-
     }
 }

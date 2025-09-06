@@ -84,7 +84,7 @@ namespace AppRefiner.Refactors
         /// Applies stored configuration to a refactor instance
         /// </summary>
         /// <param name="instance">The refactor instance to configure</param>
-        public static void ApplyConfigurationToInstance(IRefactor instance)
+        public static void ApplyConfigurationToInstance(BaseRefactor instance)
         {
             if (instance == null) return;
             

@@ -116,11 +116,10 @@ namespace AppRefiner.Plugins
             {
                 try
                 {
-                    // Find all non-abstract types that inherit from BaseRefactor
+                    // Find all non-abstract types that inherit from ScopedRefactor
                     var types = assembly.GetTypes()
                         .Where(t => typeof(Refactors.BaseRefactor).IsAssignableFrom(t) &&
-                               !t.IsAbstract &&
-                               t != typeof(Refactors.ScopedRefactor));
+                               !t.IsAbstract);
 
                     refactorTypes.AddRange(types);
                 }
@@ -182,8 +181,7 @@ namespace AppRefiner.Plugins
 
                     var refactorCount = assembly.GetTypes()
                         .Count(t => typeof(Refactors.BaseRefactor).IsAssignableFrom(t) &&
-                               !t.IsAbstract &&
-                               t != typeof(Refactors.ScopedRefactor));
+                               !t.IsAbstract);
 
                     var tooltipProviderCount = assembly.GetTypes()
                         .Count(t => typeof(BaseTooltipProvider).IsAssignableFrom(t) && !t.IsAbstract && !t.IsInterface);

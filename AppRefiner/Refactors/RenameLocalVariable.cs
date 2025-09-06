@@ -6,7 +6,7 @@ namespace AppRefiner.Refactors
     /// <summary>
     /// Renames a local variable, parameter, private instance variable, private method, or private constant and all its references
     /// </summary>
-    public class RenameLocalVariable(ScintillaEditor editor) : ScopedRefactor(editor)
+    public class RenameLocalVariable(ScintillaEditor editor) : BaseRefactor(editor)
     {
         /// <summary>
         /// Gets the display name of this refactoring operation

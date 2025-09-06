@@ -64,13 +64,13 @@ The core extensibility model is based on abstract base classes with ANTLR visito
 **Base Classes:**
 - `BaseLintRule`: For code analysis and issue detection
 - `BaseStyler`: For visual indicators and highlighting
-- `BaseRefactor`: For code transformations
+- `ScopedRefactor`: For code transformations (unified base class)
 - `BaseTooltipProvider`: For contextual information display
 
 **Scoped Variants:**
 - `ScopedLintRule<T>`: Adds variable/scope tracking
 - `ScopedStyler<T>`: Scope-aware styling
-- `ScopedRefactor<T>`: Scope-aware refactoring
+- All refactors now use `ScopedRefactor` (unified base class with automatic scope tracking)
 
 **Key Patterns:**
 - Reflection-based discovery from assemblies and plugins
@@ -111,11 +111,11 @@ Simplified AST representation using Composite pattern:
 5. **Always reference `PeopleCodeParser/PeopleCodeParser.g4` when implementing ANTLR visitor methods**
 
 ### Adding New Refactors
-1. Inherit from `BaseRefactor` or `ScopedRefactor<T>`
-2. Override `GetName()`, `GetDescription()`, and `CanExecute()`
-3. Use `InsertText()`, `ReplaceNode()`, etc. to track modifications
-4. Handle user input through dialogs if needed
-5. **Always reference `PeopleCodeParser/PeopleCodeParser.g4` when implementing ANTLR visitor methods**
+1. Inherit from `ScopedRefactor` (unified base class)
+2. Override static properties for metadata (`RefactorName`, `RefactorDescription`, etc.)
+3. Use `EditText()`, `InsertText()`, `DeleteText()` methods to track modifications
+4. Handle user input through dialogs if needed via `ShowRefactorDialog()`
+5. **Always reference `PeopleCodeParser/PeopleCodeParser.g4` when implementing AST visitor methods**
 
 ### Plugin Development
 1. Create new .NET 8 class library project
