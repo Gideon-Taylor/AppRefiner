@@ -43,20 +43,14 @@ namespace AppRefiner.Refactors
         /// </summary>
         public override bool DeferDialogUntilAfterVisitor => true;
 
-        // Track method declarations in the class header
-        private readonly List<MethodInfo> methodDeclarations = new();
+        // Track the app class node for analysis
+        private AppClassNode? appClassNode;
 
-        // Track method implementations in the class body
-        private readonly List<MethodInfo> methodImplementations = new();
+        // Track method declaration order 
+        private readonly List<MethodNode> methodDeclarations = new();
 
-        // Track getter/setter declarations in the class header
-        private readonly List<PropertyInfo> propertyDeclarations = new();
-
-        // Track getter/setter implementations in the class body
-        private readonly List<PropertyInfo> propertyImplementations = new();
-
-        // Flag to indicate if we're currently in a class program
-        private bool isClassProgram = false;
+        // Track method implementations that need to be sorted
+        private readonly List<MethodImplNode> methodImplementations = new();
 
         // Flag to indicate if implementations are already in the correct order
         private bool implementationsInOrder = true;
@@ -66,44 +60,19 @@ namespace AppRefiner.Refactors
         }
 
         /// <summary>
-        /// Information about a method declaration or implementation
+        /// Helper class to track method implementations with their original text
         /// </summary>
-        private class MethodInfo
+        private class MethodImplementationInfo
         {
-            public string Name { get; }
-            public int StartIndex { get; }
-            public int EndIndex { get; }
+            public MethodImplNode Node { get; }
             public string OriginalText { get; }
-            public string LeadingComments { get; set; } = string.Empty;
+            public int OriginalIndex { get; }
 
-            public MethodInfo(string name, int startIndex, int endIndex, string originalText)
+            public MethodImplementationInfo(MethodImplNode node, string originalText, int originalIndex)
             {
-                Name = name;
-                StartIndex = startIndex;
-                EndIndex = endIndex;
+                Node = node;
                 OriginalText = originalText;
-            }
-        }
-
-        /// <summary>
-        /// Information about a property getter/setter declaration or implementation
-        /// </summary>
-        private class PropertyInfo
-        {
-            public string Name { get; }
-            public bool IsGetter { get; }
-            public int StartIndex { get; }
-            public int EndIndex { get; }
-            public string OriginalText { get; }
-            public string LeadingComments { get; set; } = string.Empty;
-
-            public PropertyInfo(string name, bool isGetter, int startIndex, int endIndex, string originalText)
-            {
-                Name = name;
-                IsGetter = isGetter;
-                StartIndex = startIndex;
-                EndIndex = endIndex;
-                OriginalText = originalText;
+                OriginalIndex = originalIndex;
             }
         }
 
@@ -119,12 +88,12 @@ namespace AppRefiner.Refactors
             private Label headerLabel = new();
             private Label lblMethodCount = new();
 
-            public SortMethodsDialog(int methodCount, int propertyCount)
+            public SortMethodsDialog(int methodCount)
             {
-                InitializeComponent(methodCount, propertyCount);
+                InitializeComponent(methodCount);
             }
 
-            private void InitializeComponent(int methodCount, int propertyCount)
+            private void InitializeComponent(int methodCount)
             {
                 this.SuspendLayout();
 
@@ -142,27 +111,26 @@ namespace AppRefiner.Refactors
                 this.headerLabel.TextAlign = ContentAlignment.MiddleCenter;
 
                 // lblPrompt
-                this.lblPrompt.AutoSize = true;
+                this.lblPrompt.AutoSize = false;
                 this.lblPrompt.Location = new System.Drawing.Point(12, 40);
                 this.lblPrompt.Name = "lblPrompt";
-                this.lblPrompt.Size = new System.Drawing.Size(260, 30);
+                this.lblPrompt.Size = new System.Drawing.Size(336, 30);
                 this.lblPrompt.TabIndex = 0;
-                this.lblPrompt.Text = "This will reorder method and property implementations\nto match the order defined in the class declaration.";
+                this.lblPrompt.Text = "This will reorder method implementations to match the order\ndefined in the class declaration.";
 
                 // lblMethodCount
-                this.lblMethodCount.AutoSize = true;
+                this.lblMethodCount.AutoSize = false;
                 this.lblMethodCount.Location = new System.Drawing.Point(12, 80);
                 this.lblMethodCount.Name = "lblMethodCount";
-                this.lblMethodCount.Size = new System.Drawing.Size(260, 15);
+                this.lblMethodCount.Size = new System.Drawing.Size(336, 15);
                 this.lblMethodCount.TabIndex = 1;
 
                 string methodText = methodCount == 1 ? "method" : "methods";
-                string propertyText = propertyCount == 1 ? "property" : "properties";
-                this.lblMethodCount.Text = $"Found {methodCount} {methodText} and {propertyCount} {propertyText} to sort.";
+                this.lblMethodCount.Text = $"Found {methodCount} {methodText} to sort.";
 
                 // btnOk
                 this.btnOk.DialogResult = DialogResult.OK;
-                this.btnOk.Location = new System.Drawing.Point(116, 110);
+                this.btnOk.Location = new System.Drawing.Point(192, 110);
                 this.btnOk.Name = "btnOk";
                 this.btnOk.Size = new System.Drawing.Size(75, 28);
                 this.btnOk.TabIndex = 2;
@@ -171,7 +139,7 @@ namespace AppRefiner.Refactors
 
                 // btnCancel
                 this.btnCancel.DialogResult = DialogResult.Cancel;
-                this.btnCancel.Location = new System.Drawing.Point(197, 110);
+                this.btnCancel.Location = new System.Drawing.Point(273, 110);
                 this.btnCancel.Name = "btnCancel";
                 this.btnCancel.Size = new System.Drawing.Size(75, 28);
                 this.btnCancel.TabIndex = 3;
@@ -181,7 +149,7 @@ namespace AppRefiner.Refactors
                 // SortMethodsDialog
                 this.AcceptButton = this.btnOk;
                 this.CancelButton = this.btnCancel;
-                this.ClientSize = new System.Drawing.Size(284, 150);
+                this.ClientSize = new System.Drawing.Size(360, 150);
                 this.Controls.Add(this.btnCancel);
                 this.Controls.Add(this.btnOk);
                 this.Controls.Add(this.lblMethodCount);
@@ -215,31 +183,31 @@ namespace AppRefiner.Refactors
         /// </summary>
         public override bool ShowRefactorDialog()
         {
-            if (!isClassProgram)
+            if (appClassNode == null)
             {
                 SetFailure("This refactoring only works on class-style programs.");
                 return false;
             }
 
-            if (methodDeclarations.Count == 0 && propertyDeclarations.Count == 0)
+            if (methodDeclarations.Count == 0)
             {
-                SetFailure("No method or property declarations found in the class header.");
+                SetFailure("No method declarations found in the class header.");
                 return false;
             }
 
-            if (methodImplementations.Count == 0 && propertyImplementations.Count == 0)
+            if (methodImplementations.Count == 0)
             {
-                SetFailure("No method or property implementations found in the class body.");
+                SetFailure("No method implementations found in the class body.");
                 return false;
             }
 
             if (implementationsInOrder)
             {
-                SetFailure("Method and property implementations are already in the correct order.");
+                SetFailure("Method implementations are already in the correct order.");
                 return false;
             }
 
-            using var dialog = new SortMethodsDialog(methodImplementations.Count, propertyImplementations.Count);
+            using var dialog = new SortMethodsDialog(methodImplementations.Count);
 
             // Show dialog with the specified owner
             var wrapper = new WindowWrapper(GetEditorMainWindowHandle());
@@ -257,64 +225,17 @@ namespace AppRefiner.Refactors
 
         public override void VisitAppClass(AppClassNode node)
         {
-            isClassProgram = true;
+            appClassNode = node;
 
-            // Track method declarations
+            // Collect method declarations in order
+            methodDeclarations.AddRange(node.Methods);
+
+            // Collect method implementations in order (only those that have implementations)
             foreach (var method in node.Methods)
             {
-                if (method.SourceSpan.IsValid)
+                if (method.Implementation != null && method.Implementation.SourceSpan.IsValid)
                 {
-                    if (method.SourceSpan.IsValid)
-                    {
-                        methodDeclarations.Add(new MethodInfo(
-                            method.Name,
-                            method.SourceSpan.Start.ByteIndex,
-                            method.SourceSpan.End.ByteIndex,
-                            "" // Will be retrieved when needed
-                        ));
-                    }
-                }
-            }
-
-            // Track property declarations
-            foreach (var property in node.Properties)
-            {
-                if (property.SourceSpan.IsValid)
-                {
-                    // Add getter
-                    propertyDeclarations.Add(new PropertyInfo(
-                        property.Name,
-                        true,
-                        property.SourceSpan.Start.ByteIndex,
-                        property.SourceSpan.End.ByteIndex,
-                        "" // Will be retrieved when needed
-                    ));
-
-                    // Add setter if it exists
-                    if (property.HasSetter)
-                    {
-                        propertyDeclarations.Add(new PropertyInfo(
-                            property.Name,
-                            false,
-                            property.SourceSpan.Start.ByteIndex,
-                            property.SourceSpan.End.ByteIndex,
-                            "" // Will be retrieved when needed
-                        ));
-                    }
-                }
-            }
-
-            // Track method implementations
-            foreach (var method in node.MethodImplementations)
-            {
-                if (method.SourceSpan.IsValid)
-                {
-                    methodImplementations.Add(new MethodInfo(
-                        method.Name,
-                        method.SourceSpan.Start.ByteIndex,
-                        method.SourceSpan.End.ByteIndex,
-                        "" // Will be retrieved when needed
-                    ));
+                    methodImplementations.Add(method.Implementation);
                 }
             }
 
@@ -329,22 +250,18 @@ namespace AppRefiner.Refactors
         /// </summary>
         private void CheckImplementationOrder()
         {
-            // Simple check: if method implementations are in the same order as declarations
-            if (methodImplementations.Count != methodDeclarations.Count)
-            {
-                implementationsInOrder = false;
-                return;
-            }
+            // Check if implementations are in the same order as declarations
+            var declarationOrder = methodDeclarations
+                .Where(m => m.Implementation != null)
+                .Select(m => m.Name.ToLowerInvariant())
+                .ToList();
 
-            for (int i = 0; i < methodDeclarations.Count; i++)
-            {
-                if (i >= methodImplementations.Count ||
-                    !methodDeclarations[i].Name.Equals(methodImplementations[i].Name, StringComparison.OrdinalIgnoreCase))
-                {
-                    implementationsInOrder = false;
-                    return;
-                }
-            }
+            var implementationOrder = methodImplementations
+                .Select(impl => impl.Name.ToLowerInvariant())
+                .ToList();
+
+            // Compare the orders - they should match exactly
+            implementationsInOrder = declarationOrder.SequenceEqual(implementationOrder);
         }
 
         /// <summary>
@@ -352,59 +269,74 @@ namespace AppRefiner.Refactors
         /// </summary>
         private void ApplyChanges()
         {
-            // Since we can't use GetOriginalText, we'll delete and re-insert in the correct order
-            // Sort implementations by their start position (reverse order for deletion)
-            var allImplementations = new List<MethodInfo>();
-            allImplementations.AddRange(methodImplementations);
-            allImplementations.AddRange(propertyImplementations.Cast<MethodInfo>());
-            
-            if (allImplementations.Count == 0) return;
-            
-            allImplementations = allImplementations.OrderBy(impl => impl.StartIndex).ToList();
+            if (methodImplementations.Count == 0) return;
 
-            // Delete all implementations in reverse order
-            foreach (var impl in allImplementations.OrderByDescending(i => i.StartIndex))
+            // Create a list to track implementation info with original text
+            var implementationInfos = new List<MethodImplementationInfo>();
+
+            // Extract original text for each implementation
+            for (int i = 0; i < methodImplementations.Count; i++)
             {
-                DeleteText(impl.StartIndex, impl.EndIndex, $"Remove {impl.Name} implementation");
+                var impl = methodImplementations[i];
+                var originalText = ExtractOriginalText(impl);
+                implementationInfos.Add(new MethodImplementationInfo(impl, originalText, i));
             }
 
-            // Find insertion point (after the last implementation was)
-            var insertionPoint = allImplementations.First().StartIndex;
-
-            // Build sorted implementation text in declaration order
-            var sortedText = new StringBuilder();
-            
-            // Add methods first in declaration order
-            foreach (var declaration in methodDeclarations)
+            // Sort implementations by declaration order
+            var sortedImplementations = new List<MethodImplementationInfo>();
+            foreach (var declaration in methodDeclarations.Where(m => m.Implementation != null))
             {
-                var implementation = methodImplementations.FirstOrDefault(impl =>
-                    impl.Name.Equals(declaration.Name, StringComparison.OrdinalIgnoreCase));
-                if (implementation != null)
+                var matchingImpl = implementationInfos.FirstOrDefault(info =>
+                    info.Node.Name.Equals(declaration.Name, StringComparison.OrdinalIgnoreCase));
+                if (matchingImpl != null)
                 {
-                    if (sortedText.Length > 0)
-                        sortedText.AppendLine().AppendLine();
-                    sortedText.Append($"// Method implementation for {implementation.Name} will be preserved");
+                    sortedImplementations.Add(matchingImpl);
                 }
             }
 
-            // Then add properties in declaration order  
-            foreach (var declaration in propertyDeclarations)
+            // Apply the changes by replacing each implementation in reverse order (to preserve positions)
+            for (int i = implementationInfos.Count - 1; i >= 0; i--)
             {
-                var implementation = propertyImplementations.FirstOrDefault(impl =>
-                    impl.Name.Equals(declaration.Name, StringComparison.OrdinalIgnoreCase) &&
-                    impl.IsGetter == declaration.IsGetter);
-                if (implementation != null)
+                var originalImpl = implementationInfos[i];
+                var sortedImpl = sortedImplementations[i];
+                
+                // Only replace if the implementation actually changed position
+                if (originalImpl.Node.Name != sortedImpl.Node.Name)
                 {
-                    if (sortedText.Length > 0)
-                        sortedText.AppendLine().AppendLine();
-                    sortedText.Append($"// Property implementation for {implementation.Name} will be preserved");
+                    EditText(originalImpl.Node.SourceSpan.Start.ByteIndex,
+                           originalImpl.Node.SourceSpan.End.ByteIndex,
+                           sortedImpl.OriginalText,
+                           $"Sort {sortedImpl.Node.Name} implementation");
                 }
             }
+        }
 
-            if (sortedText.Length > 0)
+        /// <summary>
+        /// Extracts the original source text for a method implementation
+        /// </summary>
+        private string ExtractOriginalText(MethodImplNode implementation)
+        {
+            // For now, use the node's ToString() method to reconstruct the method
+            // This provides a reasonable fallback until we can access the actual source text
+            try
             {
-                InsertText(insertionPoint, sortedText.ToString(), "Insert sorted implementations");
+                return implementation.ToString() ?? $"// Method {implementation.Name} - unable to reconstruct";
             }
+            catch (Exception ex)
+            {
+                return $"// Method {implementation.Name} - error reconstructing: {ex.Message}";
+            }
+        }
+
+        /// <summary>
+        /// Resets the refactor state for a new analysis
+        /// </summary>
+        protected override void OnReset()
+        {
+            appClassNode = null;
+            methodDeclarations.Clear();
+            methodImplementations.Clear();
+            implementationsInOrder = true;
         }
     }
 }
