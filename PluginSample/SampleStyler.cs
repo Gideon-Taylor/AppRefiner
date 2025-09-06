@@ -55,7 +55,7 @@ namespace PluginSample
         }
 
         // Always provide a Reset method, even if it just calls the base
-        public override void Reset()
+        public new void Reset()
         {
             base.Reset(); // Ensures Indicators list is cleared/reinitialized
         }

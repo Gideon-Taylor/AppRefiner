@@ -10,7 +10,7 @@ namespace AppRefiner.Stylers;
 /// Highlights potential issues with SQL variable counts (CreateSQL/SQLExec) using shared validation logic.
 /// Ported from ANTLR-based SQLVariableCountStyler to work with self-hosted parser AST.
 /// </summary>
-public class SQLVariableCountStyler : ScopedStyler, IStyler
+public class SQLVariableCountStyler : BaseStyler
 {
     // Corrected BGRA format colors
     private const uint ErrorColor = 0x0000FFFF;   // Opaque Red

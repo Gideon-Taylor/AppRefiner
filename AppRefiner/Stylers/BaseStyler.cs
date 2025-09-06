@@ -1,6 +1,4 @@
-
 using AppRefiner.Database;
-
 using PeopleCodeParser.SelfHosted;
 using PeopleCodeParser.SelfHosted.Visitors;
 
@@ -28,10 +26,10 @@ namespace AppRefiner.Stylers
         }
     }
 
-    // New self-hosted parser-based styler base class
-    public class BaseStyler : AstVisitorBase, IStyler
+    // Unified self-hosted parser-based scoped styler - now the single base class for all stylers
+    public class BaseStyler : ScopedAstVisitor<object>
     {
-        public List<Indicator> Indicators { get; } = new();
+        public List<Indicator> Indicators { get; } = [];
 
         /// <summary>
         /// Whether this styler is currently active/enabled
@@ -58,9 +56,9 @@ namespace AppRefiner.Stylers
         /// </summary>
         public ScintillaEditor? Editor { get; set; }
 
-        public void AddIndicator(SourceSpan span, IndicatorType type, uint color, string? tooltip = null)
+        public void AddIndicator(SourceSpan span, IndicatorType type, uint color, string? tooltip = null, List<(Type RefactorClass, string Description)>? quickFixes = null)
         {
-            AddIndicator((span.Start.ByteIndex, span.End.ByteIndex), type, color, tooltip);
+            AddIndicator((span.Start.ByteIndex, span.End.ByteIndex), type, color, tooltip, quickFixes);
         }
 
         public void AddIndicator((int Start, int Stop) span, IndicatorType type, uint color, string? tooltip = null, List<(Type RefactorClass, string Description)>? quickFixes = null)
@@ -79,8 +77,9 @@ namespace AppRefiner.Stylers
             }
         }
 
-        public virtual void Reset()
+        public new void Reset()
         {
+            base.Reset();
             Indicators.Clear();
         }
     }

@@ -10,7 +10,7 @@ namespace AppRefiner.Stylers
     /// </summary>
     public class StylerManager
     {
-        private readonly List<IStyler> stylers = new();
+        private readonly List<BaseStyler> stylers = new();
         private readonly DataGridView stylerGrid; // DataGridView for styler options
         private readonly MainForm mainForm; // Needed for Invoke potentially, though aiming to minimize direct use
         private readonly SettingsService settingsService; // Added SettingsService
@@ -22,7 +22,7 @@ namespace AppRefiner.Stylers
             settingsService = settings; // Store SettingsService
         }
 
-        public IEnumerable<IStyler> StylerRules => stylers;
+        public IEnumerable<BaseStyler> StylerRules => stylers;
 
         /// <summary>
         /// Discovers stylers, populates the grid, and loads saved states.
@@ -35,8 +35,8 @@ namespace AppRefiner.Stylers
             // Discover core stylers from the main assembly
             var executingAssembly = Assembly.GetExecutingAssembly();
             var coreStylerTypes = executingAssembly.GetTypes()
-                .Where(p => typeof(IStyler).IsAssignableFrom(p) && !p.IsAbstract && !p.IsInterface
-                    && p.Name != "BaseStyler" && p.Name != "ScopedStyler");
+                .Where(p => typeof(BaseStyler).IsAssignableFrom(p) && !p.IsAbstract && !p.IsInterface
+                    && p.Name != "ScopedStyler");
 
             // Discover stylers from plugins
             var pluginStylers = PluginManager.DiscoverStylerTypes();
@@ -48,8 +48,8 @@ namespace AppRefiner.Stylers
             {
                 try
                 {
-                    IStyler? styler = (IStyler?)Activator.CreateInstance(type);
-                    if (styler != null)
+                    // Create instance - all stylers now inherit from ScopedStyler which implements IStyler
+                    if (Activator.CreateInstance(type) is BaseStyler styler)
                     {
                         int rowIndex = stylerGrid.Rows.Add(styler.Active, styler.Description);
                         stylerGrid.Rows[rowIndex].Tag = styler;
@@ -87,11 +87,10 @@ namespace AppRefiner.Stylers
                 return; // Unable to parse
             }
 
-            // Get active stylers, filtering by database requirement and excluding base classes
+            // Get active stylers, filtering by database requirement and excluding base class
             var activeStylers = stylers.Where(a => a.Active
                 && (a.DatabaseRequirement != DataManagerRequirement.Required || editorDataManager != null)
-                && a.GetType() != typeof(BaseStyler)
-                && a.GetType() != typeof(ScopedStyler));
+                && a.GetType() != typeof(BaseStyler));
 
             List<Indicator> newIndicators = new();
 
@@ -209,7 +208,7 @@ namespace AppRefiner.Stylers
         {
             if (e.RowIndex >= 0 && e.ColumnIndex == 0) // Assuming column 0 is the 'Active' checkbox
             {
-                if (stylerGrid.Rows[e.RowIndex].Tag is IStyler styler)
+                if (stylerGrid.Rows[e.RowIndex].Tag is BaseStyler styler)
                 {
                     // Ensure the value is a boolean before casting
                     if (stylerGrid.Rows[e.RowIndex].Cells[0].Value is bool isActive)

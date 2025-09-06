@@ -241,7 +241,7 @@ namespace AppRefiner.Stylers
         /// <summary>
         /// Reset state for reuse
         /// </summary>
-        public override void Reset()
+        public new void Reset()
         {
             base.Reset();
             // No additional state to clear in this implementation

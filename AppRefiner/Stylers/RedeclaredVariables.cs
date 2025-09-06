@@ -24,7 +24,7 @@ public class ShadowInfo
 /// Highlights variables that are declared multiple times in the same scope.
 /// Detects redeclarations in local variable declarations and property shadowing.
 /// </summary>
-public class RedeclaredVariables : ScopedStyler
+public class RedeclaredVariables : BaseStyler
 {
     private const uint REDECLARATION_COLOR = 0x0000FFA0; // Harsh red color with high alpha
     public override string Description => "Redeclared variables";

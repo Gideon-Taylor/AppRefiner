@@ -8,7 +8,7 @@ namespace AppRefiner.Stylers;
 /// Visitor that identifies meaningless variable names in PeopleCode.
 /// This is a self-hosted equivalent to the AppRefiner's MeaninglessVariableNameStyler.
 /// </summary>
-public class MeaninglessVariableNameStyler : ScopedStyler
+public class MeaninglessVariableNameStyler : BaseStyler
 {
     private const uint HIGHLIGHT_COLOR = 0xD9D6A560; // Yellow highlight color from original
     private readonly HashSet<string> meaninglessNames = new(StringComparer.OrdinalIgnoreCase)

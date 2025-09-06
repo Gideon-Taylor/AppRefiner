@@ -8,7 +8,7 @@ namespace AppRefiner.Stylers;
 /// Highlights variables that are referenced but not defined in any accessible scope.
 /// This is a self-hosted equivalent to the ANTLR-based UndefinedVariableStyler.
 /// </summary>
-public class UndefinedVariables : ScopedStyler
+public class UndefinedVariables : BaseStyler
 {
     private const uint HIGHLIGHT_COLOR = 0x0000FFA0; // Harsh red color with high alpha
     private HashSet<(string Name, SourceSpan Location)> undefinedVars = new();

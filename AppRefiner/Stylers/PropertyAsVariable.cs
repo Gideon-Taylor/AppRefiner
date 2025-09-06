@@ -7,7 +7,7 @@ namespace AppRefiner.Stylers;
 /// Highlights properties used as variables (&PropertyName) outside of constructors.
 /// This is a self-hosted equivalent to the ANTLR-based PropertyAsVariable styler.
 /// </summary>
-public class PropertyAsVariable : ScopedStyler
+public class PropertyAsVariable : BaseStyler
 {
     private const uint HIGHLIGHT_COLOR = 0x4DB7FF80;
     private readonly HashSet<string> publicProperties = new();

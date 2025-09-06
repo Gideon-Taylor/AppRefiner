@@ -8,7 +8,7 @@ namespace AppRefiner.Stylers;
 /// Visitor that identifies unused variables, parameters, and instance variables in PeopleCode.
 /// This is a self-hosted equivalent to the AppRefiner's UnusedLocalVariableStyler.
 /// </summary>
-public class UnusedVariables : ScopedStyler
+public class UnusedVariables : BaseStyler
 {
     private const uint HIGHLIGHT_COLOR = 0x73737380; // Light gray text (no alpha)
 
