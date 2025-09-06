@@ -187,6 +187,16 @@ public abstract class AstVisitorBase : IAstVisitor
     {
         // Visit members in a specific order to ensure proper semantic analysis
 
+        if (node.BaseClass != null)
+        {
+            node.BaseClass.Accept(this);
+        }
+
+        if (node.ImplementedInterface != null)
+        {
+            node.ImplementedInterface.Accept(this);
+        }
+
         // 1. First visit instance variables
         foreach (var instanceVar in node.InstanceVariables)
         {
