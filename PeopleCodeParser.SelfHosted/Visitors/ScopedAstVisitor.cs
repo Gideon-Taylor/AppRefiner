@@ -368,11 +368,13 @@ public abstract class ScopedAstVisitor<T> : AstVisitorBase
             }
 
             // Track parameter annotations as references
-            foreach (var annotation in node.ParameterAnnotations)
+            if (node.Implementation != null)
             {
-                AddVariableReference(annotation.Name, annotation.NameToken.SourceSpan, ReferenceType.ParameterAnnotation, "method parameter annotation");
+                foreach (var annotation in node.Implementation.ParameterAnnotations)
+                {
+                    AddVariableReference(annotation.Name, annotation.NameToken.SourceSpan, ReferenceType.ParameterAnnotation, "method parameter annotation");
+                }
             }
-
             base.VisitMethod(node);
         }
         finally
