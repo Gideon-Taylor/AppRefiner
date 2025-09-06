@@ -1,26 +1,46 @@
+using AppRefiner.TooltipProviders;
+using PeopleCodeParser.SelfHosted.Nodes;
+
 namespace PluginSample
 {
-    // Example using ParseTreeTooltipProvider for context-aware tooltips
-    public class SampleTooltipProvider : ParseTreeTooltipProvider
+    /// <summary>
+    /// Sample tooltip provider that shows tooltips for function names.
+    /// This demonstrates how to create a plugin tooltip provider using ScopedTooltipProvider.
+    /// </summary>
+    public class SampleTooltipProvider : BaseTooltipProvider
     {
         public override string Name => "Sample Tooltip Provider";
         public override string Description => "Sample: Shows tooltip for function names.";
         public override int Priority => 10; // Higher priority means checked first
 
-        // Optional: Specify token types you care about to optimize parsing
-        // public override int[]? TokenTypes => new[] { PeopleCodeLexer.FUNCTION };
-
-        public override void EnterFunctionDefinition(FunctionDefinitionContext context)
+        /// <summary>
+        /// Override VisitFunction to provide tooltips for function definitions
+        /// </summary>
+        public override void VisitFunction(FunctionNode node)
         {
-            var functionNameNode = context.allowableFunctionName();
-            if (functionNameNode != null)
+            // Check if the current position is within this function's name
+            if (ContainsPosition(node.NameToken.SourceSpan))
             {
-                string functionName = functionNameNode.GetText();
-                string tooltip = $"Sample Tooltip: This is function \"{functionName}\"";
-
-                // Use helper to register the tooltip for the function name node
-                RegisterTooltip(functionNameNode, tooltip);
+                string tooltip = $"Sample Tooltip: This is function \"{node.Name}\"";
+                RegisterTooltip(node.NameToken.SourceSpan, tooltip);
             }
+
+            base.VisitFunction(node);
+        }
+
+        /// <summary>
+        /// Override VisitMethod to provide tooltips for method definitions
+        /// </summary>
+        public override void VisitMethod(MethodNode node)
+        {
+            // Check if the current position is within this method's name
+            if (ContainsPosition(node.NameToken.SourceSpan))
+            {
+                string tooltip = $"Sample Tooltip: This is method \"{node.Name}\"";
+                RegisterTooltip(node.NameToken.SourceSpan, tooltip);
+            }
+
+            base.VisitMethod(node);
         }
     }
 }

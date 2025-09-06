@@ -12,7 +12,7 @@ namespace AppRefiner.TooltipProviders
     /// <summary>
     /// Base class for tooltip providers that leverage the self-hosted AST parser with comprehensive scope tracking.
     /// This class provides advanced scope-aware tooltip functionality with variable analysis and tracking.
-    /// For simple AST-based tooltips without scope analysis, use AstTooltipProvider.
+    /// This is the unified base class for all tooltip providers.
     /// </summary>
     public abstract class BaseTooltipProvider : ScopedAstVisitor<object>
     {
