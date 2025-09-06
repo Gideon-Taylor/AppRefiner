@@ -117,6 +117,8 @@ public class UnaryOperationNode : ExpressionNode
 
     public override bool HasSideEffects => Operand.HasSideEffects;
 
+    public override bool IsLValue => Operator == UnaryOperator.Reference;
+
     public UnaryOperationNode(UnaryOperator op, ExpressionNode operand)
     {
         Operator = op;
@@ -198,7 +200,7 @@ public class IdentifierNode : ExpressionNode
     /// </summary>
     public IdentifierType IdentifierType { get; }
 
-    public override bool IsLValue => IdentifierType is IdentifierType.UserVariable or IdentifierType.Generic;
+    public override bool IsLValue => IdentifierType is IdentifierType.UserVariable or IdentifierType.Generic or IdentifierType.Super;
 
     public IdentifierNode(string name, IdentifierType identifierType)
     {

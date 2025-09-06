@@ -33,6 +33,12 @@ public abstract class ScopedAstVisitor<T> : AstVisitorBase
     /// </summary>
     private ScopeContext? currentScope;
 
+    /// <summary>
+    /// Flag to track if we're currently processing an assignment expression
+    /// to prevent duplicate reference tracking
+    /// </summary>
+    private bool isInAssignmentContext = false;
+
     #endregion
 
     #region Public Properties
@@ -479,17 +485,23 @@ public abstract class ScopedAstVisitor<T> : AstVisitorBase
     }
 
     /// <summary>
-    /// Visits an identifier node and tracks variable references
+    /// Visits an identifier node - reference tracking now handled by assignment-aware visitors
+    /// This method only handles identifiers that appear outside of assignment contexts
     /// </summary>
     public override void VisitIdentifier(IdentifierNode node)
     {
-        AddVariableReference(node.Name, node.SourceSpan, ReferenceType.Read, "identifier reference");
-
-        // Handle property access with & prefix
-        if (node.Name.StartsWith("&"))
+        // Only add reference if this identifier is not part of an assignment expression
+        // Assignment expressions are handled by VisitAssignment which provides proper context
+        if (!isInAssignmentContext)
         {
-            var propertyName = node.Name.Substring(1);
-            AddVariableReference(propertyName, node.SourceSpan, ReferenceType.Read, "property reference");
+            AddVariableReference(node.Name, node.SourceSpan, ReferenceType.Read, "identifier reference");
+
+            // Handle property access with & prefix
+            if (node.Name.StartsWith("&"))
+            {
+                var propertyName = node.Name.Substring(1);
+                AddVariableReference(propertyName, node.SourceSpan, ReferenceType.Read, "property reference");
+            }
         }
 
         base.VisitIdentifier(node);
@@ -557,6 +569,52 @@ public abstract class ScopedAstVisitor<T> : AstVisitorBase
         base.VisitCatch(node);
     }
 
+    /// <summary>
+    /// Visits an assignment and properly classifies left-hand side as Write and right-hand side as Read
+    /// </summary>
+    public override void VisitAssignment(AssignmentNode node)
+    {
+        // Set flag to prevent duplicate reference tracking from VisitIdentifier
+        bool wasInAssignmentContext = isInAssignmentContext;
+        isInAssignmentContext = true;
+
+        try
+        {
+            // Visit the target (left-hand side) and mark identifiers as Write operations
+            VisitExpressionAsWrite(node.Target);
+
+            // Visit the value (right-hand side) and mark identifiers as Read operations
+            VisitExpressionAsRead(node.Value);
+        }
+        finally
+        {
+            // Restore previous context
+            isInAssignmentContext = wasInAssignmentContext;
+        }
+        
+        // DO NOT call base.VisitAssignment(node) - we handle the traversal manually above
+        // This prevents duplicate visits to the same nodes
+    }
+
+    /// <summary>
+    /// Visits an expression statement and checks if it contains an assignment
+    /// </summary>
+    public override void VisitExpressionStatement(ExpressionStatementNode node)
+    {
+        // Check if the expression is an assignment
+        if (node.Expression is AssignmentNode assignment)
+        {
+            // Handle assignment directly
+            VisitAssignment(assignment);
+        }
+        else
+        {
+            // Handle other expression statements normally
+            base.VisitExpressionStatement(node);
+        }
+    }
+
+
     #endregion
 
     #region Helper Methods
@@ -586,8 +644,159 @@ public abstract class ScopedAstVisitor<T> : AstVisitorBase
         customScopeData.Clear();
         variableRegistry.Clear();
         currentScope = null;
+        isInAssignmentContext = false;
 
         OnReset();
+    }
+
+    /// <summary>
+    /// Visits an expression and marks all identifiers as Write operations
+    /// Used for assignment targets (left-hand side)
+    /// </summary>
+    private void VisitExpressionAsWrite(ExpressionNode expression)
+    {
+        switch (expression)
+        {
+            case IdentifierNode identifier:
+                AddVariableReference(identifier.Name, identifier.SourceSpan, ReferenceType.Write, "assignment target");
+                
+                // Handle property access with & prefix
+                if (identifier.Name.StartsWith("&"))
+                {
+                    var propertyName = identifier.Name.Substring(1);
+                    AddVariableReference(propertyName, identifier.SourceSpan, ReferenceType.Write, "property assignment");
+                }
+                break;
+
+            case MemberAccessNode memberAccess:
+                // For member access like %This.PropertyName, the target is read, member is written
+                VisitExpressionAsRead(memberAccess.Target);
+                
+                if (memberAccess.Target is IdentifierNode targetIdent && 
+                    targetIdent.Name.Equals("%THIS", StringComparison.OrdinalIgnoreCase))
+                {
+                    // Mark the property as being written to
+                    AddVariableReference(memberAccess.MemberName, memberAccess.SourceSpan, ReferenceType.Write, "%THIS property write");
+                    
+                    var varNameWithPrefix = $"&{memberAccess.MemberName}";
+                    AddVariableReference(varNameWithPrefix, memberAccess.SourceSpan, ReferenceType.Write, "%THIS property write");
+                }
+                break;
+
+            case ArrayAccessNode arrayAccess:
+                // For array access like &arr[i], the array is written, index is read
+                VisitExpressionAsWrite(arrayAccess.Array);
+                foreach (var index in arrayAccess.Indices)
+                {
+                    VisitExpressionAsRead(index);
+                }
+                break;
+
+            case PropertyAccessNode propertyAccess:
+                // For property access, target is read, property is written
+                VisitExpressionAsRead(propertyAccess.Target);
+                break;
+
+            default:
+                // For other expressions, visit normally (as read context)
+                VisitExpressionAsRead(expression);
+                break;
+        }
+    }
+
+    /// <summary>
+    /// Visits an expression and marks all identifiers as Read operations
+    /// Used for assignment values (right-hand side) and other read contexts
+    /// </summary>
+    private void VisitExpressionAsRead(ExpressionNode expression)
+    {
+        switch (expression)
+        {
+            case IdentifierNode identifier:
+                AddVariableReference(identifier.Name, identifier.SourceSpan, ReferenceType.Read, "identifier reference");
+                
+                // Handle property access with & prefix
+                if (identifier.Name.StartsWith("&"))
+                {
+                    var propertyName = identifier.Name.Substring(1);
+                    AddVariableReference(propertyName, identifier.SourceSpan, ReferenceType.Read, "property reference");
+                }
+                break;
+
+            case MemberAccessNode memberAccess:
+                // Visit the target
+                VisitExpressionAsRead(memberAccess.Target);
+                
+                if (memberAccess.Target is IdentifierNode targetIdent && 
+                    targetIdent.Name.Equals("%THIS", StringComparison.OrdinalIgnoreCase))
+                {
+                    // Mark the property as being read
+                    AddVariableReference(memberAccess.MemberName, memberAccess.SourceSpan, ReferenceType.Read, "%THIS property read");
+                    
+                    var varNameWithPrefix = $"&{memberAccess.MemberName}";
+                    AddVariableReference(varNameWithPrefix, memberAccess.SourceSpan, ReferenceType.Read, "%THIS property read");
+                }
+                break;
+
+            case AssignmentNode assignment:
+                // Nested assignment - recursively handle
+                VisitExpressionAsWrite(assignment.Target);
+                VisitExpressionAsRead(assignment.Value);
+                break;
+
+            case BinaryOperationNode binaryOp:
+                // Both operands are read
+                VisitExpressionAsRead(binaryOp.Left);
+                VisitExpressionAsRead(binaryOp.Right);
+                break;
+
+            case UnaryOperationNode unaryOp:
+                // Operand is read
+                VisitExpressionAsRead(unaryOp.Operand);
+                break;
+
+            case FunctionCallNode functionCall:
+                // Function and all arguments are read
+                VisitExpressionAsRead(functionCall.Function);
+                foreach (var arg in functionCall.Arguments)
+                {
+                    VisitExpressionAsRead(arg);
+                }
+                break;
+
+            case ArrayAccessNode arrayAccess:
+                // Array and indices are read
+                VisitExpressionAsRead(arrayAccess.Array);
+                foreach (var index in arrayAccess.Indices)
+                {
+                    VisitExpressionAsRead(index);
+                }
+                break;
+
+            case PropertyAccessNode propertyAccess:
+                // Target is read
+                VisitExpressionAsRead(propertyAccess.Target);
+                break;
+
+            case ParenthesizedExpressionNode parenthesized:
+                // Visit the inner expression
+                VisitExpressionAsRead(parenthesized.Expression);
+                break;
+
+            case TypeCastNode typeCast:
+                // Visit the expression being cast
+                VisitExpressionAsRead(typeCast.Expression);
+                break;
+
+            case LiteralNode:
+                // Literals don't reference variables - no action needed
+                break;
+
+            default:
+                // For unknown expression types, use the base visitor
+                expression.Accept(this);
+                break;
+        }
     }
 
     #endregion

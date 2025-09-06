@@ -3562,7 +3562,7 @@ public class PeopleCodeParser
             if (!Match(TokenType.If))
                 return null;
 
-            var condition = ParseExpression();
+            var condition = ParseExpressionForCondition();
             if (condition == null)
             {
                 ReportError("Expected condition after 'IF'");
@@ -3730,7 +3730,7 @@ public class PeopleCodeParser
             if (!Match(TokenType.While))
                 return null;
 
-            var condition = ParseExpression();
+            var condition = ParseExpressionForCondition();
             if (condition == null)
             {
                 ReportError("Expected condition after 'WHILE'");
@@ -3777,7 +3777,7 @@ public class PeopleCodeParser
 
             Consume(TokenType.Until, "Expected 'UNTIL' after REPEAT statements");
 
-            var condition = ParseExpression();
+            var condition = ParseExpressionForCondition();
             if (condition == null)
             {
                 ReportError("Expected condition after 'UNTIL'");
@@ -4199,7 +4199,7 @@ public class PeopleCodeParser
                     }
 
                     // Required single expression
-                    var condition = ParseExpression();
+                    var condition = ParseExpressionForCondition();
                     if (condition == null)
                     {
                         ReportError("Expected condition expression after 'WHEN'");
@@ -4280,11 +4280,32 @@ public class PeopleCodeParser
     }
 
     /// <summary>
+    /// Parse expression in condition context (comparisons, not assignments)
+    /// </summary>
+    private ExpressionNode? ParseExpressionForCondition()
+    {
+        try
+        {
+            EnterRule("condition_expression");
+            return ParseOrExpression(allowAssignmentEqual: false);
+        }
+        catch (Exception ex)
+        {
+            ReportError($"Error parsing condition expression: {ex.Message}");
+            return null;
+        }
+        finally
+        {
+            ExitRule();
+        }
+    }
+
+    /// <summary>
     /// Parse assignment expressions (=, +=, -=, |=)
     /// </summary>
     private ExpressionNode? ParseAssignmentExpression()
     {
-        var expr = ParseOrExpression();
+        var expr = ParseOrExpression(allowAssignmentEqual: true);
         if (expr == null) return null;
 
         if (Current.Type.IsAssignmentOperator())
@@ -4293,7 +4314,7 @@ public class PeopleCodeParser
             var opToken = Current;
             _position++;
 
-            var right = ParseAssignmentExpression(); // Right associative
+            var right = ParseAssignmentExpression(); // Right associative - allow assignment equals in right side too
             if (right == null)
             {
                 ReportError("Expected expression after assignment operator");
@@ -4318,14 +4339,14 @@ public class PeopleCodeParser
     /// <summary>
     /// Parse logical OR expressions
     /// </summary>
-    private ExpressionNode? ParseOrExpression()
+    private ExpressionNode? ParseOrExpression(bool allowAssignmentEqual = false)
     {
-        var left = ParseAndExpression();
+        var left = ParseAndExpression(allowAssignmentEqual);
         if (left == null) return null;
 
         while (Match(TokenType.Or))
         {
-            var right = ParseAndExpression();
+            var right = ParseAndExpression(allowAssignmentEqual);
             if (right == null)
             {
                 ReportError("Expected expression after 'OR'");
@@ -4345,14 +4366,14 @@ public class PeopleCodeParser
     /// <summary>
     /// Parse logical AND expressions
     /// </summary>
-    private ExpressionNode? ParseAndExpression()
+    private ExpressionNode? ParseAndExpression(bool allowAssignmentEqual = false)
     {
-        var left = ParseEqualityExpression();
+        var left = ParseEqualityExpression(allowAssignmentEqual);
         if (left == null) return null;
 
         while (Match(TokenType.And))
         {
-            var right = ParseEqualityExpression();
+            var right = ParseEqualityExpression(allowAssignmentEqual);
             if (right == null)
             {
                 ReportError("Expected expression after 'AND'");
@@ -4372,9 +4393,9 @@ public class PeopleCodeParser
     /// <summary>
     /// Parse equality expressions (=, <>, !=)
     /// </summary>
-    private ExpressionNode? ParseEqualityExpression()
+    private ExpressionNode? ParseEqualityExpression(bool allowAssignmentEqual = false)
     {
-        var left = ParseRelationalExpression();
+        var left = ParseRelationalExpression(allowAssignmentEqual);
         if (left == null) return null;
 
         bool notFlag = false;
@@ -4384,12 +4405,14 @@ public class PeopleCodeParser
             _position++;
         }
 
-        while (Current.Type is TokenType.Equal or TokenType.NotEqual)
+        // If we're allowing assignment equals, don't consume TokenType.Equal as comparison
+        while ((allowAssignmentEqual && Current.Type == TokenType.NotEqual) || 
+               (!allowAssignmentEqual && Current.Type is TokenType.Equal or TokenType.NotEqual))
         {
             var op = Current.Type == TokenType.Equal ? BinaryOperator.Equal : BinaryOperator.NotEqual;
             _position++;
 
-            var right = ParseRelationalExpression();
+            var right = ParseRelationalExpression(allowAssignmentEqual);
             if (right == null)
             {
                 ReportError("Expected expression after equality operator");
@@ -4409,9 +4432,9 @@ public class PeopleCodeParser
     /// <summary>
     /// Parse relational expressions (<, <=, >, >=)
     /// </summary>
-    private ExpressionNode? ParseRelationalExpression()
+    private ExpressionNode? ParseRelationalExpression(bool allowAssignmentEqual = false)
     {
-        var left = ParseTypeCastExpression();
+        var left = ParseTypeCastExpression(allowAssignmentEqual);
         if (left == null) return null;
 
         bool notFlag = false;
@@ -4454,13 +4477,13 @@ public class PeopleCodeParser
     /// <summary>
     /// Parse type cast expressions (expr AS Type)
     /// </summary>
-    private ExpressionNode? ParseTypeCastExpression()
+    private ExpressionNode? ParseTypeCastExpression(bool allowAssignmentEqual = false)
     {
         try
         {
             EnterRule("typeCastExpression");
 
-            var expr = ParseConcatenationExpression();
+            var expr = ParseConcatenationExpression(allowAssignmentEqual);
             if (expr == null) return null;
 
             // Handle type casting (expr AS Type) - PeopleCode only supports single casts, not chains
@@ -4504,14 +4527,14 @@ public class PeopleCodeParser
     /// <summary>
     /// Parse string concatenation expressions (|)
     /// </summary>
-    private ExpressionNode? ParseConcatenationExpression()
+    private ExpressionNode? ParseConcatenationExpression(bool allowAssignmentEqual = false)
     {
-        var left = ParseNotExpression();
+        var left = ParseNotExpression(allowAssignmentEqual);
         if (left == null) return null;
 
         while (Match(TokenType.Pipe))
         {
-            var right = ParseNotExpression();
+            var right = ParseNotExpression(allowAssignmentEqual);
             if (right == null)
             {
                 ReportError("Expected expression after '|'");
@@ -4531,14 +4554,14 @@ public class PeopleCodeParser
     /// <summary>
     /// Parse NOT expressions (NOT expression)
     /// </summary>
-    private ExpressionNode? ParseNotExpression()
+    private ExpressionNode? ParseNotExpression(bool allowAssignmentEqual = false)
     {
         if (Check(TokenType.Not))
         {
             var notToken = Current;
             _position++; // Advance past NOT token
 
-            var operand = ParseAdditiveExpression();
+            var operand = ParseAdditiveExpression(allowAssignmentEqual);
             if (operand == null)
             {
                 ReportError("Expected expression after 'NOT'");
@@ -4559,15 +4582,15 @@ public class PeopleCodeParser
             };
         }
 
-        return ParseAdditiveExpression();
+        return ParseAdditiveExpression(allowAssignmentEqual);
     }
 
     /// <summary>
     /// Parse additive expressions (+, -)
     /// </summary>
-    private ExpressionNode? ParseAdditiveExpression()
+    private ExpressionNode? ParseAdditiveExpression(bool allowAssignmentEqual = false)
     {
-        var left = ParseMultiplicativeExpression();
+        var left = ParseMultiplicativeExpression(allowAssignmentEqual);
         if (left == null) return null;
 
         while (Current.Type is TokenType.Plus or TokenType.Minus)
@@ -4575,7 +4598,7 @@ public class PeopleCodeParser
             var op = Current.Type == TokenType.Plus ? BinaryOperator.Add : BinaryOperator.Subtract;
             _position++;
 
-            var right = ParseMultiplicativeExpression();
+            var right = ParseMultiplicativeExpression(allowAssignmentEqual);
             if (right == null)
             {
                 ReportError("Expected expression after additive operator");
@@ -4595,9 +4618,9 @@ public class PeopleCodeParser
     /// <summary>
     /// Parse multiplicative expressions (*, /)
     /// </summary>
-    private ExpressionNode? ParseMultiplicativeExpression()
+    private ExpressionNode? ParseMultiplicativeExpression(bool allowAssignmentEqual = false)
     {
-        var left = ParseExponentialExpression();
+        var left = ParseExponentialExpression(allowAssignmentEqual);
         if (left == null) return null;
 
         while (Current.Type is TokenType.Star or TokenType.Div)
@@ -4605,7 +4628,7 @@ public class PeopleCodeParser
             var op = Current.Type == TokenType.Star ? BinaryOperator.Multiply : BinaryOperator.Divide;
             _position++;
 
-            var right = ParseExponentialExpression();
+            var right = ParseExponentialExpression(allowAssignmentEqual);
             if (right == null)
             {
                 ReportError("Expected expression after multiplicative operator");
@@ -4625,15 +4648,15 @@ public class PeopleCodeParser
     /// <summary>
     /// Parse exponential expressions (**)
     /// </summary>
-    private ExpressionNode? ParseExponentialExpression()
+    private ExpressionNode? ParseExponentialExpression(bool allowAssignmentEqual = false)
     {
-        var left = ParseUnaryExpression();
+        var left = ParseUnaryExpression(allowAssignmentEqual);
         if (left == null) return null;
 
         if (Match(TokenType.Power))
         {
             // Right associative
-            var right = ParseExponentialExpression();
+            var right = ParseExponentialExpression(allowAssignmentEqual);
             if (right == null)
             {
                 ReportError("Expected expression after '**'");
@@ -4653,7 +4676,7 @@ public class PeopleCodeParser
     /// <summary>
     /// Parse unary expressions (-, @)
     /// </summary>
-    private ExpressionNode? ParseUnaryExpression()
+    private ExpressionNode? ParseUnaryExpression(bool allowAssignmentEqual = false)
     {
         if (Current.Type is TokenType.Minus or TokenType.At)
         {
@@ -4666,7 +4689,7 @@ public class PeopleCodeParser
             var opToken = Current;
             _position++;
 
-            var operand = ParseUnaryExpression(); // Right associative
+            var operand = ParseUnaryExpression(allowAssignmentEqual); // Right associative
             if (operand == null)
             {
                 ReportError("Expected expression after unary operator");
@@ -4680,15 +4703,15 @@ public class PeopleCodeParser
             };
         }
 
-        return ParsePostfixExpression();
+        return ParsePostfixExpression(allowAssignmentEqual);
     }
 
     /// <summary>
     /// Parse postfix expressions (function calls, array access, property access)
     /// </summary>
-    private ExpressionNode? ParsePostfixExpression()
+    private ExpressionNode? ParsePostfixExpression(bool allowAssignmentEqual = false)
     {
-        var expr = ParsePrimaryExpression();
+        var expr = ParsePrimaryExpression(allowAssignmentEqual);
         if (expr == null) return null;
 
         // Defensive validation: ensure primary expression has token boundaries
@@ -4868,7 +4891,7 @@ public class PeopleCodeParser
     /// <summary>
     /// Parse primary expressions (literals, identifiers, parenthesized expressions)
     /// </summary>
-    private ExpressionNode? ParsePrimaryExpression()
+    private ExpressionNode? ParsePrimaryExpression(bool allowAssignmentEqual = false)
     {
         // Literals
         if (Current.Type.IsLiteral())
@@ -4910,7 +4933,8 @@ public class PeopleCodeParser
         if (Match(TokenType.LeftParen))
         {
             var leftParenToken = Previous; // Capture opening paren
-            var expr = ParseExpression();
+            // Parentheses always create condition context (comparisons, not assignments)
+            var expr = ParseOrExpression(allowAssignmentEqual: false);
             if (expr == null)
             {
                 ReportError("Expected expression inside parentheses");
