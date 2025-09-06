@@ -290,7 +290,7 @@ namespace AppRefiner.Refactors
             foreach (var varRef in targetReferences)
             {
                 // start and end are inclusive, so subtract 1 from the end, because SourceSpan has the upper bound as exclusive
-                EditText(varRef.SourceSpan.Start.ByteIndex, varRef.SourceSpan.End.ByteIndex - 1,
+                EditText(varRef.SourceSpan.Start.ByteIndex, varRef.SourceSpan.End.ByteIndex,
                             newVariableName ?? variableToRename.Name, $"Rename {variableToRename} to {newVariableName}");
             }
         }
