@@ -681,6 +681,8 @@ public abstract class ScopedAstVisitor<T> : AstVisitorBase
                     var varNameWithPrefix = $"&{memberAccess.MemberName}";
                     AddVariableReference(varNameWithPrefix, memberAccess.SourceSpan, ReferenceType.Write, "%THIS property write");
                 }
+                // Also allow other visitors to process the member access
+                expression.Accept(this);
                 break;
 
             case ArrayAccessNode arrayAccess:
@@ -690,11 +692,15 @@ public abstract class ScopedAstVisitor<T> : AstVisitorBase
                 {
                     VisitExpressionAsRead(index);
                 }
+                // Also allow other visitors to process the array access
+                expression.Accept(this);
                 break;
 
             case PropertyAccessNode propertyAccess:
                 // For property access, target is read, property is written
                 VisitExpressionAsRead(propertyAccess.Target);
+                // Also allow other visitors to process the property access
+                expression.Accept(this);
                 break;
 
             default:
@@ -736,23 +742,31 @@ public abstract class ScopedAstVisitor<T> : AstVisitorBase
                     var varNameWithPrefix = $"&{memberAccess.MemberName}";
                     AddVariableReference(varNameWithPrefix, memberAccess.SourceSpan, ReferenceType.Read, "%THIS property read");
                 }
+                // Also allow other visitors to process the member access
+                expression.Accept(this);
                 break;
 
             case AssignmentNode assignment:
                 // Nested assignment - recursively handle
                 VisitExpressionAsWrite(assignment.Target);
                 VisitExpressionAsRead(assignment.Value);
+                // Also allow other visitors to process the assignment
+                expression.Accept(this);
                 break;
 
             case BinaryOperationNode binaryOp:
                 // Both operands are read
                 VisitExpressionAsRead(binaryOp.Left);
                 VisitExpressionAsRead(binaryOp.Right);
+                // Also allow other visitors to process the binary operation
+                expression.Accept(this);
                 break;
 
             case UnaryOperationNode unaryOp:
                 // Operand is read
                 VisitExpressionAsRead(unaryOp.Operand);
+                // Also allow other visitors to process the unary operation
+                expression.Accept(this);
                 break;
 
             case FunctionCallNode functionCall:
@@ -762,6 +776,8 @@ public abstract class ScopedAstVisitor<T> : AstVisitorBase
                 {
                     VisitExpressionAsRead(arg);
                 }
+                // Also allow other visitors to process the function call
+                expression.Accept(this);
                 break;
 
             case ArrayAccessNode arrayAccess:
@@ -771,21 +787,29 @@ public abstract class ScopedAstVisitor<T> : AstVisitorBase
                 {
                     VisitExpressionAsRead(index);
                 }
+                // Also allow other visitors to process the array access
+                expression.Accept(this);
                 break;
 
             case PropertyAccessNode propertyAccess:
                 // Target is read
                 VisitExpressionAsRead(propertyAccess.Target);
+                // Also allow other visitors to process the property access
+                expression.Accept(this);
                 break;
 
             case ParenthesizedExpressionNode parenthesized:
                 // Visit the inner expression
                 VisitExpressionAsRead(parenthesized.Expression);
+                // Also allow other visitors to process the parenthesized expression
+                expression.Accept(this);
                 break;
 
             case TypeCastNode typeCast:
                 // Visit the expression being cast
                 VisitExpressionAsRead(typeCast.Expression);
+                // Also allow other visitors to process the type cast
+                expression.Accept(this);
                 break;
 
             case LiteralNode:

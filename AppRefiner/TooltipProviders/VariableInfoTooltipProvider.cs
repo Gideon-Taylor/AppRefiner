@@ -1,3 +1,4 @@
+using PeopleCodeParser.SelfHosted;
 using PeopleCodeParser.SelfHosted.Nodes;
 using PeopleCodeParser.SelfHosted.Visitors.Models;
 using System.Text;
@@ -12,6 +13,12 @@ namespace AppRefiner.TooltipProviders
     /// </summary>
     public class VariableInfoTooltipProvider : BaseTooltipProvider
     {
+        // Fields to store variable/member information found at current position
+        private string? _hoveredVariableName;
+        private string? _hoveredMemberName;
+        private SourceSpan? _hoveredVariableSpan;
+        private SourceSpan? _hoveredMemberSpan;
+        private ScopeContext? _scopeContext;
         /// <summary>
         /// Name of the tooltip provider.
         /// </summary>
@@ -32,35 +39,129 @@ namespace AppRefiner.TooltipProviders
         /// </summary>
         public override void ProcessProgram(ProgramNode program, int position, int lineNumber)
         {
+            // Reset state for each processing
+            _hoveredVariableName = null;
+            _hoveredMemberName = null;
+            _hoveredVariableSpan = null;
+            _hoveredMemberSpan = null;
+            
             base.ProcessProgram(program, position, lineNumber);
         }
 
         /// <summary>
-        /// Override to process identifier references and register rich variable tooltips
+        /// Override VisitProgram to register tooltips after full traversal is complete
+        /// </summary>
+        public override void VisitProgram(ProgramNode node)
+        {
+            // First, perform full AST traversal to populate all variable statistics
+            base.VisitProgram(node);
+            
+            // After traversal is complete, register tooltips for any variables/members found at current position
+            RegisterTooltip();
+        }
+
+        /// <summary>
+        /// Override to check if identifier is at current position and store for deferred processing
         /// </summary>
         public override void VisitIdentifier(IdentifierNode node)
         {
-            // Check if this identifier represents a variable
-            if (IsVariableIdentifier(node))
+            // Check if this identifier represents a variable and is at the current position
+            if (IsVariableIdentifier(node) && node.SourceSpan.ContainsPosition(CurrentPosition))
             {
-                ProcessVariableReference(node);
+                _hoveredVariableName = node.Name;
+                _hoveredVariableSpan = node.SourceSpan;
+                _scopeContext = GetCurrentScope();
             }
 
             base.VisitIdentifier(node);
         }
 
+        public override void VisitVariable(VariableNode node)
+        {
+            if (node.SourceSpan.ContainsPosition(CurrentPosition))
+            {
+                _hoveredVariableName = node.Name;
+                _hoveredVariableSpan = node.SourceSpan;
+                _scopeContext = GetCurrentScope();
+            }
+
+            base.VisitVariable(node);
+        }
+
         /// <summary>
-        /// Override to process member access expressions for properties
+        /// Override to check if member access is at current position and store for deferred processing
         /// </summary>
         public override void VisitMemberAccess(MemberAccessNode node)
         {
             // Handle property access patterns like %This.PropertyName or &variable.PropertyName
-            if (IsPropertyAccessPattern(node))
+            if (IsPropertyAccessPattern(node) && node.SourceSpan.ContainsPosition(CurrentPosition))
             {
-                ProcessPropertyAccess(node);
+                _hoveredMemberName = node.MemberName;
+                _hoveredMemberSpan = node.SourceSpan;
+                _scopeContext = GetCurrentScope();
             }
 
             base.VisitMemberAccess(node);
+        }
+
+        public override void VisitAssignment(AssignmentNode node)
+        {
+            if (node.Target is IdentifierNode identifier)
+            {
+                if (identifier.SourceSpan.ContainsPosition(CurrentPosition))
+                {
+                    _hoveredVariableName = identifier.Name;
+                    _hoveredVariableSpan = identifier.SourceSpan;
+                    _scopeContext = GetCurrentScope();
+                }
+
+            }
+            base.VisitAssignment(node);
+        }
+
+        public override void VisitLocalVariableDeclaration(LocalVariableDeclarationNode node)
+        {
+            /* Todo handle the name of the variable since we dont have Identifier nodes here. */
+            foreach (var nameInfo in node.VariableNameInfos)
+            {
+                if (nameInfo.SourceSpan.ContainsPosition(CurrentPosition))
+                {
+                    _hoveredVariableName = nameInfo.Name;
+                    _hoveredVariableSpan = nameInfo.SourceSpan;
+                    _scopeContext = GetCurrentScope();
+                    break;
+                }
+            }
+            base.VisitLocalVariableDeclaration(node);
+        }
+
+        public override void VisitLocalVariableDeclarationWithAssignment(LocalVariableDeclarationWithAssignmentNode node)
+        {
+            if (node.VariableNameInfo.SourceSpan.ContainsPosition(CurrentPosition))
+            {
+                _hoveredVariableName = node.VariableNameInfo.Name;
+                _hoveredVariableSpan = node.VariableNameInfo.SourceSpan;;
+            }
+
+            base.VisitLocalVariableDeclarationWithAssignment(node);
+        }
+
+        /// <summary>
+        /// Registers tooltips for variables/members found at the current position after full traversal
+        /// </summary>
+        private void RegisterTooltip()
+        {
+            // Register tooltip for hovered variable if found
+            if (!string.IsNullOrEmpty(_hoveredVariableName) && _hoveredVariableSpan.HasValue)
+            {
+                ProcessVariableReference(_hoveredVariableName, _hoveredVariableSpan.Value);
+            }
+            
+            // Register tooltip for hovered member if found
+            if (!string.IsNullOrEmpty(_hoveredMemberName) && _hoveredMemberSpan.HasValue)
+            {
+                ProcessMemberAccess(_hoveredMemberName, _hoveredMemberSpan.Value);
+            }
         }
 
         /// <summary>
@@ -84,67 +185,69 @@ namespace AppRefiner.TooltipProviders
         }
 
         /// <summary>
-        /// Processes a variable reference and registers a rich tooltip
+        /// Processes a variable reference and registers a rich tooltip with complete statistics
         /// </summary>
-        private void ProcessVariableReference(IdentifierNode node)
+        private void ProcessVariableReference(string variableName, SourceSpan span)
         {
+            if (_scopeContext == null) return;
             try
             {
-                // Try to get the variable information from the scoped visitor
-                var variable = GetVariablesAtPosition()
-                    .FirstOrDefault(v => v.Name.Equals(node.Name, StringComparison.OrdinalIgnoreCase) &&
+                // Try to get the variable information from the scoped visitor (now with complete statistics)
+                var variable = GetVariablesInScope(_scopeContext)
+                    .FirstOrDefault(v => v.Name.Equals(variableName, StringComparison.OrdinalIgnoreCase) &&
                                         v.VariableNameInfo.SourceSpan.IsValid);
 
                 if (variable != null)
                 {
                     string tooltipText = GenerateRichVariableTooltip(variable);
-                    RegisterTooltip(node.SourceSpan, tooltipText);
+                    RegisterTooltip(span, tooltipText);
                 }
                 else
                 {
                     // Fallback for variables not found in scope (could be system variables or globals)
-                    string tooltipText = GenerateBasicVariableTooltip(node);
-                    RegisterTooltip(node.SourceSpan, tooltipText);
+                    string tooltipText = GenerateBasicVariableTooltip(variableName);
+                    RegisterTooltip(span, tooltipText);
                 }
             }
             catch (Exception)
             {
                 // Silently handle errors and fall back to basic tooltip
-                string tooltipText = GenerateBasicVariableTooltip(node);
-                RegisterTooltip(node.SourceSpan, tooltipText);
+                string tooltipText = GenerateBasicVariableTooltip(variableName);
+                RegisterTooltip(span, tooltipText);
             }
         }
 
         /// <summary>
-        /// Processes a property access and registers a rich tooltip
+        /// Processes a property access and registers a rich tooltip with complete statistics
         /// </summary>
-        private void ProcessPropertyAccess(MemberAccessNode node)
+        private void ProcessMemberAccess(string memberName, SourceSpan span)
         {
+            if (_scopeContext == null) return;
             try
             {
-                // Try to find the property in the current class
-                var property = GetAllVariables()
+                // Try to find the property in the current class (now with complete statistics)
+                var property = GetVariablesInScope(_scopeContext)
                     .Where(v => v.Kind == VariableKind.Property &&
-                               v.Name.Equals(node.MemberName, StringComparison.OrdinalIgnoreCase))
+                               v.Name.Equals(memberName, StringComparison.OrdinalIgnoreCase))
                     .FirstOrDefault(v => v.VariableNameInfo.SourceSpan.IsValid);
 
                 if (property != null)
                 {
                     string tooltipText = GenerateRichVariableTooltip(property);
-                    RegisterTooltip(node.SourceSpan, tooltipText);
+                    RegisterTooltip(span, tooltipText);
                 }
                 else
                 {
                     // Fallback for unknown properties
-                    string tooltipText = GenerateBasicPropertyTooltip(node.MemberName);
-                    RegisterTooltip(node.SourceSpan, tooltipText);
+                    string tooltipText = GenerateBasicPropertyTooltip(memberName);
+                    RegisterTooltip(span, tooltipText);
                 }
             }
             catch (Exception)
             {
                 // Silently handle errors and fall back to basic tooltip
-                string tooltipText = GenerateBasicPropertyTooltip(node.MemberName);
-                RegisterTooltip(node.SourceSpan, tooltipText);
+                string tooltipText = GenerateBasicPropertyTooltip(memberName);
+                RegisterTooltip(span, tooltipText);
             }
         }
 
@@ -260,14 +363,14 @@ namespace AppRefiner.TooltipProviders
         /// <summary>
         /// Generates a basic tooltip for variables not found in scope analysis
         /// </summary>
-        private string GenerateBasicVariableTooltip(IdentifierNode node)
+        private string GenerateBasicVariableTooltip(string variableName)
         {
             var sb = new StringBuilder();
 
-            sb.AppendLine($"**{node.Name}**");
+            sb.AppendLine($"**{variableName}**");
 
             // Try to infer variable type from name patterns
-            string inferredType = InferVariableType(node.Name);
+            string inferredType = InferVariableType(variableName);
             if (!string.IsNullOrEmpty(inferredType))
             {
                 sb.AppendLine($"🔍 Type: {inferredType}");
