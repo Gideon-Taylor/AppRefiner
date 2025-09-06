@@ -314,6 +314,24 @@ public class ArrayAccessNode : ExpressionNode
     }
 }
 
+public class ObjectCreateShortHand : ExpressionNode
+{
+    public override void Accept(IAstVisitor visitor)
+    {
+        visitor.VisitObjectCreateShortHand(this);
+    }
+
+    public override TResult Accept<TResult>(IAstVisitor<TResult> visitor)
+    {
+        return visitor.VisitObjectCreateShortHand(this);
+    }
+
+    public override string ToString()
+    {
+        return "create()";
+    }
+}
+
 /// <summary>
 /// Object creation expression (CREATE Class(args))
 /// </summary>
@@ -433,6 +451,38 @@ public class ParenthesizedExpressionNode : ExpressionNode
     }
 }
 
+public class PartialShortHandAssignmentNode : ExpressionNode
+{
+    /// <summary>
+    /// Left-hand side (target)
+    /// </summary>
+    public ExpressionNode Target { get; }
+
+    /// <summary>
+    /// Assignment operator
+    /// </summary>
+    public AssignmentOperator Operator { get; }
+
+    public PartialShortHandAssignmentNode(ExpressionNode target, AssignmentOperator op)
+    {
+        Target = target ?? throw new ArgumentNullException(nameof(target));
+        Operator = op;
+
+        AddChild(target);
+    }
+
+    public override void Accept(IAstVisitor visitor)
+    {
+        visitor.VisitPartialShortHandAssignment(this);
+    }
+
+    public override TResult Accept<TResult>(IAstVisitor<TResult> visitor)
+    {
+        return visitor.VisitPartialShortHandAssignment(this);
+    }
+
+}
+
 /// <summary>
 /// Assignment expression (a = b, a += b)
 /// </summary>
@@ -527,6 +577,7 @@ public enum AssignmentOperator
     AddAssign,        // +=
     SubtractAssign,   // -=
     ConcatenateAssign // |=
+
 }
 
 /// <summary>

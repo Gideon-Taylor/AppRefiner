@@ -333,7 +333,7 @@ namespace AppRefiner
 
             Debug.Log($"Create shorthand detected at position {position}. Auto-pairing: {autoPairingEnabled}");
             // Return the refactor instance for MainForm to process
-            return new CreateAutoComplete(editor, autoPairingEnabled);
+            return new CreateAutoComplete(editor);
         }
 
 

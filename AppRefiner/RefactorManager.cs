@@ -299,7 +299,7 @@ namespace AppRefiner.Refactors
                 refactorClass.Initialize(activeEditor.ContentString, currentCursorPosition);
 
                 // NEW: Apply configuration just-in-time before visitor runs
-                RefactorConfigManager.ApplyConfigurationToInstance(refactorClass);
+                 RefactorConfigManager.ApplyConfigurationToInstance(refactorClass);
 
                 // Run the refactor visitor using AST visitor pattern
                 if (refactorClass is IAstVisitor visitor)

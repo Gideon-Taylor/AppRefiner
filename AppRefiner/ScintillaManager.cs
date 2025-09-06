@@ -426,8 +426,12 @@ namespace AppRefiner
         {
             if (editor == null) return false;
 
+            var currentCursorLocation = ScintillaManager.GetCursorPosition(editor);
+
+            var isInsideReplacement = currentCursorLocation >= startPos && currentCursorLocation <= endPos;
+
             // Set target range
-            editor.SendMessage(SCI_SETTARGETRANGE, startPos, endPos + 1);
+            editor.SendMessage(SCI_SETTARGETRANGE, startPos, endPos);
 
             if (string.IsNullOrEmpty(newText))
             {
@@ -454,6 +458,11 @@ namespace AppRefiner
 
             // Replace the target with the new text
             editor.SendMessage(SCI_REPLACETARGET, textBytes.Length, remoteBuffer);
+
+            if (isInsideReplacement)
+            {
+                ScintillaManager.SetCursorPosition(editor, startPos + Encoding.UTF8.GetByteCount(newText));
+            }
 
             return true;
         }

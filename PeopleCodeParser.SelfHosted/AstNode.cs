@@ -251,12 +251,12 @@ public struct SourceSpan : IEquatable<SourceSpan>
     /// <summary>
     /// True if this span represents a valid source location
     /// </summary>
-    public bool IsValid => Start.Index >= 0 && End.Index >= Start.Index;
+    public bool IsValid => Start.ByteIndex >= 0 && End.ByteIndex >= Start.ByteIndex;
 
     /// <summary>
     /// Checks if this span contains the given position
     /// </summary>
-    public bool ContainsPosition(int position) => position >= Start.Index && position <= End.Index;
+    public bool ContainsPosition(int position) => position >= Start.ByteIndex && position <= End.ByteIndex;
 
     public SourceSpan(SourcePosition start, SourcePosition end)
     {

@@ -62,6 +62,9 @@ public interface IAstVisitor
     void VisitCatch(CatchStatementNode node);
     void VisitMetadataExpression(MetadataExpressionNode node);
     void VisitClassConstant(ClassConstantNode classConstantNode);
+
+    void VisitPartialShortHandAssignment(PartialShortHandAssignmentNode node);
+    void VisitObjectCreateShortHand(ObjectCreateShortHand node);
 }
 
 /// <summary>
@@ -124,6 +127,10 @@ public interface IAstVisitor<out TResult>
     TResult VisitCatch(CatchStatementNode node);
     TResult VisitMetadataExpression(MetadataExpressionNode node);
     TResult VisitClassConstant(ClassConstantNode classConstantNode);
+
+    TResult VisitPartialShortHandAssignment(PartialShortHandAssignmentNode node);
+
+    TResult VisitObjectCreateShortHand(ObjectCreateShortHand node);
 }
 
 /// <summary>
@@ -148,6 +155,25 @@ public abstract class AstVisitorBase : IAstVisitor
             import.Accept(this);
         }
 
+        // Visit global variables
+        foreach (var variable in node.Variables)
+        {
+            variable.Accept(this);
+        }
+
+        // Visit constants
+        foreach (var constant in node.Constants)
+        {
+            constant.Accept(this);
+        }
+
+        /* Visit external function declarations */
+        // Visit functions
+        foreach (var function in node.Functions.Where(f => f.IsDeclaration))
+        {
+            function.Accept(this);
+        }
+
         // Visit app class or interface if present
         if (node.AppClass != null)
         {
@@ -158,20 +184,8 @@ public abstract class AstVisitorBase : IAstVisitor
             node.Interface.Accept(this);
         }
 
-        // Visit constants
-        foreach (var constant in node.Constants)
-        {
-            constant.Accept(this);
-        }
-
-        // Visit global variables
-        foreach (var variable in node.Variables)
-        {
-            variable.Accept(this);
-        }
-
         // Visit functions
-        foreach (var function in node.Functions)
+        foreach (var function in node.Functions.Where(f => f.IsImplementation))
         {
             function.Accept(this);
         }
@@ -638,4 +652,11 @@ public abstract class AstVisitorBase : IAstVisitor
     }
     public virtual void VisitMetadataExpression(MetadataExpressionNode node) => DefaultVisit(node);
     public virtual void VisitClassConstant(ClassConstantNode classConstantNode) => DefaultVisit(classConstantNode);
+
+    public virtual void VisitPartialShortHandAssignment(PartialShortHandAssignmentNode node)
+    {
+        node.Target.Accept(this);
+    }
+
+    public virtual void VisitObjectCreateShortHand(ObjectCreateShortHand node) => DefaultVisit(node);
 }

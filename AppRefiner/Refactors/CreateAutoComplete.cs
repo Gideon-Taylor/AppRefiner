@@ -1,4 +1,5 @@
 using PeopleCodeParser.SelfHosted.Nodes;
+using PeopleCodeParser.SelfHosted.Visitors.Models;
 
 namespace AppRefiner.Refactors
 {
@@ -22,57 +23,57 @@ namespace AppRefiner.Refactors
 
         private bool isAppropriateContext = false;
         private string? detectedClassType = null;
-        private FunctionCallNode? targetCreateCall = null;
-        private readonly bool autoPairingEnabled;
-
-        // Track instance variables and their types
-        private readonly Dictionary<string, string> instanceVariables = new();
+        private ObjectCreateShortHand? targetCreateCall = null;
 
         // Track parent class information for %Super usage
-        private string? parentClassName = null;
+        private string parentClassName = "";
 
-        public CreateAutoComplete(ScintillaEditor editor, bool autoPairingEnabled = true) : base(editor)
-        {
-            this.autoPairingEnabled = autoPairingEnabled;
-            Debug.Log($"CreateAutoComplete initialized with auto-pairing: {autoPairingEnabled}");
-        }
+        public CreateAutoComplete(ScintillaEditor editor) : base(editor){}
 
-        /// <summary>
-        /// Check if this is a create() call and detect the appropriate type
-        /// </summary>
-        private bool IsCreateCallAtCursor(LocalVariableDeclarationWithAssignmentNode node)
+        public override void VisitAssignment(AssignmentNode node)
         {
-            // Check if the initializer is a function call to "create"
-            if (node.InitialValue is FunctionCallNode functionCall &&
-                functionCall.Function is IdentifierNode identifier)
+            if ( node.Value is ObjectCreateShortHand createCall && createCall.SourceSpan.ContainsPosition(CurrentPosition))
             {
-                if (identifier.Name.Equals("create", StringComparison.OrdinalIgnoreCase))
+                isAppropriateContext = true;
+                targetCreateCall = createCall;
+
+                if (node.Target is IdentifierNode identifierNode)
                 {
-                    // Check if cursor is within the function call
-                    if (functionCall.SourceSpan.IsValid)
+                    /* Look up variable */
+                    var variableInfo = FindVariable(identifierNode.Name);
+                    if (variableInfo != null)
                     {
-                        var span = functionCall.SourceSpan;
-                        if (CurrentPosition >= span.Start.ByteIndex && CurrentPosition <= span.End.ByteIndex + 1)
+                        detectedClassType = variableInfo.Type;
+                    } else
+                    {
+                        if (identifierNode.Name.Equals("%Super", StringComparison.CurrentCultureIgnoreCase))
                         {
-                            // Try to detect the class type from the variable type
-                            if (node.Type is AppClassTypeNode appClassType)
-                            {
-                                detectedClassType = appClassType.ClassName;
-                                return true;
-                            }
+                            detectedClassType = parentClassName;
+                        }
+                        else
+                        {
+
+                            detectedClassType = identifierNode.Name;
                         }
                     }
                 }
+                else
+                {
+                    SetFailure("Create() expansion is not supported on expression that need an infered type.");
+                }
+                Debug.Log($"CreateAutoComplete: Found create() call for type {detectedClassType} at cursor position {CurrentPosition}");
             }
-            return false;
+
+            base.VisitAssignment(node);
         }
 
         public override void VisitLocalVariableDeclarationWithAssignment(LocalVariableDeclarationWithAssignmentNode node)
         {
-            if (IsCreateCallAtCursor(node) && node.InitialValue is FunctionCallNode createCall)
+            if (node.InitialValue is ObjectCreateShortHand createCall && createCall.SourceSpan.ContainsPosition(CurrentPosition))
             {
                 isAppropriateContext = true;
                 targetCreateCall = createCall;
+                detectedClassType = node.Type.ToString();
                 Debug.Log($"CreateAutoComplete: Found create() call for type {detectedClassType} at cursor position {CurrentPosition}");
             }
 
@@ -86,15 +87,6 @@ namespace AppRefiner.Refactors
             {
                 parentClassName = node.BaseClass.ToString();
                 Debug.Log($"Class extends {parentClassName}");
-            }
-
-            // Track instance variables for type detection
-            foreach (var instanceVar in node.InstanceVariables)
-            {
-                if (instanceVar.Type is AppClassTypeNode appClassType)
-                {
-                    instanceVariables[instanceVar.Name] = appClassType.ClassName;
-                }
             }
 
             base.VisitAppClass(node);
@@ -119,6 +111,8 @@ namespace AppRefiner.Refactors
                 return;
             }
 
+
+
             if (string.IsNullOrEmpty(detectedClassType))
             {
                 Debug.Log("CreateAutoComplete: No class type detected, skipping");
@@ -139,24 +133,7 @@ namespace AppRefiner.Refactors
         /// </summary>
         private string GenerateCreateReplacement(string classType)
         {
-            // Handle special cases
-            if (classType.Equals(parentClassName, StringComparison.OrdinalIgnoreCase))
-            {
-                // If creating parent class type, use %Super
-                return "%Super";
-            }
-
-            // For regular app classes, use create with class name
-            if (classType.Contains(":"))
-            {
-                // Fully qualified class name
-                return $"create {classType}()";
-            }
-            else
-            {
-                // Simple class name - might need import
-                return $"create {classType}()";
-            }
+            return $"create {classType}()";
         }
     }
 }

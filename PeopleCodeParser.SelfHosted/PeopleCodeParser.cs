@@ -1,6 +1,7 @@
 using PeopleCodeParser.SelfHosted.Lexing;
 using PeopleCodeParser.SelfHosted.Nodes;
 using System.Diagnostics;
+using System.Net.Http.Headers;
 
 namespace PeopleCodeParser.SelfHosted;
 
@@ -4317,6 +4318,17 @@ public class PeopleCodeParser
             var right = ParseAssignmentExpression(); // Right associative - allow assignment equals in right side too
             if (right == null)
             {
+                if (op is AssignmentOperator.AddAssign ||
+                    op is AssignmentOperator.SubtractAssign ||
+                    op is AssignmentOperator.ConcatenateAssign)
+                {
+                    /* The parser gets triggered as soon as these are entered, so you will almost *never* have a valid right hand expression here.*/
+                    /* We shouldn't fail the parse here and should make an empty expression for the right side so we can still return an assignment */
+                    /* node. */
+                    return new PartialShortHandAssignmentNode(expr, op) { FirstToken = expr.FirstToken, LastToken = opToken };
+                }
+
+
                 ReportError("Expected expression after assignment operator");
                 return expr;
             }
@@ -4953,7 +4965,19 @@ public class PeopleCodeParser
         // Object creation
         if (Match(TokenType.Create))
         {
-            return ParseObjectCreation();
+          if (Check(TokenType.LeftParen) && Peek().Type == TokenType.RightParen)
+            {
+                /* We have a create shorthand! */
+                var shortHandNode = new ObjectCreateShortHand() { FirstToken = Previous, LastToken = Peek(1) };
+                
+                /* Skip the right paren */
+                _position += 2;
+                return shortHandNode;
+            }
+            else
+            {
+                return ParseObjectCreation();
+            }
         }
 
         // App class path (metadata expression)

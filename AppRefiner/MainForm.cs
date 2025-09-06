@@ -1809,6 +1809,9 @@ namespace AppRefiner
                 {
                     // Execute via RefactorManager
                     refactorManager?.ExecuteRefactor(refactor, activeEditor);
+
+                    /* Move the cursor backwards 1 */
+                    ScintillaManager.SetCursorPosition(activeEditor, ScintillaManager.GetCursorPosition(activeEditor) - 1);
                 }
             }
             else if (m.Msg == AR_MSGBOX_SHORTHAND)
