@@ -53,7 +53,7 @@ namespace AppRefiner
         private readonly string _databasePath;
         private readonly string _connectionString;
         public delegate void CacheProgressHandler(int processed, int total);
-        public event CacheProgressHandler OnCacheProgressUpdate;
+        public event CacheProgressHandler? OnCacheProgressUpdate;
 
         /* create delegate here for "report progress" which gets passed in current function count, and total function count */
         

@@ -953,7 +953,7 @@ namespace AppRefiner.Dialogs
 
         #region Event Handlers
 
-        private void HeaderPanel_MouseDown(object sender, MouseEventArgs e)
+        private void HeaderPanel_MouseDown(object? sender, MouseEventArgs e)
         {
             if (e.Button == MouseButtons.Left)
             {
@@ -964,7 +964,7 @@ namespace AppRefiner.Dialogs
             }
         }
 
-        private void HeaderPanel_MouseMove(object sender, MouseEventArgs e)
+        private void HeaderPanel_MouseMove(object? sender, MouseEventArgs e)
         {
             if (isDragging && e.Button == MouseButtons.Left)
             {
@@ -979,7 +979,7 @@ namespace AppRefiner.Dialogs
             }
         }
 
-        private void HeaderPanel_MouseUp(object sender, MouseEventArgs e)
+        private void HeaderPanel_MouseUp(object? sender, MouseEventArgs e)
         {
             if (e.Button == MouseButtons.Left)
             {
@@ -989,12 +989,12 @@ namespace AppRefiner.Dialogs
             }
         }
 
-        private void EnableReplaceCheckBox_CheckedChanged(object sender, EventArgs e)
+        private void EnableReplaceCheckBox_CheckedChanged(object? sender, EventArgs e)
         {
             UpdateReplaceVisibility();
         }
 
-        private void UseRegexCheckBox_CheckedChanged(object sender, EventArgs e)
+        private void UseRegexCheckBox_CheckedChanged(object? sender, EventArgs e)
         {
             // Validate regex when enabling regex mode
             if (useRegexCheckBox.Checked)
@@ -1007,7 +1007,7 @@ namespace AppRefiner.Dialogs
             }
         }
 
-        private void FindComboBox_TextChanged(object sender, EventArgs e)
+        private void FindComboBox_TextChanged(object? sender, EventArgs e)
         {
             SaveToEditor();
             UpdateStatus("");
