@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.Text.Json;
 
 namespace AppRefiner.Refactors
@@ -86,7 +87,33 @@ namespace AppRefiner.Refactors
         public static void ApplyConfigurationToInstance(IRefactor instance)
         {
             if (instance == null) return;
+            
+            string typeName = instance.GetType().FullName ?? string.Empty;
+            if (!string.IsNullOrEmpty(typeName) && RefactorConfigs.TryGetValue(typeName, out string? jsonConfig))
+            {
+                var config = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(jsonConfig);
+                if (config == null) return;
 
+                var configProperties = instance.GetType().GetConfigurableProperties();
+
+                foreach (var property in configProperties)
+                {
+                    if (config.TryGetValue(property.Name, out var value))
+                    {
+                        try
+                        {
+                            var typedValue = JsonSerializer.Deserialize(value.GetRawText(), property.PropertyType);
+                            property.SetValue(instance, typedValue);
+                        }
+                        catch
+                        {
+                            // Skip properties that can't be deserialized
+                        }
+                    }
+                }
+
+
+            }
             // Configuration is not currently supported with the new refactor architecture
             // This method is kept for compatibility
         }

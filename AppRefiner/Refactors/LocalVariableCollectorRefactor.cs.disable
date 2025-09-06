@@ -310,7 +310,7 @@ namespace AppRefiner.Refactors
             }
 
             // Remove original declarations (in reverse order to maintain positions)
-            var sortedVariables = variables.OrderByDescending(v => v.SourceSpan.Start.Index).ToList();
+            var sortedVariables = variables.OrderByDescending(v => v.SourceSpan.Start.ByteIndex).ToList();
             foreach (var variable in sortedVariables)
             {
                 DeleteText(variable.Node.SourceSpan, $"Remove original declaration of {variable.Name}");

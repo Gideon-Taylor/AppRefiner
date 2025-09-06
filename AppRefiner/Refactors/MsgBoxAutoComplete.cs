@@ -48,7 +48,7 @@ namespace AppRefiner.Refactors
                 {
                     var span = functionCall.SourceSpan;
                     // Check if cursor is within the function call
-                    return CurrentPosition >= span.Start.Index && CurrentPosition <= span.End.Index + 1;
+                    return CurrentPosition >= span.Start.ByteIndex && CurrentPosition <= span.End.ByteIndex + 1;
                 }
             }
             return false;
@@ -108,7 +108,7 @@ namespace AppRefiner.Refactors
                 replacementText += ";";
             }
 
-            Debug.Log($"MsgBoxAutoComplete: Replacing MsgBox() from pos {targetMsgBoxCall.SourceSpan.Start.Index} to {targetMsgBoxCall.SourceSpan.End.Index}");
+            Debug.Log($"MsgBoxAutoComplete: Replacing MsgBox() from pos {targetMsgBoxCall.SourceSpan.Start.ByteIndex} to {targetMsgBoxCall.SourceSpan.End.ByteIndex}");
             Debug.Log($"MsgBoxAutoComplete: Replacement text: '{replacementText}'");
 
             // Replace the entire MsgBox call with MessageBox expansion

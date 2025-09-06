@@ -333,7 +333,7 @@ namespace AppRefiner.Refactors
                 if (nodeToInsertBefore?.SourceSpan.IsValid == true)
                 {
                     var span = nodeToInsertBefore.SourceSpan;
-                    var lineNumber = ScintillaManager.GetLineFromPosition(Editor, span.Start.Index);
+                    var lineNumber = ScintillaManager.GetLineFromPosition(Editor, span.Start.ByteIndex);
                     var insertPos = ScintillaManager.GetLineStartIndex(Editor, lineNumber > 0 ? lineNumber - 1 : 1);
                     InsertText(insertPos, newSuppressLine, "Suppress report");
                     changeGenerated = true;

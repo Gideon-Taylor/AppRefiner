@@ -1,6 +1,7 @@
 using PeopleCodeParser.SelfHosted;
 using PeopleCodeParser.SelfHosted.Visitors;
 using System.Diagnostics;
+using System.Text.Json;
 
 namespace AppRefiner.Refactors
 {
@@ -313,6 +314,7 @@ namespace AppRefiner.Refactors
 
             DeleteText(span, description);
         }
+
 
         #endregion
 

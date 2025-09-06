@@ -52,7 +52,7 @@ namespace AppRefiner.Refactors
                     if (functionCall.SourceSpan.IsValid)
                     {
                         var span = functionCall.SourceSpan;
-                        if (CurrentPosition >= span.Start.Index && CurrentPosition <= span.End.Index + 1)
+                        if (CurrentPosition >= span.Start.ByteIndex && CurrentPosition <= span.End.ByteIndex + 1)
                         {
                             // Try to detect the class type from the variable type
                             if (node.Type is AppClassTypeNode appClassType)

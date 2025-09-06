@@ -44,7 +44,7 @@ namespace AppRefiner.Refactors
                 {
                     var span = assignment.SourceSpan;
                     // Check if cursor is within the assignment
-                    return CurrentPosition >= span.Start.Index && CurrentPosition <= span.End.Index + 1;
+                    return CurrentPosition >= span.Start.ByteIndex && CurrentPosition <= span.End.ByteIndex + 1;
                 }
             }
             return false;
@@ -115,7 +115,7 @@ namespace AppRefiner.Refactors
             }
 
             // Calculate the positions
-            int operatorStartIndex = assignment.SourceSpan.Start.Index + operatorMatch.Index;
+            int operatorStartIndex = assignment.SourceSpan.Start.ByteIndex + operatorMatch.Index;
             int operatorEndIndex = operatorStartIndex + operatorMatch.Length;
 
             // Replace only the "lhs +=" part with "lhs = lhs +"
@@ -125,11 +125,11 @@ namespace AppRefiner.Refactors
             Debug.Log($"  Original text: '{originalText}'");
             Debug.Log($"  Target text: '{targetText}'");
             Debug.Log($"  Operator: '{concatChar}='");
-            Debug.Log($"  Replacement range: {assignment.SourceSpan.Start.Index} to {operatorEndIndex - 1}");
+            Debug.Log($"  Replacement range: {assignment.SourceSpan.Start.ByteIndex} to {operatorEndIndex - 1}");
             Debug.Log($"  New text: '{newText}'");
 
             // Replace only the "target operator=" portion, leaving everything after untouched
-            EditText(assignment.SourceSpan.Start.Index, operatorEndIndex - 1, newText, RefactorDescription);
+            EditText(assignment.SourceSpan.Start.ByteIndex, operatorEndIndex - 1, newText, RefactorDescription);
 
             refactorApplied = true; // Mark as applied to prevent re-application.
         }

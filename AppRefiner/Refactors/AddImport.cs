@@ -117,7 +117,7 @@ namespace AppRefiner.Refactors
 
                 if (firstImport.SourceSpan.IsValid && lastImport.SourceSpan.IsValid)
                 {
-                    EditText(firstImport.SourceSpan.Start.Index, lastImport.SourceSpan.End.Index,
+                    EditText(firstImport.SourceSpan.Start.ByteIndex, lastImport.SourceSpan.End.ByteIndex,
                              newImportsBlockText, $"Add import for {_appClassPathToAdd}");
                 }
             }
@@ -129,27 +129,27 @@ namespace AppRefiner.Refactors
                 // If there's an app class, insert before it
                 if (node.AppClass?.SourceSpan.IsValid == true)
                 {
-                    insertionPoint = node.AppClass.SourceSpan.Start.Index;
+                    insertionPoint = node.AppClass.SourceSpan.Start.ByteIndex;
                 }
                 // If there's an interface, insert before it
                 else if (node.Interface?.SourceSpan.IsValid == true)
                 {
-                    insertionPoint = node.Interface.SourceSpan.Start.Index;
+                    insertionPoint = node.Interface.SourceSpan.Start.ByteIndex;
                 }
                 // If there are functions, insert before the first one
                 else if (node.Functions.Count > 0 && node.Functions[0].SourceSpan.IsValid)
                 {
-                    insertionPoint = node.Functions[0].SourceSpan.Start.Index;
+                    insertionPoint = node.Functions[0].SourceSpan.Start.ByteIndex;
                 }
                 // If there are variables, insert before the first one
                 else if (node.Variables.Count > 0 && node.Variables[0].SourceSpan.IsValid)
                 {
-                    insertionPoint = node.Variables[0].SourceSpan.Start.Index;
+                    insertionPoint = node.Variables[0].SourceSpan.Start.ByteIndex;
                 }
                 // If there's a main block, insert before it
                 else if (node.MainBlock?.SourceSpan.IsValid == true)
                 {
-                    insertionPoint = node.MainBlock.SourceSpan.Start.Index;
+                    insertionPoint = node.MainBlock.SourceSpan.Start.ByteIndex;
                 }
 
                 // Add standard spacing: imports block, blank line, then the rest

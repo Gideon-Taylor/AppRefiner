@@ -268,8 +268,8 @@ namespace AppRefiner.Refactors
                     {
                         methodDeclarations.Add(new MethodInfo(
                             method.Name,
-                            method.SourceSpan.Start.Index,
-                            method.SourceSpan.End.Index,
+                            method.SourceSpan.Start.ByteIndex,
+                            method.SourceSpan.End.ByteIndex,
                             originalText
                         ));
                     }
@@ -288,8 +288,8 @@ namespace AppRefiner.Refactors
                         propertyDeclarations.Add(new PropertyInfo(
                             property.Name,
                             true,
-                            property.SourceSpan.Start.Index,
-                            property.SourceSpan.End.Index,
+                            property.SourceSpan.Start.ByteIndex,
+                            property.SourceSpan.End.ByteIndex,
                             originalText
                         ));
 
@@ -299,8 +299,8 @@ namespace AppRefiner.Refactors
                             propertyDeclarations.Add(new PropertyInfo(
                                 property.Name,
                                 false,
-                                property.SourceSpan.Start.Index,
-                                property.SourceSpan.End.Index,
+                                property.SourceSpan.Start.ByteIndex,
+                                property.SourceSpan.End.ByteIndex,
                                 originalText
                             ));
                         }
@@ -318,8 +318,8 @@ namespace AppRefiner.Refactors
                     {
                         methodImplementations.Add(new MethodInfo(
                             method.Name,
-                            method.SourceSpan.Start.Index,
-                            method.SourceSpan.End.Index,
+                            method.SourceSpan.Start.ByteIndex,
+                            method.SourceSpan.End.ByteIndex,
                             originalText
                         ));
                     }
