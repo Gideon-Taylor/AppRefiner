@@ -2006,11 +2006,11 @@ public class PeopleCodeParser
                 // Handle property getter/setter implementations
                 if (propertyDeclarations.TryGetValue(implementationProperty.Name, out var declarationProperty))
                 {
-                    // Unify: attach getter/setter body to existing declaration
-                    if (implementationProperty.IsGetter && implementationProperty.GetterBody != null)
-                        declarationProperty.SetGetterBody(implementationProperty.GetterBody);
-                    else if (implementationProperty.IsSetter && implementationProperty.SetterBody != null)
-                        declarationProperty.SetSetterBody(implementationProperty.SetterBody);
+                    // Unify: attach getter/setter implementation to existing declaration
+                    if (implementationProperty.IsGetter && implementationProperty.GetterImplementation != null)
+                        declarationProperty.SetGetterImplementation(implementationProperty.GetterImplementation);
+                    else if (implementationProperty.IsSetter && implementationProperty.SetterImplementation != null)
+                        declarationProperty.SetSetterImplementation(implementationProperty.SetterImplementation);
 
                     // The unified property is already in appClass.Properties, so we're done
                 }
@@ -2244,7 +2244,10 @@ public class PeopleCodeParser
 
             // Parse getter body
             var getterBody = ParseStatementList(TokenType.EndGet);
-            propertyNode.SetGetterBody(getterBody);
+            
+            // Create getter implementation
+            var getterImpl = new MethodImplNode(propertyName, Previous, getterBody);
+            propertyNode.SetGetterImplementation(getterImpl);
 
             // Expect END-GET
             Consume(TokenType.EndGet, "Expected 'END-GET' after getter implementation");
@@ -2311,7 +2314,10 @@ public class PeopleCodeParser
             if (!Check(TokenType.EndSet))
             {
                 var setterBody = ParseStatementList(TokenType.EndSet);
-                propertyNode.SetSetterBody(setterBody);
+                
+                // Create setter implementation
+                var setterImpl = new MethodImplNode(propertyName, Previous, setterBody);
+                propertyNode.SetSetterImplementation(setterImpl);
             }
 
             // Expect END-SET

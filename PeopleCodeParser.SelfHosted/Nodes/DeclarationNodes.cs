@@ -233,14 +233,24 @@ public class PropertyNode : DeclarationNode
     public string? ImplementedPropertyName { get; set; }
 
     /// <summary>
-    /// Property getter body (for implementations)
+    /// Property getter implementation (for implementations)
     /// </summary>
-    public BlockNode? GetterBody { get; set; }
+    public MethodImplNode? GetterImplementation { get; set; }
 
     /// <summary>
-    /// Property setter body (for implementations)
+    /// Property setter implementation (for implementations)
     /// </summary>
-    public BlockNode? SetterBody { get; set; }
+    public MethodImplNode? SetterImplementation { get; set; }
+
+    /// <summary>
+    /// Property getter body (compatibility property - returns GetterImplementation?.Body)
+    /// </summary>
+    public BlockNode? GetterBody => GetterImplementation?.Body;
+
+    /// <summary>
+    /// Property setter body (compatibility property - returns SetterImplementation?.Body)
+    /// </summary>
+    public BlockNode? SetterBody => SetterImplementation?.Body;
 
     /// <summary>
     /// True if this is a getter implementation
@@ -268,25 +278,26 @@ public class PropertyNode : DeclarationNode
         AddChild(type);
     }
 
-    public void SetGetterBody(BlockNode getterBody)
+    public void SetGetterImplementation(MethodImplNode getterImplementation)
     {
-        if (GetterBody != null)
-            RemoveChild(GetterBody);
+        if (GetterImplementation != null)
+            RemoveChild(GetterImplementation);
 
-        GetterBody = getterBody;
-        if (getterBody != null)
-            AddChild(getterBody);
+        GetterImplementation = getterImplementation;
+        if (getterImplementation != null)
+            AddChild(getterImplementation);
     }
 
-    public void SetSetterBody(BlockNode setterBody)
+    public void SetSetterImplementation(MethodImplNode setterImplementation)
     {
-        if (SetterBody != null)
-            RemoveChild(SetterBody);
+        if (SetterImplementation != null)
+            RemoveChild(SetterImplementation);
 
-        SetterBody = setterBody;
-        if (setterBody != null)
-            AddChild(setterBody);
+        SetterImplementation = setterImplementation;
+        if (setterImplementation != null)
+            AddChild(setterImplementation);
     }
+
 
     public override void Accept(IAstVisitor visitor)
     {

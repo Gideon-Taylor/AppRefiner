@@ -70,12 +70,13 @@ namespace AppRefiner.Refactors.QuickFixes
             }
         }
 
-        private void Reset()
+        private new void Reset()
         {
             targetClass = null;
             abstractMethods.Clear();
             abstractProperties.Clear();
             baseClassPath = null;
+            base.Reset();
         }
 
         private void AnalyzeBaseClassForAbstractMembers(string baseClassPath)

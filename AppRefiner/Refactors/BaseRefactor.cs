@@ -1,3 +1,4 @@
+using DiffPlex.Model;
 using PeopleCodeParser.SelfHosted;
 using PeopleCodeParser.SelfHosted.Visitors;
 using System.Diagnostics;
@@ -93,7 +94,7 @@ namespace AppRefiner.Refactors
 
         #region Private Fields
 
-        private string? source;
+        protected string? originalSource;
         private int cursorPosition = -1;
         private bool failed;
         private string? failureMessage;
@@ -126,7 +127,7 @@ namespace AppRefiner.Refactors
         /// </summary>
         public virtual void Initialize(string source, int cursorPosition)
         {
-            this.source = source;
+            this.originalSource = source;
             this.cursorPosition = cursorPosition;
             failed = false;
             failureMessage = null;
@@ -224,6 +225,15 @@ namespace AppRefiner.Refactors
         /// </summary>
         protected void InsertText(int position, string text, string description)
         {
+            var existingDelete = edits.FirstOrDefault(e => e.StartIndex < e.EndIndex && string.IsNullOrEmpty(e.NewText));
+
+            if (existingDelete != null)
+            {
+                edits.Remove(existingDelete);
+                edits.Add(new TextEdit(existingDelete.StartIndex, existingDelete.EndIndex, text, $"Converted to edit: {existingDelete.Description} + {description}"));
+                return;
+            }
+
             edits.Add(new TextEdit(position, position, text, description));
         }
 
@@ -232,7 +242,7 @@ namespace AppRefiner.Refactors
         /// </summary>
         protected void InsertText(SourcePosition position, string text, string description)
         {
-            edits.Add(new TextEdit(position.ByteIndex, position.ByteIndex, text, description));
+            InsertText(position.ByteIndex, text, description);
         }
 
         /// <summary>
@@ -240,6 +250,15 @@ namespace AppRefiner.Refactors
         /// </summary>
         protected void DeleteText(int startIndex, int endIndex, string description)
         {
+            var existingInsert = edits.FirstOrDefault(e => e.StartIndex == startIndex && e.StartIndex == e.EndIndex);
+
+            if (existingInsert != null)
+            {
+                edits.Remove(existingInsert);
+                edits.Add(new TextEdit(startIndex, endIndex, existingInsert.NewText, $"Converted to edit: {description} + {existingInsert.Description}"));
+                return;
+            }
+
             edits.Add(new TextEdit(startIndex, endIndex, "", description));
         }
 
@@ -248,7 +267,7 @@ namespace AppRefiner.Refactors
         /// </summary>
         protected void DeleteText(SourceSpan span, string description)
         {
-            edits.Add(new TextEdit(span, "", description));
+            DeleteText(span.Start.ByteIndex, span.End.ByteIndex, description);
         }
 
         /// <summary>

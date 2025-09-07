@@ -62,12 +62,13 @@ namespace AppRefiner.Refactors.QuickFixes
             GenerateMethodImplementation();
         }
 
-        private void Reset()
+        private new void Reset()
         {
             targetClass = null;
             targetMethod = null;
             baseMethodToOverride = null;
             baseClassPath = null;
+            base.Reset();
         }
 
         private MethodNode? FindTargetMethodByCursorPosition(List<MethodNode> methodsNeedingImplementation)

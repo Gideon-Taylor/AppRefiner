@@ -26,9 +26,14 @@ public enum EnhancedScopeType
     Function,
 
     /// <summary>
-    /// Property scope - contains property getter/setter logic
+    /// Property getter scope - contains getter implementation logic and local variables
     /// </summary>
-    Property
+    PropertyGetter,
+
+    /// <summary>
+    /// Property setter scope - contains setter implementation logic, local variables, and implicit &Value parameter
+    /// </summary>
+    PropertySetter
 }
 
 /// <summary>

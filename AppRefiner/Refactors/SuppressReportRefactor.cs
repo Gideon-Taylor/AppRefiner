@@ -16,7 +16,7 @@ namespace AppRefiner.Refactors
     /// <summary>
     /// Creates a new instance of the SuppressReportRefactor class using the self-hosted parser
     /// </summary>
-    public class SuppressReportRefactor : ScopedRefactor
+    public class SuppressReportRefactor : BaseRefactor
     {
         /// <summary>
         /// Gets the display name of this refactoring operation
@@ -29,8 +29,7 @@ namespace AppRefiner.Refactors
         public new static string RefactorDescription => "Suppress linting reports for a specific scope";
 
         private SuppressReportMode type = SuppressReportMode.LINE;
-        private bool changeGenerated = false;
-        private readonly Stack<(AstNode Node, ScopeType Type)> contextStack = new();
+        private AstNode? globalNode;
 
         /// <summary>
         /// Indicates that this refactor requires a user input dialog
@@ -240,40 +239,35 @@ namespace AppRefiner.Refactors
             return false;
         }
 
-        protected override void OnEnterScope(PeopleCodeParser.SelfHosted.Visitors.Models.ScopeInfo scopeInfo)
+        public override void VisitBlock(BlockNode node)
         {
-            // Track scope contexts for suppression insertion
-            contextStack.Push((null, scopeInfo.Type));
-        }
+            base.VisitBlock(node);
 
-        protected override void OnExitScope(PeopleCodeParser.SelfHosted.Visitors.Models.ScopeInfo scopeInfo, Dictionary<string, VariableInfo> variableScope, Dictionary<string, object> customData)
-        {
-            // Check if current cursor position is within this scope
-            if (scopeInfo.Parent?.Name != null)
+            if (node.SourceSpan.ContainsLine(LineNumber))
             {
-                var lineStart = ScintillaManager.GetLineStartIndex(Editor, LineNumber - 1);
-                var lineEnd = ScintillaManager.GetLineStartIndex(Editor, LineNumber);
-                
-                // Since we don't have direct access to the node's span, we'll use line number
-                if (LineNumber >= 0)
+                var statement = node.Statements.Where(s => s.SourceSpan.ContainsLine(LineNumber)).FirstOrDefault();
+                if (statement is not null)
                 {
-                    GenerateChange();
+                    GenerateChange(node);
                 }
-                else if (contextStack.Count > 0)
-                {
-                    contextStack.Pop();
-                }
+
+
             }
+
+
         }
 
-        private void GenerateChange()
+        protected override void OnEnterGlobalScope(ScopeContext scope, ProgramNode node)
         {
-            if (changeGenerated) return;
+            base.OnEnterGlobalScope(scope, node);
+            globalNode = node.MainBlock;
+        }
 
+        private void GenerateChange(BlockNode node)
+        {
             if (Editor.LineToReports.TryGetValue(LineNumber, out var reports))
             {
                 var newSuppressLine = $"/* #AppRefiner suppress ({string.Join(",", reports.Select(r => r.GetFullId()))}) */\r\n";
-                AstNode? nodeToInsertBefore = null;
 
                 if (type == SuppressReportMode.LINE)
                 {
@@ -283,60 +277,41 @@ namespace AppRefiner.Refactors
                         startIndex = 0;
                     }
                     InsertText(startIndex, newSuppressLine, "Add suppression comment");
-                    changeGenerated = true;
                     return;
                 }
                 else if (type == SuppressReportMode.NEAREST_BLOCK)
                 {
-                    if (contextStack.Count > 0)
-                    {
-                        nodeToInsertBefore = contextStack.Pop().Node;
-                    }
-                }
+                    InsertText(node.SourceSpan.Start.ByteIndex, newSuppressLine, "Add suppression comment");
+                    return;
+				}
                 else if (type == SuppressReportMode.METHOD_OR_FUNC)
                 {
-                    // Pop until we find a method or function scope
-                    while (contextStack.Count > 0)
+                    var parentNode = node.Parent;
+                    /* TODO: we need to support property get/set but don't have access to their implementation node */
+                    while (parentNode is not MethodNode || parentNode is not FunctionNode || parentNode is not null)
                     {
-                        var (node, scopeType) = contextStack.Pop();
-                        if (scopeType == ScopeType.Method || scopeType == ScopeType.Function)
-                        {
-                            nodeToInsertBefore = node;
-                            break;
-                        }
+                        parentNode = parentNode?.Parent;
                     }
-                    if (nodeToInsertBefore == null)
+
+                    if (parentNode is null)
                     {
-                        SetFailure("Unable to find method or function scope.");
+                        SetFailure("Unable to locate method or function start.");
                         return;
                     }
-                }
+
+                    InsertText(parentNode.SourceSpan.Start.ByteIndex, newSuppressLine, "Add suppression comment");
+                    return;
+				}
                 else if (type == SuppressReportMode.GLOBAL)
                 {
-                    // Pop until we find the global scope
-                    while (contextStack.Count > 0)
+                    if (globalNode is not null)
                     {
-                        var (node, scopeType) = contextStack.Pop();
-                        if (scopeType == ScopeType.Global)
-                        {
-                            nodeToInsertBefore = node;
-                            break;
-                        }
-                    }
-                    if (nodeToInsertBefore == null)
+						InsertText(globalNode.SourceSpan.Start.ByteIndex, newSuppressLine, "Add suppression comment");
+						return;
+					} else
                     {
-                        SetFailure("Unable to find global scope start.");
-                        return;
+                        SetFailure("Unable to find the start of the global scope.");
                     }
-                }
-
-                if (nodeToInsertBefore?.SourceSpan.IsValid == true)
-                {
-                    var span = nodeToInsertBefore.SourceSpan;
-                    var lineNumber = ScintillaManager.GetLineFromPosition(Editor, span.Start.ByteIndex);
-                    var insertPos = ScintillaManager.GetLineStartIndex(Editor, lineNumber > 0 ? lineNumber - 1 : 1);
-                    InsertText(insertPos, newSuppressLine, "Suppress report");
-                    changeGenerated = true;
                 }
                 else
                 {

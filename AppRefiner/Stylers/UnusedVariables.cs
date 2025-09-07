@@ -90,9 +90,8 @@ public class UnusedVariables : BaseStyler
         {
             EnhancedScopeType.Method => "Unused method variable",
             EnhancedScopeType.Function => "Unused function variable",
-            EnhancedScopeType.Property => "Unused property variable",
-            //EnhancedScopeType.Getter => "Unused getter variable",
-            //EnhancedScopeType.Setter => "Unused setter variable",
+            EnhancedScopeType.PropertyGetter => "Unused getter variable",
+            EnhancedScopeType.PropertySetter => "Unused setter variable",
             _ => "Unused local variable"
         };
     }

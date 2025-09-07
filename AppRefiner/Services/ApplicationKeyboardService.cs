@@ -118,7 +118,7 @@ namespace AppRefiner.Services
                 return Modifiers == other.Modifiers && Key == other.Key;
             }
 
-            public override bool Equals(object obj)
+            public override bool Equals(object? obj)
             {
                 return obj is KeyCombination other && Equals(other);
             }

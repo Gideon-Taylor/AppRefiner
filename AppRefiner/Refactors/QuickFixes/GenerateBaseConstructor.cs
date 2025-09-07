@@ -55,11 +55,12 @@ namespace AppRefiner.Refactors.QuickFixes
             }
         }
 
-        private void Reset()
+        private new void Reset()
         {
             targetClass = null;
             baseConstructor = null;
             existingMemberNames.Clear();
+            base.Reset();
         }
 
         private void CollectExistingMemberNames(AppClassNode classNode)

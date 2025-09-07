@@ -1,5 +1,6 @@
 using PeopleCodeParser.SelfHosted.Lexing;
 using PeopleCodeParser.SelfHosted.Visitors;
+using System.ComponentModel;
 
 namespace PeopleCodeParser.SelfHosted;
 
@@ -257,6 +258,7 @@ public struct SourceSpan : IEquatable<SourceSpan>
     /// Checks if this span contains the given position
     /// </summary>
     public bool ContainsPosition(int position) => position >= Start.ByteIndex && position <= End.ByteIndex;
+    public bool ContainsLine(int line) => line >= Start.Line && line <= End.Line;
 
     public SourceSpan(SourcePosition start, SourcePosition end)
     {
