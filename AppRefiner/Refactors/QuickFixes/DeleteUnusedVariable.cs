@@ -71,18 +71,18 @@ namespace AppRefiner.Refactors.QuickFixes
                 {
                     /* just remove this name? */
 
-                    var newString = $"   instance {targetVariable.Type} {string.Join(", ", varDecl.NameInfos.Where(n => n.Name != targetVariable.Name).Select(v => v.Name))}";
+                    var newString = $"instance {targetVariable.Type} {string.Join(", ", varDecl.NameInfos.Where(n => n.Name != targetVariable.Name).Select(v => v.Name))}";
 
                     EditText(varDecl.SourceSpan, newString, "Remove variable from declaration.");
                 }
                 else
                 {
                     /* remove the whole line */
-                    var lineStart = ScintillaManager.GetLineStartIndex(editor, varDecl.SourceSpan.Start.Line);
-                    var lineLength = ScintillaManager.GetLineLength(editor, varDecl.SourceSpan.Start.Line);
+                    var lineStart = ScintillaManager.GetLineStartIndex(editor, varDecl.SourceSpan.Start.Line - 1);
+                    var lineLength = ScintillaManager.GetLineLength(editor, varDecl.SourceSpan.Start.Line - 1);
 
                     /* + 1 to delete the \n ? */
-                    DeleteText(new SourceSpan(lineStart, lineStart + lineLength + 1), "Delete unused local variable.");
+                    DeleteText(new SourceSpan(lineStart, lineStart + lineLength), "Delete unused local variable.");
                 }
             }
         }
@@ -90,8 +90,45 @@ namespace AppRefiner.Refactors.QuickFixes
         private void RemoveParameter(VariableInfo targetVariable)
         {
             var declNode = targetVariable.DeclarationNode;
-            // TODO: finish this
+            List<ParameterNode> parameters = [];
 
+            if (declNode.Parent is FunctionNode func)
+            {
+                parameters = func.Parameters;
+            } else if (declNode.Parent is MethodNode method)
+            {
+                parameters = method.Parameters;
+            }
+
+            if (parameters.Count == 1)
+            {
+                /* easy, just delete this declaration */
+                DeleteText(declNode.SourceSpan, "Remove unused parameter");
+                return;
+            }
+
+            /* need to handle space between parameters */
+
+            /* find the index this variable is at... */
+            var variableIndex = parameters.FindIndex(p => p.Name == targetVariable.Name);
+
+            if (variableIndex == 0)
+            {
+                /* We are the first parameter */
+                /* Removes from the start of the unused, to the start of the next parameter */
+                DeleteText(declNode.SourceSpan.Start.ByteIndex, parameters[variableIndex + 1].SourceSpan.Start.ByteIndex, "Remove unused parameter");
+            }
+            else if (variableIndex == parameters.Count - 1)
+            {
+                /* We are the last parameter */
+                /* This deletes from the end of the previous to the end of us */
+                DeleteText(parameters[variableIndex - 1].SourceSpan.End.ByteIndex, declNode.SourceSpan.End.ByteIndex, "Remove unused parameter");
+            } else
+            {
+                /* We're in the middle of 2 parameters */
+                /* This deletes from the end of the start of the unused to the start of the next one */
+                DeleteText(declNode.SourceSpan.Start.ByteIndex, parameters[variableIndex + 1].SourceSpan.Start.ByteIndex, "Remove unused parameter");
+            }
         }
 
         private void RemoveLocalVariable(VariableInfo variable)
@@ -105,7 +142,7 @@ namespace AppRefiner.Refactors.QuickFixes
                     /* just remove this name? */
 
                     var newString = $"Local {varDecl.Type} {string.Join(", ", varDecl.VariableNameInfos.Where(n => n.Name != variable.Name).Select(v => v.Name))}";
-                    var foldLevel = ScintillaManager.GetCurrentLineFoldLevel(editor, varDecl.SourceSpan.Start.Line);
+                    var foldLevel = ScintillaManager.GetCurrentLineFoldLevel(editor, varDecl.SourceSpan.Start.Line - 1);
 
                     var padding = new string(' ', foldLevel.Level * 3);
 
@@ -114,8 +151,8 @@ namespace AppRefiner.Refactors.QuickFixes
                 else
                 {
                     /* remove the whole line */
-                    var lineStart = ScintillaManager.GetLineStartIndex(editor, varDecl.SourceSpan.Start.Line);
-                    var lineLength = ScintillaManager.GetLineLength(editor, varDecl.SourceSpan.Start.Line);
+                    var lineStart = ScintillaManager.GetLineStartIndex(editor, varDecl.SourceSpan.Start.Line - 1);
+                    var lineLength = ScintillaManager.GetLineLength(editor, varDecl.SourceSpan.Start.Line - 1);
 
                     /* +1 to remove the \n ? */
                     DeleteText(new SourceSpan(lineStart, lineStart + lineLength + 1), "Delete unused local variable.");
@@ -124,8 +161,8 @@ namespace AppRefiner.Refactors.QuickFixes
             else if (declNode is LocalVariableDeclarationWithAssignmentNode varWithAssign)
             {
                 /* remove the whole line */
-                var lineStart = ScintillaManager.GetLineStartIndex(editor, varWithAssign.SourceSpan.Start.Line);
-                var lineLength = ScintillaManager.GetLineLength(editor, varWithAssign.SourceSpan.Start.Line);
+                var lineStart = ScintillaManager.GetLineStartIndex(editor, varWithAssign.SourceSpan.Start.Line - 1);
+                var lineLength = ScintillaManager.GetLineLength(editor, varWithAssign.SourceSpan.Start.Line - 1);
                 DeleteText(new SourceSpan(lineStart, lineStart + lineLength), "Delete unused local variable.");
             }
         }

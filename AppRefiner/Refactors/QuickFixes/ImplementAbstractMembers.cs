@@ -386,11 +386,17 @@ namespace AppRefiner.Refactors.QuickFixes
 
         private void InsertMethodHeader(string methodHeader, VisibilityModifier visibility)
         {
-            var insertPosition = FindHeaderInsertionPosition(visibility);
+            var (insertPosition, needsHeader) = FindHeaderInsertionPosition(visibility);
 
             if (insertPosition >= 0)
             {
                 var headerWithNewline = methodHeader + Environment.NewLine;
+
+                if (needsHeader)
+                {
+                    headerWithNewline = $"protected{Environment.NewLine}{headerWithNewline}";
+                }
+
                 InsertText(insertPosition, headerWithNewline,
                           $"Insert abstract method header");
             }
@@ -402,7 +408,7 @@ namespace AppRefiner.Refactors.QuickFixes
 
         private void InsertPropertyHeader(string propertyHeader, VisibilityModifier visibility)
         {
-            var insertPosition = FindHeaderInsertionPosition(visibility);
+            var (insertPosition, needsHeader) = FindHeaderInsertionPosition(visibility);
 
             if (insertPosition >= 0)
             {
@@ -431,24 +437,60 @@ namespace AppRefiner.Refactors.QuickFixes
             }
         }
 
-        private int FindHeaderInsertionPosition(VisibilityModifier visibility)
+        private (int insertPosition,bool needsSectionHeader) FindHeaderInsertionPosition(VisibilityModifier visibility)
         {
             if (targetClass == null)
-                return -1;
+                return (-1,false);
 
-            // For now, use a simple approach: find the first method/property and insert there
-            // or insert before end-class if no members exist
-            var firstMember = targetClass.Methods.Concat<AstNode>(targetClass.Properties)
-                .OrderBy(m => m.SourceSpan.Start.ByteIndex)
-                .FirstOrDefault();
+            var insertLine = 0;
+            var needsHeader = false;
 
-            if (firstMember != null)
+            if (visibility == VisibilityModifier.Public)
             {
-                return firstMember.SourceSpan.Start.ByteIndex;
+                if (targetClass.VisibilitySections[VisibilityModifier.Public].Count > 0)
+                {
+                    /* we have items in the public header */
+                    insertLine = targetClass.VisibilitySections[VisibilityModifier.Public].Last().SourceSpan.Start.Line - 1;
+                } else
+                {
+                    /* Do we have a protected header? */
+                    if (targetClass.ProtectedToken != null)
+                    {
+                        insertLine = targetClass.ProtectedToken.SourceSpan.Start.Line - 1;
+                    } else if (targetClass.PrivateToken != null)
+                    {
+                        insertLine = targetClass.PrivateToken.SourceSpan.Start.Line - 1;
+                    } else
+                    {
+                        insertLine = targetClass.LastToken!.SourceSpan.Start.Line - 1;
+                    }
+                }
             }
 
+            if (visibility == VisibilityModifier.Protected)
+            {
+                needsHeader = (targetClass.ProtectedToken == null);
+
+                if (targetClass.VisibilitySections[VisibilityModifier.Protected].Count > 0)
+                {
+                    /* we have items in the public header */
+                    insertLine = targetClass.VisibilitySections[VisibilityModifier.Protected].Last().SourceSpan.Start.Line - 1;
+                }
+                else
+                {
+                    if (targetClass.PrivateToken != null)
+                    {
+                        insertLine = targetClass.PrivateToken.SourceSpan.Start.Line - 1;
+                    }
+                    else
+                    {
+                        insertLine = targetClass.LastToken!.SourceSpan.Start.Line - 1;
+                    }
+                }
+            }
+            var insertPosition = ScintillaManager.GetLineStartIndex(Editor, insertLine - 1);
             // Fallback: insert before end-class
-            return targetClass.SourceSpan.End.ByteIndex;
+            return (insertPosition, needsHeader);
         }
 
         private int FindImplementationInsertionPosition()

@@ -844,6 +844,7 @@ public class PeopleCodeParser
             // Parse protected section if present
             if (Match(TokenType.Protected))
             {
+                classNode.ProtectedToken = Previous; // Capture the 'protected' token
                 while (Match(TokenType.Semicolon)) { } // Optional semicolons
                 ParseVisibilitySection(classNode, VisibilityModifier.Protected);
             }
@@ -851,6 +852,7 @@ public class PeopleCodeParser
             // Parse private section if present
             if (Match(TokenType.Private))
             {
+                classNode.PrivateToken = Previous; // Capture the 'private' token
                 while (Match(TokenType.Semicolon)) { } // Optional semicolons
                 ParseVisibilitySection(classNode, VisibilityModifier.Private);
             }
@@ -1278,7 +1280,6 @@ public class PeopleCodeParser
         try
         {
             EnterRule("methodArgument");
-
             // Parse parameter name (must be a user variable &name)
             if (!Check(TokenType.UserVariable))
             {
@@ -1299,7 +1300,6 @@ public class PeopleCodeParser
             // Optional AS typeT
             if (Match(TokenType.As))
             {
-                var startToken = Current;
                 // Parse parameter type
                 paramType = ParseTypeReference();
                 if (paramType == null)
@@ -1308,13 +1308,13 @@ public class PeopleCodeParser
                     // Use default ANY type if we couldn't parse the specified type
                     paramType = new BuiltInTypeNode(BuiltInType.Any)
                     {
-                        FirstToken = startToken,
+                        FirstToken = nameToken,
                         LastToken = Previous
                     };
                 }
             }
 
-            var parameter = new ParameterNode(paramName, nameToken, paramType);
+            var parameter = new ParameterNode(paramName, nameToken, paramType) { FirstToken = nameToken, LastToken = Previous };
 
             // Parse optional OUT modifier
             if (Match(TokenType.Out))
@@ -4321,20 +4321,19 @@ public class PeopleCodeParser
             var opToken = Current;
             _position++;
 
+            if (op is AssignmentOperator.AddAssign ||
+                    op is AssignmentOperator.SubtractAssign ||
+                    op is AssignmentOperator.ConcatenateAssign)
+            {
+                /* The parser gets triggered as soon as these are entered, so you will almost *never* have a valid right hand expression here.*/
+                /* We shouldn't fail the parse here and should make an empty expression for the right side so we can still return an assignment */
+                /* node. */
+                return new PartialShortHandAssignmentNode(expr, op) { FirstToken = expr.FirstToken, LastToken = opToken };
+            }
+
             var right = ParseAssignmentExpression(); // Right associative - allow assignment equals in right side too
             if (right == null)
             {
-                if (op is AssignmentOperator.AddAssign ||
-                    op is AssignmentOperator.SubtractAssign ||
-                    op is AssignmentOperator.ConcatenateAssign)
-                {
-                    /* The parser gets triggered as soon as these are entered, so you will almost *never* have a valid right hand expression here.*/
-                    /* We shouldn't fail the parse here and should make an empty expression for the right side so we can still return an assignment */
-                    /* node. */
-                    return new PartialShortHandAssignmentNode(expr, op) { FirstToken = expr.FirstToken, LastToken = opToken };
-                }
-
-
                 ReportError("Expected expression after assignment operator");
                 return expr;
             }

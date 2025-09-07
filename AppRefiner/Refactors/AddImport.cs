@@ -153,8 +153,7 @@ namespace AppRefiner.Refactors
                 }
 
                 // Add standard spacing: imports block, blank line, then the rest
-                string insertText = newImportsBlockText + Environment.NewLine + Environment.NewLine;
-                InsertText(insertionPoint, insertText, $"Add import for {_appClassPathToAdd}");
+                InsertText(insertionPoint, newImportsBlockText, $"Add import for {_appClassPathToAdd}");
             }
         }
 

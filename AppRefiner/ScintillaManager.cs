@@ -1427,11 +1427,6 @@ namespace AppRefiner
         /// <returns>The start index of the previous line, or -1 if there is no previous line</returns>
         public static int GetLineStartIndex(ScintillaEditor editor, int line)
         {
-            if (editor == null || line < 1)
-            {
-                return -1; // No previous line for line 0 or invalid inputs
-            }
-
             return (int)editor.SendMessage(SCI_POSITIONFROMLINE, line, IntPtr.Zero);
         }
 

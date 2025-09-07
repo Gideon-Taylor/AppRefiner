@@ -268,6 +268,16 @@ public class AppClassNode : AstNode
     public Token NameToken { get; }
 
     /// <summary>
+    /// Token for the 'protected' keyword, if present
+    /// </summary>
+    public Token? ProtectedToken { get; set; }
+
+    /// <summary>
+    /// Token for the 'private' keyword, if present
+    /// </summary>
+    public Token? PrivateToken { get; set; }
+
+    /// <summary>
     /// Base class type (for EXTENDS clause), null if no base class
     /// </summary>
     public TypeNode? BaseClass { get; set; }

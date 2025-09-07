@@ -29,23 +29,17 @@ namespace AppRefiner.Stylers
             // Get all method declarations (methods without implementations)
             var declarations = classNode.Methods.Where(m => m.IsDeclaration).ToList();
 
-            // Get all method implementations
-            var implementations = classNode.Methods.Where(m => m.IsImplementation).ToList();
-
             foreach (var declaration in declarations)
             {
                 // Skip constructors - they have their own handling
                 if (declaration.IsConstructor)
                     continue;
 
-                // Check if there's already an implementation for this method
-                bool hasImplementation = implementations.Any(impl =>
-                    string.Equals(impl.Name, declaration.Name, StringComparison.OrdinalIgnoreCase));
+                if (declaration.IsAbstract)
+                    continue;
 
-                if (!hasImplementation)
-                {
-                    FlagMissingImplementation(declaration);
-                }
+                FlagMissingImplementation(declaration);
+                
             }
         }
 

@@ -226,7 +226,7 @@ namespace AppRefiner.Refactors.QuickFixes
             var annotations = new List<string>();
             foreach (var param in parameters)
             {
-                annotations.Add($"   /+ &{param.Name} as {param.Type} +/");
+                annotations.Add($"   /+ {param.Name} as {param.Type} +/");
             }
 
             return string.Join(Environment.NewLine, annotations) + Environment.NewLine;
@@ -277,21 +277,16 @@ namespace AppRefiner.Refactors.QuickFixes
         {
             if (targetClass == null) return -1;
 
-            var classEndPosition = targetClass.SourceSpan.End.ByteIndex;
-            var firstMethod = targetClass.Methods.FirstOrDefault();
-
-            if (firstMethod != null)
+            if (targetClass.BaseClass != null)
             {
-                return firstMethod.SourceSpan.Start.ByteIndex;
-            }
-
-            var firstProperty = targetClass.Properties.FirstOrDefault();
-            if (firstProperty != null)
+                var insertLine = targetClass.BaseClass.SourceSpan.Start.Line - 1 + 1; /* Line after the extends... */
+                return ScintillaManager.GetLineStartIndex(Editor, insertLine);
+            } else if (targetClass.ImplementedInterface != null)
             {
-                return firstProperty.SourceSpan.Start.ByteIndex;
+                var insertLine = targetClass.ImplementedInterface.SourceSpan.Start.Line - 1 + 1; /* Line after the implements... */
+                return ScintillaManager.GetLineStartIndex(Editor, insertLine);
             }
-
-            return classEndPosition;
+            return -1;
         }
 
         private int FindImplementationInsertionPosition()
