@@ -80,20 +80,6 @@ namespace AppRefiner.Linters
             if (_collectedComments.Count == 0)
                 return;
 
-            // Get the last comment or use the end of the program for the summary location
-            var lastComment = node.Comments.LastOrDefault();
-            PeopleCodeParser.SelfHosted.SourceSpan summarySpan;
-
-            if (lastComment != null)
-            {
-                summarySpan = lastComment.SourceSpan;
-            }
-            else
-            {
-                // Fallback to program span if no comments
-                summarySpan = node.SourceSpan;
-            }
-
             // Build a summary string
             var summaryBuilder = new StringBuilder();
 
@@ -167,7 +153,10 @@ namespace AppRefiner.Linters
             }
 
             // Add a single report with the summary
-            AddReport(1, summaryBuilder.ToString().TrimEnd(), ReportType.Info, summarySpan.Start.Line, summarySpan);
+            if (node.LastToken != null)
+            {
+                AddReport(1, summaryBuilder.ToString().TrimEnd(), ReportType.Info, node.LastToken.SourceSpan.Start.Line, node.LastToken.SourceSpan);
+            }
         }
 
         private void ProcessComment(PeopleCodeParser.SelfHosted.Lexing.Token comment)
