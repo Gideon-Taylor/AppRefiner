@@ -16,29 +16,15 @@ namespace AppRefiner.Linters
 
         private bool IsObjectType(TypeNode typeNode)
         {
-            // Check if the type is the built-in 'any' type (closest to 'object' in PeopleCode)
             if (typeNode is BuiltInTypeNode builtInType)
             {
-                return builtInType.Type == PeopleCodeParser.SelfHosted.Nodes.BuiltInType.Any;
+                return builtInType.Type == PeopleCodeParser.SelfHosted.Nodes.BuiltInType.Object;
             }
             return false;
         }
 
         // Track object variables that are declared
         private readonly HashSet<string> objectVariables = new();
-
-        public override void VisitLocalVariableDeclaration(LocalVariableDeclarationNode node)
-        {
-            base.VisitLocalVariableDeclaration(node);
-
-            if (!IsObjectType(node.Type))
-                return;
-
-            foreach (var varInfo in node.VariableNameInfos)
-            {
-                objectVariables.Add(varInfo.Name);
-            }
-        }
 
         public override void VisitLocalVariableDeclarationWithAssignment(LocalVariableDeclarationWithAssignmentNode node)
         {
@@ -67,7 +53,8 @@ namespace AppRefiner.Linters
             base.VisitAssignment(node);
 
             // Check if left side is a variable we're tracking as object type
-            if (node.Target is IdentifierNode identNode && objectVariables.Contains(identNode.Name))
+            if (node.Target is IdentifierNode identNode && 
+                GetAccessibleVariables(GetCurrentScope()).Where(v => v.Name == identNode.Name && v.Type.ToLower() == "object").Any())
             {
                 // Check if right side is an object creation
                 if (node.Value is ObjectCreationNode)
