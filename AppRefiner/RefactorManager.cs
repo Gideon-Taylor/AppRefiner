@@ -245,7 +245,7 @@ namespace AppRefiner.Refactors
 
             try
             {
-                ScintillaManager.ClearAnnotations(activeEditor); // Consider if this should be optional
+                //ScintillaManager.ClearAnnotations(activeEditor); // Consider if this should be optional
 
                 activeEditor.ContentString = ScintillaManager.GetScintillaText(activeEditor);
                 if (activeEditor.ContentString == null)

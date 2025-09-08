@@ -260,7 +260,22 @@ namespace AppRefiner.Refactors
         protected override void OnEnterGlobalScope(ScopeContext scope, ProgramNode node)
         {
             base.OnEnterGlobalScope(scope, node);
-            globalNode = node.MainBlock;
+            if (node.Imports.Count > 0)
+            {
+                globalNode = node.Imports.First();
+            }
+            else if (node.MainBlock != null)
+            {
+                globalNode = node.MainBlock;
+            }
+            else if (node.AppClass != null)
+            {
+                globalNode = node.AppClass;
+            }
+            else if (node.Interface != null)
+            {
+                globalNode = node.Interface;
+            }
         }
 
         private void GenerateChange(BlockNode node)
@@ -288,7 +303,7 @@ namespace AppRefiner.Refactors
                 {
                     var parentNode = node.Parent;
                     /* TODO: we need to support property get/set but don't have access to their implementation node */
-                    while (parentNode is not MethodNode || parentNode is not FunctionNode || parentNode is not null)
+                    while (parentNode is not MethodNode && parentNode is not FunctionNode && parentNode is not null)
                     {
                         parentNode = parentNode?.Parent;
                     }
@@ -298,8 +313,14 @@ namespace AppRefiner.Refactors
                         SetFailure("Unable to locate method or function start.");
                         return;
                     }
+                    if (parentNode is MethodNode method && method.Implementation is not null)
+                    {
+                        InsertText(method.Implementation.SourceSpan.Start.ByteIndex, newSuppressLine, "Add suppression comment");
+                    } else if (parentNode is FunctionNode func)
+                    {
+                        InsertText(func.SourceSpan.Start.ByteIndex, newSuppressLine, "Add suppression comment");
+                    }
 
-                    InsertText(parentNode.SourceSpan.Start.ByteIndex, newSuppressLine, "Add suppression comment");
                     return;
 				}
                 else if (type == SuppressReportMode.GLOBAL)
