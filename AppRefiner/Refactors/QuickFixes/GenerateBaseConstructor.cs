@@ -252,11 +252,11 @@ namespace AppRefiner.Refactors.QuickFixes
 
             if (targetClass.BaseClass != null)
             {
-                var insertLine = targetClass.BaseClass.SourceSpan.Start.Line - 1 + 1; /* Line after the extends... */
+                var insertLine = targetClass.BaseClass.SourceSpan.Start.Line + 1; /* Line after the extends... */
                 return ScintillaManager.GetLineStartIndex(Editor, insertLine);
             } else if (targetClass.ImplementedInterface != null)
             {
-                var insertLine = targetClass.ImplementedInterface.SourceSpan.Start.Line - 1 + 1; /* Line after the implements... */
+                var insertLine = targetClass.ImplementedInterface.SourceSpan.Start.Line + 1; /* Line after the implements... */
                 return ScintillaManager.GetLineStartIndex(Editor, insertLine);
             }
             return -1;

@@ -12,7 +12,7 @@ namespace AppRefiner.Linters
     /// Uses ScopedAstVisitor for comprehensive scope and variable tracking.
     /// </summary>
     /// <typeparam name="T">The type of data to track in scopes</typeparam>
-    public abstract class ScopedLintRule<T> : ScopedAstVisitor<T>, ILinter
+    public abstract class BaseLintRule : ScopedAstVisitor<object>
     {
         // Linter ID must be set by all subclasses
         public abstract string LINTER_ID { get; }
@@ -25,32 +25,7 @@ namespace AppRefiner.Linters
         public IDataManager? DataManager { get; set; }
 
         // The suppression processor shared across all linters
-        public LinterSuppressionProcessor? SuppressionListener { get; set; }
-
-        // Helper method for adding reports using VariableInfo
-        protected void AddScopedReport(int reportNumber, string message, ReportType type, int line, PeopleCodeParser.SelfHosted.Visitors.Models.VariableInfo varInfo)
-        {
-            AddReport(reportNumber, message, type, line, varInfo.VariableNameInfo.SourceSpan);
-        }
-
-        // Helper method for adding reports using SourceSpan
-        protected void AddScopedReport(int reportNumber, string message, ReportType type, int line, PeopleCodeParser.SelfHosted.SourceSpan span)
-        {
-            AddReport(reportNumber, message, type, line, span);
-        }
-
-        // Helper method to find variable in current scope using ScopedAstVisitor
-        protected PeopleCodeParser.SelfHosted.Visitors.Models.VariableInfo? FindVariableInCurrentScope(string name)
-        {
-            return FindVariable(name);
-        }
-
-        // Helper method to get all variables accessible from current scope
-        protected IEnumerable<PeopleCodeParser.SelfHosted.Visitors.Models.VariableInfo> GetVariablesInCurrentScope()
-        {
-            var currentScope = GetCurrentScope();
-            return GetAccessibleVariables(currentScope);
-        }
+        public LinterSuppressionProcessor? SuppressionProcessor { get; set; }
 
         // Helper method to add a custom report
         protected void AddReport(int reportNumber, string message, ReportType type, int line, PeopleCodeParser.SelfHosted.SourceSpan span)
@@ -72,25 +47,10 @@ namespace AppRefiner.Linters
             }
 
             // Only add the report if it's not suppressed
-            if (SuppressionListener == null || !SuppressionListener.IsSuppressed(report.LinterId, report.ReportNumber, report.Line))
+            if (SuppressionProcessor == null || !SuppressionProcessor.IsSuppressed(report.LinterId, report.ReportNumber, report.Line))
             {
                 Reports.Add(report);
             }
-        }
-
-        // Variable tracking is now handled by ScopedAstVisitor base class
-        // Override these methods if you need custom variable tracking behavior
-
-        protected override void OnVariableDeclared(PeopleCodeParser.SelfHosted.Visitors.Models.VariableInfo variable)
-        {
-            // Custom variable declaration handling can be added here
-            base.OnVariableDeclared(variable);
-        }
-
-        protected override void OnVariableReferenced(string variableName, PeopleCodeParser.SelfHosted.Visitors.Models.VariableReference reference)
-        {
-            // Custom variable reference handling can be added here
-            base.OnVariableReferenced(variableName, reference);
         }
 
         // ILinter interface implementation methods
@@ -102,7 +62,7 @@ namespace AppRefiner.Linters
                           p.Name != nameof(LINTER_ID) &&
                           p.Name != nameof(DatabaseRequirement) &&
                           p.Name != nameof(DataManager) &&
-                          p.Name != nameof(SuppressionListener) &&
+                          p.Name != nameof(SuppressionProcessor) &&
                           p.Name != nameof(Reports))
                 .ToList();
 
@@ -147,12 +107,6 @@ namespace AppRefiner.Linters
                     }
                 }
             }
-        }
-
-        // Override Reset to handle both base classes
-        void ILinter.Reset()
-        {
-            Reset();
         }
     }
 }

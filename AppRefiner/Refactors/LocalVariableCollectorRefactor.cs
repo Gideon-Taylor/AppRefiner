@@ -258,7 +258,7 @@ namespace AppRefiner.Refactors
             {
                 if (variableDecl is LocalVariableDeclarationNode localVariableDecl)
                 {
-                    var lineNum = localVariableDecl.SourceSpan.Start.Line - 1;
+                    var lineNum = localVariableDecl.SourceSpan.Start.Line;
                     if (processedNodes.Contains(localVariableDecl)) { continue; }
 
                     var lineStartIndex = ScintillaManager.GetLineStartIndex(Editor, lineNum);

@@ -78,8 +78,8 @@ namespace AppRefiner.Refactors.QuickFixes
                 else
                 {
                     /* remove the whole line */
-                    var lineStart = ScintillaManager.GetLineStartIndex(editor, varDecl.SourceSpan.Start.Line - 1);
-                    var lineLength = ScintillaManager.GetLineLength(editor, varDecl.SourceSpan.Start.Line - 1);
+                    var lineStart = ScintillaManager.GetLineStartIndex(editor, varDecl.SourceSpan.Start.Line);
+                    var lineLength = ScintillaManager.GetLineLength(editor, varDecl.SourceSpan.Start.Line);
 
                     /* + 1 to delete the \n ? */
                     DeleteText(new SourceSpan(lineStart, lineStart + lineLength), "Delete unused local variable.");
@@ -142,7 +142,7 @@ namespace AppRefiner.Refactors.QuickFixes
                     /* just remove this name? */
 
                     var newString = $"Local {varDecl.Type} {string.Join(", ", varDecl.VariableNameInfos.Where(n => n.Name != variable.Name).Select(v => v.Name))}";
-                    var foldLevel = ScintillaManager.GetCurrentLineFoldLevel(editor, varDecl.SourceSpan.Start.Line - 1);
+                    var foldLevel = ScintillaManager.GetCurrentLineFoldLevel(editor, varDecl.SourceSpan.Start.Line);
 
                     var padding = new string(' ', foldLevel.Level * 3);
 
@@ -151,8 +151,8 @@ namespace AppRefiner.Refactors.QuickFixes
                 else
                 {
                     /* remove the whole line */
-                    var lineStart = ScintillaManager.GetLineStartIndex(editor, varDecl.SourceSpan.Start.Line - 1);
-                    var lineLength = ScintillaManager.GetLineLength(editor, varDecl.SourceSpan.Start.Line - 1);
+                    var lineStart = ScintillaManager.GetLineStartIndex(editor, varDecl.SourceSpan.Start.Line);
+                    var lineLength = ScintillaManager.GetLineLength(editor, varDecl.SourceSpan.Start.Line);
 
                     /* +1 to remove the \n ? */
                     DeleteText(new SourceSpan(lineStart, lineStart + lineLength + 1), "Delete unused local variable.");
@@ -161,8 +161,8 @@ namespace AppRefiner.Refactors.QuickFixes
             else if (declNode is LocalVariableDeclarationWithAssignmentNode varWithAssign)
             {
                 /* remove the whole line */
-                var lineStart = ScintillaManager.GetLineStartIndex(editor, varWithAssign.SourceSpan.Start.Line - 1);
-                var lineLength = ScintillaManager.GetLineLength(editor, varWithAssign.SourceSpan.Start.Line - 1);
+                var lineStart = ScintillaManager.GetLineStartIndex(editor, varWithAssign.SourceSpan.Start.Line);
+                var lineLength = ScintillaManager.GetLineLength(editor, varWithAssign.SourceSpan.Start.Line);
                 DeleteText(new SourceSpan(lineStart, lineStart + lineLength), "Delete unused local variable.");
             }
         }

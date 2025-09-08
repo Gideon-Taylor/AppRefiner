@@ -691,7 +691,7 @@ public abstract class ScopedAstVisitor<T> : AstVisitorBase
     /// <summary>
     /// Resets the visitor to its initial state
     /// </summary>
-    public void Reset()
+    public virtual void Reset()
     {
         // Clear all stacks
         scopeStack.Clear();

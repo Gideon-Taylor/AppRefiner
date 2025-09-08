@@ -157,8 +157,8 @@ public class PeopleCodeLexer
         _charToByteIndex[source.Length] = bytePos; // End position
 
         _position = 0;
-        _line = 1;
-        _column = 1;
+        _line = 0;
+        _column = 0;
     }
 
     /// <summary>

@@ -3,7 +3,7 @@ using PeopleCodeParser.SelfHosted.Nodes;
 
 namespace AppRefiner.Linters
 {
-    public class UseOfObjectType : ScopedLintRule<VariableInfo>
+    public class UseOfObjectType : BaseLintRule
     {
         public override string LINTER_ID => "OBJECT_TYPE";
 
@@ -52,7 +52,7 @@ namespace AppRefiner.Linters
             // Check if the assignment is an object creation
             if (node.InitialValue is ObjectCreationNode)
             {
-                AddScopedReport(
+                AddReport(
                     1,
                     "Variable is declared as 'object' but assigned a specific type.",
                     ReportType.Warning,
@@ -72,7 +72,7 @@ namespace AppRefiner.Linters
                 // Check if right side is an object creation
                 if (node.Value is ObjectCreationNode)
                 {
-                    AddScopedReport(
+                    AddReport(
                         1,
                         "Variable is declared as 'object' but assigned a specific type.",
                         ReportType.Warning,

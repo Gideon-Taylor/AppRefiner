@@ -343,7 +343,7 @@ public struct SourcePosition : IEquatable<SourcePosition>, IComparable<SourcePos
         Column = column;
     }
 
-    public SourcePosition(int index, int byteIndex, int line = 1, int column = 1)
+    public SourcePosition(int index, int byteIndex, int line = 0, int column = 0)
     {
         Index = index;
         ByteIndex = byteIndex;

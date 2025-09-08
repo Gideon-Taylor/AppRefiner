@@ -152,13 +152,13 @@ namespace AppRefiner
             }
 
             // Use self-hosted parser approach
-            ProcessLintersWithSelfHostedParser(activeEditor.ContentString, activeEditor, editorDataManager);
+            ProcessLintersForEditor(activeEditor.ContentString, activeEditor, editorDataManager);
         }
 
         /// <summary>
         /// Processes linters using the self-hosted parser approach
         /// </summary>
-        private void ProcessLintersWithSelfHostedParser(string sourceCode, ScintillaEditor activeEditor, IDataManager? editorDataManager)
+        private void ProcessLintersForEditor(string sourceCode, ScintillaEditor activeEditor, IDataManager? editorDataManager)
         {
             try
             {
@@ -481,7 +481,7 @@ namespace AppRefiner
                         reports = pg.Select(item => new
                         {
                             type = item.LintReport.Type.ToString(),
-                            line = item.LintReport.Line + 1,
+                            line = item.LintReport.Line,
                             message = item.LintReport.Message
                         }).OrderBy(r => r.line).ToList()
                     }).ToList()
