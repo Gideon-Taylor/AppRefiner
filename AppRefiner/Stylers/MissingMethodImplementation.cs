@@ -31,10 +31,6 @@ namespace AppRefiner.Stylers
 
             foreach (var declaration in declarations)
             {
-                // Skip constructors - they have their own handling
-                if (declaration.IsConstructor)
-                    continue;
-
                 if (declaration.IsAbstract)
                     continue;
 

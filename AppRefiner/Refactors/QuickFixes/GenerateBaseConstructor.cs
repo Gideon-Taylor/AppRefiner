@@ -1,4 +1,5 @@
 using PeopleCodeParser.SelfHosted.Nodes;
+using System.Text;
 
 namespace AppRefiner.Refactors.QuickFixes
 {
@@ -158,13 +159,59 @@ namespace AppRefiner.Refactors.QuickFixes
                 return;
 
             var safeParameters = GenerateSafeParameters();
-            var constructorHeader = GenerateConstructorHeader(safeParameters);
-            var constructorImplementation = GenerateConstructorImplementation(safeParameters);
-
-            InsertConstructorHeader(constructorHeader);
+            GenerateConstructorHeader(safeParameters);
             if (GetResult().Success)
             {
-                InsertConstructorImplementation(constructorImplementation);
+                GenerateConstructorImplementation(safeParameters);
+            }
+        }
+
+        private void GenerateConstructorHeader(List<(string Name, string Type)> safeParameters)
+        {
+            var parameterList = string.Join(", ", safeParameters.Select(p => $"{p.Name} As {p.Type}"));
+            var header = $"   method {targetClass!.Name}({parameterList});";
+            
+            var insertPosition = FindHeaderInsertionPosition();
+            if (insertPosition >= 0)
+            {
+                var headerWithNewline = header + Environment.NewLine;
+                InsertText(insertPosition, headerWithNewline, $"Insert constructor header for '{targetClass.Name}'");
+            }
+            else
+            {
+                SetFailure("Could not determine where to insert constructor header");
+            }
+        }
+
+        private void GenerateConstructorImplementation(List<(string Name, string Type)> safeParameters)
+        {
+            var parameterList = string.Join(", ", safeParameters.Select(p => p.Name));
+            var baseClassPath = targetClass!.BaseClass!.TypeName;
+
+            // Generate parameter annotations
+            var annotations = new StringBuilder();
+            for (int i = 0; i < safeParameters.Count; i++)
+            {
+                var param = safeParameters[i];
+                var comma = (i < safeParameters.Count - 1) ? "," : "";
+                annotations.AppendLine($"   /+ {param.Name} as {param.Type}{comma} +/");
+            }
+
+            var implementation = $"method {targetClass.Name}" + Environment.NewLine +
+                                annotations.ToString() +
+                                $"   %Super = create {baseClassPath}({parameterList});" + Environment.NewLine +
+                                Environment.NewLine +
+                                "end-method;" + Environment.NewLine;
+
+            var insertPosition = FindImplementationInsertionPosition();
+            if (insertPosition >= 0)
+            {
+                var fullImplementation = Environment.NewLine + Environment.NewLine + implementation;
+                InsertText(insertPosition, fullImplementation, $"Insert constructor implementation for '{targetClass.Name}'");
+            }
+            else
+            {
+                SetFailure("Could not determine where to insert constructor implementation");
             }
         }
 
@@ -196,82 +243,8 @@ namespace AppRefiner.Refactors.QuickFixes
             return safeName;
         }
 
-        private string GenerateConstructorHeader(List<(string Name, string Type)> parameters)
-        {
-            var parameterList = string.Join(", ", parameters.Select(p => $"{p.Name} As {p.Type}"));
-            return $"   method {targetClass!.Name}({parameterList});";
-        }
 
-        private string GenerateConstructorImplementation(List<(string Name, string Type)> parameters)
-        {
-            var parameterList = string.Join(", ", parameters.Select(p => p.Name));
-            var baseClassPath = targetClass!.BaseClass!.TypeName;
 
-            var parameterAnnotations = GenerateParameterAnnotations(parameters);
-
-            var implementation = $"method {targetClass.Name}" + Environment.NewLine +
-                                parameterAnnotations +
-                                $"   %Super = create {baseClassPath}({parameterList});" + Environment.NewLine +
-                                Environment.NewLine +
-                                "end-method;";
-
-            return Environment.NewLine + Environment.NewLine + implementation;
-        }
-
-        private string GenerateParameterAnnotations(List<(string Name, string Type)> parameters)
-        {
-            if (parameters.Count == 0)
-                return string.Empty;
-
-            var annotations = new List<string>();
-            foreach (var param in parameters)
-            {
-                annotations.Add($"   /+ {param.Name} as {param.Type} +/");
-            }
-
-            return string.Join(Environment.NewLine, annotations) + Environment.NewLine;
-        }
-
-        private void InsertConstructorHeader(string constructorHeader)
-        {
-            if (targetClass == null)
-            {
-                SetFailure("No target class identified");
-                return;
-            }
-
-            var insertPosition = FindHeaderInsertionPosition();
-            if (insertPosition >= 0)
-            {
-                var headerWithNewline = constructorHeader + Environment.NewLine;
-                InsertText(insertPosition, headerWithNewline,
-                          $"Insert constructor header for '{targetClass.Name}'");
-            }
-            else
-            {
-                SetFailure("Could not determine where to insert constructor header");
-            }
-        }
-
-        private void InsertConstructorImplementation(string constructorImplementation)
-        {
-            if (targetClass == null)
-            {
-                SetFailure("No target class identified");
-                return;
-            }
-
-            var insertPosition = FindImplementationInsertionPosition();
-            if (insertPosition >= 0)
-            {
-                InsertText(insertPosition, constructorImplementation,
-                          $"Insert constructor implementation for '{targetClass.Name}'");
-            }
-            else
-            {
-                SetFailure("Could not determine where to insert constructor implementation");
-            }
-        }
 
         private int FindHeaderInsertionPosition()
         {
@@ -293,14 +266,14 @@ namespace AppRefiner.Refactors.QuickFixes
         {
             if (targetClass == null) return -1;
 
-            var lastImplementation = targetClass.Methods
+            var firstImplementation = targetClass.Methods
                 .Where(m => m.IsImplementation)
                 .OrderBy(m => m.SourceSpan.End.ByteIndex)
-                .LastOrDefault();
+                .FirstOrDefault();
 
-            if (lastImplementation != null)
+            if (firstImplementation != null && firstImplementation.Implementation != null)
             {
-                return lastImplementation.SourceSpan.End.ByteIndex + 1;
+                return firstImplementation.Implementation.SourceSpan.End.ByteIndex + 1;
             }
 
             return targetClass.SourceSpan.End.ByteIndex + 1;

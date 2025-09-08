@@ -902,7 +902,7 @@ public class PeopleCodeParser
                     else if (Check(TokenType.Property))
                     {
                         // Property declarations are allowed in all visibility sections
-                        member = ParsePropertyDeclaration();
+                        member = ParsePropertyDeclaration(visibility);
                     }
                     else if (Check(TokenType.Instance))
                     {
@@ -1335,7 +1335,7 @@ public class PeopleCodeParser
     /// propertyDeclaration: PROPERTY typeT genericID GET SET?           #PropertyGetSet
     ///                    | PROPERTY typeT genericID ABSTRACT? READONLY? #PropertyDirect
     /// </summary>
-    private PropertyNode? ParsePropertyDeclaration()
+    private PropertyNode? ParsePropertyDeclaration(VisibilityModifier visibility)
     {
         try
         {
@@ -1365,7 +1365,7 @@ public class PeopleCodeParser
                 return null;
             }
 
-            var propertyNode = new PropertyNode(propertyName, Previous, propertyType);
+            var propertyNode = new PropertyNode(propertyName, Previous, propertyType) { Visibility = visibility };
             var lastToken = Previous; // Start with the property name as the last token
 
             // Parse property modifiers
@@ -2871,7 +2871,7 @@ public class PeopleCodeParser
                 else if (Check(TokenType.Property))
                 {
                     // Property declarations are allowed in all visibility sections
-                    var propertyDeclaration = ParsePropertyDeclaration();
+                    var propertyDeclaration = ParsePropertyDeclaration(VisibilityModifier.Public);
                     if (propertyDeclaration is PropertyNode propertyNode)
                     {
                         interfaceNode.AddProperty(propertyNode);

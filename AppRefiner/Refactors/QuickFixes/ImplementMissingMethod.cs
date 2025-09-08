@@ -98,10 +98,6 @@ namespace AppRefiner.Refactors.QuickFixes
 
             foreach (var declaration in declarations)
             {
-                // Skip constructors
-                if (declaration.IsConstructor)
-                    continue;
-
                 // Check if there's already an implementation for this method
                 bool hasImplementation = implementations.Any(impl =>
                     string.Equals(impl.Name, declaration.Name, StringComparison.OrdinalIgnoreCase));
@@ -172,18 +168,24 @@ namespace AppRefiner.Refactors.QuickFixes
                 return;
             }
 
-            var methodName = targetMethod.Name;
-            var parameters = GenerateParameterInfo(targetMethod.Parameters);
-            var overrideAnnotation = GenerateOverrideAnnotation();
-            var parameterAnnotations = GenerateParameterAnnotations(parameters);
-            var methodBody = GenerateMethodBody(targetMethod);
+            var implementsComment = baseMethodToOverride != null && !string.IsNullOrEmpty(baseClassPath)
+                ? $"{baseClassPath}.{baseMethodToOverride.Name}"
+                : null;
 
-            var implementation = GenerateFullImplementation(methodName, overrideAnnotation, parameterAnnotations, methodBody);
+            var options = new MethodImplementationOptions
+            {
+                Type = targetMethod.IsConstructor ? ImplementationType.Constructor : ImplementationType.Missing,
+                ImplementsComment = implementsComment,
+                BaseClassPath = baseClassPath,
+                TargetClassName = targetClass.Name
+            };
 
-            var insertPosition = FindImplementationInsertionPosition();
+            var implementation = targetMethod.GenerateDefaultImplementation(options);
+
+            var insertPosition = FindImplementationInsertionPosition(targetMethod.IsConstructor);
             if (insertPosition >= 0)
             {
-                InsertText(insertPosition, implementation, $"Insert implementation for method '{methodName}'");
+                InsertText(insertPosition, implementation, $"Insert implementation for method '{targetMethod.Name}'");
             }
             else
             {
@@ -191,105 +193,38 @@ namespace AppRefiner.Refactors.QuickFixes
             }
         }
 
-        private List<(string Name, string Type, bool IsOut)> GenerateParameterInfo(List<ParameterNode> parameters)
-        {
-            var paramInfo = new List<(string Name, string Type, bool IsOut)>();
 
-            foreach (var param in parameters)
-            {
-                var paramType = param.Type?.ToString() ?? "any";
-                var isOut = param.IsOut;
-                paramInfo.Add((param.Name, paramType, isOut));
-            }
-
-            return paramInfo;
-        }
-
-        private string GenerateOverrideAnnotation()
-        {
-            if (baseMethodToOverride != null && !string.IsNullOrEmpty(baseClassPath))
-            {
-                return $"   /+ Extends/implements {baseClassPath}.{baseMethodToOverride.Name} +/" + Environment.NewLine;
-            }
-
-            return string.Empty;
-        }
-
-        private string GenerateParameterAnnotations(List<(string Name, string Type, bool IsOut)> parameters)
-        {
-            if (parameters.Count == 0)
-                return string.Empty;
-
-            var annotations = new List<string>();
-            foreach (var param in parameters)
-            {
-                var outModifier = param.IsOut ? " out" : "";
-                annotations.Add($"   /+ &{param.Name} as {param.Type}{outModifier} +/");
-            }
-
-            return string.Join(Environment.NewLine, annotations) + Environment.NewLine;
-        }
-
-        private string GenerateMethodBody(MethodNode method)
-        {
-            var indent = "   ";
-            var methodBody = $"{indent}throw CreateException(0, 0, \"Method '{method.Name}' not implemented.\");" + Environment.NewLine;
-
-            // Add return statement if method has a return type
-            if (method.ReturnType != null)
-            {
-                var defaultValue = GetDefaultValueForType(method.ReturnType.ToString());
-                methodBody += $"{indent}Return {defaultValue};" + Environment.NewLine;
-            }
-
-            return methodBody;
-        }
-
-        private string GenerateFullImplementation(string methodName, string overrideAnnotation, string parameterAnnotations, string methodBody)
-        {
-            var implementation = $"method {methodName}" + Environment.NewLine +
-                                overrideAnnotation +
-                                parameterAnnotations +
-                                methodBody +
-                                "end-method;";
-
-            return Environment.NewLine + Environment.NewLine + implementation;
-        }
-
-        private string GetDefaultValueForType(string typeName)
-        {
-            switch (typeName.ToLower())
-            {
-                case "boolean":
-                    return "False";
-                case "integer":
-                case "number":
-                case "float":
-                    return "0";
-                case "string":
-                    return "\"\"";
-                case "date":
-                case "time":
-                case "datetime":
-                    return "Null";
-                default:
-                    return "Null";
-            }
-        }
-
-        private int FindImplementationInsertionPosition()
+        private int FindImplementationInsertionPosition(bool isConstructor)
         {
             if (targetClass == null)
                 return -1;
 
-            var lastImplementation = targetClass.Methods
+
+
+            if (isConstructor)
+            {
+                /* We want to target the first one... */
+                var firstImplementation = targetClass.Methods
+                .Where(m => m.IsImplementation)
+                .OrderBy(m => m.SourceSpan.End.ByteIndex)
+                .FirstOrDefault();
+
+                if (firstImplementation != null && firstImplementation.Implementation != null)
+                {
+                    return firstImplementation.Implementation.SourceSpan.Start.ByteIndex;
+                }
+            }
+            else
+            {
+                var lastImplementation = targetClass.Methods
                 .Where(m => m.IsImplementation)
                 .OrderBy(m => m.SourceSpan.End.ByteIndex)
                 .LastOrDefault();
 
-            if (lastImplementation != null)
-            {
-                return lastImplementation.SourceSpan.End.ByteIndex + 1;
+                if (lastImplementation != null && lastImplementation.Implementation != null)
+                {
+                    return lastImplementation.Implementation.SourceSpan.Start.ByteIndex;
+                }
             }
 
             return targetClass.SourceSpan.End.ByteIndex + 1;

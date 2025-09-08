@@ -1,5 +1,6 @@
 using PeopleCodeParser.SelfHosted;
 using PeopleCodeParser.SelfHosted.Nodes;
+using System.Text;
 
 namespace AppRefiner.Refactors.QuickFixes
 {
@@ -14,6 +15,15 @@ namespace AppRefiner.Refactors.QuickFixes
         private List<MethodNode> abstractMethods = new();
         private List<PropertyNode> abstractProperties = new();
         private string? baseClassPath;
+
+        /// <summary>
+        /// Represents a group of members for a specific visibility level
+        /// </summary>
+        private class VisibilityMemberGroup
+        {
+            public List<MethodNode> Methods { get; } = new();
+            public List<PropertyNode> Properties { get; } = new();
+        }
 
         public ImplementAbstractMembers(ScintillaEditor editor) : base(editor)
         {
@@ -221,6 +231,87 @@ namespace AppRefiner.Refactors.QuickFixes
             return string.Equals(method.Name, className, StringComparison.OrdinalIgnoreCase);
         }
 
+        /// <summary>
+        /// Groups abstract methods and properties by their visibility modifier
+        /// </summary>
+        private Dictionary<VisibilityModifier, VisibilityMemberGroup> GroupMembersByVisibility()
+        {
+            var groups = new Dictionary<VisibilityModifier, VisibilityMemberGroup>();
+
+            // Group methods by visibility
+            foreach (var method in abstractMethods)
+            {
+                // Debug: Log method visibility  
+                Debug.Log($"Method {method.Name} has visibility: {method.Visibility}");
+                
+                if (!groups.ContainsKey(method.Visibility))
+                    groups[method.Visibility] = new VisibilityMemberGroup();
+                groups[method.Visibility].Methods.Add(method);
+            }
+
+            // Group properties by visibility
+            foreach (var property in abstractProperties)
+            {
+                // Debug: Log property visibility
+                Debug.Log($"Property {property.Name} has visibility: {property.Visibility}");
+                
+                if (!groups.ContainsKey(property.Visibility))
+                    groups[property.Visibility] = new VisibilityMemberGroup();
+                groups[property.Visibility].Properties.Add(property);
+            }
+
+            return groups;
+        }
+
+        /// <summary>
+        /// Generates and inserts all headers for a specific visibility section
+        /// </summary>
+        private void GenerateVisibilitySectionEdits(VisibilityModifier visibility, VisibilityMemberGroup memberGroup)
+        {
+            if (targetClass == null)
+            {
+                SetFailure("No target class identified");
+                return;
+            }
+
+            var (insertPosition, needsSectionHeader) = FindHeaderInsertionPositionForVisibility(visibility);
+            if (insertPosition < 0)
+            {
+                SetFailure($"Could not determine where to insert {visibility.ToString().ToLower()} members");
+                return;
+            }
+
+            var sectionText = new StringBuilder();
+
+            // Add section header if needed
+            if (needsSectionHeader)
+            {
+                sectionText.AppendLine(visibility.ToString().ToLower());
+            }
+
+            // Add all method headers
+            foreach (var method in memberGroup.Methods)
+            {
+                var implementsComment = !string.IsNullOrEmpty(baseClassPath) ? $"{baseClassPath}.{method.Name}" : null;
+                var methodHeader = method.GenerateHeader(implementsComment);
+                sectionText.AppendLine(methodHeader);
+            }
+
+            // Add all property headers
+            foreach (var property in memberGroup.Properties)
+            {
+                var propertyHeader = GeneratePropertyHeader(property);
+                sectionText.AppendLine(propertyHeader);
+            }
+
+            // Insert the entire section as a single edit
+            var description = $"Insert {visibility.ToString().ToLower()} abstract member headers";
+            if (needsSectionHeader)
+                description += $" with {visibility.ToString().ToLower()} section header";
+
+            InsertText(insertPosition, sectionText.ToString(), description);
+        }
+
 
         private void GenerateAbstractMemberImplementations()
         {
@@ -230,57 +321,41 @@ namespace AppRefiner.Refactors.QuickFixes
                 return;
             }
 
-            // Generate method implementations
-            foreach (var method in abstractMethods)
+            // Group members by visibility modifier
+            var memberGroups = GroupMembersByVisibility();
+
+            // Process visibility sections in PeopleCode order: Public → Protected → Private
+            var visibilityOrder = new[] { VisibilityModifier.Public, VisibilityModifier.Protected, VisibilityModifier.Private };
+            
+            foreach (var visibility in visibilityOrder.Reverse<VisibilityModifier>())
             {
-                GenerateMethodImplementation(method);
+                if (memberGroups.ContainsKey(visibility) && 
+                    (memberGroups[visibility].Methods.Count > 0 || memberGroups[visibility].Properties.Count > 0))
+                {
+                    GenerateVisibilitySectionEdits(visibility, memberGroups[visibility]);
+                    if (!GetResult().Success)
+                        return;
+                }
+            }
+
+            // Generate method implementations (these go after end-class)
+            foreach (var method in abstractMethods.Reverse<MethodNode>())
+            {
+                var options = new MethodImplementationOptions
+                {
+                    Type = ImplementationType.Abstract,
+                    ImplementsComment = !string.IsNullOrEmpty(baseClassPath) ? $"{baseClassPath}.{method.Name}" : null,
+                    BaseClassPath = baseClassPath,
+                    TargetClassName = targetClass.Name
+                };
+                var implementation = method.GenerateDefaultImplementation(options);
+                InsertMethodImplementation(implementation, method.Name);
                 if (!GetResult().Success)
                     return;
             }
-
-            // Generate property implementations
-            foreach (var property in abstractProperties)
-            {
-                GeneratePropertyImplementation(property);
-                if (!GetResult().Success)
-                    return;
-            }
         }
 
-        private void GenerateMethodImplementation(MethodNode abstractMethod)
-        {
-            var methodHeader = GenerateMethodHeader(abstractMethod);
-            var methodImplementation = GenerateMethodImplementationCode(abstractMethod);
 
-            // Insert header in appropriate scope section
-            InsertMethodHeader(methodHeader, abstractMethod.Visibility);
-
-            if (GetResult().Success)
-            {
-                // Insert implementation after end-class
-                InsertMethodImplementation(methodImplementation, abstractMethod.Name);
-            }
-        }
-
-        private void GeneratePropertyImplementation(PropertyNode abstractProperty)
-        {
-            var propertyHeader = GeneratePropertyHeader(abstractProperty);
-
-            // Insert header in appropriate scope section
-            InsertPropertyHeader(propertyHeader, abstractProperty.Visibility);
-        }
-
-        private string GenerateMethodHeader(MethodNode method)
-        {
-            var parameters = GenerateParameterInfo(method.Parameters);
-            var parameterList = string.Join(", ", parameters.Select(p =>
-                $"{p.Name} As {p.Type}{(p.IsOut ? " out" : "")}"));
-
-            var returnType = method.ReturnType != null ? $" returns {method.ReturnType}" : "";
-            var overrideAnnotation = $" /* Implements {baseClassPath}.{method.Name} */";
-
-            return $"   method {method.Name}({parameterList}){returnType};{overrideAnnotation}";
-        }
 
         private string GeneratePropertyHeader(PropertyNode property)
         {
@@ -290,137 +365,8 @@ namespace AppRefiner.Refactors.QuickFixes
             return $"   property {property.Type} {property.Name}{readonlyKeyword};{overrideAnnotation}";
         }
 
-        private string GenerateMethodImplementationCode(MethodNode method)
-        {
-            var parameters = GenerateParameterInfo(method.Parameters);
-            var overrideAnnotation = GenerateOverrideAnnotation(method.Name);
-            var parameterAnnotations = GenerateParameterAnnotations(parameters);
-            var methodBody = GenerateMethodBody(method);
 
-            var implementation = $"method {method.Name}" + Environment.NewLine +
-                                overrideAnnotation +
-                                parameterAnnotations +
-                                methodBody +
-                                "end-method;";
 
-            return Environment.NewLine + Environment.NewLine + implementation;
-        }
-
-        private List<(string Name, string Type, bool IsOut)> GenerateParameterInfo(List<ParameterNode> parameters)
-        {
-            var paramInfo = new List<(string Name, string Type, bool IsOut)>();
-
-            foreach (var param in parameters)
-            {
-                var paramType = param.Type?.ToString() ?? "any";
-                var isOut = param.IsOut;
-                paramInfo.Add((param.Name, paramType, isOut));
-            }
-
-            return paramInfo;
-        }
-
-        private string GenerateOverrideAnnotation(string methodName)
-        {
-            if (!string.IsNullOrEmpty(baseClassPath))
-            {
-                return $"   /+ Extends/implements {baseClassPath}.{methodName} +/" + Environment.NewLine;
-            }
-
-            return string.Empty;
-        }
-
-        private string GenerateParameterAnnotations(List<(string Name, string Type, bool IsOut)> parameters)
-        {
-            if (parameters.Count == 0)
-                return string.Empty;
-
-            var annotations = new List<string>();
-            foreach (var param in parameters)
-            {
-                var outModifier = param.IsOut ? " out" : "";
-                annotations.Add($"   /+ &{param.Name} as {param.Type}{outModifier} +/");
-            }
-
-            return string.Join(Environment.NewLine, annotations) + Environment.NewLine;
-        }
-
-        private string GenerateMethodBody(MethodNode method)
-        {
-            var indent = "   ";
-            var declaringType = !string.IsNullOrEmpty(baseClassPath) ? baseClassPath : "base class";
-            var errorMessage = $"{declaringType}.{method.Name} not implemented for {targetClass!.Name}";
-
-            var methodBody = $"{indent}throw CreateException(0, 0, \"{errorMessage}\");" + Environment.NewLine;
-
-            // Add return statement if method has a return type
-            if (method.ReturnType != null)
-            {
-                var defaultValue = GetDefaultValueForType(method.ReturnType.ToString());
-                methodBody += $"{indent}Return {defaultValue};" + Environment.NewLine;
-            }
-
-            return methodBody;
-        }
-
-        private string GetDefaultValueForType(string typeName)
-        {
-            switch (typeName.ToLower())
-            {
-                case "boolean":
-                    return "False";
-                case "integer":
-                case "number":
-                case "float":
-                    return "0";
-                case "string":
-                    return "\"\"";
-                case "date":
-                case "time":
-                case "datetime":
-                    return "Null";
-                default:
-                    return "Null";
-            }
-        }
-
-        private void InsertMethodHeader(string methodHeader, VisibilityModifier visibility)
-        {
-            var (insertPosition, needsHeader) = FindHeaderInsertionPosition(visibility);
-
-            if (insertPosition >= 0)
-            {
-                var headerWithNewline = methodHeader + Environment.NewLine;
-
-                if (needsHeader)
-                {
-                    headerWithNewline = $"protected{Environment.NewLine}{headerWithNewline}";
-                }
-
-                InsertText(insertPosition, headerWithNewline,
-                          $"Insert abstract method header");
-            }
-            else
-            {
-                SetFailure("Could not determine where to insert method header");
-            }
-        }
-
-        private void InsertPropertyHeader(string propertyHeader, VisibilityModifier visibility)
-        {
-            var (insertPosition, needsHeader) = FindHeaderInsertionPosition(visibility);
-
-            if (insertPosition >= 0)
-            {
-                var headerWithNewline = propertyHeader + Environment.NewLine;
-                InsertText(insertPosition, headerWithNewline,
-                          $"Insert abstract property header");
-            }
-            else
-            {
-                SetFailure("Could not determine where to insert property header");
-            }
-        }
 
         private void InsertMethodImplementation(string implementation, string methodName)
         {
@@ -437,7 +383,7 @@ namespace AppRefiner.Refactors.QuickFixes
             }
         }
 
-        private (int insertPosition,bool needsSectionHeader) FindHeaderInsertionPosition(VisibilityModifier visibility)
+        private (int insertPosition,bool needsSectionHeader) FindHeaderInsertionPositionForVisibility(VisibilityModifier visibility)
         {
             if (targetClass == null)
                 return (-1,false);
@@ -445,51 +391,71 @@ namespace AppRefiner.Refactors.QuickFixes
             var insertLine = 0;
             var needsHeader = false;
 
-            if (visibility == VisibilityModifier.Public)
+            switch (visibility)
             {
-                if (targetClass.VisibilitySections[VisibilityModifier.Public].Count > 0)
-                {
-                    /* we have items in the public header */
-                    insertLine = targetClass.VisibilitySections[VisibilityModifier.Public].Last().SourceSpan.Start.Line - 1;
-                } else
-                {
-                    /* Do we have a protected header? */
-                    if (targetClass.ProtectedToken != null)
+                case VisibilityModifier.Public:
+                    if (targetClass.VisibilitySections[VisibilityModifier.Public].Count > 0)
                     {
-                        insertLine = targetClass.ProtectedToken.SourceSpan.Start.Line - 1;
-                    } else if (targetClass.PrivateToken != null)
-                    {
-                        insertLine = targetClass.PrivateToken.SourceSpan.Start.Line - 1;
-                    } else
-                    {
-                        insertLine = targetClass.LastToken!.SourceSpan.Start.Line - 1;
-                    }
-                }
-            }
-
-            if (visibility == VisibilityModifier.Protected)
-            {
-                needsHeader = (targetClass.ProtectedToken == null);
-
-                if (targetClass.VisibilitySections[VisibilityModifier.Protected].Count > 0)
-                {
-                    /* we have items in the public header */
-                    insertLine = targetClass.VisibilitySections[VisibilityModifier.Protected].Last().SourceSpan.Start.Line - 1;
-                }
-                else
-                {
-                    if (targetClass.PrivateToken != null)
-                    {
-                        insertLine = targetClass.PrivateToken.SourceSpan.Start.Line - 1;
+                        // Insert after last public member
+                        insertLine = targetClass.VisibilitySections[VisibilityModifier.Public].Last().SourceSpan.End.Line + 1;
                     }
                     else
                     {
-                        insertLine = targetClass.LastToken!.SourceSpan.Start.Line - 1;
+                        // Insert before protected section, private section, or end-class
+                        if (targetClass.ProtectedToken != null)
+                        {
+                            insertLine = targetClass.ProtectedToken.SourceSpan.Start.Line;
+                        }
+                        else if (targetClass.PrivateToken != null)
+                        {
+                            insertLine = targetClass.PrivateToken.SourceSpan.Start.Line;
+                        }
+                        else
+                        {
+                            insertLine = targetClass.LastToken!.SourceSpan.Start.Line;
+                        }
                     }
-                }
+                    break;
+
+                case VisibilityModifier.Protected:
+                    needsHeader = (targetClass.ProtectedToken == null);
+                    
+                    if (targetClass.VisibilitySections[VisibilityModifier.Protected].Count > 0)
+                    {
+                        // Insert after last protected member
+                        insertLine = targetClass.VisibilitySections[VisibilityModifier.Protected].Last().SourceSpan.End.Line + 1;
+                    }
+                    else
+                    {
+                        // Insert before private section or end-class
+                        if (targetClass.PrivateToken != null)
+                        {
+                            insertLine = targetClass.PrivateToken.SourceSpan.Start.Line;
+                        }
+                        else
+                        {
+                            insertLine = targetClass.LastToken!.SourceSpan.Start.Line;
+                        }
+                    }
+                    break;
+
+                case VisibilityModifier.Private:
+                    needsHeader = (targetClass.PrivateToken == null);
+                    
+                    if (targetClass.VisibilitySections[VisibilityModifier.Private].Count > 0)
+                    {
+                        // Insert after last private member
+                        insertLine = targetClass.VisibilitySections[VisibilityModifier.Private].Last().SourceSpan.End.Line + 1;
+                    }
+                    else
+                    {
+                        // Insert before end-class
+                        insertLine = targetClass.LastToken!.SourceSpan.Start.Line;
+                    }
+                    break;
             }
+
             var insertPosition = ScintillaManager.GetLineStartIndex(Editor, insertLine - 1);
-            // Fallback: insert before end-class
             return (insertPosition, needsHeader);
         }
 
@@ -503,9 +469,9 @@ namespace AppRefiner.Refactors.QuickFixes
                 .OrderBy(m => m.SourceSpan.End.ByteIndex)
                 .LastOrDefault();
 
-            if (lastImplementation != null)
+            if (lastImplementation != null && lastImplementation.Implementation != null)
             {
-                return lastImplementation.SourceSpan.End.ByteIndex + 1;
+                return lastImplementation.Implementation.SourceSpan.End.ByteIndex + 1;
             }
 
             return targetClass.SourceSpan.End.ByteIndex + 1;
