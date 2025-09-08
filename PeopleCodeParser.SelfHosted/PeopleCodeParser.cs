@@ -24,7 +24,7 @@ public class PeopleCodeParser
     private int _errorRecoveryCount = 0;
 
     // Compiler directive support - defaults to 99.99.99 for "newest version" policy
-    private ToolsVersion _toolsRelease = new("99.99.99");
+    public static ToolsVersion ToolsRelease = new("99.99.99");
 
     // Synchronization tokens for error recovery
     private static readonly HashSet<TokenType> StatementSyncTokens = new()
@@ -66,14 +66,10 @@ public class PeopleCodeParser
     // Store original tokens for directive reprocessing
     private readonly List<Token> _originalTokens;
     private List<SourceSpan> _skippedDirectiveSpans = new();
-    public PeopleCodeParser(IEnumerable<Token> tokens, string? toolsRelease = null)
+    public PeopleCodeParser(IEnumerable<Token> tokens)
     {
         _originalTokens = tokens?.ToList() ?? throw new ArgumentNullException(nameof(tokens));
         _tokens = new();
-        if (toolsRelease is not null)
-        {
-            _toolsRelease = new ToolsVersion(toolsRelease);
-        }
         _skippedDirectiveSpans = PreProcessDirectives();
     }
 
@@ -86,7 +82,7 @@ public class PeopleCodeParser
         _errors.RemoveAll(e => e.Message.Contains("directive") || e.Message.Contains("Directive"));
 
         // Pass 1: Process directives with all tokens (including trivia)
-        var preprocessor = new DirectivePreprocessor(_originalTokens, _toolsRelease);
+        var preprocessor = new DirectivePreprocessor(_originalTokens, ToolsRelease);
         var processedTokens = preprocessor.ProcessDirectives();
 
         // Add any preprocessing errors to our error list
@@ -516,24 +512,33 @@ public class PeopleCodeParser
                 if (!IsAtEnd && !Check(TokenType.EndOfFile))
                 {
                     if (program.MainBlock == null)
-                        program.SetMainBlock(new BlockNode());
-
-                    while (!IsAtEnd && !Check(TokenType.EndOfFile))
                     {
-                        var statement = ParseStatement();
-                        if (statement != null)
+                        var block = new BlockNode();
+                        var firstStatementToken = Current;
+                        
+                        while (!IsAtEnd && !Check(TokenType.EndOfFile))
                         {
-                            program.MainBlock?.AddStatement(statement);
-                        }
-                        else
-                        {
-                            // If we couldn't parse a statement, skip the current token to prevent infinite loop
-                            ReportError($"Unexpected token: {Current.Type}");
-                            _position++;
-                        }
+                            var statement = ParseStatement();
+                            if (statement != null)
+                            {
+                                block.AddStatement(statement);
+                            }
+                            else
+                            {
+                                // If we couldn't parse a statement, skip the current token to prevent infinite loop
+                                ReportError($"Unexpected token: {Current.Type}");
+                                _position++;
+                            }
 
-                        // Handle optional semicolons between statements
-                        while (Match(TokenType.Semicolon)) { }
+                            // Handle optional semicolons between statements
+                            while (Match(TokenType.Semicolon)) { }
+                        }
+                        
+                        // Set source span for the main block
+                        block.FirstToken = firstStatementToken;
+                        block.LastToken = Previous;
+                        
+                        program.SetMainBlock(block);
                     }
                 }
 
@@ -4118,6 +4123,15 @@ public class PeopleCodeParser
     {
         var block = new BlockNode();
         var firstToken = Current;
+        if (endTokens.Contains(Current.Type))
+        {
+            /* handle empty blocks */
+            var prevSpan = Previous.SourceSpan;
+            block.SourceSpan = new SourceSpan(prevSpan.End.Index,prevSpan.End.ByteIndex,prevSpan.End.Index, prevSpan.End.ByteIndex, prevSpan.End.Line, prevSpan.End.Column, prevSpan.End.Line, prevSpan.End.Column);
+            return block;
+        }
+
+
         while (!IsAtEnd && !endTokens.Contains(Current.Type))
         {
             var statementStartToken = Current; // Capture the token where the statement attempt begins
@@ -5270,16 +5284,11 @@ public class PeopleCodeParser
     /// <param name="version">Version string in format "major.minor[.patch]" or null to unset</param>
     public void SetToolsRelease(string? version)
     {
-        _toolsRelease = string.IsNullOrEmpty(version) ? new ToolsVersion("99.99.99") : new ToolsVersion(version);
+        ToolsRelease = string.IsNullOrEmpty(version) ? new ToolsVersion("99.99.99") : new ToolsVersion(version);
 
         // Reprocess directives with the new ToolsRelease setting
         _skippedDirectiveSpans = PreProcessDirectives();
     }
-
-    /// <summary>
-    /// Get the current PeopleTools version configuration
-    /// </summary>
-    public ToolsVersion? ToolsRelease => _toolsRelease;
 
     /// <summary>
     /// Collects all comments from the token stream and adds them to the program node

@@ -1757,5 +1757,27 @@ ORDER BY DEFN_TYPE ASC, ID ASC, CASE WHEN @sort_by_date = 'Y' THEN LASTUPDDTTM E
 
             return null;
         }
+
+        public string GetToolsVersion()
+        {
+            string sql = @"SELECT TOOLSREL || '.' || PTPATCHREL FROM PSSTATUS";
+
+            try
+            {
+                DataTable result = _connection.ExecuteQuery(sql);
+
+                if (result.Rows.Count == 0)
+                {
+                    return "99.99.99";
+                }
+
+                return result.Rows[0][0].ToString()!;
+            }
+            catch (Exception)
+            {
+                // Handle database errors
+                return "99.99.99";
+            }
+        }
     }
 }

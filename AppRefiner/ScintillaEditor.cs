@@ -319,7 +319,7 @@ namespace AppRefiner
                 SelfHostedLexer selfHostedLexer = new(ContentString ?? string.Empty);
                 var tokens = selfHostedLexer.TokenizeAll();
                 /* TODO: data manager support for getting current tools release */
-                var parser = new PeopleCodeParser.SelfHosted.PeopleCodeParser(tokens, "8.61");
+                var parser = new PeopleCodeParser.SelfHosted.PeopleCodeParser(tokens);
                 selfHostedParsedProgram = parser.ParseProgram();
                 this.ParserErrors = parser.Errors;
                 selfHostedParseSuccessful = true;
@@ -374,7 +374,7 @@ namespace AppRefiner
                 SelfHostedLexer selfHostedLexer = new(ContentString ?? string.Empty);
                 var tokens = selfHostedLexer.TokenizeAll();
                 /* TODO: data manager support for getting current tools release */
-                var parser = new PeopleCodeParser.SelfHosted.PeopleCodeParser(tokens, "8.61");
+                var parser = new PeopleCodeParser.SelfHosted.PeopleCodeParser(tokens);
                 selfHostedParsedProgram = parser.ParseProgram();
                 this.ParserErrors = parser.Errors;
                 selfHostedTokens = tokens;

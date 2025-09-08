@@ -274,5 +274,7 @@ namespace AppRefiner.Database
         /// </summary>
         /// <returns>List of OpenTarget objects representing programs that may contain function definitions</returns>
         List<OpenTarget> GetFunctionDefiningPrograms();
+
+        string GetToolsVersion();
     }
 }

@@ -3,6 +3,7 @@ using AppRefiner.Properties;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using PeopleCodeParser.SelfHosted;
 
 namespace AppRefiner.Dialogs
 {
@@ -625,9 +626,10 @@ namespace AppRefiner.Dialogs
                         {
                             throw new Exception("Failed to connect to database");
                         }
-                    });
 
-                    // Save the connection settings
+                        PeopleCodeParser.SelfHosted.PeopleCodeParser.ToolsRelease = new ToolsVersion(DataManager.GetToolsVersion());
+                    });
+                    
                     string? encryptedPassword = savePasswordCheckBox.Checked ? EncryptPassword(password, dbName) : null;
                     SaveSettingsForDatabase(dbName, readOnlyRadioButton.Checked, username, @namespace, encryptedPassword);
 
