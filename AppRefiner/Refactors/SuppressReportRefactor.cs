@@ -1,8 +1,9 @@
-using PeopleCodeParser.SelfHosted.Nodes;
+using AppRefiner.Services;
 using PeopleCodeParser.SelfHosted;
+using PeopleCodeParser.SelfHosted.Nodes;
 using PeopleCodeParser.SelfHosted.Visitors;
 using PeopleCodeParser.SelfHosted.Visitors.Models;
-using AppRefiner.Services;
+using System;
 using System.Drawing;
 using System.Windows.Forms;
 
@@ -30,7 +31,7 @@ namespace AppRefiner.Refactors
 
         private SuppressReportMode type = SuppressReportMode.LINE;
         private AstNode? globalNode;
-
+        private bool changeMade = false;
         /// <summary>
         /// Indicates that this refactor requires a user input dialog
         /// </summary>
@@ -243,6 +244,8 @@ namespace AppRefiner.Refactors
         {
             base.VisitBlock(node);
 
+            if (changeMade) return;
+
             if (node.SourceSpan.ContainsLine(LineNumber))
             {
                 var statement = node.Statements.Where(s => s.SourceSpan.ContainsLine(LineNumber)).FirstOrDefault();
@@ -253,8 +256,6 @@ namespace AppRefiner.Refactors
 
 
             }
-
-
         }
 
         protected override void OnEnterGlobalScope(ScopeContext scope, ProgramNode node)
@@ -282,28 +283,26 @@ namespace AppRefiner.Refactors
         {
             if (Editor.LineToReports.TryGetValue(LineNumber, out var reports))
             {
+                changeMade = true;
                 var newSuppressLine = $"/* #AppRefiner suppress ({string.Join(",", reports.Select(r => r.GetFullId()))}) */\r\n";
-
-                if (type == SuppressReportMode.LINE)
+                var targetLine = LineNumber;
+                if (type == SuppressReportMode.NEAREST_BLOCK)
                 {
-                    var startIndex = ScintillaManager.GetLineStartIndex(Editor, LineNumber);
-                    if (startIndex == -1)
+                    AstNode targetNode = node;
+                    if (node.Parent != null) {
+                        targetNode = node.Parent;
+                    } else
                     {
-                        startIndex = 0;
+                        SetFailure("Unable to locate block parent.");
+                        return;
                     }
-                    InsertText(startIndex, newSuppressLine, "Add suppression comment");
-                    return;
-                }
-                else if (type == SuppressReportMode.NEAREST_BLOCK)
-                {
-                    InsertText(node.SourceSpan.Start.ByteIndex, newSuppressLine, "Add suppression comment");
-                    return;
+
+                    targetLine = targetNode.SourceSpan.Start.Line;
 				}
                 else if (type == SuppressReportMode.METHOD_OR_FUNC)
                 {
                     var parentNode = node.Parent;
-                    /* TODO: we need to support property get/set but don't have access to their implementation node */
-                    while (parentNode is not MethodNode && parentNode is not FunctionNode && parentNode is not null)
+                    while (parentNode is not MethodNode && parentNode is not FunctionNode && parentNode is not null && parentNode is not MethodImplNode)
                     {
                         parentNode = parentNode?.Parent;
                     }
@@ -315,20 +314,20 @@ namespace AppRefiner.Refactors
                     }
                     if (parentNode is MethodNode method && method.Implementation is not null)
                     {
-                        InsertText(method.Implementation.SourceSpan.Start.ByteIndex, newSuppressLine, "Add suppression comment");
+                        targetLine = method.Implementation.SourceSpan.Start.Line;
                     } else if (parentNode is FunctionNode func)
                     {
-                        InsertText(func.SourceSpan.Start.ByteIndex, newSuppressLine, "Add suppression comment");
+                        targetLine = func.SourceSpan.Start.Line;
+                    } else if (parentNode is MethodImplNode methodImpl)
+                    {
+                        targetLine = methodImpl.SourceSpan.Start.Line;
                     }
-
-                    return;
 				}
                 else if (type == SuppressReportMode.GLOBAL)
                 {
                     if (globalNode is not null)
                     {
-						InsertText(globalNode.SourceSpan.Start.ByteIndex, newSuppressLine, "Add suppression comment");
-						return;
+                        targetLine = globalNode.SourceSpan.Start.Line;
 					} else
                     {
                         SetFailure("Unable to find the start of the global scope.");
@@ -338,11 +337,32 @@ namespace AppRefiner.Refactors
                 {
                     SetFailure("Unable to find line to insert suppress report.");
                 }
+
+                var insertIndex = ScintillaManager.GetLineStartIndex(Editor, targetLine);
+                var paddingCount = CountLeadingSpaces(ScintillaManager.GetLineText(Editor, targetLine));
+
+                var padding = new string(' ', paddingCount);
+
+                /* how much padding ?*/
+                InsertText(insertIndex, $"{padding}{newSuppressLine}", "Add suppression hint");
             }
             else
             {
                 SetFailure("No report found at cursor position. Please place cursor on a line with a report.");
             }
+        }
+
+        static int CountLeadingSpaces(string str)
+        {
+            if (string.IsNullOrEmpty(str))
+                return 0;
+
+            for (int i = 0; i < str.Length; i++)
+            {
+                if (str[i] != ' ')
+                    return i;
+            }
+            return str.Length; // All characters are spaces
         }
     }
 }
