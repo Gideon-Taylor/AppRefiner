@@ -1,11 +1,7 @@
 using AppRefiner.Linters;
 using AppRefiner.Stylers;
 using AppRefiner.TooltipProviders;
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Text.Json;
-using System.Windows.Forms; // Required for CheckBox references if loading/saving general settings here
 
 namespace AppRefiner
 {
@@ -27,6 +23,7 @@ namespace AppRefiner
 
         public bool RememberFolds { get; set; }
         public bool OverrideFindReplace { get; set; }
+        public bool OverrideOpen { get; set; }
     }
 
     public class SettingsService
@@ -60,6 +57,7 @@ namespace AppRefiner
                 settings.TNS_ADMIN = Properties.Settings.Default.TNS_ADMIN;
                 settings.RememberFolds = Properties.Settings.Default.rememberFolds;
                 settings.OverrideFindReplace = Properties.Settings.Default.overrideFindReplace;
+                settings.OverrideOpen = Properties.Settings.Default.overrideOpen;
             }
             catch (Exception ex)
             {
@@ -88,19 +86,20 @@ namespace AppRefiner
             Properties.Settings.Default.showClassText = settings.ShowClassText;
             Properties.Settings.Default.rememberFolds = settings.RememberFolds;
             Properties.Settings.Default.overrideFindReplace = settings.OverrideFindReplace;
+            Properties.Settings.Default.overrideOpen = settings.OverrideOpen;
         }
-        
+
         public void SaveChanges()
         {
-             try
-             {
+            try
+            {
                 Properties.Settings.Default.Save();
-             }
-             catch (Exception ex)
-             {
-                 Debug.LogException(ex, "Error saving settings");
-                 // Inform the user?
-             }
+            }
+            catch (Exception ex)
+            {
+                Debug.LogException(ex, "Error saving settings");
+                // Inform the user?
+            }
         }
 
         // --- Linter States --- 
@@ -136,9 +135,9 @@ namespace AppRefiner
                 Debug.LogException(ex, "Error deserializing LinterStates - using defaults.");
                 // Use defaults if settings are corrupt
             }
-             catch (Exception ex)
+            catch (Exception ex)
             {
-                 Debug.LogException(ex, "Error loading linter states");
+                Debug.LogException(ex, "Error loading linter states");
             }
         }
 
@@ -146,7 +145,7 @@ namespace AppRefiner
         {
             try
             {
-                 var states = linterRules.Select(l => new RuleState
+                var states = linterRules.Select(l => new RuleState
                 {
                     TypeName = l.GetType().FullName ?? "",
                     Active = l.Active
@@ -171,7 +170,7 @@ namespace AppRefiner
                     Properties.Settings.Default.StylerStates);
 
                 if (states == null) return;
-                
+
                 var stylerMap = stylers.ToDictionary(s => s.GetType().FullName ?? "");
 
                 foreach (var state in states)
@@ -189,13 +188,13 @@ namespace AppRefiner
                     }
                 }
             }
-             catch (JsonException ex)
+            catch (JsonException ex)
             {
                 Debug.LogException(ex, "Error deserializing StylerStates - using defaults.");
             }
             catch (Exception ex)
             {
-                 Debug.LogException(ex, "Error loading styler states");
+                Debug.LogException(ex, "Error loading styler states");
             }
         }
 
@@ -220,7 +219,7 @@ namespace AppRefiner
 
         // --- Tooltip Provider States --- 
 
-        public void LoadTooltipStates(IEnumerable<ITooltipProvider> tooltipProviders, DataGridView dataGridView)
+        public void LoadTooltipStates(IEnumerable<BaseTooltipProvider> tooltipProviders, DataGridView dataGridView)
         {
             try
             {
@@ -228,17 +227,17 @@ namespace AppRefiner
                     Properties.Settings.Default.TooltipStates);
 
                 if (states == null) return;
-                
+
                 var providerMap = tooltipProviders.ToDictionary(p => p.GetType().FullName ?? "");
 
                 foreach (var state in states)
                 {
-                    if(providerMap.TryGetValue(state.TypeName, out var provider))
+                    if (providerMap.TryGetValue(state.TypeName, out var provider))
                     {
                         provider.Active = state.Active;
                         // Update corresponding grid row
                         var row = dataGridView.Rows.Cast<DataGridViewRow>()
-                            .FirstOrDefault(r => r.Tag is ITooltipProvider p && p == provider);
+                            .FirstOrDefault(r => r.Tag is BaseTooltipProvider p && p == provider);
                         if (row != null)
                         {
                             row.Cells[0].Value = state.Active;
@@ -246,7 +245,7 @@ namespace AppRefiner
                     }
                 }
             }
-             catch (JsonException ex)
+            catch (JsonException ex)
             {
                 Debug.LogException(ex, "Error deserializing TooltipStates - using defaults.");
             }
@@ -256,11 +255,11 @@ namespace AppRefiner
             }
         }
 
-        public void SaveTooltipStates(IEnumerable<ITooltipProvider> tooltipProviders)
+        public void SaveTooltipStates(IEnumerable<BaseTooltipProvider> tooltipProviders)
         {
             try
             {
-                 var states = tooltipProviders.Select(p => new RuleState
+                var states = tooltipProviders.Select(p => new RuleState
                 {
                     TypeName = p.GetType().FullName ?? "",
                     Active = p.Active
@@ -269,10 +268,58 @@ namespace AppRefiner
                 Properties.Settings.Default.TooltipStates =
                     JsonSerializer.Serialize(states);
             }
-             catch (Exception ex)
+            catch (Exception ex)
             {
                 Debug.LogException(ex, "Error saving tooltip states");
             }
         }
+
+        // --- Smart Open Configuration --- 
+
+        /// <summary>
+        /// Loads the Smart Open configuration from settings
+        /// </summary>
+        /// <returns>SmartOpenConfig object with current settings or default if not found</returns>
+        public SmartOpenConfig LoadSmartOpenConfig()
+        {
+            try
+            {
+                var configJson = Properties.Settings.Default.smartOpenConfig;
+                
+                if (string.IsNullOrEmpty(configJson))
+                {
+                    return SmartOpenConfig.GetDefault();
+                }
+
+                var config = JsonSerializer.Deserialize<SmartOpenConfig>(configJson);
+                return config ?? SmartOpenConfig.GetDefault();
+            }
+            catch (JsonException ex)
+            {
+                Debug.LogException(ex, "Error deserializing SmartOpenConfig - using defaults.");
+                return SmartOpenConfig.GetDefault();
+            }
+            catch (Exception ex)
+            {
+                Debug.LogException(ex, "Error loading Smart Open configuration");
+                return SmartOpenConfig.GetDefault();
+            }
+        }
+
+        /// <summary>
+        /// Saves the Smart Open configuration to settings
+        /// </summary>
+        /// <param name="config">The SmartOpenConfig to save</param>
+        public void SaveSmartOpenConfig(SmartOpenConfig config)
+        {
+            try
+            {
+                Properties.Settings.Default.smartOpenConfig = JsonSerializer.Serialize(config);
+            }
+            catch (Exception ex)
+            {
+                Debug.LogException(ex, "Error saving Smart Open configuration");
+            }
+        }
     }
-} 
+}

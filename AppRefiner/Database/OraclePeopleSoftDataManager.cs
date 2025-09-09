@@ -1,6 +1,5 @@
 using AppRefiner.Database.Models;
 using System.Data;
-using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
 
@@ -50,14 +49,14 @@ namespace AppRefiner.Database
                 if (_connection.State != ConnectionState.Open)
                 {
                     _connection.Open();
-                    
+
                     // Set namespace if provided
                     if (!string.IsNullOrEmpty(_namespace))
                     {
                         string sql = $"ALTER SESSION SET CURRENT_SCHEMA={_namespace}";
                         _connection.ExecuteNonQuery(sql);
                     }
-                    
+
                     // Clear the record field cache when connecting
                     ClearRecordFieldCache();
                 }
@@ -80,7 +79,7 @@ namespace AppRefiner.Database
             {
                 _connection.Close();
             }
-            
+
             // Clear the record field cache when disconnecting
             ClearRecordFieldCache();
         }
@@ -441,22 +440,22 @@ namespace AppRefiner.Database
             // Parse the package path
             string[] parts = packagePath.Split(':');
             string rootPackage = parts.Length > 0 ? parts[0] : string.Empty;
-            
+
             // Determine package level (0=root, 1=subpackage, 2=subsubpackage)
             int packageLevel = parts.Length - 1;
             if (packageLevel < 0) packageLevel = 0;
-            
+
             // Build qualify path for queries (e.g., ":" or "SUB:" or "SUB:SUBSUB:")
             string qualifyPath = ":";
             if (packageLevel > 0)
             {
                 qualifyPath = string.Join(":", parts.Skip(1));
             }
-            
+
             // Get subpackages based on current level
             string subpackageSql = string.Empty;
             Dictionary<string, object> subpackageParams = new();
-            
+
             // Only root and first subpackage level can have subpackages in PeopleSoft
             // (max 3 levels: ROOT:SUB:SUBSUB)
             if (packageLevel < 2)
@@ -500,7 +499,7 @@ namespace AppRefiner.Database
                 if (!string.IsNullOrEmpty(subpackageSql))
                 {
                     DataTable subpackageResults = _connection.ExecuteQuery(subpackageSql, subpackageParams);
-                    
+
                     foreach (DataRow row in subpackageResults.Rows)
                     {
                         string? subpackageName = row["PACKAGEID"].ToString();
@@ -511,22 +510,22 @@ namespace AppRefiner.Database
                     }
                 }
             }
-            
+
             // Get classes in the current package path
             string classSql = @"
                 SELECT APPCLASSID FROM PSAPPCLASSDEFN 
                 WHERE PACKAGEROOT = :rootPackage 
                 AND QUALIFYPATH = :qualifyPath
                 ORDER BY APPCLASSID";
-                
+
             Dictionary<string, object> classParams = new()
             {
                 { ":rootPackage", rootPackage },
                 { ":qualifyPath", qualifyPath }
             };
-            
+
             DataTable classResults = _connection.ExecuteQuery(classSql, classParams);
-            
+
             foreach (DataRow row in classResults.Rows)
             {
                 string? className = row["APPCLASSID"].ToString();
@@ -535,7 +534,7 @@ namespace AppRefiner.Database
                     classes.Add(className);
                 }
             }
-            
+
             return new PackageItems(packagePath, subpackages, classes);
         }
 
@@ -631,29 +630,29 @@ namespace AppRefiner.Database
 
         public bool CheckAppClassExists(string appClassPath)
         {
-           if (!IsConnected)
+            if (!IsConnected)
             {
                 throw new InvalidOperationException("Database connection is not open");
             }
-            
+
             // Split the appClassPath by colons
             string[] parts = appClassPath.Split(':');
-            
+
             // Need at least one package and a class name
             if (parts.Length < 2)
             {
                 return false;
             }
-            
+
             // Prepare the query parameters
             Dictionary<string, object> parameters = new();
-            
+
             // Set all object IDs and values based on the parts of the appClassPath
             for (int i = 0; i < 7; i++)
             {
                 int objId = 0;
                 string objVal = " ";
-                
+
                 if (i < parts.Length)
                 {
                     if (i == parts.Length - 1)
@@ -675,7 +674,7 @@ namespace AppRefiner.Database
                     objId = 12;
                     objVal = "ONEXECUTE";
                 }
-                
+
                 // Parameter indices are 1-based
                 parameters[$":objId{i + 1}"] = objId;
                 parameters[$":objVal{i + 1}"] = objVal;
@@ -690,16 +689,16 @@ namespace AppRefiner.Database
                 AND OBJECTID5 = :objId5 AND UPPER(OBJECTVALUE5) = :objVal5
                 AND OBJECTID6 = :objId6 AND UPPER(OBJECTVALUE6) = :objVal6
                 AND OBJECTID7 = :objId7 AND UPPER(OBJECTVALUE7) = :objVal7";
-            
+
             // Execute the query
             DataTable result = _connection.ExecuteQuery(query, parameters);
-            
+
             // If any row exists, the app class exists
             if (result.Rows.Count > 0 && result.Rows[0][0] is string exists)
             {
                 return exists == "Y";
             }
-            
+
             return false;
         }
 
@@ -714,25 +713,25 @@ namespace AppRefiner.Database
             {
                 throw new InvalidOperationException("Database connection is not open");
             }
-            
+
             // First check if the class exists
             if (!CheckAppClassExists(appClassPath))
             {
                 return null;
             }
-            
+
             // Split the appClassPath by colons
             string[] parts = appClassPath.Split(':');
-            
+
             // Create a PeopleCodeItem for the class
             List<Tuple<int, string>> programFields = new();
-            
+
             // Map parts to object IDs and values
             for (int i = 0; i < parts.Length; i++)
             {
                 int objId;
                 string objVal = parts[i];
-                
+
                 if (i == parts.Length - 1)
                 {
                     // Last part is the class (OBJECTID = 107)
@@ -743,17 +742,17 @@ namespace AppRefiner.Database
                     // Package parts start at 104 and increment
                     objId = 104 + i;
                 }
-                
+
                 programFields.Add(new Tuple<int, string>(objId, objVal));
             }
-            
+
             // Add the ONEXECUTE part
             programFields.Add(new Tuple<int, string>(12, "OnExecute"));
-            
+
             // Build the PeopleCodeItem with the proper object IDs and values
             int[] objectIDs = new int[7];
             string[] objectValues = new string[7];
-            
+
             for (int i = 0; i < 7; i++)
             {
                 if (i < programFields.Count)
@@ -767,22 +766,22 @@ namespace AppRefiner.Database
                     objectValues[i] = " ";
                 }
             }
-            
+
             // Create a PeopleCodeItem with empty program text
             PeopleCodeItem item = new(
                 objectIDs,
                 objectValues,
-                Array.Empty<byte>(), 
+                Array.Empty<byte>(),
                 new List<NameReference>()
             );
-            
+
             // Load the program text
             if (LoadPeopleCodeItemContent(item))
             {
                 // Convert the binary program text to a string
                 return item.GetProgramTextAsString();
             }
-            
+
             return null;
         }
 
@@ -800,16 +799,16 @@ namespace AppRefiner.Database
 
             // Ensure record name is uppercase
             recordName = recordName.ToUpper();
-            
+
             // Check if we have this record's version in the database
             int recordVersion = GetRecordVersion(recordName);
-            
+
             // If record doesn't exist, return null
             if (recordVersion < 0)
             {
                 return null;
             }
-            
+
             // Check if we have a valid cached version
             if (_recordFieldCache.TryGetValue(recordName, out RecordFieldCache? cache))
             {
@@ -821,19 +820,19 @@ namespace AppRefiner.Database
                 // Otherwise, version is different, so remove the outdated cache entry
                 _recordFieldCache.Remove(recordName);
             }
-            
+
             // Cache miss or version mismatch, fetch the fields from the database
             List<RecordFieldInfo>? fields = FetchRecordFieldsFromDb(recordName);
-            
+
             // If fields were retrieved successfully, cache them with the current version
             if (fields != null && fields.Count > 0)
             {
                 _recordFieldCache[recordName] = new RecordFieldCache(recordName, recordVersion, fields);
             }
-            
+
             return fields;
         }
-        
+
         /// <summary>
         /// Gets the VERSION field value from PSRECDEFN for a specific record.
         /// </summary>
@@ -850,16 +849,16 @@ namespace AppRefiner.Database
             {
                 { ":recordName", recordName }
             };
-            
+
             try
             {
                 DataTable result = _connection.ExecuteQuery(sql, parameters);
-                
+
                 if (result.Rows.Count == 0)
                 {
                     return -1; // Record doesn't exist
                 }
-                
+
                 return Convert.ToInt32(result.Rows[0]["VERSION"]);
             }
             catch (Exception)
@@ -868,7 +867,7 @@ namespace AppRefiner.Database
                 return -1;
             }
         }
-        
+
         /// <summary>
         /// Fetches record field information directly from the database.
         /// </summary>
@@ -917,7 +916,7 @@ namespace AppRefiner.Database
                 return null;
             }
         }
-        
+
         /// <summary>
         /// Clears the record field cache
         /// </summary>
@@ -1140,7 +1139,7 @@ namespace AppRefiner.Database
                 {
                     EventMapSequence sequence;
                     string procSeq = row["ptcs_procseq"].ToString() ?? string.Empty;
-                    
+
                     if (procSeq.Equals("PRE", StringComparison.OrdinalIgnoreCase))
                         sequence = EventMapSequence.Pre;
                     else if (procSeq.Equals("OVER", StringComparison.OrdinalIgnoreCase))
@@ -1152,7 +1151,7 @@ namespace AppRefiner.Database
 
                     string component = string.Empty;
                     string segment = string.Empty;
-                    
+
                     if (eventMapInfo.Type == EventMapType.Page)
                     {
                         component = row["PORTAL_URI_SEG2"].ToString() ?? string.Empty;
@@ -1183,13 +1182,596 @@ namespace AppRefiner.Database
                     });
                 }
             }
-            catch (Exception ex)
+            catch (Exception)
             {
                 // Consider logging the exception here
                 // Logger.LogError($"Error retrieving event map items: {ex.Message}");
             }
 
             return results;
+        }
+
+        public List<OpenTarget> GetOpenTargets(OpenTargetSearchOptions options)
+        {
+            if (!IsConnected)
+            {
+                throw new InvalidOperationException("Database connection is not open");
+            }
+
+            var results = new List<OpenTarget>();
+
+            try
+            {
+                // Build the unified UNION ALL query based on enabled types
+                string unifiedQuery = BuildUnifiedQuery(options.EnabledTypes);
+                
+                if (string.IsNullOrEmpty(unifiedQuery))
+                {
+                    return results; // No enabled types
+                }
+
+                // Escape wildcards in search terms for LIKE queries
+                string escapedIdTerm = options.IDSearchTerm.Replace("_", "\\_");
+                string escapedDescriptionTerm = options.DescriptionSearchTerm.Replace("_", "\\_");
+                
+                var parameters = new Dictionary<string, object>
+                {
+                    [":id_search"] = escapedIdTerm,
+                    [":descr_search"] = escapedDescriptionTerm,
+                    [":max_rows_per_type"] = options.MaxRowsPerType,
+                    [":sort_by_date"] = options.SortByDate ? "Y" : "N"
+                };
+
+                DataTable data = _connection.ExecuteQuery(unifiedQuery, parameters);
+
+                foreach (DataRow row in data.Rows)
+                {
+                    string defnType = row["DEFN_TYPE"]?.ToString() ?? string.Empty;
+                    string id = row["ID"]?.ToString() ?? string.Empty;
+                    string description = row["DESCR"]?.ToString() ?? string.Empty;
+
+                    // Map definition type string to OpenTargetType enum
+                    if (TryMapDefnTypeToEnum(defnType, out OpenTargetType targetType))
+                    {
+                        // Map to appropriate PSCLASSID and create object pairs
+                        var objectPairs = CreateObjectPairs(targetType, id);
+                        
+                        results.Add(new OpenTarget(
+                            targetType,
+                            id,
+                            description,
+                            objectPairs));
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.Log($"Error retrieving open targets: {ex.Message}");
+            }
+
+            return results;
+        }
+
+        private string BuildUnifiedQuery(HashSet<OpenTargetType> enabledTypes)
+        {
+            var unionClauses = new List<string>();
+
+            foreach (var type in enabledTypes)
+            {
+                string clause = GetUnionClauseForType(type);
+                if (!string.IsNullOrEmpty(clause))
+                {
+                    unionClauses.Add(clause);
+                }
+            }
+
+            if (unionClauses.Count == 0)
+            {
+                return string.Empty;
+            }
+
+            // Build the complete query with CTE and ranking (Oracle syntax)
+            var query = $@"
+WITH U AS (
+{string.Join("\n\nUNION ALL\n\n", unionClauses)}
+)
+SELECT DEFN_TYPE, ID, DESCR, LASTUPDDTTM
+FROM (
+  SELECT U.*,
+         ROW_NUMBER() OVER (
+           PARTITION BY DEFN_TYPE
+           ORDER BY CASE
+                      WHEN (LENGTH(:id_search) > 0 AND INSTR(UPPER(ID), UPPER(:id_search)) > 0) AND 
+                           (LENGTH(:descr_search) > 0 AND INSTR(UPPER(DESCR), UPPER(:descr_search)) > 0)
+                      THEN LEAST(INSTR(UPPER(ID), UPPER(:id_search)), INSTR(UPPER(DESCR), UPPER(:descr_search)))
+                      WHEN LENGTH(:id_search) > 0 AND INSTR(UPPER(ID), UPPER(:id_search)) > 0 
+                      THEN INSTR(UPPER(ID), UPPER(:id_search))
+                      WHEN LENGTH(:descr_search) > 0 AND INSTR(UPPER(DESCR), UPPER(:descr_search)) > 0 
+                      THEN INSTR(UPPER(DESCR), UPPER(:descr_search))
+                      ELSE 999999
+                    END,
+                    ID
+         ) AS RN
+  FROM U
+)
+WHERE RN <= :max_rows_per_type
+ORDER BY DEFN_TYPE ASC, ID ASC, CASE WHEN :sort_by_date = 'Y' THEN LASTUPDDTTM END DESC";
+
+            return query;
+        }
+
+        private string GetUnionClauseForType(OpenTargetType type)
+        {
+            return type switch
+            {
+                OpenTargetType.Activity => @"
+  SELECT 'Activity' AS DEFN_TYPE, ACTIVITYNAME AS ID, DESCR60 AS DESCR, LASTUPDDTTM
+  FROM   PSACTIVITYDEFN
+  WHERE  (LENGTH(:id_search) = 0 OR UPPER(ACTIVITYNAME) LIKE UPPER(:id_search || '%') ESCAPE '\')
+     AND (LENGTH(:descr_search) = 0 OR UPPER(DESCR60) LIKE UPPER('%' || :descr_search || '%') ESCAPE '\')
+     AND (LENGTH(:id_search) > 0 OR LENGTH(:descr_search) > 0)",
+
+                OpenTargetType.AnalyticModel => @"
+  SELECT 'Analytic Model' AS DEFN_TYPE, ACEMODELID AS ID, DESCR AS DESCR, LASTUPDDTTM
+  FROM   PSACEMDLDEFN
+  WHERE  (LENGTH(:id_search) = 0 OR UPPER(ACEMODELID) LIKE UPPER(:id_search || '%') ESCAPE '\')
+     AND (LENGTH(:descr_search) = 0 OR UPPER(DESCR) LIKE UPPER('%' || :descr_search || '%') ESCAPE '\')
+     AND (LENGTH(:id_search) > 0 OR LENGTH(:descr_search) > 0)",
+
+                OpenTargetType.AnalyticType => @"
+  SELECT 'Analytic Type' AS DEFN_TYPE, PROBTYPE AS ID, DESCR AS DESCR, LASTUPDDTTM
+  FROM   PSOPTPRBTYPE
+  WHERE  (LENGTH(:id_search) = 0 OR UPPER(PROBTYPE) LIKE UPPER(:id_search || '%') ESCAPE '\')
+     AND (LENGTH(:descr_search) = 0 OR UPPER(DESCR) LIKE UPPER('%' || :descr_search || '%') ESCAPE '\')
+     AND (LENGTH(:id_search) > 0 OR LENGTH(:descr_search) > 0)",
+
+                OpenTargetType.AppEngineProgram => @"
+  SELECT 'App Engine Program' AS DEFN_TYPE, AE_APPLID AS ID, TO_CHAR(DESCR) AS DESCR, LASTUPDDTTM
+  FROM PSAEAPPLDEFN
+  WHERE  (LENGTH(:id_search) = 0 OR UPPER(AE_APPLID) LIKE UPPER(:id_search || '%') ESCAPE '\')
+     AND (LENGTH(:descr_search) = 0 OR UPPER(DESCR) LIKE UPPER('%' || :descr_search || '%') ESCAPE '\')
+     AND (LENGTH(:id_search) > 0 OR LENGTH(:descr_search) > 0)",
+
+                OpenTargetType.ApplicationPackage => @"
+  SELECT 'Application Package' AS DEFN_TYPE, 
+         PACKAGEID AS ID, 
+         TO_CHAR(DESCRLONG) AS DESCR, LASTUPDDTTM
+  FROM   PSPACKAGEDEFN
+  WHERE  (LENGTH(:id_search) = 0 OR UPPER(PACKAGEID) LIKE UPPER(:id_search || '%') ESCAPE '\')
+     AND (LENGTH(:descr_search) = 0 OR UPPER(DESCRLONG) LIKE UPPER('%' || :descr_search || '%') ESCAPE '\')
+     AND (LENGTH(:id_search) > 0 OR LENGTH(:descr_search) > 0)",
+
+                OpenTargetType.ApplicationClass => @"
+  SELECT 'Application Class' AS DEFN_TYPE, 
+         PACKAGEROOT || CASE WHEN QUALIFYPATH = ':' THEN '' ELSE ':' || QUALIFYPATH END || ':' || APPCLASSID AS ID, 
+         DESCR AS DESCR, SYSDATE AS LASTUPDDTTM
+  FROM PSAPPCLASSDEFN
+  WHERE  (LENGTH(:id_search) = 0 OR UPPER(PACKAGEROOT || CASE WHEN QUALIFYPATH = ':' THEN '' ELSE ':' || QUALIFYPATH END || ':' || APPCLASSID) LIKE UPPER('%' || :id_search || '%') ESCAPE '\')
+     AND (LENGTH(:descr_search) = 0 OR UPPER(DESCR) LIKE UPPER('%' || :descr_search || '%') ESCAPE '\')
+     AND (LENGTH(:id_search) > 0 OR LENGTH(:descr_search) > 0)",
+
+                OpenTargetType.ApprovalRuleSet => @"
+  SELECT 'Approval Rule Set' AS DEFN_TYPE, APPR_RULE_SET AS ID, DESCR60 AS DESCR, LASTUPDDTTM
+  FROM PS_APPR_RULE_HDR
+  WHERE  (LENGTH(:id_search) = 0 OR UPPER(APPR_RULE_SET) LIKE UPPER(:id_search || '%') ESCAPE '\')
+     AND (LENGTH(:descr_search) = 0 OR UPPER(DESCR60) LIKE UPPER('%' || :descr_search || '%') ESCAPE '\')
+     AND (LENGTH(:id_search) > 0 OR LENGTH(:descr_search) > 0)",
+
+                OpenTargetType.BusinessInterlink => @"
+  SELECT 'Business Interlink' AS DEFN_TYPE, IONAME AS ID, IODESCR AS DESCR, LASTUPDDTTM
+  FROM PSIODEFN
+  WHERE  (LENGTH(:id_search) = 0 OR UPPER(IONAME) LIKE UPPER(:id_search || '%') ESCAPE '\')
+     AND (LENGTH(:descr_search) = 0 OR UPPER(IODESCR) LIKE UPPER('%' || :descr_search || '%') ESCAPE '\')
+     AND (LENGTH(:id_search) > 0 OR LENGTH(:descr_search) > 0)",
+
+                OpenTargetType.BusinessProcess => @"
+  SELECT 'Business Process' AS DEFN_TYPE, BUSPROCNAME AS ID, DESCR60 AS DESCR, LASTUPDDTTM
+  FROM   PSBUSPROCDEFN
+  WHERE  (LENGTH(:id_search) = 0 OR UPPER(BUSPROCNAME) LIKE UPPER(:id_search || '%') ESCAPE '\')
+     AND (LENGTH(:descr_search) = 0 OR UPPER(DESCR60) LIKE UPPER('%' || :descr_search || '%') ESCAPE '\')
+     AND (LENGTH(:id_search) > 0 OR LENGTH(:descr_search) > 0)",
+
+                OpenTargetType.Component => @"
+  SELECT 'Component' AS DEFN_TYPE, PNLGRPNAME AS ID, DESCR AS DESCR, LASTUPDDTTM
+  FROM   PSPNLGRPDEFN
+  WHERE  (LENGTH(:id_search) = 0 OR UPPER(PNLGRPNAME) LIKE UPPER(:id_search || '%') ESCAPE '\')
+     AND (LENGTH(:descr_search) = 0 OR UPPER(DESCR) LIKE UPPER('%' || :descr_search || '%') ESCAPE '\')
+     AND (LENGTH(:id_search) > 0 OR LENGTH(:descr_search) > 0)",
+
+                OpenTargetType.ComponentInterface => @"
+  SELECT 'Component Interface' AS DEFN_TYPE, BCNAME AS ID, DESCR AS DESCR, LASTUPDDTTM
+  FROM   PSBCDEFN
+  WHERE  (LENGTH(:id_search) = 0 OR UPPER(BCNAME) LIKE UPPER(:id_search || '%') ESCAPE '\')
+     AND (LENGTH(:descr_search) = 0 OR UPPER(DESCR) LIKE UPPER('%' || :descr_search || '%') ESCAPE '\')
+     AND (LENGTH(:id_search) > 0 OR LENGTH(:descr_search) > 0)",
+
+                OpenTargetType.Field => @"
+  SELECT 'Field' AS DEFN_TYPE, FIELDNAME AS ID, TO_CHAR(DESCRLONG) AS DESCR, LASTUPDDTTM
+  FROM   PSDBFIELD
+  WHERE  (LENGTH(:id_search) = 0 OR UPPER(FIELDNAME) LIKE UPPER(:id_search || '%') ESCAPE '\')
+     AND (LENGTH(:descr_search) = 0 OR UPPER(DESCRLONG) LIKE UPPER('%' || :descr_search || '%') ESCAPE '\')
+     AND (LENGTH(:id_search) > 0 OR LENGTH(:descr_search) > 0)",
+
+                OpenTargetType.FileLayout => @"
+  SELECT 'File Layout' AS DEFN_TYPE, FLDDEFNNAME AS ID, DESCR AS DESCR, LASTUPDDTTM
+  FROM   PSFLDDEFN
+  WHERE  (LENGTH(:id_search) = 0 OR UPPER(FLDDEFNNAME) LIKE UPPER(:id_search || '%') ESCAPE '\')
+     AND (LENGTH(:descr_search) = 0 OR UPPER(DESCR) LIKE UPPER('%' || :descr_search || '%') ESCAPE '\')
+     AND (LENGTH(:id_search) > 0 OR LENGTH(:descr_search) > 0)",
+
+                OpenTargetType.FileReference => @"
+  SELECT 'File Reference' AS DEFN_TYPE, FILEREFNAME AS ID, TO_CHAR(DESCRLONG) AS DESCR, LASTUPDDTTM
+  FROM PSFILEREDEFN
+  WHERE  (LENGTH(:id_search) = 0 OR UPPER(FILEREFNAME) LIKE UPPER(:id_search || '%') ESCAPE '\')
+     AND (LENGTH(:descr_search) = 0 OR UPPER(TO_CHAR(DESCRLONG)) LIKE UPPER('%' || :descr_search || '%') ESCAPE '\')
+     AND (LENGTH(:id_search) > 0 OR LENGTH(:descr_search) > 0)",
+
+                OpenTargetType.HTML => @"
+  SELECT 'HTML' AS DEFN_TYPE, CONTNAME AS ID, DESCR AS DESCR, LASTUPDDTTM
+  FROM   PSCONTDEFN
+  WHERE  CONTTYPE = 4
+     AND (LENGTH(:id_search) = 0 OR UPPER(CONTNAME) LIKE UPPER(:id_search || '%') ESCAPE '\')
+     AND (LENGTH(:descr_search) = 0 OR UPPER(DESCR) LIKE UPPER('%' || :descr_search || '%') ESCAPE '\')
+     AND (LENGTH(:id_search) > 0 OR LENGTH(:descr_search) > 0)",
+
+                OpenTargetType.Image => @"
+  SELECT 'Image' AS DEFN_TYPE, CONTNAME AS ID, DESCR AS DESCR, LASTUPDDTTM
+  FROM   PSCONTDEFN
+  WHERE  CONTTYPE = 1
+     AND (LENGTH(:id_search) = 0 OR UPPER(CONTNAME) LIKE UPPER(:id_search || '%') ESCAPE '\')
+     AND (LENGTH(:descr_search) = 0 OR UPPER(DESCR) LIKE UPPER('%' || :descr_search || '%') ESCAPE '\')
+     AND (LENGTH(:id_search) > 0 OR LENGTH(:descr_search) > 0)",
+
+                OpenTargetType.Menu => @"
+  SELECT 'Menu' AS DEFN_TYPE, MENUNAME AS ID, DESCR AS DESCR, LASTUPDDTTM
+  FROM   PSMENUDEFN
+  WHERE  (LENGTH(:id_search) = 0 OR UPPER(MENUNAME) LIKE UPPER(:id_search || '%') ESCAPE '\')
+     AND (LENGTH(:descr_search) = 0 OR UPPER(DESCR) LIKE UPPER('%' || :descr_search || '%') ESCAPE '\')
+     AND (LENGTH(:id_search) > 0 OR LENGTH(:descr_search) > 0)",
+
+                OpenTargetType.Message => @"
+  SELECT 'Message' AS DEFN_TYPE, MSGNAME AS ID, DESCR AS DESCR, LASTUPDDTTM
+  FROM   PSMSGDEFN
+  WHERE  (LENGTH(:id_search) = 0 OR UPPER(MSGNAME) LIKE UPPER(:id_search || '%') ESCAPE '\')
+     AND (LENGTH(:descr_search) = 0 OR UPPER(DESCR) LIKE UPPER('%' || :descr_search || '%') ESCAPE '\')
+     AND (LENGTH(:id_search) > 0 OR LENGTH(:descr_search) > 0)",
+
+                OpenTargetType.OptimizationModel => @"
+  SELECT 'Optimization Model' AS DEFN_TYPE, PAMS_MODEL_NAME AS ID, DESCR AS DESCR, LASTUPDDTTM
+  FROM   PSOPTMODEL
+  WHERE  (LENGTH(:id_search) = 0 OR UPPER(PAMS_MODEL_NAME) LIKE UPPER(:id_search || '%') ESCAPE '\')
+     AND (LENGTH(:descr_search) = 0 OR UPPER(DESCR) LIKE UPPER('%' || :descr_search || '%') ESCAPE '\')
+     AND (LENGTH(:id_search) > 0 OR LENGTH(:descr_search) > 0)",
+
+                OpenTargetType.Page => @"
+  SELECT 'Page' AS DEFN_TYPE, PNLNAME AS ID, DESCR AS DESCR, LASTUPDDTTM
+  FROM   PSPNLDEFN
+  WHERE  PNLTYPE <> 7
+     AND (LENGTH(:id_search) = 0 OR UPPER(PNLNAME) LIKE UPPER(:id_search || '%') ESCAPE '\')
+     AND (LENGTH(:descr_search) = 0 OR UPPER(DESCR) LIKE UPPER('%' || :descr_search || '%') ESCAPE '\')
+     AND (LENGTH(:id_search) > 0 OR LENGTH(:descr_search) > 0)",
+
+                OpenTargetType.PageFluid => @"
+  SELECT 'Page (Fluid)' AS DEFN_TYPE, PNLNAME AS ID, DESCR AS DESCR, LASTUPDDTTM
+  FROM   PSPNLDEFN
+  WHERE  PNLTYPE = 7
+     AND (LENGTH(:id_search) = 0 OR UPPER(PNLNAME) LIKE UPPER(:id_search || '%') ESCAPE '\')
+     AND (LENGTH(:descr_search) = 0 OR UPPER(DESCR) LIKE UPPER('%' || :descr_search || '%') ESCAPE '\')
+     AND (LENGTH(:id_search) > 0 OR LENGTH(:descr_search) > 0)",
+
+                OpenTargetType.Project => @"
+  SELECT 'Project' AS DEFN_TYPE, PROJECTNAME AS ID, PROJECTDESCR AS DESCR, LASTUPDDTTM
+  FROM   PSPROJECTDEFN
+  WHERE  (LENGTH(:id_search) = 0 OR UPPER(PROJECTNAME) LIKE UPPER(:id_search || '%') ESCAPE '\')
+     AND (LENGTH(:descr_search) = 0 OR UPPER(PROJECTDESCR) LIKE UPPER('%' || :descr_search || '%') ESCAPE '\')
+     AND (LENGTH(:id_search) > 0 OR LENGTH(:descr_search) > 0)",
+
+                OpenTargetType.Record => @"
+  SELECT 'Record' AS DEFN_TYPE, RECNAME AS ID, RECDESCR AS DESCR, LASTUPDDTTM
+  FROM   PSRECDEFN
+  WHERE  (LENGTH(:id_search) = 0 OR UPPER(RECNAME) LIKE UPPER(:id_search || '%') ESCAPE '\')
+     AND (LENGTH(:descr_search) = 0 OR UPPER(RECDESCR) LIKE UPPER('%' || :descr_search || '%') ESCAPE '\')
+     AND (LENGTH(:id_search) > 0 OR LENGTH(:descr_search) > 0)",
+
+                OpenTargetType.SQL => @"
+  SELECT 'SQL' AS DEFN_TYPE, SQLID AS ID, ' ' AS DESCR, LASTUPDDTTM
+  FROM   PSSQLDEFN
+  WHERE  (LENGTH(:id_search) = 0 OR UPPER(SQLID) LIKE UPPER(:id_search || '%') ESCAPE '\')
+     AND (LENGTH(:descr_search) = 0 OR ' ' LIKE UPPER('%' || :descr_search || '%') ESCAPE '\')
+     AND (LENGTH(:id_search) > 0 OR LENGTH(:descr_search) > 0)",
+
+                OpenTargetType.StyleSheet => @"
+  SELECT 'Style Sheet' AS DEFN_TYPE, CONTNAME AS ID, DESCR AS DESCR, LASTUPDDTTM
+  FROM   PSCONTDEFN
+  WHERE  CONTTYPE = 9
+     AND (LENGTH(:id_search) = 0 OR UPPER(CONTNAME) LIKE UPPER(:id_search || '%') ESCAPE '\')
+     AND (LENGTH(:descr_search) = 0 OR UPPER(DESCR) LIKE UPPER('%' || :descr_search || '%') ESCAPE '\')
+     AND (LENGTH(:id_search) > 0 OR LENGTH(:descr_search) > 0)",
+
+                _ => string.Empty
+            };
+        }
+
+        private bool TryMapDefnTypeToEnum(string defnType, out OpenTargetType targetType)
+        {
+            targetType = defnType switch
+            {
+                "Activity" => OpenTargetType.Activity,
+                "Analytic Model" => OpenTargetType.AnalyticModel,
+                "Analytic Type" => OpenTargetType.AnalyticType,
+                "App Engine Program" => OpenTargetType.AppEngineProgram,
+                "Application Package" => OpenTargetType.ApplicationPackage,
+                "Application Class" => OpenTargetType.ApplicationClass,
+                "Approval Rule Set" => OpenTargetType.ApprovalRuleSet,
+                "Business Interlink" => OpenTargetType.BusinessInterlink,
+                "Business Process" => OpenTargetType.BusinessProcess,
+                "Component" => OpenTargetType.Component,
+                "Component Interface" => OpenTargetType.ComponentInterface,
+                "Field" => OpenTargetType.Field,
+                "File Layout" => OpenTargetType.FileLayout,
+                "File Reference" => OpenTargetType.FileReference,
+                "HTML" => OpenTargetType.HTML,
+                "Image" => OpenTargetType.Image,
+                "Menu" => OpenTargetType.Menu,
+                "Message" => OpenTargetType.Message,
+                "Optimization Model" => OpenTargetType.OptimizationModel,
+                "Page" => OpenTargetType.Page,
+                "Page (Fluid)" => OpenTargetType.PageFluid,
+                "Project" => OpenTargetType.Project,
+                "Record" => OpenTargetType.Record,
+                "SQL" => OpenTargetType.SQL,
+                "Style Sheet" => OpenTargetType.StyleSheet,
+                _ => OpenTargetType.UNKNOWN // Default fallback
+            };
+
+            return defnType != null || targetType != OpenTargetType.UNKNOWN;
+        }
+
+        private List<(PSCLASSID, string)> CreateObjectPairs(OpenTargetType targetType, string id)
+        {
+            var pairs = new List<(PSCLASSID, string)>();
+
+            switch (targetType)
+            {
+                case OpenTargetType.Project:
+                    pairs.Add((PSCLASSID.PROJECT, id));
+                    break;
+                case OpenTargetType.Page:
+                case OpenTargetType.PageFluid:
+                    pairs.Add((PSCLASSID.PAGE, id));
+                    break;
+                case OpenTargetType.Activity:
+                    pairs.Add((PSCLASSID.ACTIVITYNAME, id));
+                    break;
+                case OpenTargetType.AnalyticModel:
+                    pairs.Add((PSCLASSID.ANALYTIC_MODEL_ID, id));
+                    break;
+                case OpenTargetType.AnalyticType:
+                    pairs.Add((PSCLASSID.NONE, id)); // No specific PSCLASSID for analytic types
+                    break;
+                case OpenTargetType.AppEngineProgram:
+                    pairs.Add((PSCLASSID.AEAPPLICATIONID, id));
+                    break;
+                case OpenTargetType.ApplicationPackage:
+                    // Application packages use a hierarchical structure
+                    pairs.Add((PSCLASSID.APPLICATION_PACKAGE, id));
+                    break;
+                case OpenTargetType.ApplicationClass:
+                    // Application classes use package root, qualify path, and class name
+                    string[] classParts = id.Split(':');
+                    var currentClassID = PSCLASSID.APPLICATION_PACKAGE;
+                    for (var x = 0; x < classParts.Length; x++)
+                    {
+                        pairs.Add(((PSCLASSID)currentClassID++, classParts[x]));
+                    }
+
+                    /* Last one is always APPLICATION_CLASS */
+                    pairs[pairs.Count - 1] = (PSCLASSID.APPLICATION_CLASS, pairs[pairs.Count - 1].Item2);
+                    pairs.Add((PSCLASSID.METHOD, "OnExecute"));
+                    break;
+                case OpenTargetType.ApprovalRuleSet:
+                    pairs.Add((PSCLASSID.APPRRULESET, id));
+                    break;
+                case OpenTargetType.BusinessInterlink:
+                    pairs.Add((PSCLASSID.NONE, id)); // No specific PSCLASSID for business interlinks
+                    break;
+                case OpenTargetType.BusinessProcess:
+                    pairs.Add((PSCLASSID.BUSINESSPROCESS, id));
+                    break;
+                case OpenTargetType.Component:
+                    pairs.Add((PSCLASSID.COMPONENT, id));
+                    break;
+                case OpenTargetType.ComponentInterface:
+                    pairs.Add((PSCLASSID.COMPONENTINTERFACE, id));
+                    break;
+                case OpenTargetType.Field:
+                    pairs.Add((PSCLASSID.FIELD, id));
+                    break;
+                case OpenTargetType.FileLayout:
+                    pairs.Add((PSCLASSID.FILELAYOUT, id));
+                    break;
+                case OpenTargetType.FileReference:
+                    pairs.Add((PSCLASSID.FILEREFERENCE, id));
+                    break;
+                case OpenTargetType.HTML:
+                    pairs.Add((PSCLASSID.HTML, id));
+                    break;
+                case OpenTargetType.Image:
+                    pairs.Add((PSCLASSID.IMAGE, id));
+                    break;
+                case OpenTargetType.Menu:
+                    pairs.Add((PSCLASSID.MENU, id));
+                    break;
+                case OpenTargetType.Message:
+                    pairs.Add((PSCLASSID.MESSAGE, id));
+                    break;
+                case OpenTargetType.OptimizationModel:
+                    pairs.Add((PSCLASSID.OPTMODEL, id));
+                    break;
+                case OpenTargetType.Record:
+                    pairs.Add((PSCLASSID.RECORD, id));
+                    break;
+                case OpenTargetType.SQL:
+                    pairs.Add((PSCLASSID.SQL, id));
+                    break;
+                case OpenTargetType.StyleSheet:
+                    pairs.Add((PSCLASSID.STYLESHEET, id));
+                    break;
+                default:
+                    // For any remaining types without specific PSCLASSID mapping
+                    pairs.Add((PSCLASSID.NONE, id));
+                    break;
+            }
+
+            return pairs;
+        }
+
+        /// <summary>
+        /// Gets programs from PSPCMPROG that may contain function definitions
+        /// </summary>
+        /// <returns>List of OpenTarget objects representing programs that may contain function definitions</returns>
+        public List<OpenTarget> GetFunctionDefiningPrograms()
+        {
+            if (!IsConnected)
+            {
+                throw new InvalidOperationException("Database connection is not open");
+            }
+
+            var results = new List<OpenTarget>();
+
+            try
+            {
+                // Base query to find programs in PSPCMPROG
+                // TODO: Add specific filtering logic based on queryFilter parameter
+                string sql = @"
+                    SELECT DISTINCT 
+                        OBJECTID1, OBJECTVALUE1,
+                        OBJECTID2, OBJECTVALUE2, 
+                        OBJECTID3, OBJECTVALUE3,
+                        OBJECTID4, OBJECTVALUE4,
+                        OBJECTID5, OBJECTVALUE5,
+                        OBJECTID6, OBJECTVALUE6,
+                        OBJECTID7, OBJECTVALUE7
+                    FROM PSPCMPROG
+                    WHERE OBJECTID1 = 1
+                    AND OBJECTID2 = 2
+                    AND OBJECTID3 = 12 AND OBJECTVALUE3 = 'FieldFormula'";
+
+                using var command = _connection.CreateCommand();
+                command.CommandText = sql;
+
+                using var reader = command.ExecuteReader();
+                while (reader.Read())
+                {
+                    var objectPairs = new List<(PSCLASSID ObjectID, string ObjectValue)>();
+
+                    // Read all 7 object ID/value pairs
+                    for (int i = 0; i < 7; i++)
+                    {
+                        int objIdIndex = i * 2;
+                        int objValueIndex = objIdIndex + 1;
+
+                        if (!reader.IsDBNull(objIdIndex) && !reader.IsDBNull(objValueIndex))
+                        {
+                            var objectId = (PSCLASSID)reader.GetInt32(objIdIndex);
+                            var objectValue = reader.GetString(objValueIndex);
+                            
+                            if (objectId != PSCLASSID.NONE && !string.IsNullOrEmpty(objectValue))
+                            {
+                                objectPairs.Add((objectId, objectValue));
+                            }
+                        }
+                    }
+
+                    if (objectPairs.Count > 0)
+                    {
+                        // Create OpenTarget - for programs we'll use a generic name and description
+                        var name = BuildProgramName(objectPairs);
+                        results.Add(new OpenTarget(
+                            OpenTargetType.UNKNOWN, // Programs don't have a specific OpenTargetType
+                            name,
+                            "PeopleCode Program",
+                            objectPairs
+                        ));
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.Log($"Error getting function defining programs: {ex.Message}");
+            }
+
+            return results;
+        }
+
+        /// <summary>
+        /// Builds a descriptive name for a program based on its object pairs
+        /// </summary>
+        /// <param name="objectPairs">The object ID/value pairs</param>
+        /// <returns>A descriptive name for the program</returns>
+        private static string BuildProgramName(List<(PSCLASSID ObjectID, string ObjectValue)> objectPairs)
+        {
+            // TODO: Enhance this method to create meaningful program names based on object types
+            var values = objectPairs.Where(o => o.ObjectID != PSCLASSID.NONE).Select(p => p.ObjectValue).Where(v => !string.IsNullOrEmpty(v));
+            return string.Join(".", values);
+        }
+
+        /// <summary>
+        /// Gets the PeopleCode program text for a given OpenTarget
+        /// </summary>
+        /// <param name="openTarget">The OpenTarget representing the program</param>
+        /// <returns>The program text as a string, or null if not found</returns>
+        public string? GetPeopleCodeProgram(OpenTarget openTarget)
+        {
+            if (!IsConnected)
+            {
+                throw new InvalidOperationException("Database connection is not open");
+            }
+
+            try
+            {
+                // Create PeopleCodeItem from OpenTarget
+                var item = new PeopleCodeItem(
+                    [.. openTarget.ObjectIDs.Select(a => (int)a)],
+                    [.. openTarget.ObjectValues.Select(a => a ?? " ")],
+                    Array.Empty<byte>(),
+                    new List<NameReference>()
+                );
+
+                // Load the program content
+                if (LoadPeopleCodeItemContent(item))
+                {
+                    return item.GetProgramTextAsString();
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.Log($"Error getting PeopleCode program: {ex.Message}");
+            }
+
+            return null;
+        }
+
+        public string GetToolsVersion()
+        {
+            string sql = @"SELECT TOOLSREL || '.' || PTPATCHREL FROM PSSTATUS";
+
+            try
+            {
+                DataTable result = _connection.ExecuteQuery(sql);
+
+                if (result.Rows.Count == 0)
+                {
+                    return "99.99.99";
+                }
+
+                return result.Rows[0][0].ToString()!;
+            }
+            catch (Exception)
+            {
+                // Handle database errors
+                return "99.99.99";
+            }
         }
     }
 }

@@ -1,7 +1,5 @@
 using AppRefiner; // For ScintillaEditor, ModifierKeys etc.
 using AppRefiner.Refactors;
-using AppRefiner.PeopleCode; // For PeopleCodeParserBaseListener
-using static AppRefiner.PeopleCode.PeopleCodeParser;
 using System.Windows.Forms; // For Keys enum
 
 namespace PluginSample
@@ -25,7 +23,7 @@ namespace PluginSample
             // Example: Insert a comment before every return statement
             string comment = $"/* Sample Refactor Added Comment {DateTime.Now} */\n"; // Use \n for newline
 
-            // Use helper methods from BaseRefactor to add changes
+            // Use helper methods from ScopedRefactor to add changes
             InsertBefore(context, comment, "Add sample comment");
         }
 
@@ -33,4 +31,4 @@ namespace PluginSample
         // public override bool RequiresUserInputDialog => true; // If you need a dialog
         // public override bool ShowRefactorDialog() { /* Show dialog logic */ return true; }
     }
-} 
+}

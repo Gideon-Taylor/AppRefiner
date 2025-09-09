@@ -17,11 +17,15 @@
 // Message to toggle auto-pairing feature
 #define WM_TOGGLE_AUTO_PAIRING (WM_USER + 1002)
 // Message to subclass a window
-#define WM_SUBCLASS_WINDOW (WM_USER + 1003)
-// Message to toggle main window shortcuts feature
-#define WM_TOGGLE_MAIN_WINDOW_SHORTCUTS (WM_USER + 1006)
+#define WM_SUBCLASS_SCINTILLA_PARENT_WINDOW (WM_USER + 1003)
+// Message to set main window shortcuts feature (now using bit field)
+#define WM_SET_MAIN_WINDOW_SHORTCUTS (WM_USER + 1006)
 // Message to subclass main window
 #define WM_SUBCLASS_MAIN_WINDOW (WM_USER + 1005)
+// Message to subclass Results list view
+#define WM_AR_SUBCLASS_RESULTS_LIST (WM_USER + 1007)
+// Message to set open target for Results list interception
+#define WM_AR_SET_OPEN_TARGET (WM_USER + 1008)
 
 /* TODO define messages with a mask to indicate "this is a scintilla event message" */
 #define WM_SCN_EVENT_MASK 0x7000
@@ -49,7 +53,16 @@ extern HHOOK g_keyboardHook;
 extern HMODULE g_hModule;
 extern HMODULE g_dllSelfReference;
 extern bool g_enableAutoPairing;
-extern bool g_enableMainWindowShortcuts;
+// Bit field for shortcut types
+enum ShortcutType : unsigned int {
+    SHORTCUT_NONE = 0,
+    SHORTCUT_COMMAND_PALETTE = 1 << 0,  // Always enabled - Ctrl+Shift+P
+    SHORTCUT_OPEN = 1 << 1,             // Override Ctrl+O
+    SHORTCUT_SEARCH = 1 << 2,           // Override Ctrl+F, Ctrl+H, F3
+    SHORTCUT_ALL = SHORTCUT_COMMAND_PALETTE | SHORTCUT_OPEN | SHORTCUT_SEARCH
+};
+
+extern unsigned int g_enabledShortcuts;
 extern DWORD g_lastClipboardSequence;
 extern DWORD g_lastSeenClipboardSequence;
 extern bool g_hasUnprocessedCopy;
@@ -59,3 +72,4 @@ extern HWND g_callbackWindow;
 const UINT_PTR SUBCLASS_ID = 1001;
 const UINT_PTR SCINTILLA_SUBCLASS_ID = 1002;
 const UINT_PTR MAIN_WINDOW_SUBCLASS_ID = 1003;
+const UINT_PTR RESULTS_LIST_SUBCLASS_ID = 1004;

@@ -1,4 +1,5 @@
-using static AppRefiner.PeopleCode.PeopleCodeParser;
+using PeopleCodeParser.SelfHosted;
+using PeopleCodeParser.SelfHosted.Nodes;
 
 namespace AppRefiner.Linters
 {
@@ -8,12 +9,12 @@ namespace AppRefiner.Linters
     public class LongExpressionLinter : BaseLintRule
     {
         public override string LINTER_ID => "LONG_EXPR";
-        
+
         /// <summary>
         /// Maximum character length for an expression before it's considered too long
         /// </summary>
         public int MaxExpressionLength { get; set; } = 200;
-        
+
         /// <summary>
         /// Maximum number of operators in a single expression before it's considered too complex
         /// </summary>
@@ -26,117 +27,74 @@ namespace AppRefiner.Linters
             Active = false;
         }
 
-        // Handle each specific expression type
-        public override void EnterAddSubtrExpr(AddSubtrExprContext context)
+        public override void VisitBinaryOperation(BinaryOperationNode node)
         {
-            CheckExpressionComplexity(context);
+            CheckExpressionComplexity(node);
+            base.VisitBinaryOperation(node);
         }
 
-        public override void EnterMultDivExpr(MultDivExprContext context)
+        public override void VisitFunctionCall(FunctionCallNode node)
         {
-            CheckExpressionComplexity(context);
+            CheckExpressionComplexity(node);
+            base.VisitFunctionCall(node);
         }
 
-        public override void EnterEqualityExpr(EqualityExprContext context)
-        {
-            CheckExpressionComplexity(context);
-        }
-
-        public override void EnterComparisonExpr(ComparisonExprContext context)
-        {
-            CheckExpressionComplexity(context);
-        }
-
-        public override void EnterAndOrExpr(AndOrExprContext context)
-        {
-            CheckExpressionComplexity(context);
-        }
-
-        public override void EnterConcatenationExpr(ConcatenationExprContext context)
-        {
-            CheckExpressionComplexity(context);
-        }
-
-        public override void EnterExponentialExpr(ExponentialExprContext context)
-        {
-            CheckExpressionComplexity(context);
-        }
-
-        // Handle additional expression types
-        public override void EnterParenthesizedExpr(ParenthesizedExprContext context)
-        {
-            CheckExpressionComplexity(context);
-        }
-
-        public override void EnterFunctionCallExpr(FunctionCallExprContext context)
-        {
-            CheckExpressionComplexity(context);
-        }
-
-
-        private void CheckExpressionComplexity(ExpressionContext context)
+        private void CheckExpressionComplexity(AstNode node)
         {
             // Skip expressions within expressions to avoid duplication
-            if (context.Parent is ExpressionContext)
+            if (node.Parent is ExpressionNode)
                 return;
 
             // Check expression length
-            var expressionText = context.GetText();
+            var expressionText = node.SourceSpan.ToString();
             if (expressionText.Length > MaxExpressionLength)
             {
                 AddReport(
                     1,
                     $"Expression is too long ({expressionText.Length} chars). Consider breaking it down into smaller parts.",
                     Type,
-                    context.Start.Line - 1,
-                    context
+                    node.SourceSpan.Start.Line,
+                    node.SourceSpan
                 );
                 return;
             }
 
             // Count operators in complex expressions
-            int operatorCount = CountOperators(context);
+            int operatorCount = CountOperators(node);
             if (operatorCount > MaxOperatorCount)
             {
                 AddReport(
                     2,
                     $"Expression is too complex with {operatorCount} operators. Consider simplifying.",
                     Type,
-                    context.Start.Line - 1,
-                    context
+                    node.SourceSpan.Start.Line,
+                    node.SourceSpan
                 );
             }
         }
 
-        private int CountOperators(ExpressionContext context)
+        private int CountOperators(AstNode node)
         {
             int count = 0;
 
-            // Count operators in this expression
-            if (context is AddSubtrExprContext ||
-                context is MultDivExprContext ||
-                context is EqualityExprContext ||
-                context is ComparisonExprContext ||
-                context is AndOrExprContext ||
-                context is ConcatenationExprContext ||
-                context is ExponentialExprContext)
+            // Count operators in binary operations
+            if (node is BinaryOperationNode)
             {
                 count++;
             }
 
-            // Function calls, method calls, and object creation can add complexity
-            if (context is FunctionCallExprContext)
+            // Function calls add complexity
+            if (node is FunctionCallNode)
             {
-                // Count parameter expressions separately via children iteration
                 count++;  // Count the call itself as an operation
             }
 
             // Recursively count operators in child expressions
-            if (context.children != null)
+            if (node.Children != null)
             {
-                foreach (var child in context.children)
+                foreach (var child in node.Children)
                 {
-                    if (child is ExpressionContext childExpr)
+                    if (child is ExpressionNode childExpr)
                     {
                         count += CountOperators(childExpr);
                     }

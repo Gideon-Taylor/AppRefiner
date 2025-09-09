@@ -1,20 +1,9 @@
-using Antlr4.Runtime.Tree;
 using AppRefiner.Dialogs;
-using AppRefiner.Events; // For ModifierKeys
-using AppRefiner.PeopleCode;
 using AppRefiner.Plugins;
-using AppRefiner.Refactors;
-using System;
-using System.Collections.Generic;
+using PeopleCodeParser.SelfHosted.Visitors;
 using System.Diagnostics;
-using System.Drawing;
-using System.IO;
-using System.Linq;
 using System.Reflection;
 using System.Text;
-using System.Windows.Forms;
-using static SqlParser.Ast.AlterRoleOperation;
-using Antlr4.Runtime;
 
 namespace AppRefiner.Refactors
 {
@@ -52,7 +41,7 @@ namespace AppRefiner.Refactors
                 return "";
             }
 
-            StringBuilder shortcutText = new StringBuilder();
+            StringBuilder shortcutText = new();
             if ((mods & ModifierKeys.Control) == ModifierKeys.Control) shortcutText.Append("Ctrl+");
             if ((mods & ModifierKeys.Shift) == ModifierKeys.Shift) shortcutText.Append("Shift+");
             if ((mods & ModifierKeys.Alt) == ModifierKeys.Alt) shortcutText.Append("Alt+");
@@ -75,7 +64,7 @@ namespace AppRefiner.Refactors
             mainForm = form;
             refactorGrid = refactorOptionsGrid;
             DiscoverAndCacheRefactors();
-            
+
             // Load refactor configurations
             RefactorConfigManager.LoadRefactorConfigs();
         }
@@ -98,8 +87,7 @@ namespace AppRefiner.Refactors
                 .SelectMany(s => s.GetTypes())
                 .Where(p => typeof(BaseRefactor).IsAssignableFrom(p) &&
                               !p.IsAbstract &&
-                              p != typeof(BaseRefactor) &&
-                              !p.IsGenericTypeDefinition); // Avoid ScopedRefactor<>
+                              !p.IsGenericTypeDefinition);
 
             // Add plugin refactors
             var pluginRefactors = PluginManager.DiscoverRefactorTypes();
@@ -135,8 +123,8 @@ namespace AppRefiner.Refactors
                     Debug.LogException(ex, $"Error discovering or caching metadata for refactor type: {type.FullName}");
                 }
             }
-              // Sort by name for consistent ordering
-             availableRefactors.Sort((r1, r2) => string.Compare(r1.Name, r2.Name, StringComparison.OrdinalIgnoreCase));
+            // Sort by name for consistent ordering
+            availableRefactors.Sort((r1, r2) => string.Compare(r1.Name, r2.Name, StringComparison.OrdinalIgnoreCase));
         }
 
         /// <summary>
@@ -147,7 +135,7 @@ namespace AppRefiner.Refactors
             if (refactorGrid == null) return;
 
             refactorGrid.Rows.Clear();
-            
+
             // Plugin discovery should remain here or be moved to a central PluginService
             string pluginDirectory = Path.Combine(
                 Path.GetDirectoryName(Application.ExecutablePath) ?? string.Empty,
@@ -163,7 +151,7 @@ namespace AppRefiner.Refactors
                 int rowIndex = refactorGrid.Rows.Add(refactorInfo.Description, String.IsNullOrEmpty(refactorInfo.ShortcutText) ? "Cmd Palette" : refactorInfo.ShortcutText);
                 refactorGrid.Rows[rowIndex].Tag = refactorInfo;
 
-                var configurableProperties = BaseRefactor.GetConfigurableProperties(refactorInfo.RefactorType);
+                var configurableProperties = refactorInfo.RefactorType.GetConfigurableProperties();
                 DataGridViewButtonCell buttonCell = (DataGridViewButtonCell)refactorGrid.Rows[rowIndex].Cells[2];
 
                 if (configurableProperties.Count > 0)
@@ -203,34 +191,34 @@ namespace AppRefiner.Refactors
             var prop = type.GetProperty(propertyName, BindingFlags.Public | BindingFlags.Static | BindingFlags.NonPublic | BindingFlags.FlattenHierarchy);
             if (prop != null && prop.PropertyType.IsEnum && prop.PropertyType == typeof(T)) // Ensure the property type matches T
             {
-                 try
-                 {
-                      object? value = prop.GetValue(null);
-                      if (value == null) return default(T); // Return default if value is null
+                try
+                {
+                    object? value = prop.GetValue(null);
+                    if (value == null) return default(T); // Return default if value is null
 
-                      // Special handling for ModifierKeys (Flags enum)
-                      if (typeof(T) == typeof(ModifierKeys))
-                      {
-                            // For flags, the combined value is valid, skip Enum.IsDefined
-                            return (T)value; 
-                      }
-                      
-                      // Original check for non-flags enums
-                      if (Enum.IsDefined(typeof(T), value))
-                      {
-                           return (T)value;
-                      }
-                 }
-                 catch(InvalidCastException castEx) 
-                 { 
-                      // Log specific cast error if needed
-                      Debug.Log($"Cast exception retrieving {propertyName} from {type.Name}: {castEx.Message}");
-                 } 
-                 catch (Exception ex) // Catch other potential reflection/conversion errors
-                 { 
-                      Debug.LogException(ex, $"Error retrieving enum property {propertyName} from {type.Name}");
-                      /* Ignore conversion errors, return default */ 
-                 }
+                    // Special handling for ModifierKeys (Flags enum)
+                    if (typeof(T) == typeof(ModifierKeys))
+                    {
+                        // For flags, the combined value is valid, skip Enum.IsDefined
+                        return (T)value;
+                    }
+
+                    // Original check for non-flags enums
+                    if (Enum.IsDefined(typeof(T), value))
+                    {
+                        return (T)value;
+                    }
+                }
+                catch (InvalidCastException castEx)
+                {
+                    // Log specific cast error if needed
+                    Debug.Log($"Cast exception retrieving {propertyName} from {type.Name}: {castEx.Message}");
+                }
+                catch (Exception ex) // Catch other potential reflection/conversion errors
+                {
+                    Debug.LogException(ex, $"Error retrieving enum property {propertyName} from {type.Name}");
+                    /* Ignore conversion errors, return default */
+                }
             }
             return default(T);
         }
@@ -246,18 +234,18 @@ namespace AppRefiner.Refactors
         {
             if (activeEditor == null || !activeEditor.IsValid())
             {
-                 Debug.Log("ExecuteRefactor called with null or invalid editor.");
-                 return;
+                Debug.Log("ExecuteRefactor called with null or invalid editor.");
+                return;
             }
             if (refactorClass == null)
             {
-                 Debug.Log("ExecuteRefactor called with null refactor instance.");
-                 return;
+                Debug.Log("ExecuteRefactor called with null refactor instance.");
+                return;
             }
 
             try
             {
-                ScintillaManager.ClearAnnotations(activeEditor); // Consider if this should be optional
+                //ScintillaManager.ClearAnnotations(activeEditor); // Consider if this should be optional
 
                 activeEditor.ContentString = ScintillaManager.GetScintillaText(activeEditor);
                 if (activeEditor.ContentString == null)
@@ -266,7 +254,7 @@ namespace AppRefiner.Refactors
                     Task.Delay(100).ContinueWith(_ =>
                     {
                         // Show message box with specific error
-                        var mainHandle = Process.GetProcessById((int)activeEditor.ProcessId).MainWindowHandle;
+                        var mainHandle = activeEditor.AppDesignerProcess.MainWindowHandle;
                         var handleWrapper = new WindowWrapper(mainHandle);
                         new MessageBoxDialog("Refactoring failed", "Refactoring Failed", MessageBoxButtons.OK, mainHandle).ShowDialog(handleWrapper);
                     });
@@ -282,25 +270,25 @@ namespace AppRefiner.Refactors
                 {
                     if (!refactorClass.ShowRefactorDialog()) // Pass owner Removed owner
                     {
-                         Debug.Log("Refactoring cancelled by user (pre-dialog).");
-                         return; // User cancelled
+                        Debug.Log("Refactoring cancelled by user (pre-dialog).");
+                        return; // User cancelled
                     }
                 }
 
-                var (program, stream, _) = activeEditor.GetParsedProgram(true); // Force refresh
+                var (program, tokens) = activeEditor.GetSelfHostedParsedProgramWithTokens(true); // Force refresh
 
                 // Check if parsing was successful and if this refactor can run on incomplete parses
-                if (!activeEditor.IsParseSuccessful && !refactorClass.RunOnIncompleteParse)
+                if (program == null || (!activeEditor.IsSelfHostedParseSuccessful && !refactorClass.RunOnIncompleteParse))
                 {
                     Debug.Log($"Skipping refactor '{refactorClass.GetType().Name}' due to parse errors and RunOnIncompleteParse=false");
                     if (showUserMessages)
                     {
                         Task.Delay(100).ContinueWith(_ =>
                         {
-                            var mainHandle = Process.GetProcessById((int)activeEditor.ProcessId).MainWindowHandle;
+                            var mainHandle = activeEditor.AppDesignerProcess.MainWindowHandle;
                             var handleWrapper = new WindowWrapper(mainHandle);
                             new MessageBoxDialog($"The refactor '{refactorClass.GetType().Name}' cannot run because there are syntax errors in the code.\n\n" +
-                                "Please fix the syntax errors first, then try the refactor again.", 
+                                "Please fix the syntax errors first, then try the refactor again.",
                                 "Refactor Skipped - Syntax Errors", MessageBoxButtons.OK, mainHandle).ShowDialog(handleWrapper);
                         });
                     }
@@ -308,14 +296,31 @@ namespace AppRefiner.Refactors
                 }
 
                 // Initialize the refactor
-                refactorClass.Initialize(activeEditor.ContentString, stream, currentCursorPosition);
+                refactorClass.Initialize(activeEditor.ContentString, currentCursorPosition);
 
                 // NEW: Apply configuration just-in-time before visitor runs
-                RefactorConfigManager.ApplyConfigurationToInstance(refactorClass);
+                 RefactorConfigManager.ApplyConfigurationToInstance(refactorClass);
 
-                // Run the refactor visitor
-                ParseTreeWalker walker = new();
-                walker.Walk(refactorClass, program);
+                // Run the refactor visitor using AST visitor pattern
+                if (refactorClass is IAstVisitor visitor)
+                {
+                    program.Accept(visitor);
+                }
+                else
+                {
+                    Debug.Log($"Refactor {refactorClass.GetType().Name} does not implement IAstVisitor");
+                    if (showUserMessages)
+                    {
+                        Task.Delay(100).ContinueWith(_ =>
+                        {
+                            var mainHandle = activeEditor.AppDesignerProcess.MainWindowHandle;
+                            var handleWrapper = new WindowWrapper(mainHandle);
+                            new MessageBoxDialog($"The refactor {refactorClass.GetType().Name} cannot be executed because it does not implement IAstVisitor.",
+                                "Refactor Error", MessageBoxButtons.OK, mainHandle).ShowDialog(handleWrapper);
+                        });
+                    }
+                    return;
+                }
 
                 // Check result
                 var result = refactorClass.GetResult();
@@ -327,9 +332,9 @@ namespace AppRefiner.Refactors
                     Task.Delay(100).ContinueWith(_ =>
                     {
                         // Show message box with specific error
-                        var mainHandle = Process.GetProcessById((int)activeEditor.ProcessId).MainWindowHandle;
+                        var mainHandle = activeEditor.AppDesignerProcess.MainWindowHandle;
                         var handleWrapper = new WindowWrapper(mainHandle);
-                        new MessageBoxDialog(result.Message ?? "Refactoring failed", "Refactoring Failed", MessageBoxButtons.OK, mainHandle).ShowDialog(handleWrapper); 
+                        new MessageBoxDialog(result.Message ?? "Refactoring failed", "Refactoring Failed", MessageBoxButtons.OK, mainHandle).ShowDialog(handleWrapper);
                     });
 
                     return;
@@ -345,47 +350,28 @@ namespace AppRefiner.Refactors
                     }
                 }
 
-                // Apply code changes directly to Scintilla
-                var changes = refactorClass.GetChanges();
-                if (changes.Count == 0)
+                // Apply refactoring changes
+                ScintillaManager.BeginUndoAction(activeEditor); // Start undo action for all changes
+                var refactorResult = refactorClass.ApplyRefactoring();
+                ScintillaManager.EndUndoAction(activeEditor); // End undo action
+
+                if (!refactorResult.Success)
                 {
-                     Debug.Log("Refactoring produced no changes.");
-                     // Optionally show an error, but maybe success was just no change needed
-                     if (!string.IsNullOrEmpty(result.Message) && showUserMessages)
-                     {
-                          // Show success message if provided
-                          Task.Delay(100).ContinueWith(_ =>
-                          {
-                              var mainHandle = Process.GetProcessById((int)activeEditor.ProcessId).MainWindowHandle;
-                              var handleWrapper = new WindowWrapper(mainHandle);
-                              new MessageBoxDialog(result.Message, "Refactoring Note", MessageBoxButtons.OK, mainHandle).ShowDialog(handleWrapper);
-                          });
-                     }
-                     return; 
-                }
-
-                // Begin undo action to group all changes
-                ScintillaManager.BeginUndoAction(activeEditor);
-
-                try
-                {
-                    // Sort changes from last to first to avoid index shifting issues
-                    var sortedChanges = changes.OrderByDescending(c => c.StartIndex).ToList();
-
-                    // Apply each change directly to Scintilla
-                    foreach (var change in sortedChanges)
+                    Debug.Log("Refactoring produced no changes.");
+                    // Optionally show an error, but maybe success was just no change needed
+                    if (!string.IsNullOrEmpty(refactorResult.Message) && showUserMessages)
                     {
-                        if (!change.ApplyToScintilla(activeEditor))
+                        // Show success message if provided
+                        Task.Delay(100).ContinueWith(_ =>
                         {
-                            Debug.Log($"Failed to apply change: {change.Description}");
-                        }
+                            var mainHandle = activeEditor.AppDesignerProcess.MainWindowHandle;
+                            var handleWrapper = new WindowWrapper(mainHandle);
+                            new MessageBoxDialog(refactorResult.Message, "Refactoring Note", MessageBoxButtons.OK, mainHandle).ShowDialog(handleWrapper);
+                        });
                     }
+                    return;
                 }
-                finally
-                {
-                    // Always end undo action, even if there were errors
-                    ScintillaManager.EndUndoAction(activeEditor);
-                }
+
 
                 // Restore original scroll position (cursor positioning is handled by Scintilla automatically)
                 ScintillaManager.SetFirstVisibleLine(activeEditor, currentFirstVisibleLine);
@@ -410,7 +396,7 @@ namespace AppRefiner.Refactors
                             {
                                 Task.Delay(100).ContinueWith(_ =>
                                 {
-                                    var mainHandle = Process.GetProcessById((int)activeEditor.ProcessId).MainWindowHandle;
+                                    var mainHandle = activeEditor.AppDesignerProcess.MainWindowHandle;
                                     var handleWrapper = new WindowWrapper(mainHandle);
                                     new MessageBoxDialog($"Could not start follow-up refactor: {followUpType.Name}", "Follow-up Error", MessageBoxButtons.OK, mainHandle).ShowDialog(handleWrapper);
                                 });
@@ -424,7 +410,7 @@ namespace AppRefiner.Refactors
                         {
                             Task.Delay(100).ContinueWith(_ =>
                             {
-                                var mainHandle = Process.GetProcessById((int)activeEditor.ProcessId).MainWindowHandle;
+                                var mainHandle = activeEditor.AppDesignerProcess.MainWindowHandle;
                                 var handleWrapper = new WindowWrapper(mainHandle);
                                 new MessageBoxDialog($"An error occurred during the follow-up refactor: {followUpType.Name}\n\n{followUpEx.Message}", "Follow-up Error", MessageBoxButtons.OK, mainHandle).ShowDialog(handleWrapper);
                             });
@@ -436,7 +422,7 @@ namespace AppRefiner.Refactors
                     // Show success message if provided
                     Task.Delay(100).ContinueWith(_ =>
                     {
-                        var mainHandle = Process.GetProcessById((int)activeEditor.ProcessId).MainWindowHandle;
+                        var mainHandle = activeEditor.AppDesignerProcess.MainWindowHandle;
                         var handleWrapper = new WindowWrapper(mainHandle);
                         new MessageBoxDialog(result.Message, "Refactoring Complete", MessageBoxButtons.OK, mainHandle).ShowDialog(handleWrapper);
                     });
@@ -445,11 +431,11 @@ namespace AppRefiner.Refactors
             }
             catch (Exception ex)
             {
-                 Debug.LogException(ex, $"Critical error during ExecuteRefactor for {refactorClass.GetType().Name}");
+                Debug.LogException(ex, $"Critical error during ExecuteRefactor for {refactorClass.GetType().Name}");
                 Task.Delay(100).ContinueWith(_ =>
                 {
                     // Show message box with specific error
-                    var mainHandle = Process.GetProcessById((int)activeEditor.ProcessId).MainWindowHandle;
+                    var mainHandle = activeEditor.AppDesignerProcess.MainWindowHandle;
                     var handleWrapper = new WindowWrapper(mainHandle);
                     new MessageBoxDialog($"Execption during refactor: {ex.ToString()}", "Refactoring Failed", MessageBoxButtons.OK, mainHandle).ShowDialog(handleWrapper);
                 });
@@ -461,7 +447,7 @@ namespace AppRefiner.Refactors
         public void HandleRefactorGridCellContentClick(object sender, DataGridViewCellEventArgs e)
         {
             if (refactorGrid == null) return;
-            
+
             refactorGrid.CommitEdit(DataGridViewDataErrorContexts.Commit);
             if (e.ColumnIndex == 2 && e.RowIndex >= 0)
             {
@@ -470,14 +456,12 @@ namespace AppRefiner.Refactors
                     if (refactorGrid.Rows[e.RowIndex].Cells[e.ColumnIndex].Tag?.ToString() != "NoConfig")
                     {
                         // Show configuration dialog for the refactor type
-                        using (var dialog = new RefactorConfigDialog(refactorInfo.RefactorType))
-                        {
-                            dialog.ShowDialog(mainForm); // Show dialog owned by MainForm
-                        }
+                        using var dialog = new RefactorConfigDialog(refactorInfo.RefactorType);
+                        dialog.ShowDialog(mainForm); // Show dialog owned by MainForm
                     }
                 }
             }
         }
 
     }
-} 
+}

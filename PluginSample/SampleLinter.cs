@@ -1,7 +1,5 @@
 using AppRefiner.Linters;
-using static AppRefiner.PeopleCode.PeopleCodeParser;
-using System.Collections.Generic; // For List
-using Antlr4.Runtime; // For IToken
+using PeopleCodeParser.SelfHosted.Nodes;
 
 namespace PluginSample
 {
@@ -19,10 +17,10 @@ namespace PluginSample
             Active = true; // Default to active, user can disable
         }
 
-        public override void EnterMethod(MethodContext context)
+        public override void VisitMethod(MethodNode node)
         {
-            int startLine = context.Start.Line;
-            int stopLine = context.Stop.Line;
+            int startLine = node.SourceSpan.Start.Line;
+            int stopLine = node.SourceSpan.End.Line;
             int methodLength = stopLine - startLine + 1;
 
             if (methodLength > MaxMethodLength)
@@ -31,10 +29,10 @@ namespace PluginSample
                 // For simple linters, 1 is often sufficient.
                 AddReport(
                     1,
-                    $"Method '{context.genericID()?.GetText()}' is {methodLength} lines long (max {MaxMethodLength}).",
+                    $"Method '{node.Name}' is {methodLength} lines long (max {MaxMethodLength}).",
                     Type,
                     startLine, // Report on the starting line
-                    (context.Start.StartIndex, context.Stop.StopIndex) // Span covers the whole method
+                    node.NameToken.SourceSpan
                 );
             }
         }
@@ -46,4 +44,4 @@ namespace PluginSample
             // Clear any linter-specific state here
         }
     }
-} 
+}

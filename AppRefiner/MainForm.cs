@@ -1,68 +1,72 @@
-using Antlr4.Runtime.Tree;
+
 using AppRefiner.Database;
 using AppRefiner.Database.Models;
 using AppRefiner.Dialogs;
+using AppRefiner.Events;
 using AppRefiner.Linters;
-using AppRefiner.PeopleCode;
 using AppRefiner.Plugins;
 using AppRefiner.Refactors;
+using AppRefiner.Services;
+using AppRefiner.Snapshots;
 using AppRefiner.Stylers;
 using AppRefiner.Templates;
-using AppRefiner.Events;
-using System;
-using System.Collections.Generic;
-using System.ComponentModel;
+using AppRefiner.TooltipProviders;
+using PeopleCodeParser.SelfHosted.Lexing;
 using System.Data;
 using System.Diagnostics;
-using System.Drawing;
-using System.IO;
-using System.Linq;
-using System.Reflection;
-using System.Text;
-using System.Threading.Tasks;
-using System.Windows.Forms;
-using System.Drawing.Text;
-using AppRefiner.TooltipProviders;
-using AppRefiner.Snapshots;
 using System.Runtime.InteropServices;
-using AppRefiner.Services;
+using System.Text;
+using System.Threading;
 using static AppRefiner.AutoCompleteService;
-using DiffPlex.Model;
-using System.Linq.Expressions;
-using OracleInternal.Common;
 
 namespace AppRefiner
 {
     public partial class MainForm : Form
     {
+        // P/Invoke declarations for sending keystrokes to App Designer
+        [DllImport("user32.dll", CharSet = CharSet.Auto)]
+        private static extern IntPtr SendMessage(IntPtr hWnd, int msg, IntPtr wParam, IntPtr lParam);
+
+        [DllImport("user32.dll")]
+        private static extern void keybd_event(byte bVk, byte bScan, int dwFlags, int dwExtraInfo);
+
+        private const int WM_KEYDOWN = 0x0100;
+        private const int WM_KEYUP = 0x0101;
+        private const int VK_CONTROL = 0x11;
+        private const int VK_O = 0x4F;
+
         // Services for handling OS-level interactions
         private WinEventService? winEventService;
         private ApplicationKeyboardService? applicationKeyboardService;
+
+        // HashSet to track process IDs that already have AppDesignerProcess objects created
+        private readonly HashSet<uint> trackedProcessIds = new();
         private LinterManager? linterManager; // Added LinterManager
         private StylerManager? stylerManager; // Added StylerManager
         private AutoCompleteService? autoCompleteService; // Added AutoCompleteService
         private RefactorManager? refactorManager; // Added RefactorManager
         private SettingsService? settingsService; // Added SettingsService
+        private FunctionCacheManager? functionCacheManager; 
         private ScintillaEditor? activeEditor = null;
+        private AppDesignerProcess? activeAppDesigner = null;
+        private Dictionary<uint, AppDesignerProcess> AppDesignerProcesses = [];
+
+        // Current shortcut flags state - tracks which shortcuts are enabled
+        private EventHookInstaller.ShortcutType currentShortcutFlags = EventHookInstaller.ShortcutType.All;
 
         /// <summary>
         /// Gets the currently active editor
         /// </summary>
         public ScintillaEditor? ActiveEditor => activeEditor;
+        /// <summary>
+        /// Gets the currently active AppDesigner process
+        /// </summary>
+        public AppDesignerProcess? ActiveAppDesigner => activeAppDesigner;
 
-        private List<ITooltipProvider> tooltipProviders = new();
-
-        // Map of process IDs to their corresponding data managers
-        private Dictionary<uint, IDataManager> processDataManagers = new();
+        private List<BaseTooltipProvider> tooltipProviders = new();
 
         // Static list of available commands
         public static List<Command> AvailableCommands = new();
-
-        public class RuleState
-        {
-            public string TypeName { get; set; } = "";
-            public bool Active { get; set; }
-        }
 
         // Path for linting report output
         private string? lintReportPath;
@@ -80,6 +84,8 @@ namespace AppRefiner
         private const int AR_TEXT_PASTED = 2506; // New constant for text pasted detection
         private const int AR_KEY_COMBINATION = 2507; // New constant for key combination detection
         private const int AR_MSGBOX_SHORTHAND = 2508;
+        private const int AR_SUBCLASS_RESULTS_LIST = 1007; // Message to subclass Results list view
+        private const int AR_SET_OPEN_TARGET = 1008; // Message to set open target for Results list interception
         private const int SCN_USERLISTSELECTION = 2014; // User list selection notification
         private const int SCI_REPLACESEL = 0x2170; // Constant for SCI_REPLACESEL
 
@@ -89,25 +95,25 @@ namespace AppRefiner
         private SnapshotManager? snapshotManager;
 
         // Fields for editor management
-        private HashSet<ScintillaEditor> knownEditors = new HashSet<ScintillaEditor>();
-        private HashSet<uint> processesToNotDBPrompt = new HashSet<uint>();
+        private Dictionary<ScintillaEditor, DateTime> lastStylerProcessingTime = new();
+        private const int STYLER_PROCESSING_DEBOUNCE_MS = 100; // Prevent duplicate processing within 100ms
 
         // Throttling for duplicate shortcut prevention
         private DateTime _lastShortcutTime = DateTime.MinValue;
         private const int SHORTCUT_THROTTLE_MS = 300; // Very short window to catch rapid duplicates
 
         // Fields for debouncing SAVEPOINTREACHED events
-        private readonly object savepointLock = new object();
+        private readonly object savepointLock = new();
         private DateTime lastSavepointTime = DateTime.MinValue;
         private System.Threading.Timer? savepointDebounceTimer = null;
         private ScintillaEditor? pendingSaveEditor = null;
         private const int SAVEPOINT_DEBOUNCE_MS = 300;
 
         // Add instance of the new TemplateManager
-        private TemplateManager templateManager = new TemplateManager();
+        private TemplateManager templateManager = new();
 
         // Dictionary to keep track of generated UI controls for template parameters
-        private Dictionary<string, Control> currentTemplateInputControls = new Dictionary<string, Control>();
+        private Dictionary<string, Control> currentTemplateInputControls = new();
 
         public MainForm()
         {
@@ -117,6 +123,9 @@ namespace AppRefiner
         protected override void OnLoad(EventArgs e)
         {
             base.OnLoad(e);
+
+            AppDesignerProcess.CallbackWindow = this.Handle;
+
             isLoadingSettings = true; // Prevent immediate saves during initial load
 
             // Instantiate and start services
@@ -124,6 +133,7 @@ namespace AppRefiner
             applicationKeyboardService = new ApplicationKeyboardService();
             winEventService = new WinEventService();
             winEventService.WindowFocused += HandleWindowFocusEvent;
+            winEventService.WindowCreated += HandleWindowCreationEvent;
             winEventService.Start();
 
             // Instantiate LinterManager (passing UI elements)
@@ -144,6 +154,7 @@ namespace AppRefiner
             optClassText.Checked = generalSettings.ShowClassText;
             chkRememberFolds.Checked = generalSettings.RememberFolds;
             chkOverrideFindReplace.Checked = generalSettings.OverrideFindReplace;
+            chkOverrideOpen.Checked = generalSettings.OverrideOpen;
 
             linterManager = new LinterManager(this, dataGridView1, lblStatus, progressBar1, lintReportPath, settingsService);
             linterManager.InitializeLinterOptions(); // Initialize linters via the manager
@@ -190,6 +201,7 @@ namespace AppRefiner
             applicationKeyboardService?.RegisterShortcut("ApplyTemplate", AppRefiner.ModifierKeys.Control | AppRefiner.ModifierKeys.Alt, Keys.T, ApplyTemplateCommand);
             applicationKeyboardService?.RegisterShortcut("SuperGoTo", AppRefiner.ModifierKeys.Control | AppRefiner.ModifierKeys.Alt, Keys.G, SuperGoToCommand); // Use the parameterless overload
             applicationKeyboardService?.RegisterShortcut("ApplyQuickFix", AppRefiner.ModifierKeys.Control, Keys.OemPeriod, ApplyQuickFixCommand); // Ctrl + .
+            applicationKeyboardService?.RegisterShortcut("SmartOpen", AppRefiner.ModifierKeys.Control, Keys.O, ShowSmartOpenDialog); // Ctrl + O
             applicationKeyboardService?.RegisterShortcut("BetterFind", AppRefiner.ModifierKeys.Control, Keys.F, showBetterFindHandler); // Ctrl + F
             applicationKeyboardService?.RegisterShortcut("BetterFindReplace", AppRefiner.ModifierKeys.Control, Keys.H, showBetterFindReplaceHandler); // Ctrl + H
             applicationKeyboardService?.RegisterShortcut("FindNext", AppRefiner.ModifierKeys.None, Keys.F3, findNextHandler); // F3
@@ -204,10 +216,24 @@ namespace AppRefiner
             // Initialize snapshot manager
             snapshotManager = SnapshotManager.CreateFromSettings();
 
+            // Instantiate FunctionCacheManager
+            functionCacheManager = FunctionCacheManager.CreateFromSettings();
+
             // Attach event handlers for immediate save
             AttachEventHandlersForImmediateSave();
 
+            // Initialize shortcut flags based on current settings
+            InitializeShortcutFlags();
+
             isLoadingSettings = false; // Allow immediate saves now
+
+            /* Scan for existing App Designer processes */
+            foreach (var proc in Process.GetProcessesByName("pside"))
+            {
+                ValidateAndCreateAppDesignerProcess((uint)proc.Id, proc.MainWindowHandle);
+                //AppDesignerProcess adp = new AppDesignerProcess((uint)proc.Id, resultsList, GetGeneralSettingsObject());
+                //AppDesignerProcesses.Add((uint)proc.Id, adp);
+            }
         }
 
         private void AttachEventHandlersForImmediateSave()
@@ -225,23 +251,71 @@ namespace AppRefiner
             optClassText.CheckedChanged += GeneralSetting_Changed;
             chkRememberFolds.CheckedChanged += GeneralSetting_Changed;
             chkOverrideFindReplace.CheckedChanged += GeneralSetting_Changed;
-
+            chkOverrideOpen.CheckedChanged += GeneralSetting_Changed;
             // DataGridViews CellValueChanged events will also call SaveSettings
         }
 
         private void GeneralSetting_Changed(object? sender, EventArgs e)
         {
             if (isLoadingSettings) return;
+
+            // Check if this is a shortcut-related checkbox change
+            if (sender == chkOverrideOpen || sender == chkOverrideFindReplace)
+            {
+                UpdateShortcutFlags();
+            }
+            if (sender == chkOverrideOpen)
+            {
+                btnConfigSmartOpen.Enabled = chkOverrideOpen.Checked;
+            }
+
             SaveSettings(); // Call the consolidated SaveSettings method
         }
 
-        private void SaveSettings()
+        private void UpdateShortcutFlags()
         {
-            if (isLoadingSettings) return; // Prevent saving during initial load
-            if (settingsService == null) return;
+            // Start with Command Palette always enabled
+            currentShortcutFlags = EventHookInstaller.ShortcutType.CommandPalette;
 
-            // 1. Gather and save General Settings to memory
-            var generalSettingsToSave = new GeneralSettingsData
+            // Add Open shortcut if checkbox is checked
+            if (chkOverrideOpen.Checked)
+            {
+                currentShortcutFlags |= EventHookInstaller.ShortcutType.Open;
+            }
+
+            // Add Search shortcut if checkbox is checked
+            if (chkOverrideFindReplace.Checked)
+            {
+                currentShortcutFlags |= EventHookInstaller.ShortcutType.Search;
+            }
+
+            // Notify all processes of the change
+            NotifyMainWindowShortcutsChange(currentShortcutFlags);
+        }
+
+        private void InitializeShortcutFlags()
+        {
+            // Start with Command Palette always enabled
+            currentShortcutFlags = EventHookInstaller.ShortcutType.CommandPalette;
+
+            // Add Open shortcut if checkbox is checked
+            if (chkOverrideOpen.Checked)
+            {
+                currentShortcutFlags |= EventHookInstaller.ShortcutType.Open;
+            }
+
+            // Add Search shortcut if checkbox is checked
+            if (chkOverrideFindReplace.Checked)
+            {
+                currentShortcutFlags |= EventHookInstaller.ShortcutType.Search;
+            }
+
+            // Don't notify processes during initialization - they will be notified when they connect
+        }
+
+        private GeneralSettingsData GetGeneralSettingsObject()
+        {
+            return new GeneralSettingsData
             {
                 CodeFolding = chkCodeFolding.Checked,
                 InitCollapsed = chkInitCollapsed.Checked,
@@ -257,8 +331,24 @@ namespace AppRefiner
                 ShowClassPath = optClassPath.Checked,
                 ShowClassText = optClassText.Checked,
                 RememberFolds = chkRememberFolds.Checked,
-                OverrideFindReplace = chkOverrideFindReplace.Checked
+                OverrideFindReplace = chkOverrideFindReplace.Checked,
+                OverrideOpen = chkOverrideOpen.Checked
             };
+        }
+
+        private void SaveSettings()
+        {
+            if (isLoadingSettings) return; // Prevent saving during initial load
+            if (settingsService == null) return;
+
+            // 1. Gather and save General Settings to memory
+            var generalSettingsToSave = GetGeneralSettingsObject();
+
+            foreach (var app in AppDesignerProcesses.Values)
+            {
+                app.Settings = generalSettingsToSave;
+            }
+
             settingsService.SaveGeneralSettings(generalSettingsToSave);
 
             // 2. Save Linter, Styler, and Tooltip states to memory
@@ -277,36 +367,21 @@ namespace AppRefiner
         // Method to notify all hooked editors of auto-pairing setting changes
         private void NotifyAutoPairingChange(bool enabled)
         {
-            if (knownEditors == null) return;
-
-            // Get distinct thread IDs to avoid sending duplicate messages
-            var distinctThreadIds = knownEditors
-                .Where(editor => editor != null)
-                .Select(editor => editor.ThreadID)
-                .Distinct();
-
-            foreach (var threadId in distinctThreadIds)
+            foreach (var appDesigner in AppDesignerProcesses.Values)
             {
-                bool result = EventHookInstaller.SendAutoPairingToggle(threadId, enabled);
-                Debug.Log($"Sent auto-pairing toggle ({enabled}) to thread {threadId}: {result}");
+                bool result = EventHookInstaller.SetAutoPairing(appDesigner.MainWindowHandle, enabled);
+                Debug.Log($"Set auto-pairing ({enabled}) for process {appDesigner.ProcessId}: {result}");
             }
+
         }
 
         // Method to notify all hooked editors of main window shortcuts setting changes
-        private void NotifyMainWindowShortcutsChange(bool enabled)
+        private void NotifyMainWindowShortcutsChange(EventHookInstaller.ShortcutType shortcuts)
         {
-            if (knownEditors == null) return;
-
-            // Get distinct thread IDs to avoid sending duplicate messages
-            var distinctThreadIds = knownEditors
-                .Where(editor => editor != null)
-                .Select(editor => editor.ThreadID)
-                .Distinct();
-
-            foreach (var threadId in distinctThreadIds)
+            foreach (var appDesigner in AppDesignerProcesses.Values)
             {
-                bool result = EventHookInstaller.ToggleMainWindowShortcuts(threadId, enabled);
-                Debug.Log($"Sent main window shortcuts toggle ({enabled}) to thread {threadId}: {result}");
+                bool result = appDesigner.UpdateShortcuts(shortcuts);
+                Debug.Log($"Sent main window shortcuts update ({shortcuts}) to thread {appDesigner.MainThreadId}: {result}");
             }
         }
 
@@ -390,8 +465,8 @@ namespace AppRefiner
         // This is called by the Command Palette
         private void ShowCommandPalette(object? sender, KeyPressedEventArgs? e) // Keep original args for now
         {
-            if (activeEditor == null) return;
-            var mainHandle = Process.GetProcessById((int)activeEditor.ProcessId).MainWindowHandle;
+            if (activeAppDesigner == null) return;
+            var mainHandle = activeAppDesigner.MainWindowHandle;
             var handleWrapper = new WindowWrapper(mainHandle);
             // Create the command palette dialog
             var palette = new CommandPaletteDialog(AvailableCommands, mainHandle);
@@ -470,6 +545,9 @@ namespace AppRefiner
             savepointDebounceTimer?.Dispose();
             savepointDebounceTimer = null;
 
+            // Clear the styler processing time dictionary
+            lastStylerProcessingTime.Clear();
+
             SaveSettings();
         }
 
@@ -531,7 +609,7 @@ namespace AppRefiner
             {
                 return;
             }
-            if (dataGridViewTooltips.Rows[e.RowIndex].Tag is ITooltipProvider provider)
+            if (dataGridViewTooltips.Rows[e.RowIndex].Tag is BaseTooltipProvider provider)
             {
                 provider.Active = (bool)dataGridViewTooltips.Rows[e.RowIndex].Cells[0].Value;
                 SaveSettings(); // Call the consolidated SaveSettings method
@@ -582,26 +660,34 @@ namespace AppRefiner
 
         private void btnConnectDB_Click(object sender, EventArgs e)
         {
-            if (activeEditor == null) return;
-            if (activeEditor.DataManager != null)
+            if (activeAppDesigner == null || activeEditor == null) return;
+            if (activeAppDesigner.DataManager != null)
             {
-                activeEditor.DataManager.Disconnect();
-                processDataManagers.Remove(activeEditor.ProcessId);
-                activeEditor.DataManager = null;
+                activeAppDesigner.DataManager.Disconnect();
+                foreach (var editor in activeAppDesigner.Editors.Values)
+                {
+                    editor.DataManager = null;
+                }
+
+
                 btnConnectDB.Text = "Connect DB...";
                 return;
             }
 
-            var mainHandle = Process.GetProcessById((int)activeEditor.ProcessId).MainWindowHandle;
+            var mainHandle = activeAppDesigner.MainWindowHandle;
             var handleWrapper = new WindowWrapper(mainHandle);
-            DBConnectDialog dialog = new(mainHandle, activeEditor.DBName);
+            DBConnectDialog dialog = new(mainHandle, activeAppDesigner.DBName);
 
             if (dialog.ShowDialog() == DialogResult.OK)
             {
                 IDataManager? manager = dialog.DataManager;
                 if (manager != null)
                 {
-                    processDataManagers[activeEditor.ProcessId] = manager;
+                    activeAppDesigner.DataManager = manager;
+                    foreach (var editor in activeAppDesigner.Editors.Values)
+                    {
+                        editor.DataManager = manager;
+                    }
                     activeEditor.DataManager = manager;
                     btnConnectDB.Text = "Disconnect DB";
                 }
@@ -626,8 +712,6 @@ namespace AppRefiner
                 IDataManager? currentDataManager = null;
                 if (activeEditor != null)
                 {
-                    processDataManagers.TryGetValue(activeEditor.ProcessId, out currentDataManager);
-                    // If not found in map, use the one directly on the editor object if available
                     currentDataManager ??= activeEditor.DataManager;
                 }
                 linterManager?.ProcessLintersForActiveEditor(activeEditor, currentDataManager);
@@ -683,7 +767,7 @@ namespace AppRefiner
             foreach (var definition in definitions)
             {
                 // Create label for parameter
-                Label label = new Label
+                Label label = new()
                 {
                     Text = definition.Label + ":",
                     Location = new Point(horizontalPadding, currentY + 3),
@@ -731,7 +815,7 @@ namespace AppRefiner
                 // Add tooltip if description is available
                 if (!string.IsNullOrEmpty(definition.Description))
                 {
-                    ToolTip tooltip = new ToolTip();
+                    ToolTip tooltip = new();
                     tooltip.SetToolTip(inputControl, definition.Description);
                     tooltip.SetToolTip(label, definition.Description);
                 }
@@ -831,7 +915,7 @@ namespace AppRefiner
             // Check for replacement warning only if it's not insert mode
             if (!templateManager.ActiveTemplate.IsInsertMode && !string.IsNullOrWhiteSpace(ScintillaManager.GetScintillaText(activeEditor)))
             {
-                var mainHandle = Process.GetProcessById((int)activeEditor.ProcessId).MainWindowHandle;
+                var mainHandle = activeEditor.AppDesignerProcess.MainWindowHandle;
                 var handleWrapper = new WindowWrapper(mainHandle);
                 using var confirmDialog = new TemplateConfirmationDialog(
                     "Applying this template will replace all content in the current editor. Do you want to continue?",
@@ -847,10 +931,212 @@ namespace AppRefiner
             templateManager.ApplyActiveTemplateToEditor(activeEditor);
         }
 
+        private void ShowDeclareFunctionDialog()
+        {
+            if (activeAppDesigner?.DataManager == null)
+            {
+                // Show message that database connection is required
+                Task.Delay(100).ContinueWith(_ =>
+                {
+                    var mainHandle = activeAppDesigner?.MainWindowHandle ?? IntPtr.Zero;
+                    if (mainHandle != IntPtr.Zero)
+                    {
+                        var handleWrapper = new WindowWrapper(mainHandle);
+                        new MessageBoxDialog("Smart Open requires a database connection. Please connect to database first.",
+                            "Database Required", MessageBoxButtons.OK, mainHandle).ShowDialog(handleWrapper);
+                    }
+                });
+                return;
+            }
+
+            if (functionCacheManager == null)
+            {
+                // Show message that database connection is required
+                Task.Delay(100).ContinueWith(_ =>
+                {
+                    var mainHandle = activeAppDesigner?.MainWindowHandle ?? IntPtr.Zero;
+                    if (mainHandle != IntPtr.Zero)
+                    {
+                        var handleWrapper = new WindowWrapper(mainHandle);
+                        new MessageBoxDialog("There was an issue initializing the FunctionCacheManager. ",
+                            "Function Cache Manager Failure", MessageBoxButtons.OK, mainHandle).ShowDialog(handleWrapper);
+                    }
+                });
+                return;
+            }
+
+            var dataManager = activeAppDesigner.DataManager;
+            var dialog = new DeclareFunctionDialog(functionCacheManager, activeAppDesigner,
+                activeAppDesigner?.MainWindowHandle ?? IntPtr.Zero);
+
+            try
+            {
+                var mainHandle = activeAppDesigner?.MainWindowHandle ?? IntPtr.Zero;
+                var handleWrapper = new WindowWrapper(mainHandle);
+                var result = dialog.ShowDialog(handleWrapper);
+                if (result == DialogResult.OK)
+                {
+                    var selectedFunction = dialog.SelectedFunction;
+                    if (selectedFunction != null && activeAppDesigner != null)
+                    {
+                        var refactorClass = new DeclareFunction(activeEditor, selectedFunction);
+                        refactorManager.ExecuteRefactor(refactorClass, activeEditor, false);
+                    }
+                 
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.Log($"Error showing Smart Open dialog: {ex.Message}");
+            }
+            finally
+            {
+                dialog?.Dispose();
+            }
+        }
+
+        private void ShowSmartOpenDialog()
+        {
+            if (activeAppDesigner?.DataManager == null)
+            {
+                // Show message that database connection is required
+                Task.Delay(100).ContinueWith(_ =>
+                {
+                    var mainHandle = activeAppDesigner?.MainWindowHandle ?? IntPtr.Zero;
+                    if (mainHandle != IntPtr.Zero)
+                    {
+                        var handleWrapper = new WindowWrapper(mainHandle);
+                        new MessageBoxDialog("Smart Open requires a database connection. Please connect to database first.",
+                            "Database Required", MessageBoxButtons.OK, mainHandle).ShowDialog(handleWrapper);
+                    }
+                });
+                return;
+            }
+
+            var dataManager = activeAppDesigner.DataManager;
+            var dialog = new SmartOpenDialog(
+                (options) => dataManager.GetOpenTargets(options),
+                activeAppDesigner?.MainWindowHandle ?? IntPtr.Zero,
+                BypassSmartOpen);
+
+            try
+            {
+                var mainHandle = activeAppDesigner?.MainWindowHandle ?? IntPtr.Zero;
+                var handleWrapper = new WindowWrapper(mainHandle);
+                var result = dialog.ShowDialog(handleWrapper);
+                if (result == DialogResult.OK)
+                {
+                    var selectedTarget = dialog.GetSelectedTarget();
+                    if (selectedTarget != null && activeAppDesigner != null)
+                    {
+                        // Build the open target string based on the target type and object data
+                        string openTargetString = BuildOpenTargetString(selectedTarget);
+                        activeAppDesigner.SetOpenTarget(openTargetString);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.Log($"Error showing Smart Open dialog: {ex.Message}");
+            }
+            finally
+            {
+                dialog?.Dispose();
+            }
+        }
+
+        private void BypassSmartOpen()
+        {
+            if (activeAppDesigner == null)
+            {
+                Debug.Log("BypassSmartOpen: No active AppDesigner process");
+                return;
+            }
+
+            var originalShortcuts = currentShortcutFlags;
+            try
+            {
+                Debug.Log("BypassSmartOpen: Starting bypass sequence");
+
+                // Step 1: Temporarily disable SHORTCUT_OPEN for all AppDesigner processes
+                var bypassShortcuts = currentShortcutFlags & ~EventHookInstaller.ShortcutType.Open;
+
+                Debug.Log($"BypassSmartOpen: Temporarily disabling SHORTCUT_OPEN ({originalShortcuts} -> {bypassShortcuts})");
+                NotifyMainWindowShortcutsChange(bypassShortcuts);
+                // Step 2: Send Ctrl+O to the active App Designer main window
+                var mainWindowHandle = activeAppDesigner.MainWindowHandle;
+                Thread.Sleep(100);
+                WinApi.SetForegroundWindow(mainWindowHandle);
+                if (mainWindowHandle != IntPtr.Zero)
+                {
+                    Debug.Log($"BypassSmartOpen: Sending Ctrl+O to App Designer window {mainWindowHandle:X}");
+
+                    // Send the key combination using keybd_event for global effect
+                    keybd_event(VK_CONTROL, 0, 0, 0); // Ctrl down
+                    keybd_event(VK_O, 0, 0, 0);       // O down  
+                    keybd_event(VK_O, 0, 2, 0);       // O up (KEYEVENTF_KEYUP = 2)
+                    keybd_event(VK_CONTROL, 0, 2, 0); // Ctrl up
+                }
+                else
+                {
+                    Debug.Log("BypassSmartOpen: Main window handle is null");
+                }
+
+                // Step 3: Re-enable SHORTCUT_OPEN after a short delay
+                Task.Delay(100).ContinueWith(_ =>
+                {
+                    Debug.Log($"BypassSmartOpen: Re-enabling SHORTCUT_OPEN ({bypassShortcuts} -> {originalShortcuts})");
+                    NotifyMainWindowShortcutsChange(originalShortcuts);
+                });
+            }
+            catch (Exception ex)
+            {
+                Debug.Log($"BypassSmartOpen: Error during bypass: {ex.Message}");
+
+                // Ensure shortcuts are restored even if there's an error
+                NotifyMainWindowShortcutsChange(originalShortcuts);
+            }
+        }
+
+        private string BuildOpenTargetString(OpenTarget target)
+        {
+            // Build the target string based on the type
+            StringBuilder sb = new();
+            for(var x = 0; x < target.ObjectIDs.Length; x++)
+            {
+                if (target.ObjectIDs[x] == PSCLASSID.NONE) break;
+                if (x > 0)
+                {
+                    sb.Append('.');
+                }
+                sb.Append(Enum.GetName(typeof(PSCLASSID), target.ObjectIDs[x]));
+                sb.Append('.');
+                sb.Append(target.ObjectValues[x]);
+            }
+            return sb.ToString();
+        }
+
         private void RegisterCommands()
         {
             // Clear any existing commands
             AvailableCommands.Clear();
+
+            /* Main "open" command for future development now that we  can open arbitrary definitions! */
+            AvailableCommands.Add(new Command(
+                "Declare Function",
+                "Declare an external function",
+                ShowDeclareFunctionDialog
+            )
+            { RequiresActiveEditor = false });
+
+            // Smart Open command
+            AvailableCommands.Add(new Command(
+                "Open: Smart Open (Ctrl+O)",
+                "Smart search and open PeopleSoft objects across all types",
+                ShowSmartOpenDialog,
+                () => activeEditor?.DataManager != null // Requires database connection
+            )
+            { RequiresActiveEditor = false });
 
             // Add editor commands with "Editor:" prefix
             AvailableCommands.Add(new Command(
@@ -949,9 +1235,9 @@ namespace AppRefiner
                     if (activeEditor != null)
                     {
                         // Instantiate the specific refactor
-                        var suppressRefactor = new SuppressReportRefactor(activeEditor);
+                        /* var suppressRefactor = new SuppressReportRefactor(activeEditor);
                         // Execute via the manager
-                        refactorManager?.ExecuteRefactor(suppressRefactor, activeEditor);
+                        refactorManager?.ExecuteRefactor(suppressRefactor, activeEditor);*/
                     }
                 }
             ));
@@ -972,12 +1258,10 @@ namespace AppRefiner
                             if (activeEditor != null)
                             {
                                 // Need to pass current DataManager
-                                IDataManager? currentDataManager = null;
-                                processDataManagers.TryGetValue(activeEditor.ProcessId, out currentDataManager);
-                                currentDataManager ??= activeEditor.DataManager;
-                                linterManager?.ProcessSingleLinter(currentLinter, activeEditor, currentDataManager);
+                                linterManager?.ProcessSingleLinter(currentLinter, activeEditor, activeEditor.AppDesignerProcess.DataManager);
                             }
-                        }
+                        },
+                        () => activeEditor != null && activeEditor.DataManager == null
                         ));
                 }
             }
@@ -988,11 +1272,11 @@ namespace AppRefiner
                 "Connect to database for advanced functionality",
                 () =>
                 {
-                    if (activeEditor != null)
+                    if (activeAppDesigner != null)
                     {
-                        var mainHandle = Process.GetProcessById((int)activeEditor.ProcessId).MainWindowHandle;
+                        var mainHandle = activeAppDesigner.MainWindowHandle;
                         var handleWrapper = new WindowWrapper(mainHandle);
-                        DBConnectDialog dialog = new(mainHandle, activeEditor.DBName);
+                        DBConnectDialog dialog = new(mainHandle, activeAppDesigner != null ? activeAppDesigner.DBName : "");
                         dialog.StartPosition = FormStartPosition.CenterParent;
 
                         if (dialog.ShowDialog(handleWrapper) == DialogResult.OK)
@@ -1000,13 +1284,16 @@ namespace AppRefiner
                             IDataManager? manager = dialog.DataManager;
                             if (manager != null)
                             {
-                                processDataManagers[activeEditor.ProcessId] = manager;
-                                activeEditor.DataManager = manager;
+                                activeAppDesigner.DataManager = manager;
+                                foreach (var editor in activeAppDesigner.Editors.Values)
+                                {
+                                    editor.DataManager = manager;
+                                }
                             }
                         }
                     }
                 },
-                () => activeEditor != null && activeEditor.DataManager == null
+                () => activeAppDesigner != null && activeAppDesigner.DataManager == null
             ));
 
             AvailableCommands.Add(new Command(
@@ -1014,11 +1301,14 @@ namespace AppRefiner
                 "Disconnect from current database",
                 () =>
                 {
-                    if (activeEditor != null && activeEditor.DataManager != null)
+                    if (activeEditor != null && activeEditor.AppDesignerProcess.DataManager != null)
                     {
-                        activeEditor.DataManager.Disconnect();
-                        processDataManagers.Remove(activeEditor.ProcessId);
-                        activeEditor.DataManager = null;
+                        activeEditor.AppDesignerProcess.DataManager.Disconnect();
+                        activeEditor.AppDesignerProcess.DataManager = null;
+                        foreach (var editor in activeEditor.AppDesignerProcess.Editors.Values)
+                        {
+                            editor.DataManager = null;
+                        }
                     }
                 },
                 () => activeEditor != null && activeEditor.DataManager != null
@@ -1064,7 +1354,7 @@ namespace AppRefiner
                 {
                     if (activeEditor != null && linterManager != null)
                     {
-                        var mainHandle = Process.GetProcessById((int)activeEditor.ProcessId).MainWindowHandle;
+                        var mainHandle = activeEditor.AppDesignerProcess.MainWindowHandle;
 
                         this.Invoke(() =>
                         {
@@ -1139,7 +1429,7 @@ namespace AppRefiner
                         }
 
                         // Get process handle for dialog ownership
-                        var mainHandle = Process.GetProcessById((int)activeEditor.ProcessId).MainWindowHandle;
+                        var mainHandle = activeEditor.AppDesignerProcess.MainWindowHandle;
 
                         // Run on UI thread to show dialog
                         this.Invoke(() =>
@@ -1225,6 +1515,26 @@ namespace AppRefiner
                 },
                 () => activeEditor != null && activeEditor.BookmarkStack.Count > 0 // Enable condition
             ));
+
+            // Debug commands
+            AvailableCommands.Add(new Command(
+                "Debug: Open Debug Console",
+                "Open the debug console to view application logs",
+                () =>
+                {
+                    Debug.ShowDebugDialog(Handle);
+                }
+            ));
+
+            AvailableCommands.Add(new Command(
+                "Debug: Open Indicator Panel",
+                "Open the indicator debug panel to view applied styler indicators",
+                () =>
+                {
+                    Debug.ShowIndicatorPanel(Handle, this);
+                },
+                () => activeEditor != null // Enable condition
+            ));
         }
 
         private void btnPlugins_Click(object sender, EventArgs e)
@@ -1299,7 +1609,7 @@ namespace AppRefiner
             }
         }
 
-        private ScintillaEditor? SetActiveEditor(IntPtr hwnd)
+        private void SetActiveEditor(IntPtr hwnd)
         {
             try
             {
@@ -1307,27 +1617,42 @@ namespace AppRefiner
                 if (activeEditor != null && activeEditor.hWnd == hwnd)
                 {
                     // Same editor as before - just return it
-                    return activeEditor;
+                    return;
                 }
 
                 // This is a different editor or we didn't have one before
                 try
                 {
-                    var editor = ScintillaManager.GetEditor(hwnd);
-                    activeEditor = editor;
+                    WinApi.GetWindowThreadProcessId(hwnd, out uint pid);
 
-                    return editor;
+                    if (AppDesignerProcesses.TryGetValue(pid, out var process))
+                    {
+                        activeEditor = process.GetOrInitEditor(hwnd);
+                        activeAppDesigner = activeEditor.AppDesignerProcess;
+                        return;
+                    }
+                    else
+                    {
+                        var newProcess = new AppDesignerProcess(pid, IntPtr.Zero, GetGeneralSettingsObject(), currentShortcutFlags);
+
+                        AppDesignerProcesses.Add(pid, newProcess);
+                        trackedProcessIds.Add(pid);
+                        activeEditor = newProcess.GetOrInitEditor(hwnd);
+                        activeEditor.AppDesignerProcess = newProcess;
+                        activeAppDesigner = activeEditor.AppDesignerProcess;
+                        return;
+                    }
                 }
                 catch (Exception ex)
                 {
                     Debug.Log($"Error getting Scintilla editor: {ex.Message}");
-                    return null;
+                    return;
                 }
             }
             catch (Exception ex)
             {
                 Debug.Log($"Exception in GetActiveEditor: {ex.Message}");
-                return null;
+                return;
             }
         }
 
@@ -1359,10 +1684,16 @@ namespace AppRefiner
                 ScintillaManager.SetDarkMode(editor);
             }
 
-            // Process stylers for PeopleCode
+            // Process stylers for PeopleCode with debouncing to prevent double execution
             if (editor.Type == EditorType.PeopleCode)
             {
-                stylerManager?.ProcessStylersForEditor(editor);
+                var now = DateTime.UtcNow;
+                if (!lastStylerProcessingTime.TryGetValue(editor, out var lastProcessed) ||
+                    (now - lastProcessed).TotalMilliseconds > STYLER_PROCESSING_DEBOUNCE_MS)
+                {
+                    lastStylerProcessingTime[editor] = now;
+                    stylerManager?.ProcessStylersForEditor(editor);
+                }
             }
 
             FoldingManager.ProcessFolding(editor);
@@ -1477,6 +1808,9 @@ namespace AppRefiner
                 {
                     // Execute via RefactorManager
                     refactorManager?.ExecuteRefactor(refactor, activeEditor);
+
+                    /* Move the cursor backwards 1 */
+                    ScintillaManager.SetCursorPosition(activeEditor, ScintillaManager.GetCursorPosition(activeEditor) - 1);
                 }
             }
             else if (m.Msg == AR_MSGBOX_SHORTHAND)
@@ -1567,12 +1901,13 @@ namespace AppRefiner
                 Debug.Log($"Text pasted detected at position: {m.WParam}, length: {m.LParam}");
 
                 // Trigger ResolveImports refactor automatically
-                TriggerResolveImportsRefactor();
+                // Disabling this because it really messes up the "undo" where the user expects to just undo the paste
+                // TriggerResolveImportsRefactor();
             }
             else if (m.Msg == AR_KEY_COMBINATION)
             {
                 // Only process if we have an active editor
-                if (activeEditor == null || !activeEditor.IsValid()) return;
+                if ((activeEditor == null || !activeEditor.IsValid()) && activeAppDesigner == null) return;
 
                 // Simple throttling to prevent rapid duplicates
                 var now = DateTime.UtcNow;
@@ -1653,7 +1988,7 @@ namespace AppRefiner
                 }
 
                 // Create and show the definition selection dialog
-                IntPtr mainHandle = Process.GetProcessById((int)activeEditor.ProcessId).MainWindowHandle;
+                IntPtr mainHandle = activeEditor.AppDesignerProcess.MainWindowHandle;
 
                 ShowGoToDefinitionDialog(definitions, mainHandle);
 
@@ -1703,13 +2038,13 @@ namespace AppRefiner
             if (activeEditor == null) return [];
 
             // Use the parse tree from the editor if available, otherwise parse it now
-            var (program, tokenStream, comments) = activeEditor.GetParsedProgram();
+            var program = activeEditor.GetSelfHostedParsedProgram();
 
             // Create and run the visitor to collect definitions
             var visitor = new GoToDefinitionVisitor();
-            ParseTreeWalker.Default.Walk(visitor, program);
+            program?.Accept(visitor);
 
-            return visitor.Definitions;
+            return visitor.Definitions ?? [];
         }
 
 
@@ -1726,7 +2061,7 @@ namespace AppRefiner
                 MessageBox.Show("No templates found.", "No Templates", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
             }
-            var mainHandle = Process.GetProcessById((int)activeEditor.ProcessId).MainWindowHandle;
+            var mainHandle = activeEditor.AppDesignerProcess.MainWindowHandle;
             var handleWrapper = new WindowWrapper(mainHandle);
 
             // Show template selection dialog
@@ -1759,6 +2094,7 @@ namespace AppRefiner
         {
             Debug.Log("Displaying debug dialog...");
             Debug.ShowDebugDialog(Handle);
+            //Debug.ShowIndicatorPanel(Handle, this);
         }
 
 
@@ -1922,7 +2258,7 @@ namespace AppRefiner
 
                     if (xrefs.Count > 0)
                     {
-                        StringBuilder sb = new StringBuilder();
+                        StringBuilder sb = new();
                         sb.Append("Event Mapping Xrefs:\n");
 
                         foreach (var g in groups)
@@ -1953,18 +2289,10 @@ namespace AppRefiner
 
             if (!editor.IsValid())
             {
-                ScintillaManager.CleanupEditor(editor);
+                editor.Cleanup();
                 return;
             }
 
-            // Check if there's recently a new datamanager for this editor
-            if (processDataManagers.TryGetValue(editor.ProcessId, out IDataManager? dataManager))
-            {
-                editor.DataManager = dataManager;
-            }
-
-            // Update the active editor reference
-            activeEditor = editor;
             EnableUIActions();
 
             // If "only PPC" is checked and the editor is not PPC, skip
@@ -1973,122 +2301,47 @@ namespace AppRefiner
                 return;
             }
 
-            if (!editor.Initialized)
+            /* If promptForDB is set, lets check if we have a datamanger already? if not, prompt for a db connection */
+            if (chkPromptForDB.Checked && editor.DataManager == null && editor.AppDesignerProcess.DoNotPromptForDB != true)
             {
-                Debug.Log($"Found new editor via WinEvent HWND: {editor.hWnd:X}, PID: {editor.ProcessId:X} Thread: {editor.ThreadID:X}");
-
-                if (chkAutoDark.Checked)
-                {
-                    ScintillaManager.SetDarkMode(editor);
-                }
-
-                Debug.Log($"Editor isn't subclassed: {editor.hWnd}");
-                bool success = EventHookInstaller.SubclassWindow(editor.ThreadID, WindowHelper.GetParentWindow(editor.hWnd), this.Handle, chkAutoPairing.Checked);
-                Debug.Log($"Window subclassing result: {success}");
-
-                // Check if this is a new thread we haven't seen before for main window subclassing
-                var existingThreads = knownEditors
-                    .Where(e => e != null && e.ThreadID != editor.ThreadID)
-                    .Select(e => e.ThreadID)
-                    .Distinct();
-
-                bool isNewThread = !existingThreads.Contains(editor.ThreadID);
-
-                if (success && isNewThread)
-                {
-                    // Get the main window for this thread and subclass it
-                    try
-                    {
-                        var process = System.Diagnostics.Process.GetProcessById((int)editor.ProcessId);
-                        var mainWindow = process.MainWindowHandle;
-
-                        if (mainWindow != IntPtr.Zero)
-                        {
-                            // For now, default main window shortcuts to true (users can disable via settings later)
-                            bool mainWindowSuccess = EventHookInstaller.SubclassMainWindow(editor.ThreadID, mainWindow, this.Handle, chkOverrideFindReplace.Checked);
-                            Debug.Log($"Main window subclassing result for thread {editor.ThreadID}: {mainWindowSuccess} (HWND: {mainWindow:X})");
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        Debug.Log($"Error subclassing main window for thread {editor.ThreadID}: {ex.Message}");
-                    }
-                }
-
-                ScintillaManager.SetMouseDwellTime(editor, 1000);
-
-
-                if (chkCodeFolding.Checked)
-                {
-                    ScintillaManager.EnableFolding(editor);
-
-                    editor.ContentString = ScintillaManager.GetScintillaText(editor);
-
-                    if (chkRememberFolds.Checked)
-                    {
-                        editor.CollapsedFoldPaths = FoldingManager.RetrievePersistedFolds(editor);
-                    }
-
-                    FoldingManager.ProcessFolding(editor);
-                    FoldingManager.ApplyCollapsedFoldPaths(editor);
-
-                    if (chkBetterSQL.Checked && editor.Type == EditorType.SQL)
-                    {
-                        ScintillaManager.ApplyBetterSQL(editor);
-                    }
-
-                    if (chkInitCollapsed.Checked)
-                    {
-                        ScintillaManager.CollapseTopLevel(editor);
-                    }
-
-                    // Save initial content to Snapshot database
-                    if (!string.IsNullOrEmpty(editor.RelativePath))
-                    {
-                        SaveSnapshot(editor);
-                    }
-
-                    editor.Initialized = true;
-                }
-
-                /* If promptForDB is set, lets check if we have a datamanger already? if not, prompt for a db connection */
-                if (chkPromptForDB.Checked && editor.DataManager == null && !processesToNotDBPrompt.Contains(editor.ProcessId))
-                {
-                    ConnectToDB();
-                }
-                Debug.Log($"Event mapping flags: {chkEventMapping.Checked}, {chkEventMapXrefs.Checked}");
-                if (editor.DataManager != null && (chkEventMapping.Checked || chkEventMapXrefs.Checked))
-                {
-                    Debug.Log($"Processing event mapping for editor: {editor.RelativePath}");
-                    ProcessEventMapping();
-                }
-
+                ConnectToDB();
             }
+            Debug.Log($"Event mapping flags: {chkEventMapping.Checked}, {chkEventMapXrefs.Checked}");
+            if (editor.DataManager != null && (chkEventMapping.Checked || chkEventMapXrefs.Checked))
+            {
+                Debug.Log($"Processing event mapping for editor: {editor.RelativePath}");
+                ProcessEventMapping();
+            }
+
         }
+
 
         private void ConnectToDB()
         {
-            if (activeEditor == null) return;
+            if (activeAppDesigner == null) return;
 
-            var mainHandle = Process.GetProcessById((int)activeEditor.ProcessId).MainWindowHandle;
+            var mainHandle = activeAppDesigner.MainWindowHandle;
             var handleWrapper = new WindowWrapper(mainHandle);
 
             // Pass the editor's DBName to the dialog constructor
-            DBConnectDialog dialog = new(mainHandle, activeEditor.DBName);
+            DBConnectDialog dialog = new(mainHandle, activeAppDesigner.DBName);
             dialog.StartPosition = FormStartPosition.CenterParent;
-
             if (dialog.ShowDialog(handleWrapper) == DialogResult.OK)
             {
                 IDataManager? manager = dialog.DataManager;
+
                 if (manager != null)
                 {
-                    processDataManagers[activeEditor.ProcessId] = manager;
-                    activeEditor.DataManager = manager;
+                    activeAppDesigner.DataManager = manager;
+                    foreach (var editor in activeAppDesigner.Editors.Values)
+                    {
+                        editor.DataManager = manager;
+                    }
                 }
             }
             else
             {
-                processesToNotDBPrompt.Add(activeEditor.ProcessId);
+                activeAppDesigner.DoNotPromptForDB = true;
             }
         }
 
@@ -2161,12 +2414,12 @@ namespace AppRefiner
 
 
                         Debug.Log($"Processing debounced SAVEPOINTREACHED for {editorToSave.RelativePath}");
-                        lock (ScintillaManager.editorsExpectingSavePoint)
+                        lock (editorToSave)
                         {
-                            if (ScintillaManager.editorsExpectingSavePoint.Contains(editorToSave.hWnd))
+                            if (editorToSave.ExpectingSavePoint)
                             {
                                 // Remove the editor from the list of expecting save points
-                                ScintillaManager.editorsExpectingSavePoint.Remove(editorToSave.hWnd);
+                                editorToSave.ExpectingSavePoint = false;
                                 return;
                             }
                         }
@@ -2213,13 +2466,27 @@ namespace AppRefiner
         private void HandleWindowFocusEvent(object? sender, IntPtr hwnd)
         {
             // Check if the focused window is a Scintilla window
-            StringBuilder className = new StringBuilder(256);
-            NativeMethods.GetClassName(hwnd, className, className.Capacity); // Use NativeMethods
 
+            WinApi.GetWindowThreadProcessId(hwnd, out var processId); // Use WinApi
+            /* Handle focusing on App Designer but not an editor */
+            StringBuilder windowText = new StringBuilder(256);
+            WinApi.GetWindowText(hwnd, windowText, windowText.Capacity);
+
+            if (windowText.ToString().StartsWith("Application Designer"))
+            {
+                if (!AppDesignerProcesses.ContainsKey(processId))
+                {
+                    ValidateAndCreateAppDesignerProcess(processId, hwnd);
+                }
+                return;
+            }
+
+            StringBuilder className = new(256);
+            WinApi.GetClassName(hwnd, className, className.Capacity); // Use WinApi
             if (className.ToString().Contains("Scintilla"))
             {
                 // Ensure hwnd is owned by "pside.exe"
-                NativeMethods.GetWindowThreadProcessId(hwnd, out var processId); // Use NativeMethods
+
                 try
                 {
                     if ("pside".Equals(Process.GetProcessById((int)processId).ProcessName, StringComparison.OrdinalIgnoreCase))
@@ -2238,37 +2505,35 @@ namespace AppRefiner
                         }
 
                         // Use SetActiveEditor to properly handle the newly focused window
-                        var newlyFocusedEditor = SetActiveEditor(hwnd);
+                        SetActiveEditor(hwnd);
+
 
                         /* If editor doesn't have a CaptionChanged handler, set one */
-                        if (newlyFocusedEditor != null && !newlyFocusedEditor.HasCaptionEventHander)
+                        if (activeEditor != null && !activeEditor.HasCaptionEventHander)
                         {
-                            newlyFocusedEditor.CaptionChanged += (s, e) =>
+                            activeEditor.CaptionChanged += (s, e) =>
                             {
-                                newlyFocusedEditor.ContentString = ScintillaManager.GetScintillaText(newlyFocusedEditor);
-                                newlyFocusedEditor.CollapsedFoldPaths.Clear();
+                                activeEditor.ContentString = ScintillaManager.GetScintillaText(activeEditor);
+                                activeEditor.CollapsedFoldPaths.Clear();
                                 if (chkRememberFolds.Checked)
                                 {
-                                    newlyFocusedEditor.CollapsedFoldPaths = FoldingManager.RetrievePersistedFolds(newlyFocusedEditor);
+                                    activeEditor.CollapsedFoldPaths = FoldingManager.RetrievePersistedFolds(activeEditor);
                                 }
 
-                                CheckForContentChanges(newlyFocusedEditor);
+                                CheckForContentChanges(activeEditor);
                             };
                         }
 
-
-                        if (newlyFocusedEditor != null && newlyFocusedEditor.IsValid())
+                        if (activeEditor != null && activeEditor.IsValid())
                         {
-                            if (!newlyFocusedEditor.Initialized) // Check if it's truly a *new* editor needing init
+                            if (!activeEditor.Initialized) // Check if it's truly a *new* editor needing init
                             {
-                                ProcessNewEditor(newlyFocusedEditor);
-                                // Add editor to hashset of known editors
-                                knownEditors.Add(newlyFocusedEditor);
+                                ProcessNewEditor(activeEditor);
                             }
                             else
                             {
-                                // Editor already known and initialized, just check content
-                                CheckForContentChanges(newlyFocusedEditor);
+                                // Editor already known and initialized, check content on focus
+                                CheckForContentChanges(activeEditor);
                             }
                         }
                         else
@@ -2283,6 +2548,154 @@ namespace AppRefiner
                 }
                 catch (ArgumentException) { /* Process might have exited */ }
             }
+
+            // Check for any window owned by pside.exe to update activeAppDesigner
+            NativeMethods.GetWindowThreadProcessId(hwnd, out var focusedProcessId);
+            try
+            {
+                if ("pside".Equals(Process.GetProcessById((int)focusedProcessId).ProcessName, StringComparison.OrdinalIgnoreCase))
+                {
+                    // Update activeAppDesigner to the process that owns this focused window
+                    if (AppDesignerProcesses.TryGetValue(focusedProcessId, out var appDesignerProcess))
+                    {
+                        if (activeAppDesigner != appDesignerProcess)
+                        {
+                            activeAppDesigner = appDesignerProcess;
+                            Debug.Log($"Active AppDesigner changed to process ID: {focusedProcessId}");
+                        }
+                    }
+                    else
+                    {
+                        // Process not yet tracked, this shouldn't happen often as creation events should handle this
+                        Debug.Log($"Focus detected on untracked pside.exe process ID: {focusedProcessId}");
+                    }
+                }
+            }
+            catch (ArgumentException) { /* Process might have exited */ }
+        }
+
+        /// <summary>
+        /// Handles window creation events to detect Application Designer processes early.
+        /// </summary>
+        private void HandleWindowCreationEvent(object? sender, IntPtr hwnd)
+        {
+            try
+            {
+                // Get the process ID for the created window
+                NativeMethods.GetWindowThreadProcessId(hwnd, out var processId);
+
+                // Early exit if we've already tracked this process ID
+                if (trackedProcessIds.Contains(processId))
+                {
+                    return;
+                }
+
+                // Check if it's a pside.exe process
+                var process = Process.GetProcessById((int)processId);
+                if (!"pside".Equals(process.ProcessName, StringComparison.OrdinalIgnoreCase))
+                {
+                    return;
+                }
+
+                Debug.Log($"WinEvent detected window creation in pside.exe process: PID {processId}, HWND 0x{hwnd.ToInt64():X}");
+
+                // Double-check if we already have this process tracked (defensive programming)
+                if (AppDesignerProcesses.ContainsKey(processId))
+                {
+                    Debug.Log($"Process {processId} already tracked, adding to tracking set and skipping validation");
+                    trackedProcessIds.Add(processId);
+                    return;
+                }
+
+                // Try immediate validation
+                if (ValidateAndCreateAppDesignerProcess(processId, hwnd))
+                {
+                    Debug.Log($"Process {processId} immediately validated as Application Designer");
+                }
+                else
+                {
+                    // Queue for retry validation
+                    Debug.Log($"Process {processId} failed immediate validation!");
+                }
+            }
+            catch (ArgumentException)
+            {
+                // Process might have exited or be invalid, ignore
+            }
+            catch (Exception ex)
+            {
+                Debug.Log($"Error in HandleWindowCreationEvent: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Validates if a pside.exe process is an Application Designer and creates the AppDesignerProcess if successful.
+        /// </summary>
+        /// <param name="processId">The pside.exe process ID</param>
+        /// <param name="triggerWindowHandle">The window handle that triggered the validation</param>
+        /// <returns>True if validation succeeded and AppDesignerProcess was created</returns>
+        private bool ValidateAndCreateAppDesignerProcess(uint processId, IntPtr triggerWindowHandle)
+        {
+            try
+            {
+                var process = Process.GetProcessById((int)processId);
+                if (process?.MainWindowHandle == IntPtr.Zero)
+                {
+                    return false;
+                }
+
+                // Check if main window caption starts with "Application Designer"
+                var caption = WindowHelper.GetWindowText(process.MainWindowHandle);
+                if (!caption.StartsWith("Application Designer", StringComparison.OrdinalIgnoreCase))
+                {
+                    return false;
+                }
+
+                // Try to find the Results ListView - this is the key validation
+                var resultsListView = ResultsListHelper.FindResultsListView(processId);
+                if (resultsListView == IntPtr.Zero)
+                {
+                    return false;
+                }
+
+                // All validations passed - create and track the AppDesignerProcess
+                var newProcess = new AppDesignerProcess(processId, resultsListView, GetGeneralSettingsObject(), currentShortcutFlags);
+                AppDesignerProcesses.Add(processId, newProcess);
+                trackedProcessIds.Add(processId);
+                activeAppDesigner = newProcess;
+                // Add delayed "AppRefiner Connected!" message to Results ListView
+                _ = ResultsListHelper.AddDelayedMessageToResultsList(newProcess, resultsListView, "AppRefiner Connected!", 2000);
+
+                Debug.Log($"Successfully created AppDesignerProcess for process {processId} with Results ListView");
+
+                /* Set the DB name */
+
+                Task.Delay(1000).ContinueWith(_ =>
+                {
+                    // Split the title by " - " and get the second part (DB name)
+                    var caption = WindowHelper.GetWindowText(process.MainWindowHandle);
+                    string[] parts = caption.Split(new[] { " - " }, StringSplitOptions.None);
+                    if (parts.Length >= 2)
+                    {
+                        newProcess.DBName = parts[1].Trim();
+                    }
+                    else
+                    {
+                        newProcess.DBName = "";
+                    }
+                    if (newProcess.DBName != "" && chkPromptForDB.Checked)
+                    {
+                        this.Invoke(() => ConnectToDB());
+                    }
+                });
+                return true;
+            }
+
+            catch (Exception ex)
+            {
+                Debug.Log($"Exception in ValidateAndCreateAppDesignerProcess for process {processId}: {ex.Message}");
+                return false;
+            }
         }
 
         // Add this new CellPainting event handler method
@@ -2296,18 +2709,16 @@ namespace AppRefiner
                 if (cell.Tag?.ToString() == "NoConfig")
                 {
                     // Paint the background to match the grid's default background
-                    using (Brush backColorBrush = new SolidBrush(SystemColors.Control))
-                    using (Pen gridLinePen = new Pen(gridRefactors.GridColor, 1)) // Use the grid color for the border
-                    {
-                        // Erase the cell background
-                        e.Graphics.FillRectangle(backColorBrush, e.CellBounds);
+                    using Brush backColorBrush = new SolidBrush(SystemColors.Control);
+                    using Pen gridLinePen = new(gridRefactors.GridColor, 1); // Use the grid color for the border
+                                                                             // Erase the cell background
+                    e.Graphics.FillRectangle(backColorBrush, e.CellBounds);
 
-                        // Draw the grid lines (border) - Adjust coordinates slightly for standard appearance
-                        e.Graphics.DrawRectangle(gridLinePen, e.CellBounds.Left - 1, e.CellBounds.Top - 1, e.CellBounds.Width, e.CellBounds.Height);
+                    // Draw the grid lines (border) - Adjust coordinates slightly for standard appearance
+                    e.Graphics.DrawRectangle(gridLinePen, e.CellBounds.Left - 1, e.CellBounds.Top - 1, e.CellBounds.Width, e.CellBounds.Height);
 
-                        // Prevent default painting (including hover effects)
-                        e.Handled = true;
-                    }
+                    // Prevent default painting (including hover effects)
+                    e.Handled = true;
                 }
                 // Allow default painting for normal button cells or other columns
             }
@@ -2324,18 +2735,16 @@ namespace AppRefiner
                 if (cell.Tag?.ToString() == "NoConfig")
                 {
                     // Paint the background to match the grid's default background
-                    using (Brush backColorBrush = new SolidBrush(SystemColors.Control))
-                    using (Pen gridLinePen = new Pen(dataGridView1.GridColor, 1)) // Use the grid color for the border
-                    {
-                        // Erase the cell background
-                        e.Graphics.FillRectangle(backColorBrush, e.CellBounds);
+                    using Brush backColorBrush = new SolidBrush(SystemColors.Control);
+                    using Pen gridLinePen = new(dataGridView1.GridColor, 1); // Use the grid color for the border
+                                                                             // Erase the cell background
+                    e.Graphics.FillRectangle(backColorBrush, e.CellBounds);
 
-                        // Draw the grid lines (border) - Adjust coordinates slightly for standard appearance
-                        e.Graphics.DrawRectangle(gridLinePen, e.CellBounds.Left - 1, e.CellBounds.Top - 1, e.CellBounds.Width, e.CellBounds.Height);
+                    // Draw the grid lines (border) - Adjust coordinates slightly for standard appearance
+                    e.Graphics.DrawRectangle(gridLinePen, e.CellBounds.Left - 1, e.CellBounds.Top - 1, e.CellBounds.Width, e.CellBounds.Height);
 
-                        // Prevent default painting (including hover effects)
-                        e.Handled = true;
-                    }
+                    // Prevent default painting (including hover effects)
+                    e.Handled = true;
                 }
                 // Allow default painting for normal button cells or other columns
             }
@@ -2383,30 +2792,23 @@ namespace AppRefiner
         private void btnTNSADMIN_Click(object sender, EventArgs e)
         {
             /* Folder selection dialog and save result to TNS_ADMIN */
-            using (var folderDialog = new FolderBrowserDialog())
+            using var folderDialog = new FolderBrowserDialog();
+            folderDialog.Description = "Select the TNS_ADMIN directory";
+            folderDialog.ShowNewFolderButton = false;
+            if (string.IsNullOrEmpty(TNS_ADMIN))
             {
-                folderDialog.Description = "Select the TNS_ADMIN directory";
-                folderDialog.ShowNewFolderButton = false;
-                if (string.IsNullOrEmpty(TNS_ADMIN))
-                {
-                    folderDialog.SelectedPath = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
-                }
-                else
-                {
-                    folderDialog.SelectedPath = TNS_ADMIN;
-                }
-                if (folderDialog.ShowDialog(this) == DialogResult.OK)
-                {
-                    TNS_ADMIN = folderDialog.SelectedPath;
-                    SaveSettings(); // Save all settings
-                    Debug.Log($"TNS_ADMIN property set to: {folderDialog.SelectedPath}");
-                }
+                folderDialog.SelectedPath = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
             }
-        }
-
-        private void radioButton2_CheckedChanged(object sender, EventArgs e)
-        {
-
+            else
+            {
+                folderDialog.SelectedPath = TNS_ADMIN;
+            }
+            if (folderDialog.ShowDialog(this) == DialogResult.OK)
+            {
+                TNS_ADMIN = folderDialog.SelectedPath;
+                SaveSettings(); // Save all settings
+                Debug.Log($"TNS_ADMIN property set to: {folderDialog.SelectedPath}");
+            }
         }
 
         private void linkDocs_LinkClicked(object sender, LinkLabelLinkClickedEventArgs e)
@@ -2420,10 +2822,69 @@ namespace AppRefiner
             linkDocs.LinkVisited = true;
         }
 
-        private void chkOverrideFindReplace_CheckedChanged(object sender, EventArgs e)
+        /// <summary>
+        /// Opens an arbitrary code definition in the IDE by leveraging the Results list view
+        /// </summary>
+        /// <param name="targetString">The target string to open (e.g., class path, method signature)</param>
+        /// <returns>True if operation was successful</returns>
+        public bool OpenTarget(string targetString)
         {
-            // Notify all hooked editors that the override find/replace setting has changed
-            NotifyMainWindowShortcutsChange(chkOverrideFindReplace.Checked);
+            if (string.IsNullOrEmpty(targetString) || targetString.Length >= 256)
+            {
+                Debug.Log($"OpenTarget: Invalid target string length ({targetString?.Length ?? 0} chars)");
+                return false;
+            }
+
+            // Use EventHookInstaller to set the open target and trigger double-click
+            if (activeAppDesigner != null)
+            {
+                bool success = activeAppDesigner.SetOpenTarget(targetString);
+
+                if (success)
+                {
+                    Debug.Log($"OpenTarget: Successfully set target '{targetString}' for thread {activeAppDesigner.MainThreadId}");
+                }
+                else
+                {
+                    Debug.Log($"OpenTarget: Failed to set target '{targetString}' for thread {activeAppDesigner.MainThreadId}");
+                }
+                return success;
+            }
+            return false;
+
+        }
+
+        private void btnConfigSmartOpen_Click(object sender, EventArgs e)
+        {
+            try
+            {
+                // Load current Smart Open configuration
+                var currentConfig = settingsService?.LoadSmartOpenConfig() ?? SmartOpenConfig.GetDefault();
+
+                // Create and show the configuration dialog
+                using var dialog = new SmartOpenConfigDialog(currentConfig);
+                dialog.StartPosition = FormStartPosition.CenterParent;
+
+                if (dialog.ShowDialog(this) == DialogResult.OK)
+                {
+                    // Save the updated configuration
+                    settingsService?.SaveSmartOpenConfig(dialog.Configuration);
+                    settingsService?.SaveChanges();
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.LogException(ex, "Error showing Smart Open configuration dialog");
+                
+                // Show error message to user
+                Task.Delay(100).ContinueWith(_ =>
+                {
+                    var mainHandle = this.Handle;
+                    var handleWrapper = new WindowWrapper(mainHandle);
+                    new MessageBoxDialog($"Error opening Smart Open configuration: {ex.Message}", 
+                        "Configuration Error", MessageBoxButtons.OK, mainHandle).ShowDialog(handleWrapper);
+                });
+            }
         }
     }
 }

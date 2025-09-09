@@ -21,7 +21,7 @@ The Refactor API uses the ANTLR4 parser to analyze the code structure and provid
 
 ### 2. Implement the Refactor Class
 
-Custom refactors are created by extending the abstract `AppRefiner.Refactors.BaseRefactor` class. You typically override ANTLR listener methods (`Enter*`, `Exit*`, `VisitTerminal`) to find the code elements you want to modify and then call helper methods (`ReplaceNode`, `InsertText`, etc.) to stage the changes.
+Custom refactors are created by extending the abstract `AppRefiner.Refactors.ScopedRefactor` class. You typically override AST visitor methods to find the code elements you want to modify and then call helper methods (`EditText`, `InsertText`, `DeleteText`) to stage the changes.
 
 **Example: Simple Comment Replacer**
 
@@ -34,7 +34,7 @@ using System.Windows.Forms; // For Keys enum
 
 namespace MyCompany.AppRefiner.CustomRefactors
 {
-    public class StandardizeCommentRefactor : BaseRefactor
+    public class StandardizeCommentRefactor : ScopedRefactor
     {
         // --- Static Properties for Discovery ---
         
@@ -97,9 +97,9 @@ namespace MyCompany.AppRefiner.CustomRefactors
 
 ## Key API Components Reference
 
-### `BaseRefactor` Class
+### `ScopedRefactor` Class
 
-Abstract base class for refactorings. Inherits from `PeopleCodeParserBaseListener`.
+Abstract base class for refactorings. Inherits from `ScopedAstVisitor<object>` and provides automatic scope and variable tracking.
 
 **Static Properties (for discovery by AppRefiner):**
 -   `RefactorName` (string): REQUIRED. Name shown after "Refactor:" in Command Palette.
@@ -121,13 +121,13 @@ Abstract base class for refactorings. Inherits from `PeopleCodeParserBaseListene
 -   `GetChanges()` (IReadOnlyList<CodeChange>): Returns the list of staged `CodeChange` objects.
 
 **Protected Helper Methods (Call these during tree traversal to stage changes):**
--   `ReplaceNode(ParserRuleContext context, string newText, string description)`
--   `ReplaceText(int startIndex, int endIndex, string newText, string description)`
--   `InsertText(int position, string textToInsert, string description)`
--   `InsertAfter(ParserRuleContext context, string textToInsert, string description)`
--   `InsertBefore(ParserRuleContext context, string textToInsert, string description)`
+-   `EditText(int startIndex, int endIndex, string newText, string description)`
+-   `EditText(SourceSpan span, string newText, string description)`
+-   `InsertText(int position, string text, string description)`
+-   `InsertText(SourcePosition position, string text, string description)`
 -   `DeleteText(int startIndex, int endIndex, string description)`
--   `DeleteNode(ParserRuleContext context, string description)`
+-   `DeleteText(SourceSpan span, string description)`
+-   `SetFailure(string message)` - Mark the refactor as failed
 
 ### `RefactorResult` Class
 

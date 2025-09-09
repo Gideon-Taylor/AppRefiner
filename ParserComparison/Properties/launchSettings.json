@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "ParserComparison": {
+      "commandName": "Project",
+      "commandLineArgs": "--debug-on-error -d C:\\temp\\IH91U019\\PeopleCode --continue-on-error"
+    }
+  }
+}

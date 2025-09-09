@@ -94,29 +94,28 @@ namespace AppRefiner.Database
         /// </summary>
         public DataTable ExecuteQuery(string sql, Dictionary<string, object>? parameters = null)
         {
-            using (var command = _connection.CreateCommand())
+            using var command = _connection.CreateCommand();
+            command.CommandText = sql;
+            command.BindByName = true;
+
+            if (parameters != null)
             {
-                command.CommandText = sql;
-
-                if (parameters != null)
+                foreach (var param in parameters)
                 {
-                    foreach (var param in parameters)
-                    {
-                        OracleParameter oracleParam = command.CreateParameter();
-                        oracleParam.ParameterName = param.Key;
-                        oracleParam.Value = param.Value ?? DBNull.Value;
-                        command.Parameters.Add(oracleParam);
-                    }
+                    OracleParameter oracleParam = command.CreateParameter();
+                    oracleParam.ParameterName = param.Key;
+                    oracleParam.Value = param.Value ?? DBNull.Value;
+                    command.Parameters.Add(oracleParam);
                 }
-
-                DataTable dataTable = new();
-                using (var adapter = new OracleDataAdapter(command))
-                {
-                    adapter.Fill(dataTable);
-                }
-
-                return dataTable;
             }
+
+            DataTable dataTable = new();
+            using (var adapter = new OracleDataAdapter(command))
+            {
+                adapter.Fill(dataTable);
+            }
+
+            return dataTable;
         }
 
         /// <summary>
@@ -124,23 +123,22 @@ namespace AppRefiner.Database
         /// </summary>
         public int ExecuteNonQuery(string sql, Dictionary<string, object>? parameters = null)
         {
-            using (var command = _connection.CreateCommand())
+            using var command = _connection.CreateCommand();
+            command.CommandText = sql;
+            command.BindByName = true;
+
+            if (parameters != null)
             {
-                command.CommandText = sql;
-
-                if (parameters != null)
+                foreach (var param in parameters)
                 {
-                    foreach (var param in parameters)
-                    {
-                        OracleParameter oracleParam = command.CreateParameter();
-                        oracleParam.ParameterName = param.Key;
-                        oracleParam.Value = param.Value ?? DBNull.Value;
-                        command.Parameters.Add(oracleParam);
-                    }
+                    OracleParameter oracleParam = command.CreateParameter();
+                    oracleParam.ParameterName = param.Key;
+                    oracleParam.Value = param.Value ?? DBNull.Value;
+                    command.Parameters.Add(oracleParam);
                 }
-
-                return command.ExecuteNonQuery();
             }
+
+            return command.ExecuteNonQuery();
         }
 
         /// <summary>

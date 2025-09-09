@@ -1,10 +1,4 @@
-﻿using Antlr4.Runtime.Misc;
-using AppRefiner.PeopleCode;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+﻿using PeopleCodeParser.SelfHosted.Nodes;
 
 namespace AppRefiner.Linters
 {
@@ -12,7 +6,7 @@ namespace AppRefiner.Linters
     {
         public override string LINTER_ID => "REUSED_FOR_ITER";
 
-        private Stack<string> forIterators = new Stack<string>();
+        private Stack<string> forIterators = new();
 
         public ReusedForIterator()
         {
@@ -21,10 +15,11 @@ namespace AppRefiner.Linters
             Active = true;
         }
 
-        public override void EnterForStatement([NotNull] PeopleCodeParser.ForStatementContext context)
+        public override void VisitFor(ForStatementNode node)
         {
             // Get the iterator variable from the for statement
-            var iterator = context.USER_VARIABLE().GetText();
+            var iterator = node.Variable;
+
             // Check if the iterator is already in use
             if (forIterators.Contains(iterator))
             {
@@ -33,8 +28,8 @@ namespace AppRefiner.Linters
                     1,
                     $"Re-use of for loop iterator '{iterator}' in nested for loop.",
                     Type,
-                    context.Start.Line - 1,
-                    context
+                    node.SourceSpan.Start.Line,
+                    node.SourceSpan
                 );
             }
             else
@@ -42,15 +37,21 @@ namespace AppRefiner.Linters
                 // Push the iterator onto the stack
                 forIterators.Push(iterator);
             }
-        }
-        public override void ExitForStatement([NotNull] PeopleCodeParser.ForStatementContext context)
-        {
+
+            // Visit the for loop body
+            base.VisitFor(node);
+
             // Pop the iterator off the stack when exiting the for statement
-            var iterator = context.USER_VARIABLE().GetText();
             if (forIterators.Count > 0 && forIterators.Peek() == iterator)
             {
                 forIterators.Pop();
             }
+        }
+
+        public override void Reset()
+        {
+            forIterators.Clear();
+            base.Reset();
         }
     }
 }

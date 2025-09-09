@@ -1,11 +1,9 @@
-﻿using Antlr4.Runtime.Misc;
-using AppRefiner.Linters.Models;
-using AppRefiner.PeopleCode;
-using static AppRefiner.PeopleCode.PeopleCodeParser;
+﻿using AppRefiner.Linters.Models;
+using PeopleCodeParser.SelfHosted.Nodes;
 
 namespace AppRefiner.Linters
 {
-    public class UseOfObjectType : ScopedLintRule<VariableInfo>
+    public class UseOfObjectType : BaseLintRule
     {
         public override string LINTER_ID => "OBJECT_TYPE";
 
@@ -16,92 +14,66 @@ namespace AppRefiner.Linters
             Active = true;
         }
 
-        private bool IsObjectType(TypeTContext typeContext)
+        private bool IsObjectType(TypeNode typeNode)
         {
-            if (typeContext is SimpleTypeTypeContext simpleType)
+            if (typeNode is BuiltInTypeNode builtInType)
             {
-                if (simpleType.simpleType() is SimpleGenericIDContext genericId)
-                {
-                    return genericId.GENERIC_ID_LIMITED()?.GetText().Equals("object", StringComparison.OrdinalIgnoreCase) ?? false;
-                }
+                return builtInType.Type == PeopleCodeParser.SelfHosted.Nodes.BuiltInType.Object;
             }
             return false;
         }
 
-        public override void EnterLocalVariableDefinition(LocalVariableDefinitionContext context)
-        {
-            base.EnterLocalVariableDefinition(context);
+        // Track object variables that are declared
+        private readonly HashSet<string> objectVariables = new();
 
-            if (!IsObjectType(context.typeT()))
+        public override void VisitLocalVariableDeclarationWithAssignment(LocalVariableDeclarationWithAssignmentNode node)
+        {
+            base.VisitLocalVariableDeclarationWithAssignment(node);
+
+            if (!IsObjectType(node.Type))
                 return;
 
-            foreach (var varNode in context.USER_VARIABLE())
-            {
-                var varName = varNode.GetText();
-                // Add to current scope via the base class method
-                AddLocalVariable(
-                    varName,
-                    "object",
-                    varNode.Symbol.Line,
-                    varNode.Symbol
-                );
-            }
-        }
+            objectVariables.Add(node.VariableName);
 
-        public override void EnterLocalVariableDeclAssignment(LocalVariableDeclAssignmentContext context)
-        {
-            base.EnterLocalVariableDeclAssignment(context);
-
-            if (!IsObjectType(context.typeT()))
-                return;
-
-            var varName = context.USER_VARIABLE().GetText();
-            // Add to current scope
-            AddLocalVariable(
-                varName,
-                "object",
-                context.USER_VARIABLE().Symbol.Line,
-                context
-            );
-
-            // Check if the assignment is a create expression
-            if (context.expression() is ObjectCreateExprContext)
+            // Check if the assignment is an object creation
+            if (node.InitialValue is ObjectCreationNode)
             {
                 AddReport(
                     1,
                     "Variable is declared as 'object' but assigned a specific type.",
                     ReportType.Warning,
-                    context.Start.Line - 1,
-                    (context.Start.ByteStartIndex(), context.Stop.ByteStopIndex())
+                    node.SourceSpan.Start.Line,
+                    node.SourceSpan
                 );
             }
         }
 
-        public override void EnterEqualityExpr([NotNull] EqualityExprContext context)
+        public override void VisitAssignment(AssignmentNode node)
         {
-            // Only interested in assignments (=), not equality comparisons
-            if (context.EQ() == null)
-                return;
+            base.VisitAssignment(node);
 
-            // Check if left side is a variable we're tracking
-            if (context.expression(0) is IdentifierExprContext identExpr)
+            // Check if left side is a variable we're tracking as object type
+            if (node.Target is IdentifierNode identNode && 
+                GetAccessibleVariables(GetCurrentScope()).Where(v => v.Name == identNode.Name && v.Type.ToLower() == "object").Any())
             {
-                var varName = identExpr.ident().GetText();
-                if (TryGetVariableInfo(varName, out var info) && info?.Type.Equals("object", StringComparison.OrdinalIgnoreCase) == true)
+                // Check if right side is an object creation
+                if (node.Value is ObjectCreationNode)
                 {
-                    // Check if right side is a create expression
-                    if (context.expression(1) is ObjectCreateExprContext)
-                    {
-                        AddReport(
-                            1,
-                            "Variable is declared as 'object' but assigned a specific type.",
-                            ReportType.Warning,
-                            context.Start.Line - 1,
-                            (context.Start.ByteStartIndex(), context.Stop.ByteStopIndex())
-                        );
-                    }
+                    AddReport(
+                        1,
+                        "Variable is declared as 'object' but assigned a specific type.",
+                        ReportType.Warning,
+                        node.SourceSpan.Start.Line,
+                        node.SourceSpan
+                    );
                 }
             }
+        }
+
+        public new void Reset()
+        {
+            base.Reset();
+            objectVariables.Clear();
         }
     }
 }

@@ -1,19 +1,8 @@
 using AppRefiner.Database;
 using AppRefiner.Database.Models;
 using AppRefiner.Dialogs;
-using AppRefiner.PeopleCode;
-using AppRefiner.Plugins;
-using Antlr4.Runtime;
-using Antlr4.Runtime.Tree;
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Text;
-using System.Windows.Forms;
-using System.Drawing;
 using AppRefiner.Linters;
-using AppRefiner.Refactors;
+using AppRefiner.Plugins;
 using System.Diagnostics;
 
 namespace AppRefiner
@@ -26,15 +15,15 @@ namespace AppRefiner
         private readonly Label lblStatus; // Status label
         private readonly ProgressBar progressBar; // Progress bar
         private readonly SettingsService settingsService; // Added SettingsService
-        
+
         // We might still need access to the general settings like LintReportPath
         // Pass it during construction or retrieve via a SettingsService later.
         private string? lintReportPath;
-        
-        // Public property to expose LintReportPath
-        public string? LintReportPath => lintReportPath; 
 
-        public LinterManager(MainForm form, DataGridView linterOptionsGrid, Label statusLabel, ProgressBar progBar, 
+        // Public property to expose LintReportPath
+        public string? LintReportPath => lintReportPath;
+
+        public LinterManager(MainForm form, DataGridView linterOptionsGrid, Label statusLabel, ProgressBar progBar,
                              string? initialLintReportPath, SettingsService settings)
         {
             mainForm = form;
@@ -76,7 +65,7 @@ namespace AppRefiner
         {
             linterRules.Clear();
             linterGrid.Rows.Clear();
-            
+
             /* Find all classes in this assembly that extend BaseLintRule*/
             var linters = AppDomain.CurrentDomain.GetAssemblies()
                 .SelectMany(s => s.GetTypes())
@@ -129,17 +118,17 @@ namespace AppRefiner
             }
             // Apply saved configurations to linters
             LinterConfigManager.ApplyConfigurations(linterRules);
-            
+
             // Now load saved active states using SettingsService
             settingsService.LoadLinterStates(linterRules, linterGrid);
         }
 
-        private void ShowMessageBox(ScintillaEditor activeEditor, string message, string caption, MessageBoxButtons buttons,Action<DialogResult>? callback = null)
+        private void ShowMessageBox(ScintillaEditor activeEditor, string message, string caption, MessageBoxButtons buttons, Action<DialogResult>? callback = null)
         {
             Task.Delay(100).ContinueWith(_ =>
             {
                 // Show message box with specific error
-                var mainHandle = Process.GetProcessById((int)activeEditor.ProcessId).MainWindowHandle;
+                var mainHandle = activeEditor.AppDesignerProcess.MainWindowHandle;
                 var handleWrapper = new WindowWrapper(mainHandle);
                 new MessageBoxDialog(message, caption, buttons, mainHandle, callback).ShowDialog(handleWrapper);
             });
@@ -162,43 +151,74 @@ namespace AppRefiner
                 activeEditor.ContentString = ScintillaManager.GetScintillaText(activeEditor);
             }
 
-            var (program, stream, comments) = activeEditor.GetParsedProgram();
-            var activeLinters = linterRules.Where(a => a.Active);
+            // Use self-hosted parser approach
+            ProcessLintersForEditor(activeEditor.ContentString, activeEditor, editorDataManager);
+        }
 
-            if (editorDataManager == null)
+        /// <summary>
+        /// Processes linters using the self-hosted parser approach
+        /// </summary>
+        private void ProcessLintersForEditor(string sourceCode, ScintillaEditor activeEditor, IDataManager? editorDataManager)
+        {
+            try
             {
-                activeLinters = activeLinters.Where(a => a.DatabaseRequirement != DataManagerRequirement.Required);
+                // Parse with self-hosted parser
+                var lexer = new PeopleCodeParser.SelfHosted.Lexing.PeopleCodeLexer(sourceCode);
+                var tokens = lexer.TokenizeAll();
+                var parser = new PeopleCodeParser.SelfHosted.PeopleCodeParser(tokens);
+                var program = parser.ParseProgram();
+
+                if (program == null)
+                {
+                    ShowMessageBox(activeEditor, "Failed to parse PeopleCode. Please check for syntax errors.", "Parse Error", MessageBoxButtons.OK);
+                    return;
+                }
+
+                // Get active linters
+                var activeLinters = linterRules.Where(a => a.Active).ToList();
+
+                if (editorDataManager == null)
+                {
+                    activeLinters = activeLinters.Where(a => a.DatabaseRequirement != DataManagerRequirement.Required).ToList();
+                }
+
+                if (!activeLinters.Any())
+                {
+                    return;
+                }
+
+                // Create suppression processor
+                var suppressionProcessor = new LinterSuppressionProcessor();
+
+                // Process the program with suppression processor first
+                suppressionProcessor.DataManager = editorDataManager;
+                program.Accept(suppressionProcessor);
+
+                // Process each linter
+                List<Report> reports = new();
+                foreach (var linter in activeLinters)
+                {
+                    linter.Reset();
+                    linter.DataManager = editorDataManager;
+                    linter.Reports = reports;
+                    linter.SuppressionProcessor = suppressionProcessor;
+
+                    // Visit the program with this linter
+                    program.Accept(linter);
+                }
+
+                activeEditor.SetLinterReports(reports);
+                DisplayLintReports(reports, activeEditor);
             }
-
-            MultiParseTreeWalker walker = new();
-            List<Report> reports = new();
-            
-            var suppressionListener = new LinterSuppressionListener(stream, comments);
-            walker.AddListener(suppressionListener);
-
-            foreach (var linter in activeLinters)
+            catch (Exception ex)
             {
-                linter.DataManager = editorDataManager; // Assign potentially updated manager
-                linter.Reports = reports;
-                linter.Comments = comments;
-                linter.SuppressionListener = suppressionListener;
-                walker.AddListener(linter);
+                ShowMessageBox(activeEditor, $"Error during linting: {ex.Message}", "Linting Error", MessageBoxButtons.OK);
             }
-
-            walker.Walk(program);
-
-            foreach (var linter in activeLinters)
-            {
-                linter.Reset();
-            }
-
-            activeEditor.SetLinterReports(reports);
-            DisplayLintReports(reports, activeEditor);
         }
 
         public void ProcessSingleLinter(BaseLintRule linter, ScintillaEditor? activeEditor, IDataManager? editorDataManager)
         {
-             if (activeEditor == null) return;
+            if (activeEditor == null) return;
 
             ScintillaManager.ClearAnnotations(activeEditor);
 
@@ -207,41 +227,61 @@ namespace AppRefiner
                 ShowMessageBox(activeEditor, "Linting is only available for PeopleCode editors", "Error", MessageBoxButtons.OK);
                 return;
             }
-            
+
             if (linter.DatabaseRequirement == DataManagerRequirement.Required && editorDataManager == null)
             {
                 ShowMessageBox(activeEditor, "This linting rule requires a database connection", "Database Required", MessageBoxButtons.OK);
                 return;
             }
-            
+
             if (activeEditor.ContentString == null)
             {
                 activeEditor.ContentString = ScintillaManager.GetScintillaText(activeEditor);
             }
-            
-            var (program, stream, comments) = activeEditor.GetParsedProgram();
-            MultiParseTreeWalker walker = new();
-            List<Report> reports = new();
-            var suppressionListener = new LinterSuppressionListener(stream, comments);
-            walker.AddListener(suppressionListener);
 
-            // Configure and run the specific linter
-            linter.DataManager = editorDataManager;
-            linter.Reports = reports;
-            linter.Comments = comments;
-            linter.SuppressionListener = suppressionListener;
-            walker.AddListener(linter);
-            
-            walker.Walk(program);
-            linter.Reset();
+            try
+            {
+                // Parse with self-hosted parser
+                var lexer = new PeopleCodeParser.SelfHosted.Lexing.PeopleCodeLexer(activeEditor.ContentString);
+                var tokens = lexer.TokenizeAll();
+                var parser = new PeopleCodeParser.SelfHosted.PeopleCodeParser(tokens);
+                var program = parser.ParseProgram();
 
-            activeEditor.SetLinterReports(reports);
-            DisplayLintReports(reports, activeEditor);
+                if (program == null)
+                {
+                    ShowMessageBox(activeEditor, "Failed to parse PeopleCode. Please check for syntax errors.", "Parse Error", MessageBoxButtons.OK);
+                    return;
+                }
+
+                // Create suppression processor
+                var suppressionProcessor = new LinterSuppressionProcessor();
+
+                // Process the program with suppression processor first
+                suppressionProcessor.DataManager = editorDataManager;
+                program.Accept(suppressionProcessor);
+
+                // Configure and run the specific linter
+                linter.Reset();
+                linter.DataManager = editorDataManager;
+                List<Report> reports = new();
+                linter.Reports = reports;
+                linter.SuppressionProcessor = suppressionProcessor;
+
+                // Visit the program with this linter
+                program.Accept(linter);
+
+                activeEditor.SetLinterReports(reports);
+                DisplayLintReports(reports, activeEditor);
+            }
+            catch (Exception ex)
+            {
+                ShowMessageBox(activeEditor, $"Error during linting: {ex.Message}", "Linting Error", MessageBoxButtons.OK);
+            }
         }
 
         private void DisplayLintReports(List<Report> reports, ScintillaEditor activeEditor)
         {
-            
+
             foreach (var g in reports.GroupBy(r => r.Line).OrderBy(b => b.First().Line))
             {
                 List<string> messages = new();
@@ -286,14 +326,14 @@ namespace AppRefiner
             string projectName = ScintillaManager.GetProjectName(editorContext);
             if (projectName == "Untitled" || string.IsNullOrEmpty(projectName))
             {
-                ShowMessageBox(editorContext, string.IsNullOrEmpty(projectName) ? "Unable to determine the project name." : "Please open a project first.", 
+                ShowMessageBox(editorContext, string.IsNullOrEmpty(projectName) ? "Unable to determine the project name." : "Please open a project first.",
                                "Project Linting Error", MessageBoxButtons.OK);
                 return;
             }
-            
+
             if (string.IsNullOrEmpty(lintReportPath) || !Directory.Exists(lintReportPath))
             {
-                ShowMessageBox(editorContext, $"Lint report directory is not set or does not exist: {lintReportPath}", 
+                ShowMessageBox(editorContext, $"Lint report directory is not set or does not exist: {lintReportPath}",
                                "Lint Report Path Error", MessageBoxButtons.OK);
                 return;
             }
@@ -330,38 +370,36 @@ namespace AppRefiner
                 if (!dataManager.LoadPeopleCodeItemContent(ppcProg)) continue;
                 var programText = ppcProg.GetProgramTextAsString();
                 if (string.IsNullOrEmpty(programText)) continue;
-                
-                // Parsing logic...
-                PeopleCodeLexer? lexer = new(new ByteTrackingCharStream(programText));
-                var stream = new CommonTokenStream(lexer);
-                stream.Fill();
-                var comments = stream.GetTokens()
-                    .Where(token => token.Channel == PeopleCodeLexer.COMMENTS || token.Channel == PeopleCodeLexer.API_COMMENTS)
-                    .ToList();
-                PeopleCodeParser? parser = new(stream);
-                var program = parser.program();
-                parser.Interpreter.ClearDFA();
+
+                // Parsing logic using self-hosted parser
+                var lexer = new PeopleCodeParser.SelfHosted.Lexing.PeopleCodeLexer(programText);
+                var tokens = lexer.TokenizeAll();
+                var parser = new PeopleCodeParser.SelfHosted.PeopleCodeParser(tokens);
+                var program = parser.ParseProgram();
+
+                if (program == null) continue; // Skip if parsing failed
 
                 List<Report> programReports = new();
-                MultiParseTreeWalker walker = new();
-                var suppressionListener = new LinterSuppressionListener(stream, comments);
-                walker.AddListener(suppressionListener);
+
+                // Create suppression processor for self-hosted parser
+                var suppressionProcessor = new LinterSuppressionProcessor();
+                suppressionProcessor.DataManager = dataManager;
+                program.Accept(suppressionProcessor);
 
                 foreach (var linter in activeProjectLinters)
                 {
                     linter.Reset();
                     linter.DataManager = dataManager;
                     linter.Reports = programReports;
-                    linter.Comments = comments;
-                    linter.SuppressionListener = suppressionListener;
-                    walker.AddListener(linter);
-                }
+                    linter.SuppressionProcessor = suppressionProcessor;
 
-                walker.Walk(program);
+                    // Visit the program with this linter
+                    program.Accept(linter);
+                }
 
                 foreach (var report in programReports) allReports.Add((ppcProg, report));
                 foreach (var linter in activeProjectLinters) linter.Reset();
-                
+
                 ppcProg.SetProgramText(Array.Empty<byte>()); // Free memory
                 ppcProg.SetNameReferences(new List<NameReference>());
             }
@@ -378,14 +416,15 @@ namespace AppRefiner
             GenerateHtmlReport(editorContext, reportPath, projectName, allReports);
 
             updateStatus?.Invoke("Complete!");
-            
+
             // Show completion message
             FinalizeProjectLinting(editorContext, reportPath, allReports.Count);
         }
 
         private void FinalizeProjectLinting(ScintillaEditor editorContext, string reportPath, int issueCount)
         {
-            mainForm.Invoke(() => {
+            mainForm.Invoke(() =>
+            {
                 string message = issueCount > 0
                   ? $"Project linting complete. {issueCount} issues found.\n\nWould you like to open the report?"
                   : "Project linting complete. No issues found.\n\nWould you like to open the report?";
@@ -406,7 +445,7 @@ namespace AppRefiner
                 });
             });
         }
-        
+
         public void GenerateHtmlReport(ScintillaEditor editorContext, string reportPath, string projectName,
             List<(PeopleCodeItem Program, Report LintReport)> reportData)
         {
@@ -442,7 +481,7 @@ namespace AppRefiner
                         reports = pg.Select(item => new
                         {
                             type = item.LintReport.Type.ToString(),
-                            line = item.LintReport.Line + 1,
+                            line = item.LintReport.Line,
                             message = item.LintReport.Message
                         }).OrderBy(r => r.line).ToList()
                     }).ToList()
@@ -458,11 +497,13 @@ namespace AppRefiner
                 }
                 else
                 {
-                    using (Stream? stream = GetType().Assembly.GetManifestResourceStream("AppRefiner.Templates.LintReportTemplate.html"))
+                    using Stream? stream = GetType().Assembly.GetManifestResourceStream("AppRefiner.Templates.LintReportTemplate.html");
+                    if (stream != null)
                     {
-                        if (stream != null) { using (var reader = new StreamReader(stream)) { templateHtml = reader.ReadToEnd(); } }
-                        else { ShowMessageBox(editorContext, "Lint report template not found.", "Template Missing", MessageBoxButtons.OK); return; }
+                        using var reader = new StreamReader(stream);
+                        templateHtml = reader.ReadToEnd();
                     }
+                    else { ShowMessageBox(editorContext, "Lint report template not found.", "Template Missing", MessageBoxButtons.OK); return; }
                 }
 
                 string finalHtml = templateHtml.Replace("{{projectName}}", projectName)
@@ -488,11 +529,9 @@ namespace AppRefiner
                 {
                     if (linterGrid.Rows[e.RowIndex].Cells[e.ColumnIndex].Tag?.ToString() != "NoConfig")
                     {
-                         // Need to show dialog relative to the main form
-                        using (var dialog = new LinterConfigDialog(linter))
-                        {
-                            dialog.ShowDialog(mainForm); // Show dialog owned by MainForm
-                        }
+                        // Need to show dialog relative to the main form
+                        using var dialog = new LinterConfigDialog(linter);
+                        dialog.ShowDialog(mainForm); // Show dialog owned by MainForm
                     }
                 }
             }
@@ -510,4 +549,4 @@ namespace AppRefiner
             }
         }
     }
-} 
+}

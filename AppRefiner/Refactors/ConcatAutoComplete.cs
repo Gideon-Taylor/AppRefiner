@@ -1,15 +1,12 @@
-using Antlr4.Runtime;
-using System.Diagnostics;
-using AppRefiner.PeopleCode;
-using AppRefiner.Services; // For ScintillaEditor
-using static AppRefiner.PeopleCode.PeopleCodeParser; // For ConcatShortHandExprContext
+using PeopleCodeParser.SelfHosted.Nodes;
+using System.Text.RegularExpressions;
 
 namespace AppRefiner.Refactors
 {
     /// <summary>
     /// Refactoring operation that provides auto-completion for += shorthand (concatenation).
     /// </summary>
-    public class ConcatAutoComplete : ScopedRefactor<string>
+    public class ConcatAutoComplete : BaseRefactor
     {
         public new static string RefactorName => "Concat Auto Complete";
         public new static string RefactorDescription => "Auto-completes += shorthand to full concatenation expression";
@@ -30,81 +27,70 @@ namespace AppRefiner.Refactors
         /// Initializes a new instance of the <see cref="ConcatAutoComplete"/> class.
         /// </summary>
         /// <param name="editor">The Scintilla editor instance to use for this refactor.</param>
-        public ConcatAutoComplete(ScintillaEditor editor)
-            : base(editor)
+        public ConcatAutoComplete(ScintillaEditor editor) : base(editor)
         {
             Debug.Log("ConcatAutoComplete initialized.");
         }
 
-        /// <summary>
-        /// Called when the parser enters a ConcatShortHandExpr rule.
-        /// This is where the transformation from "lhs +=" to "lhs = lhs +" occurs.
-        /// We only replace the left-hand side and operator, preserving everything else on the line.
-        /// </summary>
-        /// <param name="context">The context for the ConcatShortHandExpr rule.</param>
-        public override void EnterConcatShortHandExpr(ConcatShortHandExprContext context)
+        public override void VisitProgram(ProgramNode node)
         {
-            base.EnterConcatShortHandExpr(context);
-
-            if (refactorApplied)
+            base.VisitProgram(node);
+        }
+        public override void VisitPartialShortHandAssignment(PartialShortHandAssignmentNode node)
+        {
+            if (!refactorApplied && node.SourceSpan.ContainsPosition(CurrentPosition))
             {
-                // Ensure the refactor is applied only once if this method were somehow called multiple times for the same instance.
+                ProcessConcatShorthand(node);
+            }
+
+            base.VisitPartialShortHandAssignment(node);
+        }
+
+        /// <summary>
+        /// Processes a concatenation shorthand assignment and transforms it to full form
+        /// </summary>
+        private void ProcessConcatShorthand(PartialShortHandAssignmentNode assignment)
+        {
+            if (assignment.LastToken == null) return;
+
+            // Get the target expression (left-hand side) by reconstructing from the node
+            var targetText = assignment.Target?.ToString();
+            if (string.IsNullOrEmpty(targetText))
+            {
+                Debug.Log("ConcatAutoComplete: Could not extract target text");
                 return;
             }
 
-            var lhsExprCtx = context.expression(0); // Left-hand side expression
-
-            // Get the left-hand side text
-            string lhsText = lhsExprCtx.GetText();
             
-            // Determine the operator character
-            var concatChar = "";
-            if (context.ADD() != null)
-            {
-                concatChar = "+";
-            }
-            else if (context.SUBTR() != null)
-            {
-                concatChar = "-";
-            } 
-            else if (context.PIPE() != null)
-            {
-                concatChar = "|";
-            }
 
-            // Get the original text to find where the operator ends
-            var originalText = GetOriginalText(context);
             
-            // Find the operator pattern in the original text
-            var operatorPattern = $@"({System.Text.RegularExpressions.Regex.Escape(concatChar)}=)";
-            var operatorMatch = System.Text.RegularExpressions.Regex.Match(originalText, operatorPattern);
-            
-            if (!operatorMatch.Success)
-            {
-                Debug.Log($"Could not find operator pattern {concatChar}= in original text: '{originalText}'");
-                refactorApplied = true;
-                return;
-            }
-
-            var operatorMatchIndex = System.Text.Encoding.UTF8.GetByteCount(originalText.Substring(0, operatorMatch.Index));
-
             // Calculate the positions
-            int operatorEndIndex =  operatorMatch.Index + operatorMatch.Length;
+            int operatorStartIndex = assignment.LastToken.SourceSpan.Start.ByteIndex;
+            int operatorEndIndex = assignment.LastToken.SourceSpan.End.ByteIndex;
+
+            var concatChar = assignment.Operator switch
+            {
+                AssignmentOperator.Assign => throw new NotImplementedException(),
+                AssignmentOperator.SubtractAssign => "-",
+                AssignmentOperator.ConcatenateAssign => "|",
+                AssignmentOperator.AddAssign => "+",
+                _ => throw new NotImplementedException()
+            };
 
             // Replace only the "lhs +=" part with "lhs = lhs +"
-            string newText = $"{lhsText} = {lhsText} {concatChar}";
+            string newText = $"{targetText} = {targetText} {concatChar}";
 
-            Debug.Log($"ConcatAutoComplete: Applying refactor for ConcatShortHandExpr.");
-            Debug.Log($"  Original text: '{originalText}'");
-            Debug.Log($"  LHS text: '{lhsText}'");
+            Debug.Log($"ConcatAutoComplete: Applying refactor for ConcatShorthand.");
+            Debug.Log($"  Original text: '{assignment.Target} {assignment.Operator.GetSymbol()}'");
+            Debug.Log($"  Target text: '{targetText}'");
             Debug.Log($"  Operator: '{concatChar}='");
-            Debug.Log($"  Replacement range: {context.Start.ByteStartIndex()} to {operatorEndIndex - 1}");
+            Debug.Log($"  Replacement range: {assignment.SourceSpan.Start.ByteIndex} to {operatorEndIndex - 1}");
             Debug.Log($"  New text: '{newText}'");
 
-            // Replace only the "lhs operator=" portion, leaving everything after untouched
-            ReplaceText(context.Start.ByteStartIndex(), operatorEndIndex - 1, newText, RefactorDescription);
-            
+            // Replace only the "target operator=" portion, leaving everything after untouched
+            EditText(assignment.SourceSpan.Start.ByteIndex, operatorEndIndex, newText, RefactorDescription);
+
             refactorApplied = true; // Mark as applied to prevent re-application.
         }
     }
-} 
+}

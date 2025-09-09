@@ -1,39 +1,37 @@
-using Antlr4.Runtime;
+using PeopleCodeParser.SelfHosted.Nodes;
 using System.Text;
-using static AppRefiner.PeopleCode.PeopleCodeParser;
-using AppRefiner.PeopleCode;
+
 namespace AppRefiner.Refactors
 {
     /// <summary>
     /// Refactoring operation that resolves all class references in the code and creates explicit imports for each one
     /// </summary>
-    public class ResolveImports(ScintillaEditor editor) : BaseRefactor(editor)
+    public class ResolveImports : BaseRefactor
     {
         public new static string RefactorName => "Resolve Imports";
         public new static string RefactorDescription => "Resolves all class references in the code and creates explicit imports for each one";
-        
+
         /// <summary>
         /// Whether to sort imports alphabetically. If false, maintains original order and adds new imports at the bottom.
         /// </summary>
+        [ConfigurablePropertyAttribute("Sort Imports", "Sorts imports alphabetically, with wildcards at the top.")]
         public bool SortImportsAlphabetically { get; set; } = true;
-        
+
         /// <summary>
         /// Whether to preserve existing wildcard imports that cover used classes. 
         /// If true, keeps wildcard imports when they match used class packages.
         /// </summary>
+        [ConfigurablePropertyAttribute("Preserve Wildcard Imports", "Keeps existing wildcard imports.")]
         public bool PreserveWildcardImports { get; set; } = false;
-        
+
         // Tracks unique application class paths used in the code
-        private readonly HashSet<string> usedClassPaths = [];
+        private readonly HashSet<string> usedClassPaths = new();
 
         // Tracks existing import paths in their original order
-        private readonly List<string> existingImportPaths = [];
+        private readonly List<string> existingImportPaths = new();
 
-        // The imports block if found
-        private ImportsBlockContext? importsBlockContext;
-
-        // Whether we're tracking class references after the imports block
-        private bool trackingReferences = false;
+        // The program node
+        private ProgramNode? programNode;
 
         /// <summary>
         /// Gets whether this refactor should register a keyboard shortcut
@@ -43,7 +41,7 @@ namespace AppRefiner.Refactors
         /// <summary>
         /// Gets the modifier keys for the keyboard shortcut
         /// </summary>
-        public new static ModifierKeys ShortcutModifiers => ModifierKeys.Control | ModifierKeys.Shift;
+        public new static AppRefiner.ModifierKeys ShortcutModifiers => AppRefiner.ModifierKeys.Control | AppRefiner.ModifierKeys.Shift;
 
         /// <summary>
         /// Gets the key for the keyboard shortcut
@@ -56,227 +54,166 @@ namespace AppRefiner.Refactors
         /// </summary>
         public override bool RunOnIncompleteParse => false;
 
-        /// <summary>
-        /// When entering an app class path, record it as used if we're in tracking mode
-        /// </summary>
-        public override void EnterAppClassPath(AppClassPathContext context)
+        public ResolveImports(AppRefiner.ScintillaEditor editor) : base(editor)
         {
-            if (!trackingReferences) return;
-
-            string classPath = context.GetText();
-            // Only add if it's a fully qualified class path
-            if (classPath.Contains(":"))
-            {
-                usedClassPaths.Add(classPath);
-            }
         }
 
-        /// <summary>
-        /// When we find the imports block, store it and start tracking class references
-        /// </summary>
-        public override void ExitImportsBlock(ImportsBlockContext context)
+        public override void VisitProgram(ProgramNode node)
         {
-            importsBlockContext = context;
-            
-            // Capture existing imports in their original order
-            if (context.importDeclaration() != null)
-            {
-                foreach (var importDecl in context.importDeclaration())
-                {
-                    var appClassPath = importDecl.appClassPath();
-                    if (appClassPath != null)
-                    {
-                        string importPath = appClassPath.GetText();
-                        existingImportPaths.Add(importPath);
-                    }
+            programNode = node;
+            usedClassPaths.Clear();
+            existingImportPaths.Clear();
 
-                    var appPackageAll = importDecl.appPackageAll();
-                    if (appPackageAll != null)
-                    {
-                        string importPath = appPackageAll.GetText();
-                        existingImportPaths.Add(importPath);
-                    }
+            // Capture existing imports in their original order
+            foreach (var import in node.Imports)
+            {
+                existingImportPaths.Add(import.FullPath);
+            }
+
+            base.VisitProgram(node);
+
+            // After visiting all nodes, generate the new imports
+            GenerateResolvedImports(node);
+        }
+
+        public override void VisitAppClassType(AppClassTypeNode node)
+        {
+            /* Don't count app classes used in import statements as "used" */
+            if (node.Parent is not ImportNode)
+            {
+                // Record app class type usage
+                if (!string.IsNullOrEmpty(node.ClassName) && node.QualifiedName.Contains(':'))
+                {
+                    usedClassPaths.Add(node.QualifiedName);
                 }
             }
-            
-            trackingReferences = true;
+            base.VisitAppClassType(node);
         }
 
-        /// <summary>
-        /// When entering the program, start tracking if no imports block was found
-        /// </summary>
-        public override void EnterProgram(ProgramContext context)
+        public override void VisitObjectCreation(ObjectCreationNode node)
+        {
+            // Record object creation with app class types
+            if (node.Type is AppClassTypeNode appClassType &&
+                !string.IsNullOrEmpty(appClassType.ClassName) &&
+                appClassType.ClassName.Contains(':'))
+            {
+                usedClassPaths.Add(appClassType.QualifiedName);
+            }
+
+            base.VisitObjectCreation(node);
+        }
+
+
+        private bool IsImportUsed(ImportNode import, HashSet<string> usedClasses)
         {
             
-            if (context.importsBlock == null)
+            if (import.IsWildcard)
             {
-                trackingReferences = true;
+                var pathString = string.Join(':', import.PackagePath);
+                return usedClasses.Where(u => u.StartsWith(pathString)).Any();
+            } else
+            {
+                return usedClasses.Contains(import.FullPath);
             }
         }
 
         /// <summary>
-        /// When we finish the program, generate the new imports block
+        /// Generates the resolved imports based on used class paths
         /// </summary>
-        public override void ExitProgram(ProgramContext context)
+        private void GenerateResolvedImports(ProgramNode node)
         {
             // Skip if no class references were found
             if (usedClassPaths.Count == 0) return;
 
-            // Step 1: Start with existing imports in their original order
-            var finalImportList = new List<string>(existingImportPaths);
-            
-            // Step 2: Create a working copy of used classes to process
-            var remainingUsedClasses = new HashSet<string>(usedClassPaths);
+            var existingImports = node.Imports;
+            var wildcards = node.Imports.Where(i => i.IsWildcard).ToList();
 
-            // Step 3: Handle wildcards based on preserve flag
-            if (PreserveWildcardImports)
+            var importsForUsedClasses = usedClassPaths.Select(p => new ImportNode(p)).ToList();
+
+            var newImports = importsForUsedClasses.Where(i => !(existingImports.Select(e => e.FullPath).Contains(i.FullPath))).ToList();
+
+            var finalImports = new List<ImportNode>(PreserveWildcardImports ? existingImports : existingImports.Where(e => !e.IsWildcard)).ToList();
+
+            foreach( var newImport in newImports)
             {
-                // Preserve wildcards: Remove classes covered by existing wildcards from used classes list
-                foreach (var import in existingImportPaths)
+                if (PreserveWildcardImports)
                 {
-                    if (IsWildcardImport(import))
+                    /* no matching wild card */
+                    if (!wildcards.Where(w => string.Join(':', w.PackagePath) == string.Join(':',newImport.PackagePath)).Any())
                     {
-                        var wildcardPackage = GetWildcardPackage(import);
-                        var coveredClasses = remainingUsedClasses
-                            .Where(usedClass => GetPackageFromClassPath(usedClass).Equals(wildcardPackage, StringComparison.OrdinalIgnoreCase))
-                            .ToList();
-                        
-                        // Remove covered classes from remaining list
-                        foreach (var coveredClass in coveredClasses)
-                        {
-                            remainingUsedClasses.Remove(coveredClass);
-                        }
+                        finalImports.Add(newImport);
                     }
+                } else
+                {
+                    finalImports.Add(newImport);
                 }
             }
-            else
+
+            /* Clean up any unused imports */
+            var unusedImports = finalImports.Where(e => !IsImportUsed(e, usedClassPaths)).ToList();
+
+            foreach(var unusedImport in unusedImports)
             {
-                // Don't preserve wildcards: Expand wildcards to explicit classes
-                for (int i = 0; i < finalImportList.Count; i++)
-                {
-                    var import = finalImportList[i];
-                    if (IsWildcardImport(import))
-                    {
-                        var wildcardPackage = GetWildcardPackage(import);
-                        var matchingClasses = remainingUsedClasses
-                            .Where(usedClass => GetPackageFromClassPath(usedClass).Equals(wildcardPackage, StringComparison.OrdinalIgnoreCase))
-                            .OrderBy(className => className) // Sort expanded classes
-                            .ToList();
-
-                        if (matchingClasses.Count > 0)
-                        {
-                            // Replace wildcard with explicit classes
-                            finalImportList.RemoveAt(i);
-                            finalImportList.InsertRange(i, matchingClasses);
-                            i += matchingClasses.Count - 1; // Adjust index for inserted items
-
-                            // Remove processed classes from remaining list
-                            foreach (var matchingClass in matchingClasses)
-                            {
-                                remainingUsedClasses.Remove(matchingClass);
-                            }
-                        }
-                        else
-                        {
-                            // Remove unused wildcard
-                            finalImportList.RemoveAt(i);
-                            i--; // Adjust index for removed item
-                        }
-                    }
-                }
+                finalImports.Remove(unusedImport);
             }
-
-            // Step 4: Add any remaining used classes to the end
-            finalImportList.AddRange(remainingUsedClasses.OrderBy(className => className));
-
-            // Step 5: Remove only used imports and deduplicate while preserving order
-            var seenImports = new HashSet<string>();
-            var usedImportsOnly = new List<string>();
-            
-            foreach (var import in finalImportList)
-            {
-                // Keep import if it's a wildcard that covers used classes, or if it's a used explicit class
-                bool shouldKeep = false;
-                if (IsWildcardImport(import))
-                {
-                    shouldKeep = HasUsedClassesInPackage(GetWildcardPackage(import));
-                }
-                else
-                {
-                    shouldKeep = usedClassPaths.Contains(import);
-                }
-
-                if (shouldKeep && seenImports.Add(import))
-                {
-                    usedImportsOnly.Add(import);
-                }
-            }
-            
-            finalImportList = usedImportsOnly;
 
             // Step 6: Sort if requested
             if (SortImportsAlphabetically)
             {
-                finalImportList = finalImportList.OrderBy(import => import).ToList();
+                finalImports = [.. finalImports.OrderByDescending(import => import.IsWildcard).ThenBy(import => string.Join(':', import.PackagePath))];
             }
 
             // Step 7: Generate the imports block
-            var newImports = new StringBuilder();
-            foreach (var classPath in finalImportList)
+            var newImportString = new StringBuilder();
+            foreach (var import in finalImports)
             {
-                newImports.AppendLine($"import {classPath};");
+                newImportString.AppendLine($"{import.ToString()};");
             }
 
-            // Trim trailing newlines to prevent accumulation of blank lines
-            string imports = newImports.ToString().TrimEnd();
-
-            if (importsBlockContext?.importDeclaration().Length == 0)
+            if (programNode?.Imports.Count == 0)
             {
-                imports += "\r\n\r\n";
+                newImportString.Append("\r\n");
             }
 
-            if (importsBlockContext != null)
+            if (programNode?.Imports.Count > 0)
             {
                 // Replace the existing imports block
-                ReplaceNode(importsBlockContext, imports, "Resolve imports");
+                var firstImport = programNode.Imports.First();
+                var lastImport = programNode.Imports.Last();
+
+                if (firstImport.SourceSpan.IsValid && lastImport.SourceSpan.IsValid)
+                {
+                    EditText(firstImport.SourceSpan.Start.ByteIndex, lastImport.SourceSpan.End.ByteIndex, newImportString.ToString(), "Resolve imports");
+                }
             }
             else
             {
                 // No existing imports block, so add one at the beginning of the program
-                var firstChild = context.GetChild(0);
-                if (firstChild != null)
+                var insertionPoint = 0;
+
+                // Find the best insertion point
+                if (programNode?.AppClass?.SourceSpan.IsValid == true)
                 {
-                    // Check if firstChild is a parser rule context
-                    if (firstChild is ParserRuleContext firstChildContext)
-                    {
-                        // Add exactly two newlines after imports (consistent spacing)
-                        string insertText = imports + Environment.NewLine + Environment.NewLine;
-                        
-                        // Check if the first node already contains imports to avoid adding excessive spacing
-                        string? firstNodeText = GetOriginalText(firstChildContext);
-                        if (firstNodeText != null && firstNodeText.TrimStart().StartsWith("import "))
-                        {
-                            // If first node already has imports, don't add extra newlines
-                            insertText = imports + Environment.NewLine;
-                        }
-                        
-                        InsertBefore(firstChildContext, insertText, "Add missing imports");
-                    }
-                    else
-                    {
-                        // Fall back to using InsertText if the cast fails
-                        InsertText(context.Start.ByteStartIndex(),
-                            imports + Environment.NewLine + Environment.NewLine,
-                            "Add missing imports");
-                    }
+                    insertionPoint = programNode.AppClass.SourceSpan.Start.ByteIndex;
                 }
-                else
+                else if (programNode?.Interface?.SourceSpan.IsValid == true)
                 {
-                    // Empty program, so just add the imports at the start
-                    InsertText(context.Start.ByteStartIndex(),
-                        imports + Environment.NewLine + Environment.NewLine,
-                        "Add missing imports");
+                    insertionPoint = programNode.Interface.SourceSpan.Start.ByteIndex;
                 }
+                else if (programNode?.Functions.Count > 0 && programNode.Functions[0].SourceSpan.IsValid)
+                {
+                    insertionPoint = programNode.Functions[0].SourceSpan.Start.ByteIndex;
+                }
+                else if (programNode?.Variables.Count > 0 && programNode.Variables[0].SourceSpan.IsValid)
+                {
+                    insertionPoint = programNode.Variables[0].SourceSpan.Start.ByteIndex;
+                }
+                else if (programNode?.MainBlock?.SourceSpan.IsValid == true)
+                {
+                    insertionPoint = programNode.MainBlock.SourceSpan.Start.ByteIndex;
+                }
+
+                InsertText(insertionPoint, newImportString.ToString(), "Add missing imports");
             }
         }
 
@@ -319,7 +256,7 @@ namespace AppRefiner.Refactors
                     return true;
                 }
             }
-            
+
             return false;
         }
     }

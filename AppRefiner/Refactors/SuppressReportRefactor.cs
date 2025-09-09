@@ -1,11 +1,10 @@
-using Antlr4.Runtime;
-using Antlr4.Runtime.Misc;
-using AppRefiner.PeopleCode;
+using AppRefiner.Services;
+using PeopleCodeParser.SelfHosted;
+using PeopleCodeParser.SelfHosted.Nodes;
+using PeopleCodeParser.SelfHosted.Visitors;
+using PeopleCodeParser.SelfHosted.Visitors.Models;
 using System;
-using System.Collections.Generic;
 using System.Drawing;
-using System.Linq;
-using System.Runtime.InteropServices;
 using System.Windows.Forms;
 
 namespace AppRefiner.Refactors
@@ -16,10 +15,9 @@ namespace AppRefiner.Refactors
     }
 
     /// <summary>
-    /// Creates a new instance of the SuppressReportRefactor class
+    /// Creates a new instance of the SuppressReportRefactor class using the self-hosted parser
     /// </summary>
-    /// <param name="editor">The ScintillaEditor instance to use for this refactor</param>
-    public class SuppressReportRefactor(ScintillaEditor editor) : BaseRefactor(editor)
+    public class SuppressReportRefactor : BaseRefactor
     {
         /// <summary>
         /// Gets the display name of this refactoring operation
@@ -32,17 +30,16 @@ namespace AppRefiner.Refactors
         public new static string RefactorDescription => "Suppress linting reports for a specific scope";
 
         private SuppressReportMode type = SuppressReportMode.LINE;
-        private bool changeGenerated = false;
-        private enum ScopeType
-        {
-            BLOCK, METHOD, FUNCTION, GLOBAL
-        }
-        private readonly Stack<(ParserRuleContext Context, ScopeType Type)> scopeStack = new();
-
+        private AstNode? globalNode;
+        private bool changeMade = false;
         /// <summary>
         /// Indicates that this refactor requires a user input dialog
         /// </summary>
         public override bool RequiresUserInputDialog => true;
+
+        public SuppressReportRefactor(AppRefiner.ScintillaEditor editor) : base(editor)
+        {
+        }
 
         /// <summary>
         /// Dialog form for selecting suppress report mode
@@ -225,7 +222,6 @@ namespace AppRefiner.Refactors
         /// <summary>
         /// Shows the dialog to get the suppression mode from the user
         /// </summary>
-        /// <returns>True if the user confirmed, false if canceled</returns>
         public override bool ShowRefactorDialog()
         {
             using var dialog = new SuppressReportDialog(type);
@@ -244,193 +240,111 @@ namespace AppRefiner.Refactors
             return false;
         }
 
-        public override void EnterMethod([NotNull] PeopleCodeParser.MethodContext context)
+        public override void VisitBlock(BlockNode node)
         {
-            ProcessScopeEntry(context, ScopeType.METHOD);
+            base.VisitBlock(node);
+
+            if (changeMade) return;
+
+            if (node.SourceSpan.ContainsLine(LineNumber))
+            {
+                var statement = node.Statements.Where(s => s.SourceSpan.ContainsLine(LineNumber)).FirstOrDefault();
+                if (statement is not null)
+                {
+                    GenerateChange(node);
+                }
+
+
+            }
         }
 
-        public override void ExitMethod([NotNull] PeopleCodeParser.MethodContext context)
+        protected override void OnEnterGlobalScope(ScopeContext scope, ProgramNode node)
         {
-            ProcessScopeExit(context);
+            base.OnEnterGlobalScope(scope, node);
+            if (node.Imports.Count > 0)
+            {
+                globalNode = node.Imports.First();
+            }
+            else if (node.MainBlock != null)
+            {
+                globalNode = node.MainBlock;
+            }
+            else if (node.AppClass != null)
+            {
+                globalNode = node.AppClass;
+            }
+            else if (node.Interface != null)
+            {
+                globalNode = node.Interface;
+            }
         }
 
-        public override void EnterFunctionDefinition([NotNull] PeopleCodeParser.FunctionDefinitionContext context)
+        private void GenerateChange(BlockNode node)
         {
-            ProcessScopeEntry(context, ScopeType.FUNCTION);
-        }
-
-        public override void ExitFunctionDefinition([NotNull] PeopleCodeParser.FunctionDefinitionContext context)
-        {
-            ProcessScopeExit(context);
-        }
-
-        public override void EnterGetter([NotNull] PeopleCodeParser.GetterContext context)
-        {
-            ProcessScopeEntry(context, ScopeType.FUNCTION);
-        }
-
-        public override void ExitGetter([NotNull] PeopleCodeParser.GetterContext context)
-        {
-            ProcessScopeExit(context);
-        }
-
-        public override void EnterSetter([NotNull] PeopleCodeParser.SetterContext context)
-        {
-            ProcessScopeEntry(context, ScopeType.FUNCTION);
-        }
-
-        public override void ExitSetter([NotNull] PeopleCodeParser.SetterContext context)
-        {
-            ProcessScopeExit(context);
-        }
-
-        public override void EnterImportsBlock([NotNull] PeopleCodeParser.ImportsBlockContext context)
-        {
-            ProcessScopeEntry(context, ScopeType.GLOBAL);
-        }
-
-        public override void EnterIfStatement([NotNull] PeopleCodeParser.IfStatementContext context)
-        {
-            ProcessScopeEntry(context, ScopeType.BLOCK);
-        }
-
-        public override void ExitIfStatement([NotNull] PeopleCodeParser.IfStatementContext context)
-        {
-            ProcessScopeExit(context);
-        }
-
-        public override void EnterForStatement([NotNull] PeopleCodeParser.ForStatementContext context)
-        {
-            ProcessScopeEntry(context, ScopeType.BLOCK);
-        }
-
-        public override void ExitForStatement([NotNull] PeopleCodeParser.ForStatementContext context)
-        {
-            ProcessScopeExit(context);
-        }
-
-        public override void EnterWhileStatement([NotNull] PeopleCodeParser.WhileStatementContext context)
-        {
-            ProcessScopeEntry(context, ScopeType.BLOCK);
-        }
-
-        public override void ExitWhileStatement([NotNull] PeopleCodeParser.WhileStatementContext context)
-        {
-            ProcessScopeExit(context);
-        }
-
-        public override void EnterRepeatStatement([NotNull] PeopleCodeParser.RepeatStatementContext context)
-        {
-            ProcessScopeEntry(context, ScopeType.BLOCK);
-        }
-
-        public override void ExitRepeatStatement([NotNull] PeopleCodeParser.RepeatStatementContext context)
-        {
-            ProcessScopeExit(context);
-        }
-
-        public override void EnterEvaluateStatement([NotNull] PeopleCodeParser.EvaluateStatementContext context)
-        {
-            ProcessScopeEntry(context, ScopeType.BLOCK);
-        }
-
-        public override void ExitEvaluateStatement([NotNull] PeopleCodeParser.EvaluateStatementContext context)
-        {
-            ProcessScopeExit(context);
-        }
-
-        public override void EnterTryCatchBlock([NotNull] PeopleCodeParser.TryCatchBlockContext context)
-        {
-            ProcessScopeEntry(context, ScopeType.BLOCK);
-        }
-
-        public override void ExitTryCatchBlock([NotNull] PeopleCodeParser.TryCatchBlockContext context)
-        {
-            ProcessScopeExit(context);
-        }
-
-        public override void ExitProgram([NotNull] PeopleCodeParser.ProgramContext context)
-        {
-            base.ExitProgram(context);
-
-            GenerateChange();
-        }
-
-        private void GenerateChange()
-        {
-            if (changeGenerated) return;
-
-
             if (Editor.LineToReports.TryGetValue(LineNumber, out var reports))
             {
+                changeMade = true;
                 var newSuppressLine = $"/* #AppRefiner suppress ({string.Join(",", reports.Select(r => r.GetFullId()))}) */\r\n";
-                ParserRuleContext? contextToInsertBefore = null;
-
-                if (type == SuppressReportMode.LINE)
+                var targetLine = LineNumber;
+                if (type == SuppressReportMode.NEAREST_BLOCK)
                 {
-                    var startIndex = ScintillaManager.GetLineStartIndex(Editor, LineNumber);
-                    if (startIndex == -1)
+                    AstNode targetNode = node;
+                    if (node.Parent != null) {
+                        targetNode = node.Parent;
+                    } else
                     {
-                        startIndex = 0;
+                        SetFailure("Unable to locate block parent.");
+                        return;
                     }
-                    InsertText(startIndex, newSuppressLine, "Add suppression comment");
-                    changeGenerated = true;
-                    return;
-                }
-                else if (type == SuppressReportMode.NEAREST_BLOCK)
-                {
-                    contextToInsertBefore = scopeStack.Pop().Context;
-                }
+
+                    targetLine = targetNode.SourceSpan.Start.Line;
+				}
                 else if (type == SuppressReportMode.METHOD_OR_FUNC)
                 {
-                    /* pop until we find a scope type method or func or run out */
-                    /* if we run out, SetFailure "unable to find method or function" */
-                    while (scopeStack.Count > 0)
+                    var parentNode = node.Parent;
+                    while (parentNode is not MethodNode && parentNode is not FunctionNode && parentNode is not null && parentNode is not MethodImplNode)
                     {
-                        var scope = scopeStack.Pop();
-                        if (scope.Type == ScopeType.METHOD || scope.Type == ScopeType.FUNCTION)
-                        {
-                            contextToInsertBefore = scope.Context;
-                            break;
-                        }
-                    }
-                    if (contextToInsertBefore == null)
-                    {
-                        SetFailure("Unable to find method or function scope.");
-                        return;
+                        parentNode = parentNode?.Parent;
                     }
 
-                }
+                    if (parentNode is null)
+                    {
+                        SetFailure("Unable to locate method or function start.");
+                        return;
+                    }
+                    if (parentNode is MethodNode method && method.Implementation is not null)
+                    {
+                        targetLine = method.Implementation.SourceSpan.Start.Line;
+                    } else if (parentNode is FunctionNode func)
+                    {
+                        targetLine = func.SourceSpan.Start.Line;
+                    } else if (parentNode is MethodImplNode methodImpl)
+                    {
+                        targetLine = methodImpl.SourceSpan.Start.Line;
+                    }
+				}
                 else if (type == SuppressReportMode.GLOBAL)
                 {
-                    /* Pop until we find the global scope */
-                    while (scopeStack.Count > 0)
+                    if (globalNode is not null)
                     {
-                        var scope = scopeStack.Pop();
-                        if (scope.Type == ScopeType.GLOBAL)
-                        {
-                            contextToInsertBefore = scope.Context;
-                            break;
-                        }
-                    }
-                    if (contextToInsertBefore == null)
+                        targetLine = globalNode.SourceSpan.Start.Line;
+					} else
                     {
-                        SetFailure("Unable to find global scope start.");
-                        return;
+                        SetFailure("Unable to find the start of the global scope.");
                     }
-                }
-
-                if (contextToInsertBefore != null)
-                {
-                    var insertPos = ScintillaManager.GetLineStartIndex(Editor, contextToInsertBefore.Start.Line - 1 > 0 ? contextToInsertBefore.Start.Line - 1 : 1);
-                    InsertText(insertPos, newSuppressLine, "Suppress report");
-                    changeGenerated = true;
                 }
                 else
                 {
                     SetFailure("Unable to find line to insert suppress report.");
                 }
 
+                var insertIndex = ScintillaManager.GetLineStartIndex(Editor, targetLine);
+                var paddingCount = CountLeadingSpaces(ScintillaManager.GetLineText(Editor, targetLine));
+
+                var padding = new string(' ', paddingCount);
+
+                /* how much padding ?*/
+                InsertText(insertIndex, $"{padding}{newSuppressLine}", "Add suppression hint");
             }
             else
             {
@@ -438,24 +352,17 @@ namespace AppRefiner.Refactors
             }
         }
 
-        private void ProcessScopeEntry(ParserRuleContext context, ScopeType type)
+        static int CountLeadingSpaces(string str)
         {
-            // Push the suppression set onto the stack
-            scopeStack.Push((context, type));
-        }
+            if (string.IsNullOrEmpty(str))
+                return 0;
 
-        private void ProcessScopeExit(ParserRuleContext context)
-        {
-            if (context.Start.Line <= LineNumber + 1 && context.Stop.Line >= LineNumber + 1)
+            for (int i = 0; i < str.Length; i++)
             {
-                GenerateChange();
+                if (str[i] != ' ')
+                    return i;
             }
-            else
-            {
-                if (scopeStack.Count > 0)
-                    scopeStack.Pop();
-            }
+            return str.Length; // All characters are spaces
         }
-
     }
 }

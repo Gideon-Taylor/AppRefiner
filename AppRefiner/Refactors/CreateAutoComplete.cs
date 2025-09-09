@@ -1,19 +1,12 @@
-using Antlr4.Runtime;
-using System;
-using System.Diagnostics;
-using System.Collections.Generic;
-using System.Linq;
-using static AppRefiner.PeopleCode.PeopleCodeParser;
-using AppRefiner.Database;
-using AppRefiner.Services;
-using AppRefiner.PeopleCode;
+using PeopleCodeParser.SelfHosted.Nodes;
+using PeopleCodeParser.SelfHosted.Visitors.Models;
 
 namespace AppRefiner.Refactors
 {
     /// <summary>
     /// Refactoring operation that provides auto-completion for create() statements based on variable types
     /// </summary>
-    public class CreateAutoComplete : ScopedRefactor<string>
+    public class CreateAutoComplete : BaseRefactor
     {
         public new static string RefactorName => "Create Auto Complete";
         public new static string RefactorDescription => "Auto-completes create() statements with appropriate class types";
@@ -30,439 +23,117 @@ namespace AppRefiner.Refactors
 
         private bool isAppropriateContext = false;
         private string? detectedClassType = null;
-        private int createStartPos = -1;
-        private int createEndPos = -1;
-        private bool autoPairingEnabled;
-
-        // Track instance variables and their types
-        private readonly Dictionary<string, string> instanceVariables = new();
+        private ObjectCreateShortHand? targetCreateCall = null;
 
         // Track parent class information for %Super usage
-        private string? parentClassName = null;
+        private string parentClassName = "";
 
-        /// <summary>
-        /// Initializes a new instance of the <see cref="CreateAutoComplete"/> class
-        /// </summary>
-        /// <param name="editor">The Scintilla editor instance to use for this refactor</param>
-        /// <param name="autoPairingEnabled">Whether auto-pairing is enabled, determines if closing parenthesis should be added</param>
-        public CreateAutoComplete(ScintillaEditor editor, bool autoPairingEnabled = true)
-            : base(editor)
+        public CreateAutoComplete(ScintillaEditor editor) : base(editor){}
+
+        public override void VisitAssignment(AssignmentNode node)
         {
-            this.autoPairingEnabled = autoPairingEnabled;
-            Debug.Log($"CreateAutoComplete initialized with auto-pairing: {autoPairingEnabled}");
-        }
-
-        /// <summary>
-        /// Track class extension information
-        /// </summary>
-        public override void EnterClassDeclarationExtension(ClassDeclarationExtensionContext context)
-        {
-            base.EnterClassDeclarationExtension(context);
-
-            // Get the superclass information
-            var superclass = context.superclass();
-            if (superclass is AppClassSuperClassContext appClassSuper)
+            if ( node.Value is ObjectCreateShortHand createCall && createCall.SourceSpan.ContainsPosition(CurrentPosition))
             {
-                // Extract the parent class name from the app class path
-                parentClassName = appClassSuper.appClassPath()?.GetText();
-                Debug.Log($"Class extends {parentClassName}");
-            }
-            else if (superclass is SimpleTypeSuperclassContext simpleTypeSuper)
-            {
-                // Handle built-in types like Exception
-                var simpleType = simpleTypeSuper.simpleType();
-                if (simpleType != null)
+                isAppropriateContext = true;
+                targetCreateCall = createCall;
+
+                if (node.Target is IdentifierNode identifierNode)
                 {
-                    parentClassName = simpleType.GetText();
-                    Debug.Log($"Class extends simple type {parentClassName}");
-                }
-            }
-            else if (superclass is ExceptionSuperClassContext)
-            {
-                // Handle the built-in Exception class
-                parentClassName = "Exception";
-                Debug.Log("Class extends Exception");
-            }
-        }
-
-        /// <summary>
-        /// Track class implementation information
-        /// </summary>
-        public override void EnterClassDeclarationImplementation(ClassDeclarationImplementationContext context)
-        {
-            base.EnterClassDeclarationImplementation(context);
-
-            // Get the interface class path
-            var interfacePath = context.appClassPath();
-            if (interfacePath != null)
-            {
-                // For implementations, we don't set parentClassName 
-                // because %Super wouldn't be needed for interfaces
-                Debug.Log($"Class implements {interfacePath.GetText()}");
-            }
-        }
-
-        /// <summary>
-        /// Process local variable declaration assignments to capture type information
-        /// </summary>
-        public override void EnterLocalVariableDeclAssignment(LocalVariableDeclAssignmentContext context)
-        {
-            base.EnterLocalVariableDeclAssignment(context);
-
-            // Check if this is a create() expression in a local variable declaration assignment
-            var expr = context.expression();
-            if (expr != null && IsCreateExpressionAtCursor(expr))
-            {
-                // We're in a local variable declaration, so get the type info directly
-                var typeContext = context.typeT();
-                if (typeContext is AppClassTypeContext appClass)
-                {
-                    detectedClassType = appClass.appClassPath()?.GetText();
-                    isAppropriateContext = true;
-                }
-            }
-        }
-
-        /// <summary>
-        /// Process variable assignments to handle the second case
-        /// </summary>
-        public override void EnterExpressionStmt(ExpressionStmtContext context)
-        {
-            var expr = context.expression();
-            if (expr != null && expr is EqualityExprContext equalityExpr)
-            {
-                // Check if this might be an assignment statement (lhs = rhs)
-                var lhsExpr = equalityExpr.expression(0);
-                var rhsExpr = equalityExpr.expression(1);
-
-                if (rhsExpr != null && IsCreateExpressionAtCursor(rhsExpr))
-                {
-                    // Try to get variable type info from the left-hand side
-                    if (lhsExpr is IdentifierExprContext identExpr)
+                    /* Look up variable */
+                    var variableInfo = FindVariable(identifierNode.Name);
+                    if (variableInfo != null)
                     {
-                        var ident = identExpr.ident();
-                        if (ident is IdentUserVariableContext userVarContext)
-                        {
-                            string varName = userVarContext.USER_VARIABLE().GetText();
-                            if (TryGetVariableInfo(varName, out var varInfo) && varInfo != null)
-                            {
-                                string varType = varInfo.Type;
-
-                                // Check if it's an app class type
-                                if (varType.Contains(":") && !varType.StartsWith("Array of "))
-                                {
-                                    detectedClassType = varType;
-                                    isAppropriateContext = true;
-                                }
-                                else
-                                {
-                                    // Variable exists but type is not an app class
-                                    isAppropriateContext = true;
-                                }
-                            }
-                            else
-                            {
-                                /* Maybe its a private instance or property */
-                                // Check if the variable is a property
-                                if (instanceVariables.TryGetValue(varName, out var varType) &&
-                                    varType.Contains(":") && !varType.StartsWith("Array of "))
-                                {
-                                    detectedClassType = varType;
-                                    isAppropriateContext = true;
-                                }
-                                else
-                                {
-                                    // Variable doesn't exist or type is not an app class
-                                    isAppropriateContext = true;
-                                }
-                            }
-                        }
-                        else if (ident is IdentSuperContext)
-                        {
-                            // Handle %Super = create() case
-                            if (parentClassName != null)
-                            {
-                                detectedClassType = parentClassName;
-                                isAppropriateContext = true;
-                            }
-                            else
-                            {
-                                // Parent class exists but we couldn't determine its type
-                                isAppropriateContext = true;
-                            }
-                        }
-                    }
-                    // Or a property access with %This
-                    else if (lhsExpr is DotAccessExprContext dotAccessExpr)
+                        detectedClassType = variableInfo.Type;
+                    } else
                     {
-                        // Check if the expression is %THIS
-                        var baseExpr = dotAccessExpr.expression();
-                        if (baseExpr != null && baseExpr.GetText().Equals("%THIS", StringComparison.OrdinalIgnoreCase))
+                        if (identifierNode.Name.Equals("%Super", StringComparison.CurrentCultureIgnoreCase))
                         {
-                            // Get the property name
-                            var dotAccesses = dotAccessExpr.dotAccess();
-                            if (dotAccesses != null && dotAccesses.Length > 0)
-                            {
-                                var propertyName = dotAccesses[0].genericID()?.GetText();
-
-                                if (propertyName != null)
-                                {
-                                    // Convert property name to instance variable format for lookup
-                                    string instanceVarName = $"&{propertyName}";
-
-                                    // Look up the instance variable type
-                                    if (instanceVariables.TryGetValue(instanceVarName, out var varType) &&
-                                        varType.Contains(":") && !varType.StartsWith("Array of "))
-                                    {
-                                        detectedClassType = varType;
-                                        isAppropriateContext = true;
-                                    }
-                                    else
-                                    {
-                                        // Property exists but type is not an app class or unknown
-                                        isAppropriateContext = true;
-                                    }
-                                }
-                            }
+                            detectedClassType = parentClassName;
                         }
                         else
                         {
-                            // This is a property assignment, we can't easily determine the property type
-                            // Just use the basic create auto-completion
-                            isAppropriateContext = true;
+
+                            detectedClassType = identifierNode.Name;
                         }
                     }
                 }
-            }
-        }
-
-        /// <summary>
-        /// Process super assignments
-        /// </summary>
-        public override void EnterSuperAssignmentStmt(SuperAssignmentStmtContext context)
-        {
-            base.EnterSuperAssignmentStmt(context);
-
-            // Check if this is a %Super = create() case
-            var expr = context.expression();
-            if (expr != null && IsCreateExpressionAtCursor(expr))
-            {
-                // Use parent class type if available
-                if (parentClassName != null)
-                {
-                    detectedClassType = parentClassName;
-                    isAppropriateContext = true;
-                }
                 else
                 {
-                    // Parent class exists but we couldn't determine its type
-                    isAppropriateContext = true;
+                    SetFailure("Create() expansion is not supported on expression that need an infered type.");
                 }
+                Debug.Log($"CreateAutoComplete: Found create() call for type {detectedClassType} at cursor position {CurrentPosition}");
             }
+
+            base.VisitAssignment(node);
         }
 
-        /// <summary>
-        /// Track instance variables to capture their types
-        /// </summary>
-        public override void EnterPrivateProperty(PrivatePropertyContext context)
+        public override void VisitLocalVariableDeclarationWithAssignment(LocalVariableDeclarationWithAssignmentNode node)
         {
-            base.EnterPrivateProperty(context);
-
-            var instanceDeclContext = context.instanceDeclaration();
-            if (instanceDeclContext is InstanceDeclContext instanceDecl)
+            if (node.InitialValue is ObjectCreateShortHand createCall && createCall.SourceSpan.ContainsPosition(CurrentPosition))
             {
-                // Get the type information
-                var typeContext = instanceDecl.typeT();
-                string typeStr = "Any"; // Default type if not specified
-
-                if (typeContext is AppClassTypeContext appClass)
-                {
-                    typeStr = appClass.appClassPath()?.GetText() ?? "Any";
-                }
-                else if (typeContext != null)
-                {
-                    typeStr = ScopedRefactor<string>.GetTypeFromContext(typeContext);
-                }
-
-                // Process each variable in the instance declaration
-                foreach (var varNode in instanceDecl.USER_VARIABLE())
-                {
-                    string varName = varNode.GetText();
-                    instanceVariables[varName] = typeStr;
-                }
+                isAppropriateContext = true;
+                targetCreateCall = createCall;
+                detectedClassType = node.Type.ToString();
+                Debug.Log($"CreateAutoComplete: Found create() call for type {detectedClassType} at cursor position {CurrentPosition}");
             }
+
+            base.VisitLocalVariableDeclarationWithAssignment(node);
         }
 
-        /// <summary>
-        /// Track property declarations with Get/Set to capture their types
-        /// </summary>
-        public override void EnterPropertyGetSet(PropertyGetSetContext context)
+        public override void VisitAppClass(AppClassNode node)
         {
-            base.EnterPropertyGetSet(context);
-
-            // Get the property type information
-            var typeContext = context.typeT();
-            string typeStr = "Any"; // Default type if not specified
-
-            if (typeContext is AppClassTypeContext appClass)
+            // Track class extension information
+            if (node.BaseClass != null)
             {
-                typeStr = appClass.appClassPath()?.GetText() ?? "Any";
-            }
-            else if (typeContext != null)
-            {
-                typeStr = ScopedRefactor<string>.GetTypeFromContext(typeContext);
+                parentClassName = node.BaseClass.ToString();
+                Debug.Log($"Class extends {parentClassName}");
             }
 
-            // Get the property name
-            var genericIdNode = context.genericID();
-            if (genericIdNode != null)
-            {
-                string propName = genericIdNode.GetText();
-
-                // Store the property in our dictionary with the instance variable prefix
-                // since properties are accessed via the instance variable syntax
-                string instanceVarName = $"&{propName}";
-                instanceVariables[instanceVarName] = typeStr;
-            }
-        }
-
-        /// <summary>
-        /// Track direct property declarations to capture their types
-        /// </summary>
-        public override void EnterPropertyDirect(PropertyDirectContext context)
-        {
-            base.EnterPropertyDirect(context);
-
-            // Get the property type information
-            var typeContext = context.typeT();
-            string typeStr = "Any"; // Default type if not specified
-
-            if (typeContext is AppClassTypeContext appClass)
-            {
-                typeStr = appClass.appClassPath()?.GetText() ?? "Any";
-            }
-            else if (typeContext != null)
-            {
-                typeStr = ScopedRefactor<string>.GetTypeFromContext(typeContext);
-            }
-
-            // Get the property name
-            var genericIdNode = context.genericID();
-            if (genericIdNode != null)
-            {
-                string propName = genericIdNode.GetText();
-
-                // Store the property in our dictionary with the instance variable prefix
-                // since properties are accessed via the instance variable syntax
-                string instanceVarName = $"&{propName}";
-                instanceVariables[instanceVarName] = typeStr;
-            }
-        }
-
-        /// <summary>
-        /// Check if the expression is a create() call and cursor is between the parentheses
-        /// </summary>
-        private bool IsCreateExpressionAtCursor(ExpressionContext expr)
-        {
-            if (expr is FunctionCallExprContext functionCallExpr)
-            {
-                var simpleFunc = functionCallExpr.simpleFunctionCall();
-                if (simpleFunc != null && simpleFunc.genericID()?.GetText().ToLower() == "create")
-                {
-                    var args = simpleFunc.functionCallArguments();
-                    if (simpleFunc.LPAREN() != null && simpleFunc.RPAREN() != null)
-                    {
-                        createStartPos = simpleFunc.genericID().Stop.ByteStopIndex() + 1;  // Position after "create"
-                        createEndPos = simpleFunc.RPAREN().Symbol.ByteStartIndex();        // Position of the closing parenthesis
-
-                        // Check if cursor is between the parentheses
-                        return CurrentPosition > createStartPos && CurrentPosition <= createEndPos;
-                    }
-                }
-            }
-            else if (expr is ObjectCreateExprContext)
-            {
-                // Handle ObjectCreateExpr if needed
-                // This would be for "create <classname>()" syntax which we don't need to handle
-            }
-            return false;
+            base.VisitAppClass(node);
         }
 
         /// <summary>
         /// Complete the traversal and generate changes
         /// </summary>
-        public override void ExitProgram(ProgramContext context)
+        public override void VisitProgram(ProgramNode node)
         {
-            // Debug log the instance variables and properties we've tracked
-            var varCount = instanceVariables.Count;
-            Debug.Log($"CreateAutoComplete tracked {varCount} instance variables and properties");
-            foreach (var pair in instanceVariables)
-            {
-                Debug.Log($"  {pair.Key}: {pair.Value}");
-            }
-
-            if (parentClassName != null)
-            {
-                Debug.Log($"Parent class detected: {parentClassName}");
-            }
+            base.VisitProgram(node);
 
             if (!isAppropriateContext)
             {
+                Debug.Log("CreateAutoComplete: Not in appropriate context, skipping");
                 return;
             }
 
-            if (createStartPos < 0 || createEndPos < 0)
+            if (targetCreateCall == null || !targetCreateCall.SourceSpan.IsValid)
             {
+                Debug.Log("CreateAutoComplete: Invalid target create call, skipping");
                 return;
             }
 
-            // Determine what to insert based on class type and auto-pairing status
-            if (detectedClassType != null)
+
+
+            if (string.IsNullOrEmpty(detectedClassType))
             {
-                string insertText;
-
-                // If auto-pairing is disabled, we need to add both opening and closing parentheses
-                insertText = " " + detectedClassType + "(";
-
-                if (Editor.DataManager != null)
-                {
-                    var appClassAST = new AstService(Editor.DataManager).GetAppClassAst(detectedClassType);
-                    if (appClassAST != null)
-                    {
-                        var className = appClassAST.Name;
-                        /* find constructor if any */
-                        var constructor = appClassAST.Methods.Where(m => m.Name.Equals(className)).FirstOrDefault();
-                        if (constructor != null)
-                        {
-                            // Add constructor parameters to the insert text
-                            var paramsList = constructor.Parameters.Select(p => p.Name).ToList();
-                            insertText += string.Join(", ", paramsList);
-                        }
-                    }
-                }
-
-                // Replace from after "create" to the opening parenthesis and add both parentheses
-                ReplaceText(
-                    createStartPos,
-                    autoPairingEnabled ? createStartPos : createStartPos + 1, // +1 to include the original opening parenthesis
-                    insertText,
-                    "Auto-complete create statement with type information (auto-pairing disabled)"
-                );
-
+                Debug.Log("CreateAutoComplete: No class type detected, skipping");
+                return;
             }
-            else
-            {
-                // Just add a space after "create" without changing anything else
-                string insertText = " ";
 
-                // Insert just a space after "create" without affecting the parenthesis
-                ReplaceText(
-                    createStartPos,
-                    createStartPos,
-                    insertText,
-                    "Auto-complete create statement with space"
-                );
-            }
+            // Generate appropriate create() replacement based on detected type
+            string replacementText = GenerateCreateReplacement(detectedClassType);
+
+            Debug.Log($"CreateAutoComplete: Replacing create() with {replacementText}");
+
+            // Replace the create() call with the expanded version
+            EditText(targetCreateCall.SourceSpan, replacementText, RefactorDescription);
+        }
+
+        /// <summary>
+        /// Generates the appropriate create() replacement based on the detected class type
+        /// </summary>
+        private string GenerateCreateReplacement(string classType)
+        {
+            return $"create {classType}()";
         }
     }
 }

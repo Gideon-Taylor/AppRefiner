@@ -1,5 +1,3 @@
-using System;
-using System.Linq;
 using System.Text;
 
 namespace AppRefiner.TooltipProviders
@@ -37,24 +35,24 @@ namespace AppRefiner.TooltipProviders
             {
                 return null;
             }
-            
+
             // Check if editor has highlight tooltips
             if (editor.ActiveIndicators == null || editor.ActiveIndicators.Count == 0)
             {
                 return null;
             }
-            
+
             // Find the first tooltip that contains the position
-            var activeIndicators = editor.ActiveIndicators.Where(t => 
+            var activeIndicators = editor.ActiveIndicators.Where(t =>
                 t.Start <= position && t.Start + t.Length >= position);
-            
+
             if (!activeIndicators.Any())
             {
                 return null;
             }
 
 
-            StringBuilder tooltips = new StringBuilder();
+            StringBuilder tooltips = new();
             foreach (var t in activeIndicators)
             {
                 if (t.Tooltip != null)
@@ -69,9 +67,9 @@ namespace AppRefiner.TooltipProviders
             {
                 tooltips.Append("Quick fixes... (Ctrl+.)\n");
             }
-            
+
 
             return tooltips.ToString().Trim();
         }
     }
-} 
+}

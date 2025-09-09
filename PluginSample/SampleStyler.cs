@@ -1,7 +1,4 @@
 using AppRefiner.Stylers;
-using static AppRefiner.PeopleCode.PeopleCodeParser;
-using System.Collections.Generic;
-using Antlr4.Runtime.Misc;
 
 namespace PluginSample
 {
@@ -58,7 +55,7 @@ namespace PluginSample
         }
 
         // Always provide a Reset method, even if it just calls the base
-        public override void Reset()
+        public new void Reset()
         {
             base.Reset(); // Ensures Indicators list is cleared/reinitialized
         }

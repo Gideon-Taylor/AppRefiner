@@ -38,6 +38,14 @@ namespace AppRefiner
         [DllImport("user32.dll")]
         private static extern bool ClientToScreen(IntPtr hWnd, ref POINT lpPoint);
 
+        [DllImport("user32.dll")]
+        private static extern bool EnumChildWindows(IntPtr hWndParent, EnumChildProc lpEnumFunc, IntPtr lParam);
+
+        [DllImport("user32.dll", SetLastError = true, CharSet = CharSet.Auto)]
+        private static extern int GetClassName(IntPtr hWnd, StringBuilder lpClassName, int nMaxCount);
+
+        public delegate bool EnumChildProc(IntPtr hWnd, IntPtr lParam);
+
         [StructLayout(LayoutKind.Sequential)]
         public struct RECT
         {
@@ -183,13 +191,60 @@ namespace AppRefiner
         /// <returns>Point in screen coordinates</returns>
         public static Point ClientToScreen(IntPtr hWnd, Point clientPoint)
         {
-            POINT point = new POINT { X = clientPoint.X, Y = clientPoint.Y };
+            POINT point = new() { X = clientPoint.X, Y = clientPoint.Y };
             if (ClientToScreen(hWnd, ref point))
             {
                 return new Point(point.X, point.Y);
             }
             return Point.Empty;
         }
+
+        /// <summary>
+        /// Gets the window text (caption) for a given window handle
+        /// </summary>
+        /// <param name="hWnd">Window handle</param>
+        /// <returns>Window text or empty string if not found</returns>
+        public static string GetWindowText(IntPtr hWnd)
+        {
+            const int nChars = 256;
+            var buff = new StringBuilder(nChars);
+
+            if (GetWindowText(hWnd, buff, nChars) > 0)
+            {
+                return buff.ToString();
+            }
+
+            return string.Empty;
+        }
+
+        /// <summary>
+        /// Gets the class name for a given window handle
+        /// </summary>
+        /// <param name="hWnd">Window handle</param>
+        /// <returns>Class name or empty string if not found</returns>
+        public static string GetWindowClass(IntPtr hWnd)
+        {
+            var className = new StringBuilder(256);
+            if (GetClassName(hWnd, className, className.Capacity) > 0)
+            {
+                return className.ToString();
+            }
+            return string.Empty;
+        }
+
+        /// <summary>
+        /// Enumerates all child windows of the specified parent window
+        /// </summary>
+        /// <param name="hWndParent">Parent window handle</param>
+        /// <param name="enumFunc">Callback function for each child window</param>
+        /// <param name="lParam">Application-defined parameter</param>
+        /// <returns>True if all windows were enumerated, false if callback returned false</returns>
+        public static bool EnumerateChildWindows(IntPtr hWndParent, EnumChildProc enumFunc, IntPtr lParam)
+        {
+            return EnumChildWindows(hWndParent, enumFunc, lParam);
+        }
+
+
 
     }
 

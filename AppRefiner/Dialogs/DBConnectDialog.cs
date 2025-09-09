@@ -1,13 +1,9 @@
-using System;
-using System.Drawing;
-using System.Windows.Forms;
 using AppRefiner.Database;
-using System.Collections.Generic;
-using System.Text.Json;
 using AppRefiner.Properties;
 using System.Security.Cryptography;
 using System.Text;
-using System.Threading.Tasks;
+using System.Text.Json;
+using PeopleCodeParser.SelfHosted;
 
 namespace AppRefiner.Dialogs
 {
@@ -40,10 +36,10 @@ namespace AppRefiner.Dialogs
 
         // Dictionary to store connection settings for each database
         private static Dictionary<string, DbConnectionSettings>? savedSettings;
-        
+
         // Track if settings were loaded successfully
         private bool settingsLoaded = false;
-        
+
         // Cached database connection lists for smart detection
         private List<string> oracleNames = new();
         private List<string> sqlServerDsns = new();
@@ -105,7 +101,7 @@ namespace AppRefiner.Dialogs
             LoadAllSettings();
 
             InitializeComponent();
-            
+
             // Set default DB name if provided
             if (!string.IsNullOrEmpty(defaultDbName))
             {
@@ -243,7 +239,7 @@ namespace AppRefiner.Dialogs
             this.cancelButton.ForeColor = Color.White;
             this.cancelButton.FlatStyle = FlatStyle.Flat;
             this.cancelButton.FlatAppearance.BorderSize = 0;
-            this.cancelButton.Click += (s, e) => 
+            this.cancelButton.Click += (s, e) =>
             {
                 this.DialogResult = DialogResult.Cancel;
                 this.Close();
@@ -301,7 +297,7 @@ namespace AppRefiner.Dialogs
 
             // Load all database connections for smart detection
             LoadAllDatabaseConnections();
-            
+
             // Load database names based on initially selected type
             string? dbType = this.dbTypeComboBox.SelectedItem?.ToString();
             if (dbType == "Oracle")
@@ -312,7 +308,7 @@ namespace AppRefiner.Dialogs
             {
                 LoadSqlServerDsns();
             }
-            
+
             // Update UI based on initial radio button selection
             UpdateUIForConnectionType();
         }
@@ -329,25 +325,25 @@ namespace AppRefiner.Dialogs
                 // Show namespace controls
                 namespaceLabel.Visible = true;
                 namespaceTextBox.Visible = true;
-                
+
                 // Handle SQL Server-specific namespace behavior
                 UpdateNamespaceForSqlServer();
-                
+
                 // Adjust positions of username and password controls
                 usernameLabel.Location = new Point(20, 170);
                 usernameTextBox.Location = new Point(130, 170);
                 passwordLabel.Location = new Point(20, 200);
                 passwordTextBox.Location = new Point(130, 200);
                 savePasswordCheckBox.Location = new Point(130, 230);
-                
+
                 // Adjust positions of loading controls
                 loadingLabel.Location = new Point(130, 260);
                 loadingProgressBar.Location = new Point(130, 290);
-                
+
                 // Adjust positions of action buttons
                 connectButton.Location = new Point(130, 320);
                 cancelButton.Location = new Point(280, 320);
-                
+
                 // Adjust form height
                 this.ClientSize = new Size(400, 360);
             }
@@ -356,7 +352,7 @@ namespace AppRefiner.Dialogs
                 // Hide namespace controls
                 namespaceLabel.Visible = false;
                 namespaceTextBox.Visible = false;
-                
+
                 // Reset namespace to editable when not in read-only mode
                 namespaceTextBox.ReadOnly = false;
                 namespaceTextBox.Text = string.Empty;
@@ -366,15 +362,15 @@ namespace AppRefiner.Dialogs
                 passwordLabel.Location = new Point(20, 170);
                 passwordTextBox.Location = new Point(130, 170);
                 savePasswordCheckBox.Location = new Point(130, 200);
-                
+
                 // Reset positions of loading controls
                 loadingLabel.Location = new Point(130, 230);
                 loadingProgressBar.Location = new Point(130, 260);
-                
+
                 // Reset positions of action buttons
                 connectButton.Location = new Point(130, 290);
                 cancelButton.Location = new Point(280, 290);
-                
+
                 // Reset form height
                 this.ClientSize = new Size(400, 330);
             }
@@ -383,7 +379,7 @@ namespace AppRefiner.Dialogs
         protected override void OnShown(EventArgs e)
         {
             base.OnShown(e);
-            
+
             // Center on owner window
             if (owner != IntPtr.Zero)
             {
@@ -395,23 +391,24 @@ namespace AppRefiner.Dialogs
             {
                 mouseHandler = new DialogHelper.ModalDialogMouseHandler(this, headerPanel, owner);
             }
-            
+
             // Set focus to password field if settings were loaded
             if (settingsLoaded && !string.IsNullOrEmpty(usernameTextBox.Text))
             {
                 this.BeginInvoke(new Action(() => passwordTextBox.Focus()));
             }
-            
+
             // Auto-connect if database is selected and password is saved
-            if (settingsLoaded && !string.IsNullOrEmpty(passwordTextBox.Text) && 
+            if (settingsLoaded && !string.IsNullOrEmpty(passwordTextBox.Text) &&
                 !string.IsNullOrEmpty(dbNameComboBox.Text) && !string.IsNullOrEmpty(usernameTextBox.Text))
             {
                 // Slight delay to ensure UI is fully loaded
-                this.BeginInvoke(new Action(() => {
+                this.BeginInvoke(new Action(() =>
+                {
                     // Check if namespace is required but missing
                     if (readOnlyRadioButton.Checked && string.IsNullOrEmpty(namespaceTextBox.Text))
                         return;
-                        
+
                     ConnectButton_Click(null, EventArgs.Empty);
                 }));
             }
@@ -420,12 +417,10 @@ namespace AppRefiner.Dialogs
         protected override void OnPaint(PaintEventArgs e)
         {
             base.OnPaint(e);
-            
+
             // Draw a border around the form
-            using (var pen = new Pen(Color.FromArgb(100, 100, 120)))
-            {
-                e.Graphics.DrawRectangle(pen, 0, 0, Width - 1, Height - 1);
-            }
+            using var pen = new Pen(Color.FromArgb(100, 100, 120));
+            e.Graphics.DrawRectangle(pen, 0, 0, Width - 1, Height - 1);
         }
 
         private void DbTypeComboBox_SelectedIndexChanged(object? sender, EventArgs e)
@@ -441,7 +436,7 @@ namespace AppRefiner.Dialogs
                         LoadSqlServerDsns();
                         break;
                 }
-                
+
                 // Update UI based on the new database type selection
                 UpdateUIForConnectionType();
             }
@@ -451,7 +446,7 @@ namespace AppRefiner.Dialogs
         {
             dbNameComboBox.Items.Clear();
             dbNameComboBox.Items.AddRange(oracleNames.ToArray());
-            
+
             if (dbNameComboBox.Items.Count > 0)
             {
                 dbNameComboBox.SelectedIndex = 0;
@@ -462,13 +457,13 @@ namespace AppRefiner.Dialogs
         {
             dbNameComboBox.Items.Clear();
             dbNameComboBox.Items.AddRange(sqlServerDsns.ToArray());
-            
+
             if (dbNameComboBox.Items.Count > 0)
             {
                 dbNameComboBox.SelectedIndex = 0;
             }
         }
-        
+
         /// <summary>
         /// Loads all available database connections for smart detection
         /// </summary>
@@ -478,14 +473,14 @@ namespace AppRefiner.Dialogs
             {
                 // Load Oracle TNS names
                 oracleNames = OracleDbConnection.GetAllTnsNames();
-                
+
                 // Load SQL Server DSNs (both System and User)
                 sqlServerDsns = SqlServerDbConnection.GetAvailableDsns();
             }
             catch (Exception ex)
             {
                 Debug.LogError($"Error loading database connections: {ex.Message}");
-                
+
                 // Fallback to empty lists
                 oracleNames = new List<string>();
                 sqlServerDsns = new List<string>();
@@ -498,7 +493,7 @@ namespace AppRefiner.Dialogs
         private void UpdateNamespaceForSqlServer()
         {
             string? dbType = dbTypeComboBox.SelectedItem?.ToString();
-            
+
             if (dbType == "SQL Server" && readOnlyRadioButton.Checked)
             {
                 // For SQL Server read-only connections, set namespace to database name and make it read-only
@@ -521,12 +516,12 @@ namespace AppRefiner.Dialogs
             if (!string.IsNullOrEmpty(dbName))
             {
                 settingsLoaded = ApplySettingsForDatabase(dbName);
-                
+
                 // Update namespace for SQL Server read-only connections when DB name changes
                 UpdateNamespaceForSqlServer();
-                
+
                 // Auto-connect on initial load if password is saved
-                if (isInitialLoad && settingsLoaded && !string.IsNullOrEmpty(passwordTextBox.Text) && 
+                if (isInitialLoad && settingsLoaded && !string.IsNullOrEmpty(passwordTextBox.Text) &&
                     !string.IsNullOrEmpty(usernameTextBox.Text))
                 {
                     // Check if namespace is required but missing
@@ -545,7 +540,7 @@ namespace AppRefiner.Dialogs
         private void SetConnectingState(bool isConnecting)
         {
             this.isConnecting = isConnecting;
-            
+
             // Update UI controls
             dbTypeComboBox.Enabled = !isConnecting;
             dbNameComboBox.Enabled = !isConnecting;
@@ -557,11 +552,11 @@ namespace AppRefiner.Dialogs
             savePasswordCheckBox.Enabled = !isConnecting;
             connectButton.Enabled = !isConnecting;
             cancelButton.Enabled = !isConnecting;
-            
+
             // Show/hide loading indicator
             loadingLabel.Visible = isConnecting;
             loadingProgressBar.Visible = isConnecting;
-            
+
             // Force UI update
             this.Update();
         }
@@ -577,7 +572,7 @@ namespace AppRefiner.Dialogs
                 string username = usernameTextBox.Text;
                 string password = passwordTextBox.Text;
                 string @namespace = readOnlyRadioButton.Checked ? namespaceTextBox.Text : string.Empty;
-                
+
                 if (string.IsNullOrEmpty(username) || string.IsNullOrEmpty(password))
                 {
                     MessageBox.Show("Please enter username and password", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
@@ -604,11 +599,11 @@ namespace AppRefiner.Dialogs
                     throw new NotSupportedException($"Database type '{dbType}' is not supported.");
                 }
                 string? namespaceForConnection = readOnlyRadioButton.Checked ? @namespace : null;
-                
+
                 try
                 {
                     SetConnectingState(true);
-                    
+
                     // Run connection in background to keep UI responsive
                     await Task.Run(() =>
                     {
@@ -631,12 +626,13 @@ namespace AppRefiner.Dialogs
                         {
                             throw new Exception("Failed to connect to database");
                         }
-                    });
 
-                    // Save the connection settings
+                        PeopleCodeParser.SelfHosted.PeopleCodeParser.ToolsRelease = new ToolsVersion(DataManager.GetToolsVersion());
+                    });
+                    
                     string? encryptedPassword = savePasswordCheckBox.Checked ? EncryptPassword(password, dbName) : null;
                     SaveSettingsForDatabase(dbName, readOnlyRadioButton.Checked, username, @namespace, encryptedPassword);
-                    
+
                     // Close the dialog without showing a success message
                     DialogResult = DialogResult.OK;
                     Close();
@@ -675,7 +671,7 @@ namespace AppRefiner.Dialogs
                 // Found only in Oracle - select Oracle type
                 dbTypeComboBox.SelectedIndex = 0; // Oracle
                 LoadOracleTnsNames();
-                
+
                 // Select the specific database name
                 for (int i = 0; i < dbNameComboBox.Items.Count; i++)
                 {
@@ -691,7 +687,7 @@ namespace AppRefiner.Dialogs
                 // Found only in SQL Server - select SQL Server type
                 dbTypeComboBox.SelectedIndex = 1; // SQL Server
                 LoadSqlServerDsns();
-                
+
                 // Select the specific database name
                 for (int i = 0; i < dbNameComboBox.Items.Count; i++)
                 {
@@ -707,7 +703,7 @@ namespace AppRefiner.Dialogs
                 // Found in both - prefer Oracle (existing behavior)
                 dbTypeComboBox.SelectedIndex = 0; // Oracle
                 LoadOracleTnsNames();
-                
+
                 // Select the specific database name
                 for (int i = 0; i < dbNameComboBox.Items.Count; i++)
                 {
@@ -730,7 +726,7 @@ namespace AppRefiner.Dialogs
                         return;
                     }
                 }
-                
+
                 // If not found, add it to the current combo box
                 if (!dbNameComboBox.Items.Contains(dbName))
                 {
@@ -751,7 +747,7 @@ namespace AppRefiner.Dialogs
                 return;
 
             savedSettings = new Dictionary<string, DbConnectionSettings>();
-            
+
             string settingsJson = Settings.Default.DbConnectionSettings;
             if (!string.IsNullOrEmpty(settingsJson))
             {
@@ -804,13 +800,13 @@ namespace AppRefiner.Dialogs
             // Apply connection type
             readOnlyRadioButton.Checked = settings.IsReadOnly;
             bootstrapRadioButton.Checked = !settings.IsReadOnly;
-            
+
             // Set username
             usernameTextBox.Text = settings.Username;
-            
+
             // Set namespace
             namespaceTextBox.Text = settings.Namespace;
-            
+
             // Set password if it was saved
             if (!string.IsNullOrEmpty(settings.EncryptedPassword))
             {
@@ -831,10 +827,10 @@ namespace AppRefiner.Dialogs
                 passwordTextBox.Text = string.Empty;
                 savePasswordCheckBox.Checked = false;
             }
-            
+
             // Update UI based on connection type
             UpdateUIForConnectionType();
-            
+
             return true;
         }
 
@@ -857,16 +853,16 @@ namespace AppRefiner.Dialogs
             {
                 // Convert the password to bytes
                 byte[] passwordBytes = Encoding.UTF8.GetBytes(password);
-                
+
                 // Use database name as entropy
                 byte[] entropyBytes = Encoding.UTF8.GetBytes(dbName);
-                
+
                 // Encrypt the password using DPAPI (Windows Data Protection API)
                 byte[] encryptedBytes = ProtectedData.Protect(
-                    passwordBytes, 
+                    passwordBytes,
                     entropyBytes, // Use DB name as entropy
                     DataProtectionScope.CurrentUser); // Scope: only current Windows user can decrypt
-                
+
                 // Convert to Base64 for storage
                 return Convert.ToBase64String(encryptedBytes);
             }
@@ -891,16 +887,16 @@ namespace AppRefiner.Dialogs
             {
                 // Convert from Base64
                 byte[] encryptedBytes = Convert.FromBase64String(encryptedPassword);
-                
+
                 // Use same database name as entropy
                 byte[] entropyBytes = Encoding.UTF8.GetBytes(dbName);
-                
+
                 // Decrypt the password using DPAPI
                 byte[] decryptedBytes = ProtectedData.Unprotect(
                     encryptedBytes,
                     entropyBytes, // Use same database name as entropy
                     DataProtectionScope.CurrentUser); // Same scope used for encryption
-                
+
                 // Convert back to string
                 return Encoding.UTF8.GetString(decryptedBytes);
             }

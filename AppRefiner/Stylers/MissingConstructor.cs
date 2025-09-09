@@ -1,99 +1,152 @@
-﻿using Antlr4.Runtime.Misc;
-using AppRefiner.PeopleCode;
-using AppRefiner.QuickFixes;
-using AppRefiner.Services;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using static AppRefiner.PeopleCode.PeopleCodeParser;
+using AppRefiner.Database;
+using AppRefiner.Refactors.QuickFixes;
+using PeopleCodeParser.SelfHosted.Nodes;
 
-namespace AppRefiner.Stylers
+namespace AppRefiner.Stylers;
+
+/// <summary>
+/// Visitor that identifies classes that might be missing required constructors.
+/// This styler uses the database to check if the base class has constructors with parameters,
+/// which would require the derived class to have its own constructor.
+/// </summary>
+public class MissingConstructor : BaseStyler
 {
-    public class MissingConstructor : BaseStyler
+    private const uint ERROR_COLOR = 0x0000FFFF; // Red color for missing constructor errors
+
+    public override string Description => "Missing constructors";
+
+    /// <summary>
+    /// This styler requires a database connection to check base class constructors
+    /// </summary>
+    public override DataManagerRequirement DatabaseRequirement => DataManagerRequirement.Required;
+
+    #region AST Visitor Overrides
+
+    /// <summary>
+    /// Processes the entire program and resets state
+    /// </summary>
+    public override void VisitProgram(ProgramNode node)
     {
-        private string extendedClassName = string.Empty;
-        private string className = string.Empty;
-        private MethodHeaderContext? constructorHeader;
-        private GenericIDContext? classNameContext;
-        public MissingConstructor()
-        {
-            Description = "Highlights classes missing a constructor required by their parent class.";
-            Active = true;
-        }
+        Reset();
 
-
-        public override void EnterClassDeclarationExtension([NotNull] ClassDeclarationExtensionContext context)
-        {
-            var superclassContext = context.superclass();
-            if (superclassContext is AppClassSuperClassContext appClassSuperCtx)
-            {
-                extendedClassName = appClassSuperCtx.appClassPath().GetText();
-            }
-            classNameContext = context.genericID();
-            className = classNameContext.GetText();
-        }
-
-        public override void EnterClassDeclarationImplementation([NotNull] ClassDeclarationImplementationContext context)
-        {
-            extendedClassName = context.appClassPath()?.GetText() ?? string.Empty;
-            classNameContext = context.genericID();
-            className = classNameContext.GetText();
-        }
-
-        public override void EnterMethodHeader([NotNull] MethodHeaderContext context)
-        {
-            var methodName = context.genericID().GetText();
-            if (methodName.Equals(className))
-            {
-                constructorHeader = context;
-            }
-        }
-
-        public override void ExitProgram([NotNull] ProgramContext context)
-        {
-            if (extendedClassName != string.Empty && constructorHeader == null)
-            {
-                Ast.Method? baseClassConstructor = null;
-
-                var programAst = new AstService(DataManager).GetProgramAst(extendedClassName);
-
-                if (programAst?.ContainedAppClass != null)
-                {
-                    var baseClass = programAst.ContainedAppClass;
-                    var constructors = baseClass.Methods.Where(m => m.Name.Equals(baseClass.Name, StringComparison.OrdinalIgnoreCase));
-                    if (constructors.Any())
-                    {
-                        baseClassConstructor = constructors.First();
-                    }
-                }
-                else if (programAst?.ContainedInterface != null)
-                {
-                    var baseClass = programAst.ContainedInterface;
-                    var constructors = baseClass.Methods.Where(m => m.Name.Equals(baseClass.Name, StringComparison.OrdinalIgnoreCase));
-                    if (constructors.Any())
-                    {
-                        baseClassConstructor = constructors.First();
-                    }
-                }
-
-                if (baseClassConstructor?.Parameters.Count > 0 && classNameContext != null)
-                {
-                    AddIndicator(
-                        classNameContext.Start, 
-                        classNameContext.Stop, 
-                        IndicatorType.SQUIGGLE, 
-                        0x0000FFFF, // Red color for missing constructor
-                        $"Class '{className}' is missing a constructor required by '{extendedClassName}'.",
-                        [(typeof(GenerateBaseConstructorRefactor), "Add missing constructor.")]
-                    );
-                }
-            }
-
-        }
-
+        // Visit the program
+        base.VisitProgram(node);
     }
+
+    /// <summary>
+    /// Handles application class definitions
+    /// </summary>
+    public override void VisitAppClass(AppClassNode node)
+    {
+        // Check if this class has a constructor
+        var constructorMethod = node.Methods.FirstOrDefault(m =>
+            string.Equals(m.Name, node.Name, StringComparison.OrdinalIgnoreCase));
+
+        // If no constructor and class extends another class, check if base class requires one
+        if (constructorMethod == null && node.BaseClass != null)
+        {
+            CheckIfBaseClassRequiresConstructor(node);
+        }
+
+        base.VisitAppClass(node);
+    }
+
+    #endregion
+
+    #region Helper Methods
+
+    /// <summary>
+    /// Parses the base class source code to get its AST representation
+    /// </summary>
+    /// <param name="baseClassPath">The path to the base class</param>
+    /// <returns>The parsed ProgramNode containing the base class, or null if parsing fails</returns>
+    private ProgramNode? ParseBaseClassAst(string baseClassPath)
+    {
+        if (DataManager == null || string.IsNullOrEmpty(baseClassPath))
+            return null;
+
+        try
+        {
+            // Get the source code of the base class from the database
+            string? baseClassSource = DataManager.GetAppClassSourceByPath(baseClassPath);
+
+            if (string.IsNullOrEmpty(baseClassSource))
+                return null; // Base class not found in database
+
+            // Parse the base class using the self-hosted parser
+            var lexer = new PeopleCodeParser.SelfHosted.Lexing.PeopleCodeLexer(baseClassSource);
+            var tokens = lexer.TokenizeAll();
+
+            var parser = new PeopleCodeParser.SelfHosted.PeopleCodeParser(tokens);
+            return parser.ParseProgram();
+        }
+        catch (Exception)
+        {
+            // Silently handle database or parsing errors
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Checks if the base class has parameterized constructors that would require
+    /// the derived class to implement its own constructor
+    /// </summary>
+    private void CheckIfBaseClassRequiresConstructor(AppClassNode classNode)
+    {
+        if (DataManager == null || classNode.BaseClass == null)
+            return;
+
+        try
+        {
+            // Parse the base class AST
+            ProgramNode? baseProgram = ParseBaseClassAst(classNode.BaseClass.TypeName);
+            if (baseProgram == null)
+                return; // Could not parse base class
+
+            // Check both class and interface scenarios like AppRefiner
+            MethodNode? baseClassConstructor = null;
+            string? baseClassName = null;
+
+            if (baseProgram.AppClass != null)
+            {
+                var baseClass = baseProgram.AppClass;
+                baseClassName = baseClass.Name;
+                var constructors = baseClass.Methods.Where(m =>
+                    string.Equals(m.Name, baseClass.Name, StringComparison.OrdinalIgnoreCase));
+                if (constructors.Any())
+                {
+                    baseClassConstructor = constructors.First();
+                }
+            }
+            else if (baseProgram.Interface != null)
+            {
+                var baseInterface = baseProgram.Interface;
+                baseClassName = baseInterface.Name;
+                var constructors = baseInterface.Methods.Where(m =>
+                    string.Equals(m.Name, baseInterface.Name, StringComparison.OrdinalIgnoreCase));
+                if (constructors.Any())
+                {
+                    baseClassConstructor = constructors.First();
+                }
+            }
+
+            // If base class/interface has parameterized constructor, flag the derived class
+            if (baseClassConstructor?.Parameters.Count > 0)
+            {
+                string tooltip = $"Class '{classNode.Name}' is missing a constructor required by '{classNode.BaseClass.TypeName}'.";
+                var quickFixes = new List<(Type RefactorClass, string Description)>
+                {
+                    (typeof(GenerateBaseConstructor), "Generate missing constructor")
+                };
+                AddIndicator((classNode.NameToken.SourceSpan.Start.ByteIndex, classNode.NameToken.SourceSpan.End.ByteIndex), IndicatorType.SQUIGGLE, ERROR_COLOR, tooltip, quickFixes);
+            }
+        }
+        catch (Exception)
+        {
+            // Silently handle database or parsing errors
+            // Don't add indicators if we can't determine the base class structure
+        }
+    }
+
+    #endregion
 }
-
-

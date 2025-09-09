@@ -1,315 +1,112 @@
-using Antlr4.Runtime;
-using AppRefiner.Linters.Models;
-using AppRefiner.PeopleCode;
-using static AppRefiner.PeopleCode.PeopleCodeParser;
+using AppRefiner.Database;
+using PeopleCodeParser.SelfHosted.Visitors;
+using System.Reflection;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace AppRefiner.Linters
 {
     /// <summary>
     /// Base class for lint rules that need to track variables and other elements within code scopes.
     /// Works with LinterSuppressionListener to respect scope-based suppression directives.
+    /// Uses ScopedAstVisitor for comprehensive scope and variable tracking.
     /// </summary>
     /// <typeparam name="T">The type of data to track in scopes</typeparam>
-    public abstract class ScopedLintRule<T> : BaseLintRule
+    public abstract class BaseLintRule : ScopedAstVisitor<object>
     {
-        protected readonly Stack<Dictionary<string, T>> scopeStack = new();
-        protected readonly Stack<Dictionary<string, VariableInfo>> variableScopeStack = new();
+        // Linter ID must be set by all subclasses
+        public abstract string LINTER_ID { get; }
 
-        protected ScopedLintRule()
-        {
-            // Start with a global scope
-            scopeStack.Push(new Dictionary<string, T>());
-            variableScopeStack.Push(new Dictionary<string, VariableInfo>());
-        }
+        public bool Active { get; set; } = false;
+        public string Description { get; set; } = "Description not set";
+        public ReportType Type { get; set; }
+        public List<Report>? Reports { get; set; }
+        public virtual DataManagerRequirement DatabaseRequirement => DataManagerRequirement.NotRequired;
+        public IDataManager? DataManager { get; set; }
 
-        // Variable tracking methods
-        protected void AddLocalVariable(string name, string type, int line, (int Start, int Stop) span)
+        // The suppression processor shared across all linters
+        public LinterSuppressionProcessor? SuppressionProcessor { get; set; }
+
+        // Helper method to add a custom report
+        protected void AddReport(int reportNumber, string message, ReportType type, int line, PeopleCodeParser.SelfHosted.SourceSpan span)
         {
-            var currentScope = variableScopeStack.Peek();
-            if (!currentScope.ContainsKey(name))
+            var report = new Report
             {
-                currentScope[name] = new VariableInfo(name, type, line, span);
+                LinterId = LINTER_ID,
+                ReportNumber = reportNumber,
+                Message = message,
+                Type = type,
+                Line = line,
+                Span = (span.Start.ByteIndex, span.End.ByteIndex)
+            };
+
+            // Initialize Reports list if needed
+            if (Reports == null)
+            {
+                Reports = new List<Report>();
+            }
+
+            // Only add the report if it's not suppressed
+            if (SuppressionProcessor == null || !SuppressionProcessor.IsSuppressed(report.LinterId, report.ReportNumber, report.Line))
+            {
+                Reports.Add(report);
             }
         }
 
-        // Helper method for context-based variable addition with automatic byte conversion
-        protected void AddLocalVariable(string name, string type, int line, ParserRuleContext context)
+        // ILinter interface implementation methods
+        public List<PropertyInfo> GetConfigurableProperties()
         {
-            AddLocalVariable(name, type, line, 
-                (context.Start.ByteStartIndex(), (context.Stop ?? context.Start).ByteStopIndex())
-            );
+            var properties = GetType().GetProperties(BindingFlags.Public | BindingFlags.Instance)
+                .Where(p => p.CanRead && p.CanWrite &&
+                          p.GetCustomAttribute<JsonIgnoreAttribute>() == null &&
+                          p.Name != nameof(LINTER_ID) &&
+                          p.Name != nameof(DatabaseRequirement) &&
+                          p.Name != nameof(DataManager) &&
+                          p.Name != nameof(SuppressionProcessor) &&
+                          p.Name != nameof(Reports))
+                .ToList();
+
+            return properties;
         }
 
-        // Helper method for token-based variable addition with automatic byte conversion
-        protected void AddLocalVariable(string name, string type, int line, IToken token)
+        public string GetLinterConfig()
         {
-            AddLocalVariable(name, type, line,
-                (token.ByteStartIndex(), token.ByteStopIndex())
-            );
-        }
+            var configProperties = GetConfigurableProperties();
+            var config = new Dictionary<string, object?>();
 
-        // Helper method for adding reports using VariableInfo with byte spans
-        protected void AddScopedReport(int reportNumber, string message, ReportType type, int line, VariableInfo varInfo)
-        {
-            AddReport(reportNumber, message, type, line, varInfo.Span);
-        }
-
-        // Helper method for adding reports using character span with automatic byte conversion
-        protected void AddScopedReport(int reportNumber, string message, ReportType type, int line, (int Start, int Stop) span)
-        {
-            AddReport(reportNumber, message, type, line, span);
-        }
-
-        // Helper method for adding reports using context with automatic byte conversion
-        protected void AddScopedReport(int reportNumber, string message, ReportType type, int line, ParserRuleContext context)
-        {
-            AddReport(reportNumber, message, type, line, (context.Start.ByteStartIndex(), (context.Stop ?? context.Start).ByteStopIndex()));
-        }
-
-        // Helper method for adding reports using token pair with automatic byte conversion
-        protected void AddScopedReport(int reportNumber, string message, ReportType type, int line, IToken startToken, IToken stopToken)
-        {
-            AddReport(reportNumber, message, type, line, (startToken.ByteStartIndex(), stopToken.ByteStopIndex()));
-        }
-
-        // Helper method for adding reports using single token with automatic byte conversion
-        protected void AddScopedReport(int reportNumber, string message, ReportType type, int line, IToken token)
-        {
-            AddReport(reportNumber, message, type, line, (token.ByteStartIndex(), token.ByteStopIndex()));
-        }
-
-        protected bool TryGetVariableInfo(string name, out VariableInfo? info)
-        {
-            info = null;
-            foreach (var scope in variableScopeStack)
+            foreach (var property in configProperties)
             {
-                if (scope.TryGetValue(name, out info))
+                config[property.Name] = property.GetValue(this);
+            }
+
+            return JsonSerializer.Serialize(config, new JsonSerializerOptions
+            {
+                WriteIndented = true
+            });
+        }
+
+        public void SetLinterConfig(string jsonConfig)
+        {
+            var config = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(jsonConfig);
+            if (config == null) return;
+
+            var configProperties = GetConfigurableProperties();
+
+            foreach (var property in configProperties)
+            {
+                if (config.TryGetValue(property.Name, out var value))
                 {
-                    return true;
+                    try
+                    {
+                        var typedValue = JsonSerializer.Deserialize(value.GetRawText(), property.PropertyType);
+                        property.SetValue(this, typedValue);
+                    }
+                    catch
+                    {
+                        // Skip properties that can't be deserialized
+                    }
                 }
             }
-            return false;
-        }
-
-        protected IEnumerable<VariableInfo> GetVariablesInCurrentScope()
-        {
-            return variableScopeStack.Peek().Values;
-        }
-
-        protected void MarkVariableAsUsed(string name)
-        {
-            foreach (var scope in variableScopeStack)
-            {
-                if (scope.TryGetValue(name, out var info))
-                {
-                    info.Used = true;
-                    break;
-                }
-            }
-        }
-
-        // New variable tracking parser overrides
-        public override void EnterLocalVariableDefinition(LocalVariableDefinitionContext context)
-        {
-            // Extract type information from the type context
-            var typeContext = context.typeT();
-            string typeName = GetTypeFromContext(typeContext);
-
-            // Process each variable declaration in the list
-            foreach (var varNode in context.USER_VARIABLE())
-            {
-                string varName = varNode.GetText();
-                AddLocalVariable(
-                    varName,
-                    typeName,
-                    varNode.Symbol.Line,
-                    varNode.Symbol
-                );
-                OnVariableDeclared(variableScopeStack.Peek()[varName]);
-            }
-        }
-
-        public override void EnterLocalVariableDeclAssignment(LocalVariableDeclAssignmentContext context)
-        {
-            // Extract type information from the type context
-            var typeContext = context.typeT();
-            string typeName = GetTypeFromContext(typeContext);
-
-            // Process the single variable declaration
-            var varNode = context.USER_VARIABLE();
-            string varName = varNode.GetText();
-            AddLocalVariable(
-                varName,
-                typeName,
-                varNode.Symbol.Line,
-                varNode.Symbol
-            );
-            OnVariableDeclared(variableScopeStack.Peek()[varName]);
-        }
-
-        public override void EnterIdentUserVariable(IdentUserVariableContext context)
-        {
-            string varName = context.GetText();
-            if (TryGetVariableInfo(varName, out var info) && info != null)
-            {
-                info.Used = true;
-                OnVariableUsed(info);
-            }
-        }
-
-        // Helper method to extract type information from the type context
-        private string GetTypeFromContext(TypeTContext typeContext)
-        {
-            if (typeContext is ArrayTypeContext arrayType)
-            {
-                var baseType = arrayType.typeT() != null
-                    ? GetTypeFromContext(arrayType.typeT())
-                    : "Any";
-                return $"Array of {baseType}";
-            }
-            else if (typeContext is BaseExceptionTypeContext)
-            {
-                return "Exception";
-            }
-            else if (typeContext is AppClassTypeContext appClass)
-            {
-                return appClass.appClassPath().GetText();
-            }
-            else if (typeContext is SimpleTypeTypeContext simpleType)
-            {
-                return simpleType.simpleType().GetText();
-            }
-
-            return "Any"; // Default type if none specified
-        }
-
-        // Existing scope management methods and other code...
-        protected Dictionary<string, T> GetCurrentScope() => scopeStack.Peek();
-
-        protected void AddToCurrentScope(string key, T value)
-        {
-            var currentScope = GetCurrentScope();
-            if (!currentScope.ContainsKey(key))
-            {
-                currentScope[key] = value;
-            }
-        }
-
-        protected void ReplaceInFoundScope(string key, T newValue)
-        {
-            foreach (var scope in scopeStack)
-            {
-                if (scope.ContainsKey(key))
-                {
-                    scope[key] = newValue;
-                    return;
-                }
-            }
-        }
-
-        protected bool TryFindInScopes(string key, out T? value)
-        {
-            value = default;
-            foreach (var scope in scopeStack)
-            {
-                if (scope.TryGetValue(key, out value))
-                {
-                    return true;
-                }
-            }
-            return false;
-        }
-
-        // Updated scope management overrides
-        public override void EnterMethod(MethodContext context)
-        {
-            scopeStack.Push(new Dictionary<string, T>());
-            variableScopeStack.Push(new Dictionary<string, VariableInfo>());
-            OnEnterScope();
-        }
-
-        public override void ExitMethod(MethodContext context)
-        {
-            var scope = scopeStack.Pop();
-            var varScope = variableScopeStack.Pop();
-            OnExitScope(scope);
-        }
-
-        public override void EnterFunctionDefinition(FunctionDefinitionContext context)
-        {
-            scopeStack.Push(new Dictionary<string, T>());
-            variableScopeStack.Push(new Dictionary<string, VariableInfo>());
-            OnEnterScope();
-        }
-
-        public override void ExitFunctionDefinition(FunctionDefinitionContext context)
-        {
-            var scope = scopeStack.Pop();
-            var varScope = variableScopeStack.Pop();
-            OnExitScope(scope);
-        }
-
-        public override void EnterGetter(GetterContext context)
-        {
-            scopeStack.Push(new Dictionary<string, T>());
-            variableScopeStack.Push(new Dictionary<string, VariableInfo>());
-            OnEnterScope();
-        }
-
-        public override void ExitGetter(GetterContext context)
-        {
-            var scope = scopeStack.Pop();
-            var varScope = variableScopeStack.Pop();
-            OnExitScope(scope);
-        }
-
-        public override void EnterSetter(SetterContext context)
-        {
-            scopeStack.Push(new Dictionary<string, T>());
-            variableScopeStack.Push(new Dictionary<string, VariableInfo>());
-            OnEnterScope();
-        }
-
-        public override void ExitSetter(SetterContext context)
-        {
-            var scope = scopeStack.Pop();
-            var varScope = variableScopeStack.Pop();
-            OnExitScope(scope);
-        }
-
-        public override void Reset()
-        {
-            while (scopeStack.Count > 0)
-            {
-                var dict = scopeStack.Pop();
-                dict.Clear();
-            }
-
-            while (variableScopeStack.Count > 0)
-            {
-                var dict = variableScopeStack.Pop();
-                dict.Clear();
-            }
-
-            scopeStack.Push(new Dictionary<string, T>());
-            variableScopeStack.Push(new Dictionary<string, VariableInfo>());
-        }
-
-        // Virtual methods for variable tracking that subclasses can override
-        protected virtual void OnVariableDeclared(VariableInfo varInfo) { }
-        protected virtual void OnVariableUsed(VariableInfo varInfo) { }
-
-        // Protected virtual methods for derived classes to handle scope changes
-        protected virtual void OnEnterScope() { }
-        protected virtual void OnExitScope(Dictionary<string, T> scope) { }
-
-        /// <summary>
-        /// Override of the OnExitScope method with additional variable scope information.
-        /// Provided for backwards compatibility.
-        /// </summary>
-        protected virtual void OnExitScope(Dictionary<string, T> scope, Dictionary<string, VariableInfo> variableScope)
-        {
-            OnExitScope(scope);
         }
     }
 }

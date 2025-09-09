@@ -1,6 +1,4 @@
 using AppRefiner.Stylers;
-using static AppRefiner.PeopleCode.PeopleCodeParser;
-using System.Collections.Generic; // For List
 
 namespace PluginSample
 {
@@ -33,4 +31,4 @@ namespace PluginSample
             }
         }
     }
-} 
+}

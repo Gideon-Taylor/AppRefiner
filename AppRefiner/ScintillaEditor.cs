@@ -1,16 +1,14 @@
-﻿using Antlr4.Runtime;
-using AppRefiner.Database;
+﻿using AppRefiner.Database;
+using AppRefiner.Dialogs;
 using AppRefiner.Linters;
-using AppRefiner.PeopleCode;
 using AppRefiner.Stylers;
-using System;
-using System.Collections.Generic;
+using PeopleCodeParser.SelfHosted;
+using PeopleCodeParser.SelfHosted.Lexing;
+using PeopleCodeParser.SelfHosted.Nodes;
 using System.Diagnostics;
-using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
-using System.Threading.Tasks;
-using static System.Windows.Forms.VisualStyles.VisualStyleElement.Window;
+using SelfHostedLexer = PeopleCodeParser.SelfHosted.Lexing.PeopleCodeLexer;
 
 namespace AppRefiner
 {
@@ -70,7 +68,7 @@ namespace AppRefiner
         public void UpdateSearchHistory(string term)
         {
             if (string.IsNullOrWhiteSpace(term)) return;
-            
+
             // Remove if already exists
             SearchHistory.Remove(term);
             // Add to front
@@ -84,7 +82,7 @@ namespace AppRefiner
         public void UpdateReplaceHistory(string term)
         {
             if (string.IsNullOrWhiteSpace(term)) return;
-            
+
             // Remove if already exists
             ReplaceHistory.Remove(term);
             // Add to front
@@ -93,14 +91,14 @@ namespace AppRefiner
             if (ReplaceHistory.Count > 10)
                 ReplaceHistory.RemoveAt(10);
         }
-        
+
         // Helper method to set selection range
         public void SetSelectionRange(int start, int end)
         {
             SelectionStart = start;
             SelectionEnd = end;
         }
-        
+
         // Helper method to clear selection range
         public void ClearSelectionRange()
         {
@@ -125,23 +123,16 @@ namespace AppRefiner
 
     public class ScintillaEditor
     {
-        [DllImport("user32.dll", CharSet = CharSet.Auto)]
-        private static extern IntPtr SendMessage(IntPtr hWnd, int Msg, IntPtr wParam, IntPtr lParam);
-
-        [DllImport("user32.dll")]
-        [return: MarshalAs(UnmanagedType.Bool)]
-        static extern bool IsWindow(IntPtr hWnd);
+        // Note: P/Invoke declarations moved to WinApi.cs for centralized access
 
         public IntPtr hWnd;
-        public IntPtr hProc;
-        public uint ProcessId;
-        public uint ThreadID;
         public EventMapInfo? EventMapInfo = null;
         public string ClassPath = string.Empty;
         private string? _caption = null;
-
+        public bool ExpectingSavePoint { get; set; }
         public event CaptionChangedEventHandler? CaptionChanged;
-
+        public IntPtr ResultsListView;
+        public BetterFindDialog? ActiveSearchDialog;
         protected virtual void OnCaptionChanged(CaptionChangedEventArgs e)
         {
             CaptionChanged?.Invoke(this, e);
@@ -155,7 +146,8 @@ namespace AppRefiner
             }
         }
 
-        public string? Caption { 
+        public string? Caption
+        {
             get
             {
                 return _caption;
@@ -205,7 +197,7 @@ namespace AppRefiner
                     DetermineRelativeFilePath();
                     SetEventMapInfo();
                     SetClassPath();
-                    
+
                 }
 
                 // If the caption has actually changed, raise the event *after* all other logic.
@@ -228,16 +220,11 @@ namespace AppRefiner
         public Dictionary<string, IntPtr> AnnotationPointers = new();
         public List<IntPtr> PropertyBuffers = new();
 
-        // Content hash for caching purposes
-        private int contentHash;
-        // Cached parsed program
-        private PeopleCodeParser.ProgramContext? parsedProgram;
-        // Cached token stream
-        private CommonTokenStream? tokenStream;
-        // Collection of comments from the token stream
-        private List<IToken>? comments;
-        // Tracks whether the last parse operation was successful (no syntax errors)
-        private bool parseSuccessful = true;
+        // Self-hosted parser cached fields
+        private int selfHostedContentHash;
+        private ProgramNode? selfHostedParsedProgram;
+        private List<Token>? selfHostedTokens;
+        private bool selfHostedParseSuccessful = true;
 
         public string? ContentString = null;
         public bool AnnotationsInitialized { get; set; } = false;
@@ -245,13 +232,15 @@ namespace AppRefiner
         public IntPtr AnnotationStyleOffset = IntPtr.Zero;
         public IDataManager? DataManager = null;
 
-        // Database name associated with this editor
-        public string? DBName { get; set; }
-
         /// <summary>
         /// Gets whether the last parse operation was successful (no syntax errors)
         /// </summary>
-        public bool IsParseSuccessful => parseSuccessful;
+        public bool IsParseSuccessful => selfHostedParseSuccessful;
+
+        /// <summary>
+        /// Gets whether the last self-hosted parse operation was successful (no syntax errors)
+        /// </summary>
+        public bool IsSelfHostedParseSuccessful => selfHostedParseSuccessful;
 
         // Relative path to the file in the Snapshot database
         public string? RelativePath { get; set; }
@@ -293,63 +282,122 @@ namespace AppRefiner
 
         public List<List<int>> CollapsedFoldPaths { get; set; } = [];
 
+        public IReadOnlyList<ParseError> ParserErrors { get; set; } = [];
+        internal AppDesignerProcess AppDesignerProcess { get; set; }
+
+
         /// <summary>
-        /// Gets or creates a parsed program tree for the current editor content.
-        /// Uses caching to avoid re-parsing unchanged content.
+        /// Gets the self-hosted parsed program, with caching support.
         /// </summary>
         /// <param name="forceReparse">Force a new parse regardless of content hash</param>
-        /// <returns>A tuple containing the parsed program, token stream, and comments</returns>
-        public (PeopleCodeParser.ProgramContext Program, CommonTokenStream TokenStream, List<IToken> Comments) GetParsedProgram(bool forceReparse = false)
+        /// <returns>The parsed program node, or null if parsing failed</returns>
+        public ProgramNode? GetSelfHostedParsedProgram(bool forceReparse = false)
         {
             // Ensure we have the current content
             ContentString = ScintillaManager.GetScintillaText(this);
 
             // Calculate hash of current content
             int newHash = ContentString?.GetHashCode() ?? 0;
-            Debug.Log("New content hash: " + newHash);
+            Debug.Log($"Self-hosted parser - New content hash: {newHash}");
+
             // If content hasn't changed and we have a cached parse tree, return it
-            if (!forceReparse && newHash == contentHash && parsedProgram != null && tokenStream != null && comments != null)
+            if (!forceReparse && newHash == selfHostedContentHash && selfHostedParsedProgram != null)
             {
-                return (parsedProgram, tokenStream, comments);
+                return selfHostedParsedProgram;
             }
 
             // Content has changed or we don't have a cached parse tree, parse it
-
             var currentStart = TotalParseTime.Elapsed;
             TotalParseTime.Start();
-            // Create lexer and parser
-            PeopleCodeLexer lexer = new(new ByteTrackingCharStream(ContentString));
-            tokenStream = new CommonTokenStream(lexer);
 
-            // Get all tokens including those on hidden channels
-            tokenStream.Fill();
-
-            // Collect all comments from both comment channels
-            comments = tokenStream.GetTokens()
-                .Where(token => token.Channel == PeopleCodeLexer.COMMENTS || token.Channel == PeopleCodeLexer.API_COMMENTS)
-                .ToList();
-
-            PeopleCodeParser parser = new(tokenStream);
-            parsedProgram = parser.program();
-
-            // Check if parsing was successful (no syntax errors)
-            parseSuccessful = parser.NumberOfSyntaxErrors == 0;
-            if (!parseSuccessful)
+            try
             {
-                Debug.Log($"Parse completed with {parser.NumberOfSyntaxErrors} syntax error(s)");
+                // Use the self-hosted parser
+
+
+
+                SelfHostedLexer selfHostedLexer = new(ContentString ?? string.Empty);
+                var tokens = selfHostedLexer.TokenizeAll();
+                /* TODO: data manager support for getting current tools release */
+                var parser = new PeopleCodeParser.SelfHosted.PeopleCodeParser(tokens);
+                selfHostedParsedProgram = parser.ParseProgram();
+                this.ParserErrors = parser.Errors;
+                selfHostedParseSuccessful = true;
+                selfHostedContentHash = newHash;
+
+                Debug.Log("Self-hosted parse completed successfully");
+            }
+            catch (Exception ex)
+            {
+                Debug.LogException(ex, "Error during self-hosted parse");
+                selfHostedParseSuccessful = false;
+                selfHostedParsedProgram = null;
             }
 
             TotalParseTime.Stop();
-            Debug.Log($"Parse time: {TotalParseTime.Elapsed - currentStart}");
+            Debug.Log($"Self-hosted parse time: {TotalParseTime.Elapsed - currentStart}");
             Debug.Log($"Total parse time: {TotalParseTime.Elapsed}");
+
             // Clean up resources
-            parser.Interpreter.ClearDFA();
             GC.Collect();
 
-            // Update the content hash
-            contentHash = newHash;
+            return selfHostedParsedProgram;
+        }
 
-            return (parsedProgram, tokenStream, comments);
+        /// <summary>
+        /// Gets the self-hosted parsed program along with tokens, for refactoring operations
+        /// </summary>
+        /// <param name="forceReparse">Force a new parse regardless of content hash</param>
+        /// <returns>A tuple containing the program node and token stream, or null if parsing failed</returns>
+        public (ProgramNode? Program, List<Token>? Tokens) GetSelfHostedParsedProgramWithTokens(bool forceReparse = false)
+        {
+            // Ensure we have the current content
+            ContentString = ScintillaManager.GetScintillaText(this);
+
+            // Calculate hash of current content
+            int newHash = ContentString?.GetHashCode() ?? 0;
+            Debug.Log($"Self-hosted parser (with tokens) - New content hash: {newHash}");
+
+            // If content hasn't changed and we have a cached parse tree, return it
+            if (!forceReparse && newHash == selfHostedContentHash && selfHostedParsedProgram != null && selfHostedTokens != null)
+            {
+                return (selfHostedParsedProgram, selfHostedTokens);
+            }
+
+            // Content has changed or we don't have a cached parse tree, parse it
+            var currentStart = TotalParseTime.Elapsed;
+            TotalParseTime.Start();
+
+            try
+            {
+                // Use the self-hosted parser
+                SelfHostedLexer selfHostedLexer = new(ContentString ?? string.Empty);
+                var tokens = selfHostedLexer.TokenizeAll();
+                /* TODO: data manager support for getting current tools release */
+                var parser = new PeopleCodeParser.SelfHosted.PeopleCodeParser(tokens);
+                selfHostedParsedProgram = parser.ParseProgram();
+                this.ParserErrors = parser.Errors;
+                selfHostedTokens = tokens;
+                selfHostedParseSuccessful = true;
+                selfHostedContentHash = newHash;
+
+                Debug.Log($"Self-hosted parser (with tokens) - Parse successful: {selfHostedParseSuccessful}");
+            }
+            catch (Exception ex)
+            {
+                Debug.LogException(ex, "Error during self-hosted parse (with tokens)");
+                selfHostedParseSuccessful = false;
+                selfHostedParsedProgram = null;
+                selfHostedTokens = null;
+            }
+
+            TotalParseTime.Stop();
+            Debug.Log($"Total parse time (with tokens): {TotalParseTime.Elapsed}");
+
+            // Clean up resources
+            GC.Collect();
+
+            return (selfHostedParsedProgram, selfHostedTokens);
         }
 
         /// <summary>
@@ -406,22 +454,19 @@ namespace AppRefiner
             }
         }
 
-        public ScintillaEditor(IntPtr hWnd, uint procID, uint threadID, string caption)
+        public ScintillaEditor(AppDesignerProcess appProc, IntPtr hWnd, string caption)
         {
             this.hWnd = hWnd;
 
-            PopulateEditorDBName();
-
-            ProcessId = procID;
-            ThreadID = threadID;
+            AppDesignerProcess = appProc;
             Caption = caption;
-
+            AppDesignerProcess = null;
         }
 
         public IntPtr SendMessage(int Msg, IntPtr wParam, IntPtr lParam)
         {
             //Debug.Log($"Sending message {Msg} to {hWnd:X} - {wParam:X} -- {lParam:X}");
-            return SendMessage(hWnd, Msg, wParam, lParam);
+            return WinApi.SendMessage(hWnd, Msg, wParam, lParam);
         }
 
         public void SetLinterReports(List<Report> reports)
@@ -446,44 +491,9 @@ namespace AppRefiner
 
         public bool IsValid()
         {
-            return IsWindow(hWnd);
+            return WinApi.IsWindow(hWnd);
         }
 
-        /// <summary>
-        /// Populates the DBName property of a ScintillaEditor based on its context
-        /// </summary>
-        /// <param name="editor">The editor to populate the DBName for</param>
-        private void PopulateEditorDBName()
-        {
-            // Start with the editor's handle
-            IntPtr hwnd = this.hWnd;
-
-            // Walk up the parent chain until we find the Application Designer window
-            while (hwnd != IntPtr.Zero)
-            {
-                StringBuilder caption = new StringBuilder(256);
-                NativeMethods.GetWindowText(hwnd, caption, caption.Capacity); // Use NativeMethods
-                string windowTitle = caption.ToString();
-
-                // Check if this is the Application Designer window
-                if (windowTitle.StartsWith("Application Designer"))
-                {
-                    // Split the title by " - " and get the second part (DB name)
-                    string[] parts = windowTitle.Split(new[] { " - " }, StringSplitOptions.None);
-                    if (parts.Length >= 2)
-                    {
-                        this.DBName = parts[1].Trim();
-                        Debug.Log($"Set editor DBName to: {this.DBName}");
-
-                        // Now determine the relative file path based on the database name
-                        break;
-                    }
-                }
-
-                // Get the parent window
-                hwnd = NativeMethods.GetParent(hwnd); // Use NativeMethods
-            }
-        }
 
         private void SetClassPath()
         {
@@ -492,7 +502,8 @@ namespace AppRefiner
             {
                 var parts = this.Caption.Replace(" (Application Package PeopleCode)", "").Split('.', StringSplitOptions.None);
                 ClassPath = string.Join(":", parts.SkipLast(1));
-            } else
+            }
+            else
             {
                 ClassPath = string.Empty;
             }
@@ -501,7 +512,7 @@ namespace AppRefiner
         {
             if (this.Caption == null) return;
 
-            
+
             if (this.Caption.EndsWith("(Component PeopleCode)"))
             {
                 var info = new EventMapInfo();
@@ -512,14 +523,16 @@ namespace AppRefiner
                     info.Component = parts[0];
                     info.Segment = parts[1];
                     info.ComponentEvent = EventMapInfo.EventToXlat(parts[2]);
-                } else if (parts.Length == 4)
+                }
+                else if (parts.Length == 4)
                 {
                     info.Type = EventMapType.ComponentRecord;
                     info.Component = parts[0];
                     info.Segment = parts[1];
                     info.Record = parts[2];
                     info.ComponentRecordEvent = EventMapInfo.EventToXlat(parts[3]);
-                } else if (parts.Length == 5)
+                }
+                else if (parts.Length == 5)
                 {
                     info.Type = EventMapType.ComponentRecordField;
                     info.Component = parts[0];
@@ -529,7 +542,8 @@ namespace AppRefiner
                     info.ComponentRecordEvent = EventMapInfo.EventToXlat(parts[4]);
                 }
                 this.EventMapInfo = info;
-            } else if (this.Caption.EndsWith(" (Page PeopleCode)"))
+            }
+            else if (this.Caption.EndsWith(" (Page PeopleCode)"))
             {
                 var info = new EventMapInfo();
                 var parts = this.Caption.Replace(" (Page PeopleCode)", "").Split('.', StringSplitOptions.None);
@@ -540,7 +554,8 @@ namespace AppRefiner
                     info.ComponentRecordEvent = EventMapInfo.EventToXlat(parts[1]);
                 }
                 this.EventMapInfo = info;
-            } else
+            }
+            else
             {
                 this.EventMapInfo = null;
             }
@@ -558,20 +573,20 @@ namespace AppRefiner
                 IntPtr hwnd = this.hWnd;
 
                 // Get the grandparent window to examine its caption
-                IntPtr parentHwnd = NativeMethods.GetParent(hwnd); // Use NativeMethods
+                IntPtr parentHwnd = WinApi.GetParent(hwnd);
                 if (parentHwnd != IntPtr.Zero)
                 {
-                    IntPtr grandparentHwnd = NativeMethods.GetParent(parentHwnd); // Use NativeMethods
+                    IntPtr grandparentHwnd = WinApi.GetParent(parentHwnd);
                     if (grandparentHwnd != IntPtr.Zero)
                     {
-                        StringBuilder caption = new StringBuilder(512);
-                        NativeMethods.GetWindowText(grandparentHwnd, caption, caption.Capacity); // Use NativeMethods
+                        StringBuilder caption = new(512);
+                        WinApi.GetWindowText(grandparentHwnd, caption, caption.Capacity);
                         string windowTitle = caption.ToString().Trim();
 
                         Debug.Log($"Editor grandparent window title: {windowTitle}");
 
                         // Determine editor type and generate appropriate relative path
-                        string? relativePath = DetermineRelativePathFromCaption(windowTitle, this.DBName);
+                        string? relativePath = DetermineRelativePathFromCaption(windowTitle, AppDesignerProcess.DBName);
 
                         if (!string.IsNullOrEmpty(relativePath))
                         {
@@ -762,5 +777,46 @@ namespace AppRefiner
             return cssPath;
         }
 
+        public void Cleanup()
+        {
+            var hProc = AppDesignerProcess.ProcessHandle;
+
+            /* Free all annotation strings */
+            foreach (var v in AnnotationPointers.Values)
+            {
+                if (v != IntPtr.Zero)
+                {
+                    WinApi.VirtualFreeEx(hProc, v, 0, WinApi.MEM_RELEASE);
+                }
+            }
+            foreach (var v in PropertyBuffers)
+            {
+                if (v != IntPtr.Zero)
+                {
+                    WinApi.VirtualFreeEx(hProc, v, 0, WinApi.MEM_RELEASE);
+                }
+            }
+
+            // Free autocompletion pointer if exists
+            if (AutoCompletionPointer != IntPtr.Zero)
+            {
+                WinApi.VirtualFreeEx(hProc, AutoCompletionPointer, 0, WinApi.MEM_RELEASE);
+                AutoCompletionPointer = IntPtr.Zero;
+            }
+
+            // Free user list pointer if exists
+            if (UserListPointer != IntPtr.Zero)
+            {
+                WinApi.VirtualFreeEx(hProc, UserListPointer, 0, WinApi.MEM_RELEASE);
+                UserListPointer = IntPtr.Zero;
+            }
+
+            AnnotationPointers.Clear();
+            PropertyBuffers.Clear();
+            Caption = null;
+            ContentString = null;
+        }
+
     }
+    
 }

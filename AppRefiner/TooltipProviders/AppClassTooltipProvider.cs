@@ -1,146 +1,160 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using Antlr4.Runtime;
-using Antlr4.Runtime.Misc;
-using Antlr4.Runtime.Tree;
-using AppRefiner.Ast; // Assuming AST classes are here
 using AppRefiner.Database;
-using AppRefiner.PeopleCode;
-using AppRefiner.Services; // For AstService
+using PeopleCodeParser.SelfHosted.Lexing;
+using PeopleCodeParser.SelfHosted.Nodes;
+using System.Text;
 
 namespace AppRefiner.TooltipProviders
 {
     /// <summary>
     /// Provides tooltips for Application Class paths, showing public/protected members.
+    /// This is the self-hosted equivalent of the ANTLR-based AppClassTooltipProvider.
     /// </summary>
-    public class AppClassTooltipProvider : ParseTreeTooltipProvider
+    public class AppClassTooltipProvider : BaseTooltipProvider
     {
-        private AstService _astService;
-
+        /// <summary>
+        /// Name of the tooltip provider.
+        /// </summary>
         public override string Name => "Application Class Details";
+
+        /// <summary>
+        /// Description of what the tooltip provider does.
+        /// </summary>
         public override string Description => "Shows public and protected members of an Application Class when hovering over its path.";
+
+        /// <summary>
+        /// Database connection is required to look up parent classes
+        /// </summary>
         public override DataManagerRequirement DatabaseRequirement => DataManagerRequirement.Required;
-        // We don't rely on specific token types, but rather the parser rule context.
-        public override int[]? TokenTypes => null; 
 
-        private string extendedClassPath = string.Empty;
+        private string extendedClassPath;
 
-        public AppClassTooltipProvider()
-        {
-        }
-
-        
+        /// <summary>
+        /// Resets the internal state of the tooltip provider.
+        /// </summary>
+        /// 
         public override void Reset()
         {
             base.Reset();
         }
 
-        public override void EnterProgram([NotNull] PeopleCodeParser.ProgramContext context)
+        public override void VisitAppClass(AppClassNode node)
         {
-            _astService = new AstService(DataManager);
-            base.EnterProgram(context);
-
-            var parsedProgram = AppRefiner.Ast.Program.Parse(context, "", DataManager);
-            if (parsedProgram.ContainedInterface != null)
+            if (node.BaseClass != null)
             {
-                if (parsedProgram.ContainedInterface.ExtendedInterface != null)
+                if (node.BaseClass is AppClassTypeNode classPath)
                 {
-                    extendedClassPath = parsedProgram.ContainedInterface.ExtendedInterface.FullPath;
+                    extendedClassPath = classPath.QualifiedName;
+                }
+                else
+                {
+                    extendedClassPath = node.BaseClass.ToString();
                 }
             }
-            else if (parsedProgram.ContainedAppClass != null)
-            {
-                if (parsedProgram.ContainedAppClass.ExtendedClass != null)
-                {
-                    extendedClassPath = parsedProgram.ContainedAppClass.ExtendedClass.FullPath;
-                }
-            }
+            base.VisitAppClass(node);
         }
 
-
-        private Dictionary<string, Ast.Program> _programPathToAst = new Dictionary<string, Ast.Program>();
-
-        /// <summary>
-        /// Called when the parser enters an appClassPath rule.
-        /// Generates a tooltip with class member information.
-        /// </summary>
-        public override void EnterAppClassPath(PeopleCodeParser.AppClassPathContext context)
+        public override void VisitInterface(InterfaceNode node)
         {
-            base.EnterAppClassPath(context);
-
-            if (context == null || DataManager == null) return;
-
-            // Reconstruct the full class path from the parse tree context.
-            string hoveredClassPath = context.GetText();
-
-            Ast.Program? appClassProgram = null;
-            if (_programPathToAst.TryGetValue(hoveredClassPath, out Ast.Program? programAst)){
-                appClassProgram = programAst;
+            if (node.BaseInterface != null)
+            {
+                if (node.BaseInterface is AppClassTypeNode classPath)
+                {
+                    extendedClassPath = classPath.QualifiedName;
+                }
+                else
+                {
+                    extendedClassPath = node.BaseInterface.ToString();
+                }
             }
-            else{
-                var hoveredProgramAst = _astService.GetProgramAst(hoveredClassPath);
+            base.VisitInterface(node);
+        }
 
-                
-                _programPathToAst[hoveredClassPath] = hoveredProgramAst;
-                appClassProgram = hoveredProgramAst;
+        public override void VisitAppClassType(AppClassTypeNode node)
+        {
+            if (node.SourceSpan.ContainsPosition(CurrentPosition))
+            {
+                ProcessAppClassPath(node);
             }
+            base.VisitAppClassType(node);
+        }
 
-            bool showProtected = (hoveredClassPath == extendedClassPath);
+        public override void VisitImport(ImportNode node)
+        {
+            base.VisitImport(node);
+        }
+        
+        /// <summary>
+        /// Processes an app class path identifier to generate tooltip information
+        /// </summary>
+        private void ProcessAppClassPath(AppClassTypeNode node)
+        {
+            if (DataManager == null) return;
+
+            string hoveredClassPath = node.QualifiedName;
+
+            ProgramNode? appClassProgram = null;
+            
+            // Parse the external class
+            appClassProgram = ParseExternalClass(hoveredClassPath);
+              
+            
+
+            bool showProtected = string.Equals(hoveredClassPath, extendedClassPath, StringComparison.OrdinalIgnoreCase);
 
             // Build the tooltip string
             string tooltipText = string.Empty;
-            
-            if (appClassProgram?.ContainedInterface != null)
+
+            if (appClassProgram?.Interface != null)
             {
-                tooltipText = BuildTooltipForInterface(appClassProgram.ContainedInterface, showProtected);
+                tooltipText = BuildTooltipForInterface(appClassProgram.Interface, showProtected);
             }
-            else if (appClassProgram?.ContainedAppClass != null)
+            else if (appClassProgram?.AppClass != null)
             {
-                tooltipText = BuildTooltipForClass(appClassProgram.ContainedAppClass, showProtected);
+                tooltipText = BuildTooltipForClass(appClassProgram.AppClass, showProtected);
             }
 
-            // Register the tooltip for the range covered by the appClassPath context
-            RegisterTooltip(context, tooltipText);
-
+            // Register the tooltip for the identifier
+            RegisterTooltip(node.SourceSpan, tooltipText);
         }
 
-
-        private string BuildTooltipForInterface(Interface intfcAst, bool includeProtected)
+        private string BuildTooltipForInterface(InterfaceNode intfc, bool includeProtected)
         {
             var sb = new StringBuilder();
-            sb.AppendLine($"Interface: {intfcAst.FullPath}");
-            if (!string.IsNullOrEmpty(intfcAst.ExtendedInterface?.FullPath))
+            sb.AppendLine($"Interface: {intfc.Name}");
+            if (intfc.BaseInterface != null)
             {
-                sb.AppendLine($"Extends: {intfcAst.ExtendedInterface.FullPath}");
+                sb.AppendLine($"Extends: {intfc.BaseInterface.TypeName}");
             }
 
             sb.AppendLine("---");
 
             // Combine methods and properties for display
-            var methodsToShow = intfcAst.Methods
-                .Where(m => m.Scope == Ast.Scope.Public || (includeProtected && m.Scope == Ast.Scope.Protected));
+            var methodsToShow = intfc.Methods
+                .Where(m => m.Visibility == VisibilityModifier.Public ||
+                           includeProtected && m.Visibility == VisibilityModifier.Protected);
 
-            var propertiesToShow = intfcAst.Properties
-                .Where(p => p.Scope == Ast.Scope.Public || (includeProtected && p.Scope == Ast.Scope.Protected));
+            var propertiesToShow = intfc.Properties
+                .Where(p => p.Visibility == VisibilityModifier.Public ||
+                           includeProtected && p.Visibility == VisibilityModifier.Protected);
 
             bool addedMembers = false;
 
             foreach (var method in methodsToShow.OrderBy(m => m.Name))
             {
                 addedMembers = true;
-                string args = string.Join(", ", method.Parameters.Select(p => $"{p.Type.Name} {p.Name}")); // Use Type.Name
-                string returns = method.ReturnType != null ? $": {method.ReturnType.Name}" : ""; // Use Type.Name
-                sb.AppendLine($"({method.Scope}) {(method.IsAbstract? "Abstract ": "")}Method: {method.Name}({args}){returns}");
+                string args = string.Join(", ", method.Parameters.Select(p => $"{p.Type?.TypeName ?? "any"} {p.Name}"));
+                string returns = method.ReturnType != null ? $": {method.ReturnType.TypeName}" : "";
+                string abstractText = method.IsAbstract ? "Abstract " : "";
+                sb.AppendLine($"({method.Visibility}) {abstractText}Method: {method.Name}({args}){returns}");
             }
 
             foreach (var prop in propertiesToShow.OrderBy(p => p.Name))
             {
                 addedMembers = true;
-                string accessors = (prop.HasGetter ? "Get" : "") + (prop.HasSetter ? (prop.HasGetter ? "/Set" : "Set") : "");
-                if (prop.IsReadonly) accessors = "ReadOnly"; // Corrected property name
-                sb.AppendLine($"({prop.Scope}) Property: {prop.Type.Name} {prop.Name} {{{accessors}}}"); // Use Type.Name
+                string accessors = (prop.HasGet ? "Get" : "") + (prop.HasSetter ? prop.HasGet ? "/Set" : "Set" : "");
+                if (prop.IsReadOnly) accessors = "ReadOnly";
+                string typeName = prop.Type?.TypeName ?? "any";
+                sb.AppendLine($"({prop.Visibility}) Property: {typeName} {prop.Name} {{{accessors}}}");
             }
 
             if (!addedMembers)
@@ -151,51 +165,51 @@ namespace AppRefiner.TooltipProviders
             return sb.ToString().Trim();
         }
 
-        private string BuildTooltipForClass(AppClass classAst, bool includeProtected)
+        private string BuildTooltipForClass(AppClassNode classNode, bool includeProtected)
         {
             var sb = new StringBuilder();
-            sb.AppendLine($"Class: {classAst.FullPath}");
-            if (!string.IsNullOrEmpty(classAst.ExtendedClass?.FullPath))
+            sb.AppendLine($"Class: {classNode.Name}");
+            if (classNode.BaseClass != null)
             {
-                sb.AppendLine($"Extends: {classAst.ExtendedClass.FullPath}");
-            }
-            if (!string.IsNullOrEmpty(classAst.ImplementedInterface?.FullPath))
-            {
-                sb.AppendLine($"Implements: {classAst.ImplementedInterface.FullPath}");
+                sb.AppendLine($"Extends: {classNode.BaseClass.TypeName}");
             }
             sb.AppendLine("---");
 
             // Combine methods and properties for display
-            var methodsToShow = classAst.Methods
-                .Where(m => m.Scope == Ast.Scope.Public || (includeProtected && m.Scope == Ast.Scope.Protected));
-                
-            var propertiesToShow = classAst.Properties
-                .Where(p => p.Scope == Ast.Scope.Public || (includeProtected && p.Scope == Ast.Scope.Protected));
+            var methodsToShow = classNode.Methods
+                .Where(m => m.Visibility == VisibilityModifier.Public ||
+                           includeProtected && m.Visibility == VisibilityModifier.Protected);
+
+            var propertiesToShow = classNode.Properties
+                .Where(p => p.Visibility == VisibilityModifier.Public ||
+                           includeProtected && p.Visibility == VisibilityModifier.Protected);
 
             bool addedMembers = false;
 
             foreach (var method in methodsToShow.OrderBy(m => m.Name))
             {
                 addedMembers = true;
-                string args = string.Join(", ", method.Parameters.Select(p => $"{p.Type.Name} {p.Name}")); // Use Type.Name
-                string returns = method.ReturnType != null ? $": {method.ReturnType.Name}" : ""; // Use Type.Name
-                sb.AppendLine($"({method.Scope}) {(method.IsAbstract ? "Abstract " : "")}Method: {method.Name}({args}){returns}");
+                string args = string.Join(", ", method.Parameters.Select(p => $"{p.Type?.TypeName ?? "any"} {p.Name}"));
+                string returns = method.ReturnType != null ? $": {method.ReturnType.TypeName}" : "";
+                string abstractText = method.IsAbstract ? "Abstract " : "";
+                sb.AppendLine($"({method.Visibility}) {abstractText}Method: {method.Name}({args}){returns}");
             }
 
             foreach (var prop in propertiesToShow.OrderBy(p => p.Name))
             {
                 addedMembers = true;
-                string accessors = (prop.HasGetter ? "Get" : "") + (prop.HasSetter ? (prop.HasGetter ? "/Set" : "Set") : "");
-                if (prop.IsReadonly) accessors = "ReadOnly"; // Corrected property name
-                sb.AppendLine($"({prop.Scope}) Property: {prop.Type.Name} {prop.Name} {{{accessors}}}"); // Use Type.Name
+                string accessors = (prop.HasGet ? "Get" : "") + (prop.HasSetter ? prop.HasGet ? "/Set" : "Set" : "");
+                if (prop.IsReadOnly) accessors = "ReadOnly";
+                string typeName = prop.Type?.TypeName ?? "any";
+                sb.AppendLine($"({prop.Visibility}) Property: {typeName} {prop.Name} {{{accessors}}}");
             }
 
             if (!addedMembers)
             {
-                 sb.AppendLine(includeProtected ? "(No public or protected members found)" : "(No public members found)");
+                sb.AppendLine(includeProtected ? "(No public or protected members found)" : "(No public members found)");
             }
 
             return sb.ToString().Trim();
         }
     }
-} 
+}

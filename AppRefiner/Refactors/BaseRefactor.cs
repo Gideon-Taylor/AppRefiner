@@ -1,309 +1,27 @@
-using Antlr4.Runtime;
-using Antlr4.Runtime.Tree;
-using AppRefiner.PeopleCode;
+using DiffPlex.Model;
+using PeopleCodeParser.SelfHosted;
+using PeopleCodeParser.SelfHosted.Visitors;
 using System.Diagnostics;
-using System.Reflection;
-using System.Text;
-using System.Text.Json;
-using System.Text.Json.Serialization;
 
 namespace AppRefiner.Refactors
 {
     /// <summary>
-    /// Represents the result of a refactoring operation
+    /// Base class for implementing PeopleCode refactoring operations that need scope and variable tracking.
+    /// This class leverages the ScopedAstVisitor from the SelfHosted parser to provide automatic scope management.
     /// </summary>
-    public class RefactorResult
+    public abstract class BaseRefactor : ScopedAstVisitor<object>
     {
-        /// <summary>
-        /// Whether the refactoring was successful
-        /// </summary>
-        public bool Success { get; }
+        #region Static Properties
 
-        /// <summary>
-        /// Optional message providing details about the result
-        /// </summary>
-        public string? Message { get; }
-
-        /// <summary>
-        /// Creates a new refactoring result
-        /// </summary>
-        /// <param name="success">Whether the refactoring was successful</param>
-        /// <param name="message">Optional message providing details</param>
-        public RefactorResult(bool success, string? message = null)
-        {
-            Success = success;
-            Message = message;
-        }
-
-        /// <summary>
-        /// Creates a successful result
-        /// </summary>
-        public static RefactorResult Successful => new(true);
-
-        /// <summary>
-        /// Creates a failed result with the specified error message
-        /// </summary>
-        public static RefactorResult Failed(string message) => new(false, message);
-    }
-
-    /// <summary>
-    /// Represents a change to be applied to the source code
-    /// </summary>
-    public abstract class CodeChange
-    {
-        /// <summary>
-        /// The starting index in the source where the change begins
-        /// </summary>
-        public int StartIndex { get; }
-
-        /// <summary>
-        /// A description of what this change does
-        /// </summary>
-        public string Description { get; }
-
-        /// <summary>
-        /// Creates a new code change
-        /// </summary>
-        /// <param name="startIndex">The starting index of the change</param>
-        /// <param name="description">A description of the change</param>
-        protected CodeChange(int startIndex, string description)
-        {
-            StartIndex = startIndex;
-            Description = description;
-        }
-
-        /// <summary>
-        /// Applies this change directly to the Scintilla editor using API calls
-        /// </summary>
-        /// <param name="editor">The Scintilla editor to apply changes to</param>
-        /// <returns>True if the change was applied successfully, false otherwise</returns>
-        public abstract bool ApplyToScintilla(ScintillaEditor editor);
-
-        /// <summary>
-        /// Calculates how this change affects a cursor position
-        /// </summary>
-        /// <param name="cursorPosition">The current cursor position</param>
-        /// <returns>The new cursor position after applying this change</returns>
-        public abstract int UpdateCursorPosition(int cursorPosition);
-    }
-
-    /// <summary>
-    /// Represents a change that deletes text from the source
-    /// </summary>
-    public class DeleteChange : CodeChange
-    {
-        /// <summary>
-        /// The ending index (inclusive) in the source where the deletion ends
-        /// </summary>
-        public int EndIndex { get; }
-
-        /// <summary>
-        /// Length of the deleted text
-        /// </summary>
-        public int DeleteLength => EndIndex - StartIndex + 1;
-
-        /// <summary>
-        /// Creates a new deletion change
-        /// </summary>
-        /// <param name="startIndex">The starting index where deletion begins</param>
-        /// <param name="endIndex">The ending index (inclusive) where deletion ends</param>
-        /// <param name="description">A description of what is being deleted</param>
-        public DeleteChange(int startIndex, int endIndex, string description)
-            : base(startIndex, description)
-        {
-            EndIndex = endIndex;
-        }
-
-        /// <summary>
-        /// Applies the deletion directly to the Scintilla editor
-        /// </summary>
-        public override bool ApplyToScintilla(ScintillaEditor editor)
-        {
-            return ScintillaManager.DeleteTextRange(editor, StartIndex, DeleteLength);
-        }
-
-        /// <summary>
-        /// Updates cursor position based on this deletion
-        /// </summary>
-        /// <param name="cursorPosition">The current cursor position</param>
-        /// <returns>The adjusted cursor position</returns>
-        public override int UpdateCursorPosition(int cursorPosition)
-        {
-            if (cursorPosition <= StartIndex)
-            {
-                // Cursor is before deletion, no change needed
-                return cursorPosition;
-            }
-            else if (cursorPosition <= EndIndex)
-            {
-                // Cursor is within deleted text, move to start of deletion
-                return StartIndex;
-            }
-            else
-            {
-                // Cursor is after deleted text, shift backward by deleted length
-                return cursorPosition - DeleteLength;
-            }
-        }
-    }
-
-    /// <summary>
-    /// Represents a change that inserts text into the source
-    /// </summary>
-    public class InsertChange : CodeChange
-    {
-        /// <summary>
-        /// The text to insert at the start index
-        /// </summary>
-        public string TextToInsert { get; }
-
-        /// <summary>
-        /// Creates a new insertion change
-        /// </summary>
-        /// <param name="startIndex">The index where insertion should occur</param>
-        /// <param name="textToInsert">The text to insert</param>
-        /// <param name="description">A description of what is being inserted</param>
-        public InsertChange(int startIndex, string textToInsert, string description)
-            : base(startIndex, description)
-        {
-            TextToInsert = textToInsert;
-        }
-
-        /// <summary>
-        /// Applies the insertion directly to the Scintilla editor
-        /// </summary>
-        public override bool ApplyToScintilla(ScintillaEditor editor)
-        {
-            return ScintillaManager.InsertTextAtLocation(editor, StartIndex, TextToInsert);
-        }
-
-        /// <summary>
-        /// Updates cursor position based on this insertion
-        /// </summary>
-        /// <param name="cursorPosition">The current cursor position</param>
-        /// <returns>The adjusted cursor position</returns>
-        public override int UpdateCursorPosition(int cursorPosition)
-        {
-            if (cursorPosition < StartIndex)
-            {
-                // Cursor is before insertion point, no change needed
-                return cursorPosition;
-            }
-            else
-            {
-                // Cursor is at or after insertion point, shift forward by inserted text length
-                return cursorPosition + TextToInsert.Length;
-            }
-        }
-    }
-
-    /// <summary>
-    /// Represents a change that replaces text in the source
-    /// </summary>
-    public class ReplaceChange : CodeChange
-    {
-        /// <summary>
-        /// The ending index (inclusive) in the source where the replacement ends
-        /// </summary>
-        public int EndIndex { get; }
-
-        /// <summary>
-        /// The new text to replace the old text with
-        /// </summary>
-        public string NewText { get; }
-
-        /// <summary>
-        /// The length of the original text being replaced
-        /// </summary>
-        public int OldLength => EndIndex - StartIndex + 1;
-
-        /// <summary>
-        /// The net change in length (positive if new text is longer, negative if shorter)
-        /// </summary>
-        public int LengthDelta => NewText.Length - OldLength;
-
-        /// <summary>
-        /// Creates a new replacement change
-        /// </summary>
-        /// <param name="startIndex">The starting index where replacement begins</param>
-        /// <param name="endIndex">The ending index (inclusive) where replacement ends</param>
-        /// <param name="newText">The new text to replace the old text with</param>
-        /// <param name="description">A description of what is being replaced</param>
-        public ReplaceChange(int startIndex, int endIndex, string newText, string description)
-            : base(startIndex, description)
-        {
-            EndIndex = endIndex;
-            NewText = newText;
-        }
-
-        /// <summary>
-        /// Applies the replacement directly to the Scintilla editor
-        /// </summary>
-        public override bool ApplyToScintilla(ScintillaEditor editor)
-        {
-            return ScintillaManager.ReplaceTextRange(editor, StartIndex, EndIndex, NewText);
-        }
-
-        /// <summary>
-        /// Updates cursor position based on this replacement
-        /// </summary>
-        /// <param name="cursorPosition">The current cursor position</param>
-        /// <returns>The adjusted cursor position</returns>
-        public override int UpdateCursorPosition(int cursorPosition)
-        {
-            if (cursorPosition < StartIndex)
-            {
-                // Cursor is before replacement, no change needed
-                return cursorPosition;
-            }
-            else if (cursorPosition <= EndIndex)
-            {
-                // Cursor is within replacement
-                // Move to end of new text if cursor was inside replaced section
-                return StartIndex + NewText.Length;
-            }
-            else
-            {
-                // Cursor is after replacement, adjust by the change in length
-                return cursorPosition + LengthDelta;
-            }
-        }
-    }
-
-    /// <summary>
-    /// Base class for implementing PeopleCode refactoring operations
-    /// </summary>
-    /// <remarks>
-    /// Creates a new instance of the BaseRefactor class
-    /// </remarks>
-    /// <param name="editor">The ScintillaEditor instance to use for this refactor</param>
-    /// <remarks>
-    /// Creates a new instance of the BaseRefactor class
-    /// </remarks>
-    /// <param name="editor">The ScintillaEditor instance to use for this refactor</param>
-    /// <param name="currentPosition">The current cursor position in the editor</param>
-    /// <param name="lineNumber">The current line number in the editor</param>
-    public abstract class BaseRefactor(ScintillaEditor editor) : AppRefiner.PeopleCode.PeopleCodeParserBaseListener
-    {
         /// <summary>
         /// Gets the display name for this refactor
         /// </summary>
-        public static string RefactorName => "Base Refactor";
+        public static string RefactorName => "Scoped Refactor";
 
         /// <summary>
         /// Gets the description for this refactor
         /// </summary>
-        public static string RefactorDescription => "Base refactoring operation";
-
-        /// <summary>
-        /// Gets whether this refactor requires a user input dialog
-        /// </summary>
-        public virtual bool RequiresUserInputDialog => false;
-
-        /// <summary>
-        /// Gets whether this refactor should defer showing the dialog until after the visitor has run
-        /// </summary>
-        public virtual bool DeferDialogUntilAfterVisitor => false;
+        public static string RefactorDescription => "Scope-aware refactoring operation";
 
         /// <summary>
         /// Gets whether this refactor should have a keyboard shortcut registered
@@ -325,6 +43,20 @@ namespace AppRefiner.Refactors
         /// </summary>
         public static Keys ShortcutKey => Keys.None;
 
+        #endregion
+
+        #region IRefactor Properties
+
+        /// <summary>
+        /// Gets whether this refactor requires a user input dialog
+        /// </summary>
+        public virtual bool RequiresUserInputDialog => false;
+
+        /// <summary>
+        /// Gets whether this refactor should defer showing the dialog until after the visitor has run
+        /// </summary>
+        public virtual bool DeferDialogUntilAfterVisitor => false;
+
         /// <summary>
         /// Gets the type of a refactor that should be run immediately after this one completes successfully.
         /// Returns null if no follow-up refactor is needed.
@@ -332,57 +64,214 @@ namespace AppRefiner.Refactors
         public virtual Type? FollowUpRefactorType => null;
 
         /// <summary>
-        /// Gets whether this refactor should run even when the ANTLR parse has syntax errors.
+        /// Gets whether this refactor should run even when the parser has syntax errors.
         /// Defaults to true for backward compatibility, but refactors that modify imports or 
         /// other structure-sensitive elements should set this to false.
         /// </summary>
         public virtual bool RunOnIncompleteParse => true;
 
-        protected ScintillaEditor Editor { get; } = editor;
-        protected int CurrentPosition { get; } = ScintillaManager.GetCursorPosition(editor);
-        protected int LineNumber { get; } = ScintillaManager.GetCurrentLineNumber(editor);
+        /// <summary>
+        /// Gets the ScintillaEditor instance
+        /// </summary>
+        public ScintillaEditor Editor { get; }
 
-        private string? source;
-        protected CommonTokenStream? tokenStream;
+        /// <summary>
+        /// Gets the current cursor position
+        /// </summary>
+        public int CurrentPosition { get; }
+
+        /// <summary>
+        /// Gets the current line number
+        /// </summary>
+        public int LineNumber { get; }
+
+        /// <summary>
+        /// Gets the current cursor position (alias for CurrentPosition)
+        /// </summary>
+        protected int CurrentCursorPosition => CurrentPosition;
+
+        #endregion
+
+        #region Private Fields
+
+        protected string? originalSource;
         private int cursorPosition = -1;
         private bool failed;
         private string? failureMessage;
-        private readonly List<CodeChange> changes = new();
+        private readonly List<TextEdit> edits = new();
+
+        #endregion
+
+        /// <summary>
+        /// Creates a new refactor instance
+        /// </summary>
+        protected BaseRefactor(ScintillaEditor editor)
+        {
+            Editor = editor;
+            CurrentPosition = ScintillaManager.GetCursorPosition(editor);
+            LineNumber = ScintillaManager.GetCurrentLineNumber(editor);
+        }
+
+        #region Refactor Implementation
 
         /// <summary>
         /// Gets the main window handle for the editor
         /// </summary>
-        /// <returns>The main window handle</returns>
-        protected IntPtr GetEditorMainWindowHandle()
+        public IntPtr GetEditorMainWindowHandle()
         {
-            return Process.GetProcessById((int)Editor.ProcessId).MainWindowHandle;
+            return Editor.AppDesignerProcess.MainWindowHandle;
         }
 
         /// <summary>
-        /// Shows the dialog for this refactor
+        /// Initializes the refactor with the source code and cursor position
         /// </summary>
-        /// <returns>True if the user confirmed, false if canceled</returns>
+        public virtual void Initialize(string source, int cursorPosition)
+        {
+            this.originalSource = source;
+            this.cursorPosition = cursorPosition;
+            failed = false;
+            failureMessage = null;
+            edits.Clear();
+        }
+
+        /// <summary>
+        /// Shows the refactor dialog (if required)
+        /// </summary>
         public virtual bool ShowRefactorDialog()
         {
-            // Base implementation just returns true (no dialog needed)
             return true;
         }
 
         /// <summary>
-        /// Initializes the refactor with source code and token stream
+        /// Applies the refactoring changes to the document
         /// </summary>
-        public virtual void Initialize(string sourceText, CommonTokenStream tokenStream, int cursorPosition = -1)
+        public virtual RefactorResult ApplyRefactoring()
         {
-            source = sourceText;
-            this.tokenStream = tokenStream;
-            changes.Clear();
-            failed = false;
-            failureMessage = null;
-            this.cursorPosition = cursorPosition;
+            if (failed)
+            {
+                return RefactorResult.Failed(failureMessage ?? "Unknown error");
+            }
+
+            if (edits.Count == 0)
+            {
+                return RefactorResult.Failed("No changes to apply");
+            }
+
+            try
+            {
+                ApplyEdits();
+                return RefactorResult.Successful;
+            }
+            catch (Exception ex)
+            {
+                return RefactorResult.Failed($"Error applying edits: {ex.Message}");
+            }
         }
 
         /// <summary>
-        /// Sets a failure status with an error message
+        /// Gets the result of the refactoring operation
+        /// </summary>
+        public virtual RefactorResult GetResult()
+        {
+            if (failed)
+            {
+                return RefactorResult.Failed(failureMessage ?? "Unknown error");
+            }
+            if (!DeferDialogUntilAfterVisitor)
+            {
+                return edits.Count > 0 ? RefactorResult.Successful : RefactorResult.Failed("No changes to apply");
+            }
+
+            // Always successful for deferred dialogs. they will report errors after the dialog runs
+            // this is because some refactors require input from the user before they can generate the changes (like renaming variables).
+            return RefactorResult.Successful;
+        }
+
+        #endregion
+
+        #region Text Editing Methods
+
+        /// <summary>
+        /// Applies the collected edits to the document
+        /// </summary>
+        protected virtual void ApplyEdits()
+        {
+            // Apply edits in reverse order to avoid position shifting
+            var sortedEdits = edits.OrderByDescending(e => e.StartIndex).ToList();
+            foreach (var edit in sortedEdits)
+            {
+                ScintillaManager.ReplaceTextRange(Editor, edit.StartIndex, edit.EndIndex, edit.NewText);
+            }
+        }
+
+        /// <summary>
+        /// Adds a text edit to replace text at the given position
+        /// </summary>
+        protected void EditText(int startIndex, int endIndex, string newText, string description)
+        {
+            edits.Add(new TextEdit(startIndex, endIndex, newText, description));
+        }
+
+        /// <summary>
+        /// Adds a text edit to replace text at the given source span
+        /// </summary>
+        protected void EditText(SourceSpan span, string newText, string description)
+        {
+            edits.Add(new TextEdit(span, newText, description));
+        }
+
+        /// <summary>
+        /// Adds a text edit to insert text at the given position
+        /// </summary>
+        protected void InsertText(int position, string text, string description)
+        {
+            var existingDelete = edits.FirstOrDefault(e => e.StartIndex < e.EndIndex && string.IsNullOrEmpty(e.NewText));
+
+            if (existingDelete != null)
+            {
+                edits.Remove(existingDelete);
+                edits.Add(new TextEdit(existingDelete.StartIndex, existingDelete.EndIndex, text, $"Converted to edit: {existingDelete.Description} + {description}"));
+                return;
+            }
+
+            edits.Add(new TextEdit(position, position, text, description));
+        }
+
+        /// <summary>
+        /// Adds a text edit to insert text at the given source position
+        /// </summary>
+        protected void InsertText(SourcePosition position, string text, string description)
+        {
+            InsertText(position.ByteIndex, text, description);
+        }
+
+        /// <summary>
+        /// Adds a text edit to delete text at the given position range
+        /// </summary>
+        protected void DeleteText(int startIndex, int endIndex, string description)
+        {
+            var existingInsert = edits.FirstOrDefault(e => e.StartIndex == startIndex && e.StartIndex == e.EndIndex);
+
+            if (existingInsert != null)
+            {
+                edits.Remove(existingInsert);
+                edits.Add(new TextEdit(startIndex, endIndex, existingInsert.NewText, $"Converted to edit: {description} + {existingInsert.Description}"));
+                return;
+            }
+
+            edits.Add(new TextEdit(startIndex, endIndex, "", description));
+        }
+
+        /// <summary>
+        /// Adds a text edit to delete text at the given source span
+        /// </summary>
+        protected void DeleteText(SourceSpan span, string description)
+        {
+            DeleteText(span.Start.ByteIndex, span.End.ByteIndex, description);
+        }
+
+        /// <summary>
+        /// Marks the refactor as failed with the specified message
         /// </summary>
         protected void SetFailure(string message)
         {
@@ -390,300 +279,31 @@ namespace AppRefiner.Refactors
             failureMessage = message;
         }
 
-        /// <summary>
-        /// Gets the result of the refactoring operation
-        /// </summary>
-        public RefactorResult GetResult() => failed ? RefactorResult.Failed(failureMessage ?? "Unknown error") : RefactorResult.Successful;
+        #endregion
+
+        #region Helper Methods for Variable References
 
         /// <summary>
-        /// Gets the updated cursor position after refactoring
+        /// Checks if a position is within a source span
         /// </summary>
-        /// <returns>The new cursor position, or -1 if no cursor position was provided</returns>
-        public int GetUpdatedCursorPosition()
+        protected bool IsPositionInSpan(int position, SourceSpan span)
         {
-            return cursorPosition;
+            return position >= span.Start.ByteIndex && position <= span.End.ByteIndex;
         }
 
         /// <summary>
-        /// Gets the list of changes that will be applied
+        /// Checks if a node contains the current cursor position
         /// </summary>
-        public IReadOnlyList<CodeChange> GetChanges() => changes.AsReadOnly();
-
-        /// <summary>
-        /// Adds a new replacement change using parser context
-        /// </summary>
-        /// <param name="context">The parser rule context to replace</param>
-        /// <param name="newText">The new text to replace with</param>
-        /// <param name="description">A description of what is being replaced</param>
-        protected void ReplaceNode(ParserRuleContext context, string newText, string description, bool eatExtraForSemicolon = false)
+        protected bool NodeContainsCursor(AstNode node)
         {
-            // Handle case where node has a Start but no Stop (empty node)
-            if (context.Stop == null)
-            {
-                InsertText(context.Start.ByteStartIndex(), newText, description);
-            }
-            else
-            {
-                // Normal case - replace the entire node
-                changes.Add(new ReplaceChange(
-                    context.Start.ByteStartIndex(),
-                    eatExtraForSemicolon ? context.Stop.ByteStopIndex() + 1 : context.Stop.ByteStopIndex(),
-                    newText,
-                    description
-                ));
-            }
+            return node.SourceSpan.ContainsPosition(CurrentPosition);
         }
 
-        /// <summary>
-        /// Adds a replacement change with explicit start and end positions
-        /// </summary>
-        /// <param name="startIndex">The starting index where replacement begins</param>
-        /// <param name="endIndex">The ending index (inclusive) where replacement ends</param>
-        /// <param name="newText">The new text to replace with</param>
-        /// <param name="description">A description of what is being replaced</param>
-        protected void ReplaceText(int startIndex, int endIndex, string newText, string description)
-        {
-            changes.Add(new ReplaceChange(startIndex, endIndex, newText, description));
-        }
+        #endregion
 
         /// <summary>
-        /// Adds a new insertion change
+        /// Gets the list of edits for testing
         /// </summary>
-        /// <param name="position">The position where text should be inserted</param>
-        /// <param name="textToInsert">The text to insert</param>
-        /// <param name="description">A description of what is being inserted</param>
-        protected void InsertText(int position, string textToInsert, string description)
-        {
-            changes.Add(new InsertChange(position, textToInsert, description));
-        }
-
-        /// <summary>
-        /// Adds a new insertion change after a parser rule context
-        /// </summary>
-        /// <param name="context">The parser rule context to insert after</param>
-        /// <param name="textToInsert">The text to insert</param>
-        /// <param name="description">A description of what is being inserted</param>
-        protected void InsertAfter(ParserRuleContext context, string textToInsert, string description)
-        {
-            changes.Add(new InsertChange(context.Stop.ByteStopIndex() + 1, textToInsert, description));
-        }
-
-        /// <summary>
-        /// Adds a new insertion change before a parser rule context
-        /// </summary>
-        /// <param name="context">The parser rule context to insert before</param>
-        /// <param name="textToInsert">The text to insert</param>
-        /// <param name="description">A description of what is being inserted</param>
-        protected void InsertBefore(ParserRuleContext context, string textToInsert, string description)
-        {
-            // Convert to byte index for Scintilla API
-            changes.Add(new InsertChange(context.Start.ByteStartIndex(), textToInsert, description));
-        }
-
-        /// <summary>
-        /// Adds a new deletion change
-        /// </summary>
-        /// <param name="startIndex">The starting index of text to delete</param>
-        /// <param name="endIndex">The ending index (inclusive) of text to delete</param>
-        /// <param name="description">A description of what is being deleted</param>
-        protected void DeleteText(int startIndex, int endIndex, string description)
-        {
-            changes.Add(new DeleteChange(startIndex, endIndex, description));
-        }
-
-        /// <summary>
-        /// Adds a new deletion change to remove a parser rule context
-        /// </summary>
-        /// <param name="context">The parser rule context to delete</param>
-        /// <param name="description">A description of what is being deleted</param>
-        protected void DeleteNode(ParserRuleContext context, string description)
-        {
-            // Convert tokens to byte indexes for Scintilla API
-            
-            changes.Add(new DeleteChange(
-                context.Start.ByteStartIndex(),
-                context.Stop.ByteStopIndex(),
-                description
-            ));
-        }
-
-        /// <summary>
-        /// Gets the original text for a parser rule context
-        /// </summary>
-        protected string? GetOriginalText(ParserRuleContext context, bool includeSemicolon = false)
-        {
-            bool needToCaptureSemicolon = false;
-            if (includeSemicolon && source != null && source.Length > context.Stop.ByteStopIndex() + 2)
-            {
-                needToCaptureSemicolon = source[context.Stop.ByteStopIndex() + 1] == ';';
-            }
-
-            return source == null
-                ? null
-                : source.Substring(
-                context.Start.ByteStartIndex(),
-                context.Stop.ByteStopIndex() - context.Start.ByteStartIndex() + 1 + (needToCaptureSemicolon ? 1 : 0)
-            );
-        }
-
-        /// <summary>
-        /// Gets all configurable properties for a specific refactor type
-        /// </summary>
-        /// <param name="refactorType">The refactor type to inspect</param>
-        /// <returns>A list of PropertyInfo objects representing configurable properties</returns>
-        public static List<PropertyInfo> GetConfigurableProperties(Type refactorType)
-        {
-            var properties = refactorType.GetProperties(BindingFlags.Public | BindingFlags.Instance)
-                .Where(p => p.CanRead && p.CanWrite && 
-                          p.GetCustomAttribute<JsonIgnoreAttribute>() == null &&
-                          IsConfigurableProperty(p))
-                .ToList();
-
-            return properties;
-        }
-
-        /// <summary>
-        /// Determines if a property should be configurable
-        /// </summary>
-        /// <param name="property">The property to check</param>
-        /// <returns>True if the property should be configurable</returns>
-        private static bool IsConfigurableProperty(PropertyInfo property)
-        {
-            // Exclude specific properties that shouldn't be configurable
-            var excludedProperties = new HashSet<string>
-            {
-                nameof(Editor),
-                nameof(CurrentPosition),
-                nameof(LineNumber),
-                nameof(RequiresUserInputDialog),
-                nameof(DeferDialogUntilAfterVisitor),
-                nameof(FollowUpRefactorType),
-                nameof(RunOnIncompleteParse)
-            };
-
-            return !excludedProperties.Contains(property.Name);
-        }
-
-        /// <summary>
-        /// Gets the default configuration for a specific refactor type
-        /// </summary>
-        /// <param name="refactorType">The refactor type</param>
-        /// <returns>JSON string containing the default configuration</returns>
-        public static string GetDefaultRefactorConfig(Type refactorType)
-        {
-            var configProperties = GetConfigurableProperties(refactorType);
-            var config = new Dictionary<string, object?>();
-
-            // Create a temporary instance to get default values
-            try
-            {
-                // BaseRefactor requires an editor parameter, but we just need default values
-                // We'll create a minimal mock or handle this differently for each refactor
-                var tempInstance = Activator.CreateInstance(refactorType, new object[] { null! });
-                if (tempInstance != null)
-                {
-                    foreach (var property in configProperties)
-                    {
-                        config[property.Name] = property.GetValue(tempInstance);
-                    }
-                }
-            }
-            catch
-            {
-                // If we can't create an instance, just use default values for property types
-                foreach (var property in configProperties)
-                {
-                    config[property.Name] = GetDefaultValueForType(property.PropertyType);
-                }
-            }
-
-            return JsonSerializer.Serialize(config, new JsonSerializerOptions
-            {
-                WriteIndented = true
-            });
-        }
-
-        /// <summary>
-        /// Gets a default value for a given type
-        /// </summary>
-        /// <param name="type">The type to get a default value for</param>
-        /// <returns>The default value for the type</returns>
-        private static object? GetDefaultValueForType(Type type)
-        {
-            if (type == typeof(bool)) return false;
-            if (type == typeof(int)) return 0;
-            if (type == typeof(string)) return string.Empty;
-            if (type.IsEnum) return Enum.GetValues(type).GetValue(0);
-            return null;
-        }
-
-        /// <summary>
-        /// Applies configuration to this refactor instance
-        /// </summary>
-        /// <param name="jsonConfig">JSON string containing the configuration</param>
-        public virtual void ApplyRefactorConfig(string jsonConfig)
-        {
-            if (string.IsNullOrEmpty(jsonConfig)) return;
-
-            try
-            {
-                var config = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(jsonConfig);
-                if (config == null) return;
-
-                var configProperties = GetConfigurableProperties(GetType());
-
-                foreach (var property in configProperties)
-                {
-                    if (config.TryGetValue(property.Name, out var value))
-                    {
-                        try
-                        {
-                            var typedValue = JsonSerializer.Deserialize(value.GetRawText(), property.PropertyType);
-                            property.SetValue(this, typedValue);
-                        }
-                        catch
-                        {
-                            // Skip properties that can't be deserialized
-                        }
-                    }
-                }
-            }
-            catch
-            {
-                // If configuration fails, continue with defaults
-            }
-        }
-
-        /// <summary>
-        /// Gets the current configuration of this refactor instance as JSON
-        /// </summary>
-        /// <returns>JSON string containing the current configuration</returns>
-        public virtual string GetCurrentRefactorConfig()
-        {
-            var configProperties = GetConfigurableProperties(GetType());
-            var config = new Dictionary<string, object?>();
-
-            foreach (var property in configProperties)
-            {
-                config[property.Name] = property.GetValue(this);
-            }
-
-            return JsonSerializer.Serialize(config, new JsonSerializerOptions
-            {
-                WriteIndented = true
-            });
-        }
-
-        /// <summary>
-        /// Helper method to get static string properties from a type using reflection
-        /// </summary>
-        /// <param name="type">The type to inspect</param>
-        /// <param name="propertyName">The name of the property to get</param>
-        /// <returns>The string value of the property or null if not found</returns>
-        public static string? GetStaticStringProperty(Type type, string propertyName)
-        {
-            var prop = type.GetProperty(propertyName, BindingFlags.Public | BindingFlags.Static | BindingFlags.NonPublic | BindingFlags.FlattenHierarchy);
-            return prop?.GetValue(null) as string;
-        }
+        internal List<TextEdit> GetEdits() => edits;
     }
 }

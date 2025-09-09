@@ -1,5 +1,5 @@
 using AppRefiner.Database;
-using static AppRefiner.PeopleCode.PeopleCodeParser;
+using PeopleCodeParser.SelfHosted.Nodes;
 
 namespace AppRefiner.Linters
 {
@@ -21,18 +21,21 @@ namespace AppRefiner.Linters
             // Nothing to reset
         }
 
-        public override void EnterSimpleFunctionCall(SimpleFunctionCallContext context)
+        public override void VisitFunctionCall(FunctionCallNode node)
         {
-            var functionName = context.genericID()?.GetText();
-            if (!functionName?.Equals("GetHTMLText", StringComparison.OrdinalIgnoreCase) ?? true)
+            // Check if the function being called is "GetHTMLText"
+            if (!(node.Function is IdentifierNode functionId))
                 return;
 
-            var args = context.functionCallArguments();
-            if (args?.expression() == null || args.expression().Length == 0)
+            var functionName = functionId.Name;
+            if (!functionName.Equals("GetHTMLText", StringComparison.OrdinalIgnoreCase))
+                return;
+
+            if (node.Arguments.Count == 0)
                 return;
 
             // Process the first argument which should be HTML reference
-            var firstArg = args.expression()[0];
+            var firstArg = node.Arguments[0];
             var htmlRef = GetHtmlReference(firstArg);
             if (htmlRef == null)
                 return;
@@ -48,15 +51,15 @@ namespace AppRefiner.Linters
                     1,
                     $"Invalid HTML definition: {htmlRef}",
                     ReportType.Error,
-                    firstArg.Start.Line - 1,
-                    firstArg
+                    firstArg.SourceSpan.Start.Line,
+                    firstArg.SourceSpan
                 );
                 return;
             }
 
             // Validate bind parameter count
             var bindCount = htmlDef.BindCount;
-            var providedBinds = args.expression().Length - 1; // Minus the HTML reference
+            var providedBinds = node.Arguments.Count - 1; // Minus the HTML reference
 
             if (providedBinds < bindCount)
             {
@@ -64,8 +67,8 @@ namespace AppRefiner.Linters
                     2,
                     $"GetHTMLText has too few bind parameters. Expected {bindCount}, got {providedBinds}.",
                     ReportType.Error,
-                    context.Start.Line - 1,
-                    context
+                    node.SourceSpan.Start.Line,
+                    node.SourceSpan
                 );
             }
             else if (providedBinds > bindCount && bindCount > 0)
@@ -74,25 +77,23 @@ namespace AppRefiner.Linters
                     3,
                     $"GetHTMLText has more bind parameters than needed. Expected {bindCount}, got {providedBinds}.",
                     ReportType.Warning,
-                    context.Start.Line - 1,
-                    context
+                    node.SourceSpan.Start.Line,
+                    node.SourceSpan
                 );
             }
+
+            base.VisitFunctionCall(node);
         }
 
-        private string? GetHtmlReference(ExpressionContext expr)
+        private string? GetHtmlReference(ExpressionNode expr)
         {
             // Handle HTML.NAME format
-            if (expr is DotAccessExprContext dotAccess)
+            if (expr is MemberAccessNode memberAccess)
             {
-                var leftExpr = dotAccess.expression();
-                if (leftExpr is IdentifierExprContext idExpr &&
-                    idExpr.ident().GetText().Equals("HTML", StringComparison.OrdinalIgnoreCase))
+                if (memberAccess.Target is IdentifierNode targetId &&
+                    targetId.Name.Equals("HTML", StringComparison.OrdinalIgnoreCase))
                 {
-                    if (dotAccess.children[1] is DotAccessContext dotAccessCtx)
-                    {
-                        return dotAccessCtx.genericID().GetText();
-                    }
+                    return memberAccess.MemberName;
                 }
             }
             return null;

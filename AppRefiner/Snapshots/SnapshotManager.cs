@@ -1,10 +1,5 @@
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using Microsoft.Data.Sqlite;
 using AppRefiner.Database.Models;
-using System.Diagnostics;
+using Microsoft.Data.Sqlite;
 
 namespace AppRefiner.Snapshots
 {
@@ -23,16 +18,16 @@ namespace AppRefiner.Snapshots
         public SnapshotManager(string databasePath)
         {
             _databasePath = databasePath;
-            
+
             // Ensure the directory exists
             string directory = Path.GetDirectoryName(databasePath);
             if (!string.IsNullOrEmpty(directory) && !Directory.Exists(directory))
             {
                 Directory.CreateDirectory(directory);
             }
-            
+
             _connectionString = $"Data Source={databasePath}";
-            
+
             // Initialize the database
             InitializeDatabase();
         }
@@ -51,12 +46,12 @@ namespace AppRefiner.Snapshots
                 {
                     string appDataPath = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
                     dbPath = Path.Combine(appDataPath, "AppRefiner", "Snapshots.db");
-                    
+
                     // Save the default path to settings
                     Properties.Settings.Default.SnapshotDatabasePath = dbPath;
                     Properties.Settings.Default.Save();
                 }
-                
+
                 // Create and return a new SnapshotManager
                 return new SnapshotManager(dbPath);
             }
@@ -76,7 +71,7 @@ namespace AppRefiner.Snapshots
             {
                 using var connection = new SqliteConnection(_connectionString);
                 connection.Open();
-                
+
                 // Create snapshots table if it doesn't exist
                 using var command = connection.CreateCommand();
                 command.CommandText = @"
@@ -92,7 +87,7 @@ namespace AppRefiner.Snapshots
                     CREATE INDEX IF NOT EXISTS idx_snapshots_filepath ON Snapshots(FilePath);
                     CREATE INDEX IF NOT EXISTS idx_snapshots_dbname ON Snapshots(DBName);
                 ";
-                
+
                 command.ExecuteNonQuery();
             }
             catch (Exception ex)
@@ -114,22 +109,22 @@ namespace AppRefiner.Snapshots
                 Debug.Log("Cannot save snapshot: Content is empty");
                 return false;
             }
-            
+
             try
             {
                 string filePath = editor.RelativePath ?? "unknown-file";
                 string caption = editor.Caption ?? "Unknown";
-                
+
                 // Remove any type suffix from caption, e.g. " (PeopleCode)"
                 if (caption.Contains("("))
                 {
                     caption = caption.Substring(0, caption.LastIndexOf("(")).Trim();
                 }
-                
+
                 // Create a new snapshot in the database
                 return SaveSnapshot(new Snapshot
                 {
-                    DBName = editor.DBName,
+                    DBName = editor.AppDesignerProcess.DBName,
                     FilePath = filePath,
                     Caption = caption,
                     CreatedAt = DateTime.Now,
@@ -142,7 +137,7 @@ namespace AppRefiner.Snapshots
                 return false;
             }
         }
-        
+
         /// <summary>
         /// Saves a snapshot to the database
         /// </summary>
@@ -154,24 +149,24 @@ namespace AppRefiner.Snapshots
             {
                 using var connection = new SqliteConnection(_connectionString);
                 connection.Open();
-                
+
                 using var command = connection.CreateCommand();
                 command.CommandText = @"
                     INSERT INTO Snapshots (DBName, FilePath, Caption, CreatedAt, Content)
                     VALUES (@DBName, @FilePath, @Caption, @CreatedAt, @Content)
                 ";
-                
+
                 command.Parameters.AddWithValue("@DBName", snapshot.DBName as object ?? DBNull.Value);
                 command.Parameters.AddWithValue("@FilePath", snapshot.FilePath);
                 command.Parameters.AddWithValue("@Caption", snapshot.Caption);
                 command.Parameters.AddWithValue("@CreatedAt", snapshot.CreatedAt.ToString("yyyy-MM-dd HH:mm:ss"));
                 command.Parameters.AddWithValue("@Content", snapshot.Content);
-                
+
                 int rowsAffected = command.ExecuteNonQuery();
-                
+
                 // Clean up old snapshots for this file if needed
                 CleanupOldSnapshots(snapshot.FilePath, snapshot.DBName);
-                
+
                 return rowsAffected > 0;
             }
             catch (Exception ex)
@@ -192,19 +187,19 @@ namespace AppRefiner.Snapshots
             {
                 // Get the max snapshots setting
                 int maxSnapshots = Properties.Settings.Default.MaxFileSnapshots;
-                
+
                 // Only limit if the setting is valid
                 if (maxSnapshots <= 0)
                 {
                     return;
                 }
-                
+
                 using var connection = new SqliteConnection(_connectionString);
                 connection.Open();
-                
+
                 // Count existing snapshots for this file
                 using var countCommand = connection.CreateCommand();
-                
+
                 if (dbName != null)
                 {
                     countCommand.CommandText = @"
@@ -220,16 +215,16 @@ namespace AppRefiner.Snapshots
                         WHERE FilePath = @FilePath AND DBName IS NULL
                     ";
                 }
-                
+
                 countCommand.Parameters.AddWithValue("@FilePath", filePath);
-                
+
                 int count = Convert.ToInt32(countCommand.ExecuteScalar());
-                
+
                 // If we have more snapshots than allowed, delete the oldest ones
                 if (count > maxSnapshots)
                 {
                     using var deleteCommand = connection.CreateCommand();
-                    
+
                     if (dbName != null)
                     {
                         deleteCommand.CommandText = @"
@@ -255,12 +250,12 @@ namespace AppRefiner.Snapshots
                             )
                         ";
                     }
-                    
+
                     deleteCommand.Parameters.AddWithValue("@FilePath", filePath);
                     deleteCommand.Parameters.AddWithValue("@LimitCount", count - maxSnapshots);
-                    
+
                     deleteCommand.ExecuteNonQuery();
-                    
+
                     Debug.Log($"Cleaned up old snapshots for {filePath}, keeping {maxSnapshots} most recent snapshots");
                 }
             }
@@ -279,14 +274,14 @@ namespace AppRefiner.Snapshots
         public List<Snapshot> GetFileHistory(string relativePath, string? dbName = null)
         {
             var result = new List<Snapshot>();
-            
+
             try
             {
                 using var connection = new SqliteConnection(_connectionString);
                 connection.Open();
-                
+
                 using var command = connection.CreateCommand();
-                
+
                 if (dbName != null)
                 {
                     command.CommandText = @"
@@ -306,11 +301,11 @@ namespace AppRefiner.Snapshots
                         ORDER BY CreatedAt DESC
                     ";
                 }
-                
+
                 command.Parameters.AddWithValue("@FilePath", relativePath);
-                
+
                 using var reader = command.ExecuteReader();
-                
+
                 while (reader.Read())
                 {
                     result.Add(new Snapshot
@@ -328,7 +323,7 @@ namespace AppRefiner.Snapshots
             {
                 Debug.Log($"Error getting file history: {ex.Message}");
             }
-            
+
             return result;
         }
 
@@ -343,18 +338,18 @@ namespace AppRefiner.Snapshots
             {
                 using var connection = new SqliteConnection(_connectionString);
                 connection.Open();
-                
+
                 using var command = connection.CreateCommand();
                 command.CommandText = @"
                     SELECT Id, DBName, FilePath, Caption, CreatedAt, Content
                     FROM Snapshots
                     WHERE Id = @Id
                 ";
-                
+
                 command.Parameters.AddWithValue("@Id", snapshotId);
-                
+
                 using var reader = command.ExecuteReader();
-                
+
                 if (reader.Read())
                 {
                     return new Snapshot
@@ -367,7 +362,7 @@ namespace AppRefiner.Snapshots
                         Content = reader.GetString(5)
                     };
                 }
-                
+
                 return null;
             }
             catch (Exception ex)
@@ -393,10 +388,10 @@ namespace AppRefiner.Snapshots
                     Debug.Log($"Failed to get snapshot with ID: {snapshotId}");
                     return false;
                 }
-                
+
                 // Set the content in the editor
                 ScintillaManager.SetScintillaText(editor, snapshot.Content);
-                
+
                 return true;
             }
             catch (Exception ex)
@@ -407,4 +402,4 @@ namespace AppRefiner.Snapshots
         }
 
     }
-} 
+}

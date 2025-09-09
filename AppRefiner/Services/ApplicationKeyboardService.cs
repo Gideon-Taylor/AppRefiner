@@ -1,7 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Windows.Forms;
-
 namespace AppRefiner.Services
 {
     public class ApplicationKeyboardService : IDisposable
@@ -69,7 +65,7 @@ namespace AppRefiner.Services
                     {
                         Task.Delay(100).ContinueWith(_ =>
                         {
-                                registration.Action.Invoke();
+                            registration.Action.Invoke();
                         });
                         return true; // Handled
                     }
@@ -122,7 +118,7 @@ namespace AppRefiner.Services
                 return Modifiers == other.Modifiers && Key == other.Key;
             }
 
-            public override bool Equals(object obj)
+            public override bool Equals(object? obj)
             {
                 return obj is KeyCombination other && Equals(other);
             }

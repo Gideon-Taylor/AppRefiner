@@ -1,5 +1,4 @@
-using System.Collections.Generic;
-using static AppRefiner.PeopleCode.PeopleCodeParser;
+using PeopleCodeParser.SelfHosted.Nodes;
 
 namespace AppRefiner.Linters
 {
@@ -22,31 +21,13 @@ namespace AppRefiner.Linters
             Active = false;
         }
 
-        public override void EnterCatchClause(CatchClauseContext context)
+        public override void VisitCatch(CatchStatementNode node)
         {
-            // Check if there's a statement block
-            var statementBlock = context.statementBlock();
-
-            // If there's no statement block or it's empty
-            if (statementBlock == null ||
-                statementBlock.statements() == null ||
-                statementBlock.statements().statement() == null ||
-                statementBlock.statements().statement().Length == 0)
+            // Check if the catch block is empty
+            if (node.Body == null || node.Body.Statements.Count == 0)
             {
-                // Check if the exception type is in the allowed list
-                // Based on the grammar: CATCH (EXCEPTION | appClassPath) USER_VARIABLE
-                string? exceptionType = null;
-                if (context.EXCEPTION() != null)
-                {
-                    exceptionType = "Exception";
-                }
-                else if (context.appClassPath() != null)
-                {
-                    exceptionType = context.appClassPath().GetText();
-                }
-
                 // Check if there's a comment in the catch block and we're allowing that
-                if (AllowWithComments && HasComment(context))
+                if (AllowWithComments && HasComment(node))
                 {
                     return;
                 }
@@ -55,22 +36,20 @@ namespace AppRefiner.Linters
                     1,
                     "Empty catch block silently swallows exceptions. Consider logging or rethrowing.",
                     Type,
-                    context.Start.Line - 1,
-                    context
+                    node.SourceSpan.Start.Line,
+                    node.SourceSpan
                 );
             }
+
+            base.VisitCatch(node);
         }
 
-        private bool HasComment(CatchClauseContext context)
+        private bool HasComment(CatchStatementNode node)
         {
             // This is a simplified implementation - in a real-world scenario,
-            // you would need to check for comments in the token stream
+            // you would need to check for comments associated with the node
             // For now, we'll just return false
             return false;
-        }
-
-        public override void Reset()
-        {
         }
     }
 }

@@ -1,8 +1,4 @@
-using System;
-using System.Drawing;
-using System.Windows.Forms;
 using DiffPlex;
-using DiffPlex.Chunkers;
 using DiffPlex.DiffBuilder;
 using DiffPlex.DiffBuilder.Model;
 
@@ -40,7 +36,7 @@ namespace AppRefiner.Dialogs
             this.headerLabel = new Label();
             this.diffTextBox = new RichTextBox();
             this.closeButton = new Button();
-            
+
             InitializeComponent(title);
             ShowDiffContent(oldContent, newContent);
         }
@@ -58,7 +54,7 @@ namespace AppRefiner.Dialogs
             this.headerLabel = new Label();
             this.diffTextBox = new RichTextBox();
             this.closeButton = new Button();
-            
+
             InitializeComponent(title);
             FormatDiffContent(diffContent);
         }
@@ -103,7 +99,7 @@ namespace AppRefiner.Dialogs
             this.closeButton.ForeColor = Color.White;
             this.closeButton.FlatStyle = FlatStyle.Flat;
             this.closeButton.FlatAppearance.BorderSize = 0;
-            this.closeButton.Click += (s, e) => 
+            this.closeButton.Click += (s, e) =>
             {
                 this.DialogResult = DialogResult.Cancel;
                 this.Close();
@@ -144,7 +140,7 @@ namespace AppRefiner.Dialogs
             // Use DiffPlex to generate the diff
             var diffBuilder = new InlineDiffBuilder(new Differ());
             var diff = diffBuilder.BuildDiffModel(oldContent, newContent);
-            
+
             diffTextBox.Clear();
             diffTextBox.SuspendLayout();
 
@@ -189,10 +185,10 @@ namespace AppRefiner.Dialogs
 
                 // Format line number prefix if needed
                 string formattedLine = $"{prefix}{lineContent}";
-                
+
                 // Append the formatted line
                 AppendFormattedText(formattedLine, Color.Black, backgroundColor);
-                
+
                 lineNumber++;
             }
 
@@ -222,9 +218,9 @@ namespace AppRefiner.Dialogs
             for (int i = 0; i < lines.Length; i++)
             {
                 string line = lines[i];
-                
+
                 // Detect the type of line and apply appropriate formatting
-                if (line.StartsWith("diff --git") || line.StartsWith("index ") || 
+                if (line.StartsWith("diff --git") || line.StartsWith("index ") ||
                     line.StartsWith("--- ") || line.StartsWith("+++ "))
                 {
                     // Diff header - blue background
@@ -293,7 +289,7 @@ namespace AppRefiner.Dialogs
         protected override void OnShown(EventArgs e)
         {
             base.OnShown(e);
-            
+
             // Center on owner window
             if (owner != IntPtr.Zero)
             {
@@ -310,12 +306,10 @@ namespace AppRefiner.Dialogs
         protected override void OnPaint(PaintEventArgs e)
         {
             base.OnPaint(e);
-            
+
             // Draw a border around the form
-            using (var pen = new Pen(Color.FromArgb(100, 100, 120)))
-            {
-                e.Graphics.DrawRectangle(pen, 0, 0, Width - 1, Height - 1);
-            }
+            using var pen = new Pen(Color.FromArgb(100, 100, 120));
+            e.Graphics.DrawRectangle(pen, 0, 0, Width - 1, Height - 1);
         }
 
         protected override bool ProcessDialogKey(Keys keyData)
@@ -332,10 +326,10 @@ namespace AppRefiner.Dialogs
         protected override void OnFormClosed(FormClosedEventArgs e)
         {
             base.OnFormClosed(e);
-            
+
             // Dispose the mouse handler
             mouseHandler?.Dispose();
             mouseHandler = null;
         }
     }
-} 
+}

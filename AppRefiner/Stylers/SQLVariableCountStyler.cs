@@ -1,93 +1,138 @@
-using AppRefiner.Linters;
-using Antlr4.Runtime.Tree;
-using static AppRefiner.PeopleCode.PeopleCodeParser;
 using AppRefiner.Database;
-using AppRefiner.PeopleCode; // Added for Report
-using AppRefiner.Linters.Models; // Added for ReportType enum and Report class
-using System.Linq; // Added for Where clause
-using System.Collections.Generic; // Added for List
+using AppRefiner.Linters;
+using AppRefiner.Shared.SQL;
+using PeopleCodeParser.SelfHosted;
+using PeopleCodeParser.SelfHosted.Nodes;
 
-namespace AppRefiner.Stylers
+namespace AppRefiner.Stylers;
+
+/// <summary>
+/// Highlights potential issues with SQL variable counts (CreateSQL/SQLExec) using shared validation logic.
+/// Ported from ANTLR-based SQLVariableCountStyler to work with self-hosted parser AST.
+/// </summary>
+public class SQLVariableCountStyler : BaseStyler
 {
-    public class SQLVariableCountStyler : BaseStyler
+    // Corrected BGRA format colors
+    private const uint ErrorColor = 0x0000FFFF;   // Opaque Red
+    private const uint WarningColor = 0x00FFFF00; // Opaque Yellow
+
+    private readonly SQLValidationContext validationContext;
+    private readonly SQLVariableValidator createSqlValidator;
+    private readonly SQLExecValidator sqlExecValidator;
+
+    public SQLVariableCountStyler()
     {
-        // Corrected BGRA format (BBGGRRAA)
-        private const uint ErrorColor = 0x0000FFFF;   // Opaque Red
-        private const uint WarningColor = 0x00FFFF00; // Opaque Yellow
+        // Initialize validation context and validators
+        validationContext = new SQLValidationContext();
+        createSqlValidator = new SQLVariableValidator(validationContext);
+        sqlExecValidator = new SQLExecValidator(validationContext);
+    }
 
-        public SQLVariableCountStyler()
+    public override string Description => "SQL variable count";
+
+    public override DataManagerRequirement DatabaseRequirement => DataManagerRequirement.Optional;
+
+    public override void VisitProgram(ProgramNode node)
+    {
+        // Set up validation context
+        validationContext.DataManager = DataManager;
+
+        // Reset validators
+        createSqlValidator.Reset();
+        sqlExecValidator.Reset();
+
+        // Clear any previous indicators
+        Reset();
+
+        // Visit the AST
+        base.VisitProgram(node);
+    }
+
+    public override void VisitLocalVariableDeclaration(LocalVariableDeclarationNode node)
+    {
+        // Validate SQL variable declarations
+        var reports = createSqlValidator.ValidateVariableDeclaration(node);
+        ProcessReports(reports);
+
+        base.VisitLocalVariableDeclaration(node);
+    }
+
+    public override void VisitLocalVariableDeclarationWithAssignment(LocalVariableDeclarationWithAssignmentNode node)
+    {
+        // Validate SQL variable declarations with assignment
+        var reports = createSqlValidator.ValidateVariableDeclarationWithAssignment(node);
+        ProcessReports(reports);
+
+        base.VisitLocalVariableDeclarationWithAssignment(node);
+    }
+
+    public override void VisitFunctionCall(FunctionCallNode node)
+    {
+        var allReports = new List<Report>();
+
+        // Validate CreateSQL/GetSQL calls
+        var createSqlReports = createSqlValidator.ValidateCreateSQL(node);
+        allReports.AddRange(createSqlReports);
+
+        // Validate SQLExec calls
+        var sqlExecReports = sqlExecValidator.ValidateSQLExec(node);
+        allReports.AddRange(sqlExecReports);
+
+        ProcessReports(allReports);
+
+        base.VisitFunctionCall(node);
+    }
+
+    public override void VisitExpressionStatement(ExpressionStatementNode node)
+    {
+        base.VisitExpressionStatement(node);
+    }
+
+    public override void VisitMemberAccess(MemberAccessNode node)
+    {
+        // Check if this member access is followed by a function call (method call pattern)
+        // We need to look at the parent context to see if this is part of a method call
+        if (node.Parent is FunctionCallNode functionCall && functionCall.Function == node)
         {
-            Description = "Highlights potential issues with SQL variable counts (CreateSQL/SQLExec).";
-            Active = true; // Set to true to enable by default, or manage externally
+            var reports = createSqlValidator.ValidateSQLMethodCall(node, functionCall);
+            ProcessReports(reports);
         }
 
-        public override DataManagerRequirement DatabaseRequirement => DataManagerRequirement.Optional;
+        base.VisitMemberAccess(node);
+    }
 
-        public override void ExitProgram(ProgramContext context)
+    private void ProcessReports(IEnumerable<Report> reports)
+    {
+        if (reports == null) return;
+
+        // Filter out Info reports and process Errors and Warnings
+        foreach (var report in reports.Where(r => r.Type != ReportType.Info))
         {
-            base.ExitProgram(context);
+            // Ensure span values are valid
+            if (report.Span.Start < 0 || report.Span.Stop < report.Span.Start) continue;
 
-            if (Indicators == null)
+            uint color = report.Type switch
             {
-                Indicators = [];
-            }
+                ReportType.Error => ErrorColor,
+                ReportType.Warning => WarningColor,
+                _ => WarningColor
+            };
 
-            var createSqlLinter = new CreateSQLVariableCount { DataManager = this.DataManager };
-            var sqlExecLinter = new SQLExecVariableCount { DataManager = this.DataManager };
-            List<Report> linterReports = [];
-            createSqlLinter.Reports = linterReports;
-            sqlExecLinter.Reports = linterReports;
-
-            // Walk the tree with both linters
-            MultiParseTreeWalker walker = new MultiParseTreeWalker();
-            walker.AddListener(createSqlLinter);
-            walker.AddListener(sqlExecLinter);
-            
-            walker.Walk(context);
-
-            // Collect reports and create indicators
-            ProcessReports(createSqlLinter.Reports);
-        }
-
-        private void ProcessReports(List<Report> reports)
-        {
-            if (reports == null || Indicators == null) return;
-
-            // Filter out Info reports and process Errors and Warnings
-            foreach (var report in reports.Where(r => r.Type != ReportType.Info))
-            {
-                // Ensure span values are valid
-                if (report.Span.Start < 0 || report.Span.Stop < report.Span.Start) continue;
-
-                uint color;
-                switch (report.Type)
-                {
-                    case ReportType.Error:
-                        color = ErrorColor;
-                        break;
-                    case ReportType.Warning:
-                        color = WarningColor;
-                        break;
-                    default: // Should not happen due to Where clause, but good practice
-                        continue;
-                }
-
-                Indicators.Add(new Indicator
-                {
-                    Start = report.Span.Start,
-                    Length = report.Span.Stop - report.Span.Start + 1,
-                    Color = color, // Use the determined color based on severity
-                    Tooltip = report.Message,
-                    Type = IndicatorType.SQUIGGLE,
-                    QuickFixes = []
-                });
-            }
-        }
-
-        public override void Reset()
-        {
-            base.Reset();
-            // Any additional reset logic specific to this styler can go here
+            AddIndicator(
+                new SourceSpan(report.Span.Start, report.Span.Stop),
+                IndicatorType.SQUIGGLE,
+                color,
+                report.Message
+            );
         }
     }
-} 
+
+    protected override void OnReset()
+    {
+        base.OnReset();
+
+        // Reset validators when the styler is reset
+        createSqlValidator?.Reset();
+        sqlExecValidator?.Reset();
+    }
+}

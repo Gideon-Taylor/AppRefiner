@@ -1,6 +1,3 @@
-using System;
-using System.Collections.Generic;
-
 namespace AppRefiner.Database.Models
 {
     /// <summary>
@@ -12,22 +9,22 @@ namespace AppRefiner.Database.Models
         /// The name of the record
         /// </summary>
         public string RecordName { get; }
-        
+
         /// <summary>
         /// The version number from PSRECDEFN.VERSION
         /// </summary>
         public int Version { get; }
-        
+
         /// <summary>
         /// The timestamp when this cache entry was created
         /// </summary>
         public DateTime CacheTimestamp { get; }
-        
+
         /// <summary>
         /// The cached list of field information
         /// </summary>
         public List<RecordFieldInfo> Fields { get; }
-        
+
         public RecordFieldCache(string recordName, int version, List<RecordFieldInfo> fields)
         {
             RecordName = recordName;
@@ -36,4 +33,4 @@ namespace AppRefiner.Database.Models
             CacheTimestamp = DateTime.Now;
         }
     }
-} 
+}

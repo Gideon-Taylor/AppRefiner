@@ -1,4 +1,3 @@
-using System;
 using System.Runtime.InteropServices;
 using System.Text;
 
@@ -10,6 +9,7 @@ namespace AppRefiner
         internal delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
 
         // WinEvent constants
+        internal const uint EVENT_OBJECT_CREATE = 0x8000;
         internal const uint EVENT_OBJECT_FOCUS = 0x8005;
         internal const uint WINEVENT_OUTOFCONTEXT = 0x0000;
         internal const uint WINEVENT_SKIPOWNPROCESS = 0x0002;
@@ -53,10 +53,14 @@ namespace AppRefiner
 
         [DllImport("user32.dll", CharSet = CharSet.Auto)]
         internal static extern IntPtr SendMessage(IntPtr hWnd, int Msg, int wParam, IntPtr lParam);
-        
+
         [DllImport("user32.dll", CharSet = CharSet.Auto)]
         internal static extern IntPtr SendMessage(IntPtr hWnd, int Msg, int wParam, string? lParam);
 
+        /* DLL import for IsWindow() */
+        [DllImport("user32.dll")]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        internal static extern bool IsWindow(IntPtr hWnd);
 
         [StructLayout(LayoutKind.Sequential)]
         internal struct RECT
@@ -66,9 +70,9 @@ namespace AppRefiner
             public int Right;
             public int Bottom;
         }
-        
+
         // Window Messages
         internal const int WM_GETTEXT = 0x000D;
         internal const int WM_GETTEXTLENGTH = 0x000E;
     }
-} 
+}

@@ -1,14 +1,11 @@
-using Antlr4.Runtime;
-using System.Diagnostics;
-using AppRefiner.Services; // For ScintillaEditor
-using static AppRefiner.PeopleCode.PeopleCodeParser; // For ANTLR parser contexts
-using AppRefiner.PeopleCode;
+using PeopleCodeParser.SelfHosted.Nodes;
+
 namespace AppRefiner.Refactors
 {
     /// <summary>
     /// Refactoring operation that provides auto-completion for MsgBox() statements, expanding them to MessageBox() calls
     /// </summary>
-    public class MsgBoxAutoComplete : ScopedRefactor<string>
+    public class MsgBoxAutoComplete : BaseRefactor
     {
         public new static string RefactorName => "MsgBox Auto Complete";
         public new static string RefactorDescription => "Auto-completes MsgBox() statements with MessageBox() expansion";
@@ -24,103 +21,94 @@ namespace AppRefiner.Refactors
         public new static bool IsHidden => true;
 
         private bool isAppropriateContext = false;
-        private int msgboxStartPos = -1;
-        private int msgboxEndPos = -1;
-        private bool autoPairingEnabled;
+        private FunctionCallNode? targetMsgBoxCall;
+        private readonly bool autoPairingEnabled;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="MsgBoxAutoComplete"/> class
         /// </summary>
         /// <param name="editor">The Scintilla editor instance to use for this refactor</param>
         /// <param name="autoPairingEnabled">Whether auto-pairing is enabled, determines if closing parenthesis should be added</param>
-        public MsgBoxAutoComplete(ScintillaEditor editor, bool autoPairingEnabled = true)
-            : base(editor)
+        public MsgBoxAutoComplete(ScintillaEditor editor, bool autoPairingEnabled = true) : base(editor)
         {
             this.autoPairingEnabled = autoPairingEnabled;
             Debug.Log($"MsgBoxAutoComplete initialized with auto-pairing: {autoPairingEnabled}");
         }
 
         /// <summary>
-        /// Check if the expression is a MsgBox() call and cursor is between the parentheses
+        /// Check if the function call is a MsgBox() call and cursor is in the appropriate position
         /// </summary>
-        private bool IsMsgBoxExpressionAtCursor(ExpressionContext expr)
+        private bool IsMsgBoxCallAtCursor(FunctionCallNode functionCall)
         {
-            if (expr is FunctionCallExprContext functionCallExpr)
+            // Check if it's a MsgBox call
+            if (functionCall.Function is IdentifierNode identifier &&
+                identifier.Name.Equals("msgbox", StringComparison.OrdinalIgnoreCase))
             {
-                var simpleFunc = functionCallExpr.simpleFunctionCall();
-                if (simpleFunc != null && simpleFunc.genericID()?.GetText().ToLower() == "msgbox")
+                if (functionCall.SourceSpan.IsValid)
                 {
-                    var args = simpleFunc.functionCallArguments();
-                    if (simpleFunc.LPAREN() != null && simpleFunc.RPAREN() != null)
-                    {
-                        msgboxStartPos = simpleFunc.genericID().Start.ByteStartIndex();  // Position at start of "MsgBox"
-                        msgboxEndPos = simpleFunc.RPAREN().Symbol.ByteStopIndex();      // Position of the closing parenthesis
-
-                        // Check if cursor is between the parentheses or right after "MsgBox"
-                        return CurrentPosition >= msgboxStartPos && CurrentPosition <= msgboxEndPos + 1;
-                    }
+                    var span = functionCall.SourceSpan;
+                    // Check if cursor is within the function call
+                    return CurrentPosition >= span.Start.ByteIndex && CurrentPosition <= span.End.ByteIndex + 1;
                 }
             }
             return false;
         }
 
-        /// <summary>
-        /// Process expression statements to find MsgBox() calls
-        /// </summary>
-        public override void EnterExpressionStmt(ExpressionStmtContext context)
+        public override void VisitFunctionCall(FunctionCallNode node)
         {
-            var expr = context.expression();
-            if (expr != null && IsMsgBoxExpressionAtCursor(expr))
+            if (IsMsgBoxCallAtCursor(node))
             {
                 isAppropriateContext = true;
+                targetMsgBoxCall = node;
                 Debug.Log($"MsgBoxAutoComplete: Found MsgBox() call at cursor position {CurrentPosition}");
             }
+
+            base.VisitFunctionCall(node);
         }
 
-        /// <summary>
-        /// Process function call expressions directly
-        /// </summary>
-        public override void EnterFunctionCallExpr(FunctionCallExprContext context)
+        public override void VisitExpressionStatement(ExpressionStatementNode node)
         {
-            base.EnterFunctionCallExpr(context);
-            
-            if (IsMsgBoxExpressionAtCursor(context))
+            // Check if the expression statement contains a MsgBox function call
+            if (node.Expression is FunctionCallNode functionCall && IsMsgBoxCallAtCursor(functionCall))
             {
                 isAppropriateContext = true;
-                Debug.Log($"MsgBoxAutoComplete: Found MsgBox() function call at cursor position {CurrentPosition}");
+                targetMsgBoxCall = functionCall;
+                Debug.Log($"MsgBoxAutoComplete: Found MsgBox() call in expression statement at cursor position {CurrentPosition}");
             }
+
+            base.VisitExpressionStatement(node);
         }
 
         /// <summary>
         /// Complete the traversal and generate changes
         /// </summary>
-        public override void ExitProgram(ProgramContext context)
+        public override void VisitProgram(ProgramNode node)
         {
+            base.VisitProgram(node);
+
             if (!isAppropriateContext)
             {
                 Debug.Log("MsgBoxAutoComplete: Not in appropriate context, skipping");
                 return;
             }
 
-            if (msgboxStartPos < 0 || msgboxEndPos < 0)
+            if (targetMsgBoxCall == null || !targetMsgBoxCall.SourceSpan.IsValid)
             {
-                Debug.Log("MsgBoxAutoComplete: Invalid position ranges, skipping");
+                Debug.Log("MsgBoxAutoComplete: Invalid target MsgBox call or position ranges, skipping");
                 return;
             }
 
             // Replace MsgBox() with MessageBox(0,"",0,0,"")
-            string replacementText = "MessageBox(0,\"\",0,0,\"\");";
+            string replacementText = "MessageBox(0,\"\",0,0,\"\")";
 
-            Debug.Log($"MsgBoxAutoComplete: Replacing MsgBox() from pos {msgboxStartPos} to {msgboxEndPos}");
+            // For simplicity, always add a semicolon since MsgBox calls are typically statements
+            replacementText += ";";
+
+            Debug.Log($"MsgBoxAutoComplete: Replacing MsgBox() from pos {targetMsgBoxCall.SourceSpan.Start.ByteIndex} to {targetMsgBoxCall.SourceSpan.End.ByteIndex}");
             Debug.Log($"MsgBoxAutoComplete: Replacement text: '{replacementText}'");
 
-            // Replace the entire MsgBox( call with MessageBox( expansion
-            ReplaceText(
-                msgboxStartPos,
-                msgboxEndPos,
-                replacementText,
-                RefactorDescription
-            );
+            // Replace the entire MsgBox call with MessageBox expansion using EditText
+            EditText(targetMsgBoxCall.SourceSpan, replacementText, RefactorDescription);
         }
     }
 }

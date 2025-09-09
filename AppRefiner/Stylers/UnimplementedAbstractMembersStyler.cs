@@ -1,16 +1,11 @@
 using AppRefiner.Database;
-using AppRefiner.Ast;
-using AppRefiner.PeopleCode;
-using static AppRefiner.PeopleCode.PeopleCodeParser; // For context types
-using Antlr4.Runtime.Misc; // For NotNull
-using Antlr4.Runtime;
-using Antlr4.Runtime.Tree; // For IParseTree, ITerminalNode
-using System.Linq;
+using AppRefiner.Refactors.QuickFixes;
+using PeopleCodeParser.SelfHosted.Nodes;
 using System.Text;
-using AppRefiner.QuickFixes; // For StringBuilder
 
 namespace AppRefiner.Stylers
 {
+
     /// <summary>
     /// Styler that checks if an Application Class implements all abstract members
     /// from its base class or interfaces.
@@ -19,132 +14,237 @@ namespace AppRefiner.Stylers
     {
         private const uint WARNING_COLOR = 0xFF00A5FF; // Orange (BGRA) for unimplemented members warning
 
-        // Member variables to store context during parse tree walk
-        private ParserRuleContext? _extendsTargetCtx;
-        private ParserRuleContext? _implementsTargetCtx;
-        private ProgramContext? _currentProgramContext;
-
-        public UnimplementedAbstractMembersStyler()
-        {
-            Description = "Highlights Application Classes that do not implement all abstract members from base classes or interfaces.";
-            Active = true; // Assuming it should be active by default
-        }
+        public override string Description => "Missing abstract implementations";
 
         /// <summary>
         /// Specifies that this styler requires a database connection to resolve class hierarchies.
         /// </summary>
         public override DataManagerRequirement DatabaseRequirement => DataManagerRequirement.Required;
 
-        public override void Reset()
+        /// <summary>
+        /// Processes the entire program and resets state
+        /// </summary>
+        public override void VisitProgram(ProgramNode node)
         {
-            // No specific cache to clear here beyond the base reset
-            base.Reset();
-            _extendsTargetCtx = null;
-            _implementsTargetCtx = null;
-            _currentProgramContext = null;
+            Reset();
+            base.VisitProgram(node);
         }
 
-        public override void EnterProgram([NotNull] ProgramContext context)
+        /// <summary>
+        /// Check application classes for unimplemented abstract members
+        /// </summary>
+        public override void VisitAppClass(AppClassNode node)
         {
-            // Store the program context for later use in ExitProgram
-            _currentProgramContext = context;
-        }
-
-        public override void EnterClassDeclarationExtension([NotNull] ClassDeclarationExtensionContext context)
-        {
-            // Store the context for the 'extends' clause path
-            var superClassCtx = context.superclass();
-            if (superClassCtx is AppClassSuperClassContext appClassSuperCtx)
+            // Only proceed if we have a database connection and either a base class or interface
+            if (DataManager == null || (node.BaseClass == null && node.ImplementedInterface == null))
             {
-                _extendsTargetCtx = appClassSuperCtx.appClassPath();
-            }
-        }
-
-        public override void EnterClassDeclarationImplementation([NotNull] ClassDeclarationImplementationContext context)
-        {
-            // Store the context for the 'implements' clause path
-            _implementsTargetCtx = context.appClassPath();
-        }
-
-        public override void ExitProgram([NotNull] ProgramContext context)
-        {
-            // Ensure we are exiting the same context we entered and have necessary components
-            if (context != _currentProgramContext || DataManager == null || _currentProgramContext == null)
-            {
-                 // Reset state if context mismatch or missing components, just in case
-                Reset(); 
-                return;
-            } 
-
-            if (_implementsTargetCtx == null && _extendsTargetCtx == null)
-            {
-                // No class extension or implementation found, nothing to do
-                Reset();
+                base.VisitAppClass(node);
                 return;
             }
 
             try
             {
-                // Parse the AST using the stored program context
-                var programAst = AppRefiner.Ast.Program.Parse(_currentProgramContext, "", DataManager);
-
-                // Check if this program contains an Application Class
-                if (programAst.ContainedAppClass == null) return;
-
-                var appClass = programAst.ContainedAppClass;
-
-                // Get the list of unimplemented abstract methods and properties
-                var (unimplementedMethods, unimplementedProperties) = appClass.GetAllUnimplementedAbstractMembers();
+                // Get all unimplemented abstract members
+                var (unimplementedMethods, unimplementedProperties) = GetAllUnimplementedAbstractMembers(node);
 
                 // If there are no unimplemented members, we are done
-                if (unimplementedMethods.Count == 0 && unimplementedProperties.Count == 0) return;
-
-                // Determine the final target node to highlight
-                IParseTree? finalTargetNode = null;
-                if (appClass.ExtendedClass != null && _extendsTargetCtx != null)
+                if (unimplementedMethods.Count == 0 && unimplementedProperties.Count == 0)
                 {
-                    finalTargetNode = _extendsTargetCtx;
-                }
-                else if (appClass.ImplementedInterface != null && _implementsTargetCtx != null)
-                {
-                    finalTargetNode = _implementsTargetCtx;
+                    base.VisitAppClass(node);
+                    return;
                 }
 
-                // If we still don't have a target, we cannot add an indicator
-                if (finalTargetNode == null) return;
-
-                // Build the tooltip message
-                var tooltipBuilder = new StringBuilder("Missing implementations:");
-                foreach (var method in unimplementedMethods)
+                // Determine what to highlight based on what the class extends/implements
+                TypeNode? targetToHighlight = null;
+                if (node.BaseClass != null)
                 {
-                    tooltipBuilder.Append($"\n - Method: {method.Name}");
+                    targetToHighlight = node.BaseClass;
                 }
-                foreach (var prop in unimplementedProperties)
+                else if (node.ImplementedInterface != null)
                 {
-                    tooltipBuilder.Append($"\n - Property: {prop.Name}");
+                    targetToHighlight = node.ImplementedInterface;
                 }
 
-                if (finalTargetNode is ParserRuleContext ctxNode)
+                // If we have a target to highlight, add the indicator
+                if (targetToHighlight != null)
                 {
-                    AddIndicator(ctxNode, IndicatorType.SQUIGGLE, WARNING_COLOR, tooltipBuilder.ToString(), 
-                        [(typeof(ImplementAbstractMembersRefactor),"Implement missing abstract members")]);
-                }
-                else if (finalTargetNode is ITerminalNode termNode)
-                {
-                    AddIndicator(termNode.Symbol, IndicatorType.SQUIGGLE, WARNING_COLOR, tooltipBuilder.ToString(),
-                        [(typeof(ImplementAbstractMembersRefactor),"Implement missing abstract members")]);
+                    // Build the tooltip message
+                    var tooltipBuilder = new StringBuilder("Missing implementations:");
+                    foreach (var method in unimplementedMethods)
+                    {
+                        tooltipBuilder.Append($"\n - Method: {method.Name}");
+                    }
+                    foreach (var prop in unimplementedProperties)
+                    {
+                        tooltipBuilder.Append($"\n - Property: {prop.Name}");
+                    }
+
+                    var quickFixes = new List<(Type RefactorClass, string Description)>
+                    {
+                        (typeof(ImplementAbstractMembers), "Implement missing abstract members")
+                    };
+
+                    AddIndicator((targetToHighlight.SourceSpan.Start.ByteIndex, targetToHighlight.SourceSpan.End.ByteIndex), IndicatorType.SQUIGGLE, WARNING_COLOR, tooltipBuilder.ToString(), quickFixes);
                 }
             }
             catch (Exception ex)
             {
-                Console.Error.WriteLine($"Error in UnimplementedAbstractMembersStyler: {ex.Message}\n{ex.StackTrace}");
+                // Log error but don't throw - stylers should be resilient
+                Console.Error.WriteLine($"Error in UnimplementedAbstractMembersStyler: {ex.Message}");
             }
-            finally
+
+            base.VisitAppClass(node);
+        }
+
+        /// <summary>
+        /// Gets all unimplemented abstract members from base classes and interfaces
+        /// </summary>
+        private (List<MethodNode> UnimplementedMethods, List<PropertyNode> UnimplementedProperties)
+            GetAllUnimplementedAbstractMembers(AppClassNode node)
+        {
+            var abstractMethods = new Dictionary<string, MethodNode>();
+            var abstractProperties = new Dictionary<string, PropertyNode>();
+            var implementedSignatures = GetImplementedSignatures(node);
+
+            // Collect from base class hierarchy
+            if (node.BaseClass != null)
             {
-                // Reset state after processing the program
-                // This is crucial if the styler instance is reused
-                Reset(); 
+                CollectAbstractMembers(node.BaseClass.TypeName, implementedSignatures, abstractMethods, abstractProperties);
+            }
+
+            // Collect from implemented interface hierarchy  
+            if (node.ImplementedInterface != null)
+            {
+                CollectAbstractMembers(node.ImplementedInterface.TypeName, implementedSignatures, abstractMethods, abstractProperties);
+            }
+
+            return (abstractMethods.Values.ToList(), abstractProperties.Values.ToList());
+        }
+
+        /// <summary>
+        /// Gets signatures of all concrete members implemented in a class
+        /// </summary>
+        private static HashSet<string> GetImplementedSignatures(AppClassNode node)
+        {
+            var signatures = new HashSet<string>();
+
+            // Add concrete methods (excluding constructors)
+            foreach (var method in node.Methods.Where(m => !m.IsAbstract && !IsConstructor(m, node.Name)))
+                signatures.Add($"M:{method.Name}({method.Parameters.Count})");
+
+            // Add concrete properties
+            foreach (var property in node.Properties.Where(p => !p.IsAbstract))
+                signatures.Add($"P:{property.Name}");
+
+            return signatures;
+        }
+
+        /// <summary>
+        /// Recursively collects abstract members from a class or interface hierarchy
+        /// </summary>
+        private void CollectAbstractMembers(string typePath, HashSet<string> implementedSignatures,
+            Dictionary<string, MethodNode> abstractMethods, Dictionary<string, PropertyNode> abstractProperties)
+        {
+            try
+            {
+                var program = ParseClassAst(typePath);
+                if (program == null) return;
+
+                var isInterface = program.Interface != null;
+                var methods = isInterface ? program.Interface!.Methods : program.AppClass?.Methods;
+                var properties = isInterface ? program.Interface!.Properties : program.AppClass?.Properties;
+
+                if (methods == null && properties == null) return;
+
+                // Process methods - all interface methods are abstract, only abstract class methods
+                if (methods != null)
+                {
+                    foreach (var method in methods.Where(m => isInterface || m.IsAbstract))
+                    {
+                        string signature = $"M:{method.Name}({method.Parameters.Count})";
+                        if (!implementedSignatures.Contains(signature))
+                            abstractMethods.TryAdd(signature, method);
+                    }
+                }
+
+                // Process properties - all interface properties are abstract, only abstract class properties
+                if (properties != null)
+                {
+                    foreach (var property in properties.Where(p => isInterface || p.IsAbstract))
+                    {
+                        string signature = $"P:{property.Name}";
+                        if (!implementedSignatures.Contains(signature))
+                            abstractProperties.TryAdd(signature, property);
+                    }
+                }
+
+                // Add concrete implementations to prevent propagation from parents (classes only)
+                if (!isInterface && program.AppClass != null)
+                {
+                    foreach (var method in program.AppClass.Methods.Where(m => !m.IsAbstract && !IsConstructor(m, program.AppClass.Name)))
+                        implementedSignatures.Add($"M:{method.Name}({method.Parameters.Count})");
+                    foreach (var property in program.AppClass.Properties.Where(p => !p.IsAbstract))
+                        implementedSignatures.Add($"P:{property.Name}");
+                }
+
+                // Recurse to parent
+                string? parentPath = isInterface ? program.Interface?.BaseInterface?.TypeName : program.AppClass?.BaseClass?.TypeName;
+                if (parentPath != null)
+                {
+                    CollectAbstractMembers(parentPath, implementedSignatures, abstractMethods, abstractProperties);
+                }
+            }
+            catch (Exception)
+            {
+                // Silently handle parsing errors
             }
         }
+
+        /// <summary>
+        /// Parses a class or interface AST from its path using the self-hosted parser
+        /// </summary>
+        private ProgramNode? ParseClassAst(string classPath)
+        {
+            if (DataManager == null || string.IsNullOrEmpty(classPath))
+                return null;
+
+            try
+            {
+                // Get the source code from the database
+                string? sourceCode = DataManager.GetAppClassSourceByPath(classPath);
+
+                if (string.IsNullOrEmpty(sourceCode))
+                    return null; // Class not found in database
+
+                // Parse using the self-hosted parser
+                var lexer = new PeopleCodeParser.SelfHosted.Lexing.PeopleCodeLexer(sourceCode);
+                var tokens = lexer.TokenizeAll();
+
+                var parser = new PeopleCodeParser.SelfHosted.PeopleCodeParser(tokens);
+                return parser.ParseProgram();
+            }
+            catch (Exception)
+            {
+                // Silently handle database or parsing errors
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// Helper method to determine if a method is a constructor
+        /// </summary>
+        private static bool IsConstructor(MethodNode method, string className)
+        {
+            return string.Equals(method.Name, className, StringComparison.OrdinalIgnoreCase);
+        }
+
+        /// <summary>
+        /// Reset state for reuse
+        /// </summary>
+        public new void Reset()
+        {
+            base.Reset();
+            // No additional state to clear in this implementation
+        }
     }
-} 
+}

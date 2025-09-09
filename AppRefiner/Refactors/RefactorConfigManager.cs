@@ -1,6 +1,4 @@
-using System;
-using System.Collections.Generic;
-using System.IO;
+using System.ComponentModel;
 using System.Text.Json;
 
 namespace AppRefiner.Refactors
@@ -89,12 +87,35 @@ namespace AppRefiner.Refactors
         public static void ApplyConfigurationToInstance(BaseRefactor instance)
         {
             if (instance == null) return;
-
+            
             string typeName = instance.GetType().FullName ?? string.Empty;
-            if (!string.IsNullOrEmpty(typeName) && RefactorConfigs.TryGetValue(typeName, out string? config))
+            if (!string.IsNullOrEmpty(typeName) && RefactorConfigs.TryGetValue(typeName, out string? jsonConfig))
             {
-                instance.ApplyRefactorConfig(config);
+                var config = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(jsonConfig);
+                if (config == null) return;
+
+                var configProperties = instance.GetType().GetConfigurableProperties();
+
+                foreach (var property in configProperties)
+                {
+                    if (config.TryGetValue(property.Name, out var value))
+                    {
+                        try
+                        {
+                            var typedValue = JsonSerializer.Deserialize(value.GetRawText(), property.PropertyType);
+                            property.SetValue(instance, typedValue);
+                        }
+                        catch
+                        {
+                            // Skip properties that can't be deserialized
+                        }
+                    }
+                }
+
+
             }
+            // Configuration is not currently supported with the new refactor architecture
+            // This method is kept for compatibility
         }
 
         /// <summary>
@@ -148,7 +169,7 @@ namespace AppRefiner.Refactors
         /// <returns>True if the refactor has configurable properties</returns>
         public static bool HasConfigurableProperties(Type refactorType)
         {
-            return BaseRefactor.GetConfigurableProperties(refactorType).Count > 0;
+            return refactorType.GetConfigurableProperties().Count > 0;
         }
 
         /// <summary>
@@ -165,7 +186,7 @@ namespace AppRefiner.Refactors
             }
 
             // Create default configuration
-            var defaultConfig = BaseRefactor.GetDefaultRefactorConfig(refactorType);
+            var defaultConfig = "{}";
             UpdateRefactorConfig(refactorType, defaultConfig);
             return defaultConfig;
         }

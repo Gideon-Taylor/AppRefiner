@@ -1,4 +1,5 @@
-using static AppRefiner.PeopleCode.PeopleCodeParser;
+using PeopleCodeParser.SelfHosted.Lexing;
+using PeopleCodeParser.SelfHosted.Nodes;
 
 namespace AppRefiner.Linters
 {
@@ -14,20 +15,15 @@ namespace AppRefiner.Linters
             Active = true;
         }
 
-        public override void Reset()
+        public override void VisitProgram(ProgramNode node)
         {
-            // Nothing to reset
-        }
-
-        public override void EnterProgram(ProgramContext context)
-        {
-            if (Comments == null || Comments.Count == 0)
+            if (node.Comments == null || node.Comments.Count == 0)
                 return;
 
-            foreach (var comment in Comments)
+            foreach (var comment in node.Comments)
             {
-                // Check only for line comments
-                if (comment.Type != PeopleCodeLexer.LINE_COMMENT)
+                // Check only for line comments (REM comments)
+                if (comment.Type != TokenType.LineComment)
                     continue;
 
                 // If line count is greater than 1 and no proper terminator, flag it
@@ -37,11 +33,13 @@ namespace AppRefiner.Linters
                         1,
                         "REM comment spans multiple lines, possible missing semicolon termination.",
                         Type,
-                        comment.Line,
-                        comment
+                        comment.SourceSpan.Start.Line,
+                        comment.SourceSpan
                     );
                 }
             }
+
+            base.VisitProgram(node);
         }
     }
 }

@@ -1,7 +1,3 @@
-using System;
-using System.Drawing;
-using System.Windows.Forms;
-
 namespace AppRefiner.Dialogs
 {
     /// <summary>
@@ -29,7 +25,7 @@ namespace AppRefiner.Dialogs
             this.headerLabel = new Label();
             this.contentTextBox = new RichTextBox();
             this.closeButton = new Button();
-            
+
             InitializeComponent(content, title);
         }
 
@@ -73,7 +69,7 @@ namespace AppRefiner.Dialogs
             this.closeButton.ForeColor = Color.White;
             this.closeButton.FlatStyle = FlatStyle.Flat;
             this.closeButton.FlatAppearance.BorderSize = 0;
-            this.closeButton.Click += (s, e) => 
+            this.closeButton.Click += (s, e) =>
             {
                 this.DialogResult = DialogResult.Cancel;
                 this.Close();
@@ -101,7 +97,7 @@ namespace AppRefiner.Dialogs
         protected override void OnShown(EventArgs e)
         {
             base.OnShown(e);
-            
+
             // Center on owner window
             if (owner != IntPtr.Zero)
             {
@@ -118,12 +114,10 @@ namespace AppRefiner.Dialogs
         protected override void OnPaint(PaintEventArgs e)
         {
             base.OnPaint(e);
-            
+
             // Draw a border around the form
-            using (var pen = new Pen(Color.FromArgb(100, 100, 120)))
-            {
-                e.Graphics.DrawRectangle(pen, 0, 0, Width - 1, Height - 1);
-            }
+            using var pen = new Pen(Color.FromArgb(100, 100, 120));
+            e.Graphics.DrawRectangle(pen, 0, 0, Width - 1, Height - 1);
         }
 
         protected override bool ProcessDialogKey(Keys keyData)
@@ -140,10 +134,10 @@ namespace AppRefiner.Dialogs
         protected override void OnFormClosed(FormClosedEventArgs e)
         {
             base.OnFormClosed(e);
-            
+
             // Dispose the mouse handler
             mouseHandler?.Dispose();
             mouseHandler = null;
         }
     }
-} 
+}

@@ -1,4 +1,3 @@
-using System;
 using AppRefiner.Dialogs;
 
 namespace AppRefiner
@@ -16,6 +15,17 @@ namespace AppRefiner
         public static DebugDialog ShowDebugDialog(IntPtr parentHandle)
         {
             return DebugDialog.ShowDialog(parentHandle);
+        }
+
+        /// <summary>
+        /// Opens the indicator debug panel
+        /// </summary>
+        /// <param name="parentHandle">Handle to the parent window</param>
+        /// <param name="mainForm">Reference to main form for accessing active editor</param>
+        /// <returns>The indicator debug panel instance</returns>
+        public static IndicatorDebugPanel ShowIndicatorPanel(IntPtr parentHandle, MainForm mainForm)
+        {
+            return DebugDialog.ShowIndicatorPanel(parentHandle, mainForm);
         }
 
         /// <summary>
@@ -52,12 +62,12 @@ namespace AppRefiner
         /// <param name="context">Optional context information</param>
         public static void LogException(Exception ex, string context = "")
         {
-            string message = string.IsNullOrEmpty(context) 
-                ? $"Exception: {ex.Message}\n{ex.StackTrace}" 
+            string message = string.IsNullOrEmpty(context)
+                ? $"Exception: {ex.Message}\n{ex.StackTrace}"
                 : $"Exception in {context}: {ex.Message}\n{ex.StackTrace}";
-                
+
             DebugDialog.Log(message, DebugMessageType.Error);
-            
+
             // Log inner exceptions if they exist
             if (ex.InnerException != null)
             {
@@ -65,4 +75,4 @@ namespace AppRefiner
             }
         }
     }
-} 
+}

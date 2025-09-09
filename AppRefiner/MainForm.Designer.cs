@@ -49,9 +49,12 @@ namespace AppRefiner
             chkEventMapping = new CheckBox();
             groupBox1 = new GroupBox();
             btnReportDirectory = new Button();
+            chkOverrideOpen = new CheckBox();
             btnTNSADMIN = new Button();
             btnDebugLog = new Button();
             grpEditorSettings = new GroupBox();
+            btnConfigSmartOpen = new Button();
+            chkOverrideFindReplace = new CheckBox();
             chkRememberFolds = new CheckBox();
             chkCodeFolding = new CheckBox();
             chkPromptForDB = new CheckBox();
@@ -90,7 +93,6 @@ namespace AppRefiner
             cmbTemplates = new ComboBox();
             progressBar1 = new ProgressBar();
             lblStatus = new Label();
-            chkOverrideFindReplace = new CheckBox();
             ((System.ComponentModel.ISupportInitialize)splitContainer1).BeginInit();
             splitContainer1.Panel1.SuspendLayout();
             splitContainer1.Panel2.SuspendLayout();
@@ -266,6 +268,16 @@ namespace AppRefiner
             btnReportDirectory.UseVisualStyleBackColor = true;
             btnReportDirectory.Click += btnReportDirectory_Click;
             // 
+            // chkOverrideOpen
+            // 
+            chkOverrideOpen.AutoSize = true;
+            chkOverrideOpen.Location = new Point(432, 72);
+            chkOverrideOpen.Name = "chkOverrideOpen";
+            chkOverrideOpen.Size = new Size(103, 19);
+            chkOverrideOpen.TabIndex = 32;
+            chkOverrideOpen.Text = "Override Open";
+            chkOverrideOpen.UseVisualStyleBackColor = true;
+            // 
             // btnTNSADMIN
             // 
             btnTNSADMIN.Location = new Point(6, 51);
@@ -288,6 +300,8 @@ namespace AppRefiner
             // 
             // grpEditorSettings
             // 
+            grpEditorSettings.Controls.Add(btnConfigSmartOpen);
+            grpEditorSettings.Controls.Add(chkOverrideOpen);
             grpEditorSettings.Controls.Add(chkOverrideFindReplace);
             grpEditorSettings.Controls.Add(chkRememberFolds);
             grpEditorSettings.Controls.Add(chkCodeFolding);
@@ -304,6 +318,26 @@ namespace AppRefiner
             grpEditorSettings.TabIndex = 20;
             grpEditorSettings.TabStop = false;
             grpEditorSettings.Text = "Settings";
+            // 
+            // btnConfigSmartOpen
+            // 
+            btnConfigSmartOpen.Location = new Point(432, 43);
+            btnConfigSmartOpen.Name = "btnConfigSmartOpen";
+            btnConfigSmartOpen.Size = new Size(110, 23);
+            btnConfigSmartOpen.TabIndex = 33;
+            btnConfigSmartOpen.Text = "Config Open...";
+            btnConfigSmartOpen.UseVisualStyleBackColor = true;
+            btnConfigSmartOpen.Click += btnConfigSmartOpen_Click;
+            // 
+            // chkOverrideFindReplace
+            // 
+            chkOverrideFindReplace.AutoSize = true;
+            chkOverrideFindReplace.Location = new Point(245, 69);
+            chkOverrideFindReplace.Name = "chkOverrideFindReplace";
+            chkOverrideFindReplace.Size = new Size(143, 19);
+            chkOverrideFindReplace.TabIndex = 31;
+            chkOverrideFindReplace.Text = "Override Find/Replace";
+            chkOverrideFindReplace.UseVisualStyleBackColor = true;
             // 
             // chkRememberFolds
             // 
@@ -714,17 +748,6 @@ namespace AppRefiner
             lblStatus.Text = "Stopped";
             lblStatus.TextAlign = ContentAlignment.MiddleCenter;
             // 
-            // chkOverrideFindReplace
-            // 
-            chkOverrideFindReplace.AutoSize = true;
-            chkOverrideFindReplace.Location = new Point(245, 69);
-            chkOverrideFindReplace.Name = "chkOverrideFindReplace";
-            chkOverrideFindReplace.Size = new Size(143, 19);
-            chkOverrideFindReplace.TabIndex = 31;
-            chkOverrideFindReplace.Text = "Override Find/Replace";
-            chkOverrideFindReplace.UseVisualStyleBackColor = true;
-            chkOverrideFindReplace.CheckedChanged += chkOverrideFindReplace_CheckedChanged;
-            // 
             // MainForm
             // 
             AutoScaleDimensions = new SizeF(7F, 15F);
@@ -829,5 +852,7 @@ namespace AppRefiner
         private DataGridViewTextBoxColumn Column1;
         private DataGridViewButtonColumn dataGridViewButtonColumn1;
         private CheckBox chkOverrideFindReplace;
+        private CheckBox chkOverrideOpen;
+        private Button btnConfigSmartOpen;
     }
 }

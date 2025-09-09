@@ -1,9 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Drawing;
-using System.Windows.Forms;
-using System.Linq;
-
 namespace AppRefiner.Dialogs
 {
     /// <summary>
@@ -37,19 +31,19 @@ namespace AppRefiner.Dialogs
             this.owner = owner;
             allDefinitions = definitions;
             filteredDefinitions = new List<GoToCodeDefinition>(allDefinitions);
-            
+
             this.headerPanel = new Panel();
             this.headerLabel = new Label();
             this.searchBox = new TextBox();
             this.definitionsTreeView = new TreeView();
-            
+
             InitializeComponent();
             ConfigureForm();
             PopulateDefinitionsTree();
         }
 
         private void InitializeComponent()
-        {   
+        {
             this.headerPanel.SuspendLayout();
             this.SuspendLayout();
 
@@ -102,13 +96,13 @@ namespace AppRefiner.Dialogs
             this.StartPosition = FormStartPosition.Manual;
             this.Text = "Go To Definition";
             this.ShowInTaskbar = false;
-            
+
             // Add background color to make dialog stand out
             this.BackColor = Color.FromArgb(240, 240, 245);
-            
+
             // Add a 1-pixel border to make the dialog visually distinct
             this.Padding = new Padding(1);
-            
+
             this.headerPanel.ResumeLayout(false);
             this.ResumeLayout(false);
             this.PerformLayout();
@@ -121,11 +115,12 @@ namespace AppRefiner.Dialogs
             definitionsTreeView.ShowPlusMinus = true;
             definitionsTreeView.ShowRootLines = true;
             definitionsTreeView.FullRowSelect = true;
-            
+
             // Add context menu for toggling grouping
             var contextMenu = new ContextMenuStrip();
             var toggleGroupingItem = new ToolStripMenuItem("Toggle Grouping");
-            toggleGroupingItem.Click += (s, e) => {
+            toggleGroupingItem.Click += (s, e) =>
+            {
                 groupingEnabled = !groupingEnabled;
                 PopulateDefinitionsTree();
             };
@@ -349,9 +344,9 @@ namespace AppRefiner.Dialogs
         protected override void OnPaint(PaintEventArgs e)
         {
             base.OnPaint(e);
-            
+
             // Draw a border around the form
-            ControlPaint.DrawBorder(e.Graphics, ClientRectangle, 
+            ControlPaint.DrawBorder(e.Graphics, ClientRectangle,
                 Color.FromArgb(100, 100, 120), // Border color
                 1, ButtonBorderStyle.Solid,    // Left
                 Color.FromArgb(100, 100, 120), // Border color
@@ -366,13 +361,13 @@ namespace AppRefiner.Dialogs
         {
             base.OnShown(e);
             searchBox.Focus();
-            
+
             // Center on owner window
             if (owner != IntPtr.Zero)
             {
                 WindowHelper.CenterFormOnWindow(this, owner);
             }
-            
+
             // Create the mouse handler if this is a modal dialog
             if (this.Modal && owner != IntPtr.Zero)
             {
@@ -383,10 +378,10 @@ namespace AppRefiner.Dialogs
         protected override void OnFormClosed(FormClosedEventArgs e)
         {
             base.OnFormClosed(e);
-            
+
             // Dispose the mouse handler
             mouseHandler?.Dispose();
             mouseHandler = null;
         }
     }
-} 
+}

@@ -1,8 +1,4 @@
 using AppRefiner.Dialogs;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading;
 // Remove direct dependency on System.Windows.Forms if possible
 // using System.Windows.Forms; 
 
@@ -20,7 +16,7 @@ namespace AppRefiner.Templates
         public string Description { get; set; }
         public bool IsVisible { get; set; } = true; // Determined by display conditions
         public string CurrentValue { get; set; } = ""; // Current value held by the manager
-        
+
         public TemplateParameterUIDefinition(TemplateInput input, string currentValue = "")
         {
             Id = input.Id;
@@ -31,7 +27,7 @@ namespace AppRefiner.Templates
             CurrentValue = currentValue; // Initialize with current value if provided
         }
     }
-    
+
     /// <summary>
     /// Manages the loading, UI generation, and application of code templates.
     /// </summary>
@@ -46,7 +42,7 @@ namespace AppRefiner.Templates
         private Dictionary<string, DisplayCondition> templateInputsDisplayConditions = new();
 
         // --- Properties ---
-        
+
         /// <summary>
         /// Gets the list of currently loaded templates.
         /// </summary>
@@ -56,18 +52,18 @@ namespace AppRefiner.Templates
         /// Gets or sets the currently selected template for parameter generation or application.
         /// </summary>
         private Template? _activeTemplate;
-        public Template? ActiveTemplate 
-        { 
+        public Template? ActiveTemplate
+        {
             get => _activeTemplate;
-            set 
+            set
             {
                 _activeTemplate = value;
                 InitializeParameterValues(); // Reset values when template changes
             }
         }
-        
+
         // Stores the current values provided for the ActiveTemplate's inputs
-        private Dictionary<string, string> currentParameterValues = new Dictionary<string, string>();
+        private Dictionary<string, string> currentParameterValues = new();
 
 
         // --- Constructor ---
@@ -86,10 +82,10 @@ namespace AppRefiner.Templates
             // Logic from MainForm.LoadTemplates will go here
             LoadedTemplates = Template.GetAvailableTemplates();
             // Reset active template and values if templates are reloaded
-            ActiveTemplate = null; 
+            ActiveTemplate = null;
             currentParameterValues.Clear();
         }
-        
+
         /// <summary>
         /// Initializes or resets the current parameter values based on the ActiveTemplate's inputs and defaults.
         /// </summary>
@@ -114,7 +110,7 @@ namespace AppRefiner.Templates
         {
             if (ActiveTemplate != null && ActiveTemplate.Inputs != null && ActiveTemplate.Inputs.Any(i => i.Id == inputId))
             {
-                 currentParameterValues[inputId] = value;
+                currentParameterValues[inputId] = value;
             }
         }
 
@@ -131,19 +127,19 @@ namespace AppRefiner.Templates
             foreach (var input in ActiveTemplate.Inputs)
             {
                 string currentValue = currentParameterValues.TryGetValue(input.Id, out var val) ? val : input.DefaultValue ?? "";
-                 var definition = new TemplateParameterUIDefinition(input, currentValue);
-                 
-                 // Check display condition
-                 if (input.DisplayCondition != null)
-                 {
-                     definition.IsVisible = Template.IsDisplayConditionMet(input.DisplayCondition, currentParameterValues);
-                 }
-                 else
-                 {
-                     definition.IsVisible = true;
-                 }
-                 
-                 definitions.Add(definition);
+                var definition = new TemplateParameterUIDefinition(input, currentValue);
+
+                // Check display condition
+                if (input.DisplayCondition != null)
+                {
+                    definition.IsVisible = Template.IsDisplayConditionMet(input.DisplayCondition, currentParameterValues);
+                }
+                else
+                {
+                    definition.IsVisible = true;
+                }
+
+                definitions.Add(definition);
             }
             return definitions;
         }
@@ -155,7 +151,7 @@ namespace AppRefiner.Templates
         /// <returns>True if validation passes, false otherwise.</returns>
         public bool ValidateInputs()
         {
-             if (ActiveTemplate?.Inputs == null) return true;
+            if (ActiveTemplate?.Inputs == null) return true;
 
             foreach (var input in ActiveTemplate.Inputs.Where(i => i.Required))
             {
@@ -169,7 +165,7 @@ namespace AppRefiner.Templates
                 // Only validate if the input is required AND visible
                 if (isVisible && (!currentParameterValues.TryGetValue(input.Id, out string? value) || string.IsNullOrWhiteSpace(value)))
                 {
-                     return false; // Required and visible input is missing or empty
+                    return false; // Required and visible input is missing or empty
                 }
             }
             return true;
@@ -214,13 +210,13 @@ namespace AppRefiner.Templates
 
                 if (ActiveTemplate.CursorPosition >= 0)
                 {
-                     ScintillaManager.SetCursorPosition(editor, finalCursorPos);
-                     WindowHelper.FocusWindow(editor.hWnd);
+                    ScintillaManager.SetCursorPosition(editor, finalCursorPos);
+                    WindowHelper.FocusWindow(editor.hWnd);
                 }
                 else if (ActiveTemplate.SelectionStart >= 0 && ActiveTemplate.SelectionEnd >= 0)
                 {
-                     ScintillaManager.SetSelection(editor, selectionStart, selectionEnd);
-                     WindowHelper.FocusWindow(editor.hWnd);
+                    ScintillaManager.SetSelection(editor, selectionStart, selectionEnd);
+                    WindowHelper.FocusWindow(editor.hWnd);
                 }
             }
             else // Replace mode
@@ -228,15 +224,15 @@ namespace AppRefiner.Templates
                 ScintillaManager.SetScintillaText(editor, generatedContent);
                 if (ActiveTemplate.CursorPosition >= 0)
                 {
-                     ScintillaManager.SetCursorPosition(editor, ActiveTemplate.CursorPosition);
-                     WindowHelper.FocusWindow(editor.hWnd);
+                    ScintillaManager.SetCursorPosition(editor, ActiveTemplate.CursorPosition);
+                    WindowHelper.FocusWindow(editor.hWnd);
                 }
                 else if (ActiveTemplate.SelectionStart >= 0 && ActiveTemplate.SelectionEnd >= 0)
                 {
-                     ScintillaManager.SetSelection(editor, ActiveTemplate.SelectionStart, ActiveTemplate.SelectionEnd);
-                     WindowHelper.FocusWindow(editor.hWnd);
+                    ScintillaManager.SetSelection(editor, ActiveTemplate.SelectionStart, ActiveTemplate.SelectionEnd);
+                    WindowHelper.FocusWindow(editor.hWnd);
                 }
             }
         }
     }
-} 
+}

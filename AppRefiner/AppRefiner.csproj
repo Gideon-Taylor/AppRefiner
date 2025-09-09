@@ -9,6 +9,7 @@
     <PlatformTarget>x64</PlatformTarget>
     <ApplicationIcon>AppRefiner.ico</ApplicationIcon>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <AnalysisLevel>latest</AnalysisLevel>
   </PropertyGroup>
 
   <ItemGroup>
@@ -17,17 +18,17 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Hogimn.Sql.Formatter" Version="2.0.1" />
-    <PackageReference Include="Microsoft.Data.Sqlite" Version="8.0.0" />
-    <PackageReference Include="DiffPlex" Version="1.7.1" />
-    <PackageReference Include="Oracle.ManagedDataAccess.Core" Version="23.7.0" />
-    <PackageReference Include="SqlParserCS" Version="0.6.3" />
-    <PackageReference Include="System.Data.Odbc" Version="9.0.7" />
-    <PackageReference Include="System.IO.Hashing" Version="9.0.2" />
+    <PackageReference Include="Hogimn.Sql.Formatter" Version="2.0.2" />
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="9.0.8" />
+    <PackageReference Include="DiffPlex" Version="1.8.0" />
+    <PackageReference Include="Oracle.ManagedDataAccess.Core" Version="23.9.1" />
+    <PackageReference Include="SqlParserCS" Version="0.6.5" />
+    <PackageReference Include="System.Data.Odbc" Version="9.0.8" />
+    <PackageReference Include="System.IO.Hashing" Version="9.0.8" />
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\PeopleCodeParser\PeopleCodeParser.csproj" />
+    <ProjectReference Include="..\PeopleCodeParser.SelfHosted\PeopleCodeParser.SelfHosted.csproj" />
   </ItemGroup>
 
   <ItemGroup>

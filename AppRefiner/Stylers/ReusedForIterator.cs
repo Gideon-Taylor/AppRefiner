@@ -1,79 +1,77 @@
-﻿
-    using AppRefiner.Linters;
-    using Antlr4.Runtime.Tree;
-    using static AppRefiner.PeopleCode.PeopleCodeParser;
-    using AppRefiner.Database;
-    using AppRefiner.PeopleCode; // Added for Report
-    using AppRefiner.Linters.Models; // Added for ReportType enum and Report class
-    using System.Linq; // Added for Where clause
-    using System.Collections.Generic; // Added for List
-    using global::AppRefiner.Database;
-    using global::AppRefiner.Linters;
-    using global::AppRefiner.PeopleCode;
-    using static global::AppRefiner.PeopleCode.PeopleCodeParser;
-using Antlr4.Runtime.Misc;
-using static SqlParser.Ast.Statement;
-using System.Net.Mime;
+using PeopleCodeParser.SelfHosted.Nodes;
 
-namespace AppRefiner.Stylers
+namespace AppRefiner.Stylers;
+
+/// <summary>
+/// Visitor that detects the re-use of for loop iterators in nested for loops.
+/// This is a self-hosted equivalent to the AppRefiner's ReusedForIterator linter.
+/// </summary>
+public class ReusedForIterator : BaseStyler
 {
-    public class ReusedForIterator : BaseStyler
+    private const uint ERROR_COLOR = 0x0000FF85; // Red color for errors
+    private readonly Stack<string> forIterators = new();
+
+    public override string Description => "Reused for iterators";
+
+    #region AST Visitor Overrides
+
+    /// <summary>
+    /// Processes the entire program and resets state
+    /// </summary>
+    public override void VisitProgram(ProgramNode node)
     {
-        // Corrected BGRA format (BBGGRRAA)
-        private const uint ErrorColor = 0x0000FFFF;   // Opaque Red
-        private const uint WarningColor = 0x00FFFF00; // Opaque Yellow
+        Reset();
+        base.VisitProgram(node);
+    }
 
-        private Stack<string> forIterators = new Stack<string>();
+    /// <summary>
+    /// Handles FOR statements and checks for iterator reuse
+    /// </summary>
+    public override void VisitFor(ForStatementNode node)
+    {
+        // Get the iterator variable from the for statement
+        var iterator = node.Variable;
 
-        public ReusedForIterator()
+        // Check if the iterator is already in use
+        if (forIterators.Contains(iterator))
         {
-            Description = "Highlights for loops that re-use an outer for's iterator.";
-            Active = true; // Set to true to enable by default, or manage externally
+            // Report the re-use of the iterator
+            AddIndicator(
+                node.IteratorToken.SourceSpan,
+                IndicatorType.HIGHLIGHTER,
+                ERROR_COLOR,
+                $"Re-use of for loop iterator '{iterator}' in nested for loop."
+            );
+        }
+        else
+        {
+            // Push the iterator onto the stack
+            forIterators.Push(iterator);
         }
 
-        public override DataManagerRequirement DatabaseRequirement => DataManagerRequirement.Optional;
+        // Visit the for loop body (where nested for loops might be)
+        base.VisitFor(node);
 
-        public override void EnterForStatement([NotNull] PeopleCodeParser.ForStatementContext context)
+        // Pop the iterator off the stack when exiting the for statement
+        // Only pop if this iterator is on top of the stack (defensive programming)
+        if (forIterators.Count > 0 && forIterators.Peek() == iterator)
         {
-            // Get the iterator variable from the for statement
-            var iterator = context.USER_VARIABLE().GetText();
-            // Check if the iterator is already in use
-            if (forIterators.Contains(iterator))
-            {
-                // Determine the end token based on expressions
-                var endToken = context.USER_VARIABLE().Symbol;
-                var expressions = context.expression();
-                if (expressions.Length > 0)
-                {
-                    endToken = expressions[0].Stop;
-                }
-                if (expressions.Length > 1)
-                {
-                    endToken = expressions[1].Stop;
-                }
-
-                AddIndicator(
-                    context.FOR().Symbol, 
-                    endToken, 
-                    IndicatorType.SQUIGGLE, 
-                    ErrorColor,
-                    $"For loop re-uses iterator {iterator} which is used by an outer for loop."
-                );
-            }
-            else
-            {
-                // Push the iterator onto the stack
-                forIterators.Push(iterator);
-            }
-        }
-        public override void ExitForStatement([NotNull] PeopleCodeParser.ForStatementContext context)
-        {
-            // Pop the iterator off the stack when exiting the for statement
-            var iterator = context.USER_VARIABLE().GetText();
-            if (forIterators.Count > 0 && forIterators.Peek() == iterator)
-            {
-                forIterators.Pop();
-            }
+            forIterators.Pop();
         }
     }
+
+    #endregion
+
+    #region Lifecycle Methods
+
+    /// <summary>
+    /// Resets the styler to its initial state
+    /// </summary>
+    public new void Reset()
+    {
+        base.Reset();
+        forIterators.Clear();
+    }
+
+    #endregion
 }

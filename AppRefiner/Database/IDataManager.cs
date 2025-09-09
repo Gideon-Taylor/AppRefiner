@@ -234,7 +234,7 @@ namespace AppRefiner.Database
         /// <param name="appClassPath">The application class path to check</param>
         /// <returns>True if the application class exists, false otherwise</returns>
         bool CheckAppClassExists(string appClassPath);
-        
+
         /// <summary>
         /// Retrieves the source code for an Application Class by its path
         /// </summary>
@@ -242,13 +242,15 @@ namespace AppRefiner.Database
         /// <returns>The source code of the application class if found, otherwise null</returns>
         string? GetAppClassSourceByPath(string appClassPath);
 
+        string? GetPeopleCodeProgram(OpenTarget openTarget);
+
         /// <summary>
         /// Retrieves field information for a specified PeopleSoft record.
         /// </summary>
         /// <param name="recordName">The name of the record (uppercase).</param>
         /// <returns>A list of RecordFieldInfo objects, or null if the record doesn't exist or an error occurs.</returns>
         List<RecordFieldInfo>? GetRecordFields(string recordName);
-        
+
         /// <summary>
         /// Gets all subpackages and classes in the specified application package path
         /// </summary>
@@ -259,5 +261,20 @@ namespace AppRefiner.Database
         List<EventMapItem> GetEventMapItems(EventMapInfo eventMapInfo);
 
         List<EventMapInfo> GetEventMapXrefs(string classPath);
+
+        /// <summary>
+        /// Gets targets that can be opened based on search options including separate ID and description search terms
+        /// </summary>
+        /// <param name="options">Search options including enabled types, limits, and search terms for ID and description</param>
+        /// <returns>List of OpenTarget objects matching the search criteria</returns>
+        List<OpenTarget> GetOpenTargets(OpenTargetSearchOptions options);
+
+        /// <summary>
+        /// Gets programs from PSPCMPROG that may contain function definitions
+        /// </summary>
+        /// <returns>List of OpenTarget objects representing programs that may contain function definitions</returns>
+        List<OpenTarget> GetFunctionDefiningPrograms();
+
+        string GetToolsVersion();
     }
 }

@@ -1,13 +1,7 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using System.IO; // Added for Path operations
-using Microsoft.Data.Sqlite; // Added for SQLite support
-using System.Text.Json; // Added for JSON serialization
-using System.Diagnostics; // Keep existing Debug
+﻿using Microsoft.Data.Sqlite; // Added for SQLite support
 using System.Security.Cryptography; // Added for SHA256
+using System.Text;
+using System.Text.Json; // Added for JSON serialization
 
 namespace AppRefiner
 {
@@ -37,20 +31,18 @@ namespace AppRefiner
                 Directory.CreateDirectory(dbDirectory);
             }
 
-            using (var connection = new SqliteConnection($"Data Source={dbPath}"))
-            {
-                connection.Open();
-                string tableCommand = @"
+            using var connection = new SqliteConnection($"Data Source={dbPath}");
+            connection.Open();
+            string tableCommand = @"
                     CREATE TABLE IF NOT EXISTS EditorFoldStates (
                         full_path TEXT NOT NULL,
                         content_hash TEXT NOT NULL,
                         fold_paths TEXT NOT NULL,
                         PRIMARY KEY (full_path, content_hash)
                     );";
-                var command = connection.CreateCommand();
-                command.CommandText = tableCommand;
-                command.ExecuteNonQuery();
-            }
+            var command = connection.CreateCommand();
+            command.CommandText = tableCommand;
+            command.ExecuteNonQuery();
         }
 
         private static string CalculateContentHash(string content)
@@ -59,16 +51,14 @@ namespace AppRefiner
             {
                 return "0"; // Or handle as an error/empty case appropriately
             }
-            using (SHA256 sha256Hash = SHA256.Create())
+            using SHA256 sha256Hash = SHA256.Create();
+            byte[] bytes = sha256Hash.ComputeHash(Encoding.UTF8.GetBytes(content));
+            StringBuilder builder = new();
+            for (int i = 0; i < bytes.Length; i++)
             {
-                byte[] bytes = sha256Hash.ComputeHash(Encoding.UTF8.GetBytes(content));
-                StringBuilder builder = new StringBuilder();
-                for (int i = 0; i < bytes.Length; i++)
-                {
-                    builder.Append(bytes[i].ToString("x2"));
-                }
-                return builder.ToString();
+                builder.Append(bytes[i].ToString("x2"));
             }
+            return builder.ToString();
         }
 
         public static void UpdatePersistedFolds(ScintillaEditor editor)
@@ -87,32 +77,30 @@ namespace AppRefiner
 
             InitializeDatabase();
 
-            using (var connection = new SqliteConnection($"Data Source={GetDatabasePath()}"))
-            {
-                connection.Open();
-                var command = connection.CreateCommand();
+            using var connection = new SqliteConnection($"Data Source={GetDatabasePath()}");
+            connection.Open();
+            var command = connection.CreateCommand();
 
-                if (pathsToStore == null || pathsToStore.Count == 0)
-                {
-                    // If the list is empty, delete the specific record for this path and hash
-                    command.CommandText = @"
+            if (pathsToStore == null || pathsToStore.Count == 0)
+            {
+                // If the list is empty, delete the specific record for this path and hash
+                command.CommandText = @"
                         DELETE FROM EditorFoldStates
                         WHERE full_path = @full_path AND content_hash = @content_hash;";
-                    command.Parameters.AddWithValue("@full_path", fullPath);
-                    command.Parameters.AddWithValue("@content_hash", contentHash);
-                }
-                else
-                {
-                    string serializedPaths = JsonSerializer.Serialize(pathsToStore);
-                    command.CommandText = @"
+                command.Parameters.AddWithValue("@full_path", fullPath);
+                command.Parameters.AddWithValue("@content_hash", contentHash);
+            }
+            else
+            {
+                string serializedPaths = JsonSerializer.Serialize(pathsToStore);
+                command.CommandText = @"
                         INSERT OR REPLACE INTO EditorFoldStates (full_path, content_hash, fold_paths)
                         VALUES (@full_path, @content_hash, @fold_paths);";
-                    command.Parameters.AddWithValue("@full_path", fullPath);
-                    command.Parameters.AddWithValue("@content_hash", contentHash);
-                    command.Parameters.AddWithValue("@fold_paths", serializedPaths);
-                }
-                command.ExecuteNonQuery();
+                command.Parameters.AddWithValue("@full_path", fullPath);
+                command.Parameters.AddWithValue("@content_hash", contentHash);
+                command.Parameters.AddWithValue("@fold_paths", serializedPaths);
             }
+            command.ExecuteNonQuery();
         }
 
         public static List<List<int>> RetrievePersistedFolds(ScintillaEditor editor)
@@ -121,7 +109,7 @@ namespace AppRefiner
 
             string fullPath = editor.RelativePath;
             if (string.IsNullOrEmpty(fullPath)) return new List<List<int>>();
-            
+
             // Use existing ContentString, assuming it's populated.
             string content = editor.ContentString;
             if (string.IsNullOrEmpty(content)) return new List<List<int>>();
@@ -130,43 +118,39 @@ namespace AppRefiner
 
             InitializeDatabase();
 
-            using (var connection = new SqliteConnection($"Data Source={GetDatabasePath()}"))
-            {
-                connection.Open();
-                var command = connection.CreateCommand();
-                command.CommandText = @"
+            using var connection = new SqliteConnection($"Data Source={GetDatabasePath()}");
+            connection.Open();
+            var command = connection.CreateCommand();
+            command.CommandText = @"
                     SELECT fold_paths FROM EditorFoldStates
                     WHERE full_path = @full_path AND content_hash = @current_content_hash;";
-                command.Parameters.AddWithValue("@full_path", fullPath);
-                command.Parameters.AddWithValue("@current_content_hash", currentContentHash);
+            command.Parameters.AddWithValue("@full_path", fullPath);
+            command.Parameters.AddWithValue("@current_content_hash", currentContentHash);
 
-                using (var reader = command.ExecuteReader())
+            using var reader = command.ExecuteReader();
+            if (reader.Read())
+            {
+                string serializedPaths = reader.GetString(0);
+                try
                 {
-                    if (reader.Read())
-                    {
-                        string serializedPaths = reader.GetString(0);
-                        try
-                        {
-                            return JsonSerializer.Deserialize<List<List<int>>>(serializedPaths) ?? new List<List<int>>();
-                        }
-                        catch (JsonException)
-                        {
-                            // Handle malformed JSON, perhaps log an error
-                            return new List<List<int>>();
-                        }
-                    }
-                    else
-                    {
-                        // No match for current content hash, clear out all stored folds for this path
-                        var deleteCommand = connection.CreateCommand();
-                        deleteCommand.CommandText = @"
+                    return JsonSerializer.Deserialize<List<List<int>>>(serializedPaths) ?? new List<List<int>>();
+                }
+                catch (JsonException)
+                {
+                    // Handle malformed JSON, perhaps log an error
+                    return new List<List<int>>();
+                }
+            }
+            else
+            {
+                // No match for current content hash, clear out all stored folds for this path
+                var deleteCommand = connection.CreateCommand();
+                deleteCommand.CommandText = @"
                             DELETE FROM EditorFoldStates
                             WHERE full_path = @full_path;";
-                        deleteCommand.Parameters.AddWithValue("@full_path", fullPath);
-                        deleteCommand.ExecuteNonQuery();
-                        return new List<List<int>>();
-                    }
-                }
+                deleteCommand.Parameters.AddWithValue("@full_path", fullPath);
+                deleteCommand.ExecuteNonQuery();
+                return new List<List<int>>();
             }
         }
 
@@ -184,11 +168,11 @@ namespace AppRefiner
 
         public static List<List<int>> GetCollapsedFoldPathsDirectly(ScintillaEditor editor)
         {
-            List<List<int>> collapsedPaths = new List<List<int>>();
+            List<List<int>> collapsedPaths = new();
             if (editor == null) return collapsedPaths;
 
-            Stack<PathBuilderNode> hierarchyStack = new Stack<PathBuilderNode>();
-            List<int> currentPath = new List<int>(); // Stores the 0-based indices forming the current path
+            Stack<PathBuilderNode> hierarchyStack = new();
+            List<int> currentPath = new(); // Stores the 0-based indices forming the current path
 
             int lineCount = ScintillaManager.GetLineCount(editor);
             int rootFoldCount = 0; // To assign indices to top-level folds
@@ -270,7 +254,7 @@ namespace AppRefiner
                 if (line.StartsWith("/* #region"))
                 {
                     /* If the next character is a - we will default this region to collapsed */
-            if (line.Length > 10 && line[10] == '-')
+                    if (line.Length > 10 && line[10] == '-')
                     {
                         collapseByDefault = true;
                     }
@@ -329,10 +313,10 @@ namespace AppRefiner
 
 
             // For efficient lookup
-            HashSet<string> collapseTargetPaths = new HashSet<string>(pathsToCollapse.Select(PathToString));
+            HashSet<string> collapseTargetPaths = new(pathsToCollapse.Select(PathToString));
 
-            Stack<PathBuilderNode> hierarchyStack = new Stack<PathBuilderNode>();
-            List<int> currentPath = new List<int>(); // Stores the 0-based indices forming the current path
+            Stack<PathBuilderNode> hierarchyStack = new();
+            List<int> currentPath = new(); // Stores the 0-based indices forming the current path
 
             int lineCount = ScintillaManager.GetLineCount(editor);
             int rootFoldCount = 0; // To assign 0-based indices to top-level folds

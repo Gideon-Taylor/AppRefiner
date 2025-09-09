@@ -1,60 +1,52 @@
-﻿using Antlr4.Runtime.Misc;
-using AppRefiner.PeopleCode;
-using AppRefiner.QuickFixes;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using static AppRefiner.PeopleCode.PeopleCodeParser;
+using PeopleCodeParser.SelfHosted.Nodes;
 
-namespace AppRefiner.Stylers
+namespace AppRefiner.Stylers;
+
+/// <summary>
+/// Visitor that identifies class names that do not match the expected name from the editor's class path.
+/// This is a self-hosted equivalent to the AppRefiner's ClassNameMismatch styler.
+/// </summary>
+public class ClassNameMismatch : BaseStyler
 {
-    public class ClassNameMismatch : BaseStyler
+    private const uint ERROR_COLOR = 0x0000FFFF; // Red color for class name mismatch
+
+    public override string Description => "Class name mismatch";
+
+    /// <summary>
+    /// Processes the entire program and resets state
+    /// </summary>
+    public override void VisitProgram(ProgramNode node)
     {
-        public ClassNameMismatch()
+        Reset();
+
+        // Visit the program
+        base.VisitProgram(node);
+    }
+
+    /// <summary>
+    /// Handles application class definitions and validates the class name
+    /// </summary>
+    public override void VisitAppClass(AppClassNode node)
+    {
+        if (Editor == null)
         {
-            Description = "Highlights class names that do not match the expected name.";
-            Active = true;
+            base.VisitAppClass(node);
+            return;
         }
 
+        // Get the class name from the AST
+        string className = node.Name;
 
-        public override void EnterClassDeclarationExtension([NotNull] ClassDeclarationExtensionContext context)
+        // Get the expected class name from the editor's class path
+        string expectedName = Editor.ClassPath.Split(':').LastOrDefault() ?? string.Empty;
+
+        // Check if the class name matches the expected name (case-insensitive)
+        if (!string.Equals(className, expectedName, StringComparison.OrdinalIgnoreCase))
         {
-            VerifyClassName(context.genericID());
+            string tooltip = $"Class name '{className}' does not match expected name '{expectedName}'.";
+            AddIndicator(node.NameToken.SourceSpan, IndicatorType.SQUIGGLE, ERROR_COLOR, tooltip);
         }
 
-        public override void EnterClassDeclarationImplementation([NotNull] ClassDeclarationImplementationContext context)
-        {
-            VerifyClassName(context.genericID());
-        }
-
-        public override void EnterClassDeclarationPlain([NotNull] ClassDeclarationPlainContext context)
-        {
-            VerifyClassName(context.genericID());
-        }
-
-
-        private void VerifyClassName(GenericIDContext genericID)
-        {
-            if (Editor == null)
-            {
-                return; // No editor available
-            }
-            var className = genericID.GetText();
-            var expectedName = Editor.ClassPath.Split(":").LastOrDefault() ?? string.Empty;
-            if (!string.Equals(className, expectedName, StringComparison.OrdinalIgnoreCase))
-            {
-                AddIndicator(
-                    genericID.Start, 
-                    genericID.Stop, 
-                    IndicatorType.SQUIGGLE, 
-                    0x0000FFFF, // Red color for mismatch
-                    $"Class name '{className}' does not match expected name '{expectedName}'.",
-                    [(typeof(CorrectClassName), "Correct class name.")]
-                );
-            }
-
-        }
+        base.VisitAppClass(node);
     }
 }

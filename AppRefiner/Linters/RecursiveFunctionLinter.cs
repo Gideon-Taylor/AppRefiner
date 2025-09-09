@@ -1,4 +1,4 @@
-using static AppRefiner.PeopleCode.PeopleCodeParser;
+using PeopleCodeParser.SelfHosted.Nodes;
 
 namespace AppRefiner.Linters
 {
@@ -8,7 +8,7 @@ namespace AppRefiner.Linters
     public class RecursiveFunctionLinter : BaseLintRule
     {
         public override string LINTER_ID => "RECURSIVE_FUNC";
-        private Dictionary<string, FunctionDefinitionContext> functions = new();
+        private Dictionary<string, FunctionNode> functions = new();
         private string currentFunction = "";
 
         public RecursiveFunctionLinter()
@@ -18,56 +18,61 @@ namespace AppRefiner.Linters
             Active = false;
         }
 
-        public override void EnterFunctionDefinition(FunctionDefinitionContext context)
+        public override void VisitFunction(FunctionNode node)
         {
             // Store the function name and context
-            var functionName = context.allowableFunctionName().GetText().ToLower();
-            functions[functionName] = context;
+            var functionName = node.Name.ToLower();
+            functions[functionName] = node;
             currentFunction = functionName;
-        }
 
-        public override void ExitFunctionDefinition(FunctionDefinitionContext context)
-        {
+            // Visit the function body
+            base.VisitFunction(node);
+
             currentFunction = "";
         }
 
-        public override void EnterSimpleFunctionCall(SimpleFunctionCallContext context)
+        public override void VisitFunctionCall(FunctionCallNode node)
         {
             // Skip if we're not in a function
             if (string.IsNullOrEmpty(currentFunction))
                 return;
 
-            var calledFunctionName = context.genericID().GetText().ToLower();
+            // Check if the function being called is an identifier
+            if (!(node.Function is IdentifierNode functionId))
+                return;
+
+            var calledFunctionName = functionId.Name.ToLower();
 
             // Check if the function calls itself
             if (calledFunctionName == currentFunction)
             {
                 // Check for termination conditions in the function
-                var functionContext = functions[currentFunction];
-                if (!HasSafeTerminationCondition(functionContext))
+                var functionNode = functions[currentFunction];
+                if (!HasSafeTerminationCondition(functionNode))
                 {
                     AddReport(
                         1,
                         "Potentially unsafe recursive function call. Ensure there is a proper termination condition.",
                         Type,
-                        context.Start.Line - 1,
-                        context
+                        node.SourceSpan.Start.Line,
+                        node.SourceSpan
                     );
                 }
             }
+
+            base.VisitFunctionCall(node);
         }
 
-        private bool HasSafeTerminationCondition(FunctionDefinitionContext context)
+        private bool HasSafeTerminationCondition(FunctionNode node)
         {
-            // Look for IF statements with RETURN in the function
-            var statements = context.statements();
-            if (statements == null)
+            // Look for IF statements in the function body
+            if (node.Body == null)
                 return false;
 
             // Simple check: does it have at least one if statement?
-            foreach (var stmt in statements.statement())
+            foreach (var stmt in node.Body.Statements)
             {
-                if (stmt is IfStmtContext)
+                if (stmt is IfStatementNode)
                     return true;  // It has at least one IF, assume it's for termination
             }
 

@@ -1,25 +1,32 @@
-﻿using System;
-using System.Collections.Generic;
-using System.IO.Pipes;
-using System.Linq;
-using System.Runtime.InteropServices;
-using System.Text;
-using System.Threading.Tasks;
+﻿using System.Runtime.InteropServices;
 
 namespace AppRefiner.Events
 {
-    
-    internal static class EventHookInstaller
+
+    public static class EventHookInstaller
     {
         private const uint WM_USER = 0x400;
         private const uint WM_TOGGLE_AUTO_PAIRING = WM_USER + 1002;
-        private const uint WM_SUBCLASS_WINDOW = WM_USER + 1003;
+        private const uint WM_SUBCLASS_SCINTILLA_PARENT_WINDOW = WM_USER + 1003;
         private const uint WM_REMOVE_HOOK = WM_USER + 1004;
         private const uint WM_SUBCLASS_MAIN_WINDOW = WM_USER + 1005;
-        private const uint WM_TOGGLE_MAIN_WINDOW_SHORTCUTS = WM_USER + 1006;
+        private const uint WM_SET_MAIN_WINDOW_SHORTCUTS = WM_USER + 1006;
+        private const uint WM_AR_SUBCLASS_RESULTS_LIST = WM_USER + 1007;
+        private const uint WM_AR_SET_OPEN_TARGET = WM_USER + 1008;
 
-        private static Dictionary<uint, IntPtr> _activeHooks = new Dictionary<uint, IntPtr>();
-        private static Dictionary<uint, IntPtr> _activeKeyboardHooks = new Dictionary<uint, IntPtr>();
+        // Bit field for shortcut types
+        [Flags]
+        public enum ShortcutType : uint
+        {
+            None = 0,
+            CommandPalette = 1 << 0,  // Always enabled - Ctrl+Shift+P
+            Open = 1 << 1,            // Override Ctrl+O
+            Search = 1 << 2,          // Override Ctrl+F, Ctrl+H, F3
+            All = CommandPalette | Open | Search
+        }
+
+        private static Dictionary<uint, IntPtr> _activeHooks = new();
+        private static Dictionary<uint, IntPtr> _activeKeyboardHooks = new();
 
         // Win32 API imports
         [DllImport("user32.dll")]
@@ -41,34 +48,71 @@ namespace AppRefiner.Events
         [DllImport("AppRefinerHook.dll", CallingConvention = CallingConvention.Cdecl)]
         public static extern bool UnsubclassWindow(IntPtr hWnd);
 
-        // Method to subclass a window
-        public static bool SubclassWindow(uint threadId, IntPtr windowToSubclass, IntPtr callbackWindow, bool autoPairingEnabled)
+        /// <summary>
+        /// Installs hooks for the specified thread ID. This should be called proactively when 
+        /// an AppDesigner process is detected to ensure hooks are available for all operations.
+        /// </summary>
+        /// <param name="threadId">The thread ID to install hooks for</param>
+        /// <returns>True if hooks are successfully installed or already exist</returns>
+        public static bool InstallHook(uint threadId)
         {
-            // If we already have a hook for this thread, use it
-            if (!_activeHooks.TryGetValue(threadId, out IntPtr existingHookId))
+            bool success = true;
+
+            // Install main GetMessage hook if not already present
+            if (!_activeHooks.ContainsKey(threadId))
             {
-                // Set a new hook
                 IntPtr hookId = SetHook(threadId);
-                if (hookId == IntPtr.Zero)
+                if (hookId != IntPtr.Zero)
                 {
-                    return false;
+                    _activeHooks[threadId] = hookId;
+                    Debug.Log($"Successfully installed main hook for thread {threadId}");
                 }
-                
-                // Store the hook ID
-                _activeHooks[threadId] = hookId;
+                else
+                {
+                    Debug.Log($"Failed to install main hook for thread {threadId}");
+                    success = false;
+                }
+            }
+
+            // Also install keyboard hook for better shortcut interception
+            if (!_activeKeyboardHooks.ContainsKey(threadId))
+            {
+                IntPtr keyboardHookId = SetKeyboardHook(threadId);
+                if (keyboardHookId != IntPtr.Zero)
+                {
+                    _activeKeyboardHooks[threadId] = keyboardHookId;
+                    Debug.Log($"Successfully installed keyboard hook for thread {threadId}");
+                }
+                else
+                {
+                    Debug.Log($"Warning: Failed to install keyboard hook for thread {threadId} (non-critical)");
+                    // Don't mark as failure since keyboard hook is optional
+                }
+            }
+
+            return success;
+        }
+
+        // Method to subclass a window
+        public static bool SubclassScintillaParentWindow(uint threadId, IntPtr windowToSubclass, IntPtr callbackWindow, IntPtr mainWindowHandle, bool autoPairingEnabled)
+        {
+            // Ensure we have a hook for this thread (should already be installed proactively)
+            if (!_activeHooks.ContainsKey(threadId))
+            {
+                Debug.Log($"Warning: No hook found for thread {threadId} in SubclassWindow - hook should have been installed proactively");
+                return false;
             }
 
             // Send the thread message to subclass the window
-            bool result = PostThreadMessage(threadId, WM_SUBCLASS_WINDOW, windowToSubclass, callbackWindow);
+            bool result = PostThreadMessage(threadId, WM_SUBCLASS_SCINTILLA_PARENT_WINDOW, windowToSubclass, callbackWindow);
 
-            // Toggle auto-pairing if subclassing was successful
-            if (result)
+            // Set auto-pairing if subclassing was successful - now synchronous
+            if (result && mainWindowHandle != IntPtr.Zero)
             {
-                result = PostThreadMessage(threadId, WM_TOGGLE_AUTO_PAIRING, autoPairingEnabled ? 1 : 0, IntPtr.Zero);
+                // Small delay to ensure subclassing completes, then set auto-pairing synchronously
+                Thread.Sleep(5);
+                result = SetAutoPairing(mainWindowHandle, autoPairingEnabled);
             }
-
-            // Do not unhook here, as unhooking might cause the DLL to unload
-            // Unhook();
 
             return result;
         }
@@ -86,73 +130,104 @@ namespace AppRefiner.Events
             {
                 UnhookThread(hookPair.Key);
             }
-            
+
             foreach (var keyboardHookPair in _activeKeyboardHooks.ToList())
             {
                 UnhookKeyboardForThread(keyboardHookPair.Key);
             }
-            
+
             _activeHooks.Clear();
             _activeKeyboardHooks.Clear();
         }
-        
-        // Method to send auto-pairing toggle to a specific thread
+
+        // Method to send auto-pairing toggle to a specific main window (deprecated - use SetAutoPairing instead)
         public static bool SendAutoPairingToggle(uint threadId, bool enabled)
         {
-            if (_activeHooks.ContainsKey(threadId))
-            {
-                return PostThreadMessage(threadId, WM_TOGGLE_AUTO_PAIRING, enabled ? 1 : 0, IntPtr.Zero);
-            }
+            // This method is deprecated - callers should use SetAutoPairing with main window handle
+            // For now, return false to indicate the old method no longer works
+            Debug.Log($"Warning: SendAutoPairingToggle is deprecated. Use SetAutoPairing with main window handle instead.");
             return false;
         }
 
         // Method to subclass main window
-        public static bool SubclassMainWindow(uint threadId, IntPtr mainWindow, IntPtr callbackWindow, bool shortcutsEnabled)
+        public static bool SubclassMainWindow(AppDesignerProcess appDesigner, IntPtr callbackWindow, ShortcutType enabledShortcuts)
         {
-            // Ensure we have a hook for this thread first
-            if (!_activeHooks.ContainsKey(threadId))
+            // Ensure we have a hook for this thread (should already be installed proactively)
+            if (!_activeHooks.ContainsKey(appDesigner.MainThreadId))
             {
-                // Set a new hook
-                IntPtr hookId = SetHook(threadId);
-                if (hookId == IntPtr.Zero)
-                {
-                    return false;
-                }
-                
-                // Store the hook ID
-                _activeHooks[threadId] = hookId;
-            }
-
-            // Also set up keyboard hook for better shortcut interception
-            if (!_activeKeyboardHooks.ContainsKey(threadId))
-            {
-                IntPtr keyboardHookId = SetKeyboardHook(threadId);
-                if (keyboardHookId != IntPtr.Zero)
-                {
-                    _activeKeyboardHooks[threadId] = keyboardHookId;
-                }
+                Debug.Log($"Warning: No hook found for thread {appDesigner.MainThreadId} in SubclassMainWindow - hook should have been installed proactively");
+                return false;
             }
 
             // Send the thread message to subclass the main window
-            bool result = PostThreadMessage(threadId, WM_SUBCLASS_MAIN_WINDOW, mainWindow, callbackWindow);
+            bool result = PostThreadMessage(appDesigner.MainThreadId, WM_SUBCLASS_MAIN_WINDOW, appDesigner.MainWindowHandle, callbackWindow);
 
-            // Toggle main window shortcuts if subclassing was successful
+            // Set main window shortcuts if subclassing was successful
+            // Since WM_SET_MAIN_WINDOW_SHORTCUTS is now handled synchronously in MainWindowSubclassProc,
+            // we need to ensure the subclassing is complete before calling it
             if (result)
             {
-                result = PostThreadMessage(threadId, WM_TOGGLE_MAIN_WINDOW_SHORTCUTS, shortcutsEnabled ? 1 : 0, IntPtr.Zero);
+                // Retry logic to ensure subclassing is complete before setting shortcuts
+                bool shortcutResult = false;
+                for (int attempt = 0; attempt < 5; attempt++)
+                {
+                    Thread.Sleep(5); // Small delay to allow subclassing to complete
+                    shortcutResult = SetMainWindowShortcuts(appDesigner.MainWindowHandle, enabledShortcuts);
+                    if (shortcutResult)
+                        break;
+                }
+                Debug.Log($"SetMainWindowShortcuts result for process {appDesigner.ProcessId}: {shortcutResult}");
             }
 
             return result;
         }
 
-        // Method to send main window shortcuts toggle to a specific thread
-        public static bool ToggleMainWindowShortcuts(uint threadId, bool enabled)
+        /// <summary>
+        /// Subclasses the Results list view for IDE open target functionality
+        /// Note: SetOpenTarget functionality has been moved to AppDesignerProcess class
+        /// </summary>
+        /// <param name="threadId">Thread ID where the Results list view belongs</param>
+        /// <param name="resultsListView">Handle to the Results list view (SysListView32)</param>
+        /// <param name="callbackWindow">AppRefiner main window handle for callbacks</param>
+        /// <returns>True if subclassing was successful</returns>
+        public static bool SubclassResultsList(uint threadId, IntPtr resultsListView, IntPtr callbackWindow)
         {
-            if (_activeHooks.ContainsKey(threadId))
+            // Ensure we have a hook for this thread (should already be installed proactively)
+            if (!_activeHooks.ContainsKey(threadId))
             {
-                return PostThreadMessage(threadId, WM_TOGGLE_MAIN_WINDOW_SHORTCUTS, enabled ? 1 : 0, IntPtr.Zero);
+                Debug.Log($"Warning: No hook found for thread {threadId} in SubclassResultsList - hook should have been installed proactively");
+                return false;
+            }
+
+            // Send the thread message to subclass the Results list view
+            return PostThreadMessage(threadId, WM_AR_SUBCLASS_RESULTS_LIST, resultsListView, callbackWindow);
+        }
+
+
+        // Method to set main window shortcuts for a specific main window
+        public static bool SetMainWindowShortcuts(IntPtr mainWindowHandle, ShortcutType enabledShortcuts)
+        {
+            if (mainWindowHandle != IntPtr.Zero)
+            {
+                return WinApi.SendMessage(mainWindowHandle, WM_SET_MAIN_WINDOW_SHORTCUTS, (IntPtr)(uint)enabledShortcuts, IntPtr.Zero) != IntPtr.Zero;
             }
             return false;
+        }
+
+        // Method to set auto-pairing for a specific main window
+        public static bool SetAutoPairing(IntPtr mainWindowHandle, bool enabled)
+        {
+            if (mainWindowHandle != IntPtr.Zero)
+            {
+                return WinApi.SendMessage(mainWindowHandle, (int)WM_TOGGLE_AUTO_PAIRING, enabled ? 1 : 0, IntPtr.Zero) != IntPtr.Zero;
+            }
+            return false;
+        }
+
+        // Helper method to ensure Command Palette is always enabled
+        public static ShortcutType EnsureCommandPaletteEnabled(ShortcutType shortcuts)
+        {
+            return shortcuts | ShortcutType.CommandPalette;
         }
 
         // Method to unhook keyboard hook for a specific thread
@@ -167,7 +242,7 @@ namespace AppRefiner.Events
                 }
                 return result;
             }
-            
+
             return false;
         }
 
@@ -175,13 +250,13 @@ namespace AppRefiner.Events
         public static bool UnhookThread(uint threadId)
         {
             bool result = true;
-            
+
             // Unhook keyboard hook first
             if (_activeKeyboardHooks.ContainsKey(threadId))
             {
                 result &= UnhookKeyboardForThread(threadId);
             }
-            
+
             // Unhook main hook
             if (_activeHooks.TryGetValue(threadId, out IntPtr hookId))
             {
@@ -192,8 +267,18 @@ namespace AppRefiner.Events
                 }
                 result &= unhookResult;
             }
-            
+
             return result;
+        }
+
+        /// <summary>
+        /// Checks if a thread has an active hook
+        /// </summary>
+        /// <param name="threadId">Thread ID to check</param>
+        /// <returns>True if the thread has an active hook</returns>
+        public static bool HasActiveHook(uint threadId)
+        {
+            return _activeHooks.ContainsKey(threadId);
         }
     }
 }

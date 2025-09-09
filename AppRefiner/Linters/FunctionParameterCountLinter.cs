@@ -1,4 +1,4 @@
-using static AppRefiner.PeopleCode.PeopleCodeParser;
+using PeopleCodeParser.SelfHosted.Nodes;
 
 namespace AppRefiner.Linters
 {
@@ -8,12 +8,12 @@ namespace AppRefiner.Linters
     public class FunctionParameterCountLinter : BaseLintRule
     {
         public override string LINTER_ID => "FUNC_PARAM_COUNT";
-        
+
         /// <summary>
         /// Maximum recommended number of parameters for a method
         /// </summary>
         public int MaxMethodParameters { get; set; } = 5;
-        
+
         /// <summary>
         /// Maximum recommended number of parameters for a function
         /// </summary>
@@ -26,13 +26,9 @@ namespace AppRefiner.Linters
             Active = false;
         }
 
-        public override void EnterMethodHeader(MethodHeaderContext context)
+        public override void VisitMethod(MethodNode node)
         {
-            var args = context.methodArguments();
-            if (args == null)
-                return;
-
-            var paramCount = args.methodArgument().Length;
+            var paramCount = node.Parameters.Count;
 
             if (paramCount > MaxMethodParameters)
             {
@@ -40,19 +36,17 @@ namespace AppRefiner.Linters
                     1,
                     $"Method has {paramCount} parameters, which exceeds recommended maximum of {MaxMethodParameters}. Consider refactoring.",
                     Type,
-                    context.Start.Line - 1,
-                    context
+                    node.SourceSpan.Start.Line,
+                    node.SourceSpan
                 );
             }
+
+            base.VisitMethod(node);
         }
 
-        public override void EnterFunctionDefinition(FunctionDefinitionContext context)
+        public override void VisitFunction(FunctionNode node)
         {
-            var args = context.functionArguments();
-            if (args == null)
-                return;
-
-            var paramCount = args.functionArgument().Length;
+            var paramCount = node.Parameters.Count;
 
             if (paramCount > MaxFunctionParameters)
             {
@@ -60,14 +54,12 @@ namespace AppRefiner.Linters
                     2,
                     $"Function has {paramCount} parameters, which exceeds recommended maximum of {MaxFunctionParameters}. Consider using a compound parameter object.",
                     Type,
-                    context.Start.Line - 1,
-                    context
+                    node.SourceSpan.Start.Line,
+                    node.SourceSpan
                 );
             }
-        }
 
-        public override void Reset()
-        {
+            base.VisitFunction(node);
         }
     }
 }

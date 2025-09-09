@@ -1,12 +1,4 @@
-using System;
-using System.Collections.Generic;
-using System.Diagnostics;
-using System.Linq;
 using System.Reflection;
-using System.Text;
-using Antlr4.Runtime;
-using AppRefiner;
-using AppRefiner.PeopleCode;
 
 namespace AppRefiner.TooltipProviders
 {
@@ -15,7 +7,7 @@ namespace AppRefiner.TooltipProviders
     /// </summary>
     public static class TooltipManager
     {
-        private static readonly List<ITooltipProvider> providers = new List<ITooltipProvider>();
+        private static readonly List<BaseTooltipProvider> providers = new();
         private static bool initialized = false;
 
         /// <summary>
@@ -36,10 +28,10 @@ namespace AppRefiner.TooltipProviders
             DiscoverAndRegisterPluginProviders();
 
             initialized = true;
-            
+
             Debug.Log($"Initialized TooltipManager with {providers.Count} providers");
         }
-        
+
         /// <summary>
         /// Discovers and registers tooltip providers from the current assembly
         /// </summary>
@@ -48,17 +40,17 @@ namespace AppRefiner.TooltipProviders
             try
             {
                 var currentAssembly = Assembly.GetExecutingAssembly();
-                
-                // Find all non-abstract types that implement ITooltipProvider
+
+                // Find all non-abstract types that implement BaseTooltipProvider
                 var tooltipProviderTypes = currentAssembly.GetTypes()
-                    .Where(t => typeof(ITooltipProvider).IsAssignableFrom(t) && !t.IsAbstract && !t.IsInterface);
-                
+                    .Where(t => typeof(BaseTooltipProvider).IsAssignableFrom(t) && !t.IsAbstract && !t.IsInterface);
+
                 foreach (var type in tooltipProviderTypes)
                 {
                     try
                     {
                         // Create an instance of the tooltip provider and register it
-                        var provider = Activator.CreateInstance(type) as ITooltipProvider;
+                        var provider = Activator.CreateInstance(type) as BaseTooltipProvider;
                         if (provider != null)
                         {
                             RegisterProvider(provider);
@@ -77,7 +69,7 @@ namespace AppRefiner.TooltipProviders
                 Debug.LogError($"Error discovering built-in tooltip providers: {ex.Message}");
             }
         }
-        
+
         /// <summary>
         /// Discovers and registers tooltip providers from plugins
         /// </summary>
@@ -87,13 +79,13 @@ namespace AppRefiner.TooltipProviders
             {
                 // Get tooltip provider types from plugins
                 var pluginProviderTypes = Plugins.PluginManager.DiscoverTooltipProviderTypes();
-                
+
                 foreach (var type in pluginProviderTypes)
                 {
                     try
                     {
                         // Create an instance of the tooltip provider and register it
-                        var provider = Activator.CreateInstance(type) as ITooltipProvider;
+                        var provider = Activator.CreateInstance(type) as BaseTooltipProvider;
                         if (provider != null)
                         {
                             RegisterProvider(provider);
@@ -117,14 +109,14 @@ namespace AppRefiner.TooltipProviders
         /// Registers a tooltip provider with the manager.
         /// </summary>
         /// <param name="provider">The tooltip provider to register.</param>
-        public static void RegisterProvider(ITooltipProvider provider)
+        public static void RegisterProvider(BaseTooltipProvider provider)
         {
             if (provider == null)
                 throw new ArgumentNullException(nameof(provider));
 
             // Add provider and sort by priority
             providers.Add(provider);
-            
+
             // Sort in descending order of priority
             providers.Sort((a, b) => b.Priority.CompareTo(a.Priority));
         }
@@ -132,7 +124,7 @@ namespace AppRefiner.TooltipProviders
         /// <summary>
         /// Gets all registered tooltip providers.
         /// </summary>
-        public static IReadOnlyList<ITooltipProvider> Providers => providers.AsReadOnly();
+        public static IReadOnlyList<BaseTooltipProvider> Providers => providers.AsReadOnly();
 
         /// <summary>
         /// Shows a tooltip for the given position in the editor by querying all active providers.
@@ -159,131 +151,37 @@ namespace AppRefiner.TooltipProviders
 
             // Collect tooltips from all active providers
             var tooltips = new List<string>();
-            
-            // Separate parse tree providers from regular providers
-            var parseTreeProviders = providers.Where(p => p.Active && p is ParseTreeTooltipProvider)
-                .Cast<ParseTreeTooltipProvider>().ToList();
-            var regularProviders = providers.Where(p => p.Active && !(p is ParseTreeTooltipProvider));
-            
-            // First, query regular providers which don't need parse tree analysis
-            foreach (var provider in regularProviders)
+
+            var tooltipProviders = providers.Where(p => p.Active && p.GetType().IsAssignableTo(typeof(BaseTooltipProvider)))
+                .ToList();
+
+            // Then, handle AST providers if there are any and this is PeopleCode
+            if (tooltipProviders.Count > 0 && editor.Type == EditorType.PeopleCode)
             {
-                var tooltip = provider.GetTooltip(editor, position);
-                if (!string.IsNullOrEmpty(tooltip))
-                {
-                    tooltips.Add(tooltip);
-                }
+                ProcessTooltipProviders(editor, position, lineNumber, tooltipProviders, tooltips);
             }
-            
-            // Then, handle parse tree providers if there are any
-            if (parseTreeProviders.Count > 0 && editor.Type == EditorType.PeopleCode)
-            {
-                var applicableProviders = FilterParseTreeProviders(editor, position, parseTreeProviders);
-                
-                if (applicableProviders.Count > 0)
-                {
-                    // Process applicable parse tree providers
-                    ProcessParseTreeTooltipProviders(editor, position, lineNumber, applicableProviders, tooltips);
-                }
-            }
-            
+
             // If no tooltips were found, return false
             if (tooltips.Count == 0)
                 return false;
-                
+
             // Combine all tooltips with blank lines between them
             var combinedTooltip = string.Join(Environment.NewLine + Environment.NewLine, tooltips);
-                
+
             // Show the combined tooltip
             ScintillaManager.ShowCallTipWithText(editor, position, combinedTooltip);
             return true;
         }
-        
-        /// <summary>
-        /// Filters parse tree providers based on the token at the given position.
-        /// </summary>
-        /// <param name="editor">The editor to check</param>
-        /// <param name="position">The position in the document</param>
-        /// <param name="providers">The list of parse tree providers to filter</param>
-        /// <returns>List of applicable providers that match tokens at the position</returns>
-        private static List<ParseTreeTooltipProvider> FilterParseTreeProviders(
-            ScintillaEditor editor, 
-            int position, 
-            List<ParseTreeTooltipProvider> providers)
-        {
-            var applicableProviders = new List<ParseTreeTooltipProvider>();
-
-            if (editor.ContentString == null) return [];
-
-            try
-            {
-                // Create lexer and token stream
-                var lexer = new PeopleCodeLexer(new ByteTrackingCharStream(editor.ContentString));
-                var tokenStream = new Antlr4.Runtime.CommonTokenStream(lexer);
-                
-                // Get all tokens including those on hidden channels
-                tokenStream.Fill();
-                var tokens = tokenStream.GetTokens();
-                
-                // Check providers against tokens
-                foreach (var provider in providers)
-                {
-                    // If provider specifies no token types, it should be run for any token
-                    if (provider.TokenTypes == null || provider.TokenTypes.Length == 0)
-                    {
-                        applicableProviders.Add(provider);
-                        continue;
-                    }
-                    
-                    // Check if any token at the position matches the provider's token types
-                    bool applicable = false;
-                    foreach (var token in tokens)
-                    {
-                        // Check if token contains or is adjacent to the position
-                        if (position >= token.ByteStartIndex() && position <= token.ByteStopIndex() + 1)
-                        {
-                            if (provider.CanProvideTooltipForToken(token, position))
-                            {
-                                applicable = true;
-                                break;
-                            }
-                        }
-                    }
-                    
-                    if (applicable)
-                    {
-                        applicableProviders.Add(provider);
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                Debug.LogError($"Error filtering parse tree tooltip providers: {ex.Message}");
-            }
-            
-            return applicableProviders;
-        }
-        
-        /// <summary>
-        /// Process parse tree tooltip providers by creating a MultiParseTreeWalker.
-        /// </summary>
-        private static void ProcessParseTreeTooltipProviders(
-            ScintillaEditor editor, 
-            int position,
-            List<ParseTreeTooltipProvider> applicableProviders,
-            List<string> tooltips)
-        {
-            ProcessParseTreeTooltipProviders(editor, position, -1, applicableProviders, tooltips);
-        }
 
         /// <summary>
-        /// Process parse tree tooltip providers by creating a MultiParseTreeWalker.
+        /// Process AST-based tooltip providers using the self-hosted parser.
+        /// Handles both AstTooltipProvider and ScopedAstTooltipProvider types.
         /// </summary>
-        private static void ProcessParseTreeTooltipProviders(
-            ScintillaEditor editor, 
+        private static void ProcessTooltipProviders(
+            ScintillaEditor editor,
             int position,
             int lineNumber,
-            List<ParseTreeTooltipProvider> applicableProviders,
+            List<BaseTooltipProvider> tooltipProviders,
             List<string> tooltips)
         {
             if (editor.ContentString == null)
@@ -291,41 +189,26 @@ namespace AppRefiner.TooltipProviders
 
             try
             {
-                
+                // Parse the content using self-hosted parser
+                var lexer = new PeopleCodeParser.SelfHosted.Lexing.PeopleCodeLexer(editor.ContentString);
+                var tokens = lexer.TokenizeAll();
+                var parser = new PeopleCodeParser.SelfHosted.PeopleCodeParser(tokens);
+                var program = parser.ParseProgram();
 
-                var (program, tokenStream, comments) = editor.GetParsedProgram();
-
-                // Create and configure the parse tree walker
-                var walker = new MultiParseTreeWalker();
-                
                 // Reset and configure each provider
-                foreach (var provider in applicableProviders)
+                foreach (var provider in tooltipProviders)
                 {
                     provider.Reset();
-                    provider.Comments = comments;
                     provider.DataManager = editor.DataManager;
-                    
-                    // Initialize content for ScopeTooltipProvider before walking the parse tree
-                    if (provider is ScopeTooltipProvider scopeProvider)
+
+                    if (provider.CanProvideTooltipAt(editor, program, tokens, position, lineNumber))
                     {
-                        // Set the line number if available
-                        if (lineNumber > 0)
-                        {
-                            scopeProvider.LineNumber = lineNumber;
-                        }
-                        
-                        // Initialize with token stream to identify first tokens on each line
-                        scopeProvider.InitializeWithTokenStream(tokenStream);
+                        provider.ProcessProgram(program, position, lineNumber);
                     }
-                    
-                    walker.AddListener(provider);
                 }
-                
-                // Walk the parse tree to collect tooltip information
-                walker.Walk(program);
-                
+
                 // Retrieve tooltips from each provider
-                foreach (var provider in applicableProviders)
+                foreach (var provider in tooltipProviders)
                 {
                     var tooltip = provider.GetTooltip(editor, position);
                     if (!string.IsNullOrEmpty(tooltip))
@@ -333,11 +216,10 @@ namespace AppRefiner.TooltipProviders
                         tooltips.Add(tooltip);
                     }
                 }
-                GC.Collect();
             }
             catch (Exception ex)
             {
-                Debug.LogError($"Error processing parse tree tooltip providers: {ex.Message}");
+                Debug.LogError($"Error processing AST tooltip providers: {ex.Message}");
             }
         }
 
@@ -360,4 +242,4 @@ namespace AppRefiner.TooltipProviders
             ScintillaManager.HideCallTip(editor);
         }
     }
-} 
+}
