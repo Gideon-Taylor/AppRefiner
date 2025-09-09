@@ -92,10 +92,10 @@ namespace AppRefiner.Linters
         public override void VisitProgram(ProgramNode node)
         {
             Reset();
-            base.VisitProgram(node);
 
             // Process comments to find suppression directives
             ProcessSuppressionComments(node);
+            base.VisitProgram(node);
         }
 
         /// <summary>
@@ -328,7 +328,7 @@ namespace AppRefiner.Linters
 
             // For now, we'll use a simplified approach - check if there are suppressions
             // on the line immediately before the scope
-            if (_lineSpecificSuppressions.TryGetValue(scopeStartLine - 1, out var lineSuppressions))
+            if (_lineSpecificSuppressions.TryGetValue(scopeStartLine, out var lineSuppressions))
             {
                 // Copy the line suppressions to the scope suppressions
                 foreach (var suppression in lineSuppressions)

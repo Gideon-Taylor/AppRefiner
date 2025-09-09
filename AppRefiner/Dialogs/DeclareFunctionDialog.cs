@@ -69,7 +69,7 @@ namespace AppRefiner.Dialogs
             this.functionCacheManager = functionCacheManager ?? throw new ArgumentNullException(nameof(functionCacheManager));
             this.appDesignerProcess = appDesignerProcess ?? throw new ArgumentNullException(nameof(appDesignerProcess));
             this.owner = owner;
-
+            this.dbName = appDesignerProcess.DBName;
             // Initialize UI components
             this.headerPanel = new Panel();
             this.headerLabel = new Label();
@@ -460,7 +460,7 @@ namespace AppRefiner.Dialogs
             // Add return type if it exists and is not empty
             if (!string.IsNullOrEmpty(result.ReturnType))
             {
-                displayName += $" {result.ReturnType}";
+                displayName += $" Returns {result.ReturnType}";
             }
             
             return displayName;

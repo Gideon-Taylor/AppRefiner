@@ -1,0 +1,97 @@
+using PeopleCodeParser.SelfHosted.Nodes;
+
+namespace AppRefiner.Refactors
+{
+    /// <summary>
+    /// Refactoring operation that adds a specific application class import if it's not already covered by an existing explicit or wildcard import.
+    /// </summary>
+    public class DeclareFunction : BaseRefactor
+    {
+        public new static string RefactorName => "Add Import";
+        public new static string RefactorDescription => "Adds a specific application class import if not already covered.";
+
+        /// <summary>
+        /// This refactor should not have a keyboard shortcut.
+        /// </summary>
+        public new static bool RegisterKeyboardShortcut => false;
+
+        /// <summary>
+        /// This refactor should be hidden from discovery.
+        /// </summary>
+        public new static bool IsHidden => true;
+
+        private readonly FunctionSearchResult _functionToDeclare;
+        private ProgramNode? _programNode;
+
+
+        /// <summary>
+        /// Initializes a new instance of the <see cref="AddImport"/> class with a specific path.
+        /// </summary>
+        /// <param name="editor">The Scintilla editor instance.</param>
+        /// <param name="appClassPathToAdd">The application class path to add.</param>
+        public DeclareFunction(AppRefiner.ScintillaEditor editor, FunctionSearchResult functionToDeclare) : base(editor)
+        {
+            if (functionToDeclare == null)
+                throw new ArgumentException("Function to declare cannot be null", nameof(functionToDeclare));
+
+            _functionToDeclare = functionToDeclare;
+        }
+
+        public override void VisitProgram(ProgramNode node)
+        {
+            _programNode = node;
+
+            var lastDeclaration = node.Functions.OrderBy(f => f.SourceSpan.Start.Line).LastOrDefault<FunctionNode>(f => f.IsDeclaration);
+            var firstFuncImpl = node.Functions.Where(f => f.IsImplementation).OrderBy(f => f.SourceSpan.Start.Line).FirstOrDefault();
+
+            var padding = "";
+            var insertLine = 0;
+            if (lastDeclaration != null)
+            {
+                /* get the padding of this declarations line */
+                insertLine = lastDeclaration.SourceSpan.Start.Line + 1;
+                var paddingCount = CountLeadingSpaces(ScintillaManager.GetLineText(Editor, lastDeclaration.SourceSpan.Start.Line));
+                padding = new string(' ', paddingCount);
+            }
+            else if (node.AppClass != null)
+            {
+                insertLine = node.AppClass.SourceSpan.End.Line + 1;
+            }
+            else if (node.Imports.Count > 0)
+            {
+                insertLine = node.Imports.Last().SourceSpan.Start.Line + 1;
+            }
+            else if (firstFuncImpl != null)
+            {
+                insertLine = firstFuncImpl.SourceSpan.Start.Line - 1;
+                var firstLeadingComment = firstFuncImpl.GetLeadingComments().FirstOrDefault();
+                if (firstLeadingComment != null)
+                {
+                    insertLine = firstLeadingComment.SourceSpan.Start.Line - 1;
+                }
+            }
+            
+
+            if (insertLine < 0) insertLine = 0;
+
+            var insertIndex = ScintillaManager.GetLineStartIndex(Editor, insertLine);
+
+            var declaration = $"{padding}{_functionToDeclare.ToDeclaration()}{Environment.NewLine}";
+            InsertText(insertIndex, declaration, "Insert function declaration");
+            InsertText(CurrentPosition, _functionToDeclare.GetExampleCall(), "Insert example call of function");
+        }
+
+        static int CountLeadingSpaces(string str)
+        {
+            if (string.IsNullOrEmpty(str))
+                return 0;
+
+            for (int i = 0; i < str.Length; i++)
+            {
+                if (str[i] != ' ')
+                    return i;
+            }
+            return str.Length; // All characters are spaces
+        }
+    }
+}

@@ -3,7 +3,9 @@ using AppRefiner.Database.Models;
 using Microsoft.Data.Sqlite;
 using PeopleCodeParser.SelfHosted;
 using PeopleCodeParser.SelfHosted.Lexing;
+using PeopleCodeParser.SelfHosted.Nodes;
 using System.Diagnostics;
+using System.Text;
 using System.Text.Json;
 
 namespace AppRefiner
@@ -43,6 +45,27 @@ namespace AppRefiner
             ParameterTypes = parameterTypes;
             ReturnType = returnType;
         }
+
+        public string ToDeclaration()
+        {
+            var parts = FunctionPath.Split(':');
+
+            return $"Declare Function {FunctionName} PeopleCode {parts[0]}.{parts[1]} {parts[2]};";
+        }
+
+        public string GetExampleCall()
+        {
+            var sb = new StringBuilder();
+            if (!string.IsNullOrEmpty(ReturnType))
+            {
+                sb.Append($"Local {ReturnType} &funcResult = ");
+            }
+
+            sb.Append($"{FunctionName}({string.Join(", ", ParameterNames ?? [])});");
+
+            return sb.ToString();
+        }
+
     }
 
     /// <summary>
@@ -227,29 +250,25 @@ namespace AppRefiner
 
                 using var command = connection.CreateCommand();
                 
-                if (appDesignerProcess != null && !string.IsNullOrEmpty(appDesignerProcess.DBName))
+                if (appDesignerProcess == null && string.IsNullOrEmpty(appDesignerProcess.DBName))
                 {
-                    command.CommandText = @"
-                        SELECT FunctionName, FunctionPath, ParameterNames, ParameterTypes, ReturnType
-                        FROM FunctionCache 
-                        WHERE DBName = @DBName 
-                        AND FunctionName LIKE @SearchTerm COLLATE NOCASE
-                        ORDER BY FunctionName
-                    ";
-                    command.Parameters.AddWithValue("@DBName", appDesignerProcess.DBName);
+                    return results;
                 }
-                else
-                {
-                    command.CommandText = @"
-                        SELECT FunctionName, FunctionPath, ParameterNames, ParameterTypes, ReturnType
-                        FROM FunctionCache 
-                        WHERE FunctionName LIKE @SearchTerm COLLATE NOCASE
-                        ORDER BY FunctionName
-                    ";
-                }
-
+                
+                command.CommandText = @"
+                    SELECT FunctionName, FunctionPath, ParameterNames, ParameterTypes, ReturnType
+                    FROM FunctionCache 
+                    WHERE DBName = @DBName 
+                    AND (FunctionName LIKE @SearchTerm COLLATE NOCASE
+                            OR FunctionPath LIKE @ProgramPrefix COLLATE NOCASE
+                        )
+                    ORDER BY FunctionName
+                ";
+                command.Parameters.AddWithValue("@DBName", appDesignerProcess.DBName);
+                
+                
                 command.Parameters.AddWithValue("@SearchTerm", $"%{searchTerm}%");
-
+                command.Parameters.AddWithValue("@ProgramPrefix", $"{searchTerm}%");
                 using var reader = command.ExecuteReader();
                 while (reader.Read())
                 {
@@ -309,8 +328,10 @@ namespace AppRefiner
                     {
                         Debugger.Break();
                     }
+
                     foreach (var function in program.Functions)
                     {
+                        var returnTypeString = function.ReturnType?.TypeName ?? "";
                         var newFunc = new FunctionCacheItem
                         {
                             DBName = appDesignerProcess.DBName,

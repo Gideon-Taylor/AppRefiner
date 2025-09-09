@@ -976,14 +976,13 @@ namespace AppRefiner
                 var result = dialog.ShowDialog(handleWrapper);
                 if (result == DialogResult.OK)
                 {
-                 /*   var selectedTarget = dialog.GetSelectedTarget();
-                    if (selectedTarget != null && activeAppDesigner != null)
+                    var selectedFunction = dialog.SelectedFunction;
+                    if (selectedFunction != null && activeAppDesigner != null)
                     {
-                        // Build the open target string based on the target type and object data
-                        string openTargetString = BuildOpenTargetString(selectedTarget);
-                        activeAppDesigner.SetOpenTarget(openTargetString);
+                        var refactorClass = new DeclareFunction(activeEditor, selectedFunction);
+                        refactorManager.ExecuteRefactor(refactorClass, activeEditor, false);
                     }
-                 */
+                 
                 }
             }
             catch (Exception ex)

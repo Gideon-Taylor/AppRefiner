@@ -30,7 +30,7 @@ public class BuiltInTypeNode : TypeNode
 {
     public BuiltInType Type { get; }
 
-    public override string TypeName => Type.ToString();
+    public override string TypeName => Type.ToKeyword();
     public override bool IsBuiltIn => true;
 
     public BuiltInTypeNode(BuiltInType type)
@@ -73,10 +73,10 @@ public class ArrayTypeNode : TypeNode
     {
         get
         {
-            var arrayName = "Array";
+            var arrayName = "array";
             for (var x = 2; x <= Dimensions; x++)
             {
-                arrayName += " of Array";
+                arrayName += " of array";
             }
 
             return ElementType != null ? $"{arrayName} of {ElementType.TypeName}" : arrayName;
@@ -405,17 +405,17 @@ public static class BuiltInTypeExtensions
             // Primitive types (proper casing to match TokenType.GetText())
             BuiltInType.Any => "any",
             BuiltInType.Boolean => "boolean",
-            BuiltInType.Date => "Date",
-            BuiltInType.DateTime => "DateTime",
+            BuiltInType.Date => "date",
+            BuiltInType.DateTime => "datetime",
             BuiltInType.Exception => "Exception",
             BuiltInType.Float => "float",
             BuiltInType.Integer => "integer",
             BuiltInType.Number => "number",
             BuiltInType.String => "string",
-            BuiltInType.Time => "Time",
+            BuiltInType.Time => "time",
 
             // Object types (use enum name directly)
-            _ => type.ToString()
+            _ => Enum.GetName(typeof(BuiltInType), type) ?? nameof(type)
         };
     }
 
@@ -490,14 +490,6 @@ public static class BuiltInTypeExtensions
     }
 
     /// <summary>
-    /// True if this type can be implicitly converted from string
-    /// </summary>
-    public static bool IsStringConvertible(this BuiltInType type)
-    {
-        return type != BuiltInType.Boolean; // All types except boolean can be converted from string
-    }
-
-    /// <summary>
     /// True if this type represents an exception object
     /// </summary>
     public static bool IsException(this BuiltInType type)
@@ -519,7 +511,7 @@ public static class BuiltInTypeExtensions
     public static bool IsNullable(this BuiltInType type)
     {
         // In PeopleCode, most types can be null, but primitives typically default to zero/empty
-        return type is not (BuiltInType.Integer or BuiltInType.Float or BuiltInType.Number or BuiltInType.Boolean);
+        return type is not (BuiltInType.String or BuiltInType.Integer or BuiltInType.Float or BuiltInType.Number or BuiltInType.Boolean);
     }
 }
 
