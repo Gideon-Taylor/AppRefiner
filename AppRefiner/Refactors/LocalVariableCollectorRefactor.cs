@@ -182,6 +182,12 @@ namespace AppRefiner.Refactors
             var groupedByType = localVariables.GroupBy(v => v.Type).OrderBy(g => g.Key, StringComparer.OrdinalIgnoreCase).Select(g => g.OrderBy(g => g.Name));
 
             var newDeclarations = new StringBuilder();
+            var padding = "   ";
+
+            if (node is ProgramNode && ((ProgramNode)node).MainBlock is not null)
+            {
+                padding = "";
+            }
 
             foreach (var group in groupedByType)
             {
@@ -190,14 +196,14 @@ namespace AppRefiner.Refactors
                 if (selectedMode == VariableCollectionMode.CollapseByType)
                 {
                     var names = string.Join(", ", group.Select(g => g.Name));
-                    newDeclarations.AppendLine($"   Local {group.First().Type} {names};");
+                    newDeclarations.AppendLine($"{padding}Local {group.First().Type} {names};");
                 }
                 else
                 {
                     /* make a new declaration for each one */
                     foreach (var variable in group)
                     {
-                        newDeclarations.AppendLine($"   Local {variable.Type} {variable.Name};");
+                        newDeclarations.AppendLine($"{padding}Local {variable.Type} {variable.Name};");
                     }
                 }
             }
