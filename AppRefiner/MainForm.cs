@@ -1932,33 +1932,6 @@ namespace AppRefiner
             }
         }
 
-        private void TriggerResolveImportsRefactor()
-        {
-            if (activeEditor == null || !activeEditor.IsValid() || refactorManager == null)
-            {
-                return;
-            }
-
-            try
-            {
-                // Create an instance of the ResolveImports refactor
-                var resolveImportsRefactor = new ResolveImports(activeEditor);
-
-                // Execute via the RefactorManager (showUserMessages: false for automatic execution)
-                Task.Delay(100).ContinueWith(_ =>
-                {
-                    refactorManager.ExecuteRefactor(resolveImportsRefactor, activeEditor, showUserMessages: false);
-                }, TaskScheduler.Default);
-
-            }
-            catch (Exception ex)
-            {
-                Debug.Log($"Error executing ResolveImports refactor: {ex.Message}");
-                // Note: Intentionally not showing MessageBox for automatic execution to avoid interrupting user workflow
-            }
-        }
-
-
         private void UpdateSavedFoldsForEditor(ScintillaEditor? editor)
         {
             if (editor == null) return;

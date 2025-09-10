@@ -1,5 +1,8 @@
+using AppRefiner.Database;
 using AppRefiner.Database.Models;
 using System.Runtime.InteropServices;
+using System.Text.RegularExpressions;
+using static SqlParser.Ast.DataType;
 
 namespace AppRefiner.Dialogs
 {
@@ -269,8 +272,19 @@ namespace AppRefiner.Dialogs
             {
                 // Convert SmartOpenConfig to OpenTargetSearchOptions with search terms
                 var searchOptions = CreateSearchOptionsFromConfig();
-                searchOptions.IDSearchTerm = idSearchBox.Text;
-                searchOptions.DescriptionSearchTerm = descrSearchBox.Text;
+
+                /* What's a good way to manage these */
+
+                if (idSearchBox.Text.Contains(' '))
+                {
+                    var parts = idSearchBox.Text.Split(' ');
+                    searchOptions.IDSearchTerm = parts[0];
+                    searchOptions.DescriptionSearchTerm = parts[1] + "%" + descrSearchBox.Text;
+                } else
+                {
+                    searchOptions.IDSearchTerm = idSearchBox.Text;
+                    searchOptions.DescriptionSearchTerm = descrSearchBox.Text;
+                }
                 
                 // Get results from the search function
                 allTargets = searchFunction(searchOptions);
@@ -300,7 +314,7 @@ namespace AppRefiner.Dialogs
             
             foreach (var (typeName, isEnabled) in config.EnabledTypes)
             {
-                if (isEnabled && TryMapStringToTargetType(typeName, out OpenTargetType targetType))
+                if (isEnabled && IDataManager.TryMapStringToTargetType(typeName, out OpenTargetType targetType))
                 {
                     enabledTypes.Add(targetType);
                 }
@@ -312,40 +326,7 @@ namespace AppRefiner.Dialogs
                 config.SortByLastUpdate);
         }
 
-        private bool TryMapStringToTargetType(string typeName, out OpenTargetType targetType)
-        {
-            targetType = typeName switch
-            {
-                "Activity" => OpenTargetType.Activity,
-                "Analytic Model" => OpenTargetType.AnalyticModel,
-                "Analytic Type" => OpenTargetType.AnalyticType,
-                "App Engine Program" => OpenTargetType.AppEngineProgram,
-                "Application Package" => OpenTargetType.ApplicationPackage,
-                "Application Class" => OpenTargetType.ApplicationClass,
-                "Approval Rule Set" => OpenTargetType.ApprovalRuleSet,
-                "Business Interlink" => OpenTargetType.BusinessInterlink,
-                "Business Process" => OpenTargetType.BusinessProcess,
-                "Component" => OpenTargetType.Component,
-                "Component Interface" => OpenTargetType.ComponentInterface,
-                "Field" => OpenTargetType.Field,
-                "File Layout" => OpenTargetType.FileLayout,
-                "File Reference" => OpenTargetType.FileReference,
-                "HTML" => OpenTargetType.HTML,
-                "Image" => OpenTargetType.Image,
-                "Menu" => OpenTargetType.Menu,
-                "Message" => OpenTargetType.Message,
-                "Optimization Model" => OpenTargetType.OptimizationModel,
-                "Page" => OpenTargetType.Page,
-                "Page (Fluid)" => OpenTargetType.PageFluid,
-                "Project" => OpenTargetType.Project,
-                "Record" => OpenTargetType.Record,
-                "SQL" => OpenTargetType.SQL,
-                "Style Sheet" => OpenTargetType.StyleSheet,
-                _ => OpenTargetType.Project
-            };
-
-            return !typeName.Equals("Unknown", StringComparison.OrdinalIgnoreCase);
-        }
+        
 
 
         #endregion
@@ -381,12 +362,12 @@ namespace AppRefiner.Dialogs
             // Group targets by type
             var groupedTargets = filteredTargets
                 .GroupBy(t => t.Type)
-                .OrderBy(g => g.Key.ToString());
+                .OrderBy(g => Regex.Replace(g.Key.ToString(), "([a-z])([A-Z])", "$1 $2"));
 
             foreach (var group in groupedTargets)
             {
                 // Create group node
-                var groupName = group.Key.ToString();
+                var groupName = Regex.Replace(group.Key.ToString(), "([a-z])([A-Z])", "$1 $2");
                 var groupNode = new TreeNode($"{groupName} ({group.Count()})");
                 groupNode.Tag = null; // Group nodes have no target data
                 groupNode.NodeFont = new Font(targetsTreeView.Font, FontStyle.Bold);

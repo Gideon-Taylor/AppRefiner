@@ -24,6 +24,19 @@ namespace AppRefiner.Database.Models
         Message,
         OptimizationModel,
         PageFluid,
+        NonClassPeopleCode,
+
+        /* NonClass PeopleCode types, these aren't exposed in the OpenConfig */
+        PagePeopleCode,
+        ComponentPeopleCode,
+        ComponentRecordPeopleCode,
+        ComponentRecFieldPeopleCode,
+        RecordFieldPeopleCode,
+        MenuPeopleCode,
+        AppEnginePeopleCode,
+        ComponentInterfacePeopleCode,
+        MessagePeopleCode,
+
         Record,
         SQL,
         StyleSheet,
@@ -39,6 +52,7 @@ namespace AppRefiner.Database.Models
         /// Gets the type of the target
         /// </summary>
         public OpenTargetType Type { get; }
+        public string? DisplayTargetType { get; set; } = null;
 
         /// <summary>
         /// Gets the display name of the target

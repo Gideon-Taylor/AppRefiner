@@ -101,6 +101,7 @@ namespace AppRefiner
                 "Image",
                 "Menu",
                 "Message",
+                "Non Class PeopleCode",
                 "Optimization Model",
                 "Page",
                 "Page (Fluid)",

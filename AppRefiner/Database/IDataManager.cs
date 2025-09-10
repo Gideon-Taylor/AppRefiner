@@ -1,4 +1,6 @@
 using AppRefiner.Database.Models;
+using PeopleCodeParser.SelfHosted.Nodes;
+using static SqlParser.Ast.DataType;
 
 namespace AppRefiner.Database
 {
@@ -276,5 +278,250 @@ namespace AppRefiner.Database
         List<OpenTarget> GetFunctionDefiningPrograms();
 
         string GetToolsVersion();
+
+
+        public static bool TryMapStringToTargetType(string typeName, out OpenTargetType targetType)
+        {
+            targetType = typeName switch
+            {
+                "Activity" => OpenTargetType.Activity,
+                "Analytic Model" => OpenTargetType.AnalyticModel,
+                "Analytic Type" => OpenTargetType.AnalyticType,
+                "App Engine Program" => OpenTargetType.AppEngineProgram,
+                "Application Package" => OpenTargetType.ApplicationPackage,
+                "Application Class" => OpenTargetType.ApplicationClass,
+                "Approval Rule Set" => OpenTargetType.ApprovalRuleSet,
+                "Business Interlink" => OpenTargetType.BusinessInterlink,
+                "Business Process" => OpenTargetType.BusinessProcess,
+                "Component" => OpenTargetType.Component,
+                "Component Interface" => OpenTargetType.ComponentInterface,
+                "Field" => OpenTargetType.Field,
+                "File Layout" => OpenTargetType.FileLayout,
+                "File Reference" => OpenTargetType.FileReference,
+                "HTML" => OpenTargetType.HTML,
+                "Image" => OpenTargetType.Image,
+                "Menu" => OpenTargetType.Menu,
+                "Message" => OpenTargetType.Message,
+                "Optimization Model" => OpenTargetType.OptimizationModel,
+                "Page" => OpenTargetType.Page,
+                "Page (Fluid)" => OpenTargetType.PageFluid,
+
+                // Non class PeopleCode Types
+                "Non Class PeopleCode" => OpenTargetType.NonClassPeopleCode, // used by the open config dialog */
+
+                /* These are used during the reverse lookup from the query results */
+                "Page PeopleCode" => OpenTargetType.PagePeopleCode,
+                "Component PeopleCode" => OpenTargetType.ComponentPeopleCode,
+                "Component Record PeopleCode" => OpenTargetType.ComponentRecordPeopleCode,
+                "Component Rec Field PeopleCode" => OpenTargetType.ComponentRecFieldPeopleCode,
+                "Record Field PeopleCode" => OpenTargetType.RecordFieldPeopleCode,
+                "Menu PeopleCode" => OpenTargetType.MenuPeopleCode,
+                "App Engine PeopleCode" => OpenTargetType.AppEnginePeopleCode,
+                "Component Interface PeopleCode" => OpenTargetType.ComponentInterfacePeopleCode,
+                "Message PeopleCode" => OpenTargetType.MessagePeopleCode,
+                
+
+                "Project" => OpenTargetType.Project,
+                "Record" => OpenTargetType.Record,
+                "SQL" => OpenTargetType.SQL,
+                "Style Sheet" => OpenTargetType.StyleSheet,
+                _ => OpenTargetType.Project
+            };
+
+            return !typeName.Equals("Unknown", StringComparison.OrdinalIgnoreCase);
+        }
+
+        public static List<(PSCLASSID, string)> CreateObjectPairs(OpenTargetType targetType, string id, string descr)
+        {
+            var pairs = new List<(PSCLASSID, string)>();
+
+            switch (targetType)
+            {
+                case OpenTargetType.Project:
+                    pairs.Add((PSCLASSID.PROJECT, id));
+                    break;
+                case OpenTargetType.Page:
+                case OpenTargetType.PageFluid:
+                    pairs.Add((PSCLASSID.PAGE, id));
+                    break;
+                case OpenTargetType.Activity:
+                    pairs.Add((PSCLASSID.ACTIVITYNAME, id));
+                    break;
+                case OpenTargetType.AnalyticModel:
+                    pairs.Add((PSCLASSID.ANALYTIC_MODEL_ID, id));
+                    break;
+                case OpenTargetType.AnalyticType:
+                    pairs.Add((PSCLASSID.NONE, id)); // No specific PSCLASSID for analytic types
+                    break;
+                case OpenTargetType.AppEngineProgram:
+                    pairs.Add((PSCLASSID.AEAPPLICATIONID, id));
+                    break;
+                case OpenTargetType.ApplicationPackage:
+                    // Application packages use a hierarchical structure
+                    pairs.Add((PSCLASSID.APPLICATION_PACKAGE, id));
+                    break;
+                case OpenTargetType.ApplicationClass:
+                    // Application classes use package root, qualify path, and class name
+                    string[] classParts = id.Split(':');
+                    var currentClassID = PSCLASSID.APPLICATION_PACKAGE;
+                    for (var x = 0; x < classParts.Length; x++)
+                    {
+                        pairs.Add(((PSCLASSID)currentClassID++, classParts[x]));
+                    }
+
+                    /* Last one is always APPLICATION_CLASS */
+                    pairs[pairs.Count - 1] = (PSCLASSID.APPLICATION_CLASS, pairs[pairs.Count - 1].Item2);
+                    pairs.Add((PSCLASSID.METHOD, "OnExecute"));
+                    break;
+                case OpenTargetType.ApprovalRuleSet:
+                    pairs.Add((PSCLASSID.APPRRULESET, id));
+                    break;
+                case OpenTargetType.BusinessInterlink:
+                    pairs.Add((PSCLASSID.NONE, id)); // No specific PSCLASSID for business interlinks
+                    break;
+                case OpenTargetType.BusinessProcess:
+                    pairs.Add((PSCLASSID.BUSINESSPROCESS, id));
+                    break;
+                case OpenTargetType.Component:
+                    pairs.Add((PSCLASSID.COMPONENT, id));
+                    break;
+                case OpenTargetType.ComponentInterface:
+                    pairs.Add((PSCLASSID.COMPONENTINTERFACE, id));
+                    break;
+                case OpenTargetType.Field:
+                    pairs.Add((PSCLASSID.FIELD, id));
+                    break;
+                case OpenTargetType.FileLayout:
+                    pairs.Add((PSCLASSID.FILELAYOUT, id));
+                    break;
+                case OpenTargetType.FileReference:
+                    pairs.Add((PSCLASSID.FILEREFERENCE, id));
+                    break;
+                case OpenTargetType.HTML:
+                    pairs.Add((PSCLASSID.HTML, id));
+                    break;
+                case OpenTargetType.Image:
+                    pairs.Add((PSCLASSID.IMAGE, id));
+                    break;
+                case OpenTargetType.Menu:
+                    pairs.Add((PSCLASSID.MENU, id));
+                    break;
+                case OpenTargetType.Message:
+                    pairs.Add((PSCLASSID.MESSAGE, id));
+                    break;
+                case OpenTargetType.OptimizationModel:
+                    pairs.Add((PSCLASSID.OPTMODEL, id));
+                    break;
+                case OpenTargetType.Record:
+                    pairs.Add((PSCLASSID.RECORD, id));
+                    break;
+                case OpenTargetType.SQL:
+                    pairs.Add((PSCLASSID.SQL, id));
+                    break;
+                case OpenTargetType.StyleSheet:
+                    pairs.Add((PSCLASSID.STYLESHEET, id));
+                    break;
+                case OpenTargetType.PagePeopleCode:
+                    pairs.Add((PSCLASSID.PAGE, id));  // id is just the page name
+                    pairs.Add((PSCLASSID.METHOD, "Activate"));
+                    break;
+
+                case OpenTargetType.ComponentPeopleCode:
+                    // id format: Component.Market.Method
+                    string[] parts = descr.Split('.');
+                    pairs.Add((PSCLASSID.COMPONENT, parts[0]));
+                    pairs.Add((PSCLASSID.MARKET, parts[1]));
+                    pairs.Add((PSCLASSID.METHOD, parts[2]));
+                    break;
+
+                case OpenTargetType.ComponentRecordPeopleCode:
+                    // id format: Component.Market.Record, descr adds .Method
+                    parts = descr.Split('.');
+                    pairs.Add((PSCLASSID.COMPONENT, parts[0]));
+                    pairs.Add((PSCLASSID.MARKET, parts[1]));
+                    pairs.Add((PSCLASSID.RECORD, parts[2]));
+                    pairs.Add((PSCLASSID.METHOD, parts[3]));
+                    break;
+
+                case OpenTargetType.ComponentRecFieldPeopleCode:
+                    // id format: Component.Market.Record.Field, descr adds .Method
+                    parts = descr.Split('.');
+                    pairs.Add((PSCLASSID.COMPONENT, parts[0]));
+                    pairs.Add((PSCLASSID.MARKET, parts[1]));
+                    pairs.Add((PSCLASSID.RECORD, parts[2]));
+                    pairs.Add((PSCLASSID.FIELD, parts[3]));
+                    pairs.Add((PSCLASSID.METHOD, parts[4]));
+                    break;
+
+                case OpenTargetType.RecordFieldPeopleCode:
+                    // id format: Record.Field, descr adds .Method
+                    parts = descr.Split('.');
+                    pairs.Add((PSCLASSID.RECORD, parts[0]));
+                    pairs.Add((PSCLASSID.FIELD, parts[1]));
+                    pairs.Add((PSCLASSID.METHOD, parts[2]));
+                    break;
+
+                case OpenTargetType.MenuPeopleCode:
+                    // id format: Menu.BarName.ItemName, descr adds .ItemSelected
+                    parts = descr.Split('.');
+                    pairs.Add((PSCLASSID.MENU, parts[0]));
+                    pairs.Add((PSCLASSID.MENUBAR, parts[1]));
+                    pairs.Add((PSCLASSID.MENUITEM, parts[2]));
+                    pairs.Add((PSCLASSID.METHOD, parts[3]));
+                    break;
+
+                case OpenTargetType.AppEnginePeopleCode:
+                    // id format: Program.Section.Step, descr has all 7 parts
+                    parts = descr.Split('.');
+                    pairs.Add((PSCLASSID.AEAPPLICATIONID, parts[0]));
+                    pairs.Add((PSCLASSID.AESECTION, parts[1]));
+                    pairs.Add((PSCLASSID.MARKET, parts[2]));
+                    pairs.Add((PSCLASSID.DBTYPE, parts[3]));
+                    pairs.Add((PSCLASSID.EFFDT, parts[4]));
+                    pairs.Add((PSCLASSID.AESTEP, parts[5]));
+                    pairs.Add((PSCLASSID.METHOD, parts[6]));
+                    break;
+
+                case OpenTargetType.ComponentInterfacePeopleCode:
+                    // id format: CI name, descr adds .Method
+                    parts = descr.Split('.');
+                    pairs.Add((PSCLASSID.COMPINTFCINTERFACE, parts[0]));
+                    pairs.Add((PSCLASSID.METHOD, parts[1]));
+                    break;
+
+                case OpenTargetType.MessagePeopleCode:
+                    parts = descr.Split('.');
+                    pairs.Add((PSCLASSID.MESSAGE, parts[0]));
+                    if (parts.Length == 2 && parts[1] == "OnRequest")
+                    {
+                        pairs.Add((PSCLASSID.METHOD, parts[1]));
+                    }
+                    else if (parts.Length == 3 && parts[2] == "Subscription")
+                    {
+                        pairs.Add((PSCLASSID.SUBSCRIPTION, parts[1]));
+                        pairs.Add((PSCLASSID.METHOD, parts[2]));
+                    }
+                    break;
+                default:
+                    // For any remaining types without specific PSCLASSID mapping
+                    pairs.Add((PSCLASSID.NONE, id));
+                    break;
+            }
+
+            return pairs;
+        }
+
+        private static bool IsValidFieldMethod(string method)
+        {
+            var fieldMethods = new HashSet<string>
+            {
+                "FieldChange", "FieldDefault", "FieldEdit",
+                "FieldFormula", "PrePopup", "RowDelete",
+                "RowInit", "RowInsert", "RowSelect",
+                "SaveEdit", "SavePostChange", "SavePreChange",
+                "SearchInit", "SearchSave", "Workflow"
+            };
+            return fieldMethods.Contains(method);
+        }
     }
 }

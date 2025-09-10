@@ -1229,10 +1229,10 @@ namespace AppRefiner.Database
                     string description = row["DESCR"]?.ToString() ?? string.Empty;
 
                     // Map definition type string to OpenTargetType enum
-                    if (TryMapDefnTypeToEnum(defnType, out OpenTargetType targetType))
+                    if (IDataManager.TryMapStringToTargetType(defnType, out OpenTargetType targetType))
                     {
                         // Map to appropriate PSCLASSID and create object pairs
-                        var objectPairs = CreateObjectPairs(targetType, id);
+                        var objectPairs = IDataManager.CreateObjectPairs(targetType, id, description);
                         
                         results.Add(new OpenTarget(
                             targetType,
@@ -1488,147 +1488,9 @@ ORDER BY DEFN_TYPE ASC, ID ASC, CASE WHEN @sort_by_date = 'Y' THEN LASTUPDDTTM E
      AND (LEN(@descr_search) = 0 OR UPPER(DESCR) LIKE UPPER('%' + @descr_search + '%') ESCAPE '\')
      AND (LEN(@id_search) > 0 OR LEN(@descr_search) > 0)",
 
+                OpenTargetType.NonClassPeopleCode => NON_CLASS_PPC_QUERY,
                 _ => string.Empty
             };
-        }
-
-        private bool TryMapDefnTypeToEnum(string defnType, out OpenTargetType targetType)
-        {
-            targetType = defnType switch
-            {
-                "Activity" => OpenTargetType.Activity,
-                "Analytic Model" => OpenTargetType.AnalyticModel,
-                "Analytic Type" => OpenTargetType.AnalyticType,
-                "App Engine Program" => OpenTargetType.AppEngineProgram,
-                "Application Package" => OpenTargetType.ApplicationPackage,
-                "Application Class" => OpenTargetType.ApplicationClass,
-                "Approval Rule Set" => OpenTargetType.ApprovalRuleSet,
-                "Business Interlink" => OpenTargetType.BusinessInterlink,
-                "Business Process" => OpenTargetType.BusinessProcess,
-                "Component" => OpenTargetType.Component,
-                "Component Interface" => OpenTargetType.ComponentInterface,
-                "Field" => OpenTargetType.Field,
-                "File Layout" => OpenTargetType.FileLayout,
-                "File Reference" => OpenTargetType.FileReference,
-                "HTML" => OpenTargetType.HTML,
-                "Image" => OpenTargetType.Image,
-                "Menu" => OpenTargetType.Menu,
-                "Message" => OpenTargetType.Message,
-                "Optimization Model" => OpenTargetType.OptimizationModel,
-                "Page" => OpenTargetType.Page,
-                "Page (Fluid)" => OpenTargetType.PageFluid,
-                "Project" => OpenTargetType.Project,
-                "Record" => OpenTargetType.Record,
-                "SQL" => OpenTargetType.SQL,
-                "Style Sheet" => OpenTargetType.StyleSheet,
-                _ => OpenTargetType.Project // Default fallback
-            };
-
-            return defnType != null && !defnType.Equals("Project") || targetType != OpenTargetType.Project;
-        }
-
-        private List<(PSCLASSID, string)> CreateObjectPairs(OpenTargetType targetType, string id)
-        {
-            var pairs = new List<(PSCLASSID, string)>();
-
-            switch (targetType)
-            {
-                case OpenTargetType.Project:
-                    pairs.Add((PSCLASSID.PROJECT, id));
-                    break;
-                case OpenTargetType.Page:
-                case OpenTargetType.PageFluid:
-                    pairs.Add((PSCLASSID.PAGE, id));
-                    break;
-                case OpenTargetType.Activity:
-                    pairs.Add((PSCLASSID.ACTIVITYNAME, id));
-                    break;
-                case OpenTargetType.AnalyticModel:
-                    pairs.Add((PSCLASSID.ANALYTIC_MODEL_ID, id));
-                    break;
-                case OpenTargetType.AnalyticType:
-                    pairs.Add((PSCLASSID.NONE, id)); // No specific PSCLASSID for analytic types
-                    break;
-                case OpenTargetType.AppEngineProgram:
-                    pairs.Add((PSCLASSID.AEAPPLICATIONID, id));
-                    break;
-                case OpenTargetType.ApplicationPackage:
-                    // Application packages use a hierarchical structure
-                    pairs.Add((PSCLASSID.APPLICATION_PACKAGE, id));
-                    break;
-                case OpenTargetType.ApplicationClass:
-                    // Application classes use package root, qualify path, and class name
-                    string[] classParts = id.Split(':');
-                    if (classParts.Length >= 2)
-                    {
-                        pairs.Add((PSCLASSID.PACKAGEROOT, classParts[0]));
-                        if (classParts.Length == 2)
-                        {
-                            pairs.Add((PSCLASSID.PACKAGEQUALIFYPATH, ":"));
-                            pairs.Add((PSCLASSID.APPLICATION_CLASS, classParts[1]));
-                        }
-                        else if (classParts.Length > 2)
-                        {
-                            pairs.Add((PSCLASSID.PACKAGEQUALIFYPATH, string.Join(":", classParts.Skip(1).Take(classParts.Length - 2))));
-                            pairs.Add((PSCLASSID.APPLICATION_CLASS, classParts[classParts.Length - 1]));
-                        }
-                    }
-                    break;
-                case OpenTargetType.ApprovalRuleSet:
-                    pairs.Add((PSCLASSID.APPRRULESET, id));
-                    break;
-                case OpenTargetType.BusinessInterlink:
-                    pairs.Add((PSCLASSID.NONE, id)); // No specific PSCLASSID for business interlinks
-                    break;
-                case OpenTargetType.BusinessProcess:
-                    pairs.Add((PSCLASSID.BUSINESSPROCESS, id));
-                    break;
-                case OpenTargetType.Component:
-                    pairs.Add((PSCLASSID.COMPONENT, id));
-                    break;
-                case OpenTargetType.ComponentInterface:
-                    pairs.Add((PSCLASSID.COMPONENTINTERFACE, id));
-                    break;
-                case OpenTargetType.Field:
-                    pairs.Add((PSCLASSID.FIELD, id));
-                    break;
-                case OpenTargetType.FileLayout:
-                    pairs.Add((PSCLASSID.FILELAYOUT, id));
-                    break;
-                case OpenTargetType.FileReference:
-                    pairs.Add((PSCLASSID.FILEREFERENCE, id));
-                    break;
-                case OpenTargetType.HTML:
-                    pairs.Add((PSCLASSID.HTML, id));
-                    break;
-                case OpenTargetType.Image:
-                    pairs.Add((PSCLASSID.IMAGE, id));
-                    break;
-                case OpenTargetType.Menu:
-                    pairs.Add((PSCLASSID.MENU, id));
-                    break;
-                case OpenTargetType.Message:
-                    pairs.Add((PSCLASSID.MESSAGE, id));
-                    break;
-                case OpenTargetType.OptimizationModel:
-                    pairs.Add((PSCLASSID.OPTMODEL, id));
-                    break;
-                case OpenTargetType.Record:
-                    pairs.Add((PSCLASSID.RECORD, id));
-                    break;
-                case OpenTargetType.SQL:
-                    pairs.Add((PSCLASSID.SQL, id));
-                    break;
-                case OpenTargetType.StyleSheet:
-                    pairs.Add((PSCLASSID.STYLESHEET, id));
-                    break;
-                default:
-                    // For any remaining types without specific PSCLASSID mapping
-                    pairs.Add((PSCLASSID.NONE, id));
-                    break;
-            }
-
-            return pairs;
         }
 
         /// <summary>
@@ -1779,5 +1641,136 @@ ORDER BY DEFN_TYPE ASC, ID ASC, CASE WHEN @sort_by_date = 'Y' THEN LASTUPDDTTM E
                 return "99.99.99";
             }
         }
+
+        private const string NON_CLASS_PPC_QUERY = @"-- Page PeopleCode
+SELECT 'Page PeopleCode' AS DEFN_TYPE, 
+       OBJECTVALUE1 AS ID,
+       OBJECTVALUE1 + '.Activate' AS DESCR,
+       LASTUPDDTTM
+FROM PSPCMPROG 
+WHERE OBJECTID1 = 9 AND OBJECTID2 = 12
+  AND (LEN(@id_search) = 0 OR UPPER(OBJECTVALUE1) LIKE UPPER(@id_search + '%') ESCAPE '\')
+  AND (LEN(@descr_search) = 0 OR UPPER(OBJECTVALUE1 + '.Activate') LIKE UPPER('%' + @descr_search + '%') ESCAPE '\')
+  AND (LEN(@id_search) > 0 OR LEN(@descr_search) > 0)
+
+UNION ALL
+
+-- Component PeopleCode
+SELECT 'Component PeopleCode' AS DEFN_TYPE,
+       OBJECTVALUE1 + '.' + OBJECTVALUE2 + '.' + OBJECTVALUE3 AS ID,
+       OBJECTVALUE1 + '.' + OBJECTVALUE2 + '.' + OBJECTVALUE3 AS DESCR,
+       LASTUPDDTTM
+FROM PSPCMPROG 
+WHERE OBJECTID1 = 10 AND OBJECTID2 = 39 AND OBJECTID3 = 12
+  AND (LEN(@id_search) = 0 OR UPPER(OBJECTVALUE1 + '.' + OBJECTVALUE2 + '.' + OBJECTVALUE3) LIKE UPPER(@id_search + '%') ESCAPE '\')
+  AND (LEN(@descr_search) = 0 OR UPPER(OBJECTVALUE1 + '.' + OBJECTVALUE2 + '.' + OBJECTVALUE3) LIKE UPPER('%' + @descr_search + '%') ESCAPE '\')
+  AND (LEN(@id_search) > 0 OR LEN(@descr_search) > 0)
+
+UNION ALL
+
+-- Component Record PeopleCode
+SELECT 'Component Record PeopleCode' AS DEFN_TYPE,
+       OBJECTVALUE1 + '.' + OBJECTVALUE2 + '.' + OBJECTVALUE3 AS ID,
+       OBJECTVALUE1 + '.' + OBJECTVALUE2 + '.' + OBJECTVALUE3 + '.' + OBJECTVALUE4 AS DESCR,
+       LASTUPDDTTM
+FROM PSPCMPROG 
+WHERE OBJECTID1 = 10 AND OBJECTID2 = 39 AND OBJECTID3 = 1 AND OBJECTID4 = 12
+  AND (LEN(@id_search) = 0 OR UPPER(OBJECTVALUE1 + '.' + OBJECTVALUE2 + '.' + OBJECTVALUE3) LIKE UPPER(@id_search + '%') ESCAPE '\')
+  AND (LEN(@descr_search) = 0 OR UPPER(OBJECTVALUE1 + '.' + OBJECTVALUE2 + '.' + OBJECTVALUE3 + '.' + OBJECTVALUE4) LIKE UPPER('%' + @descr_search + '%') ESCAPE '\')
+  AND (LEN(@id_search) > 0 OR LEN(@descr_search) > 0)
+
+UNION ALL
+
+-- Component Record Field PeopleCode
+SELECT 'Component Rec Field PeopleCode' AS DEFN_TYPE,
+       OBJECTVALUE1 + '.' + OBJECTVALUE2 + '.' + OBJECTVALUE3 + '.' + OBJECTVALUE4 AS ID,
+       OBJECTVALUE1 + '.' + OBJECTVALUE2 + '.' + OBJECTVALUE3 + '.' + OBJECTVALUE4 + '.' + OBJECTVALUE5 AS DESCR,
+       LASTUPDDTTM
+FROM PSPCMPROG 
+WHERE OBJECTID1 = 10 AND OBJECTID2 = 39 AND OBJECTID3 = 1 AND OBJECTID4 = 2 AND OBJECTID5 = 12
+  AND (LEN(@id_search) = 0 OR UPPER(OBJECTVALUE1 + '.' + OBJECTVALUE2 + '.' + OBJECTVALUE3 + '.' + OBJECTVALUE4) LIKE UPPER(@id_search + '%') ESCAPE '\')
+  AND (LEN(@descr_search) = 0 OR UPPER(OBJECTVALUE1 + '.' + OBJECTVALUE2 + '.' + OBJECTVALUE3 + '.' + OBJECTVALUE4 + '.' + OBJECTVALUE5) LIKE UPPER('%' + @descr_search + '%') ESCAPE '\')
+  AND (LEN(@id_search) > 0 OR LEN(@descr_search) > 0)
+
+UNION ALL
+
+-- Record Field PeopleCode
+SELECT 'Record Field PeopleCode' AS DEFN_TYPE,
+       OBJECTVALUE1 + '.' + OBJECTVALUE2 AS ID,
+       OBJECTVALUE1 + '.' + OBJECTVALUE2 + '.' + OBJECTVALUE3 AS DESCR,
+       LASTUPDDTTM
+FROM PSPCMPROG 
+WHERE OBJECTID1 = 1 AND OBJECTID2 = 2 AND OBJECTID3 = 12
+  AND (LEN(@id_search) = 0 OR UPPER(OBJECTVALUE1 + '.' + OBJECTVALUE2) LIKE UPPER(@id_search + '%') ESCAPE '\')
+  AND (LEN(@descr_search) = 0 OR UPPER(OBJECTVALUE1 + '.' + OBJECTVALUE2 + '.' + OBJECTVALUE3) LIKE UPPER('%' + @descr_search + '%') ESCAPE '\')
+  AND (LEN(@id_search) > 0 OR LEN(@descr_search) > 0)
+
+UNION ALL
+
+-- Menu PeopleCode
+SELECT 'Menu PeopleCode' AS DEFN_TYPE,
+       OBJECTVALUE1 + '.' + OBJECTVALUE2 + '.' + OBJECTVALUE3 AS ID,
+       OBJECTVALUE1 + '.' + OBJECTVALUE2 + '.' + OBJECTVALUE3 + '.' + OBJECTVALUE4 AS DESCR,
+       LASTUPDDTTM
+FROM PSPCMPROG 
+WHERE OBJECTID1 = 3 AND OBJECTID2 = 4 AND OBJECTID3 = 5 AND OBJECTID4 = 12
+  AND (LEN(@id_search) = 0 OR UPPER(OBJECTVALUE1 + '.' + OBJECTVALUE2 + '.' + OBJECTVALUE3) LIKE UPPER(@id_search + '%') ESCAPE '\')
+  AND (LEN(@descr_search) = 0 OR UPPER(OBJECTVALUE1 + '.' + OBJECTVALUE2 + '.' + OBJECTVALUE3 + '.' + OBJECTVALUE4) LIKE UPPER('%' + @descr_search + '%') ESCAPE '\')
+  AND (LEN(@id_search) > 0 OR LEN(@descr_search) > 0)
+
+UNION ALL
+
+-- App Engine PeopleCode
+SELECT 'App Engine PeopleCode' AS DEFN_TYPE,
+       OBJECTVALUE1 + '.' + OBJECTVALUE2 + '.' + OBJECTVALUE6 AS ID,
+       OBJECTVALUE1 + '.' + OBJECTVALUE2 + '.' + OBJECTVALUE3 + '.' + 
+       OBJECTVALUE4 + '.' + OBJECTVALUE5 + '.' + OBJECTVALUE6 + '.' + OBJECTVALUE7 AS DESCR,
+       LASTUPDDTTM
+FROM PSPCMPROG 
+WHERE OBJECTID1 = 66 AND OBJECTID2 = 77 AND OBJECTID3 = 39 AND OBJECTID4 = 20 
+      AND OBJECTID5 = 21 AND OBJECTID6 = 78 AND OBJECTID7 = 12
+  AND (LEN(@id_search) = 0 OR UPPER(OBJECTVALUE1 + '.' + OBJECTVALUE2 + '.' + OBJECTVALUE6) LIKE UPPER(@id_search + '%') ESCAPE '\')
+  AND (LEN(@descr_search) = 0 OR UPPER(OBJECTVALUE1 + '.' + OBJECTVALUE2 + '.' + OBJECTVALUE3 + '.' + 
+      OBJECTVALUE4 + '.' + OBJECTVALUE5 + '.' + OBJECTVALUE6 + '.' + OBJECTVALUE7) LIKE UPPER('%' + @descr_search + '%') ESCAPE '\')
+  AND (LEN(@id_search) > 0 OR LEN(@descr_search) > 0)
+
+UNION ALL
+
+-- Component Interface PeopleCode
+SELECT 'Component Interface PeopleCode' AS DEFN_TYPE,
+       OBJECTVALUE1 AS ID,
+       OBJECTVALUE1 + '.' + OBJECTVALUE2 AS DESCR,
+       LASTUPDDTTM
+FROM PSPCMPROG 
+WHERE OBJECTID1 = 74
+  AND (LEN(@id_search) = 0 OR UPPER(OBJECTVALUE1) LIKE UPPER(@id_search + '%') ESCAPE '\')
+  AND (LEN(@descr_search) = 0 OR UPPER(OBJECTVALUE1 + '.' + OBJECTVALUE2) LIKE UPPER('%' + @descr_search + '%') ESCAPE '\')
+  AND (LEN(@id_search) > 0 OR LEN(@descr_search) > 0)
+
+UNION ALL
+
+-- Message/Subscription PeopleCode
+SELECT 'Message PeopleCode' AS DEFN_TYPE,
+       OBJECTVALUE1 + 
+       CASE WHEN OBJECTVALUE2 IS NOT NULL AND OBJECTVALUE2 != ' ' 
+            THEN '.' + OBJECTVALUE2 ELSE '' END AS ID,
+       OBJECTVALUE1 + 
+       CASE WHEN OBJECTVALUE2 IS NOT NULL AND OBJECTVALUE2 != ' ' 
+            THEN '.' + OBJECTVALUE2 ELSE '' END +
+       CASE WHEN OBJECTVALUE3 IS NOT NULL AND OBJECTVALUE3 != ' ' 
+            THEN '.' + OBJECTVALUE3 ELSE '' END AS DESCR,
+       LASTUPDDTTM
+FROM PSPCMPROG 
+WHERE (OBJECTID1 = 60 OR OBJECTID1 = 87)
+  AND (LEN(@id_search) = 0 OR 
+       UPPER(OBJECTVALUE1 + CASE WHEN OBJECTVALUE2 IS NOT NULL AND OBJECTVALUE2 != ' ' 
+            THEN '.' + OBJECTVALUE2 ELSE '' END) LIKE UPPER(@id_search + '%') ESCAPE '\')
+  AND (LEN(@descr_search) = 0 OR 
+       UPPER(OBJECTVALUE1 + 
+       CASE WHEN OBJECTVALUE2 IS NOT NULL AND OBJECTVALUE2 != ' ' 
+            THEN '.' + OBJECTVALUE2 ELSE '' END +
+       CASE WHEN OBJECTVALUE3 IS NOT NULL AND OBJECTVALUE3 != ' ' 
+            THEN '.' + OBJECTVALUE3 ELSE '' END) LIKE UPPER('%' + @descr_search + '%') ESCAPE '\')
+  AND (LEN(@id_search) > 0 OR LEN(@descr_search) > 0)";
     }
 }
