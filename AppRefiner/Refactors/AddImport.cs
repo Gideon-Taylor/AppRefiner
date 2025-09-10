@@ -91,15 +91,6 @@ namespace AppRefiner.Refactors
             var allImportStatements = new List<string>(_existingImportStatements);
             allImportStatements.Add(newImportStatement);
 
-            // Sort the imports alphabetically by the path part, case-insensitively
-            allImportStatements.Sort((s1, s2) =>
-            {
-                // Extract path by removing "import " prefix and trailing ";"
-                string path1 = s1.Length > 7 ? s1.Substring(7, s1.Length - (s1.EndsWith(";") ? 8 : 7)).Trim() : s1;
-                string path2 = s2.Length > 7 ? s2.Substring(7, s2.Length - (s2.EndsWith(";") ? 8 : 7)).Trim() : s2;
-                return string.Compare(path1, path2, StringComparison.OrdinalIgnoreCase);
-            });
-
             // Generate the new imports block text, joined by newlines
             string newImportsBlockText = string.Join(Environment.NewLine, allImportStatements);
 
