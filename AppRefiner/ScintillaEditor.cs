@@ -349,7 +349,7 @@ namespace AppRefiner
         /// </summary>
         /// <param name="forceReparse">Force a new parse regardless of content hash</param>
         /// <returns>A tuple containing the program node and token stream, or null if parsing failed</returns>
-        public (ProgramNode? Program, List<Token>? Tokens) GetParsedProgramWithTokens(bool forceReparse = false, bool includeStatementNumbers = false)
+        public (ProgramNode? Program, List<Token>? Tokens) GetParsedProgramWithTokens(bool forceReparse = false)
         {
             // Ensure we have the current content
             ContentString = ScintillaManager.GetScintillaText(this);
@@ -375,7 +375,7 @@ namespace AppRefiner
                 var tokens = selfHostedLexer.TokenizeAll();
                 /* TODO: data manager support for getting current tools release */
                 var parser = new PeopleCodeParser.SelfHosted.PeopleCodeParser(tokens);
-                selfHostedParsedProgram = parser.ParseProgram(includeStatementNumbers);
+                selfHostedParsedProgram = parser.ParseProgram();
                 this.ParserErrors = parser.Errors;
                 selfHostedTokens = tokens;
                 selfHostedParseSuccessful = true;

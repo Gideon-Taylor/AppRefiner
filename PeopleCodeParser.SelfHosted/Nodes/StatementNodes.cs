@@ -35,7 +35,9 @@ public abstract class StatementNode : AstNode
     /// The sequential number of this statement in the program
     /// This is useful for consumers of the library to track statement execution order
     /// </summary>
-    public int StatementNumber { get; set; } = 0;
+
+    public abstract void RegisterStatementNumbers(PeopleCodeParser parser, ProgramNode programNode);
+
 }
 
 /// <summary>
@@ -87,6 +89,15 @@ public class BlockNode : StatementNode
     {
         return $"Block ({Statements.Count} statements)";
     }
+
+    public override void RegisterStatementNumbers(PeopleCodeParser parser, ProgramNode programNode)
+    {
+        /* Blocks themselves do not have statement numbers */
+        foreach(var statement in Statements)
+        {
+            statement.RegisterStatementNumbers(parser, programNode);
+        }
+    }
 }
 
 /// <summary>
@@ -104,6 +115,7 @@ public class IfStatementNode : StatementNode
     /// </summary>
     public BlockNode ThenBlock { get; }
 
+    public Token ElseToken { get; set; }
     /// <summary>
     /// ELSE block (optional)
     /// </summary>
@@ -119,12 +131,12 @@ public class IfStatementNode : StatementNode
         AddChildren(condition, thenBlock);
     }
 
-    public void SetElseBlock(BlockNode elseBlock)
+    public void SetElseBlock(Token elseToken, BlockNode elseBlock)
     {
         if (ElseBlock != null)
             RemoveChild(ElseBlock);
-
-        ElseBlock = elseBlock;
+        ElseToken = elseToken;
+            ElseBlock = elseBlock;
         if (elseBlock != null)
             AddChild(elseBlock);
     }
@@ -142,6 +154,34 @@ public class IfStatementNode : StatementNode
     public override string ToString()
     {
         return ElseBlock != null ? "If-Then-Else" : "If-Then";
+    }
+
+    public override void RegisterStatementNumbers(PeopleCodeParser parser, ProgramNode programNode)
+    {
+        /* register the If */
+        programNode.SetStatementNumber( SourceSpan.Start.Line);
+
+        /* process the body */
+        ThenBlock.RegisterStatementNumbers(parser, programNode);
+
+        var previousBlock = ThenBlock;
+
+        if (ElseToken != null && ElseBlock != null)
+        {
+            if (ThenBlock.Statements.Count == 0 || (ThenBlock.Statements.Last().HasSemicolon))
+            {
+                programNode.SetStatementNumber( ElseToken.SourceSpan.Start.Line);
+            }
+            previousBlock = ElseBlock;
+
+            ElseBlock.RegisterStatementNumbers(parser, programNode);
+        }
+
+        /* register end if, if last block was empty or if last blocks last statement ended with a semicolon */
+        if (previousBlock.Statements.Count == 0 || previousBlock.Statements.Last().HasSemicolon)
+        {
+            programNode.SetStatementNumber( SourceSpan.End.Line);
+        }
     }
 }
 
@@ -213,6 +253,20 @@ public class ForStatementNode : StatementNode
         var stepStr = StepValue != null ? $" Step {StepValue}" : "";
         return $"For {Variable} = {FromValue} To {ToValue}{stepStr}";
     }
+
+    public override void RegisterStatementNumbers(PeopleCodeParser parser, ProgramNode programNode)
+    {
+        /* register the Repeat */
+        programNode.SetStatementNumber( SourceSpan.Start.Line);
+
+        /* process the body */
+        Body.RegisterStatementNumbers(parser, programNode);
+
+        if (Body.Statements.Count == 0 || (Body.Statements.Last().HasSemicolon))
+        {
+            programNode.SetStatementNumber( SourceSpan.End.Line);
+        }
+    }
 }
 
 /// <summary>
@@ -254,6 +308,20 @@ public class WhileStatementNode : StatementNode
     public override string ToString()
     {
         return $"While {Condition}";
+    }
+
+    public override void RegisterStatementNumbers(PeopleCodeParser parser, ProgramNode programNode)
+    {
+        /* register the Repeat */
+        programNode.SetStatementNumber( SourceSpan.Start.Line);
+
+        /* process the body */
+        Body.RegisterStatementNumbers(parser, programNode);
+
+        if (Body.Statements.Count == 0 || (Body.Statements.Last().HasSemicolon))
+        {
+            programNode.SetStatementNumber( SourceSpan.End.Line);
+        }
     }
 }
 
@@ -297,6 +365,21 @@ public class RepeatStatementNode : StatementNode
     {
         return $"Repeat-Until {Condition}";
     }
+
+    public override void RegisterStatementNumbers(PeopleCodeParser parser, ProgramNode programNode)
+    {
+        /* register the Repeat */
+        programNode.SetStatementNumber( SourceSpan.Start.Line);
+
+        /* process the body */
+        Body.RegisterStatementNumbers(parser, programNode);
+
+        if (Body.Statements.Count == 0 || (Body.Statements.Last().HasSemicolon))
+        {
+            programNode.SetStatementNumber( SourceSpan.End.Line);
+        }
+    }
+
 }
 
 /// <summary>
@@ -317,6 +400,7 @@ public class EvaluateStatementNode : StatementNode
     /// <summary>
     /// WHEN-OTHER clause (optional)
     /// </summary>
+    public Token? WhenOtherToken { get; set; }
     public BlockNode? WhenOtherBlock { get; set; }
 
     public override bool IntroducesScope => true;
@@ -336,12 +420,13 @@ public class EvaluateStatementNode : StatementNode
         AddChildren(whenClause.Condition, whenClause.Body);
     }
 
-    public void SetWhenOtherBlock(BlockNode whenOtherBlock)
+    public void SetWhenOtherBlock(Token whenOtherToken, BlockNode whenOtherBlock)
     {
         if (WhenOtherBlock != null)
             RemoveChild(WhenOtherBlock);
 
         WhenOtherBlock = whenOtherBlock;
+        WhenOtherToken = whenOtherToken;
         if (whenOtherBlock != null)
             AddChild(whenOtherBlock);
     }
@@ -360,6 +445,58 @@ public class EvaluateStatementNode : StatementNode
     {
         return $"Evaluate {Expression} ({WhenClauses.Count} When clauses)";
     }
+
+    public override void RegisterStatementNumbers(PeopleCodeParser parser, ProgramNode programNode)
+    {
+
+        /* register the "evaluate" */
+        programNode.SetStatementNumber( SourceSpan.Start.Line);
+        BlockNode? previousBlock = null;
+
+        foreach(var whenClause in WhenClauses)
+        {
+            if (previousBlock == null)
+            {
+                /* I *think* its safe to use the starting line of the expression of the when clause */
+                programNode.SetStatementNumber( whenClause.Condition.SourceSpan.Start.Line);
+            } else
+            {
+                if (previousBlock.Statements.Count > 0 && previousBlock.Statements.Last().HasSemicolon)
+                {
+                    /* Register this when clause */
+                    programNode.SetStatementNumber( whenClause.Condition.SourceSpan.Start.Line);
+                }
+            }
+
+            whenClause.Body.RegisterStatementNumbers(parser, programNode);
+            previousBlock = whenClause.Body;
+        }
+
+        /* 
+         * if previous when body was empty, dont register "when"
+         * if previous body ended without semicolon, don't register "when"
+         */
+
+        if (WhenOtherToken != null && WhenOtherBlock != null)
+        {
+            if (previousBlock == null || previousBlock.Statements.Count == 0 || previousBlock.Statements.Last().HasSemicolon)
+            {
+                programNode.SetStatementNumber( WhenOtherToken.SourceSpan.Start.Line);
+            }
+            WhenOtherBlock.RegisterStatementNumbers(parser, programNode);
+            previousBlock = WhenOtherBlock;
+        }
+
+
+        if (previousBlock == null || 
+            previousBlock.Statements.Count == 0 || 
+            (previousBlock.Statements.Count > 0 && previousBlock.Statements.Last().HasSemicolon))
+        {
+            /* register end-evaluate if previous when block was empty or ended with a semicolon*/
+            programNode.SetStatementNumber( SourceSpan.End.Line);
+        }
+    }
+
 }
 
 /// <summary>
@@ -450,6 +587,31 @@ public class TryStatementNode : StatementNode
     {
         return $"try ({CatchClauses.Count} catch clauses)";
     }
+
+    public override void RegisterStatementNumbers(PeopleCodeParser parser, ProgramNode programNode)
+    {
+        
+        /* register the "try" */
+        programNode.SetStatementNumber( SourceSpan.Start.Line);
+
+        /* register statement numbers in the block here */
+        TryBlock.RegisterStatementNumbers(parser, programNode);
+        BlockNode previousBlock = TryBlock;
+        foreach (var catchClause in CatchClauses)
+        {
+            /* register the "catch" */
+            if (previousBlock.Statements.Count == 0 || (previousBlock.Statements.Count > 0 && previousBlock.Statements.Last().HasSemicolon))
+            {
+                programNode.SetStatementNumber( catchClause.SourceSpan.Start.Line);
+            }
+
+            catchClause.Body.RegisterStatementNumbers(parser, programNode);
+            previousBlock = catchClause.Body;
+        }
+
+        /* register end-try */
+        programNode.SetStatementNumber( SourceSpan.End.Line);
+    }
 }
 
 
@@ -496,6 +658,11 @@ public class ReturnStatementNode : StatementNode
     {
         return Value != null ? $"Return {Value}" : "Return";
     }
+
+    public override void RegisterStatementNumbers(PeopleCodeParser parser, ProgramNode programNode)
+    {
+        programNode.SetStatementNumber( SourceSpan.Start.Line);
+    }
 }
 
 /// <summary>
@@ -530,6 +697,11 @@ public class ThrowStatementNode : StatementNode
     {
         return $"Throw {Exception}";
     }
+
+    public override void RegisterStatementNumbers(PeopleCodeParser parser, ProgramNode programNode)
+    {
+        programNode.SetStatementNumber( SourceSpan.Start.Line);
+    }
 }
 
 /// <summary>
@@ -553,6 +725,11 @@ public class BreakStatementNode : StatementNode
     {
         return "break";
     }
+
+    public override void RegisterStatementNumbers(PeopleCodeParser parser, ProgramNode programNode)
+    {
+        programNode.SetStatementNumber( SourceSpan.Start.Line);
+    }
 }
 
 /// <summary>
@@ -575,6 +752,11 @@ public class ContinueStatementNode : StatementNode
     public override string ToString()
     {
         return "Continue";
+    }
+
+    public override void RegisterStatementNumbers(PeopleCodeParser parser, ProgramNode programNode)
+    {
+        programNode.SetStatementNumber( SourceSpan.Start.Line);
     }
 }
 
@@ -621,6 +803,11 @@ public class ExitStatementNode : StatementNode
     {
         return ExitCode != null ? $"Exit {ExitCode}" : "Exit";
     }
+
+    public override void RegisterStatementNumbers(PeopleCodeParser parser, ProgramNode programNode)
+    {
+        programNode.SetStatementNumber( SourceSpan.Start.Line);
+    }
 }
 
 /// <summary>
@@ -655,6 +842,11 @@ public class ErrorStatementNode : StatementNode
     {
         return $"Error {Message}";
     }
+
+    public override void RegisterStatementNumbers(PeopleCodeParser parser, ProgramNode programNode)
+    {
+        programNode.SetStatementNumber( SourceSpan.Start.Line);
+    }
 }
 
 /// <summary>
@@ -686,6 +878,11 @@ public class WarningStatementNode : StatementNode
     public override string ToString()
     {
         return $"Warning {Message}";
+    }
+
+    public override void RegisterStatementNumbers(PeopleCodeParser parser, ProgramNode programNode)
+    {
+        programNode.SetStatementNumber( SourceSpan.Start.Line);
     }
 }
 
@@ -720,6 +917,11 @@ public class ExpressionStatementNode : StatementNode
     public override string ToString()
     {
         return Expression.ToString() + ";";
+    }
+
+    public override void RegisterStatementNumbers(PeopleCodeParser parser, ProgramNode programNode)
+    {
+        programNode.SetStatementNumber( SourceSpan.Start.Line);
     }
 }
 
@@ -769,6 +971,11 @@ public class LocalVariableDeclarationNode : StatementNode
     public override string ToString()
     {
         return $"Local {Type} {string.Join(", ", VariableNames)}";
+    }
+
+    public override void RegisterStatementNumbers(PeopleCodeParser parser, ProgramNode programNode)
+    {
+        programNode.SetStatementNumber( SourceSpan.Start.Line);
     }
 }
 
@@ -822,6 +1029,10 @@ public class LocalVariableDeclarationWithAssignmentNode : StatementNode
     public override string ToString()
     {
         return $"Local {Type} {VariableName} = {InitialValue}";
+    }
+    public override void RegisterStatementNumbers(PeopleCodeParser parser, ProgramNode programNode)
+    {
+        programNode.SetStatementNumber( SourceSpan.Start.Line);
     }
 }
 
@@ -877,5 +1088,10 @@ public class CatchStatementNode : StatementNode
         var typeStr = ExceptionType != null ? $" {ExceptionType}" : "";
         var varStr = ExceptionVariable != null ? $" {ExceptionVariable.Name}" : "";
         return $"catch{typeStr}{varStr}";
+    }
+
+    public override void RegisterStatementNumbers(PeopleCodeParser parser, ProgramNode programNode)
+    {
+        /* Do nothing here, "catch" statements are processed by their containing "try" */
     }
 }

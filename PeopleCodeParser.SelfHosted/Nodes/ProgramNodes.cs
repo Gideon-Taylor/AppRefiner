@@ -61,6 +61,10 @@ public class ProgramNode : AstNode
 
     public List<SourceSpan> SkippedDirectiveSpans { get; set; } = new();
 
+    public Dictionary<int, int> StatementNumberMap { get; } = new();
+
+    private int _statementCounter = 0;
+
     public ProgramNode()
     {
         // Initialize collections and set up parent relationships
@@ -152,8 +156,22 @@ public class ProgramNode : AstNode
             return $"Program (Interface: {Interface!.Name})";
         return "Program";
     }
-}
 
+    public void SetStatementNumber(int line)
+    {
+        StatementNumberMap[_statementCounter++] = line;
+    }
+
+    public int GetLineForStatement(int statement)
+    {
+        if (StatementNumberMap.TryGetValue(statement, out int line))
+        {
+            return line;
+        }
+        return -1;
+
+    }
+}
 /// <summary>
 /// Import declaration node
 /// </summary>

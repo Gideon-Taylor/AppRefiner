@@ -587,7 +587,9 @@ public class FunctionNode : DeclarationNode
         if (IsDeclaration) return;
 
         /* registering the Function line */
-        programNode.SetStatementNumber(parser.GetNextStatementNumber(), SourceSpan.Start.Line);
+        programNode.SetStatementNumber(SourceSpan.Start.Line);
+
+        if (Body == null) return;
 
         Body.RegisterStatementNumbers(parser, programNode);
 
@@ -595,7 +597,7 @@ public class FunctionNode : DeclarationNode
         /* Registering the end-function line */
         if (Body.Statements.Count > 0 && Body.Statements.Last().HasSemicolon)
         {
-            programNode.SetStatementNumber(parser.GetNextStatementNumber(), SourceSpan.End.Line);
+            programNode.SetStatementNumber( SourceSpan.End.Line);
         }
 
     }
