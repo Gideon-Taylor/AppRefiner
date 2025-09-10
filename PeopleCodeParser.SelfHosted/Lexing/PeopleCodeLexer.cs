@@ -762,6 +762,14 @@ public class PeopleCodeLexer
             if (endKeyword != null) return endKeyword;
         }
 
+        // Check for WHEN-OTHER pattern
+        if (text.ToUpperInvariant() == "WHEN" && !IsAtEnd && CurrentChar == '-')
+        {
+            // Look ahead for WHEN-OTHER keyword
+            var whenKeyword = ScanWhenKeyword(sb, start);
+            if (whenKeyword != null) return whenKeyword;
+        }
+
         // Check for boolean literals first (before keywords)
         if (text.Equals("TRUE", StringComparison.OrdinalIgnoreCase))
         {
@@ -817,6 +825,41 @@ public class PeopleCodeLexer
         }
 
         // Not a recognized END keyword, backtrack
+        _position = savedPosition;
+        _line = savedLine;
+        _column = savedColumn;
+        return null;
+    }
+
+    private Token? ScanWhenKeyword(StringBuilder sb, SourcePosition start)
+    {
+        var savedPosition = _position;
+        var savedLine = _line;
+        var savedColumn = _column;
+
+        // Skip hyphens (should be exactly one for WHEN-OTHER)
+        if (!IsAtEnd && CurrentChar == '-')
+        {
+            sb.Append(Advance());
+        }
+
+        // Scan the next word
+        var secondWord = new StringBuilder();
+        while (!IsAtEnd && char.IsLetter(CurrentChar))
+        {
+            var ch = Advance();
+            sb.Append(ch);
+            secondWord.Append(ch);
+        }
+
+        var fullKeyword = sb.ToString().Replace(" ", "-").ToUpperInvariant();
+
+        if (Keywords.TryGetValue(fullKeyword, out var keywordType))
+        {
+            return Token.CreateKeyword(keywordType, sb.ToString(), CreateSpan(start));
+        }
+
+        // Not a recognized WHEN keyword, backtrack
         _position = savedPosition;
         _line = savedLine;
         _column = savedColumn;
