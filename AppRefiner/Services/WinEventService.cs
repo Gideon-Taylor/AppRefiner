@@ -21,6 +21,12 @@ namespace AppRefiner.Services
         /// </summary>
         public event EventHandler<nint>? WindowCreated;
 
+        /// <summary>
+        /// Event raised when a window becomes visible, potentially a dialog window.
+        /// The event is invoked on the synchronization context captured during Start.
+        /// </summary>
+        public event EventHandler<nint>? WindowShown;
+
         public WinEventService()
         {
             // Capture synchronization context for marshalling events back to the UI thread
@@ -39,7 +45,7 @@ namespace AppRefiner.Services
 
             winEventHook = NativeMethods.SetWinEventHook(
                 NativeMethods.EVENT_OBJECT_CREATE,      // Event Min
-                NativeMethods.EVENT_OBJECT_FOCUS,       // Event Max
+                NativeMethods.EVENT_OBJECT_FOCUS,       // Event Max (includes SHOW in range)
                 nint.Zero,                            // hmodWinEventProc
                 winEventDelegate,                       // lpfnWinEventProc
                 0,                                      // idProcess (all)
@@ -54,7 +60,7 @@ namespace AppRefiner.Services
             }
             else
             {
-                Debug.Log("Successfully set up WinEvent hook for creation and focus events.");
+                Debug.Log("Successfully set up WinEvent hook for creation, show, and focus events.");
             }
         }
 
@@ -106,6 +112,19 @@ namespace AppRefiner.Services
                     OnWindowCreated(hwnd);
                 }
             }
+            else if (eventType == NativeMethods.EVENT_OBJECT_SHOW)
+            {
+                // Raise the window shown event, marshalling to the captured context (usually UI thread)
+                if (syncContext != null)
+                {
+                    syncContext.Post(_ => OnWindowShown(hwnd), null);
+                }
+                else
+                {
+                    // If no context, raise directly (might be on a background thread)
+                    OnWindowShown(hwnd);
+                }
+            }
         }
 
         protected virtual void OnWindowFocused(nint hwnd)
@@ -116,6 +135,11 @@ namespace AppRefiner.Services
         protected virtual void OnWindowCreated(nint hwnd)
         {
             WindowCreated?.Invoke(this, hwnd);
+        }
+
+        protected virtual void OnWindowShown(nint hwnd)
+        {
+            WindowShown?.Invoke(this, hwnd);
         }
 
         public void Dispose()

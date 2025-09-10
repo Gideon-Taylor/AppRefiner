@@ -24,6 +24,7 @@ namespace AppRefiner
         public bool RememberFolds { get; set; }
         public bool OverrideFindReplace { get; set; }
         public bool OverrideOpen { get; set; }
+        public bool AutoCenterDialogs { get; set; } = false;
     }
 
     public class SettingsService
@@ -58,6 +59,7 @@ namespace AppRefiner
                 settings.RememberFolds = Properties.Settings.Default.rememberFolds;
                 settings.OverrideFindReplace = Properties.Settings.Default.overrideFindReplace;
                 settings.OverrideOpen = Properties.Settings.Default.overrideOpen;
+                settings.AutoCenterDialogs = Properties.Settings.Default.AutoCenterDialogs;
             }
             catch (Exception ex)
             {
@@ -87,6 +89,7 @@ namespace AppRefiner
             Properties.Settings.Default.rememberFolds = settings.RememberFolds;
             Properties.Settings.Default.overrideFindReplace = settings.OverrideFindReplace;
             Properties.Settings.Default.overrideOpen = settings.OverrideOpen;
+            Properties.Settings.Default.AutoCenterDialogs = settings.AutoCenterDialogs;
         }
 
         public void SaveChanges()

@@ -38,6 +38,7 @@ namespace AppRefiner
         // Services for handling OS-level interactions
         private WinEventService? winEventService;
         private ApplicationKeyboardService? applicationKeyboardService;
+        private DialogCenteringService? dialogCenteringService;
 
         // HashSet to track process IDs that already have AppDesignerProcess objects created
         private readonly HashSet<uint> trackedProcessIds = new();
@@ -130,10 +131,12 @@ namespace AppRefiner
 
             // Instantiate and start services
             settingsService = new SettingsService(); // Instantiate SettingsService first
+            dialogCenteringService = new DialogCenteringService(settingsService);
             applicationKeyboardService = new ApplicationKeyboardService();
             winEventService = new WinEventService();
             winEventService.WindowFocused += HandleWindowFocusEvent;
             winEventService.WindowCreated += HandleWindowCreationEvent;
+            winEventService.WindowShown += HandleWindowShownEvent;
             winEventService.Start();
 
             // Instantiate LinterManager (passing UI elements)
@@ -154,6 +157,7 @@ namespace AppRefiner
             optClassText.Checked = generalSettings.ShowClassText;
             chkRememberFolds.Checked = generalSettings.RememberFolds;
             chkOverrideFindReplace.Checked = generalSettings.OverrideFindReplace;
+            chkAutoCenterDialogs.Checked = generalSettings.AutoCenterDialogs;
             chkOverrideOpen.Checked = generalSettings.OverrideOpen;
 
             linterManager = new LinterManager(this, dataGridView1, lblStatus, progressBar1, lintReportPath, settingsService);
@@ -252,6 +256,7 @@ namespace AppRefiner
             chkRememberFolds.CheckedChanged += GeneralSetting_Changed;
             chkOverrideFindReplace.CheckedChanged += GeneralSetting_Changed;
             chkOverrideOpen.CheckedChanged += GeneralSetting_Changed;
+            chkAutoCenterDialogs.CheckedChanged += GeneralSetting_Changed;
             // DataGridViews CellValueChanged events will also call SaveSettings
         }
 
@@ -332,7 +337,8 @@ namespace AppRefiner
                 ShowClassText = optClassText.Checked,
                 RememberFolds = chkRememberFolds.Checked,
                 OverrideFindReplace = chkOverrideFindReplace.Checked,
-                OverrideOpen = chkOverrideOpen.Checked
+                OverrideOpen = chkOverrideOpen.Checked,
+                AutoCenterDialogs = chkAutoCenterDialogs.Checked
             };
         }
 
@@ -2092,6 +2098,8 @@ namespace AppRefiner
 
         private void btnDebugLog_Click(object sender, EventArgs e)
         {
+
+
             Debug.Log("Displaying debug dialog...");
             Debug.ShowDebugDialog(Handle);
             //Debug.ShowIndicatorPanel(Handle, this);
@@ -2584,12 +2592,6 @@ namespace AppRefiner
                 // Get the process ID for the created window
                 NativeMethods.GetWindowThreadProcessId(hwnd, out var processId);
 
-                // Early exit if we've already tracked this process ID
-                if (trackedProcessIds.Contains(processId))
-                {
-                    return;
-                }
-
                 // Check if it's a pside.exe process
                 var process = Process.GetProcessById((int)processId);
                 if (!"pside".Equals(process.ProcessName, StringComparison.OrdinalIgnoreCase))
@@ -2599,6 +2601,12 @@ namespace AppRefiner
 
                 Debug.Log($"WinEvent detected window creation in pside.exe process: PID {processId}, HWND 0x{hwnd.ToInt64():X}");
 
+                // Early exit if we've already tracked this process ID for AppDesigner process tracking
+                if (trackedProcessIds.Contains(processId))
+                {
+                    return;
+                }
+
                 // Double-check if we already have this process tracked (defensive programming)
                 if (AppDesignerProcesses.ContainsKey(processId))
                 {
@@ -2607,7 +2615,7 @@ namespace AppRefiner
                     return;
                 }
 
-                // Try immediate validation
+                // Try immediate validation for AppDesigner process tracking
                 if (ValidateAndCreateAppDesignerProcess(processId, hwnd))
                 {
                     Debug.Log($"Process {processId} immediately validated as Application Designer");
@@ -2625,6 +2633,59 @@ namespace AppRefiner
             catch (Exception ex)
             {
                 Debug.Log($"Error in HandleWindowCreationEvent: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Handles window shown events to detect and center modal dialogs.
+        /// </summary>
+        private void HandleWindowShownEvent(object? sender, IntPtr hwnd)
+        {
+            if (settingsService == null) return;
+
+            // Check if auto-centering is enabled
+            var generalSettings = settingsService.LoadGeneralSettings();
+            if (!generalSettings.AutoCenterDialogs)
+            {
+                return;
+            }
+            try
+            {
+                // Check if it's a standard dialog window class
+                var className = new System.Text.StringBuilder(256);
+                if (NativeMethods.GetClassName(hwnd, className, className.Capacity) == 0)
+                {
+                    return;
+                }
+
+                string windowClass = className.ToString();
+                if (windowClass != "#32770")
+                {
+                    return; // Not a standard dialog
+                }
+
+                // Get the process ID for the shown window
+                NativeMethods.GetWindowThreadProcessId(hwnd, out var processId);
+
+                // Check if it's a pside.exe process
+                var process = Process.GetProcessById((int)processId);
+                if (!"pside".Equals(process.ProcessName, StringComparison.OrdinalIgnoreCase))
+                {
+                    return;
+                }
+
+                Debug.Log($"WinEvent detected dialog window shown in pside.exe process: PID {processId}, HWND 0x{hwnd.ToInt64():X} (class: {windowClass})");
+
+                // Try to center the dialog
+                dialogCenteringService?.TryCenterDialog(hwnd, processId);
+            }
+            catch (ArgumentException)
+            {
+                // Process might have exited or be invalid, ignore
+            }
+            catch (Exception ex)
+            {
+                Debug.Log($"Error in HandleWindowShownEvent: {ex.Message}");
             }
         }
 

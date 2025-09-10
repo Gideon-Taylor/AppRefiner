@@ -10,6 +10,7 @@ namespace AppRefiner
 
         // WinEvent constants
         internal const uint EVENT_OBJECT_CREATE = 0x8000;
+        internal const uint EVENT_OBJECT_SHOW = 0x8002;
         internal const uint EVENT_OBJECT_FOCUS = 0x8005;
         internal const uint WINEVENT_OUTOFCONTEXT = 0x0000;
         internal const uint WINEVENT_SKIPOWNPROCESS = 0x0002;
@@ -61,6 +62,34 @@ namespace AppRefiner
         [DllImport("user32.dll")]
         [return: MarshalAs(UnmanagedType.Bool)]
         internal static extern bool IsWindow(IntPtr hWnd);
+
+        // Dialog detection and positioning APIs
+        [DllImport("user32.dll")]
+        internal static extern IntPtr GetWindow(IntPtr hWnd, uint uCmd);
+
+        [DllImport("user32.dll")]
+        internal static extern int GetWindowLong(IntPtr hWnd, int nIndex);
+
+        [DllImport("user32.dll")]
+        internal static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
+
+        // GetWindow constants
+        internal const uint GW_OWNER = 4;
+
+        // GetWindowLong constants  
+        internal const int GWL_STYLE = -16;
+
+        // Window style constants
+        internal const int WS_POPUP = unchecked((int)0x80000000);
+        internal const int WS_DLGFRAME = 0x00400000;
+        internal const int WS_DISABLED = 0x08000000;
+
+        // SetWindowPos constants
+        internal static readonly IntPtr HWND_TOP = new IntPtr(0);
+        internal const uint SWP_NOSIZE = 0x0001;
+        internal const uint SWP_NOZORDER = 0x0004;
+        internal const uint SWP_NOACTIVATE = 0x0010;
+        internal const uint SWP_SHOWWINDOW = 0x0040;
 
         [StructLayout(LayoutKind.Sequential)]
         internal struct RECT

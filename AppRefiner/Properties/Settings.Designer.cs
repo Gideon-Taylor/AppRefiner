@@ -334,5 +334,17 @@ namespace AppRefiner.Properties {
                 this["FunctionCacheDatabasePath"] = value;
             }
         }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("False")]
+        public bool AutoCenterDialogs {
+            get {
+                return ((bool)(this["AutoCenterDialogs"]));
+            }
+            set {
+                this["AutoCenterDialogs"] = value;
+            }
+        }
     }
 }

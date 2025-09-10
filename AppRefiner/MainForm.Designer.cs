@@ -49,11 +49,11 @@ namespace AppRefiner
             chkEventMapping = new CheckBox();
             groupBox1 = new GroupBox();
             btnReportDirectory = new Button();
-            chkOverrideOpen = new CheckBox();
             btnTNSADMIN = new Button();
             btnDebugLog = new Button();
             grpEditorSettings = new GroupBox();
             btnConfigSmartOpen = new Button();
+            chkOverrideOpen = new CheckBox();
             chkOverrideFindReplace = new CheckBox();
             chkRememberFolds = new CheckBox();
             chkCodeFolding = new CheckBox();
@@ -93,6 +93,7 @@ namespace AppRefiner
             cmbTemplates = new ComboBox();
             progressBar1 = new ProgressBar();
             lblStatus = new Label();
+            chkAutoCenterDialogs = new CheckBox();
             ((System.ComponentModel.ISupportInitialize)splitContainer1).BeginInit();
             splitContainer1.Panel1.SuspendLayout();
             splitContainer1.Panel2.SuspendLayout();
@@ -187,7 +188,7 @@ namespace AppRefiner
             groupBox2.Controls.Add(chkEventMapXrefs);
             groupBox2.Controls.Add(groupBox4);
             groupBox2.Controls.Add(chkEventMapping);
-            groupBox2.Location = new Point(10, 212);
+            groupBox2.Location = new Point(8, 264);
             groupBox2.Name = "groupBox2";
             groupBox2.Size = new Size(544, 119);
             groupBox2.TabIndex = 0;
@@ -251,7 +252,7 @@ namespace AppRefiner
             // 
             groupBox1.Controls.Add(btnReportDirectory);
             groupBox1.Controls.Add(btnTNSADMIN);
-            groupBox1.Location = new Point(10, 106);
+            groupBox1.Location = new Point(8, 158);
             groupBox1.Name = "groupBox1";
             groupBox1.Size = new Size(544, 100);
             groupBox1.TabIndex = 32;
@@ -267,16 +268,6 @@ namespace AppRefiner
             btnReportDirectory.Text = "Lint Report Directory...";
             btnReportDirectory.UseVisualStyleBackColor = true;
             btnReportDirectory.Click += btnReportDirectory_Click;
-            // 
-            // chkOverrideOpen
-            // 
-            chkOverrideOpen.AutoSize = true;
-            chkOverrideOpen.Location = new Point(432, 72);
-            chkOverrideOpen.Name = "chkOverrideOpen";
-            chkOverrideOpen.Size = new Size(103, 19);
-            chkOverrideOpen.TabIndex = 32;
-            chkOverrideOpen.Text = "Override Open";
-            chkOverrideOpen.UseVisualStyleBackColor = true;
             // 
             // btnTNSADMIN
             // 
@@ -300,6 +291,7 @@ namespace AppRefiner
             // 
             // grpEditorSettings
             // 
+            grpEditorSettings.Controls.Add(chkAutoCenterDialogs);
             grpEditorSettings.Controls.Add(btnConfigSmartOpen);
             grpEditorSettings.Controls.Add(chkOverrideOpen);
             grpEditorSettings.Controls.Add(chkOverrideFindReplace);
@@ -314,7 +306,7 @@ namespace AppRefiner
             grpEditorSettings.Controls.Add(chkAutoDark);
             grpEditorSettings.Location = new Point(6, 6);
             grpEditorSettings.Name = "grpEditorSettings";
-            grpEditorSettings.Size = new Size(548, 94);
+            grpEditorSettings.Size = new Size(548, 132);
             grpEditorSettings.TabIndex = 20;
             grpEditorSettings.TabStop = false;
             grpEditorSettings.Text = "Settings";
@@ -329,10 +321,20 @@ namespace AppRefiner
             btnConfigSmartOpen.UseVisualStyleBackColor = true;
             btnConfigSmartOpen.Click += btnConfigSmartOpen_Click;
             // 
+            // chkOverrideOpen
+            // 
+            chkOverrideOpen.AutoSize = true;
+            chkOverrideOpen.Location = new Point(432, 72);
+            chkOverrideOpen.Name = "chkOverrideOpen";
+            chkOverrideOpen.Size = new Size(103, 19);
+            chkOverrideOpen.TabIndex = 32;
+            chkOverrideOpen.Text = "Override Open";
+            chkOverrideOpen.UseVisualStyleBackColor = true;
+            // 
             // chkOverrideFindReplace
             // 
             chkOverrideFindReplace.AutoSize = true;
-            chkOverrideFindReplace.Location = new Point(245, 69);
+            chkOverrideFindReplace.Location = new Point(259, 68);
             chkOverrideFindReplace.Name = "chkOverrideFindReplace";
             chkOverrideFindReplace.Size = new Size(143, 19);
             chkOverrideFindReplace.TabIndex = 31;
@@ -362,7 +364,7 @@ namespace AppRefiner
             // chkPromptForDB
             // 
             chkPromptForDB.AutoSize = true;
-            chkPromptForDB.Location = new Point(245, 47);
+            chkPromptForDB.Location = new Point(259, 46);
             chkPromptForDB.Name = "chkPromptForDB";
             chkPromptForDB.Size = new Size(167, 19);
             chkPromptForDB.TabIndex = 28;
@@ -373,7 +375,7 @@ namespace AppRefiner
             // 
             chkAutoPairing.AutoSize = true;
             chkAutoPairing.ForeColor = SystemColors.ControlText;
-            chkAutoPairing.Location = new Point(245, 22);
+            chkAutoPairing.Location = new Point(259, 21);
             chkAutoPairing.Name = "chkAutoPairing";
             chkAutoPairing.Size = new Size(146, 19);
             chkAutoPairing.TabIndex = 26;
@@ -383,7 +385,7 @@ namespace AppRefiner
             // chkBetterSQL
             // 
             chkBetterSQL.AutoSize = true;
-            chkBetterSQL.Location = new Point(126, 47);
+            chkBetterSQL.Location = new Point(139, 47);
             chkBetterSQL.Name = "chkBetterSQL";
             chkBetterSQL.Size = new Size(88, 19);
             chkBetterSQL.TabIndex = 17;
@@ -393,7 +395,7 @@ namespace AppRefiner
             // chkOnlyPPC
             // 
             chkOnlyPPC.AutoSize = true;
-            chkOnlyPPC.Location = new Point(126, 69);
+            chkOnlyPPC.Location = new Point(139, 69);
             chkOnlyPPC.Name = "chkOnlyPPC";
             chkOnlyPPC.Size = new Size(76, 19);
             chkOnlyPPC.TabIndex = 16;
@@ -423,7 +425,7 @@ namespace AppRefiner
             // chkAutoDark
             // 
             chkAutoDark.AutoSize = true;
-            chkAutoDark.Location = new Point(126, 22);
+            chkAutoDark.Location = new Point(139, 22);
             chkAutoDark.Name = "chkAutoDark";
             chkAutoDark.Size = new Size(113, 19);
             chkAutoDark.TabIndex = 14;
@@ -748,6 +750,16 @@ namespace AppRefiner
             lblStatus.Text = "Stopped";
             lblStatus.TextAlign = ContentAlignment.MiddleCenter;
             // 
+            // chkAutoCenterDialogs
+            // 
+            chkAutoCenterDialogs.AutoSize = true;
+            chkAutoCenterDialogs.Location = new Point(10, 94);
+            chkAutoCenterDialogs.Name = "chkAutoCenterDialogs";
+            chkAutoCenterDialogs.Size = new Size(103, 19);
+            chkAutoCenterDialogs.TabIndex = 34;
+            chkAutoCenterDialogs.Text = "Center Dialogs";
+            chkAutoCenterDialogs.UseVisualStyleBackColor = true;
+            // 
             // MainForm
             // 
             AutoScaleDimensions = new SizeF(7F, 15F);
@@ -854,5 +866,6 @@ namespace AppRefiner
         private CheckBox chkOverrideFindReplace;
         private CheckBox chkOverrideOpen;
         private Button btnConfigSmartOpen;
+        private CheckBox chkAutoCenterDialogs;
     }
 }
