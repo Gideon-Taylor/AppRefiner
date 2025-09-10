@@ -2044,7 +2044,7 @@ namespace AppRefiner
             if (activeEditor == null) return [];
 
             // Use the parse tree from the editor if available, otherwise parse it now
-            var program = activeEditor.GetSelfHostedParsedProgram();
+            var program = activeEditor.GetParsedProgram();
 
             // Create and run the visitor to collect definitions
             var visitor = new GoToDefinitionVisitor();

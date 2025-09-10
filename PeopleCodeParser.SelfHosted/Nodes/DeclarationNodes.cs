@@ -32,6 +32,8 @@ public abstract class DeclarationNode : AstNode
         Name = name ?? throw new ArgumentNullException(nameof(name));
         NameToken = nameToken;
     }
+
+    public abstract void RegisterStatementNumbers(PeopleCodeParser parser, ProgramNode programNode);
 }
 
 /// <summary>
@@ -185,6 +187,11 @@ public class MethodNode : DeclarationNode
         ParameterAnnotations.Add(parameter);
         AddChild(parameter);
     }
+
+    public override void RegisterStatementNumbers(PeopleCodeParser parser, ProgramNode programNode)
+    {
+        /* We don't register anything here, since they are registered at ParseClassMember() time */
+    }
 }
 
 /// <summary>
@@ -286,6 +293,8 @@ public class PropertyNode : DeclarationNode
         GetterImplementation = getterImplementation;
         if (getterImplementation != null)
             AddChild(getterImplementation);
+
+        
     }
 
     public void SetSetterImplementation(MethodImplNode setterImplementation)
@@ -322,6 +331,13 @@ public class PropertyNode : DeclarationNode
         };
         var impl = IsImplementation ? " (impl)" : "";
         return $"{className}{Type} {Name}{access}{impl}";
+    }
+
+    public override void RegisterStatementNumbers(PeopleCodeParser parser, ProgramNode programNode)
+    {
+        /* Property statements are registerd when the getter/setter are parsed since
+         * they can appear in different locations in the code 
+         */
     }
 }
 
@@ -398,6 +414,11 @@ public class VariableNode : DeclarationNode
         var init = InitialValue != null ? $" = {InitialValue}" : "";
         return $"{Scope} {Type} {names}{init}";
     }
+
+    public override void RegisterStatementNumbers(PeopleCodeParser parser, ProgramNode programNode)
+    {
+        /* Variable declarations are in the preamble and not counted as statements */
+    }
 }
 
 /// <summary>
@@ -430,6 +451,11 @@ public class ConstantNode : DeclarationNode
     public override string ToString()
     {
         return $"Constant &{Name} = {Value}";
+    }
+
+    public override void RegisterStatementNumbers(PeopleCodeParser parser, ProgramNode programNode)
+    {
+        /* Constants are in the preamble and not counted as statements */
     }
 }
 
@@ -555,6 +581,25 @@ public class FunctionNode : DeclarationNode
             _ => $"Function {Name}({paramStr}){returnType}{impl}"
         };
     }
+
+    public override void RegisterStatementNumbers(PeopleCodeParser parser, ProgramNode programNode)
+    {
+        if (IsDeclaration) return;
+
+        /* registering the Function line */
+        programNode.SetStatementNumber(parser.GetNextStatementNumber(), SourceSpan.Start.Line);
+
+        Body.RegisterStatementNumbers(parser, programNode);
+
+
+        /* Registering the end-function line */
+        if (Body.Statements.Count > 0 && Body.Statements.Last().HasSemicolon)
+        {
+            programNode.SetStatementNumber(parser.GetNextStatementNumber(), SourceSpan.End.Line);
+        }
+
+    }
+
 }
 
 /// <summary>

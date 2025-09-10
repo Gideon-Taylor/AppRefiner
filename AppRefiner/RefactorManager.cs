@@ -275,7 +275,7 @@ namespace AppRefiner.Refactors
                     }
                 }
 
-                var (program, tokens) = activeEditor.GetSelfHostedParsedProgramWithTokens(true); // Force refresh
+                var (program, tokens) = activeEditor.GetParsedProgramWithTokens(true); // Force refresh
 
                 // Check if parsing was successful and if this refactor can run on incomplete parses
                 if (program == null || (!activeEditor.IsSelfHostedParseSuccessful && !refactorClass.RunOnIncompleteParse))

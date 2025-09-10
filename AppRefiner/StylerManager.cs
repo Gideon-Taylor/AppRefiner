@@ -81,7 +81,7 @@ namespace AppRefiner.Stylers
             var editorDataManager = editor?.DataManager;
 
             // Get the self-hosted parsed program
-            var program = editor?.GetSelfHostedParsedProgram();
+            var program = editor?.GetParsedProgram();
             if (program == null)
             {
                 return; // Unable to parse
