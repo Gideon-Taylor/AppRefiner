@@ -610,7 +610,10 @@ public class TryStatementNode : StatementNode
         }
 
         /* register end-try */
-        programNode.SetStatementNumber( SourceSpan.End.Line);
+        if (previousBlock.Statements.Count == 0 || (previousBlock.Statements.Count > 0 && previousBlock.Statements.Last().HasSemicolon))
+        {
+            programNode.SetStatementNumber(SourceSpan.End.Line);
+        }
     }
 }
 

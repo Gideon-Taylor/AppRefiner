@@ -2110,7 +2110,7 @@ public class PeopleCodeParser
             Consume(TokenType.EndMethod, "Expected 'END-METHOD' after method implementation");
             var lastToken = Previous;
 
-            /* register the end-set if blank or last statement had semicolon */
+            /* register the end-method if blank or last statement had semicolon */
 
             if (body.Statements.Count == 0 || body.Statements.Last().HasSemicolon)
             {
@@ -3858,9 +3858,7 @@ public class PeopleCodeParser
                 // Use smart recovery to find next statement boundary, not just END-TRY
                 SmartStatementRecover();
             }
-
-            while (Match(TokenType.Semicolon)) { }
-
+            
             return new TryStatementNode(tryBlock, catchClauses)
             {
                 FirstToken = tryStartToken,
@@ -3886,7 +3884,7 @@ public class PeopleCodeParser
         {
             value = ParseExpression();
         }
-
+        
         return new ReturnStatementNode(value);
     }
 
@@ -3926,15 +3924,13 @@ public class PeopleCodeParser
         var token = Current;
         _position++;
 
-        var exitCode = ParseExpression();
-
-        if (exitCode == null)
+        ExpressionNode? exitCode = null;
+        if (Peek().Type == TokenType.LeftParen)
         {
-            ReportError("Expected return code after 'ERROR'");
-            exitCode = new LiteralNode(0, LiteralType.Integer);
+            exitCode = ParseExpression();
         }
 
-        return new ExitStatementNode()
+        return new ExitStatementNode(exitCode)
         {
             FirstToken = token,
             LastToken = token
