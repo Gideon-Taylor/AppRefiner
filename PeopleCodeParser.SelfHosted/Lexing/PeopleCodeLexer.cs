@@ -147,14 +147,76 @@ public class PeopleCodeLexer
         _source = source ?? throw new ArgumentNullException(nameof(source));
 
         // Pre-compute character position to byte position mapping for efficient lookup
+        // Use single UTF-8 encoding operation for accuracy and performance
         _charToByteIndex = new int[source.Length + 1];
-        int bytePos = 0;
-        for (int charPos = 0; charPos < source.Length; charPos++)
+        var utf8Bytes = Encoding.UTF8.GetBytes(source);
+        
+        int charIndex = 0;
+        int byteIndex = 0;
+        
+        // Build mapping by iterating through UTF-8 bytes and tracking character boundaries
+        while (charIndex < source.Length && byteIndex < utf8Bytes.Length)
         {
-            _charToByteIndex[charPos] = bytePos;
-            bytePos += Encoding.UTF8.GetByteCount(source, charPos, 1);
+            _charToByteIndex[charIndex] = byteIndex;
+
+            // Handle surrogate pairs (high + low surrogate = 1 Unicode character)
+            if (char.IsHighSurrogate(source[charIndex]) && charIndex + 1 < source.Length && char.IsLowSurrogate(source[charIndex + 1]))
+            {
+                // Both surrogates point to the same byte position
+                _charToByteIndex[charIndex + 1] = byteIndex;
+
+                // Determine actual byte length by examining the UTF-8 bytes
+                int bytesForPair = 4; // Default for U+10000-U+10FFFF range
+
+                // Verify by checking the actual UTF-8 sequence if possible
+                if (byteIndex + 3 < utf8Bytes.Length)
+                {
+                    var firstByte = utf8Bytes[byteIndex];
+                    if ((firstByte & 0xF8) == 0xF0) // Valid 4-byte sequence start
+                    {
+                        bytesForPair = 4;
+                    }
+                    else if ((firstByte & 0xF0) == 0xE0) // 3-byte sequence (shouldn't happen for surrogates)
+                    {
+                        bytesForPair = 3;
+                    }
+                    else if ((firstByte & 0xE0) == 0xC0) // 2-byte sequence (shouldn't happen for surrogates)
+                    {
+                        bytesForPair = 2;
+                    }
+                    else // Invalid or 1-byte (shouldn't happen for surrogates)
+                    {
+                        bytesForPair = 1;
+                    }
+                }
+
+                charIndex += 2; // Skip both high and low surrogate
+                byteIndex += bytesForPair;
+            }
+            else
+            {
+                // Regular character - determine byte length from first byte
+                var firstByte = utf8Bytes[byteIndex];
+                int bytesForChar;
+
+                if ((firstByte & 0x80) == 0) // 0xxxxxxx - 1 byte (ASCII)
+                    bytesForChar = 1;
+                else if ((firstByte & 0xE0) == 0xC0) // 110xxxxx - 2 bytes
+                    bytesForChar = 2;
+                else if ((firstByte & 0xF0) == 0xE0) // 1110xxxx - 3 bytes
+                    bytesForChar = 3;
+                else if ((firstByte & 0xF8) == 0xF0) // 11110xxx - 4 bytes
+                    bytesForChar = 4;
+                else
+                    bytesForChar = 1; // Invalid UTF-8, treat as single byte
+
+                charIndex++;
+                byteIndex += bytesForChar;
+            }
         }
-        _charToByteIndex[source.Length] = bytePos; // End position
+        
+        // Set final positions
+        _charToByteIndex[source.Length] = utf8Bytes.Length;
 
         _position = 0;
         _line = 0;
