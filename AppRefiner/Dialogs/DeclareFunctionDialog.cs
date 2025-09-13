@@ -380,7 +380,8 @@ namespace AppRefiner.Dialogs
                 UpdateStatus("Ready");
                 return;
             }
-
+            /* Replace spaces with % */
+            searchTerm = searchTerm.Replace(' ', '%');
             try
             {
                 var results = functionCacheManager.SearchFunctionCache(appDesignerProcess, searchTerm);

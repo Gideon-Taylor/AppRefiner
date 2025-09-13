@@ -213,7 +213,7 @@ namespace AppRefiner.Dialogs
             diffTextBox.SuspendLayout();
 
             // Split the diff into lines for processing
-            string[] lines = diffContent.Split(new[] { "\r\n", "\r", "\n" }, StringSplitOptions.None);
+            string[] lines = diffContent.Split(new[] { "\n", "\r", "\n" }, StringSplitOptions.None);
 
             for (int i = 0; i < lines.Length; i++)
             {

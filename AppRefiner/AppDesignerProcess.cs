@@ -1,6 +1,7 @@
 ﻿using AppRefiner.Database;
 using AppRefiner.Events;
 using DiffPlex.Model;
+using PeopleCodeParser.SelfHosted;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -35,6 +36,8 @@ namespace AppRefiner
 
         public bool DoNotPromptForDB { get; set; }
         public string DBName { get; internal set; }
+
+        public SourceSpan? PendingSelection { get; set; }
 
         /// <summary>
         /// Updates the Results ListView handle for this process

@@ -96,7 +96,7 @@ namespace AppRefiner.Refactors
 
             if (!_hasExistingImports)
             {
-                newImportsBlockText += "\r\n\r\n";
+                newImportsBlockText += "\n\n";
             }
 
             // Apply the change: Replace existing imports or insert new ones

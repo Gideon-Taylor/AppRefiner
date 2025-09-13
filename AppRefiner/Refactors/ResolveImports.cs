@@ -172,7 +172,7 @@ namespace AppRefiner.Refactors
 
             if (programNode?.Imports.Count == 0)
             {
-                newImportString.Append("\r\n");
+                newImportString.Append("\n");
             }
 
             if (programNode?.Imports.Count > 0)

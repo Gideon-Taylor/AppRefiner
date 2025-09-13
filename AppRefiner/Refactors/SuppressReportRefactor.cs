@@ -284,7 +284,7 @@ namespace AppRefiner.Refactors
             if (Editor.LineToReports.TryGetValue(LineNumber, out var reports))
             {
                 changeMade = true;
-                var newSuppressLine = $"/* #AppRefiner suppress ({string.Join(",", reports.Select(r => r.GetFullId()))}) */\r\n";
+                var newSuppressLine = $"/* #AppRefiner suppress ({string.Join(",", reports.Select(r => r.GetFullId()))}) */\n";
                 var targetLine = LineNumber;
                 if (type == SuppressReportMode.NEAREST_BLOCK)
                 {
