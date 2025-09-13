@@ -588,6 +588,7 @@ public class FunctionNode : DeclarationNode
 
         /* registering the Function line */
         programNode.SetStatementNumber(SourceSpan.Start.Line);
+        programNode.RegisterPPCStatementAtLine(SourceSpan.Start.Line, this);
 
         if (Body == null) return;
 

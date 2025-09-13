@@ -435,8 +435,11 @@ public class PeopleCodeParser
     /// </summary>
     public ProgramNode ParseProgram()
     {
-        // Initialize with preprocessed tokens
-        var program = new ProgramNode();
+        
+        File.AppendAllText(@"C:\temp\parser_calls.txt", Environment.NewLine + Environment.NewLine + Environment.StackTrace); 
+        
+       // Initialize with preprocessed tokens
+       var program = new ProgramNode();
         _workingProgram = program;
         program.SkippedDirectiveSpans = _skippedDirectiveSpans;
         try
@@ -3130,6 +3133,7 @@ public class PeopleCodeParser
             functionNode.SetBody(body);
             functionNode.FirstToken = firstToken;
             functionNode.LastToken = lastToken;
+            functionNode.RegisterStatementNumbers(this, _workingProgram!);
             return functionNode;
         }
         catch (Exception ex)

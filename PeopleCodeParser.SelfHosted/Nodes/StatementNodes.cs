@@ -160,6 +160,7 @@ public class IfStatementNode : StatementNode
     {
         /* register the If */
         programNode.SetStatementNumber( SourceSpan.Start.Line);
+        programNode.RegisterPPCStatementAtLine( SourceSpan.Start.Line, this);
 
         /* process the body */
         ThenBlock.RegisterStatementNumbers(parser, programNode);
@@ -258,6 +259,7 @@ public class ForStatementNode : StatementNode
     {
         /* register the Repeat */
         programNode.SetStatementNumber( SourceSpan.Start.Line);
+        programNode.RegisterPPCStatementAtLine( SourceSpan.Start.Line, this);
 
         /* process the body */
         Body.RegisterStatementNumbers(parser, programNode);
@@ -314,6 +316,7 @@ public class WhileStatementNode : StatementNode
     {
         /* register the Repeat */
         programNode.SetStatementNumber( SourceSpan.Start.Line);
+        programNode.RegisterPPCStatementAtLine( SourceSpan.Start.Line, this);
 
         /* process the body */
         Body.RegisterStatementNumbers(parser, programNode);
@@ -370,6 +373,7 @@ public class RepeatStatementNode : StatementNode
     {
         /* register the Repeat */
         programNode.SetStatementNumber( SourceSpan.Start.Line);
+        programNode.RegisterPPCStatementAtLine( SourceSpan.Start.Line, this);
 
         /* process the body */
         Body.RegisterStatementNumbers(parser, programNode);
@@ -451,6 +455,7 @@ public class EvaluateStatementNode : StatementNode
 
         /* register the "evaluate" */
         programNode.SetStatementNumber( SourceSpan.Start.Line);
+        programNode.RegisterPPCStatementAtLine( SourceSpan.Start.Line, this);
         BlockNode? previousBlock = null;
 
         foreach(var whenClause in WhenClauses)
@@ -593,6 +598,7 @@ public class TryStatementNode : StatementNode
         
         /* register the "try" */
         programNode.SetStatementNumber( SourceSpan.Start.Line);
+        programNode.RegisterPPCStatementAtLine( SourceSpan.Start.Line, this);
 
         /* register statement numbers in the block here */
         TryBlock.RegisterStatementNumbers(parser, programNode);
@@ -665,6 +671,7 @@ public class ReturnStatementNode : StatementNode
     public override void RegisterStatementNumbers(PeopleCodeParser parser, ProgramNode programNode)
     {
         programNode.SetStatementNumber( SourceSpan.Start.Line);
+        programNode.RegisterPPCStatementAtLine( SourceSpan.Start.Line, this);
     }
 }
 
@@ -704,6 +711,7 @@ public class ThrowStatementNode : StatementNode
     public override void RegisterStatementNumbers(PeopleCodeParser parser, ProgramNode programNode)
     {
         programNode.SetStatementNumber( SourceSpan.Start.Line);
+        programNode.RegisterPPCStatementAtLine( SourceSpan.Start.Line, this);
     }
 }
 
@@ -732,6 +740,7 @@ public class BreakStatementNode : StatementNode
     public override void RegisterStatementNumbers(PeopleCodeParser parser, ProgramNode programNode)
     {
         programNode.SetStatementNumber( SourceSpan.Start.Line);
+        programNode.RegisterPPCStatementAtLine( SourceSpan.Start.Line, this);
     }
 }
 
@@ -760,6 +769,7 @@ public class ContinueStatementNode : StatementNode
     public override void RegisterStatementNumbers(PeopleCodeParser parser, ProgramNode programNode)
     {
         programNode.SetStatementNumber( SourceSpan.Start.Line);
+        programNode.RegisterPPCStatementAtLine( SourceSpan.Start.Line, this);
     }
 }
 
@@ -810,6 +820,7 @@ public class ExitStatementNode : StatementNode
     public override void RegisterStatementNumbers(PeopleCodeParser parser, ProgramNode programNode)
     {
         programNode.SetStatementNumber( SourceSpan.Start.Line);
+        programNode.RegisterPPCStatementAtLine( SourceSpan.Start.Line, this);
     }
 }
 
@@ -849,6 +860,7 @@ public class ErrorStatementNode : StatementNode
     public override void RegisterStatementNumbers(PeopleCodeParser parser, ProgramNode programNode)
     {
         programNode.SetStatementNumber( SourceSpan.Start.Line);
+        programNode.RegisterPPCStatementAtLine( SourceSpan.Start.Line, this);
     }
 }
 
@@ -886,6 +898,7 @@ public class WarningStatementNode : StatementNode
     public override void RegisterStatementNumbers(PeopleCodeParser parser, ProgramNode programNode)
     {
         programNode.SetStatementNumber( SourceSpan.Start.Line);
+        programNode.RegisterPPCStatementAtLine( SourceSpan.Start.Line, this);
     }
 }
 
@@ -925,6 +938,7 @@ public class ExpressionStatementNode : StatementNode
     public override void RegisterStatementNumbers(PeopleCodeParser parser, ProgramNode programNode)
     {
         programNode.SetStatementNumber( SourceSpan.Start.Line);
+        programNode.RegisterPPCStatementAtLine( SourceSpan.Start.Line, this);
     }
 }
 
@@ -979,6 +993,7 @@ public class LocalVariableDeclarationNode : StatementNode
     public override void RegisterStatementNumbers(PeopleCodeParser parser, ProgramNode programNode)
     {
         programNode.SetStatementNumber( SourceSpan.Start.Line);
+        programNode.RegisterPPCStatementAtLine( SourceSpan.Start.Line, this);
     }
 }
 
@@ -1036,6 +1051,7 @@ public class LocalVariableDeclarationWithAssignmentNode : StatementNode
     public override void RegisterStatementNumbers(PeopleCodeParser parser, ProgramNode programNode)
     {
         programNode.SetStatementNumber( SourceSpan.Start.Line);
+        programNode.RegisterPPCStatementAtLine( SourceSpan.Start.Line, this);
     }
 }
 

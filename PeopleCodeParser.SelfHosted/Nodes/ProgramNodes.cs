@@ -63,6 +63,12 @@ public class ProgramNode : AstNode
 
     public Dictionary<int, int> StatementNumberMap { get; } = new();
 
+    /// <summary>
+    /// Maps line numbers to the first statement node that starts on that line
+    /// Used for efficient navigation to statements at specific line numbers
+    /// </summary>
+    public Dictionary<int, AstNode> LineToStatementMap { get; } = new();
+
     private int _statementCounter = 0;
 
     public ProgramNode()
@@ -169,7 +175,36 @@ public class ProgramNode : AstNode
             return line;
         }
         return -1;
+    }
 
+    /// <summary>
+    /// Gets the first statement node that starts on the specified line number
+    /// </summary>
+    /// <param name="line">One-based line number</param>
+    /// <returns>StatementNode that starts on the specified line, or null if not found</returns>
+    public AstNode? GetStatementAtLine(int line)
+    {
+        if (LineToStatementMap.TryGetValue(line, out AstNode? statement))
+        {
+            return statement;
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// Registers a statement node at a specific line for efficient lookup
+    /// This is called during parsing to build the line-to-statement mapping
+    /// </summary>
+    /// <param name="line">One-based line number where the statement starts</param>
+    /// <param name="statement">The statement node that starts on this line</param>
+    public void RegisterPPCStatementAtLine(int line, AstNode statement)
+    {
+        // Only register the first statement on a line to avoid overwriting
+        // In cases where multiple statements start on the same line, the first one is typically the most relevant
+        if (!LineToStatementMap.ContainsKey(line))
+        {
+            LineToStatementMap[line] = statement;
+        }
     }
 }
 /// <summary>
