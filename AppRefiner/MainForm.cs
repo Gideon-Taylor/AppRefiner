@@ -11,6 +11,7 @@ using AppRefiner.Snapshots;
 using AppRefiner.Stylers;
 using AppRefiner.Templates;
 using AppRefiner.TooltipProviders;
+using PeopleCodeParser.SelfHosted;
 using PeopleCodeParser.SelfHosted.Lexing;
 using System.Data;
 using System.Diagnostics;
@@ -39,6 +40,7 @@ namespace AppRefiner
         private WinEventService? winEventService;
         private ApplicationKeyboardService? applicationKeyboardService;
         private DialogCenteringService? dialogCenteringService;
+        private StackTraceNavigatorDialog? stackTraceNavigatorDialog;
 
         // HashSet to track process IDs that already have AppDesignerProcess objects created
         private readonly HashSet<uint> trackedProcessIds = new();
@@ -97,7 +99,7 @@ namespace AppRefiner
 
         // Fields for editor management
         private Dictionary<ScintillaEditor, DateTime> lastStylerProcessingTime = new();
-        private const int STYLER_PROCESSING_DEBOUNCE_MS = 100; // Prevent duplicate processing within 100ms
+        private const int STYLER_PROCESSING_DEBOUNCE_MS = 1000; // Prevent duplicate processing within 100ms
 
         // Throttling for duplicate shortcut prevention
         private DateTime _lastShortcutTime = DateTime.MinValue;
@@ -109,6 +111,12 @@ namespace AppRefiner
         private System.Threading.Timer? savepointDebounceTimer = null;
         private ScintillaEditor? pendingSaveEditor = null;
         private const int SAVEPOINT_DEBOUNCE_MS = 300;
+
+        // Fields for debouncing window focus events
+        private readonly object focusEventLock = new();
+        private System.Threading.Timer? focusDebounceTimer = null;
+        private IntPtr pendingFocusHwnd = IntPtr.Zero;
+        private const int FOCUS_DEBOUNCE_MS = 150;
 
         // Add instance of the new TemplateManager
         private TemplateManager templateManager = new();
@@ -135,7 +143,7 @@ namespace AppRefiner
             applicationKeyboardService = new ApplicationKeyboardService();
             winEventService = new WinEventService();
             winEventService.WindowFocused += HandleWindowFocusEvent;
-            winEventService.WindowCreated += HandleWindowCreationEvent;
+            //winEventService.WindowCreated += HandleWindowCreationEvent;
             winEventService.WindowShown += HandleWindowShownEvent;
             winEventService.Start();
 
@@ -208,6 +216,7 @@ namespace AppRefiner
             applicationKeyboardService?.RegisterShortcut("SmartOpen", AppRefiner.ModifierKeys.Control, Keys.O, ShowSmartOpenDialog); // Ctrl + O
             applicationKeyboardService?.RegisterShortcut("BetterFind", AppRefiner.ModifierKeys.Control, Keys.F, showBetterFindHandler); // Ctrl + F
             applicationKeyboardService?.RegisterShortcut("BetterFindReplace", AppRefiner.ModifierKeys.Control, Keys.H, showBetterFindReplaceHandler); // Ctrl + H
+            applicationKeyboardService?.RegisterShortcut("StackTraceNavigator", AppRefiner.ModifierKeys.Control | AppRefiner.ModifierKeys.Alt, Keys.S, showStackTraceNavigatorHandler); // Ctrl + Alt + S
             applicationKeyboardService?.RegisterShortcut("FindNext", AppRefiner.ModifierKeys.None, Keys.F3, findNextHandler); // F3
             applicationKeyboardService?.RegisterShortcut("FindPrevious", AppRefiner.ModifierKeys.Shift, Keys.F3, findPreviousHandler); // Shift + F3
             applicationKeyboardService?.RegisterShortcut("PlaceBookmark", AppRefiner.ModifierKeys.Control, Keys.B, placeBookmarkHandler);
@@ -438,6 +447,39 @@ namespace AppRefiner
             ScintillaManager.ShowBetterFindDialog(activeEditor, enableReplaceMode: true);
         }
 
+        private void showStackTraceNavigatorHandler()
+        {
+            if (activeAppDesigner == null) return;
+
+            try
+            {
+                // Check if dialog already exists and is visible
+                if (stackTraceNavigatorDialog != null && !stackTraceNavigatorDialog.IsDisposed && stackTraceNavigatorDialog.Visible)
+                {
+                    // Bring existing dialog to front
+                    stackTraceNavigatorDialog.BringToFront();
+                    stackTraceNavigatorDialog.Activate();
+                    return;
+                }
+
+                // Create new dialog
+                var mainHandle = activeAppDesigner?.MainWindowHandle ?? IntPtr.Zero;
+                stackTraceNavigatorDialog = new StackTraceNavigatorDialog(activeAppDesigner, mainHandle);
+                
+                // Handle dialog closed event to clean up reference
+                stackTraceNavigatorDialog.FormClosed += (s, e) => {
+                    stackTraceNavigatorDialog = null;
+                };
+                
+                // Show dialog
+                stackTraceNavigatorDialog.Show();
+            }
+            catch (Exception ex)
+            {
+                Debug.Log($"Error showing Stack Trace Navigator dialog: {ex.Message}");
+            }
+        }
+
         private void findNextHandler()
         {
             if (activeEditor == null) return;
@@ -550,6 +592,18 @@ namespace AppRefiner
             // Dispose the savepoint debounce timer if it exists
             savepointDebounceTimer?.Dispose();
             savepointDebounceTimer = null;
+
+            // Dispose the focus debounce timer if it exists
+            focusDebounceTimer?.Dispose();
+            focusDebounceTimer = null;
+
+            // Dispose the Stack Trace Navigator dialog if it exists
+            if (stackTraceNavigatorDialog != null && !stackTraceNavigatorDialog.IsDisposed)
+            {
+                stackTraceNavigatorDialog.Close();
+                stackTraceNavigatorDialog.Dispose();
+                stackTraceNavigatorDialog = null;
+            }
 
             // Clear the styler processing time dictionary
             lastStylerProcessingTime.Clear();
@@ -1475,6 +1529,23 @@ namespace AppRefiner
                         ScintillaManager.ShowBetterFindDialog(activeEditor, enableReplaceMode: true);
                 },
                 () => activeEditor != null // Enable condition
+            ));
+
+            AvailableCommands.Add(new Command(
+                "Stack Trace Navigator (Ctrl+Alt+S)",
+                "Open the Stack Trace Navigator to parse and navigate PeopleCode stack traces",
+                () =>
+                {
+                    // Delay showing the dialog to allow Command Palette to close first
+                    Task.Delay(100).ContinueWith(_ =>
+                    {
+                        this.BeginInvoke(new Action(() =>
+                        {
+                            showStackTraceNavigatorHandler();
+                        }));
+                    });
+                },
+                () => activeAppDesigner != null // Always enabled
             ));
 
             AvailableCommands.Add(new Command(
@@ -2444,7 +2515,56 @@ namespace AppRefiner
         }
 
         // Renamed from WinEventProc and updated signature for EventHandler
+        // Now debounced to prevent multiple rapid focus events
         private void HandleWindowFocusEvent(object? sender, IntPtr hwnd)
+        {
+            lock (focusEventLock)
+            {
+                // Cancel any pending focus timer
+                focusDebounceTimer?.Change(Timeout.Infinite, Timeout.Infinite);
+
+                // Store the hwnd for later processing
+                pendingFocusHwnd = hwnd;
+
+                // Start a new timer to process this focus event after the debounce period
+                focusDebounceTimer = new System.Threading.Timer(
+                    ProcessFocusEvent, null, FOCUS_DEBOUNCE_MS, Timeout.Infinite);
+            }
+        }
+
+        private void ProcessFocusEvent(object? _)
+        {
+            IntPtr hwndToProcess = IntPtr.Zero;
+
+            lock (focusEventLock)
+            {
+                // If there's no pending focus hwnd, just return
+                if (pendingFocusHwnd == IntPtr.Zero)
+                    return;
+
+                // Get the hwnd to process
+                hwndToProcess = pendingFocusHwnd;
+
+                // Clear the pending hwnd
+                pendingFocusHwnd = IntPtr.Zero;
+            }
+
+            try
+            {
+                // Make sure we're on the UI thread
+                this.Invoke(() =>
+                {
+                    ProcessWindowFocus(hwndToProcess);
+                });
+            }
+            catch (Exception ex)
+            {
+                Debug.Log($"Error processing debounced focus event: {ex.Message}");
+                Debug.Log(ex.StackTrace);
+            }
+        }
+
+        private void ProcessWindowFocus(IntPtr hwnd)
         {
             // Check if the focused window is a Scintilla window
 
@@ -2502,6 +2622,18 @@ namespace AppRefiner
                                 }
 
                                 CheckForContentChanges(activeEditor);
+                                if (activeEditor.AppDesignerProcess.PendingSelection is SourceSpan selection)
+                                {
+                                    activeEditor.AppDesignerProcess.PendingSelection = null;
+                                    WindowHelper.FocusWindow(activeEditor.hWnd);
+                                    ScintillaManager.SetSelection(activeEditor, selection.Start.ByteIndex, selection.End.ByteIndex);
+                                    
+                                    // Reposition stack trace dialog if visible to avoid covering selection
+                                    if (stackTraceNavigatorDialog != null && !stackTraceNavigatorDialog.IsDisposed && stackTraceNavigatorDialog.Visible)
+                                    {
+                                        stackTraceNavigatorDialog.AvoidSelectionOverlap(activeEditor, selection);
+                                    }
+                                }
                             };
                         }
 
@@ -2510,11 +2642,36 @@ namespace AppRefiner
                             if (!activeEditor.Initialized) // Check if it's truly a *new* editor needing init
                             {
                                 ProcessNewEditor(activeEditor);
+                                if (activeEditor.AppDesignerProcess.PendingSelection is SourceSpan selection)
+                                {
+                                    activeEditor.AppDesignerProcess.PendingSelection = null;
+                                    WindowHelper.FocusWindow(activeEditor.hWnd);
+                                    ScintillaManager.SetSelection(activeEditor, selection.Start.ByteIndex, selection.End.ByteIndex);
+                                    
+                                    // Reposition stack trace dialog if visible to avoid covering selection
+                                    if (stackTraceNavigatorDialog != null && !stackTraceNavigatorDialog.IsDisposed && stackTraceNavigatorDialog.Visible)
+                                    {
+                                        stackTraceNavigatorDialog.AvoidSelectionOverlap(activeEditor, selection);
+                                    }
+                                }
                             }
                             else
                             {
                                 // Editor already known and initialized, check content on focus
                                 CheckForContentChanges(activeEditor);
+                                Debug.Log("Focus!");
+                                if (activeEditor.AppDesignerProcess.PendingSelection is SourceSpan selection)
+                                {
+                                    activeEditor.AppDesignerProcess.PendingSelection = null;
+                                    WindowHelper.FocusWindow(activeEditor.hWnd);
+                                    ScintillaManager.SetSelection(activeEditor, selection.Start.ByteIndex, selection.End.ByteIndex);
+                                    
+                                    // Reposition stack trace dialog if visible to avoid covering selection
+                                    if (stackTraceNavigatorDialog != null && !stackTraceNavigatorDialog.IsDisposed && stackTraceNavigatorDialog.Visible)
+                                    {
+                                        stackTraceNavigatorDialog.AvoidSelectionOverlap(activeEditor, selection);
+                                    }
+                                }
                             }
                         }
                         else
@@ -2555,10 +2712,7 @@ namespace AppRefiner
             catch (ArgumentException) { /* Process might have exited */ }
         }
 
-        /// <summary>
-        /// Handles window creation events to detect Application Designer processes early.
-        /// </summary>
-        private void HandleWindowCreationEvent(object? sender, IntPtr hwnd)
+        private void HandleMainWindowShown(IntPtr hwnd)
         {
             try
             {
@@ -2572,31 +2726,35 @@ namespace AppRefiner
                     return;
                 }
 
-                Debug.Log($"WinEvent detected window creation in pside.exe process: PID {processId}, HWND 0x{hwnd.ToInt64():X}");
+                if (process.MainWindowHandle == hwnd)
+                {
 
-                // Early exit if we've already tracked this process ID for AppDesigner process tracking
-                if (trackedProcessIds.Contains(processId))
-                {
-                    return;
-                }
+                    Debug.Log($"WinEvent detected window creation in pside.exe process: PID {processId}, HWND 0x{hwnd.ToInt64():X}");
 
-                // Double-check if we already have this process tracked (defensive programming)
-                if (AppDesignerProcesses.ContainsKey(processId))
-                {
-                    Debug.Log($"Process {processId} already tracked, adding to tracking set and skipping validation");
-                    trackedProcessIds.Add(processId);
-                    return;
-                }
+                    // Early exit if we've already tracked this process ID for AppDesigner process tracking
+                    if (trackedProcessIds.Contains(processId))
+                    {
+                        return;
+                    }
 
-                // Try immediate validation for AppDesigner process tracking
-                if (ValidateAndCreateAppDesignerProcess(processId, hwnd))
-                {
-                    Debug.Log($"Process {processId} immediately validated as Application Designer");
-                }
-                else
-                {
-                    // Queue for retry validation
-                    Debug.Log($"Process {processId} failed immediate validation!");
+                    // Double-check if we already have this process tracked (defensive programming)
+                    if (AppDesignerProcesses.ContainsKey(processId))
+                    {
+                        Debug.Log($"Process {processId} already tracked, adding to tracking set and skipping validation");
+                        trackedProcessIds.Add(processId);
+                        return;
+                    }
+
+                    // Try immediate validation for AppDesigner process tracking
+                    if (ValidateAndCreateAppDesignerProcess(processId, hwnd))
+                    {
+                        Debug.Log($"Process {processId} immediately validated as Application Designer");
+                    }
+                    else
+                    {
+                        // Queue for retry validation
+                        Debug.Log($"Process {processId} failed immediate validation!");
+                    }
                 }
             }
             catch (ArgumentException)
@@ -2614,6 +2772,8 @@ namespace AppRefiner
         /// </summary>
         private void HandleWindowShownEvent(object? sender, IntPtr hwnd)
         {
+            /* Testing out "Window shown" for pside detect */
+
             if (settingsService == null) return;
 
             // Check if auto-centering is enabled
@@ -2634,6 +2794,7 @@ namespace AppRefiner
                 string windowClass = className.ToString();
                 if (windowClass != "#32770")
                 {
+                    HandleMainWindowShown(hwnd);
                     return; // Not a standard dialog
                 }
 

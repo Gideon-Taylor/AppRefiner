@@ -849,7 +849,7 @@ namespace AppRefiner
 
             // Split the document text into lines.
             // This handles both Windows (CRLF) and Unix (LF) line endings.
-            string[] lines = editor.ContentString.Split(new[] { "\r\n", "\n" }, StringSplitOptions.None);
+            string[] lines = editor.ContentString.Split(new[] { "\n", "\n" }, StringSplitOptions.None);
             int lineCount = lines.Length;
 
             // Precompute an indent value for each line.
@@ -969,7 +969,7 @@ namespace AppRefiner
             var contentWithMarker = editor.ContentString?.Insert(cursorPosition, "--AppRefiner--");
             var formatted = SqlFormatter.Of(Dialect.StandardSql)
                 .Extend(cfg => cfg.PlusSpecialWordChars("%").PlusNamedPlaceholderTypes(new string[] { ":" }).PlusOperators(new string[] { "%Concat" }))
-                .Format(contentWithMarker, formatConfig).Replace("\n", "\r\n");
+                .Format(contentWithMarker, formatConfig).Replace("\n", "\n");
 
             var newCursorPosition = formatted.IndexOf("--AppRefiner--");
             if (newCursorPosition > 0)
@@ -990,7 +990,7 @@ namespace AppRefiner
 
             var formatted = SqlFormatter.Of(Dialect.StandardSql)
                 .Extend(cfg => cfg.PlusSpecialWordChars("%").PlusNamedPlaceholderTypes(new string[] { ":" }).PlusOperators(new string[] { "%Concat" }))
-                .Format(editor.ContentString, formatConfig).Replace("\n", "\r\n");
+                .Format(editor.ContentString, formatConfig).Replace("\n", "\n");
             if (string.IsNullOrEmpty(formatted))
             {
                 return;
