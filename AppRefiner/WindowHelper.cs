@@ -27,7 +27,16 @@ namespace AppRefiner
         private static extern bool SetForegroundWindow(IntPtr hWnd);
 
         [DllImport("user32.dll", SetLastError = true)]
-        private static extern bool GetWindowRect(IntPtr hWnd, out RECT lpRect);
+        public static extern bool GetWindowRect(IntPtr hWnd, out RECT lpRect);
+
+        [DllImport("user32.dll")]
+        public static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
+
+        [DllImport("user32.dll")]
+        public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
+
+        [DllImport("user32.dll")]
+        public static extern bool BringWindowToTop(IntPtr hWnd);
 
         [DllImport("user32.dll")]
         private static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
@@ -46,6 +55,13 @@ namespace AppRefiner
 
         public delegate bool EnumChildProc(IntPtr hWnd, IntPtr lParam);
 
+        // SetWindowPos constants
+        public static readonly IntPtr HWND_TOPMOST = new(-1);
+        public static readonly IntPtr HWND_NOTOPMOST = new(-2);
+        public const uint SWP_NOMOVE = 0x0002;
+        public const uint SWP_NOSIZE = 0x0001;
+        public const uint SWP_SHOWWINDOW = 0x0040;
+
         [StructLayout(LayoutKind.Sequential)]
         public struct RECT
         {
@@ -53,6 +69,9 @@ namespace AppRefiner
             public int Top;
             public int Right;
             public int Bottom;
+
+            public int Width => Right - Left;
+            public int Height => Bottom - Top;
         }
 
         [StructLayout(LayoutKind.Sequential)]
@@ -76,6 +95,9 @@ namespace AppRefiner
             SetForegroundWindow(hWnd);
         }
 
+        [DllImport("user32.dll")]
+        private static extern bool EnumWindows(EnumWindowsProc enumProc, IntPtr lParam);
+
         /// <summary>
         /// Given a process ID, retrieves the caption of its main window.
         /// </summary>
@@ -83,13 +105,6 @@ namespace AppRefiner
         /// <returns>The caption text of the main window, or an empty string if not found.</returns>
         public static string GetMainWindowCaption(uint processId)
         {
-            // Import the EnumWindows function from user32.dll
-            [DllImport("user32.dll")]
-            static extern bool EnumWindows(EnumWindowsProc enumProc, IntPtr lParam);
-
-            // Import the GetWindowThreadProcessId function from user32.dll
-            [DllImport("user32.dll", SetLastError = true)]
-            static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);
 
             IntPtr foundWindow = IntPtr.Zero;
             string windowCaption = string.Empty;
