@@ -1772,5 +1772,72 @@ WHERE (OBJECTID1 = 60 OR OBJECTID1 = 87)
        CASE WHEN OBJECTVALUE3 IS NOT NULL AND OBJECTVALUE3 != ' ' 
             THEN '.' + OBJECTVALUE3 ELSE '' END) LIKE UPPER('%' + @descr_search + '%') ESCAPE '\')
   AND (LEN(@id_search) > 0 OR LEN(@descr_search) > 0)";
+
+        public List<(PSCLASSID[] ObjectIds, string[] ObjectValues)> GetProgramObjectIds(string[] objectValues)
+        {
+            if (!IsConnected)
+            {
+                return new List<(PSCLASSID[] ObjectIds, string[] ObjectValues)>();
+            }
+
+            // Pad array to 7 elements with spaces if needed
+            string[] paddedValues = new string[7];
+            for (int i = 0; i < 7; i++)
+            {
+                paddedValues[i] = i < objectValues.Length && !string.IsNullOrEmpty(objectValues[i]) 
+                    ? objectValues[i] 
+                    : " ";
+            }
+
+            string sql = @"
+                SELECT OBJECTID1, OBJECTID2, OBJECTID3, OBJECTID4, OBJECTID5, OBJECTID6, OBJECTID7,
+                       OBJECTVALUE1, OBJECTVALUE2, OBJECTVALUE3, OBJECTVALUE4, OBJECTVALUE5, OBJECTVALUE6, OBJECTVALUE7
+                FROM PSPCMPROG 
+                WHERE OBJECTVALUE1 = @val1 
+                  AND OBJECTVALUE2 = @val2 
+                  AND OBJECTVALUE3 = @val3 
+                  AND OBJECTVALUE4 = @val4 
+                  AND OBJECTVALUE5 = @val5 
+                  AND OBJECTVALUE6 = @val6 
+                  AND OBJECTVALUE7 = @val7";
+
+            var results = new List<(PSCLASSID[] ObjectIds, string[] ObjectValues)>();
+
+            try
+            {
+                var parameters = new Dictionary<string, object>
+                {
+                    ["val1"] = paddedValues[0],
+                    ["val2"] = paddedValues[1],
+                    ["val3"] = paddedValues[2],
+                    ["val4"] = paddedValues[3],
+                    ["val5"] = paddedValues[4],
+                    ["val6"] = paddedValues[5],
+                    ["val7"] = paddedValues[6]
+                };
+
+                DataTable result = _connection.ExecuteQuery(sql, parameters);
+
+                foreach (DataRow row in result.Rows)
+                {
+                    var objectIds = new PSCLASSID[7];
+                    var objectVals = new string[7];
+
+                    for (int i = 0; i < 7; i++)
+                    {
+                        objectIds[i] = (PSCLASSID)Convert.ToInt32(row[$"OBJECTID{i + 1}"]);
+                        objectVals[i] = row[$"OBJECTVALUE{i + 1}"]?.ToString() ?? " ";
+                    }
+
+                    results.Add((objectIds, objectVals));
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.Log($"Error querying PSPCMPROG for object IDs: {ex.Message}");
+            }
+
+            return results;
+        }
     }
 }

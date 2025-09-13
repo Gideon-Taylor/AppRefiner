@@ -104,7 +104,7 @@ namespace AppRefiner
             /*var lastChar = OutputText[OutputText.Length - 1];
             if (lastChar != '\n')
             {
-                Write("\r\n");
+                Write("\n");
             }*/
             if (OutputText.Length > 0 && OutputText[OutputText.Length - 1] != '\n')
             {
@@ -121,7 +121,7 @@ namespace AppRefiner
                 }
                 if (onlyWhitespace == false)
                 {
-                    Write("\r\n");
+                    Write("\n");
                 }
             }
         }
@@ -236,7 +236,7 @@ namespace AppRefiner
             }
             if (OutputText.Length > 0 && OutputText[OutputText.Length - 1] != '\n')
             {
-                Write("\r\n");
+                Write("\n");
             }
         }
         private void WriteOperatorSpaceBefore()
@@ -424,7 +424,7 @@ namespace AppRefiner
 
                         ResetBooleanFrame();
 
-                        Write(";\r\n");
+                        Write(";\n");
                         break;
                     case 22:
                         /* Space Before */
@@ -448,7 +448,7 @@ namespace AppRefiner
                             currentBoolFrame.BoolIndent++;
                         }
                         currentBoolFrame.lastSeenBool = BOOLEAN_TYPES.AND;
-                        Write("\r\n");
+                        Write("\n");
                         break;
                     case 25:
                         while (OutputText[OutputText.Length - 1] == ' ')
@@ -457,18 +457,18 @@ namespace AppRefiner
                         }
                         if (OutputText[OutputText.Length - 1] != '\n')
                         {
-                            Write("\r\n");
+                            Write("\n");
                         }
                         nIndent--;
                         WritePadding();
                         Write("Else");
-                        Write("\r\n");
+                        Write("\n");
                         nIndent++;
                         break;
                     case 26:
                         /*if (Char.IsWhiteSpace(OutputText[OutputText.Length -1]) == false)
                         {
-                            Write("\r\n");
+                            Write("\n");
                             WritePadding();
                         }*/
                         while (OutputText[OutputText.Length - 1] == ' ')
@@ -477,7 +477,7 @@ namespace AppRefiner
                         }
                         if (OutputText[OutputText.Length - 1] != '\n')
                         {
-                            Write("\r\n");
+                            Write("\n");
                         }
                         WritePadding();
                         Write("End-If");
@@ -504,7 +504,7 @@ namespace AppRefiner
                     case 30:
                         WriteOperatorSpaceBefore();
                         Write("Or");
-                        Write("\r\n");
+                        Write("\n");
                         if (currentBoolFrame.isAndIndented == false)
                         {
                             currentBoolFrame.BoolIndent++;
@@ -525,7 +525,7 @@ namespace AppRefiner
                         Write("Then");
                         isInsideIf = false;
                         currentBoolFrame.BoolIndent = 0;
-                        Write("\r\n");
+                        Write("\n");
                         break;
                     case 32:
                         //TODO: Fix the "IfAA" that is found on the first hit of this
@@ -549,12 +549,12 @@ namespace AppRefiner
                         WriteNewLineBefore();
                         WritePadding();
                         Write(ReadComment());
-                        Write("\r\n");
+                        Write("\n");
                         break;
                     case 37:
                         if (OutputText.Length > 0 && Char.IsWhiteSpace(OutputText[OutputText.Length - 1]) == false)
                         {
-                            Write("\r\n");
+                            Write("\n");
                             WritePadding();
                         }
 
@@ -571,12 +571,12 @@ namespace AppRefiner
                     case 39:
                         if (OutputText.Length > 0 && Char.IsWhiteSpace(OutputText[OutputText.Length - 1]) == false)
                         {
-                            Write("\r\n");
+                            Write("\n");
                             WritePadding();
                         }
 
                         Write("Repeat");
-                        Write("\r\n");
+                        Write("\n");
                         nIndent++;
                         break;
                     case 40:
@@ -593,7 +593,7 @@ namespace AppRefiner
                     case 41:
                         if (OutputText.Length > 0 && Char.IsWhiteSpace(OutputText[OutputText.Length - 1]) == false)
                         {
-                            Write("\r\n");
+                            Write("\n");
                             WritePadding();
                         }
 
@@ -627,11 +627,11 @@ namespace AppRefiner
                         if (isCompOrGblDefn && lastByte == 21 && tempNext == 21)
                         {
                             isCompOrGblDefn = false;
-                            Write("\r\n");
+                            Write("\n");
                         }
                         else if (OutputText[OutputText.Length - 1] != '\n')
                         {
-                            Write("\r\n");
+                            Write("\n");
                         }
                         break;
                     case 46:
@@ -740,7 +740,7 @@ namespace AppRefiner
                         WriteNewLineBeforeBlockEnd();
                         WritePadding();
                         Write("When-Other");
-                        Write("\r\n");
+                        Write("\n");
                         nIndent++;
                         break;
                     case 63:
@@ -775,7 +775,7 @@ namespace AppRefiner
                     case 69:
                         if (OutputText.Length > 0 && OutputText[OutputText.Length - 1] != '\n')
                         {
-                            Write("\r\n");
+                            Write("\n");
                             WritePadding();
                         }
                         Write("Global");
@@ -852,7 +852,7 @@ namespace AppRefiner
                         Write(ReadComment());
                         /*if (lastByte == 31 || lastByte == 21 || lastByte == 25)
                         {
-                            Write("\r\n");
+                            Write("\n");
                         }*/
                         if (isInsideIf && (lastByte != 24 && lastByte != 30) || (isAppClass && afterClassDefn == false && unMatchedParens > 0))
                         {
@@ -860,11 +860,11 @@ namespace AppRefiner
                         }
                         else
                         {
-                            Write("\r\n");
+                            Write("\n");
                         }
                         break;
                     case 79:
-                        Write("\r\n");
+                        Write("\n");
                         break;
                     case 80:
                         Write(ReadNumber());
@@ -882,7 +882,7 @@ namespace AppRefiner
                     case 84:
                         if (OutputText.Length > 0 && OutputText[OutputText.Length - 1] != '\n')
                         {
-                            Write("\r\n");
+                            Write("\n");
                             WritePadding();
                         }
                         Write("Component");
@@ -895,7 +895,7 @@ namespace AppRefiner
                         }*/
                         WriteSpaceBefore();
                         Write(ReadComment());
-                        Write("\r\n");
+                        Write("\n");
                         break;
                     case 86:
                         WriteNewLineBefore();
@@ -971,7 +971,7 @@ namespace AppRefiner
                         nIndent--;
                         WritePadding();
                         Write("private");
-                        Write("\r\n");
+                        Write("\n");
                         nIndent++;
                         break;
                     case 98:
@@ -998,7 +998,7 @@ namespace AppRefiner
                     case 101:
                         WriteSpaceBefore();
                         Write("try");
-                        Write("\r\n");
+                        Write("\n");
                         nIndent++;
                         WritePadding();
                         break;
@@ -1035,7 +1035,7 @@ namespace AppRefiner
                             }
                             if (OutputText[OutputText.Length - 1] != '\n')
                             {
-                                Write("\r\n");
+                                Write("\n");
                             }
                             nIndent--;
                             WritePadding();
@@ -1056,7 +1056,7 @@ namespace AppRefiner
                             }
                             if (OutputText[OutputText.Length - 1] != '\n')
                             {
-                                Write("\r\n");
+                                Write("\n");
                             }
                             nIndent--;
                             WritePadding();
@@ -1075,7 +1075,7 @@ namespace AppRefiner
                         Write("/+ ");
                         Write(ReadPureString());
                         Write(" +/");
-                        Write("\r\n");
+                        Write("\n");
                         WritePadding();
                         break;
                     case 110:
@@ -1099,7 +1099,7 @@ namespace AppRefiner
                         nIndent--;
                         WritePadding();
                         Write("end-interface");
-                        Write("\r\n");
+                        Write("\n");
                         break;
                     case 114:
                         WriteSpaceBefore();
@@ -1111,7 +1111,7 @@ namespace AppRefiner
                         nIndent--;
                         WritePadding();
                         Write("protected");
-                        Write("\r\n");
+                        Write("\n");
                         nIndent++;
                         break;
                     case 117:
@@ -1141,7 +1141,7 @@ namespace AppRefiner
 
                         Write(str);
 
-                        Write("\r\n");
+                        Write("\n");
                         nIndent++;
                         break;
                     case 119:
@@ -1153,7 +1153,7 @@ namespace AppRefiner
                         stringLength = BitConverter.ToInt16(shortLen, 0);
                         stringData = new byte[stringLength];
                         ms.Read(stringData, 0, stringLength);
-                        str = Encoding.Unicode.GetString(stringData).Replace("\n", "\r\n");
+                        str = Encoding.Unicode.GetString(stringData).Replace("\n", "\n");
 
                         /* Special handling for #Else because it isn't a seperate "token" but lumped together with the commented out code */
                         if (str.StartsWith("#Else") && char.IsWhiteSpace(str[5]))
@@ -1169,7 +1169,7 @@ namespace AppRefiner
 
                         WritePadding();
                         Write(str);
-                        Write("\r\n");
+                        Write("\n");
                         nIndent++;
                         break;
                     case 120:
@@ -1180,7 +1180,7 @@ namespace AppRefiner
                         stringLength = BitConverter.ToInt16(shortLen, 0);
                         stringData = new byte[stringLength];
                         ms.Read(stringData, 0, stringLength);
-                        str = Encoding.Unicode.GetString(stringData).Replace("\n", "\r\n");
+                        str = Encoding.Unicode.GetString(stringData).Replace("\n", "\n");
 
                         if (str == "#If" || str == "#Else" || str == "#End-If")
                         {
@@ -1189,7 +1189,7 @@ namespace AppRefiner
 
                         WritePadding();
                         Write(str);
-                        Write("\r\n");
+                        Write("\n");
                         WritePadding();
                         break;
                     case 121:

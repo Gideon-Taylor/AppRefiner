@@ -75,6 +75,11 @@ namespace AppRefiner.Database.Models
         public string?[] ObjectValues { get; }
 
         /// <summary>
+        /// Gets the statement number for navigation (optional)
+        /// </summary>
+        public int? StatementNumber { get; }
+
+        /// <summary>
         /// Creates a new OpenTarget with the specified type, name, description, and object pairs
         /// </summary>
         /// <param name="type">The type of the target</param>
@@ -85,11 +90,29 @@ namespace AppRefiner.Database.Models
             OpenTargetType type,
             string name,
             string description,
-            IEnumerable<(PSCLASSID ObjectID, string ObjectValue)> objectPairs)
+            IEnumerable<(PSCLASSID ObjectID, string ObjectValue)> objectPairs) : this(type, name, description, objectPairs, null)
+        {
+        }
+
+        /// <summary>
+        /// Creates a new OpenTarget with the specified type, name, description, object pairs, and statement number
+        /// </summary>
+        /// <param name="type">The type of the target</param>
+        /// <param name="name">The display name</param>
+        /// <param name="description">The description</param>
+        /// <param name="objectPairs">The object ID/value pairs (up to 7)</param>
+        /// <param name="statementNumber">The statement number for navigation (optional)</param>
+        public OpenTarget(
+            OpenTargetType type,
+            string name,
+            string description,
+            IEnumerable<(PSCLASSID ObjectID, string ObjectValue)> objectPairs,
+            int? statementNumber)
         {
             Type = type;
             Name = name ?? string.Empty;
             Description = description ?? string.Empty;
+            StatementNumber = statementNumber;
 
             ObjectIDs = new PSCLASSID[7];
             ObjectValues = new string?[7];
@@ -146,7 +169,14 @@ namespace AppRefiner.Database.Models
                 ? $"{Name} - {Description}"
                 : Name;
             
-            return $"{typeName}: {displayName}";
+            var result = $"{typeName}: {displayName}";
+            
+            if (StatementNumber.HasValue)
+            {
+                result += $" (Statement: {StatementNumber.Value})";
+            }
+            
+            return result;
         }
     }
 }

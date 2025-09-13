@@ -279,6 +279,13 @@ namespace AppRefiner.Database
 
         string GetToolsVersion();
 
+        /// <summary>
+        /// Gets program object IDs from PSPCMPROG based on object values
+        /// </summary>
+        /// <param name="objectValues">Array of object values (padded to 7 with spaces)</param>
+        /// <returns>List of tuples containing object IDs and values for matching programs</returns>
+        List<(PSCLASSID[] ObjectIds, string[] ObjectValues)> GetProgramObjectIds(string[] objectValues);
+
 
         public static bool TryMapStringToTargetType(string typeName, out OpenTargetType targetType)
         {
