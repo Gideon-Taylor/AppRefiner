@@ -1002,7 +1002,7 @@ namespace AppRefiner
                     if (mainHandle != IntPtr.Zero)
                     {
                         var handleWrapper = new WindowWrapper(mainHandle);
-                        new MessageBoxDialog("Smart Open requires a database connection. Please connect to database first.",
+                        new MessageBoxDialog("Declare function requires a database connection. Please connect to database first.",
                             "Database Required", MessageBoxButtons.OK, mainHandle).ShowDialog(handleWrapper);
                     }
                 });
@@ -1047,7 +1047,7 @@ namespace AppRefiner
             }
             catch (Exception ex)
             {
-                Debug.Log($"Error showing Smart Open dialog: {ex.Message}");
+                Debug.Log($"Error showing Declare Function dialog: {ex.Message}");
             }
             finally
             {
