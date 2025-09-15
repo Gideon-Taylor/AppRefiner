@@ -435,9 +435,6 @@ public class PeopleCodeParser
     /// </summary>
     public ProgramNode ParseProgram()
     {
-        
-        File.AppendAllText(@"C:\temp\parser_calls.txt", Environment.NewLine + Environment.NewLine + Environment.StackTrace); 
-        
        // Initialize with preprocessed tokens
        var program = new ProgramNode();
         _workingProgram = program;
