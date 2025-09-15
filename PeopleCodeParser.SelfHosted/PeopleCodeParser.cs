@@ -1,5 +1,6 @@
 using PeopleCodeParser.SelfHosted.Lexing;
 using PeopleCodeParser.SelfHosted.Nodes;
+using PeopleCodeParser.SelfHosted.TypeSystem;
 using System.Diagnostics;
 using System.Net.Http.Headers;
 
@@ -999,7 +1000,7 @@ public class PeopleCodeParser
             {
                 // Special built-in exception type
                 var token = Previous;
-                return new BuiltInTypeNode(BuiltInType.Exception)
+                return new BuiltInTypeNode(PeopleCodeType.Any)
                 {
                     FirstToken = token,
                     LastToken = token
@@ -1088,17 +1089,17 @@ public class PeopleCodeParser
         // First check for primitive type tokens
         var builtInType = Current.Type switch
         {
-            TokenType.Any => BuiltInType.Any,
-            TokenType.Boolean => BuiltInType.Boolean,
-            TokenType.Date => BuiltInType.Date,
-            TokenType.DateTime => BuiltInType.DateTime,
-            TokenType.Exception => BuiltInType.Exception,
-            TokenType.Float => BuiltInType.Float,
-            TokenType.Integer => BuiltInType.Integer,
-            TokenType.Number => BuiltInType.Number,
-            TokenType.String => BuiltInType.String,
-            TokenType.Time => BuiltInType.Time,
-            _ => (BuiltInType?)null
+            TokenType.Any => PeopleCodeType.Any,
+            TokenType.Boolean => PeopleCodeType.Boolean,
+            TokenType.Date => PeopleCodeType.Date,
+            TokenType.DateTime => PeopleCodeType.DateTime,
+            TokenType.Exception => PeopleCodeType.Any, // Map to Any since Exception type isn't in the authoritative enum
+            TokenType.Float => PeopleCodeType.Number, // Map to number since Float isn't in the authoritative enum
+            TokenType.Integer => PeopleCodeType.Integer,
+            TokenType.Number => PeopleCodeType.Number,
+            TokenType.String => PeopleCodeType.String,
+            TokenType.Time => PeopleCodeType.Time,
+            _ => (PeopleCodeType?)null
         };
 
         if (builtInType.HasValue)
@@ -1115,12 +1116,11 @@ public class PeopleCodeParser
         // Check if current token is a generic identifier that might be a built-in object type
         if (Check(TokenType.GenericId, TokenType.GenericIdLimited))
         {
-            var parsedType = BuiltInTypeExtensions.TryParseKeyword(Current.Text);
-            if (parsedType.HasValue)
+            if (PeopleCodeTypeRegistry.TryGetPeopleCodeTypeEnum(Current.Text, out var parsedType))
             {
                 var token = Current;
                 _position++;
-                return new BuiltInTypeNode(parsedType.Value)
+                return new BuiltInTypeNode(parsedType)
                 {
                     FirstToken = token,
                     LastToken = token
@@ -1301,7 +1301,7 @@ public class PeopleCodeParser
             var nameToken = Current;
             _position++;
 
-            TypeNode? paramType = new BuiltInTypeNode(BuiltInType.Any)
+            TypeNode? paramType = new BuiltInTypeNode(PeopleCodeType.Any)
             {
                 FirstToken = Current,
                 LastToken = Current
@@ -1316,7 +1316,7 @@ public class PeopleCodeParser
                 {
                     ReportError("Expected parameter type after 'AS'");
                     // Use default ANY type if we couldn't parse the specified type
-                    paramType = new BuiltInTypeNode(BuiltInType.Any)
+                    paramType = new BuiltInTypeNode(PeopleCodeType.Any)
                     {
                         FirstToken = nameToken,
                         LastToken = Previous
@@ -1527,7 +1527,7 @@ public class PeopleCodeParser
             if (Match(TokenType.Exception))
             {
                 var token = Previous;
-                return new BuiltInTypeNode(BuiltInType.Exception)
+                return new BuiltInTypeNode(PeopleCodeType.Any)
                 {
                     FirstToken = token,
                     LastToken = token
@@ -1600,7 +1600,7 @@ public class PeopleCodeParser
                 {
                     ReportError("Expected type after 'OF' in array declaration");
                     // Create a default ANY type for error recovery
-                    elementType = new BuiltInTypeNode(BuiltInType.Any);
+                    elementType = new BuiltInTypeNode(PeopleCodeType.Any);
                 }
             }
 
@@ -1668,7 +1668,7 @@ public class PeopleCodeParser
             {
                 ReportError("Expected type after 'OF' in array annotation");
                 // Create a default ANY type for error recovery
-                elementType = new BuiltInTypeNode(BuiltInType.Any);
+                elementType = new BuiltInTypeNode(PeopleCodeType.Any);
             }
 
             var arrayNode = new ArrayTypeNode(dimensions, elementType);
@@ -2189,7 +2189,7 @@ public class PeopleCodeParser
             }
 
             // Create property node with unknown type for now (will be inferred)
-            var propertyNode = new PropertyNode(propertyName, Previous, new BuiltInTypeNode(BuiltInType.Any));
+            var propertyNode = new PropertyNode(propertyName, Previous, new BuiltInTypeNode(PeopleCodeType.Any));
 
             // Parse method return annotation (contains the actual property type)
             // Try to parse a return annotation - it's fine if there isn't one
@@ -2269,7 +2269,7 @@ public class PeopleCodeParser
             }
 
             // Create property node with unknown type for now
-            var propertyNode = new PropertyNode(propertyName, Previous, new BuiltInTypeNode(BuiltInType.Any));
+            var propertyNode = new PropertyNode(propertyName, Previous, new BuiltInTypeNode(PeopleCodeType.Any));
 
             // Parse method parameter annotation (contains the property type)
             // Try to parse a parameter annotation - it's fine if there isn't one
@@ -3214,7 +3214,7 @@ public class PeopleCodeParser
 
 
             // Create parameter with default type (Any)
-            var parameter = new ParameterNode(paramName, nameToken, new BuiltInTypeNode(BuiltInType.Any));
+            var parameter = new ParameterNode(paramName, nameToken, new BuiltInTypeNode(PeopleCodeType.Any));
 
             // Parse optional REF or VALUE modifier
             if (Match(TokenType.Ref))
@@ -3817,7 +3817,7 @@ public class PeopleCodeParser
                 // Parse exception type (EXCEPTION or appClassPath)
                 if (Match(TokenType.Exception))
                 {
-                    exceptionType = new BuiltInTypeNode(BuiltInType.Exception);
+                    exceptionType = new BuiltInTypeNode(PeopleCodeType.Any);
                 }
                 else
                 {
@@ -5333,6 +5333,109 @@ public class PeopleCodeParser
             }
         }
     }
+
+    #region Type Checking Integration
+
+    /// <summary>
+    /// Performs type inference on the parsed program using the specified mode
+    /// </summary>
+    /// <param name="program">The program to analyze (if null, uses the last parsed program)</param>
+    /// <param name="mode">The type inference mode to use</param>
+    /// <param name="resolver">Optional program resolver for thorough mode</param>
+    /// <param name="options">Optional analysis options</param>
+    /// <returns>The results of the type inference operation</returns>
+    public async Task<TypeInferenceResult> InferTypesAsync(
+        ProgramNode? program = null,
+        TypeInferenceMode mode = TypeInferenceMode.Quick,
+        IProgramResolver? resolver = null,
+        TypeInferenceOptions? options = null)
+    {
+        program ??= _workingProgram;
+
+        if (program == null)
+        {
+            throw new InvalidOperationException("No program available for type inference. Parse a program first or provide one explicitly.");
+        }
+
+        var engine = new TypeInferenceEngine();
+        return await engine.InferTypesAsync(program, mode, resolver, options);
+    }
+
+    /// <summary>
+    /// Parses a program and immediately performs type inference
+    /// </summary>
+    /// <param name="mode">The type inference mode to use</param>
+    /// <param name="resolver">Optional program resolver for thorough mode</param>
+    /// <param name="options">Optional analysis options</param>
+    /// <returns>Tuple containing the parsed program and type inference results</returns>
+    public async Task<(ProgramNode Program, TypeInferenceResult TypeResult)> ParseProgramWithTypesAsync(
+        TypeInferenceMode mode = TypeInferenceMode.Quick,
+        IProgramResolver? resolver = null,
+        TypeInferenceOptions? options = null)
+    {
+        var program = ParseProgram();
+        var typeResult = await InferTypesAsync(program, mode, resolver, options);
+        return (program, typeResult);
+    }
+
+    /// <summary>
+    /// Creates a type service instance configured for this parser
+    /// </summary>
+    /// <param name="mode">The initial type inference mode</param>
+    /// <param name="resolver">Optional program resolver for thorough mode</param>
+    /// <returns>A configured type service</returns>
+    public ITypeService CreateTypeService(TypeInferenceMode mode = TypeInferenceMode.Quick, IProgramResolver? resolver = null)
+    {
+        var service = new TypeService();
+        service.Enable(mode);
+
+        if (resolver != null)
+        {
+            service.RegisterProgramResolver(resolver);
+        }
+
+        return service;
+    }
+
+    /// <summary>
+    /// Quick validation to check if the parsed program has type errors
+    /// </summary>
+    /// <param name="program">The program to validate (if null, uses the last parsed program)</param>
+    /// <param name="mode">The type inference mode to use for validation</param>
+    /// <returns>True if the program has no type errors, false otherwise</returns>
+    public async Task<bool> ValidateProgramTypesAsync(ProgramNode? program = null, TypeInferenceMode mode = TypeInferenceMode.Quick)
+    {
+        try
+        {
+            var result = await InferTypesAsync(program, mode);
+            return result.Success && result.Errors.Count == 0;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Gets a summary of type information for the parsed program
+    /// </summary>
+    /// <param name="program">The program to analyze (if null, uses the last parsed program)</param>
+    /// <param name="mode">The type inference mode to use</param>
+    /// <returns>A human-readable summary of type analysis results</returns>
+    public async Task<string> GetTypeSummaryAsync(ProgramNode? program = null, TypeInferenceMode mode = TypeInferenceMode.Quick)
+    {
+        try
+        {
+            var result = await InferTypesAsync(program, mode);
+            return result.GetSummary();
+        }
+        catch (Exception ex)
+        {
+            return $"Type analysis failed: {ex.Message}";
+        }
+    }
+
+    #endregion
 }
 
 

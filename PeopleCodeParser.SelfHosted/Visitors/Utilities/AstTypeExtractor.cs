@@ -1,4 +1,5 @@
 using PeopleCodeParser.SelfHosted.Nodes;
+using PeopleCodeParser.SelfHosted.TypeSystem;
 
 namespace PeopleCodeParser.SelfHosted.Visitors.Utilities;
 
@@ -18,7 +19,7 @@ public static class AstTypeExtractor
 
     private static string GetBuiltInTypeName(BuiltInTypeNode builtInType)
     {
-        return builtInType.Type.ToKeyword();
+        return builtInType.Type.GetTypeName();
     }
 
     private static string GetArrayTypeName(ArrayTypeNode arrayType)
@@ -85,7 +86,7 @@ public static class AstTypeExtractor
 
     public static bool IsBuiltInType(string typeName)
     {
-        return BuiltInTypeExtensions.TryParseKeyword(typeName) != null;
+        return PeopleCodeTypeRegistry.IsValidTypeName(typeName);
     }
 
     public static bool IsArrayType(string typeName)
@@ -108,9 +109,9 @@ public static class AstTypeExtractor
 
         var normalized = typeName.Trim();
 
-        if (BuiltInTypeExtensions.TryParseKeyword(normalized) is BuiltInType builtIn)
+        if (PeopleCodeTypeRegistry.TryGetPeopleCodeTypeEnum(normalized, out var peopleCodeType))
         {
-            return builtIn.ToKeyword();
+            return peopleCodeType.GetTypeName();
         }
 
         return normalized;
