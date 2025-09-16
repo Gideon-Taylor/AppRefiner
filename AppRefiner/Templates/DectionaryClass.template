@@ -1,0 +1,53 @@
+{
+  "templateName": "Mathesh Class",
+  "description": "Basic PeopleCode class with constructor",
+  "inputs": [
+    {
+      "id": "class_name",
+      "label": "Class Name",
+      "type": "string",
+      "required": true,
+      "defaultValue": "MyClass",
+      "description": "The name of the class to generate"
+    },
+    {
+      "id": "include_comments",
+      "label": "Include Comments",
+      "type": "boolean",
+      "required": true,
+      "defaultValue": "true",
+      "description": "Whether to include additional comments in the generated code"
+    },
+    {
+      "id": "add_notes",
+      "label": "Add Notes - Mathesh",
+      "type": "boolean",
+      "required": true,
+      "defaultValue": "true",
+      "description": "Check to add additional notes to test the Template"
+    }
+  ]
+}
+---
+{{#if add_notes}}
+/* This below class craeted by adding additional template on AppFinder Tool - Start */
+{{/if}}
+{{#if include_comments}}
+/* This is a basic class template */
+{{/if}}
+class {{class_name}}
+{{#if include_comments}}
+   /* Constructor */
+{{/if}}
+   method {{class_name}}();
+   
+end-class;
+{{#if add_notes}}
+/* This below class craeted by adding additional template on AppFinder Tool - End */
+{{/if}}
+{{#if include_comments}}
+/* Constructor implementation */
+{{/if}}
+method {{class_name}}
+   [[select]]/* your code goes here */[[/select]]
+end-method;
