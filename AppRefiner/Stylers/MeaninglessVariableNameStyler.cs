@@ -29,7 +29,7 @@ public class MeaninglessVariableNameStyler : BaseStyler
     /// </summary>
     public override void VisitLocalVariableDeclaration(LocalVariableDeclarationNode node)
     {
-        CheckVariableNames(node.VariableNames);
+        CheckVariableNameInfos(node.VariableNameInfos);
         base.VisitLocalVariableDeclaration(node);
     }
 
@@ -50,7 +50,7 @@ public class MeaninglessVariableNameStyler : BaseStyler
         // Check parameter names before visiting the method body
         foreach (var parameter in node.Parameters)
         {
-            CheckVariableName(parameter.Name, parameter.SourceSpan);
+            CheckVariableName(parameter.Name, parameter.NameToken.SourceSpan);
         }
 
         base.VisitMethod(node);
@@ -70,16 +70,14 @@ public class MeaninglessVariableNameStyler : BaseStyler
     #region Helper Methods
 
     /// <summary>
-    /// Checks multiple variable names from a collection
+    /// Checks multiple variable names from a collection with their source span information
     /// </summary>
-    private void CheckVariableNames(IEnumerable<string> variableNames)
+    private void CheckVariableNameInfos(IEnumerable<VariableNameInfo> variableNameInfos)
     {
-        foreach (var variableName in variableNames)
+        foreach (var variableNameInfo in variableNameInfos)
         {
-            // For local variable declarations, we need to find the source span
-            // This is a simplified approach - in the real implementation we'd need
-            // more precise span information for each variable
-            CheckVariableName(variableName, default);
+            // Use the actual source span from the variable name token
+            CheckVariableName(variableNameInfo.Name, variableNameInfo.SourceSpan);
         }
     }
 
