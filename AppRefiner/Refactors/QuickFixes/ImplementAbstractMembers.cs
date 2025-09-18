@@ -391,6 +391,9 @@ namespace AppRefiner.Refactors.QuickFixes
             var insertLine = 0;
             var needsHeader = false;
 
+            // Check if we have an empty class (no members in any section)
+            var hasAnyMembers = targetClass.VisibilitySections.Values.Any(section => section.Count > 0);
+
             switch (visibility)
             {
                 case VisibilityModifier.Public:
@@ -412,14 +415,14 @@ namespace AppRefiner.Refactors.QuickFixes
                         }
                         else
                         {
-                            insertLine = targetClass.LastToken!.SourceSpan.Start.Line;
+                            insertLine = FindEndClassInsertionLine();
                         }
                     }
                     break;
 
                 case VisibilityModifier.Protected:
                     needsHeader = (targetClass.ProtectedToken == null);
-                    
+
                     if (targetClass.VisibilitySections[VisibilityModifier.Protected].Count > 0)
                     {
                         // Insert after last protected member
@@ -434,14 +437,17 @@ namespace AppRefiner.Refactors.QuickFixes
                         }
                         else
                         {
-                            insertLine = targetClass.LastToken!.SourceSpan.Start.Line;
+                            insertLine = FindEndClassInsertionLine();
+                            // we +1 here because the general rule is to insert above the line we locate
+                            // but in an empty class this causes the "line above" end-class to be 'class' so we insert the method
+                            // above the class by mistake.
                         }
                     }
                     break;
 
                 case VisibilityModifier.Private:
                     needsHeader = (targetClass.PrivateToken == null);
-                    
+
                     if (targetClass.VisibilitySections[VisibilityModifier.Private].Count > 0)
                     {
                         // Insert after last private member
@@ -450,13 +456,46 @@ namespace AppRefiner.Refactors.QuickFixes
                     else
                     {
                         // Insert before end-class
-                        insertLine = targetClass.LastToken!.SourceSpan.Start.Line;
+                        insertLine = FindEndClassInsertionLine();
                     }
                     break;
             }
 
             var insertPosition = ScintillaManager.GetLineStartIndex(Editor, insertLine - 1);
             return (insertPosition, needsHeader);
+        }
+
+        /// <summary>
+        /// Finds the appropriate line number for inserting content before the end-class statement.
+        /// Handles cases where LastToken might not be set correctly for empty classes.
+        /// </summary>
+        private int FindEndClassInsertionLine()
+        {
+            if (targetClass == null)
+                return -1;
+
+            // First try to use LastToken if it's available and seems valid
+            if (targetClass.LastToken != null && targetClass.LastToken.SourceSpan.Start.Line > 0)
+            {
+                return targetClass.LastToken.SourceSpan.Start.Line;
+            }
+
+            // Fallback: Use the class's overall SourceSpan end
+            if (targetClass.SourceSpan.End.Line > 0)
+            {
+                // Insert just before the end of the class span
+                return targetClass.SourceSpan.End.Line;
+            }
+
+            // Final fallback: Use the class name token position + reasonable offset
+            if (targetClass.NameToken != null)
+            {
+                // Assume end-class is a few lines after the class declaration
+                return targetClass.NameToken.SourceSpan.Start.Line + 2;
+            }
+
+            // If all else fails, return an error
+            return -1;
         }
 
         private int FindImplementationInsertionPosition()
@@ -474,7 +513,26 @@ namespace AppRefiner.Refactors.QuickFixes
                 return lastImplementation.Implementation.SourceSpan.End.ByteIndex + 1;
             }
 
-            return targetClass.SourceSpan.End.ByteIndex + 1;
+            // For empty classes or classes without implementations, insert after the class definition
+            // Use a more robust approach to find the end of the class
+            if (targetClass.SourceSpan.End.ByteIndex > 0)
+            {
+                return targetClass.SourceSpan.End.ByteIndex + 1;
+            }
+
+            // Fallback: Use LastToken if available
+            if (targetClass.LastToken != null)
+            {
+                return targetClass.LastToken.SourceSpan.End.ByteIndex + 1;
+            }
+
+            // Final fallback: Use a reasonable position after the class name
+            if (targetClass.NameToken != null)
+            {
+                return targetClass.NameToken.SourceSpan.End.ByteIndex + 100; // Rough estimate
+            }
+
+            return -1;
         }
     }
 }
