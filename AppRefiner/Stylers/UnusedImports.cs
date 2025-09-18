@@ -44,6 +44,20 @@ namespace AppRefiner.Stylers
             }
         }
 
+        public override void VisitAppClass(AppClassNode node)
+        {
+            base.VisitAppClass(node);
+
+            if (node.BaseClass != null && node.BaseClass is AppClassTypeNode baseType)
+            {
+                MarkAppClassTypeAsUsed(baseType);
+            }
+            if (node.ImplementedInterface != null && node.ImplementedInterface is AppClassTypeNode intfType)
+            {
+                MarkAppClassTypeAsUsed(intfType);
+            }
+        }
+
         public override void VisitImport(ImportNode node)
         {
             var packageKey = node.FullPath.Replace(":*", "");
@@ -73,6 +87,10 @@ namespace AppRefiner.Stylers
             {
                 MarkAppClassTypeAsUsed(appClassType);
             }
+            else if (node.Type is ArrayTypeNode arrayTypeNode && arrayTypeNode.ElementType is AppClassTypeNode arrayClassType)
+            {
+                MarkAppClassTypeAsUsed(arrayClassType);
+            }
             base.VisitLocalVariableDeclaration(node);
         }
 
@@ -81,6 +99,10 @@ namespace AppRefiner.Stylers
             if (node.Type is AppClassTypeNode appClassType)
             {
                 MarkAppClassTypeAsUsed(appClassType);
+            }
+            else if (node.Type is ArrayTypeNode arrayTypeNode && arrayTypeNode.ElementType is AppClassTypeNode arrayClassType)
+            {
+                MarkAppClassTypeAsUsed(arrayClassType);
             }
             base.VisitLocalVariableDeclarationWithAssignment(node);
         }
@@ -91,6 +113,10 @@ namespace AppRefiner.Stylers
             {
                 MarkAppClassTypeAsUsed(appClassType);
             }
+            else if (node.TargetType is ArrayTypeNode arrayTypeNode && arrayTypeNode.ElementType is AppClassTypeNode arrayClassType)
+            {
+                MarkAppClassTypeAsUsed(arrayClassType);
+            }
             base.VisitTypeCast(node);
         }
 
@@ -100,7 +126,12 @@ namespace AppRefiner.Stylers
             {
                 MarkAppClassTypeAsUsed(appClassType);
             }
+            else if (node.Type is ArrayTypeNode arrayTypeNode && arrayTypeNode.ElementType is AppClassTypeNode arrayClassType)
+            {
+                MarkAppClassTypeAsUsed(arrayClassType);
+            }
             base.VisitVariable(node);
         }
+
     }
 }
