@@ -152,14 +152,14 @@ namespace AppRefiner.Refactors
                 return RefactorResult.Failed(failureMessage ?? "Unknown error");
             }
 
-            if (edits.Count == 0)
-            {
-                return RefactorResult.Failed("No changes to apply");
-            }
-
+            // Success is determined by explicit failure, not edit count
+            // Zero edits is a valid successful outcome (e.g., already in desired state)
             try
             {
-                ApplyEdits();
+                if (edits.Count > 0)
+                {
+                    ApplyEdits();
+                }
                 return RefactorResult.Successful;
             }
             catch (Exception ex)
@@ -177,13 +177,9 @@ namespace AppRefiner.Refactors
             {
                 return RefactorResult.Failed(failureMessage ?? "Unknown error");
             }
-            if (!DeferDialogUntilAfterVisitor)
-            {
-                return edits.Count > 0 ? RefactorResult.Successful : RefactorResult.Failed("No changes to apply");
-            }
 
-            // Always successful for deferred dialogs. they will report errors after the dialog runs
-            // this is because some refactors require input from the user before they can generate the changes (like renaming variables).
+            // Success is determined by explicit failure, not edit count
+            // Zero edits is a valid successful outcome (e.g., already in desired state)
             return RefactorResult.Successful;
         }
 

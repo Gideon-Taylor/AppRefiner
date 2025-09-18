@@ -357,16 +357,14 @@ namespace AppRefiner.Refactors
 
                 if (!refactorResult.Success)
                 {
-                    Debug.Log("Refactoring produced no changes.");
-                    // Optionally show an error, but maybe success was just no change needed
-                    if (!string.IsNullOrEmpty(refactorResult.Message) && showUserMessages)
+                    Debug.Log($"Refactoring failed: {refactorResult.Message}");
+                    if (showUserMessages)
                     {
-                        // Show success message if provided
                         Task.Delay(100).ContinueWith(_ =>
                         {
                             var mainHandle = activeEditor.AppDesignerProcess.MainWindowHandle;
                             var handleWrapper = new WindowWrapper(mainHandle);
-                            new MessageBoxDialog(refactorResult.Message, "Refactoring Note", MessageBoxButtons.OK, mainHandle).ShowDialog(handleWrapper);
+                            new MessageBoxDialog(refactorResult.Message ?? "Refactoring failed", "Refactoring Failed", MessageBoxButtons.OK, mainHandle).ShowDialog(handleWrapper);
                         });
                     }
                     return;

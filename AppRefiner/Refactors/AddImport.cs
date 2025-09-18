@@ -80,7 +80,7 @@ namespace AppRefiner.Refactors
             // Check if the class path is already covered by existing imports
             if (IsCovered(_appClassPathToAdd, _existingImportPaths))
             {
-                // No changes needed
+                // Import is already covered - refactor completes successfully with no changes needed
                 return;
             }
 
