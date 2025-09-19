@@ -118,6 +118,15 @@ namespace AppRefiner
         private IntPtr pendingFocusHwnd = IntPtr.Zero;
         private const int FOCUS_DEBOUNCE_MS = 150;
 
+        // Fields for Application Designer validation retry mechanism
+        private readonly object validationRetryLock = new();
+        private readonly Dictionary<uint, System.Threading.Timer> validationRetryTimers = new();
+        private readonly Dictionary<uint, int> validationRetryAttempts = new();
+        private readonly Dictionary<uint, IntPtr> validationRetryHandles = new();
+        private const int VALIDATION_RETRY_BASE_DELAY_MS = 250; // Start with 250ms
+        private const int VALIDATION_RETRY_MAX_ATTEMPTS = 10; // Try up to 10 times
+        private const int VALIDATION_RETRY_MAX_DELAY_MS = 3000; // Cap at 2 seconds
+
         // Add instance of the new TemplateManager
         private TemplateManager templateManager = new();
 
@@ -596,6 +605,18 @@ namespace AppRefiner
             // Dispose the focus debounce timer if it exists
             focusDebounceTimer?.Dispose();
             focusDebounceTimer = null;
+
+            // Clean up all validation retry timers
+            lock (validationRetryLock)
+            {
+                foreach (var timer in validationRetryTimers.Values)
+                {
+                    timer.Dispose();
+                }
+                validationRetryTimers.Clear();
+                validationRetryAttempts.Clear();
+                validationRetryHandles.Clear();
+            }
 
             // Dispose the Stack Trace Navigator dialog if it exists
             if (stackTraceNavigatorDialog != null && !stackTraceNavigatorDialog.IsDisposed)
@@ -2691,7 +2712,8 @@ namespace AppRefiner
             NativeMethods.GetWindowThreadProcessId(hwnd, out var focusedProcessId);
             try
             {
-                if ("pside".Equals(Process.GetProcessById((int)focusedProcessId).ProcessName, StringComparison.OrdinalIgnoreCase))
+                var process = Process.GetProcessById((int)processId);
+                if ("pside".Equals(process.ProcessName, StringComparison.OrdinalIgnoreCase))
                 {
                     // Update activeAppDesigner to the process that owns this focused window
                     if (AppDesignerProcesses.TryGetValue(focusedProcessId, out var appDesignerProcess))
@@ -2706,6 +2728,9 @@ namespace AppRefiner
                     {
                         // Process not yet tracked, this shouldn't happen often as creation events should handle this
                         Debug.Log($"Focus detected on untracked pside.exe process ID: {focusedProcessId}");
+
+                        // Check if it's a pside.exe process
+                        ValidateAndCreateAppDesignerProcess(focusedProcessId, process.MainWindowHandle);
                     }
                 }
             }
@@ -2825,11 +2850,55 @@ namespace AppRefiner
 
         /// <summary>
         /// Validates if a pside.exe process is an Application Designer and creates the AppDesignerProcess if successful.
+        /// This method includes retry logic for when the Results tab is not immediately available.
         /// </summary>
         /// <param name="processId">The pside.exe process ID</param>
         /// <param name="triggerWindowHandle">The window handle that triggered the validation</param>
         /// <returns>True if validation succeeded and AppDesignerProcess was created</returns>
         private bool ValidateAndCreateAppDesignerProcess(uint processId, IntPtr triggerWindowHandle)
+        {
+            // Clean up any existing retry for this process first
+            CleanupValidationRetry(processId);
+
+            // Try immediate validation
+            bool success = ValidateAndCreateAppDesignerProcessInternal(processId, triggerWindowHandle, 0);
+
+            if (!success)
+            {
+                // If immediate validation failed, it might be due to Results tab not being ready yet
+                // Check if we should schedule a retry (only if the process exists and appears to be App Designer)
+                try
+                {
+                    var process = Process.GetProcessById((int)processId);
+                    if (process?.MainWindowHandle != IntPtr.Zero)
+                    {
+                        var caption = WindowHelper.GetWindowText(process.MainWindowHandle);
+                        if (caption.StartsWith("Application Designer", StringComparison.OrdinalIgnoreCase))
+                        {
+                            Debug.Log($"Initial validation failed for process {processId}, scheduling retry");
+                            ScheduleValidationRetry(processId, triggerWindowHandle, 1);
+                            // Return true to indicate we're handling this process (even though async)
+                            return true;
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Debug.Log($"Exception checking process for retry eligibility {processId}: {ex.Message}");
+                }
+            }
+
+            return success;
+        }
+
+        /// <summary>
+        /// Internal method that performs the actual Application Designer validation without retry logic.
+        /// </summary>
+        /// <param name="processId">The pside.exe process ID</param>
+        /// <param name="triggerWindowHandle">The window handle that triggered the validation</param>
+        /// <param name="attemptNumber">The attempt number (0 for initial, 1+ for retries)</param>
+        /// <returns>True if validation succeeded and AppDesignerProcess was created</returns>
+        private bool ValidateAndCreateAppDesignerProcessInternal(uint processId, IntPtr triggerWindowHandle, int attemptNumber)
         {
             try
             {
@@ -2850,7 +2919,15 @@ namespace AppRefiner
                 var resultsListView = ResultsListHelper.FindResultsListView(processId);
                 if (resultsListView == IntPtr.Zero)
                 {
+                    Debug.Log($"Results tab not found for process {processId} (attempt {attemptNumber})");
                     return false;
+                }
+
+                // Check if we already have this process tracked (could happen with retries)
+                if (AppDesignerProcesses.ContainsKey(processId))
+                {
+                    Debug.Log($"Process {processId} already tracked, skipping duplicate validation");
+                    return true;
                 }
 
                 // All validations passed - create and track the AppDesignerProcess
@@ -2861,7 +2938,7 @@ namespace AppRefiner
                 // Add delayed "AppRefiner Connected!" message to Results ListView
                 _ = ResultsListHelper.AddDelayedMessageToResultsList(newProcess, resultsListView, "AppRefiner Connected!", 2000);
 
-                Debug.Log($"Successfully created AppDesignerProcess for process {processId} with Results ListView");
+                Debug.Log($"Successfully created AppDesignerProcess for process {processId} with Results ListView (attempt {attemptNumber})");
 
                 /* Set the DB name */
 
@@ -2888,9 +2965,118 @@ namespace AppRefiner
 
             catch (Exception ex)
             {
-                Debug.Log($"Exception in ValidateAndCreateAppDesignerProcess for process {processId}: {ex.Message}");
+                Debug.Log($"Exception in ValidateAndCreateAppDesignerProcessInternal for process {processId} (attempt {attemptNumber}): {ex.Message}");
                 return false;
             }
+        }
+
+        /// <summary>
+        /// Schedules a retry attempt for Application Designer validation after a delay.
+        /// </summary>
+        /// <param name="processId">The process ID to retry validation for</param>
+        /// <param name="hwnd">The window handle associated with the process</param>
+        /// <param name="attemptNumber">Current attempt number (1-based)</param>
+        private void ScheduleValidationRetry(uint processId, IntPtr hwnd, int attemptNumber)
+        {
+            lock (validationRetryLock)
+            {
+                // Clean up any existing timer for this process
+                CleanupValidationRetryLocked(processId);
+
+                // Store the attempt count and window handle
+                validationRetryAttempts[processId] = attemptNumber;
+                validationRetryHandles[processId] = hwnd;
+
+                // Calculate delay with exponential backoff, capped at max delay
+                int delay = Math.Min(VALIDATION_RETRY_BASE_DELAY_MS * (1 << (attemptNumber - 1)), VALIDATION_RETRY_MAX_DELAY_MS);
+
+                Debug.Log($"Scheduling validation retry #{attemptNumber} for process {processId} in {delay}ms");
+
+                // Create and start the retry timer
+                var timer = new System.Threading.Timer(RetryValidation, processId, delay, Timeout.Infinite);
+                validationRetryTimers[processId] = timer;
+            }
+        }
+
+        /// <summary>
+        /// Timer callback that retries Application Designer validation.
+        /// </summary>
+        /// <param name="state">The process ID (as uint) to retry validation for</param>
+        private void RetryValidation(object? state)
+        {
+            if (state is not uint processId)
+                return;
+
+            IntPtr hwnd;
+            int attemptNumber;
+
+            // Get the retry context under lock
+            lock (validationRetryLock)
+            {
+                if (!validationRetryAttempts.TryGetValue(processId, out attemptNumber) ||
+                    !validationRetryHandles.TryGetValue(processId, out hwnd))
+                {
+                    Debug.Log($"Retry validation called for process {processId} but no retry context found");
+                    return;
+                }
+            }
+
+            Debug.Log($"Retrying validation attempt #{attemptNumber} for process {processId}");
+
+            try
+            {
+                // Try validation again
+                if (ValidateAndCreateAppDesignerProcessInternal(processId, hwnd, attemptNumber))
+                {
+                    Debug.Log($"Validation retry #{attemptNumber} succeeded for process {processId}");
+                    CleanupValidationRetry(processId);
+                }
+                else
+                {
+                    // Check if we should retry again
+                    if (attemptNumber < VALIDATION_RETRY_MAX_ATTEMPTS)
+                    {
+                        ScheduleValidationRetry(processId, hwnd, attemptNumber + 1);
+                    }
+                    else
+                    {
+                        Debug.Log($"Validation failed after {VALIDATION_RETRY_MAX_ATTEMPTS} attempts for process {processId}");
+                        CleanupValidationRetry(processId);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.Log($"Exception during validation retry for process {processId}: {ex.Message}");
+                CleanupValidationRetry(processId);
+            }
+        }
+
+        /// <summary>
+        /// Cleans up retry tracking for a specific process ID.
+        /// </summary>
+        /// <param name="processId">The process ID to clean up</param>
+        private void CleanupValidationRetry(uint processId)
+        {
+            lock (validationRetryLock)
+            {
+                CleanupValidationRetryLocked(processId);
+            }
+        }
+
+        /// <summary>
+        /// Internal cleanup method that must be called under validationRetryLock.
+        /// </summary>
+        /// <param name="processId">The process ID to clean up</param>
+        private void CleanupValidationRetryLocked(uint processId)
+        {
+            if (validationRetryTimers.TryGetValue(processId, out var timer))
+            {
+                timer.Dispose();
+                validationRetryTimers.Remove(processId);
+            }
+            validationRetryAttempts.Remove(processId);
+            validationRetryHandles.Remove(processId);
         }
 
         // Add this new CellPainting event handler method
