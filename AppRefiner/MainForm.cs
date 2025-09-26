@@ -2142,8 +2142,8 @@ namespace AppRefiner
                 return;
             }
 
-            // Check if editor is not empty and warn user
-            if (!string.IsNullOrWhiteSpace(ScintillaManager.GetScintillaText(activeEditor)))
+            // Check for replacement warning only if it's not insert mode
+            if (!templateDialog.SelectedTemplate.IsInsertMode && !string.IsNullOrWhiteSpace(ScintillaManager.GetScintillaText(activeEditor)))
             {
                 using var confirmDialog = new TemplateConfirmationDialog(
                     "Applying a template will replace all content in the current editor. Do you want to continue?",
