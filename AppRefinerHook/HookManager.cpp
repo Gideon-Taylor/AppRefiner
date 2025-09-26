@@ -130,24 +130,37 @@ void HandleScintillaNotification(HWND hwnd, SCNotification* scn, HWND callbackWi
             if (scn->ch == ':' && callbackWindow && IsWindow(callbackWindow)) {
                 // Get the current position
                 int currentPos = SendMessage(hwnd, SCI_GETCURRENTPOS, 0, 0);
-                
+
                 // Debug: Get autocompletion settings
                 bool autoHide = SendMessage(hwnd, SCI_AUTOCGETAUTOHIDE, 0, 0) != 0;
                 int separator = SendMessage(hwnd, SCI_AUTOCGETSEPARATOR, 0, 0);
                 char debugMsg[256];
-                sprintf_s(debugMsg, "Autocompletion settings - AutoHide: %s, Separator: '%c' (%d)\n", 
+                sprintf_s(debugMsg, "Autocompletion settings - AutoHide: %s, Separator: '%c' (%d)\n",
                           autoHide ? "true" : "false", (char)separator, separator);
                 OutputDebugStringA(debugMsg);
-                
+
                 // Send the app package suggest message with current position as wParam
                 SendMessage(callbackWindow, WM_AR_APP_PACKAGE_SUGGEST, (WPARAM)currentPos, 0);
+            }
+
+            // Check for ampersand character to trigger variable auto-suggest
+            if (scn->ch == '&' && callbackWindow && IsWindow(callbackWindow)) {
+                // Get the current position
+                int currentPos = SendMessage(hwnd, SCI_GETCURRENTPOS, 0, 0);
+
+                char debugMsg[256];
+                sprintf_s(debugMsg, "Ampersand character detected, triggering variable suggestions at position %d\n", currentPos);
+                OutputDebugStringA(debugMsg);
+
+                // Send the variable suggest message with current position as wParam
+                SendMessage(callbackWindow, WM_AR_VARIABLE_SUGGEST, (WPARAM)currentPos, 0);
             }
             
             // Verify the window is still valid before proceeding
             if (IsWindow(hwnd)) {
                 // Handle auto-pairing first
                 HandleAutoPairing(hwnd, scn);
-                
+
                 // Verify window is still valid
                 if (IsWindow(hwnd)) {
                     // Then handle auto-indentation

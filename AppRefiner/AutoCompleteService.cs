@@ -1,8 +1,102 @@
 using AppRefiner.Refactors; // For ScopedRefactor, AddImport, CreateAutoComplete
 using System.Runtime.InteropServices; // For DllImport
+using PeopleCodeParser.SelfHosted;
+using PeopleCodeParser.SelfHosted.Visitors.Models;
+using PeopleCodeParser.SelfHosted.Visitors;
+using PeopleCodeParser.SelfHosted.Nodes;
+using PeopleCodeParser.SelfHosted.Lexing;
 
 namespace AppRefiner
 {
+    /// <summary>
+    /// Internal variable collector for auto-completion suggestions
+    /// </summary>
+    internal class VariableCollector : ScopedAstVisitor<object>
+    {
+        private readonly int targetPosition;
+        private ScopeContext? targetScope;
+        private List<VariableInfo> accessibleVariables = new();
+        private bool targetIsInString = false;
+        public VariableCollector(int position)
+        {
+            targetPosition = position;
+        }
+
+        public List<VariableInfo> GetAccessibleVariables() => accessibleVariables;
+
+        public override void VisitLiteral(LiteralNode node)
+        {
+            base.VisitLiteral(node);
+            if (!targetIsInString && node.LiteralType == LiteralType.String)
+            {
+                targetIsInString = (node.SourceSpan.ContainsPosition(targetPosition));
+            }
+            
+        }
+
+        public override void VisitProgram(ProgramNode node)
+        {
+            base.VisitProgram(node);
+
+            if (targetIsInString)
+            {
+                accessibleVariables.Clear();
+            }
+            else
+            {
+                accessibleVariables = accessibleVariables.Where(v => v.DeclarationNode.SourceSpan.Start.ByteIndex < targetPosition).ToList();
+            }
+
+        }
+        protected override void OnExitFunctionScope(ScopeContext scope, FunctionNode node, Dictionary<string, object> customData)
+        {
+            base.OnExitFunctionScope(scope, node, customData);
+
+            if (node.Body != null && node.Body.SourceSpan.ContainsPosition(targetPosition))
+            {
+                accessibleVariables = GetAccessibleVariables(scope).ToList();
+            }
+
+        }
+        protected override void OnExitMethodScope(ScopeContext scope, MethodNode node, Dictionary<string, object> customData)
+        {
+            base.OnExitMethodScope(scope, node, customData);
+
+            if (node.Body != null && node.Body.SourceSpan.ContainsPosition(targetPosition))
+            {
+                accessibleVariables = GetAccessibleVariables(scope).ToList();
+            }
+        }
+
+        protected override void OnExitPropertyGetterScope(ScopeContext scope, PropertyNode node, Dictionary<string, object> customData)
+        {
+            base.OnExitPropertyGetterScope(scope, node, customData);
+            if (node.GetterBody != null && node.GetterBody.SourceSpan.ContainsPosition(targetPosition))
+            {
+                accessibleVariables = GetAccessibleVariables(scope).ToList();
+            }
+        }
+
+        protected override void OnExitPropertySetterScope(ScopeContext scope, PropertyNode node, Dictionary<string, object> customData)
+        {
+            base.OnExitPropertySetterScope(scope, node, customData);
+            if (node.SetterBody != null && node.SetterBody.SourceSpan.ContainsPosition(targetPosition))
+            {
+                accessibleVariables = GetAccessibleVariables(scope).ToList();
+            }
+        }
+
+        protected override void OnExitGlobalScope(ScopeContext scope, ProgramNode node, Dictionary<string, object> customData)
+        {
+            base.OnExitGlobalScope(scope, node, customData);
+            if (accessibleVariables.Count == 0)
+            {
+                accessibleVariables = GetAccessibleVariables(scope).ToList();
+            }
+        }
+
+    }
+
     /// <summary>
     /// Provides services for handling code auto-completion features.
     /// </summary>
@@ -11,12 +105,15 @@ namespace AppRefiner
         public enum UserListType
         {
             AppPackage = 1,
-            QuickFix = 2
+            QuickFix = 2,
+            Variable = 3
         }
 
         // Constants related to Scintilla messages (can be kept private if only used here)
         private const int SCI_LINEFROMPOSITION = 2166;
         private const int SCI_POSITIONFROMLINE = 2167;
+        private const int SCI_GETCURRENTPOS = 2008;
+        private const int SCI_SETSEL = 2160;
         private const int AR_APP_PACKAGE_SUGGEST = 2500; // Keep for recursive call
 
         [DllImport("user32.dll", CharSet = CharSet.Auto)]
@@ -115,6 +212,110 @@ namespace AppRefiner
             catch (Exception ex)
             {
                 Debug.LogException(ex, "Error getting app package suggestions");
+            }
+        }
+
+        /// <summary>
+        /// Shows variable suggestions based on the current scope at the cursor position.
+        /// </summary>
+        /// <param name="editor">The current Scintilla editor.</param>
+        /// <param name="position">Current cursor position.</param>
+        public void ShowVariableSuggestions(ScintillaEditor? editor, int position)
+        {
+            if (editor == null || !editor.IsValid()) return;
+
+            try
+            {
+                // Get the current document text
+                string content = ScintillaManager.GetScintillaText(editor) ?? "";
+                if (string.IsNullOrEmpty(content))
+                {
+                    Debug.Log("No content available for variable suggestions.");
+                    return;
+                }
+
+                // Parse the current document to get AST
+                var lexer = new PeopleCodeLexer(content);
+                var tokens = lexer.TokenizeAll();
+                var parser = new PeopleCodeParser.SelfHosted.PeopleCodeParser(tokens);
+                var program = parser.ParseProgram();
+
+                if (program == null)
+                {
+                    Debug.Log("Failed to parse document for variable suggestions.");
+                    return;
+                }
+
+                // Use the variable collector to get accessible variables at the current position
+                var collector = new VariableCollector(position);
+                collector.VisitProgram(program);
+
+                var accessibleVariables = collector.GetAccessibleVariables();
+
+                // Convert to list of strings for autocomplete, filtering out duplicates by name
+                List<string> suggestions = new();
+                var variableGroups = accessibleVariables
+                    .GroupBy(v => v.Name)
+                    .Select(g => g.First()) // Take first occurrence of each variable name
+                    .OrderBy(v => v.Name);
+
+                foreach (var variable in variableGroups)
+                {
+                    // Format variable with its type and kind for better context
+                    string suggestion = FormatVariableSuggestion(variable);
+                    suggestions.Add(suggestion);
+                }
+
+                if (suggestions.Count > 0)
+                {
+                    Debug.Log($"Showing {suggestions.Count} variable suggestions at position {position}");
+                    bool result = ScintillaManager.ShowUserList(editor, UserListType.Variable, position, suggestions);
+
+                    if (!result)
+                    {
+                        Debug.Log("Failed to show user list popup for variables.");
+                    }
+                }
+                else
+                {
+                    Debug.Log("No variables found in current scope.");
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.LogException(ex, "Error getting variable suggestions");
+            }
+        }
+
+        /// <summary>
+        /// Formats a variable for display in the suggestion list
+        /// </summary>
+        private string FormatVariableSuggestion(VariableInfo variable)
+        {
+            string kindText = variable.Kind switch
+            {
+                VariableKind.Local => "Local",
+                VariableKind.Parameter => "Parameter",
+                VariableKind.Instance => "Instance",
+                VariableKind.Global => "Global",
+                VariableKind.Component => "Component",
+                VariableKind.Property => "Property",
+                VariableKind.Exception => "Exception",
+                VariableKind.Constant => "Constant",
+                _ => "Variable"
+            };
+
+            // Remove the & prefix from variable name for display since it's already in the document
+            string displayName = variable.Name.StartsWith("&") ? variable.Name.Substring(1) : variable.Name;
+
+            // Include type information if available
+            if (!string.IsNullOrEmpty(variable.Type) && variable.Type != "any")
+            {
+                return $"{displayName} ({variable.Type} {kindText})";
+            }
+            else
+            {
+                return $"{displayName} ({kindText})";
             }
         }
 
@@ -296,6 +497,83 @@ namespace AppRefiner
             return null;
         }
 
+        private BaseRefactor? HandleVariableListSelection(ScintillaEditor editor, string selection)
+        {
+            // Extract the variable name and kind from the formatted selection
+            // Format is: "variableName (Type Kind)" or "variableName (Kind)"
+            string variableName = selection;
+            bool isProperty = false;
+
+            var openParenIndex = selection.IndexOf(" (");
+            if (openParenIndex > 0)
+            {
+                variableName = selection.Substring(0, openParenIndex);
+
+                // Extract the kind information to determine if it's a property
+                string kindInfo = selection.Substring(openParenIndex + 2); // Skip " ("
+                var closeParenIndex = kindInfo.LastIndexOf(')');
+                if (closeParenIndex > 0)
+                {
+                    kindInfo = kindInfo.Substring(0, closeParenIndex);
+                    // Check if the kind contains "Property"
+                    isProperty = kindInfo.Contains("Property");
+                }
+            }
+
+            // Determine the appropriate prefix based on variable kind
+            string prefix = isProperty ? "%This." : "&";
+            string fullVariableName = prefix + variableName;
+
+            Debug.Log($"Variable selected: {variableName} from formatted text: {selection}, isProperty: {isProperty}, using prefix: {prefix}");
+
+            // Replace the partial variable reference with the complete variable name
+            try
+            {
+                // Get current cursor position
+                int currentPos = (int)editor.SendMessage(SCI_GETCURRENTPOS, 0, 0);
+
+                // Find the start of the variable reference by looking backwards for the & character
+                string content = ScintillaManager.GetScintillaText(editor) ?? "";
+
+                int ampersandPos = -1;
+                for (int i = currentPos - 1; i >= 0; i--)
+                {
+                    if (i < content.Length && content[i] == '&')
+                    {
+                        ampersandPos = i;
+                        break;
+                    }
+                    // Stop if we hit whitespace or other non-identifier characters
+                    if (i < content.Length && !char.IsLetterOrDigit(content[i]) && content[i] != '_')
+                    {
+                        break;
+                    }
+                }
+
+                if (ampersandPos >= 0)
+                {
+                    // Replace from & position to current position with the full variable name
+                    editor.SendMessage(SCI_SETSEL, ampersandPos, currentPos);
+                    ScintillaManager.InsertTextAtCursor(editor, fullVariableName);
+                    Debug.Log($"Replaced text from position {ampersandPos} to {currentPos} with {fullVariableName}");
+                }
+                else
+                {
+                    // Fallback: just insert the full variable name
+                    ScintillaManager.InsertTextAtCursor(editor, fullVariableName);
+                    Debug.Log($"Could not find & start position, inserted {fullVariableName} at cursor");
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.LogException(ex, "Error handling variable selection");
+                // Fallback to simple insertion
+                ScintillaManager.InsertTextAtCursor(editor, fullVariableName);
+            }
+
+            return null; // No refactoring needed for variable insertion
+        }
+
         /// <summary>
         /// Handles the selection made by the user from an autocomplete list.
         /// </summary>
@@ -314,6 +592,8 @@ namespace AppRefiner
                 case UserListType.QuickFix:
                     // Handle quick fix selection here if needed
                     return HandleQuickFixSelection(editor, selection);
+                case UserListType.Variable:
+                    return HandleVariableListSelection(editor, selection);
                 default:
                     Debug.Log($"Unknown list type: {listType}");
                     return null;

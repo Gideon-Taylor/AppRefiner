@@ -87,6 +87,7 @@ namespace AppRefiner
         private const int AR_TEXT_PASTED = 2506; // New constant for text pasted detection
         private const int AR_KEY_COMBINATION = 2507; // New constant for key combination detection
         private const int AR_MSGBOX_SHORTHAND = 2508;
+        private const int AR_VARIABLE_SUGGEST = 2509; // New constant for variable auto suggest when & is typed
         private const int AR_SUBCLASS_RESULTS_LIST = 1007; // Message to subclass Results list view
         private const int AR_SET_OPEN_TARGET = 1008; // Message to set open target for Results list interception
         private const int SCN_USERLISTSELECTION = 2014; // User list selection notification
@@ -1885,6 +1886,20 @@ namespace AppRefiner
 
                 // Call the AutoCompleteService
                 autoCompleteService.ShowAppPackageSuggestions(activeEditor, position);
+            }
+            else if (m.Msg == AR_VARIABLE_SUGGEST)
+            {
+                // Only process if we have an active editor and service
+                if (activeEditor == null || !activeEditor.IsValid() || autoCompleteService == null) return;
+
+                /* Handle variable suggestion request */
+                Debug.Log($"Received variable suggest message. WParam: {m.WParam}, LParam: {m.LParam}");
+
+                // WParam contains the current cursor position
+                int position = m.WParam.ToInt32();
+
+                // Call the AutoCompleteService
+                autoCompleteService.ShowVariableSuggestions(activeEditor, position);
             }
             else if (m.Msg == AR_CREATE_SHORTHAND)
             {
