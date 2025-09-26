@@ -118,7 +118,7 @@ namespace AppRefiner
             }
 
             /* This subclasses the parent window for scintilla notifications *and* the scintilla editor itself */
-            EventHookInstaller.SubclassScintillaParentWindow(threadId, WindowHelper.GetParentWindow(hWnd), CallbackWindow, MainWindowHandle, true);
+            EventHookInstaller.SubclassScintillaParentWindow(threadId, WindowHelper.GetParentWindow(hWnd), CallbackWindow, MainWindowHandle, Settings.AutoPair);
 
 
             ScintillaManager.SetMouseDwellTime(editor, 1000);
