@@ -195,6 +195,23 @@ namespace AppRefiner
                 int processedCount = 0;
                 int functionCount = 0;
 
+                // Delete definitions for this DB
+                try
+                {
+                    using var connection = new SqliteConnection(_connectionString);
+                    connection.Open();
+                    using var deleteCommand = connection.CreateCommand();
+                    deleteCommand.CommandText = @"
+                        DELETE FROM FunctionCache 
+                        WHERE DBName = @DBName
+                    ";
+
+                    deleteCommand.Parameters.AddWithValue("@DBName", appDesignerProcess.DBName);
+                    
+                    deleteCommand.ExecuteNonQuery();
+                }
+                catch { }
+
                 foreach (var program in programs)
                 {
                     try
@@ -329,7 +346,7 @@ namespace AppRefiner
                         Debugger.Break();
                     }
 
-                    foreach (var function in program.Functions)
+                    foreach (var function in program.Functions.Where(f => f.IsImplementation))
                     {
                         var returnTypeString = function.ReturnType?.TypeName ?? "";
                         var newFunc = new FunctionCacheItem
@@ -367,62 +384,25 @@ namespace AppRefiner
             {
                 using var connection = new SqliteConnection(_connectionString);
                 connection.Open();
-
-                // Check if function already exists
-                using var checkCommand = connection.CreateCommand();
-                checkCommand.CommandText = @"
-                    SELECT COUNT(*) FROM FunctionCache 
-                    WHERE DBName = @DBName AND FunctionPath = @FunctionPath AND FunctionName = @FunctionName
+                
+                // Insert new function
+                using var insertCommand = connection.CreateCommand();
+                insertCommand.CommandText = @"
+                    INSERT INTO FunctionCache (DBName, FunctionName, FunctionPath, ParameterNames, ParameterTypes, ReturnType, CreatedAt, UpdatedAt)
+                    VALUES (@DBName, @FunctionName, @FunctionPath, @ParameterNames, @ParameterTypes, @ReturnType, @CreatedAt, @UpdatedAt)
                 ";
-                checkCommand.Parameters.AddWithValue("@DBName", function.DBName);
-                checkCommand.Parameters.AddWithValue("@FunctionPath", function.FunctionPath);
-                checkCommand.Parameters.AddWithValue("@FunctionName", function.FunctionName);
 
-                int existingCount = Convert.ToInt32(checkCommand.ExecuteScalar());
-                if (existingCount > 0)
-                {
-                    // Update existing function
-                    using var updateCommand = connection.CreateCommand();
-                    updateCommand.CommandText = @"
-                        UPDATE FunctionCache 
-                        SET FunctionName = @FunctionName,
-                            ParameterNames = @ParameterNames,
-                            ParameterTypes = @ParameterTypes,
-                            ReturnType = @ReturnType,
-                            UpdatedAt = @UpdatedAt
-                        WHERE DBName = @DBName AND FunctionPath = @FunctionPath AND FunctionName = @FunctionName
-                    ";
-                    
-                    updateCommand.Parameters.AddWithValue("@DBName", function.DBName);
-                    updateCommand.Parameters.AddWithValue("@FunctionPath", function.FunctionPath);
-                    updateCommand.Parameters.AddWithValue("@FunctionName", function.FunctionName);
-                    updateCommand.Parameters.AddWithValue("@ParameterNames", SerializeStringList(function.ParameterNames));
-                    updateCommand.Parameters.AddWithValue("@ParameterTypes", SerializeStringList(function.ParameterTypes));
-                    updateCommand.Parameters.AddWithValue("@ReturnType", function.ReturnType as object ?? DBNull.Value);
-                    updateCommand.Parameters.AddWithValue("@UpdatedAt", DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"));
+                insertCommand.Parameters.AddWithValue("@DBName", function.DBName);
+                insertCommand.Parameters.AddWithValue("@FunctionName", function.FunctionName);
+                insertCommand.Parameters.AddWithValue("@FunctionPath", function.FunctionPath);
+                insertCommand.Parameters.AddWithValue("@ParameterNames", SerializeStringList(function.ParameterNames));
+                insertCommand.Parameters.AddWithValue("@ParameterTypes", SerializeStringList(function.ParameterTypes));
+                insertCommand.Parameters.AddWithValue("@ReturnType", function.ReturnType as object ?? DBNull.Value);
+                insertCommand.Parameters.AddWithValue("@CreatedAt", DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"));
+                insertCommand.Parameters.AddWithValue("@UpdatedAt", DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"));
 
-                    return updateCommand.ExecuteNonQuery() > 0;
-                }
-                else
-                {
-                    // Insert new function
-                    using var insertCommand = connection.CreateCommand();
-                    insertCommand.CommandText = @"
-                        INSERT INTO FunctionCache (DBName, FunctionName, FunctionPath, ParameterNames, ParameterTypes, ReturnType, CreatedAt, UpdatedAt)
-                        VALUES (@DBName, @FunctionName, @FunctionPath, @ParameterNames, @ParameterTypes, @ReturnType, @CreatedAt, @UpdatedAt)
-                    ";
-
-                    insertCommand.Parameters.AddWithValue("@DBName", function.DBName);
-                    insertCommand.Parameters.AddWithValue("@FunctionName", function.FunctionName);
-                    insertCommand.Parameters.AddWithValue("@FunctionPath", function.FunctionPath);
-                    insertCommand.Parameters.AddWithValue("@ParameterNames", SerializeStringList(function.ParameterNames));
-                    insertCommand.Parameters.AddWithValue("@ParameterTypes", SerializeStringList(function.ParameterTypes));
-                    insertCommand.Parameters.AddWithValue("@ReturnType", function.ReturnType as object ?? DBNull.Value);
-                    insertCommand.Parameters.AddWithValue("@CreatedAt", DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"));
-                    insertCommand.Parameters.AddWithValue("@UpdatedAt", DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"));
-
-                    return insertCommand.ExecuteNonQuery() > 0;
-                }
+                return insertCommand.ExecuteNonQuery() > 0;
+                
             }
             catch (Exception ex)
             {
