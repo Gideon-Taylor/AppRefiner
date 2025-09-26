@@ -372,10 +372,11 @@ namespace AppRefiner
                 using var checkCommand = connection.CreateCommand();
                 checkCommand.CommandText = @"
                     SELECT COUNT(*) FROM FunctionCache 
-                    WHERE DBName = @DBName AND FunctionPath = @FunctionPath
+                    WHERE DBName = @DBName AND FunctionPath = @FunctionPath AND FunctionName = @FunctionName
                 ";
                 checkCommand.Parameters.AddWithValue("@DBName", function.DBName);
                 checkCommand.Parameters.AddWithValue("@FunctionPath", function.FunctionPath);
+                checkCommand.Parameters.AddWithValue("@FunctionName", function.FunctionName);
 
                 int existingCount = Convert.ToInt32(checkCommand.ExecuteScalar());
                 if (existingCount > 0)
@@ -389,7 +390,7 @@ namespace AppRefiner
                             ParameterTypes = @ParameterTypes,
                             ReturnType = @ReturnType,
                             UpdatedAt = @UpdatedAt
-                        WHERE DBName = @DBName AND FunctionPath = @FunctionPath
+                        WHERE DBName = @DBName AND FunctionPath = @FunctionPath AND FunctionName = @FunctionName
                     ";
                     
                     updateCommand.Parameters.AddWithValue("@DBName", function.DBName);
