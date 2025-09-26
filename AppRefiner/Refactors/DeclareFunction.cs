@@ -1,14 +1,16 @@
 using PeopleCodeParser.SelfHosted.Nodes;
+using System;
+using System.Linq;
 
 namespace AppRefiner.Refactors
 {
     /// <summary>
-    /// Refactoring operation that adds a specific application class import if it's not already covered by an existing explicit or wildcard import.
+    /// Refactoring operation that declares a function if it is not already declared.
     /// </summary>
     public class DeclareFunction : BaseRefactor
     {
-        public new static string RefactorName => "Add Import";
-        public new static string RefactorDescription => "Adds a specific application class import if not already covered.";
+        public new static string RefactorName => "Declare Function";
+        public new static string RefactorDescription => "Declares a function if not already declared.";
 
         /// <summary>
         /// This refactor should not have a keyboard shortcut.
@@ -23,12 +25,11 @@ namespace AppRefiner.Refactors
         private readonly FunctionSearchResult _functionToDeclare;
         private ProgramNode? _programNode;
 
-
         /// <summary>
-        /// Initializes a new instance of the <see cref="AddImport"/> class with a specific path.
+        /// Initializes a new instance of the <see cref="DeclareFunction"/> class with a specific function to declare.
         /// </summary>
         /// <param name="editor">The Scintilla editor instance.</param>
-        /// <param name="appClassPathToAdd">The application class path to add.</param>
+        /// <param name="functionToDeclare">The function search result to declare.</param>
         public DeclareFunction(AppRefiner.ScintillaEditor editor, FunctionSearchResult functionToDeclare) : base(editor)
         {
             if (functionToDeclare == null)
@@ -41,44 +42,53 @@ namespace AppRefiner.Refactors
         {
             _programNode = node;
 
-            var lastDeclaration = node.Functions.OrderBy(f => f.SourceSpan.Start.Line).LastOrDefault<FunctionNode>(f => f.IsDeclaration);
-            var firstFuncImpl = node.Functions.Where(f => f.IsImplementation).OrderBy(f => f.SourceSpan.Start.Line).FirstOrDefault();
-
-            var padding = "";
-            var insertLine = 0;
-            if (lastDeclaration != null)
+            if (_programNode != null)
             {
-                /* get the padding of this declarations line */
-                insertLine = lastDeclaration.SourceSpan.Start.Line + 1;
-                var paddingCount = CountLeadingSpaces(ScintillaManager.GetLineText(Editor, lastDeclaration.SourceSpan.Start.Line));
-                padding = new string(' ', paddingCount);
-            }
-            else if (node.AppClass != null)
-            {
-                insertLine = node.AppClass.SourceSpan.End.Line + 1;
-            }
-            else if (node.Imports.Count > 0)
-            {
-                insertLine = node.Imports.Last().SourceSpan.Start.Line + 1;
-            }
-            else if (firstFuncImpl != null)
-            {
-                insertLine = firstFuncImpl.SourceSpan.Start.Line - 1;
-                var firstLeadingComment = firstFuncImpl.GetLeadingComments().FirstOrDefault();
-                if (firstLeadingComment != null)
+                bool alreadyDeclared = _programNode.Functions.Any(f => f.IsDeclaration && 
+                    string.Equals(f.Name, _functionToDeclare.FunctionName, StringComparison.OrdinalIgnoreCase));
+                if (!alreadyDeclared)
                 {
-                    insertLine = firstLeadingComment.SourceSpan.Start.Line - 1;
+                    var lastDeclaration = node.Functions.OrderBy(f => f.SourceSpan.Start.Line).LastOrDefault<FunctionNode>(f => f.IsDeclaration);
+                    var firstFuncImpl = node.Functions.Where(f => f.IsImplementation).OrderBy(f => f.SourceSpan.Start.Line).FirstOrDefault();
+
+                    var padding = "";
+                    var insertLine = 0;
+                    if (lastDeclaration != null)
+                    {
+                        /* get the padding of this declarations line */
+                        insertLine = lastDeclaration.SourceSpan.Start.Line + 1;
+                        var paddingCount = CountLeadingSpaces(ScintillaManager.GetLineText(Editor, lastDeclaration.SourceSpan.Start.Line));
+                        padding = new string(' ', paddingCount);
+                    }
+                    else if (node.AppClass != null)
+                    {
+                        insertLine = node.AppClass.SourceSpan.End.Line + 1;
+                    }
+                    else if (node.Imports.Count > 0)
+                    {
+                        insertLine = node.Imports.Last().SourceSpan.Start.Line + 1;
+                    }
+                    else if (firstFuncImpl != null)
+                    {
+                        insertLine = firstFuncImpl.SourceSpan.Start.Line - 1;
+                        var firstLeadingComment = firstFuncImpl.GetLeadingComments().FirstOrDefault();
+                        if (firstLeadingComment != null)
+                        {
+                            insertLine = firstLeadingComment.SourceSpan.Start.Line - 1;
+                        }
+                    }
+
+                    if (insertLine < 0) insertLine = 0;
+
+                    var insertIndex = ScintillaManager.GetLineStartIndex(Editor, insertLine);
+
+
+                    var declaration = $"{padding}{_functionToDeclare.ToDeclaration()}{Environment.NewLine}";
+                    InsertText(insertIndex, declaration, "Insert function declaration");
                 }
+
+                InsertText(CurrentPosition, _functionToDeclare.GetExampleCall(), "Insert example call of function");
             }
-            
-
-            if (insertLine < 0) insertLine = 0;
-
-            var insertIndex = ScintillaManager.GetLineStartIndex(Editor, insertLine);
-
-            var declaration = $"{padding}{_functionToDeclare.ToDeclaration()}{Environment.NewLine}";
-            InsertText(insertIndex, declaration, "Insert function declaration");
-            InsertText(CurrentPosition, _functionToDeclare.GetExampleCall(), "Insert example call of function");
         }
 
         static int CountLeadingSpaces(string str)
