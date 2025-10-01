@@ -7,7 +7,7 @@ namespace AppRefiner
     /// <summary>
     /// Enumeration of code definition types
     /// </summary>
-    public enum GoToDefinitionType
+    public enum OutlineDefinitionType
     {
         Method,
         Property,
@@ -20,7 +20,7 @@ namespace AppRefiner
     /// <summary>
     /// Enumeration of code definition scopes
     /// </summary>
-    public enum GoToDefinitionScope
+    public enum OutlineDefinitionScope
     {
         Public,
         Protected,
@@ -31,7 +31,7 @@ namespace AppRefiner
     /// <summary>
     /// Represents a code definition (method, property, function, etc.) that can be navigated to
     /// </summary>
-    public class GoToCodeDefinition
+    public class OutlineItem
     {
         /// <summary>
         /// The name of the definition
@@ -46,12 +46,12 @@ namespace AppRefiner
         /// <summary>
         /// The type of code definition (method, property, function, etc.)
         /// </summary>
-        public GoToDefinitionType DefinitionType { get; set; }
+        public OutlineDefinitionType DefinitionType { get; set; }
 
         /// <summary>
         /// The scope of the definition (public, protected, private)
         /// </summary>
-        public GoToDefinitionScope Scope { get; set; }
+        public OutlineDefinitionScope Scope { get; set; }
 
         /// <summary>
         /// The position in the source code where the definition begins
@@ -76,7 +76,7 @@ namespace AppRefiner
         /// <summary>
         /// Creates a new code definition with the provided parameters
         /// </summary>
-        public GoToCodeDefinition(string name, string type, GoToDefinitionType definitionType, GoToDefinitionScope scope, int position, int line)
+        public OutlineItem(string name, string type, OutlineDefinitionType definitionType, OutlineDefinitionScope scope, int position, int line)
         {
             Name = name;
             Type = type;
@@ -93,10 +93,10 @@ namespace AppRefiner
         {
             return Scope switch
             {
-                GoToDefinitionScope.Public => "[Public] ",
-                GoToDefinitionScope.Protected => "[Protected] ",
-                GoToDefinitionScope.Private => "[Private] ",
-                GoToDefinitionScope.Global => "[Global] ",
+                OutlineDefinitionScope.Public => "[Public] ",
+                OutlineDefinitionScope.Protected => "[Protected] ",
+                OutlineDefinitionScope.Private => "[Private] ",
+                OutlineDefinitionScope.Global => "[Global] ",
                 _ => string.Empty
             };
         }
@@ -105,12 +105,12 @@ namespace AppRefiner
     /// <summary>
     /// A visitor implementation that collects code definitions for navigation purposes
     /// </summary>
-    public class GoToDefinitionVisitor : ScopedAstVisitor<GoToDefinitionType>
+    public class OutlineVisitor : ScopedAstVisitor<OutlineDefinitionType>
     {
         /// <summary>
         /// Collection of all definitions found in the code
         /// </summary>
-        public List<GoToCodeDefinition> Definitions { get; } = new List<GoToCodeDefinition>();
+        public List<OutlineItem> Definitions { get; } = new List<OutlineItem>();
 
         /// <summary>
         /// Dictionary to map property names to their types from the header declarations
@@ -120,7 +120,7 @@ namespace AppRefiner
         /// <summary>
         /// Current PeopleCode scope (public, protected, private)
         /// </summary>
-        private GoToDefinitionScope currentPeopleCodeScope = GoToDefinitionScope.Private; // Default to private
+        private OutlineDefinitionScope currentPeopleCodeScope = OutlineDefinitionScope.Private; // Default to private
 
         /// <summary>
         /// Process methods to capture scope information
@@ -131,10 +131,10 @@ namespace AppRefiner
             var methodName = node.Name;
             var returnType = GetReturnTypeString(node.ReturnType);
 
-            Definitions.Add(new GoToCodeDefinition(
+            Definitions.Add(new OutlineItem(
                 methodName,
                 returnType,
-                GoToDefinitionType.Method,
+                OutlineDefinitionType.Method,
                 currentPeopleCodeScope,
                 node.SourceSpan.Start.ByteIndex,
                 node.SourceSpan.Start.Line
@@ -156,10 +156,10 @@ namespace AppRefiner
             // Store the property type for getter/setter lookup
             propertyTypes[propertyName] = propertyType;
 
-            Definitions.Add(new GoToCodeDefinition(
+            Definitions.Add(new OutlineItem(
                 propertyName,
                 propertyType,
-                GoToDefinitionType.Property,
+                OutlineDefinitionType.Property,
                 currentPeopleCodeScope,
                 node.SourceSpan.Start.ByteIndex,
                 node.SourceSpan.Start.Line
@@ -178,11 +178,11 @@ namespace AppRefiner
             var functionName = node.Name;
             var returnType = GetReturnTypeString(node.ReturnType);
 
-            Definitions.Add(new GoToCodeDefinition(
+            Definitions.Add(new OutlineItem(
                 functionName,
                 returnType,
-                GoToDefinitionType.Function,
-                GoToDefinitionScope.Global, // Functions are always global scope
+                OutlineDefinitionType.Function,
+                OutlineDefinitionScope.Global, // Functions are always global scope
                 node.SourceSpan.Start.ByteIndex,
                 node.SourceSpan.Start.Line
             ));
@@ -209,11 +209,11 @@ namespace AppRefiner
                     // Store the variable type for potential future lookups
                     propertyTypes[variableName] = variableType;
 
-                    Definitions.Add(new GoToCodeDefinition(
+                    Definitions.Add(new OutlineItem(
                         variableName,
                         variableType,
-                        GoToDefinitionType.Instance,
-                        GoToDefinitionScope.Private, // Instance variables are always private
+                        OutlineDefinitionType.Instance,
+                        OutlineDefinitionScope.Private, // Instance variables are always private
                         nameInfo.SourceSpan.Start.ByteIndex,
                         nameInfo.SourceSpan.Start.Line
                     ));
@@ -268,7 +268,7 @@ namespace AppRefiner
         protected override void OnEnterGlobalScope(ScopeContext scope, ProgramNode node)
         {
             // Reset scope to private at the start
-            currentPeopleCodeScope = GoToDefinitionScope.Private;
+            currentPeopleCodeScope = OutlineDefinitionScope.Private;
 
             // Call base
             base.OnEnterGlobalScope(scope, node);
@@ -282,7 +282,7 @@ namespace AppRefiner
         protected override void OnEnterClassScope(ScopeContext scope, AppClassNode node)
         {
             // Reset scope for each class (PeopleCode classes start with private by default)
-            currentPeopleCodeScope = GoToDefinitionScope.Private;
+            currentPeopleCodeScope = OutlineDefinitionScope.Private;
 
             // Call base
             base.OnEnterClassScope(scope, node);

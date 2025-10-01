@@ -221,7 +221,7 @@ namespace AppRefiner
             applicationKeyboardService?.RegisterShortcut("LintCode", AppRefiner.ModifierKeys.Control | AppRefiner.ModifierKeys.Alt, Keys.L, lintCodeHandler);
             applicationKeyboardService?.RegisterShortcut("CommandPalette", AppRefiner.ModifierKeys.Control | AppRefiner.ModifierKeys.Shift, Keys.P, ShowCommandPalette); // Use the parameterless overload
             applicationKeyboardService?.RegisterShortcut("ApplyTemplate", AppRefiner.ModifierKeys.Control | AppRefiner.ModifierKeys.Alt, Keys.T, ApplyTemplateCommand);
-            applicationKeyboardService?.RegisterShortcut("SuperGoTo", AppRefiner.ModifierKeys.Control | AppRefiner.ModifierKeys.Alt, Keys.G, SuperGoToCommand); // Use the parameterless overload
+            applicationKeyboardService?.RegisterShortcut("Outline", AppRefiner.ModifierKeys.Control | AppRefiner.ModifierKeys.Shift, Keys.O, ShowOutlineCommand); // Use the parameterless overload
             applicationKeyboardService?.RegisterShortcut("ApplyQuickFix", AppRefiner.ModifierKeys.Control, Keys.OemPeriod, ApplyQuickFixCommand); // Ctrl + .
             applicationKeyboardService?.RegisterShortcut("SmartOpen", AppRefiner.ModifierKeys.Control, Keys.O, ShowSmartOpenDialog); // Ctrl + O
             applicationKeyboardService?.RegisterShortcut("BetterFind", AppRefiner.ModifierKeys.Control, Keys.F, showBetterFindHandler); // Ctrl + F
@@ -1459,12 +1459,12 @@ namespace AppRefiner
             ));
 
             AvailableCommands.Add(new Command(
-                "Navigation: Go To Definition",
+                "Navigation: Outline",
                 "\"Navigate to methods, properties, functions, getters, and setters within the current file\"",
                 () =>
                 {
                     // No action needed
-                    SuperGoToCommand();
+                    ShowOutlineCommand();
                 },
                 () => activeEditor != null
             ));
@@ -2058,14 +2058,14 @@ namespace AppRefiner
             }
         }
 
-        public void SuperGoToCommand()
+        public void ShowOutlineCommand()
         {
             if (activeEditor == null) return;
 
             try
             {
                 // Parse the content using the parser
-                var definitions = CollectGoToDefinitions();
+                var definitions = CollectOutlineDefinitions();
 
                 if (definitions.Count == 0)
                 {
@@ -2076,7 +2076,7 @@ namespace AppRefiner
                 // Create and show the definition selection dialog
                 IntPtr mainHandle = activeEditor.AppDesignerProcess.MainWindowHandle;
 
-                ShowGoToDefinitionDialog(definitions, mainHandle);
+                ShowOutlineDialog(definitions, mainHandle);
 
             }
             catch (Exception ex)
@@ -2088,16 +2088,16 @@ namespace AppRefiner
         /// <summary>
         /// Shows the definition selection dialog
         /// </summary>
-        private void ShowGoToDefinitionDialog(List<GoToCodeDefinition> definitions, IntPtr mainHandle)
+        private void ShowOutlineDialog(List<OutlineItem> definitions, IntPtr mainHandle)
         {
             var handleWrapper = new WindowWrapper(mainHandle);
-            var dialog = new DefinitionSelectionDialog(definitions, mainHandle);
+            var dialog = new OutlineDialog(definitions, mainHandle);
 
             DialogResult result = dialog.ShowDialog(handleWrapper);
 
             if (result == DialogResult.OK)
             {
-                GoToCodeDefinition? selectedDefinition = dialog.SelectedDefinition;
+                OutlineItem? selectedDefinition = dialog.SelectedDefinition;
                 if (activeEditor != null && selectedDefinition != null)
                 {
                     // Navigate to the selected definition
@@ -2119,7 +2119,7 @@ namespace AppRefiner
         /// </summary>
         /// <param name="editor">The editor to collect definitions from</param>
         /// <returns>A list of code definitions</returns>
-        private List<GoToCodeDefinition> CollectGoToDefinitions()
+        private List<OutlineItem> CollectOutlineDefinitions()
         {
             if (activeEditor == null) return [];
 
@@ -2127,7 +2127,7 @@ namespace AppRefiner
             var program = activeEditor.GetParsedProgram();
 
             // Create and run the visitor to collect definitions
-            var visitor = new GoToDefinitionVisitor();
+            var visitor = new OutlineVisitor();
             program?.Accept(visitor);
 
             return visitor.Definitions ?? [];

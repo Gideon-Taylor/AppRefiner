@@ -3,15 +3,15 @@ namespace AppRefiner.Dialogs
     /// <summary>
     /// Dialog for selecting a code definition to navigate to
     /// </summary>
-    public class DefinitionSelectionDialog : Form
+    public class OutlineDialog : Form
     {
         private readonly Panel headerPanel;
         private readonly Label headerLabel;
         private readonly TextBox searchBox;
         private readonly TreeView definitionsTreeView;
-        private readonly List<GoToCodeDefinition> allDefinitions;
-        private List<GoToCodeDefinition> filteredDefinitions;
-        private GoToCodeDefinition? selectedDefinition;
+        private readonly List<OutlineItem> allDefinitions;
+        private List<OutlineItem> filteredDefinitions;
+        private OutlineItem? selectedDefinition;
         private readonly IntPtr owner;
         private DialogHelper.ModalDialogMouseHandler? mouseHandler;
         private bool groupingEnabled = true;
@@ -19,18 +19,18 @@ namespace AppRefiner.Dialogs
         /// <summary>
         /// Gets the selected definition after dialog closes
         /// </summary>
-        public GoToCodeDefinition? SelectedDefinition => selectedDefinition;
+        public OutlineItem? SelectedDefinition => selectedDefinition;
 
         /// <summary>
         /// Initializes a new instance of DefinitionSelectionDialog with a list of code definitions
         /// </summary>
         /// <param name="definitions">The list of code definitions to display</param>
         /// <param name="owner">The owner window handle</param>
-        public DefinitionSelectionDialog(List<GoToCodeDefinition> definitions, IntPtr owner)
+        public OutlineDialog(List<OutlineItem> definitions, IntPtr owner)
         {
             this.owner = owner;
             allDefinitions = definitions;
-            filteredDefinitions = new List<GoToCodeDefinition>(allDefinitions);
+            filteredDefinitions = new List<OutlineItem>(allDefinitions);
 
             this.headerPanel = new Panel();
             this.headerLabel = new Label();
@@ -157,16 +157,16 @@ namespace AppRefiner.Dialogs
 
                     switch (definition.DefinitionType)
                     {
-                        case GoToDefinitionType.Method:
+                        case OutlineDefinitionType.Method:
                             switch (definition.Scope)
                             {
-                                case GoToDefinitionScope.Public:
+                                case OutlineDefinitionScope.Public:
                                     publicMethodsNode.Nodes.Add(node);
                                     break;
-                                case GoToDefinitionScope.Protected:
+                                case OutlineDefinitionScope.Protected:
                                     protectedMethodsNode.Nodes.Add(node);
                                     break;
-                                case GoToDefinitionScope.Private:
+                                case OutlineDefinitionScope.Private:
                                     privateMethodsNode.Nodes.Add(node);
                                     break;
                                 default:
@@ -174,14 +174,14 @@ namespace AppRefiner.Dialogs
                                     break;
                             }
                             break;
-                        case GoToDefinitionType.Property:
+                        case OutlineDefinitionType.Property:
                             propertiesNode.Nodes.Add(node);
                             break;
-                        case GoToDefinitionType.Function:
+                        case OutlineDefinitionType.Function:
                             functionsNode.Nodes.Add(node);
                             break;
-                        case GoToDefinitionType.Getter:
-                        case GoToDefinitionType.Setter:
+                        case OutlineDefinitionType.Getter:
+                        case OutlineDefinitionType.Setter:
                         default:
                             instanceVariablesNode.Nodes.Add(node);
                             break;
@@ -237,7 +237,7 @@ namespace AppRefiner.Dialogs
         {
             if (string.IsNullOrWhiteSpace(filter))
             {
-                filteredDefinitions = new List<GoToCodeDefinition>(allDefinitions);
+                filteredDefinitions = new List<OutlineItem>(allDefinitions);
             }
             else
             {
@@ -321,7 +321,7 @@ namespace AppRefiner.Dialogs
 
         private void SelectDefinition()
         {
-            if (definitionsTreeView.SelectedNode != null && definitionsTreeView.SelectedNode.Tag is GoToCodeDefinition definition)
+            if (definitionsTreeView.SelectedNode != null && definitionsTreeView.SelectedNode.Tag is OutlineItem definition)
             {
                 selectedDefinition = definition;
                 this.DialogResult = DialogResult.OK;
