@@ -29,9 +29,14 @@ public class ProgramNode : AstNode
     public List<FunctionNode> Functions { get; } = new();
 
     /// <summary>
-    /// Global and component variable declarations
+    /// Component and global variable declarations (does not include local variables)
     /// </summary>
-    public List<VariableNode> Variables { get; } = new();
+    public List<ProgramVariableNode> ComponentAndGlobalVariables { get; } = new();
+
+    /// <summary>
+    /// Program-level local variable declarations (includes both LocalVariableDeclarationNode and LocalVariableDeclarationWithAssignmentNode)
+    /// </summary>
+    public List<StatementNode> LocalVariables { get; } = new();
 
     /// <summary>
     /// Constant declarations
@@ -86,12 +91,6 @@ public class ProgramNode : AstNode
     {
         Functions.Add(function);
         AddChild(function);
-    }
-
-    public void AddVariable(VariableNode variable)
-    {
-        Variables.Add(variable);
-        AddChild(variable);
     }
 
     public void AddConstant(ConstantNode constant)
@@ -353,7 +352,7 @@ public class AppClassNode : AstNode
     /// <summary>
     /// Instance variable declarations
     /// </summary>
-    public List<VariableNode> InstanceVariables { get; } = new();
+    public List<ProgramVariableNode> InstanceVariables { get; } = new();
 
     /// <summary>
     /// Constant declarations
@@ -433,7 +432,7 @@ public class AppClassNode : AstNode
                 else
                     Properties.Add(property);
                 break;
-            case VariableNode variable:
+            case ProgramVariableNode variable:
                 InstanceVariables.Add(variable);
                 break;
             case ConstantNode constant:

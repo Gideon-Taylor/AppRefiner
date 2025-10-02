@@ -484,9 +484,9 @@ public abstract class ScopedAstVisitor<T> : AstVisitorBase
         }
     }
     /// <summary>
-    /// Visits a variable node and registers it in the appropriate scope
+    /// Visits a program variable node and registers it in the appropriate scope
     /// </summary>
-    public override void VisitVariable(VariableNode node)
+    public override void VisitProgramVariable(ProgramVariableNode node)
     {
         var typeName = node.Type.ToString();
         var variableKind = GetVariableKindFromScope(node.Scope);
@@ -497,7 +497,7 @@ public abstract class ScopedAstVisitor<T> : AstVisitorBase
             RegisterVariable(nameInfo, typeName, variableKind, node);
         }
 
-        base.VisitVariable(node);
+        base.VisitProgramVariable(node);
     }
 
     /// <summary>
@@ -683,8 +683,7 @@ public abstract class ScopedAstVisitor<T> : AstVisitorBase
             VariableScope.Instance => VariableKind.Instance,
             VariableScope.Global => VariableKind.Global,
             VariableScope.Component => VariableKind.Component,
-            VariableScope.Local => VariableKind.Local,
-            _ => VariableKind.Local
+            _ => throw new ArgumentException($"Unexpected VariableScope: {scope}", nameof(scope))
         };
     }
 
@@ -733,6 +732,8 @@ public abstract class ScopedAstVisitor<T> : AstVisitorBase
                     var propertyName = identifier.Name.Substring(1);
                     AddVariableReference(propertyName, identifier.SourceSpan, ReferenceType.Write, "property assignment");
                 }
+                // Also allow other visitors to process the member access
+                expression.Accept(this);
                 break;
 
             case MemberAccessNode memberAccess:
@@ -773,6 +774,8 @@ public abstract class ScopedAstVisitor<T> : AstVisitorBase
             default:
                 // For other expressions, visit normally (as read context)
                 VisitExpressionAsRead(expression);
+                // Also allow other visitors to process the member access
+                expression.Accept(this);
                 break;
         }
     }
@@ -794,6 +797,8 @@ public abstract class ScopedAstVisitor<T> : AstVisitorBase
                     var propertyName = identifier.Name.Substring(1);
                     AddVariableReference(propertyName, identifier.SourceSpan, ReferenceType.Read, "property reference");
                 }
+                // Also allow other visitors to process the member access
+                expression.Accept(this);
                 break;
 
             case MemberAccessNode memberAccess:

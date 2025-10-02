@@ -132,10 +132,15 @@ namespace AppRefiner.Refactors
                 {
                     insertionPoint = node.Functions[0].SourceSpan.Start.ByteIndex;
                 }
-                // If there are variables, insert before the first one
-                else if (node.Variables.Count > 0 && node.Variables[0].SourceSpan.IsValid)
+                // If there are component/global variables, insert before the first one
+                else if (node.ComponentAndGlobalVariables.Count > 0 && node.ComponentAndGlobalVariables[0].SourceSpan.IsValid)
                 {
-                    insertionPoint = node.Variables[0].SourceSpan.Start.ByteIndex;
+                    insertionPoint = node.ComponentAndGlobalVariables[0].SourceSpan.Start.ByteIndex;
+                }
+                // If there are local variables, insert before the first one
+                else if (node.LocalVariables.Count > 0 && node.LocalVariables[0].SourceSpan.IsValid)
+                {
+                    insertionPoint = node.LocalVariables[0].SourceSpan.Start.ByteIndex;
                 }
                 // If there's a main block, insert before it
                 else if (node.MainBlock?.SourceSpan.IsValid == true)

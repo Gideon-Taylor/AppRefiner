@@ -204,9 +204,13 @@ namespace AppRefiner.Refactors
                 {
                     insertionPoint = programNode.Functions[0].SourceSpan.Start.ByteIndex;
                 }
-                else if (programNode?.Variables.Count > 0 && programNode.Variables[0].SourceSpan.IsValid)
+                else if (programNode?.ComponentAndGlobalVariables.Count > 0 && programNode.ComponentAndGlobalVariables[0].SourceSpan.IsValid)
                 {
-                    insertionPoint = programNode.Variables[0].SourceSpan.Start.ByteIndex;
+                    insertionPoint = programNode.ComponentAndGlobalVariables[0].SourceSpan.Start.ByteIndex;
+                }
+                else if (programNode?.LocalVariables.Count > 0 && programNode.LocalVariables[0].SourceSpan.IsValid)
+                {
+                    insertionPoint = programNode.LocalVariables[0].SourceSpan.Start.ByteIndex;
                 }
                 else if (programNode?.MainBlock?.SourceSpan.IsValid == true)
                 {

@@ -342,9 +342,10 @@ public class PropertyNode : DeclarationNode
 }
 
 /// <summary>
-/// Variable declaration
+/// Program-level variable declaration (Component, Global, or Instance scope)
+/// Does not include local variables - use LocalVariableDeclarationNode for those
 /// </summary>
-public class VariableNode : DeclarationNode
+public class ProgramVariableNode : DeclarationNode
 {
     /// <summary>
     /// Variable type
@@ -352,7 +353,7 @@ public class VariableNode : DeclarationNode
     public TypeNode Type { get; }
 
     /// <summary>
-    /// Variable scope
+    /// Variable scope (Component, Global, or Instance only)
     /// </summary>
     public VariableScope Scope { get; }
 
@@ -371,7 +372,7 @@ public class VariableNode : DeclarationNode
     /// </summary>
     public List<VariableNameInfo> NameInfos { get; } = new();
 
-    public VariableNode(string name, Token nameToken, TypeNode type, VariableScope scope) : base(name, nameToken)
+    public ProgramVariableNode(string name, Token nameToken, TypeNode type, VariableScope scope) : base(name, nameToken)
     {
         Type = type ?? throw new ArgumentNullException(nameof(type));
         Scope = scope;
@@ -400,12 +401,12 @@ public class VariableNode : DeclarationNode
 
     public override void Accept(IAstVisitor visitor)
     {
-        visitor.VisitVariable(this);
+        visitor.VisitProgramVariable(this);
     }
 
     public override TResult Accept<TResult>(IAstVisitor<TResult> visitor)
     {
-        return visitor.VisitVariable(this);
+        return visitor.VisitProgramVariable(this);
     }
 
     public override string ToString()
@@ -797,11 +798,11 @@ public class MethodImplNode : AstNode
 }
 
 /// <summary>
-/// Variable scopes
+/// Variable scopes for ProgramVariableNode
+/// Note: Local variables use LocalVariableDeclarationNode instead
 /// </summary>
 public enum VariableScope
 {
-    Local,
     Global,
     Component,
     Instance

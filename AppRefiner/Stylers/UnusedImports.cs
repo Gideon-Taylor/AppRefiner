@@ -120,7 +120,7 @@ namespace AppRefiner.Stylers
             base.VisitTypeCast(node);
         }
 
-        public override void VisitVariable(VariableNode node)
+        public override void VisitProgramVariable(ProgramVariableNode node)
         {
             if (node.Type is AppClassTypeNode appClassType)
             {
@@ -130,7 +130,7 @@ namespace AppRefiner.Stylers
             {
                 MarkAppClassTypeAsUsed(arrayClassType);
             }
-            base.VisitVariable(node);
+            base.VisitProgramVariable(node);
         }
 
     }

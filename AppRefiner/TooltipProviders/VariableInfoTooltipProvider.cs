@@ -76,7 +76,7 @@ namespace AppRefiner.TooltipProviders
             base.VisitIdentifier(node);
         }
 
-        public override void VisitVariable(VariableNode node)
+        public override void VisitProgramVariable(ProgramVariableNode node)
         {
             if (node.SourceSpan.ContainsPosition(CurrentPosition))
             {
@@ -85,7 +85,7 @@ namespace AppRefiner.TooltipProviders
                 _scopeContext = GetCurrentScope();
             }
 
-            base.VisitVariable(node);
+            base.VisitProgramVariable(node);
         }
 
         /// <summary>

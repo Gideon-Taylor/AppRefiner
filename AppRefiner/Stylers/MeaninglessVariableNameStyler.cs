@@ -57,12 +57,12 @@ public class MeaninglessVariableNameStyler : BaseStyler
     }
 
     /// <summary>
-    /// Handles instance variable declarations
+    /// Handles program variable declarations
     /// </summary>
-    public override void VisitVariable(VariableNode node)
+    public override void VisitProgramVariable(ProgramVariableNode node)
     {
         CheckVariableName(node.Name, node.NameToken.SourceSpan);
-        base.VisitVariable(node);
+        base.VisitProgramVariable(node);
     }
 
     #endregion

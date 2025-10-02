@@ -65,7 +65,7 @@ namespace AppRefiner.Refactors.QuickFixes
         private void RemoveInstanceVariable(VariableInfo targetVariable)
         {
             var declNode = targetVariable.DeclarationNode;
-            if (declNode is VariableNode varDecl)
+            if (declNode is ProgramVariableNode varDecl)
             {
                 if (varDecl.NameInfos.Count > 1)
                 {

@@ -23,7 +23,7 @@ public interface IAstVisitor
     void VisitMethod(MethodNode node);
     void VisitMethodImpl(MethodImplNode node);
     void VisitProperty(PropertyNode node);
-    void VisitVariable(VariableNode node);
+    void VisitProgramVariable(ProgramVariableNode node);
     void VisitConstant(ConstantNode node);
     void VisitFunction(FunctionNode node);
 
@@ -88,7 +88,7 @@ public interface IAstVisitor<out TResult>
     TResult VisitMethod(MethodNode node);
     TResult VisitMethodImpl(MethodImplNode node);
     TResult VisitProperty(PropertyNode node);
-    TResult VisitVariable(VariableNode node);
+    TResult VisitProgramVariable(ProgramVariableNode node);
     TResult VisitConstant(ConstantNode node);
     TResult VisitFunction(FunctionNode node);
 
@@ -155,10 +155,16 @@ public abstract class AstVisitorBase : IAstVisitor
             import.Accept(this);
         }
 
-        // Visit global variables
-        foreach (var variable in node.Variables)
+        // Visit component and global variables
+        foreach (var variable in node.ComponentAndGlobalVariables)
         {
             variable.Accept(this);
+        }
+
+        // Visit program-level local variables
+        foreach (var localVar in node.LocalVariables)
+        {
+            localVar.Accept(this);
         }
 
         // Visit constants
@@ -378,7 +384,7 @@ public abstract class AstVisitorBase : IAstVisitor
             node.SetterBody.Accept(this);
         }
     }
-    public virtual void VisitVariable(VariableNode node)
+    public virtual void VisitProgramVariable(ProgramVariableNode node)
     {
         // Visit type first
         node.Type.Accept(this);

@@ -604,15 +604,18 @@ public class PeopleCodeParser
                     {
                         var variable = ParseVariableDeclaration();
                         if (variable != null)
-                            program.AddVariable(variable);
+                            program.ComponentAndGlobalVariables.Add(variable);
 
                     }
                     else if (Check(TokenType.Local))
                     {
                         var startPosition = _position;
-                        var variable = ParseVariableDeclaration();
+                        var variable = ParseLocalVariableStatement();
                         if (variable != null)
-                            program.AddVariable(variable);
+                        {
+                            // Add to LocalVariables list (program-level locals)
+                            program.LocalVariables.Add(variable);
+                        }
                         else
                         {
                             _position = startPosition; // Reset position if parsing failed
@@ -1430,7 +1433,7 @@ public class PeopleCodeParser
     /// instanceDeclaration: INSTANCE typeT USER_VARIABLE (COMMA USER_VARIABLE)* COMMA? #InstanceDecl
     ///                    | INSTANCE typeT                                             #EmptyInstanceDecl
     /// </summary>
-    private VariableNode? ParseInstanceDeclaration()
+    private ProgramVariableNode? ParseInstanceDeclaration()
     {
         try
         {
@@ -1464,7 +1467,7 @@ public class PeopleCodeParser
             var lastToken = Current; // Track the last token for positioning
             _position++;
 
-            var variableNode = new VariableNode(firstVarName, firstVarToken, variableType, VariableScope.Instance);
+            var variableNode = new ProgramVariableNode(firstVarName, firstVarToken, variableType, VariableScope.Instance);
             variableNode.UpdateVariableNode(firstVarName, firstVarToken);
 
             // Parse additional variable names separated by commas
@@ -3324,11 +3327,12 @@ public class PeopleCodeParser
     }
 
     /// <summary>
-    /// Parse non-local variable declaration according to grammar:
+    /// Parse program variable declaration according to grammar:
     /// nonLocalVarDeclaration: (COMPONENT | GLOBAL) typeT USER_VARIABLE (COMMA USER_VARIABLE)* COMMA?
     ///                       | (COMPONENT | GLOBAL) typeT  // compiles yet is meaningless
+    /// Note: LOCAL variables in preamble are handled by ParseLocalVariableDeclaration()
     /// </summary>
-    private VariableNode? ParseVariableDeclaration()
+    private ProgramVariableNode? ParseVariableDeclaration()
     {
         try
         {
@@ -3339,7 +3343,13 @@ public class PeopleCodeParser
             VariableScope scope;
             if (Match(TokenType.Global)) scope = VariableScope.Global;
             else if (Match(TokenType.Component)) scope = VariableScope.Component;
-            else if (Match(TokenType.Local)) scope = VariableScope.Local;
+            else if (Match(TokenType.Local))
+            {
+                // LOCAL variables should be handled separately as LocalVariableDeclarationNode
+                // Rewind and return null to let ParseLocalVariableDeclaration handle it
+                _position--;
+                return null;
+            }
             else return null;
 
             var varType = ParseTypeReference();
@@ -3354,7 +3364,7 @@ public class PeopleCodeParser
             {
                 // This is the second variant: (COMPONENT | GLOBAL) typeT
                 // Create a variable node with empty name for AST consistency
-                var emptyVariable = new VariableNode("", Peek(), varType, scope);
+                var emptyVariable = new ProgramVariableNode("", Peek(), varType, scope);
                 // Set token positioning for empty variable
                 emptyVariable.FirstToken = firstToken;
                 emptyVariable.LastToken = Previous; // Last token consumed was the type
@@ -3368,7 +3378,7 @@ public class PeopleCodeParser
             var lastToken = Current; // Track the last token for positioning
             _position++;
 
-            var variable = new VariableNode(firstName, firstNameToken, varType, scope);
+            var variable = new ProgramVariableNode(firstName, firstNameToken, varType, scope);
             variable.UpdateVariableNode(firstName, firstNameToken);
 
             // Additional names

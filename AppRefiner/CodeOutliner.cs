@@ -194,7 +194,7 @@ namespace AppRefiner
         /// <summary>
         /// Visit instance variable declarations
         /// </summary>
-        public override void VisitVariable(VariableNode node)
+        public override void VisitProgramVariable(ProgramVariableNode node)
         {
             // Only process instance variables (private scope)
             if (node.Scope == VariableScope.Instance)
@@ -221,7 +221,7 @@ namespace AppRefiner
             }
 
             // Call base to continue traversal
-            base.VisitVariable(node);
+            base.VisitProgramVariable(node);
         }
 
         /// <summary>
