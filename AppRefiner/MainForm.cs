@@ -53,6 +53,7 @@ namespace AppRefiner
         private ScintillaEditor? activeEditor = null;
         private AppDesignerProcess? activeAppDesigner = null;
         private Dictionary<uint, AppDesignerProcess> AppDesignerProcesses = [];
+        private Dictionary<string, (int FirstLine, int CursorPosition)> lastKnownPositions = new();
 
         // Current shortcut flags state - tracks which shortcuts are enabled
         private EventHookInstaller.ShortcutType currentShortcutFlags = EventHookInstaller.ShortcutType.All;
@@ -229,6 +230,7 @@ namespace AppRefiner
             applicationKeyboardService?.RegisterShortcut("StackTraceNavigator", AppRefiner.ModifierKeys.Control | AppRefiner.ModifierKeys.Alt, Keys.S, showStackTraceNavigatorHandler); // Ctrl + Alt + S
             applicationKeyboardService?.RegisterShortcut("FindNext", AppRefiner.ModifierKeys.None, Keys.F3, findNextHandler); // F3
             applicationKeyboardService?.RegisterShortcut("FindPrevious", AppRefiner.ModifierKeys.Shift, Keys.F3, findPreviousHandler); // Shift + F3
+            applicationKeyboardService?.RegisterShortcut("GoToDefinition", AppRefiner.ModifierKeys.None, Keys.F12, goToDefinitionHandler); // F12
             applicationKeyboardService?.RegisterShortcut("PlaceBookmark", AppRefiner.ModifierKeys.Control, Keys.B, placeBookmarkHandler);
             applicationKeyboardService?.RegisterShortcut("GoToPreviousBookmark", AppRefiner.ModifierKeys.Control, Keys.OemMinus, goToPreviousBookmarkHandler);
 
@@ -500,6 +502,11 @@ namespace AppRefiner
         {
             if (activeEditor == null) return;
             ScintillaManager.FindPrevious(activeEditor);
+        }
+
+        private void goToDefinitionHandler()
+        {
+            GoToDefinitionCommand();
         }
 
         private void placeBookmarkHandler()
@@ -1180,7 +1187,8 @@ namespace AppRefiner
             }
         }
 
-        private string BuildOpenTargetString(OpenTarget target)
+
+        private string BuildOpenTargetString(OpenTarget target, SourceSpan? span = null)
         {
             // Build the target string based on the type
             StringBuilder sb = new();
@@ -1195,6 +1203,12 @@ namespace AppRefiner
                 sb.Append('.');
                 sb.Append(target.ObjectValues[x]);
             }
+
+            if (span.HasValue)
+            {
+                sb.Append($".SOURCETOKEN.{span.Value.Start.ByteIndex}");
+            }
+
             return sb.ToString();
         }
 
@@ -1986,6 +2000,10 @@ namespace AppRefiner
 
                     activeEditor.ContentString = ScintillaManager.GetScintillaText(activeEditor);
 
+                    var lastKnownKey = $"{activeEditor.Caption}";
+
+                    lastKnownPositions[lastKnownKey] = (ScintillaManager.GetFirstVisibleLine(activeEditor), ScintillaManager.GetCursorPosition(activeEditor));
+
                     // Process the editor content now that typing has paused
                     // This replaces the periodic scanning from the timer
                     CheckForContentChanges(activeEditor);
@@ -2133,6 +2151,97 @@ namespace AppRefiner
             return visitor.Definitions ?? [];
         }
 
+        /// <summary>
+        /// F12 Go to Definition - Context-sensitive navigation to symbol definition at cursor position
+        /// </summary>
+        public void GoToDefinitionCommand()
+        {
+            if (activeEditor == null) return;
+
+            try
+            {
+                // Get current cursor position
+                int cursorPosition = ScintillaManager.GetCursorPosition(activeEditor);
+                Debug.Log($"F12 Go to Definition at cursor position: {cursorPosition}");
+
+                // Parse the content to get AST
+                var program = activeEditor.GetParsedProgram();
+                if (program == null)
+                {
+                    Debug.Log("Failed to parse program for go to definition");
+
+                    // Show error message
+                    IntPtr mainHandle = activeEditor.AppDesignerProcess.MainWindowHandle;
+                    var handleWrapper = new WindowWrapper(mainHandle);
+                    Task.Delay(100).ContinueWith(_ =>
+                    {
+                        new MessageBoxDialog(
+                            "Unable to parse the current file for go to definition.",
+                            "Go to Definition",
+                            MessageBoxButtons.OK,
+                            mainHandle
+                        ).ShowDialog(handleWrapper);
+                    });
+                    return;
+                }
+
+                // Use new scope-aware resolver with optional database support
+                var goToVisitor = new GoToDefinitionVisitor(program, cursorPosition, activeEditor.DataManager);
+                
+                goToVisitor.VisitProgram(program);
+
+                var result = goToVisitor.Result;
+
+                if (result == null )
+                {
+                    string errorMsg =  "Unable to determine symbol at cursor position";
+                    Debug.Log($"Definition resolution failed");
+
+                    // Show error message
+                    IntPtr mainHandle = activeEditor.AppDesignerProcess.MainWindowHandle;
+                    var handleWrapper = new WindowWrapper(mainHandle);
+                    Task.Delay(100).ContinueWith(_ =>
+                    {
+                        new MessageBoxDialog(
+                            errorMsg,
+                            "Go to Definition",
+                            MessageBoxButtons.OK,
+                            mainHandle
+                        ).ShowDialog(handleWrapper);
+                    });
+                    return;
+                }
+
+
+                IntPtr mainWindowHandle = activeEditor.AppDesignerProcess.MainWindowHandle;
+
+                // Handle cross-program navigation (base class)
+                if (result.TargetProgram != null)
+                {
+                    activeEditor.AppDesignerProcess.PendingSelection = result.SourceSpan;
+                    if (result.SourceSpan != null)
+                    {
+                        activeEditor.AppDesignerProcess.SetOpenTarget(BuildOpenTargetString(result.TargetProgram, result.SourceSpan));
+                    }
+                        return;
+                }
+
+                // Handle in-file navigation
+                if (result.SourceSpan != null)
+                {
+                    int position = result.SourceSpan.Value.Start.ByteIndex;
+
+                    // Navigate to variable declaration
+                    ScintillaManager.SetCursorPosition(activeEditor, position);
+                    ScintillaManager.SetSelection(activeEditor, result.SourceSpan.Value.Start.ByteIndex, result.SourceSpan.Value.End.ByteIndex);
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError($"Error in GoToDefinitionCommand: {ex.Message}");
+                Debug.LogException(ex, "GoToDefinitionCommand exception");
+            } 
+        } 
 
         private void ApplyTemplateCommand()
         {
@@ -2668,6 +2777,15 @@ namespace AppRefiner
                                     if (stackTraceNavigatorDialog != null && !stackTraceNavigatorDialog.IsDisposed && stackTraceNavigatorDialog.Visible)
                                     {
                                         stackTraceNavigatorDialog.AvoidSelectionOverlap(activeEditor, selection);
+                                    }
+                                } else
+                                {
+                                    var lastKnownKey = $"{activeEditor.Caption}";
+                                    if (lastKnownPositions.TryGetValue(lastKnownKey, out var position))
+                                    {
+                                        ScintillaManager.SetFirstVisibleLine(activeEditor, position.FirstLine);
+                                        ScintillaManager.SetCursorPosition(activeEditor, position.CursorPosition);
+
                                     }
                                 }
                             };
