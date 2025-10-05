@@ -177,6 +177,7 @@ namespace AppRefiner
             chkRememberFolds.Checked = generalSettings.RememberFolds;
             chkOverrideFindReplace.Checked = generalSettings.OverrideFindReplace;
             chkAutoCenterDialogs.Checked = generalSettings.AutoCenterDialogs;
+            chkMultiSelection.Checked = generalSettings.MultiSelection;
             chkOverrideOpen.Checked = generalSettings.OverrideOpen;
 
             linterManager = new LinterManager(this, dataGridView1, lblStatus, progressBar1, lintReportPath, settingsService);
@@ -278,6 +279,7 @@ namespace AppRefiner
             chkOverrideFindReplace.CheckedChanged += GeneralSetting_Changed;
             chkOverrideOpen.CheckedChanged += GeneralSetting_Changed;
             chkAutoCenterDialogs.CheckedChanged += GeneralSetting_Changed;
+            chkMultiSelection.CheckedChanged += GeneralSetting_Changed;
             // DataGridViews CellValueChanged events will also call SaveSettings
         }
 
@@ -359,7 +361,8 @@ namespace AppRefiner
                 RememberFolds = chkRememberFolds.Checked,
                 OverrideFindReplace = chkOverrideFindReplace.Checked,
                 OverrideOpen = chkOverrideOpen.Checked,
-                AutoCenterDialogs = chkAutoCenterDialogs.Checked
+                AutoCenterDialogs = chkAutoCenterDialogs.Checked,
+                MultiSelection = chkMultiSelection.Checked
             };
         }
 
@@ -389,6 +392,9 @@ namespace AppRefiner
 
             // 4. Notify all hooked editors of auto-pairing setting changes
             NotifyAutoPairingChange(generalSettingsToSave.AutoPair);
+
+            // 5. Notify all hooked editors of multi-selection setting changes
+            NotifyMultiSelectionChange(generalSettingsToSave.MultiSelection);
         }
 
         // Method to notify all hooked editors of auto-pairing setting changes
@@ -400,6 +406,19 @@ namespace AppRefiner
                 Debug.Log($"Set auto-pairing ({enabled}) for process {appDesigner.ProcessId}: {result}");
             }
 
+        }
+
+        // Method to notify all hooked editors of multi-selection setting changes
+        private void NotifyMultiSelectionChange(bool enabled)
+        {
+            foreach (var appDesigner in AppDesignerProcesses.Values)
+            {
+                foreach (var editor in appDesigner.Editors.Values)
+                {
+                    ScintillaManager.ToggleMultiSelection(editor, enabled);
+                    Debug.Log($"Set multi-selection ({enabled}) for editor in process {appDesigner.ProcessId}");
+                }
+            }
         }
 
         // Method to notify all hooked editors of main window shortcuts setting changes

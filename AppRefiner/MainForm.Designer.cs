@@ -52,6 +52,8 @@ namespace AppRefiner
             btnTNSADMIN = new Button();
             btnDebugLog = new Button();
             grpEditorSettings = new GroupBox();
+            chkMultiSelection = new CheckBox();
+            chkAutoCenterDialogs = new CheckBox();
             btnConfigSmartOpen = new Button();
             chkOverrideOpen = new CheckBox();
             chkOverrideFindReplace = new CheckBox();
@@ -93,7 +95,6 @@ namespace AppRefiner
             cmbTemplates = new ComboBox();
             progressBar1 = new ProgressBar();
             lblStatus = new Label();
-            chkAutoCenterDialogs = new CheckBox();
             ((System.ComponentModel.ISupportInitialize)splitContainer1).BeginInit();
             splitContainer1.Panel1.SuspendLayout();
             splitContainer1.Panel2.SuspendLayout();
@@ -291,6 +292,7 @@ namespace AppRefiner
             // 
             // grpEditorSettings
             // 
+            grpEditorSettings.Controls.Add(chkMultiSelection);
             grpEditorSettings.Controls.Add(chkAutoCenterDialogs);
             grpEditorSettings.Controls.Add(btnConfigSmartOpen);
             grpEditorSettings.Controls.Add(chkOverrideOpen);
@@ -310,6 +312,26 @@ namespace AppRefiner
             grpEditorSettings.TabIndex = 20;
             grpEditorSettings.TabStop = false;
             grpEditorSettings.Text = "Settings";
+            // 
+            // chkMultiSelection
+            // 
+            chkMultiSelection.AutoSize = true;
+            chkMultiSelection.Location = new Point(139, 94);
+            chkMultiSelection.Name = "chkMultiSelection";
+            chkMultiSelection.Size = new Size(121, 19);
+            chkMultiSelection.TabIndex = 35;
+            chkMultiSelection.Text = "Multiple Selection";
+            chkMultiSelection.UseVisualStyleBackColor = true;
+            // 
+            // chkAutoCenterDialogs
+            // 
+            chkAutoCenterDialogs.AutoSize = true;
+            chkAutoCenterDialogs.Location = new Point(10, 94);
+            chkAutoCenterDialogs.Name = "chkAutoCenterDialogs";
+            chkAutoCenterDialogs.Size = new Size(103, 19);
+            chkAutoCenterDialogs.TabIndex = 34;
+            chkAutoCenterDialogs.Text = "Center Dialogs";
+            chkAutoCenterDialogs.UseVisualStyleBackColor = true;
             // 
             // btnConfigSmartOpen
             // 
@@ -750,16 +772,6 @@ namespace AppRefiner
             lblStatus.Text = "Stopped";
             lblStatus.TextAlign = ContentAlignment.MiddleCenter;
             // 
-            // chkAutoCenterDialogs
-            // 
-            chkAutoCenterDialogs.AutoSize = true;
-            chkAutoCenterDialogs.Location = new Point(10, 94);
-            chkAutoCenterDialogs.Name = "chkAutoCenterDialogs";
-            chkAutoCenterDialogs.Size = new Size(103, 19);
-            chkAutoCenterDialogs.TabIndex = 34;
-            chkAutoCenterDialogs.Text = "Center Dialogs";
-            chkAutoCenterDialogs.UseVisualStyleBackColor = true;
-            // 
             // MainForm
             // 
             AutoScaleDimensions = new SizeF(7F, 15F);
@@ -867,5 +879,6 @@ namespace AppRefiner
         private CheckBox chkOverrideOpen;
         private Button btnConfigSmartOpen;
         private CheckBox chkAutoCenterDialogs;
+        private CheckBox chkMultiSelection;
     }
 }
