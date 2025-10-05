@@ -2778,6 +2778,14 @@ namespace AppRefiner
                         {
                             activeEditor.CaptionChanged += (s, e) =>
                             {
+                                var lastKnownKey = $"{activeEditor.Caption}";
+                                if (lastKnownPositions.TryGetValue(lastKnownKey, out var position))
+                                {
+                                    ScintillaManager.SetFirstVisibleLine(activeEditor, position.FirstLine);
+                                    ScintillaManager.SetCursorPosition(activeEditor, position.CursorPosition);
+
+                                }
+
                                 activeEditor.ContentString = ScintillaManager.GetScintillaText(activeEditor);
                                 activeEditor.CollapsedFoldPaths.Clear();
                                 if (chkRememberFolds.Checked)
@@ -2785,28 +2793,21 @@ namespace AppRefiner
                                     activeEditor.CollapsedFoldPaths = FoldingManager.RetrievePersistedFolds(activeEditor);
                                 }
 
-                                CheckForContentChanges(activeEditor);
                                 if (activeEditor.AppDesignerProcess.PendingSelection is SourceSpan selection)
                                 {
                                     activeEditor.AppDesignerProcess.PendingSelection = null;
                                     WindowHelper.FocusWindow(activeEditor.hWnd);
                                     ScintillaManager.SetSelection(activeEditor, selection.Start.ByteIndex, selection.End.ByteIndex);
-                                    
+
                                     // Reposition stack trace dialog if visible to avoid covering selection
                                     if (stackTraceNavigatorDialog != null && !stackTraceNavigatorDialog.IsDisposed && stackTraceNavigatorDialog.Visible)
                                     {
                                         stackTraceNavigatorDialog.AvoidSelectionOverlap(activeEditor, selection);
                                     }
-                                } else
-                                {
-                                    var lastKnownKey = $"{activeEditor.Caption}";
-                                    if (lastKnownPositions.TryGetValue(lastKnownKey, out var position))
-                                    {
-                                        ScintillaManager.SetFirstVisibleLine(activeEditor, position.FirstLine);
-                                        ScintillaManager.SetCursorPosition(activeEditor, position.CursorPosition);
-
-                                    }
                                 }
+
+                                CheckForContentChanges(activeEditor);
+ 
                             };
                         }
 
