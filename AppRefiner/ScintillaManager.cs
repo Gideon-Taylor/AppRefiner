@@ -232,6 +232,18 @@ namespace AppRefiner
         private const int SCI_SETSELALPHA = 2478;
         private const int SCI_SETELEMENTCOLOUR = 2753;
 
+        // Multi-selection constants
+        private const int SCI_SETMULTIPLESELECTION = 2563;
+        private const int SCI_SETADDITIONALSELECTIONTYPING = 2565;
+        private const int SCI_SETADDITIONALCARETSBLINK = 2567;
+        private const int SCI_SETADDITIONALCARETSVISIBLE = 2608;
+        private const int SCI_SETMULTIPASTE = 2614;
+        private const int SCI_SETVIRTUALSPACEOPTIONS = 2596;
+
+        // Multi-selection value constants
+        private const int SC_MULTIPASTE_EACH = 1;
+        private const int SCVS_RECTANGULARSELECTION = 1;
+
         private const int SCI_BEGINUNDOACTION = 2078;
         private const int SCI_ENDUNDOACTION = 2079;
 
@@ -2811,6 +2823,36 @@ namespace AppRefiner
             // Write to remote process memory
             return WinApi.WriteProcessMemory(editor.AppDesignerProcess.ProcessHandle, remoteBuffer, buffer, neededSize, out int bytesWritten) && bytesWritten == neededSize;
 
+        }
+
+        /// <summary>
+        /// Toggles multiple selection mode for the Scintilla editor
+        /// </summary>
+        /// <param name="editor">The editor to configure</param>
+        /// <param name="enabled">True to enable multi-selection, false to disable</param>
+        public static void ToggleMultiSelection(ScintillaEditor editor, bool enabled)
+        {
+            if (editor == null) return;
+
+            int enabledValue = enabled ? 1 : 0;
+
+            // Enable/disable multiple selection
+            editor.SendMessage(SCI_SETMULTIPLESELECTION, enabledValue, 0);
+
+            // Enable/disable typing in additional selections
+            editor.SendMessage(SCI_SETADDITIONALSELECTIONTYPING, enabledValue, 0);
+
+            // Enable/disable blinking for additional carets
+            editor.SendMessage(SCI_SETADDITIONALCARETSBLINK, enabledValue, 0);
+
+            // Make additional carets visible
+            editor.SendMessage(SCI_SETADDITIONALCARETSVISIBLE, enabledValue, 0);
+
+            // Set paste mode to paste into each selection
+            editor.SendMessage(SCI_SETMULTIPASTE, enabled ? SC_MULTIPASTE_EACH : 0, 0);
+
+            // Enable rectangular virtual space
+            editor.SendMessage(SCI_SETVIRTUALSPACEOPTIONS, enabled ? SCVS_RECTANGULARSELECTION : 0, 0);
         }
 
         #endregion

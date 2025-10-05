@@ -346,5 +346,17 @@ namespace AppRefiner.Properties {
                 this["AutoCenterDialogs"] = value;
             }
         }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("False")]
+        public bool multiSelection {
+            get {
+                return ((bool)(this["multiSelection"]));
+            }
+            set {
+                this["multiSelection"] = value;
+            }
+        }
     }
 }
