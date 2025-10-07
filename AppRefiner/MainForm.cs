@@ -89,6 +89,7 @@ namespace AppRefiner
         private const int AR_KEY_COMBINATION = 2507; // New constant for key combination detection
         private const int AR_MSGBOX_SHORTHAND = 2508;
         private const int AR_VARIABLE_SUGGEST = 2509; // New constant for variable auto suggest when & is typed
+        private const int AR_CURSOR_POSITION_CHANGED = 2510; // New constant for cursor position change detection
         private const int AR_SUBCLASS_RESULTS_LIST = 1007; // Message to subclass Results list view
         private const int AR_SET_OPEN_TARGET = 1008; // Message to set open target for Results list interception
         private const int SCN_USERLISTSELECTION = 2014; // User list selection notification
@@ -2019,7 +2020,7 @@ namespace AppRefiner
 
                     activeEditor.ContentString = ScintillaManager.GetScintillaText(activeEditor);
 
-                    var lastKnownKey = $"{activeEditor.Caption}";
+                    var lastKnownKey = $"{activeEditor.AppDesignerProcess.ProcessId}:{activeEditor.Caption}";
 
                     lastKnownPositions[lastKnownKey] = (ScintillaManager.GetFirstVisibleLine(activeEditor), ScintillaManager.GetCursorPosition(activeEditor));
 
@@ -2073,6 +2074,21 @@ namespace AppRefiner
                 {
                     applicationKeyboardService.ProcessKeyMessage(m.WParam.ToInt32());
                 }
+            }
+            else if (m.Msg == AR_CURSOR_POSITION_CHANGED)
+            {
+                // Only process if we have an active editor
+                if (activeEditor == null || !activeEditor.IsValid()) return;
+
+                // Extract first visible line from wParam, cursor position from lParam
+                int firstVisibleLine = m.WParam.ToInt32();
+                int cursorPosition = m.LParam.ToInt32();
+
+                Debug.Log($"Cursor position changed: first visible line {firstVisibleLine}, position {cursorPosition}");
+
+                // Update last known positions
+                var lastKnownKey = $"{activeEditor.AppDesignerProcess.ProcessId}:{activeEditor.Caption}";
+                lastKnownPositions[lastKnownKey] = (firstVisibleLine, cursorPosition);
             }
         }
 
@@ -2778,7 +2794,7 @@ namespace AppRefiner
                         {
                             activeEditor.CaptionChanged += (s, e) =>
                             {
-                                var lastKnownKey = $"{activeEditor.Caption}";
+                                var lastKnownKey = $"{activeEditor.AppDesignerProcess.ProcessId}:{activeEditor.Caption}";
                                 if (lastKnownPositions.TryGetValue(lastKnownKey, out var position))
                                 {
                                     ScintillaManager.SetFirstVisibleLine(activeEditor, position.FirstLine);
