@@ -268,8 +268,9 @@ public struct SourceSpan : IEquatable<SourceSpan>
 
     public SourceSpan(int startIndex, int endIndex)
     {
-        Start = new SourcePosition(startIndex);
-        End = new SourcePosition(endIndex);
+        Start = new SourcePosition(startIndex, startIndex, 0, 0);
+        End = new SourcePosition(endIndex, endIndex, 0, 0);
+
     }
 
     public SourceSpan(int startIndex, int startByteIndex, int endIndex, int endByteIndex, int startLine = 1, int startColumn = 1, int endLine = 1, int endColumn = 1)
