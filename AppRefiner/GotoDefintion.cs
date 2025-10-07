@@ -120,6 +120,19 @@ namespace AppRefiner
             {
                 _targetFunctionName = literalFunc.Name;
             }
+
+           /* if (node.Function is MemberAccessNode memberAcc && memberAcc.Target is IdentifierNode memberTarget)
+            {
+                if (memberAcc.MemberNameSpan.ContainsPosition(_position))
+                {
+                    if (memberTarget.Name.ToLower() == "%this" || memberTarget.Name.ToLower() == "%super")
+                    {
+                        int i = 3;
+                    }
+                }
+            }
+           */
+
         }
 
 
@@ -170,6 +183,43 @@ namespace AppRefiner
 
             if (node.MemberNameSpan.ContainsPosition(_position))
             {
+
+                if (node.Target is IdentifierNode varTarget && varTarget.Name.StartsWith("&"))
+                {
+                    /* Check for any in scope variables or parameters */
+                    var matchingVariable = GetVariablesInScope(GetCurrentScope()).Where(v => v.Name.Equals(varTarget.Name, StringComparison.OrdinalIgnoreCase)).FirstOrDefault();
+                    TypeNode? typeNode = null;
+                    if (matchingVariable != null)
+                    {
+                        typeNode = matchingVariable.DeclarationNode switch
+                        {
+                            LocalVariableDeclarationNode declarationNode => declarationNode.Type,
+                            LocalVariableDeclarationWithAssignmentNode assignmentNode => assignmentNode.Type,
+                            ProgramVariableNode varNode => varNode.Type,
+                            ParameterNode paramNode => paramNode.Type,
+                            _ => null
+                        };
+                    }
+
+                    if (typeNode != null && typeNode is AppClassTypeNode appClassType)
+                    {
+                        var memberName = node.MemberName;
+                        var isMethod = DetermineMemberType(node);
+                        (var foundTarget, var foundSpan) = FindMemberInClassHierarchy(appClassType, memberName, isMethod);
+
+                        if (foundTarget != null && foundSpan != null)
+                        {
+                            Result.TargetProgram = foundTarget;
+                            Result.SourceSpan = foundSpan;
+                        }
+                        else if (foundSpan != null)
+                        {
+                            Result.SourceSpan = foundSpan;
+                        }
+                    }
+
+                }
+
                 /* Left hand is an identifer and it is %Super or %This */
                 if (node.Target is IdentifierNode id && (id.Name.Equals("%this",StringComparison.OrdinalIgnoreCase) || id.Name.Equals("%super", StringComparison.OrdinalIgnoreCase)))
                 {
@@ -179,24 +229,12 @@ namespace AppRefiner
                     if (_program.AppClass == null) return;
 
                     var memberName = node.MemberName;
-                    OpenTarget? foundTarget = null;
-                    SourceSpan? foundSpan = null;
+                    var isMethod = DetermineMemberType(node);
+                    (var foundTarget, var foundSpan) = FindMemberInClass(_program.AppClass, memberName, isMethod, bypassSelf);
 
-
-
-                    if (node.Parent is FunctionCallNode functionCallNode)
+                    if (foundSpan != null)
                     {
-                        (foundTarget, foundSpan) = FindMethodForClass(_program.AppClass, memberName, bypassSelf);
-                    }
-                    else
-                    {
-                        (foundTarget, foundSpan) = FindPropertyForClass(_program.AppClass, memberName, bypassSelf);
-                    }
-
-
-                    if (foundTarget != null && foundSpan != null)
-                    {
-                        if (foundTarget.Equals(_program.AppClass))
+                        if (foundTarget is null)
                         {
                             /* Just need to set the span */
                             Result.SourceSpan = foundSpan;
@@ -213,57 +251,49 @@ namespace AppRefiner
         }
 
 
-        private (OpenTarget? targetClass, SourceSpan? span) FindMethodForClass(AppClassNode classNode, string memberName, bool skipSelf = false)
+        private (OpenTarget? targetClass, SourceSpan? span) FindMemberInClass(AppClassNode classNode, string memberName, bool isMethod, bool skipSelf = false)
         {
             if (!skipSelf)
             {
-                /* Try to send to the implementation first */
-                var matchingMethod = classNode.Methods.Where(m => m.IsImplementation && m.Name.Equals(memberName, StringComparison.OrdinalIgnoreCase)).FirstOrDefault();
-
-                /* If no implementation lets look for a method declaration */
-                if (matchingMethod == null)
+                if (isMethod)
                 {
-                    matchingMethod = classNode.Methods.Where(m => m.IsDeclaration && m.Name.Equals(memberName, StringComparison.OrdinalIgnoreCase)).FirstOrDefault();
+                    /* Try to send to the implementation first */
+                    var matchingMethod = classNode.Methods.Where(m => m.IsImplementation && m.Name.Equals(memberName, StringComparison.OrdinalIgnoreCase)).FirstOrDefault();
+
+                    /* If no implementation lets look for a method declaration */
+                    if (matchingMethod == null)
+                    {
+                        matchingMethod = classNode.Methods.Where(m => m.IsDeclaration && m.Name.Equals(memberName, StringComparison.OrdinalIgnoreCase)).FirstOrDefault();
+                    }
+
+                    if (matchingMethod != null)
+                    {
+                        return (null, matchingMethod.Implementation is null ? matchingMethod.NameToken.SourceSpan : matchingMethod.Implementation.NameToken.SourceSpan);
+                    }
                 }
-
-                if (matchingMethod != null)
+                else
                 {
-                    return (null, matchingMethod.Implementation is null ? matchingMethod.NameToken.SourceSpan : matchingMethod.Implementation.NameToken.SourceSpan);
+                    /* Find property */
+                    var matchingProperty = classNode.Properties.Where(p => p.Name.Equals(memberName, StringComparison.OrdinalIgnoreCase)).FirstOrDefault();
+
+                    if (matchingProperty != null)
+                    {
+                        return (null, matchingProperty.NameToken.SourceSpan);
+                    }
                 }
             }
 
             /* We checked ourself and didn't find it, lets get our parent... */
-            AppClassTypeNode? baseClassType = null;
-
-            if (classNode.BaseClass is not null and AppClassTypeNode)
-            {
-                baseClassType = (AppClassTypeNode)classNode.BaseClass;
-            }
-            else if (classNode.ImplementedInterface is not null and AppClassTypeNode)
-            {
-                baseClassType = (AppClassTypeNode)classNode.ImplementedInterface;
-            }
-
+            var baseClassType = GetBaseClassType(classNode);
 
             if (baseClassType != null)
             {
-                List<(PSCLASSID, string)> targetParts = [];
-
-                var packageClassID = 104;
-                foreach (var package in baseClassType.PackagePath)
-                {
-                    targetParts.Add(((PSCLASSID)packageClassID++, package));
-                }
-
-                targetParts.Add((PSCLASSID.APPLICATION_CLASS, baseClassType.ClassName));
-                targetParts.Add((PSCLASSID.METHOD, "OnExecute"));
-
-                var openTarget = new OpenTarget(OpenTargetType.ApplicationClass, baseClassType.ClassName, "", targetParts);
+                var openTarget = CreateAppClassOpenTarget(baseClassType);
 
                 var parsedProg = GetParsedProgram(openTarget);
                 if (parsedProg != null && parsedProg.AppClass != null)
                 {
-                    (_, var parentSpan) = FindMethodForClass(parsedProg.AppClass, memberName, false);
+                    (_, var parentSpan) = FindMemberInClass(parsedProg.AppClass, memberName, isMethod, false);
                     if (parentSpan != null)
                     {
                         return (openTarget, parentSpan);
@@ -282,18 +312,7 @@ namespace AppRefiner
 
             if (node.SourceSpan.ContainsPosition(_position))
             {
-                List<(PSCLASSID, string)> targetParts = [];
-
-                var packageClassID = 104;
-                foreach (var package in node.PackagePath)
-                {
-                    targetParts.Add(((PSCLASSID)packageClassID++, package));
-                }
-
-                targetParts.Add((PSCLASSID.APPLICATION_CLASS, node.ClassName));
-                targetParts.Add((PSCLASSID.METHOD, "OnExecute"));
-
-                var openTarget = new OpenTarget(OpenTargetType.ApplicationClass, node.ClassName, "", targetParts);
+                var openTarget = CreateAppClassOpenTarget(node);
                 Result.TargetProgram = openTarget;
 
                 var parsedProg = GetParsedProgram(openTarget);
@@ -305,64 +324,7 @@ namespace AppRefiner
                 {
                     Result.SourceSpan = new();
                 }
-
             }
-
-        }
-        private (OpenTarget? targetClass, SourceSpan? span) FindPropertyForClass(AppClassNode classNode, string memberName, bool skipSelf = false)
-        {
-            if (!skipSelf)
-            {
-                /* Try to send to the implementation first */
-                var matchingProperty = classNode.Properties.Where(p => p.Name.Equals(memberName, StringComparison.OrdinalIgnoreCase)).FirstOrDefault();
-
-                if (matchingProperty != null)
-                {
-                    return (null, matchingProperty.NameToken.SourceSpan);
-                }
-            }
-
-            /* We checked ourself and didn't find it, lets get our parent... */
-            AppClassTypeNode? baseClassType = null;
-
-            if (classNode.BaseClass is not null and AppClassTypeNode)
-            {
-                baseClassType = (AppClassTypeNode)classNode.BaseClass;
-            }
-            else if (classNode.ImplementedInterface is not null and AppClassTypeNode )
-            {
-                baseClassType = (AppClassTypeNode)classNode.ImplementedInterface;
-            }
-
-            if (baseClassType != null)
-            {
-                List<(PSCLASSID, string)> targetParts = [];
-
-                var packageClassID = 104;
-                foreach (var package in baseClassType.PackagePath)
-                {
-                    targetParts.Add(((PSCLASSID)packageClassID++, package));
-                }
-
-                targetParts.Add((PSCLASSID.APPLICATION_CLASS, baseClassType.ClassName));
-                targetParts.Add((PSCLASSID.METHOD, "OnExecute"));
-                var openTarget = new OpenTarget(OpenTargetType.ApplicationClass, baseClassType.ClassName, "", targetParts);
-
-                var parsedProg = GetParsedProgram(openTarget);
-                if (parsedProg != null && parsedProg.AppClass != null)
-                {
-                    (_, var parentSpan) = FindPropertyForClass(parsedProg.AppClass, memberName, false);
-                    if (parentSpan != null)
-                    {
-                        return (openTarget, parentSpan);
-                    }
-                }
-                else
-                {
-                    return (null, null);
-                }
-            }
-            return (null, null);
         }
 
         private ProgramNode? GetParsedProgram(OpenTarget openTarget)
@@ -376,6 +338,50 @@ namespace AppRefiner
             var tokens = lexer.TokenizeAll();
             var parser = new PeopleCodeParser.SelfHosted.PeopleCodeParser(tokens);
             return parser.ParseProgram();
+        }
+
+        private OpenTarget CreateAppClassOpenTarget(AppClassTypeNode appClassType)
+        {
+            List<(PSCLASSID, string)> targetParts = [];
+            var packageClassID = 104;
+            foreach (var package in appClassType.PackagePath)
+            {
+                targetParts.Add(((PSCLASSID)packageClassID++, package));
+            }
+            targetParts.Add((PSCLASSID.APPLICATION_CLASS, appClassType.ClassName));
+            targetParts.Add((PSCLASSID.METHOD, "OnExecute"));
+            return new OpenTarget(OpenTargetType.ApplicationClass, appClassType.ClassName, "", targetParts);
+        }
+
+        private AppClassTypeNode? GetBaseClassType(AppClassNode classNode)
+        {
+            if (classNode.BaseClass is not null and AppClassTypeNode)
+            {
+                return (AppClassTypeNode)classNode.BaseClass;
+            }
+            else if (classNode.ImplementedInterface is not null and AppClassTypeNode)
+            {
+                return (AppClassTypeNode)classNode.ImplementedInterface;
+            }
+            return null;
+        }
+
+        private bool DetermineMemberType(MemberAccessNode node)
+        {
+            return node.Parent is FunctionCallNode;
+        }
+
+        private (OpenTarget? targetClass, SourceSpan? span) FindMemberInClassHierarchy(AppClassTypeNode appClassType, string memberName, bool isMethod)
+        {
+            var openTarget = CreateAppClassOpenTarget(appClassType);
+            var parsedProg = GetParsedProgram(openTarget);
+
+            if (parsedProg != null && parsedProg.AppClass != null)
+            {
+                return FindMemberInClass(parsedProg.AppClass, memberName, isMethod, false);
+            }
+
+            return (null, null);
         }
 
     }
