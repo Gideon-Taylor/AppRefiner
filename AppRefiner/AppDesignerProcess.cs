@@ -40,6 +40,16 @@ namespace AppRefiner
         public SourceSpan? PendingSelection { get; set; }
 
         /// <summary>
+        /// Navigation history for F12 Go To Definition navigation
+        /// </summary>
+        public List<NavigationHistoryEntry> NavigationHistory { get; set; } = new List<NavigationHistoryEntry>();
+
+        /// <summary>
+        /// Current position in the navigation history stack
+        /// </summary>
+        public int NavigationHistoryIndex { get; set; } = -1;
+
+        /// <summary>
         /// Updates the Results ListView handle for this process
         /// </summary>
         /// <param name="resultsListView">Handle to the Results ListView</param>
@@ -313,6 +323,73 @@ namespace AppRefiner
             // Always ensure Command Palette is enabled
             var shortcuts = EventHookInstaller.EnsureCommandPaletteEnabled(enabledShortcuts);
             return EventHookInstaller.SetMainWindowShortcuts(MainWindowHandle, shortcuts);
+        }
+
+        /// <summary>
+        /// Pushes a new location onto the navigation history stack.
+        /// Prunes any forward history entries after the current index.
+        /// </summary>
+        /// <param name="entry">The navigation history entry to add</param>
+        public void PushNavigationLocation(NavigationHistoryEntry entry)
+        {
+            // Remove any forward history (everything after current index)
+            if (NavigationHistoryIndex >= 0 && NavigationHistoryIndex < NavigationHistory.Count)
+            {
+                NavigationHistory.RemoveRange(NavigationHistoryIndex, NavigationHistory.Count - NavigationHistoryIndex);
+            }
+
+            // Add the new entry
+            NavigationHistory.Add(entry);
+            // Set index to Count (one past the end) to indicate we're at a new location beyond the stack
+            NavigationHistoryIndex = NavigationHistory.Count;
+
+            Debug.Log($"Pushed navigation location. Stack size: {NavigationHistory.Count}, Index: {NavigationHistoryIndex}");
+        }
+
+        /// <summary>
+        /// Checks if navigation backward is possible
+        /// </summary>
+        /// <returns>True if there are entries to navigate back to</returns>
+        public bool CanNavigateBackward()
+        {
+            return NavigationHistoryIndex > 0;
+        }
+
+        /// <summary>
+        /// Checks if navigation forward is possible
+        /// </summary>
+        /// <returns>True if there are entries to navigate forward to</returns>
+        public bool CanNavigateForward()
+        {
+            return NavigationHistoryIndex >= 0 && NavigationHistoryIndex < NavigationHistory.Count - 1;
+        }
+
+        /// <summary>
+        /// Navigates backward in the navigation history
+        /// </summary>
+        /// <returns>The navigation entry to navigate to, or null if cannot navigate backward</returns>
+        public NavigationHistoryEntry? NavigateBackward()
+        {
+            if (!CanNavigateBackward())
+                return null;
+
+            NavigationHistoryIndex--;
+            Debug.Log($"Navigate backward to index {NavigationHistoryIndex}");
+            return NavigationHistory[NavigationHistoryIndex];
+        }
+
+        /// <summary>
+        /// Navigates forward in the navigation history
+        /// </summary>
+        /// <returns>The navigation entry to navigate to, or null if cannot navigate forward</returns>
+        public NavigationHistoryEntry? NavigateForward()
+        {
+            if (!CanNavigateForward())
+                return null;
+
+            NavigationHistoryIndex++;
+            Debug.Log($"Navigate forward to index {NavigationHistoryIndex}");
+            return NavigationHistory[NavigationHistoryIndex];
         }
 
     }

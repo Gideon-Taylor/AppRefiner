@@ -217,10 +217,10 @@ namespace AppRefiner
             settingsService.LoadTooltipStates(tooltipProviders, dataGridViewTooltips);
 
             // Register keyboard shortcuts using the application-scoped service (using fully qualified Enum access)
-            applicationKeyboardService?.RegisterShortcut("CollapseLevel", AppRefiner.ModifierKeys.Alt, Keys.Left, collapseLevelHandler);
-            applicationKeyboardService?.RegisterShortcut("ExpandLevel", AppRefiner.ModifierKeys.Alt, Keys.Right, expandLevelHandler);
-            applicationKeyboardService?.RegisterShortcut("CollapseAll", AppRefiner.ModifierKeys.Control | AppRefiner.ModifierKeys.Alt, Keys.Left, collapseAllHandler);
-            applicationKeyboardService?.RegisterShortcut("ExpandAll", AppRefiner.ModifierKeys.Control | AppRefiner.ModifierKeys.Alt, Keys.Right, expandAllHandler);
+            applicationKeyboardService?.RegisterShortcut("CollapseLevel", AppRefiner.ModifierKeys.Control | AppRefiner.ModifierKeys.Shift, Keys.OemOpenBrackets, collapseLevelHandler);
+            applicationKeyboardService?.RegisterShortcut("ExpandLevel", AppRefiner.ModifierKeys.Control | AppRefiner.ModifierKeys.Shift, Keys.OemCloseBrackets, expandLevelHandler);
+            applicationKeyboardService?.RegisterShortcut("CollapseAll", AppRefiner.ModifierKeys.Control | AppRefiner.ModifierKeys.Shift | AppRefiner.ModifierKeys.Alt, Keys.OemOpenBrackets, collapseAllHandler);
+            applicationKeyboardService?.RegisterShortcut("ExpandAll", AppRefiner.ModifierKeys.Control | AppRefiner.ModifierKeys.Shift | AppRefiner.ModifierKeys.Alt, Keys.OemCloseBrackets, expandAllHandler);
             applicationKeyboardService?.RegisterShortcut("LintCode", AppRefiner.ModifierKeys.Control | AppRefiner.ModifierKeys.Alt, Keys.L, lintCodeHandler);
             applicationKeyboardService?.RegisterShortcut("CommandPalette", AppRefiner.ModifierKeys.Control | AppRefiner.ModifierKeys.Shift, Keys.P, ShowCommandPalette); // Use the parameterless overload
             applicationKeyboardService?.RegisterShortcut("ApplyTemplate", AppRefiner.ModifierKeys.Control | AppRefiner.ModifierKeys.Alt, Keys.T, ApplyTemplateCommand);
@@ -233,6 +233,8 @@ namespace AppRefiner
             applicationKeyboardService?.RegisterShortcut("FindNext", AppRefiner.ModifierKeys.None, Keys.F3, findNextHandler); // F3
             applicationKeyboardService?.RegisterShortcut("FindPrevious", AppRefiner.ModifierKeys.Shift, Keys.F3, findPreviousHandler); // Shift + F3
             applicationKeyboardService?.RegisterShortcut("GoToDefinition", AppRefiner.ModifierKeys.None, Keys.F12, goToDefinitionHandler); // F12
+            applicationKeyboardService?.RegisterShortcut("NavigateBackward", AppRefiner.ModifierKeys.Alt, Keys.Left, navigateBackwardHandler); // Alt + Left
+            applicationKeyboardService?.RegisterShortcut("NavigateForward", AppRefiner.ModifierKeys.Alt, Keys.Right, navigateForwardHandler); // Alt + Right
             applicationKeyboardService?.RegisterShortcut("PlaceBookmark", AppRefiner.ModifierKeys.Control, Keys.B, placeBookmarkHandler);
             applicationKeyboardService?.RegisterShortcut("GoToPreviousBookmark", AppRefiner.ModifierKeys.Control, Keys.OemMinus, goToPreviousBookmarkHandler);
 
@@ -527,6 +529,16 @@ namespace AppRefiner
         private void goToDefinitionHandler()
         {
             GoToDefinitionCommand();
+        }
+
+        private void navigateBackwardHandler()
+        {
+            NavigateBackwardCommand();
+        }
+
+        private void navigateForwardHandler()
+        {
+            NavigateForwardCommand();
         }
 
         private void placeBookmarkHandler()
@@ -1279,7 +1291,27 @@ namespace AppRefiner
             ));
 
             AvailableCommands.Add(new Command(
-                "Editor: Collapse All (Ctrl+Alt+Left)",
+                "Editor: Collapse Level (Ctrl+Shift+[)",
+                "Collapse the current fold level",
+                () =>
+                {
+                    if (activeEditor != null)
+                        ScintillaManager.SetCurrentLineFoldStatus(activeEditor, true);
+                }
+            ));
+
+            AvailableCommands.Add(new Command(
+                "Editor: Expand Level (Ctrl+Shift+])",
+                "Expand the current fold level",
+                () =>
+                {
+                    if (activeEditor != null)
+                        ScintillaManager.SetCurrentLineFoldStatus(activeEditor, false);
+                }
+            ));
+
+            AvailableCommands.Add(new Command(
+                "Editor: Collapse All (Ctrl+Shift+Alt+[)",
                 "Collapse all foldable sections",
                 () =>
                 {
@@ -1289,7 +1321,7 @@ namespace AppRefiner
             ));
 
             AvailableCommands.Add(new Command(
-                "Editor: Expand All (Ctrl+Alt+Right)",
+                "Editor: Expand All (Ctrl+Shift+Alt+])",
                 "Expand all foldable sections",
                 () =>
                 {
@@ -1297,6 +1329,20 @@ namespace AppRefiner
                         ScintillaManager.ExpandTopLevel(activeEditor);
                 }
             ));
+
+            AvailableCommands.Add(new Command(
+                "Navigate Backward (Alt+Left)",
+                "Navigate to the previous location in navigation history",
+                NavigateBackwardCommand
+            )
+            { RequiresActiveEditor = false });
+
+            AvailableCommands.Add(new Command(
+                "Navigate Forward (Alt+Right)",
+                "Navigate to the next location in navigation history",
+                NavigateForwardCommand
+            )
+            { RequiresActiveEditor = false });
 
             // Add refactoring commands using RefactorManager
             if (refactorManager != null)
@@ -2247,6 +2293,49 @@ namespace AppRefiner
                     return;
                 }
 
+                // BEFORE navigating, capture current location for navigation history
+                // Only capture if we found a valid navigation target
+                if ((result.TargetProgram != null || result.SourceSpan != null) && activeEditor.AppDesignerProcess != null)
+                {
+                    // Try to parse current editor caption to OpenTarget
+                    var currentOpenTarget = OpenTargetBuilder.CreateFromCaption(activeEditor.Caption);
+                    if (currentOpenTarget != null)
+                    {
+                        // Get current selection or cursor position
+                        var (_, selectionStart, selectionEnd) = ScintillaManager.GetSelectedText(activeEditor);
+
+                        // If no selection, use cursor position for both start and end
+                        if (selectionStart == selectionEnd)
+                        {
+                            selectionStart = cursorPosition;
+                            selectionEnd = cursorPosition;
+                        }
+
+                        var currentSourceSpan = new SourceSpan(
+                            new SourcePosition(selectionStart),
+                            new SourcePosition(selectionEnd)
+                        );
+
+                        // Get current first visible line for scroll restoration
+                        int firstVisibleLine = ScintillaManager.GetFirstVisibleLine(activeEditor);
+
+                        // Create navigation history entry
+                        var historyEntry = new NavigationHistoryEntry(
+                            currentOpenTarget,
+                            currentSourceSpan,
+                            firstVisibleLine,
+                            activeEditor.hWnd
+                        );
+
+                        // Push to navigation history (this will prune forward history)
+                        activeEditor.AppDesignerProcess.PushNavigationLocation(historyEntry);
+                        Debug.Log($"Pushed current location to navigation history: {currentOpenTarget.Name}");
+                    }
+                    else
+                    {
+                        Debug.Log("Warning: Could not parse current editor caption to OpenTarget for navigation history");
+                    }
+                }
 
                 IntPtr mainWindowHandle = activeEditor.AppDesignerProcess.MainWindowHandle;
 
@@ -2275,8 +2364,162 @@ namespace AppRefiner
             {
                 Debug.LogError($"Error in GoToDefinitionCommand: {ex.Message}");
                 Debug.LogException(ex, "GoToDefinitionCommand exception");
-            } 
-        } 
+            }
+        }
+
+        /// <summary>
+        /// Navigate backward in navigation history (Alt+Left)
+        /// </summary>
+        public void NavigateBackwardCommand()
+        {
+            if (activeEditor == null || activeAppDesigner == null) return;
+
+            try
+            {
+                // If we're at a location beyond the stack, save it first so we can navigate forward later
+                if (activeAppDesigner.NavigationHistoryIndex == activeAppDesigner.NavigationHistory.Count)
+                {
+                    var currentOpenTarget = OpenTargetBuilder.CreateFromCaption(activeEditor.Caption);
+                    if (currentOpenTarget != null)
+                    {
+                        int cursorPosition = ScintillaManager.GetCursorPosition(activeEditor);
+                        var (_, selectionStart, selectionEnd) = ScintillaManager.GetSelectedText(activeEditor);
+                        if (selectionStart == selectionEnd)
+                        {
+                            selectionStart = selectionEnd = cursorPosition;
+                        }
+                        var currentSourceSpan = new SourceSpan(
+                            new SourcePosition(selectionStart),
+                            new SourcePosition(selectionEnd)
+                        );
+                        int firstVisibleLine = ScintillaManager.GetFirstVisibleLine(activeEditor);
+                        var currentEntry = new NavigationHistoryEntry(
+                            currentOpenTarget,
+                            currentSourceSpan,
+                            firstVisibleLine,
+                            activeEditor.hWnd
+                        );
+                        activeAppDesigner.NavigationHistory.Add(currentEntry);
+                        Debug.Log($"Saved current location before navigating back: {currentOpenTarget.Name}");
+                    }
+                }
+
+                // Check if we can navigate backward
+                if (!activeAppDesigner.CanNavigateBackward())
+                {
+                    Debug.Log("Cannot navigate backward - at beginning of history");
+                    return;
+                }
+
+                // Get the previous location from history
+                var entry = activeAppDesigner.NavigateBackward();
+                if (entry == null)
+                {
+                    Debug.Log("NavigateBackward returned null");
+                    return;
+                }
+
+                // Validate editor handle is still valid
+                if (!WinApi.IsWindow(entry.EditorHandle))
+                {
+                    Debug.Log($"Navigation history entry has invalid editor handle: {entry.EditorHandle:X}");
+                    // Try navigating again (skip invalid entries)
+                    NavigateBackwardCommand();
+                    return;
+                }
+
+                Debug.Log($"Navigating backward to: {entry.OpenTarget.Name}");
+
+                // Check if we need to navigate to a different file or within same file
+                bool isSameEditor = entry.EditorHandle == activeEditor.hWnd;
+
+                if (isSameEditor)
+                {
+                    // Same file - just restore position and scroll
+                    ScintillaManager.SetCursorPosition(activeEditor, entry.SourceSpan.Start.ByteIndex);
+                    ScintillaManager.SetSelection(activeEditor, entry.SourceSpan.Start.ByteIndex, entry.SourceSpan.End.ByteIndex);
+                    ScintillaManager.SetFirstVisibleLine(activeEditor, entry.FirstVisibleLine);
+                }
+                else
+                {
+                    // Different file - use SetOpenTarget with PendingSelection
+                    activeAppDesigner.PendingSelection = entry.SourceSpan;
+                    string openTargetString = BuildOpenTargetString(entry.OpenTarget);
+                    activeAppDesigner.SetOpenTarget(openTargetString);
+
+                    // Store first visible line for restoration after window opens
+                    // TODO: May need to store this in PendingSelection or a separate field
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError($"Error in NavigateBackwardCommand: {ex.Message}");
+                Debug.LogException(ex, "NavigateBackwardCommand exception");
+            }
+        }
+
+        /// <summary>
+        /// Navigate forward in navigation history (Alt+Right)
+        /// </summary>
+        public void NavigateForwardCommand()
+        {
+            if (activeEditor == null || activeAppDesigner == null) return;
+
+            try
+            {
+                // Check if we can navigate forward
+                if (!activeAppDesigner.CanNavigateForward())
+                {
+                    Debug.Log("Cannot navigate forward - at end of history");
+                    return;
+                }
+
+                // Get the next location from history
+                var entry = activeAppDesigner.NavigateForward();
+                if (entry == null)
+                {
+                    Debug.Log("NavigateForward returned null");
+                    return;
+                }
+
+                // Validate editor handle is still valid
+                if (!WinApi.IsWindow(entry.EditorHandle))
+                {
+                    Debug.Log($"Navigation history entry has invalid editor handle: {entry.EditorHandle:X}");
+                    // Try navigating again (skip invalid entries)
+                    NavigateForwardCommand();
+                    return;
+                }
+
+                Debug.Log($"Navigating forward to: {entry.OpenTarget.Name}");
+
+                // Check if we need to navigate to a different file or within same file
+                bool isSameEditor = entry.EditorHandle == activeEditor.hWnd;
+
+                if (isSameEditor)
+                {
+                    // Same file - just restore position and scroll
+                    ScintillaManager.SetCursorPosition(activeEditor, entry.SourceSpan.Start.ByteIndex);
+                    ScintillaManager.SetSelection(activeEditor, entry.SourceSpan.Start.ByteIndex, entry.SourceSpan.End.ByteIndex);
+                    ScintillaManager.SetFirstVisibleLine(activeEditor, entry.FirstVisibleLine);
+                }
+                else
+                {
+                    // Different file - use SetOpenTarget with PendingSelection
+                    activeAppDesigner.PendingSelection = entry.SourceSpan;
+                    string openTargetString = BuildOpenTargetString(entry.OpenTarget);
+                    activeAppDesigner.SetOpenTarget(openTargetString);
+
+                    // Store first visible line for restoration after window opens
+                    // TODO: May need to store this in PendingSelection or a separate field
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError($"Error in NavigateForwardCommand: {ex.Message}");
+                Debug.LogException(ex, "NavigateForwardCommand exception");
+            }
+        }
 
         private void ApplyTemplateCommand()
         {
