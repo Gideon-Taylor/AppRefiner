@@ -335,6 +335,15 @@ void HandleScintillaNotification(HWND hwnd, SCNotification* scn, HWND callbackWi
                 SendMessage(callbackWindow, WM_SCN_USERLIST_SELECTION, (WPARAM)scn->listType, (LPARAM)scn->text);
             }
         }
+
+        // Handle cursor position changes (SCN_UPDATEUI with SC_UPDATE_SELECTION)
+        if (scn->nmhdr.code == SCN_UPDATEUI) {
+            // Check if the update is related to selection/cursor position
+            if (scn->updated & SC_UPDATE_SELECTION) {
+                // Notify EditorManager about cursor position change event
+                EditorManager::HandleCursorPositionChangeEvent(hwnd, callbackWindow);
+            }
+        }
     }
     catch (const std::exception& e) {
         char errorMsg[256];
