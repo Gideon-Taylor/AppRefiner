@@ -59,7 +59,7 @@ jobs:
         with:
           tag_name: ${{ steps.date.outputs.current_date }}-${{ steps.vars.outputs.sha_short }}
           release_name: Release ${{ steps.date.outputs.current_date }}-${{ steps.vars.outputs.sha_short }}
-          draft: false
+          draft: true
           prerelease: false
 
       - name: Upload Release Asset
