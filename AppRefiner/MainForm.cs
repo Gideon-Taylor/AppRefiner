@@ -221,7 +221,7 @@ namespace AppRefiner
             applicationKeyboardService?.RegisterShortcut("ExpandLevel", AppRefiner.ModifierKeys.Control | AppRefiner.ModifierKeys.Shift, Keys.OemCloseBrackets, expandLevelHandler);
             applicationKeyboardService?.RegisterShortcut("CollapseAll", AppRefiner.ModifierKeys.Control | AppRefiner.ModifierKeys.Shift | AppRefiner.ModifierKeys.Alt, Keys.OemOpenBrackets, collapseAllHandler);
             applicationKeyboardService?.RegisterShortcut("ExpandAll", AppRefiner.ModifierKeys.Control | AppRefiner.ModifierKeys.Shift | AppRefiner.ModifierKeys.Alt, Keys.OemCloseBrackets, expandAllHandler);
-            applicationKeyboardService?.RegisterShortcut("LintCode", AppRefiner.ModifierKeys.Control | AppRefiner.ModifierKeys.Alt, Keys.L, lintCodeHandler);
+            applicationKeyboardService?.RegisterShortcut("LintCode", AppRefiner.ModifierKeys.Alt, Keys.L, lintCodeHandler);
             applicationKeyboardService?.RegisterShortcut("CommandPalette", AppRefiner.ModifierKeys.Control | AppRefiner.ModifierKeys.Shift, Keys.P, ShowCommandPalette); // Use the parameterless overload
             applicationKeyboardService?.RegisterShortcut("ApplyTemplate", AppRefiner.ModifierKeys.Control | AppRefiner.ModifierKeys.Alt, Keys.T, ApplyTemplateCommand);
             applicationKeyboardService?.RegisterShortcut("Outline", AppRefiner.ModifierKeys.Control | AppRefiner.ModifierKeys.Shift, Keys.O, ShowOutlineCommand); // Use the parameterless overload
