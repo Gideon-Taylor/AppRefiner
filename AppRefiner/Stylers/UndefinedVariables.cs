@@ -1,6 +1,7 @@
 using PeopleCodeParser.SelfHosted;
 using PeopleCodeParser.SelfHosted.Nodes;
 using PeopleCodeParser.SelfHosted.Visitors.Models;
+using AppRefiner.Refactors.QuickFixes;
 
 namespace AppRefiner.Stylers;
 
@@ -12,6 +13,7 @@ public class UndefinedVariables : BaseStyler
 {
     private const uint HIGHLIGHT_COLOR = 0x0000FFA0; // Harsh red color with high alpha
     private HashSet<(string Name, SourceSpan Location)> undefinedVars = new();
+    private HashSet<(string Name, SourceSpan Location)> forLoopIterators = new();
 
     public UndefinedVariables()
     {
@@ -60,6 +62,29 @@ public class UndefinedVariables : BaseStyler
         base.VisitIdentifier(node);
     }
 
+    /// <summary>
+    /// Handles for loops and checks if the iterator variable is undefined
+    /// </summary>
+    public override void VisitFor(ForStatementNode node)
+    {
+        string varName = node.Variable;
+
+        // Check if variable is defined in any accessible scope
+        var curScope = GetCurrentScope();
+        var varsInScope = GetVariablesInScope(curScope);
+
+        // Normalize variable name (remove & prefix for comparison)
+        string normalizedVarName = varName.StartsWith('&') ? varName.Substring(1) : varName;
+
+        if (!varsInScope.Any(v => v.Name.Equals(normalizedVarName) || v.Name.Equals(varName)))
+        {
+            // Track this as an undefined for loop iterator
+            forLoopIterators.Add((varName, node.IteratorToken.SourceSpan));
+        }
+
+        base.VisitFor(node);
+    }
+
     #endregion
 
     #region Event Handlers
@@ -86,9 +111,24 @@ public class UndefinedVariables : BaseStyler
     /// </summary>
     private void GenerateIndicatorsForUndefinedVariables()
     {
+        // First, handle for loop iterators with quick fixes
+        foreach (var (name, location) in forLoopIterators)
+        {
+            string tooltip = $"Undefined for loop iterator: {name}";
+            var quickFixes = new List<(Type RefactorClass, string Description)>
+            {
+                (typeof(DeclareForLoopIterator), "Declare iterator")
+            };
+            AddIndicator(location, IndicatorType.HIGHLIGHTER, HIGHLIGHT_COLOR, tooltip, quickFixes);
+        }
 
+        // Then handle other undefined variables (excluding those already handled as for loop iterators)
         foreach (var (name, location) in undefinedVars)
         {
+            // Skip if this is already handled as a for loop iterator
+            if (forLoopIterators.Contains((name, location)))
+                continue;
+
             string tooltip = $"Undefined variable: {name}";
             AddIndicator(location, IndicatorType.HIGHLIGHTER, HIGHLIGHT_COLOR, tooltip);
         }
@@ -105,6 +145,7 @@ public class UndefinedVariables : BaseStyler
     {
         // Base class handles VariableTracker.Reset() automatically
         undefinedVars.Clear();
+        forLoopIterators.Clear();
     }
 
     #endregion
