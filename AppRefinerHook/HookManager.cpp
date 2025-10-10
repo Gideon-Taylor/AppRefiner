@@ -148,12 +148,50 @@ void HandleScintillaNotification(HWND hwnd, SCNotification* scn, HWND callbackWi
                 // Get the current position
                 int currentPos = SendMessage(hwnd, SCI_GETCURRENTPOS, 0, 0);
 
-                char debugMsg[256];
-                sprintf_s(debugMsg, "Ampersand character detected, triggering variable suggestions at position %d\n", currentPos);
-                OutputDebugStringA(debugMsg);
+                // Check what character comes after the & to avoid triggering when adding & to existing variable names
+                // Only trigger autocomplete if followed by whitespace, symbol, or end of document
+                int nextCharValue = SendMessage(hwnd, SCI_GETCHARAT, currentPos, 0);
 
-                // Send the variable suggest message with current position as wParam
-                SendMessage(callbackWindow, WM_AR_VARIABLE_SUGGEST, (WPARAM)currentPos, 0);
+                // Check if next character is whitespace, common symbol, or end of document
+                // This handles the case where user is prefixing an existing identifier (e.g., changing "x" to "&x")
+                bool shouldTriggerAutocomplete = (nextCharValue <= 0) ||  // End of document or invalid
+                                                nextCharValue == ' ' ||   // Space
+                                                nextCharValue == '\t' ||  // Tab
+                                                nextCharValue == '\r' ||  // Carriage return
+                                                nextCharValue == '\n' ||  // Line feed
+                                                nextCharValue == '(' ||   // Common symbols
+                                                nextCharValue == ')' ||
+                                                nextCharValue == '{' ||
+                                                nextCharValue == '}' ||
+                                                nextCharValue == '[' ||
+                                                nextCharValue == ']' ||
+                                                nextCharValue == ';' ||
+                                                nextCharValue == ',' ||
+                                                nextCharValue == '=' ||
+                                                nextCharValue == '+' ||
+                                                nextCharValue == '-' ||
+                                                nextCharValue == '*' ||
+                                                nextCharValue == '/' ||
+                                                nextCharValue == '<' ||
+                                                nextCharValue == '>' ||
+                                                nextCharValue == '|' ||
+                                                nextCharValue == '&';
+
+                if (shouldTriggerAutocomplete) {
+                    // Next character is whitespace, symbol, or we're at end of document - show autocomplete
+                    char debugMsg[256];
+                    sprintf_s(debugMsg, "Ampersand detected, triggering variable suggestions at position %d (next char code: %d)\n",
+                             currentPos, nextCharValue);
+                    OutputDebugStringA(debugMsg);
+
+                    // Send the variable suggest message with current position as wParam
+                    SendMessage(callbackWindow, WM_AR_VARIABLE_SUGGEST, (WPARAM)currentPos, 0);
+                } else {
+                    // User is adding & to an existing identifier, don't trigger autocomplete
+                    char debugMsg[256];
+                    sprintf_s(debugMsg, "Ampersand detected but followed by non-symbol character (code: %d), skipping autocomplete\n", nextCharValue);
+                    OutputDebugStringA(debugMsg);
+                }
             }
             
             // Verify the window is still valid before proceeding
