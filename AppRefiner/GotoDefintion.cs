@@ -206,7 +206,6 @@ namespace AppRefiner
                         var memberName = node.MemberName;
                         var isMethod = DetermineMemberType(node);
                         (var foundTarget, var foundSpan) = FindMemberInClassHierarchy(appClassType, memberName, isMethod);
-
                         if (foundTarget != null && foundSpan != null)
                         {
                             Result.TargetProgram = foundTarget;
@@ -214,6 +213,7 @@ namespace AppRefiner
                         }
                         else if (foundSpan != null)
                         {
+                            Result.TargetProgram = CreateAppClassOpenTarget(appClassType);
                             Result.SourceSpan = foundSpan;
                         }
                     }
