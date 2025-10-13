@@ -49,8 +49,8 @@ public class SimpleTypeInferenceVisitor : ScopedAstVisitor<TypeInfo>
                 program.Interface.Accept(this);
             }
 
-            // Process global variables and constants
-            foreach (var variable in program.Variables)
+            // Process global and component variables
+            foreach (var variable in program.ComponentAndGlobalVariables)
             {
                 variable.Accept(this);
             }
