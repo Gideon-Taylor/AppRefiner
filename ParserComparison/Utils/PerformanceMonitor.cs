@@ -8,12 +8,15 @@ public class PerformanceMonitor
     public long MemoryBefore { get; private set; }
     public long MemoryAfter { get; private set; }
 
-    public void StartMonitoring()
+    public void StartMonitoring(bool skipGarbageCollection = false)
     {
-        // Force garbage collection to get a clean memory reading
-        GC.Collect();
-        GC.WaitForPendingFinalizers();
-        GC.Collect();
+        if (!skipGarbageCollection)
+        {
+            // Force garbage collection to get a clean memory reading
+            GC.Collect();
+            GC.WaitForPendingFinalizers();
+            GC.Collect();
+        }
 
         MemoryBefore = GC.GetTotalMemory(false);
         _stopwatch = Stopwatch.StartNew();

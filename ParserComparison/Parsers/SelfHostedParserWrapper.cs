@@ -1,14 +1,24 @@
 using System.Diagnostics;
 using ParserComparison.Models;
 using ParserComparison.Utils;
+using PeopleCodeParser.SelfHosted.Visitors;
+using PeopleCodeParser.SelfHosted.Nodes;
 
 namespace ParserComparison.Parsers;
 
 public class SelfHostedParserWrapper : IParser
 {
-    public string Name => "Self-Hosted";
+    /// <summary>
+    /// Simple visitor for benchmarking AST traversal performance.
+    /// Does not perform any custom logic - just walks the tree with scope tracking.
+    /// </summary>
+    private class BenchmarkVisitor : ScopedAstVisitor<object>
+    {
+        // No custom implementation needed - uses default walk behavior from ScopedAstVisitor
+    }
 
-    public ParseResult Parse(string sourceCode, string filePath)
+    public string Name => "Self-Hosted";
+    public ParseResult Parse(string sourceCode, string filePath, bool skipGarbageCollection = false)
     {
         var result = new ParseResult
         {
@@ -20,7 +30,7 @@ public class SelfHostedParserWrapper : IParser
         try
         {
             var monitor = new PerformanceMonitor();
-            monitor.StartMonitoring();
+            monitor.StartMonitoring(skipGarbageCollection);
 
             // Lexing phase
             var lexerStopwatch = Stopwatch.StartNew();
@@ -43,10 +53,15 @@ public class SelfHostedParserWrapper : IParser
             result.MemoryBefore = monitor.MemoryBefore;
             result.MemoryAfter = monitor.MemoryAfter;
             result.ErrorCount = parser.Errors.Count;
-            
+
+            // Time the ScopedAstVisitor walk
             if (parseTree != null)
             {
-                result.NodeCount = CountSelfHostedNodes(parseTree);
+                var visitorStopwatch = Stopwatch.StartNew();
+                var visitor = new BenchmarkVisitor();
+                visitor.VisitProgram(parseTree);
+                visitorStopwatch.Stop();
+                result.VisitorWalkDuration = visitorStopwatch.Elapsed;
             }
 
             if (!result.Success && parser.Errors.Any())
@@ -62,20 +77,5 @@ public class SelfHostedParserWrapper : IParser
         }
 
         return result;
-    }
-
-    private int CountSelfHostedNodes(PeopleCodeParser.SelfHosted.AstNode node)
-    {
-        if (node == null) return 0;
-        
-        int count = 1; // Count this node
-        
-        // Recursively count all children using the AstNode's Children property
-        foreach (var child in node.Children)
-        {
-            count += CountSelfHostedNodes(child);
-        }
-        
-        return count;
     }
 }

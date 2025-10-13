@@ -10,7 +10,7 @@ public class ParseResult
     public long MemoryAfter { get; set; }
     public long MemoryUsed => MemoryAfter - MemoryBefore;
     public int ErrorCount { get; set; }
-    public int? NodeCount { get; set; }
+    public TimeSpan? VisitorWalkDuration { get; set; }
     public string? ErrorMessage { get; set; }
     public string ParserType { get; set; } = string.Empty;
     public string FilePath { get; set; } = string.Empty;

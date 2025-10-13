@@ -97,7 +97,11 @@ class Program
                 case "--debug-on-error":
                     config.DebugOnError = true;
                     break;
-                
+
+                case "--skip-gc":
+                    config.SkipGarbageCollection = true;
+                    break;
+
                 case "-h":
                 case "--help":
                     return null;
@@ -159,6 +163,7 @@ class Program
         Console.WriteLine("  --progress-interval <n>   Show status every n files (default: 1000)");
         Console.WriteLine("  --failed-dir <path>       Directory for failed files (default: 'failed')");
         Console.WriteLine("  --debug-on-error          Enable interactive debugging when parsing fails");
+        Console.WriteLine("  --skip-gc                 Skip garbage collection before each parse (faster benchmarking)");
         Console.WriteLine("  -h, --help                Show this help message");
         Console.WriteLine();
         Console.WriteLine("Examples:");

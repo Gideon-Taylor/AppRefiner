@@ -2,7 +2,7 @@
   "profiles": {
     "ParserComparison": {
       "commandName": "Project",
-      "commandLineArgs": "--debug-on-error -d C:\\temp\\IH91U019\\PeopleCode --continue-on-error"
+      "commandLineArgs": "--debug-on-error -d C:\\temp\\IH91U019\\PeopleCode --continue-on-error --max-files 10000 --skip-gc"
     }
   }
 }

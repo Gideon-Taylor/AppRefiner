@@ -28,7 +28,7 @@ public static class ConsoleLogger
         Console.WriteLine();
 
         // Results table
-        Console.WriteLine($"{"Parser",-15} {"Success",-10} {"Total (ms)",-12} {"Lexer (ms)",-12} {"Parser (ms)",-12} {"Memory (KB)",-12} {"Nodes",-8} {"Errors",-8}");
+        Console.WriteLine($"{"Parser",-15} {"Success",-10} {"Total (ms)",-12} {"Lexer (ms)",-12} {"Parser (ms)",-12} {"Memory (KB)",-12} {"Visitor (ms)",-12} {"Errors",-8}");
         Console.WriteLine(new string('-', 95));
 
         WriteParseResult(result.SelfHostedResult);
@@ -44,9 +44,9 @@ public static class ConsoleLogger
             Console.WriteLine($"  Parser Time: {result.SelfHostedResult.ParserDuration.TotalMilliseconds:F2}ms");
             Console.WriteLine($"  Memory Used: {result.SelfHostedResult.MemoryUsed / 1024.0:F1}KB");
 
-            if (result.SelfHostedResult.NodeCount.HasValue)
+            if (result.SelfHostedResult.VisitorWalkDuration.HasValue)
             {
-                Console.WriteLine($"  AST Nodes: {result.SelfHostedResult.NodeCount:N0}");
+                Console.WriteLine($"  Visitor Walk Time: {result.SelfHostedResult.VisitorWalkDuration.Value.TotalMilliseconds:F2}ms");
             }
         }
         else
@@ -63,9 +63,9 @@ public static class ConsoleLogger
         var lexerMs = result.LexerDuration.TotalMilliseconds;
         var parserMs = result.ParserDuration.TotalMilliseconds;
         var memoryKb = result.MemoryUsed / 1024.0;
-        var nodes = result.NodeCount?.ToString() ?? "N/A";
-        
-        Console.WriteLine($"{result.ParserType,-15} {success,-10} {totalMs,-12:F3} {lexerMs,-12:F3} {parserMs,-12:F3} {memoryKb,-12:F1} {nodes,-8} {result.ErrorCount,-8}");
+        var visitorMs = result.VisitorWalkDuration?.TotalMilliseconds.ToString("F3") ?? "N/A";
+
+        Console.WriteLine($"{result.ParserType,-15} {success,-10} {totalMs,-12:F3} {lexerMs,-12:F3} {parserMs,-12:F3} {memoryKb,-12:F1} {visitorMs,-12} {result.ErrorCount,-8}");
     }
 
 
@@ -105,9 +105,16 @@ public static class ConsoleLogger
         {
             var avgTotalTime = successful.Average(r => r.SelfHostedResult.TotalDuration.TotalMilliseconds);
             var avgMemory = successful.Average(r => r.SelfHostedResult.MemoryUsed / 1024.0);
-            
             Console.WriteLine($"Average Parse Time: {avgTotalTime:F2}ms");
             Console.WriteLine($"Average Memory Usage: {avgMemory:F1}KB");
+
+            if (successful.Any(r => r.SelfHostedResult.VisitorWalkDuration.HasValue))
+            {
+                var withVisitorTiming = successful.Where(r => r.SelfHostedResult.VisitorWalkDuration.HasValue).ToList();
+                var avgVisitorTime = withVisitorTiming.Average(r => r.SelfHostedResult.VisitorWalkDuration!.Value.TotalMilliseconds);
+                Console.WriteLine($"Average Visitor Walk Time: {avgVisitorTime:F2}ms");
+            }
+
         }
         
         // Show latest failure if any
@@ -151,13 +158,13 @@ public static class ConsoleLogger
             Console.WriteLine($"  Total Source Code: {FormatFileSize(totalFileSize)}");
             Console.WriteLine($"  Parse Speed: {totalFileSize/totalParseTime*1000:F0} bytes/second");
 
-            if (successful.Any(r => r.SelfHostedResult.NodeCount.HasValue))
+            if (successful.Any(r => r.SelfHostedResult.VisitorWalkDuration.HasValue))
             {
-                var withNodeCounts = successful.Where(r => r.SelfHostedResult.NodeCount.HasValue).ToList();
-                var totalNodes = withNodeCounts.Sum(r => r.SelfHostedResult.NodeCount!.Value);
-                var avgNodes = withNodeCounts.Average(r => r.SelfHostedResult.NodeCount!.Value);
-                Console.WriteLine($"  Total AST Nodes: {totalNodes:N0}");
-                Console.WriteLine($"  Average AST Nodes: {avgNodes:F0}");
+                var withVisitorTiming = successful.Where(r => r.SelfHostedResult.VisitorWalkDuration.HasValue).ToList();
+                var totalVisitorTime = withVisitorTiming.Sum(r => r.SelfHostedResult.VisitorWalkDuration!.Value.TotalMilliseconds);
+                var avgVisitorTime = withVisitorTiming.Average(r => r.SelfHostedResult.VisitorWalkDuration!.Value.TotalMilliseconds);
+                Console.WriteLine($"  Total Visitor Walk Time: {totalVisitorTime:F0}ms ({totalVisitorTime/1000:F1}s)");
+                Console.WriteLine($"  Average Visitor Walk Time: {avgVisitorTime:F2}ms");
             }
         }
         

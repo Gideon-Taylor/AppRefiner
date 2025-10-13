@@ -11,4 +11,5 @@ public class TestConfiguration
     public int ProgressInterval { get; set; } = 1000;
     public bool DebugOnError { get; set; } = false;
     public string? FailedFilesDirectory { get; set; } = "failed";
+    public bool SkipGarbageCollection { get; set; } = false;
 }

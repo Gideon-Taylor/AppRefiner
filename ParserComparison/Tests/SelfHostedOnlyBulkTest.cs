@@ -65,7 +65,7 @@ public class SelfHostedOnlyBulkTest
                 /* For now, we are going to strip out any directive peoplecode */
 
                 var fileSize = sourceCode.Length;
-                var selfHostedResult = selfHostedParser.Parse(sourceCode, filePath);
+                var selfHostedResult = selfHostedParser.Parse(sourceCode, filePath, config.SkipGarbageCollection);
 
                 var result = new SelfHostedOnlyResult
                 {
