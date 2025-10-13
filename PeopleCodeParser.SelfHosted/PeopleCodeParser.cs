@@ -4191,6 +4191,14 @@ public class PeopleCodeParser
 
                 if (Match(TokenType.When))
                 {
+                    /* You are allowed to have any number of "Not" operators before the BinaryOperator */
+                    int notCount = 0;
+                    while(Check(TokenType.Not))
+                    {
+                        _position++;
+                        notCount++;
+                    }
+
                     // Optional comparison operator
                     BinaryOperator? op = null;
                     if (Check(TokenType.Equal) || Check(TokenType.NotEqual) ||
@@ -4209,6 +4217,15 @@ public class PeopleCodeParser
                             TokenType.GreaterThanOrEqual => BinaryOperator.GreaterThanOrEqual,
                             _ => null
                         };
+                    }
+
+                    /* Invert the operator for any Not's that were present */
+                    if (op.HasValue)
+                    {
+                        for (int i = 0; i < notCount; i++)
+                        {
+                            op = op.Value.InvertRelop();
+                        }
                     }
 
                     // Required single expression

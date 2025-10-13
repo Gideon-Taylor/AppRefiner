@@ -556,6 +556,22 @@ public enum BinaryOperator
 
     // String
     Concatenate
+
+}
+
+public static class BinaryOperatorExtensions
+{
+
+    public static BinaryOperator InvertRelop(this BinaryOperator op) => op switch
+    {
+        BinaryOperator.Equal => BinaryOperator.NotEqual,
+        BinaryOperator.NotEqual => BinaryOperator.Equal,
+        BinaryOperator.LessThan => BinaryOperator.GreaterThanOrEqual,
+        BinaryOperator.LessThanOrEqual => BinaryOperator.GreaterThan,
+        BinaryOperator.GreaterThan => BinaryOperator.LessThanOrEqual,
+        BinaryOperator.GreaterThanOrEqual => BinaryOperator.LessThan,
+        _ => throw new NotImplementedException(),
+    };
 }
 
 /// <summary>
