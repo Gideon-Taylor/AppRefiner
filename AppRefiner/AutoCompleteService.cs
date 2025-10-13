@@ -8,6 +8,51 @@ using PeopleCodeParser.SelfHosted.Lexing;
 
 namespace AppRefiner
 {
+    internal class PositionIsInVariableDeclaration : ScopedAstVisitor<object>
+    {
+        int targetPosition;
+        bool foundPositionInVarDecl;
+        public bool IsInVariableDecl() => foundPositionInVarDecl;
+
+        public PositionIsInVariableDeclaration(int position)
+        {
+            targetPosition = position;
+        }
+
+        public override void VisitLocalVariableDeclaration(LocalVariableDeclarationNode node)
+        {
+            base.VisitLocalVariableDeclaration(node);
+            foreach (var nameInfo in node.VariableNameInfos)
+            {
+                if (nameInfo.Token != null && nameInfo.Token.SourceSpan.ContainsPosition(targetPosition)) {
+                    foundPositionInVarDecl = true;
+                }
+            }
+        }
+
+        public override void VisitLocalVariableDeclarationWithAssignment(LocalVariableDeclarationWithAssignmentNode node)
+        {
+            base.VisitLocalVariableDeclarationWithAssignment(node);
+            if (node.VariableNameInfo.Token != null && node.VariableNameInfo.Token.SourceSpan.ContainsPosition(targetPosition))
+            {
+                foundPositionInVarDecl = true;
+            }
+        }
+
+        public override void VisitProgramVariable(ProgramVariableNode node)
+        {
+            base.VisitProgramVariable(node);
+            foreach (var nameInfo in node.NameInfos)
+            {
+                if (nameInfo.Token != null && nameInfo.Token.SourceSpan.ContainsPosition(targetPosition))
+                {
+                    foundPositionInVarDecl = true;
+                }
+            }
+        }
+
+
+    }
     /// <summary>
     /// Internal variable collector for auto-completion suggestions
     /// </summary>
@@ -243,6 +288,14 @@ namespace AppRefiner
                 if (program == null)
                 {
                     Debug.Log("Failed to parse document for variable suggestions.");
+                    return;
+                }
+
+                var inNameDeclCheck = new PositionIsInVariableDeclaration(position);
+                inNameDeclCheck.VisitProgram(program);
+
+                if (inNameDeclCheck.IsInVariableDecl())
+                {
                     return;
                 }
 

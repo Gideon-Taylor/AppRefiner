@@ -423,7 +423,7 @@ public class PeopleCodeLexer
 
             // Identifiers, keywords, and variables
             '&' when PeekChar() == '&' => ScanTwoCharOperator(TokenType.DirectiveAnd),
-            '&' when IsIdentifierChar(PeekChar()) => ScanUserVariable(),
+            '&' => ScanUserVariable(),
             '%' => ScanSystemIdentifier(),
             '#' when IsDirectiveStart() => ScanDirective(),
 
@@ -515,6 +515,17 @@ public class PeopleCodeLexer
         if (!IsInCommentContext())
             return false;
 
+        // Also check for "REMARK"
+        if (_position + 5 < _source.Length)
+        {
+            var text = _source.Substring(_position, 6).ToUpperInvariant();
+            if (text == "REMARK")
+            {
+                var next = _position + 6 < _source.Length ? _source[_position + 6] : '\0';
+                return next == '\0' || char.IsWhiteSpace(next) || char.IsSymbol(next) || char.IsPunctuation(next);
+            }
+        }
+
         // Check if this looks like "REM" or "REMARK"
         if (_position + 2 < _source.Length)
         {
@@ -523,19 +534,10 @@ public class PeopleCodeLexer
             {
                 // Must be followed by space, end of input, or 'A' (for REMARK)
                 var next = _position + 3 < _source.Length ? _source[_position + 3] : '\0';
-                return next == '\0' || char.IsWhiteSpace(next) || char.ToUpperInvariant(next) == 'A' || char.IsSymbol(next) || char.IsPunctuation(next);
+                return next == '\0' || char.IsWhiteSpace(next)  || char.IsSymbol(next) || char.IsPunctuation(next);
             }
         }
-        // Also check for "REMARK"
-        if (_position + 5 < _source.Length)
-        {
-            var text = _source.Substring(_position, 6).ToUpperInvariant();
-            if (text == "REMARK")
-            {
-                var next = _position + 6 < _source.Length ? _source[_position + 6] : '\0';
-                return next == '\0' || char.IsWhiteSpace(next);
-            }
-        }
+        
         return false;
     }
 
