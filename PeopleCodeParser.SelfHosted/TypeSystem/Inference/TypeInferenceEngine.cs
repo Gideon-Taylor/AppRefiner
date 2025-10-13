@@ -148,8 +148,8 @@ public class TypeInferenceEngine : IExtendedTypeInferenceEngine
                 context.AddGlobalType($"function:{function.Name}", returnType);
             }
 
-            // Collect global variable declarations
-            foreach (var variable in program.Variables)
+            // Collect global and component variable declarations
+            foreach (var variable in program.ComponentAndGlobalVariables)
             {
                 var variableType = DetermineVariableType(variable);
                 context.AddGlobalType(variable.Name, variableType);
@@ -238,7 +238,7 @@ public class TypeInferenceEngine : IExtendedTypeInferenceEngine
     /// <summary>
     /// Determines the type of a variable declaration
     /// </summary>
-    private TypeInfo DetermineVariableType(VariableNode variable)
+    private TypeInfo DetermineVariableType(ProgramVariableNode variable)
     {
         // Check if variable has explicit type
         if (variable.Type != null)
@@ -384,7 +384,7 @@ public class TypeInferenceEngine : IExtendedTypeInferenceEngine
         return node switch
         {
             LiteralNode literal => InferLiteralType(literal),
-            VariableNode => node.GetInferredType() ?? AnyTypeInfo.Instance,
+            ProgramVariableNode => node.GetInferredType() ?? AnyTypeInfo.Instance,
             _ => node.GetInferredType() ?? UnknownTypeInfo.Instance
         };
     }
