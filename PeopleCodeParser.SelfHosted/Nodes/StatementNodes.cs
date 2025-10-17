@@ -192,10 +192,21 @@ public class IfStatementNode : StatementNode
 public class ForStatementNode : StatementNode
 {
     /// <summary>
-    /// Loop variable name
+    /// Loop iterator expression (user variable or record.field)
     /// </summary>
-    public string Variable { get; }
+    public ExpressionNode Iterator { get; }
+
+    /// <summary>
+    /// First token of the iterator (for error reporting)
+    /// </summary>
     public Token IteratorToken { get; }
+
+    /// <summary>
+    /// Iterator name (backward compatibility helper)
+    /// Returns variable name for user variables, "RECORD.FIELD" for member access
+    /// </summary>
+    public string IteratorName => GetIteratorName();
+
     /// <summary>
     /// Starting value expression
     /// </summary>
@@ -219,14 +230,34 @@ public class ForStatementNode : StatementNode
     public override bool IntroducesScope => true;
     public override bool CanTransferControl => Body.CanTransferControl;
 
-    public ForStatementNode(string variable, Token iteratorToken, ExpressionNode fromValue, ExpressionNode toValue, BlockNode body)
+    public ForStatementNode(ExpressionNode iterator, Token iteratorToken, ExpressionNode fromValue, ExpressionNode toValue, BlockNode body)
     {
-        Variable = variable ?? throw new ArgumentNullException(nameof(variable));
+        Iterator = iterator ?? throw new ArgumentNullException(nameof(iterator));
+
+        // Validate iterator is either IdentifierNode or MemberAccessNode
+        if (iterator is not IdentifierNode and not MemberAccessNode)
+        {
+            throw new ArgumentException("Iterator must be either IdentifierNode (user variable) or MemberAccessNode (record.field)", nameof(iterator));
+        }
+
         FromValue = fromValue ?? throw new ArgumentNullException(nameof(fromValue));
         ToValue = toValue ?? throw new ArgumentNullException(nameof(toValue));
         Body = body ?? throw new ArgumentNullException(nameof(body));
         IteratorToken = iteratorToken;
-        AddChildren(fromValue, toValue, body);
+        AddChildren(iterator, fromValue, toValue, body);
+    }
+
+    /// <summary>
+    /// Get the iterator name as a string
+    /// </summary>
+    private string GetIteratorName()
+    {
+        return Iterator switch
+        {
+            IdentifierNode id => id.Name,
+            MemberAccessNode ma => $"{((IdentifierNode)ma.Target).Name}.{ma.MemberName}",
+            _ => Iterator.ToString()
+        };
     }
 
     public void SetStepValue(ExpressionNode stepValue)
@@ -252,7 +283,7 @@ public class ForStatementNode : StatementNode
     public override string ToString()
     {
         var stepStr = StepValue != null ? $" Step {StepValue}" : "";
-        return $"For {Variable} = {FromValue} To {ToValue}{stepStr}";
+        return $"For {IteratorName} = {FromValue} To {ToValue}{stepStr}";
     }
 
     public override void RegisterStatementNumbers(PeopleCodeParser parser, ProgramNode programNode)

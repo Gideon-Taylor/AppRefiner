@@ -3640,16 +3640,52 @@ public class PeopleCodeParser
             if (!Match(TokenType.For))
                 return null;
 
-            // Parse USER_VARIABLE (not expression)
-            if (!Check(TokenType.UserVariable))
+            // Parse iterator: USER_VARIABLE or RECORD.FIELD
+            ExpressionNode? iterator = null;
+            var iteratorToken = Current;
+
+            if (Check(TokenType.UserVariable))
             {
-                ReportError("Expected user variable after 'FOR'");
+                // User variable: &i
+                var variableName = Current.Value?.ToString() ?? "";
+                iterator = new IdentifierNode(variableName, IdentifierType.UserVariable);
+                _position++;
+            }
+            else if (Check(TokenType.GenericId))
+            {
+                // Try RECORD.FIELD pattern
+                var recordName = ParseGenericId();
+                if (recordName != null && Match(TokenType.Dot))
+                {
+                    var fieldName = ParseGenericId();
+                    if (fieldName != null)
+                    {
+                        var recordNode = new IdentifierNode(recordName, IdentifierType.Generic);
+                        iterator = new MemberAccessNode(recordNode, fieldName, Previous.SourceSpan);
+                    }
+                    else
+                    {
+                        ReportError("Expected field name after '.' in FOR statement");
+                        return null;
+                    }
+                }
+                else
+                {
+                    ReportError("FOR statement requires user variable (&var) or record.field");
+                    return null;
+                }
+            }
+            else
+            {
+                ReportError("Expected user variable or record.field after 'FOR'");
                 return null;
             }
 
-            var variableToken = Current;
-            var variableName = variableToken.Value?.ToString() ?? "";
-            _position++; // Consume the user variable token
+            if (iterator == null)
+            {
+                ReportError("Failed to parse FOR iterator");
+                return null;
+            }
 
             if (!Match(TokenType.Equal))
             {
@@ -3703,7 +3739,7 @@ public class PeopleCodeParser
                 SmartStatementRecover();
             }
 
-            var forNode = new ForStatementNode(variableName, variableToken, start, end, body);
+            var forNode = new ForStatementNode(iterator, iteratorToken, start, end, body);
             if (step != null)
                 forNode.SetStepValue(step);
             return forNode;
