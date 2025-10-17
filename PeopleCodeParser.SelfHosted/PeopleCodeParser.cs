@@ -1767,46 +1767,7 @@ public class PeopleCodeParser
             EnterRule("genericId");
 
             // In PeopleCode, many keywords can be used as identifiers in certain contexts
-            if (Current.Type switch
-            {
-                TokenType.Any => true,
-                TokenType.Abstract => true,
-                TokenType.Boolean => true,
-                TokenType.Catch => true,
-                TokenType.Class => true,
-                TokenType.Component => true,
-                TokenType.Constant => true,  // Add missing CONSTANT keyword
-                TokenType.Continue => true,
-                TokenType.Create => true,
-                TokenType.Date => true,
-                TokenType.DateTime => true,
-                TokenType.Exception => true,
-                TokenType.Extends => true,
-                TokenType.Get => true,
-                TokenType.Global => true,
-                TokenType.Import => true,
-                TokenType.Instance => true,
-                TokenType.Integer => true,
-                TokenType.Interface => true,
-                TokenType.Method => true,
-                TokenType.Number => true,
-                TokenType.Out => true,
-                TokenType.Private => true,
-                TokenType.Property => true,
-                TokenType.ReadOnly => true,
-                TokenType.Set => true,
-                TokenType.Step => true,
-                TokenType.String => true,
-                TokenType.Throw => true,
-                TokenType.Time => true,
-                TokenType.Try => true,
-                TokenType.Value => true,
-                TokenType.GenericId => true,
-                TokenType.GenericIdLimited => true,
-
-                _ when Current.Type.IsIdentifier() => true,
-                _ => false
-            })
+            if (true)
             {
                 var result = Current.Text;
                 _position++;
