@@ -996,7 +996,7 @@ public class PeopleCodeParser
         {
             EnterRule("superclass");
 
-            if (Match(TokenType.Exception))
+            if (Match(TokenType.Array) || Match(TokenType.Exception))
             {
                 // Special built-in exception type
                 var token = Previous;
