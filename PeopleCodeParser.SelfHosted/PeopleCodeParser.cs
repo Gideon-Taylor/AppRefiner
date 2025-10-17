@@ -3251,12 +3251,17 @@ public class PeopleCodeParser
             else
             {
                 var builtInType = TryParseBuiltInType();
-                if (builtInType != null)
+
+
+                /* We can have an "As" here in the case where someone does 
+                 * Returns integer as number; */
+
+                if (Check(TokenType.As))
                 {
-                    if (builtInType.SourceSpan.Start.Index == 0 && builtInType.SourceSpan.End.Index == 0)
-                    {
-                    }
+                    _position++;
+                    builtInType = TryParseBuiltInType();
                 }
+
                 return builtInType;
             }
         }
