@@ -563,10 +563,17 @@ public abstract class ScopedAstVisitor<T> : AstVisitorBase
 
     /// <summary>
     /// Visits a FOR statement and tracks iterator variable usage
+    /// Only tracks user variables (&var), not RECORD.FIELD (which are record buffer accesses)
     /// </summary>
     public override void VisitFor(ForStatementNode node)
     {
-        AddVariableReference(node.Variable, node.IteratorToken.SourceSpan, ReferenceType.Read, "for loop iterator");
+        // Only track if the iterator is a user variable
+        // RECORD.FIELD accesses are not variables and should not be tracked
+        if (node.Iterator is IdentifierNode identifier && identifier.IdentifierType == IdentifierType.UserVariable)
+        {
+            AddVariableReference(identifier.Name, node.IteratorToken.SourceSpan, ReferenceType.Write, "for loop iterator");
+        }
+
         base.VisitFor(node);
     }
 
