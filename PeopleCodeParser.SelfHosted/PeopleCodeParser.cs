@@ -2753,9 +2753,10 @@ public class PeopleCodeParser
             }
             var iface = new InterfaceNode(name);
 
-            // Optional EXTENDS base interface
-            if (Match(TokenType.Extends))
+            // Optional EXTENDS base interface (apparently you can say implements here too...)
+            if (Check(TokenType.Extends) || Check(TokenType.Implements))
             {
+                _position++;
                 var baseType = ParseAppClassPath() ?? ParseSimpleType();
                 if (baseType != null)
                 {
