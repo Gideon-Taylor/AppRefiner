@@ -744,16 +744,16 @@ public class PeopleCodeLexer
         Advance(); // '%'
         sb.Append('%');
 
-        // Special case for %SUPER
-        if (MatchText("SUPER"))
+        // Special case for %SUPER (only if followed by word boundary)
+        if (MatchText("SUPER") && IsWordBoundaryForSpecialKeyword(5))
         {
             sb.Append("SUPER");
             for (int i = 0; i < 5; i++) Advance();
             return Token.CreateKeyword(TokenType.Super, sb.ToString(), CreateSpan(start));
         }
 
-        // Special case for %METADATA  
-        if (MatchText("METADATA"))
+        // Special case for %METADATA (only if followed by word boundary)
+        if (MatchText("METADATA") && IsWordBoundaryForSpecialKeyword(8))
         {
             sb.Append("METADATA");
             for (int i = 0; i < 8; i++) Advance();
@@ -941,6 +941,37 @@ public class PeopleCodeLexer
     private bool IsIdentifierChar(char ch)
     {
         return char.IsLetterOrDigit(ch) || ch == '_' || ch == '#' || ch == '$' || ch == '@';
+    }
+
+    /// <summary>
+    /// Check if the character at the given offset from current position represents a word boundary
+    /// for special keywords like %SUPER and %METADATA. Returns true if:
+    /// - At end of input
+    /// - Next character is a dot (.) for app class paths like %Metadata.ApplicationPackage
+    /// - Next character is not an identifier character (whitespace, operator, etc.)
+    /// Returns false if next character is an identifier character, indicating a longer identifier.
+    /// </summary>
+    private bool IsWordBoundaryForSpecialKeyword(int offset)
+    {
+        var peekPos = _position + offset;
+
+        // At end of input - valid boundary
+        if (peekPos >= _source.Length)
+            return true;
+
+        var nextChar = _source[peekPos];
+
+        // Dot indicates app class path usage like %Metadata.ApplicationPackage - valid boundary
+        if (nextChar == '.')
+            return true;
+
+        // If next character is an identifier character, it's part of a longer identifier
+        // Examples: %MetaDataChange_Success, %SuperUserRole
+        if (IsIdentifierChar(nextChar))
+            return false;
+
+        // Any other character (whitespace, operator, etc.) is a valid boundary
+        return true;
     }
 
     private bool IsDirectiveStart()
