@@ -13,6 +13,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PeopleCodeParser.SelfHosted
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PeopleCodeTypeInfo", "PeopleCodeTypeInfo\PeopleCodeTypeInfo.csproj", "{87E143EE-C54C-4084-9D7A-1E4B1D46FF0F}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PeopleCodeTypeInfo.Tests", "PeopleCodeTypeInfo.Tests\PeopleCodeTypeInfo.Tests.csproj", "{26A8401F-C9EB-4201-8712-A95A44C9D263}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -83,6 +85,18 @@ Global
 		{87E143EE-C54C-4084-9D7A-1E4B1D46FF0F}.Release|x64.Build.0 = Release|Any CPU
 		{87E143EE-C54C-4084-9D7A-1E4B1D46FF0F}.Release|x86.ActiveCfg = Release|Any CPU
 		{87E143EE-C54C-4084-9D7A-1E4B1D46FF0F}.Release|x86.Build.0 = Release|Any CPU
+		{26A8401F-C9EB-4201-8712-A95A44C9D263}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{26A8401F-C9EB-4201-8712-A95A44C9D263}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{26A8401F-C9EB-4201-8712-A95A44C9D263}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{26A8401F-C9EB-4201-8712-A95A44C9D263}.Debug|x64.Build.0 = Debug|Any CPU
+		{26A8401F-C9EB-4201-8712-A95A44C9D263}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{26A8401F-C9EB-4201-8712-A95A44C9D263}.Debug|x86.Build.0 = Debug|Any CPU
+		{26A8401F-C9EB-4201-8712-A95A44C9D263}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{26A8401F-C9EB-4201-8712-A95A44C9D263}.Release|Any CPU.Build.0 = Release|Any CPU
+		{26A8401F-C9EB-4201-8712-A95A44C9D263}.Release|x64.ActiveCfg = Release|Any CPU
+		{26A8401F-C9EB-4201-8712-A95A44C9D263}.Release|x64.Build.0 = Release|Any CPU
+		{26A8401F-C9EB-4201-8712-A95A44C9D263}.Release|x86.ActiveCfg = Release|Any CPU
+		{26A8401F-C9EB-4201-8712-A95A44C9D263}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

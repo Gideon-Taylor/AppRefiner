@@ -6,4 +6,12 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
+  <ItemGroup>
+    <None Remove="typeinfo.dat" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="typeinfo.dat" />
+  </ItemGroup>
+
 </Project>
