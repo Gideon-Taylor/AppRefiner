@@ -62,6 +62,19 @@ public class TypeInferenceOptions
     public bool IncrementalAnalysis { get; set; } = false;
 
     /// <summary>
+    /// When true, unknown types are treated permissively (similar to 'any').
+    /// Type mismatches involving unknown types will not be reported as errors.
+    /// Instead, they may be reported as warnings if <see cref="IncludeWarnings"/> is true.
+    ///
+    /// This is useful for IDE scenarios where incomplete type resolution (e.g., unimplemented
+    /// built-in functions) shouldn't block users with false positive errors.
+    ///
+    /// When false (default), unknown types cause strict errors, which helps identify
+    /// gaps in the type system implementation during testing.
+    /// </summary>
+    public bool TreatUnknownAsAny { get; set; } = false;
+
+    /// <summary>
     /// Optional provider that can supply PeopleCode program source when class metadata needs to be resolved.
     /// </summary>
     public IProgramSourceProvider? ProgramSourceProvider { get; set; }

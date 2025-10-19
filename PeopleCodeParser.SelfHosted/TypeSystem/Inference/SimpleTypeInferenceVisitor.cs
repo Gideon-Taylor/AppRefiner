@@ -193,7 +193,9 @@ public class SimpleTypeInferenceVisitor : ScopedAstVisitor<TypeInfo>
         // (unless it's void or unknown, in which case the assignment is problematic)
         var valueType = assignment.Value.GetInferredType();
         var targetType = assignment.Target.GetInferredType();
-        if (targetType != null && valueType != null && !targetType.IsAssignableFrom(valueType))
+        if (targetType != null && valueType != null &&
+            !targetType.IsAssignableFrom(valueType) &&
+            !ShouldIgnoreTypeMismatch(targetType, valueType))
         {
             var targetDescription = assignment.Target switch
             {
@@ -1023,7 +1025,9 @@ public class SimpleTypeInferenceVisitor : ScopedAstVisitor<TypeInfo>
         }
 
         // Check type compatibility if we have both types
-        if (assignedType != null && !declaredType.IsAssignableFrom(assignedType))
+        if (assignedType != null &&
+            !declaredType.IsAssignableFrom(assignedType) &&
+            !ShouldIgnoreTypeMismatch(declaredType, assignedType))
         {
             _context.ReportError(
                 $"Cannot assign value of type '{assignedType.Name}' to variable '{node.VariableName}' of type '{declaredType.Name}'",
@@ -1053,7 +1057,8 @@ public class SimpleTypeInferenceVisitor : ScopedAstVisitor<TypeInfo>
             return;
         }
 
-        if (!expectedType.IsAssignableFrom(actualType))
+        if (!expectedType.IsAssignableFrom(actualType) &&
+            !ShouldIgnoreTypeMismatch(expectedType, actualType))
         {
             _context.ReportError(
                 $"Argument type mismatch for method '{methodName}': expected '{expectedType.Name}' but found '{actualType.Name}'.",
@@ -1097,6 +1102,25 @@ public class SimpleTypeInferenceVisitor : ScopedAstVisitor<TypeInfo>
     {
         var elementType = array.ElementType != null ? ConvertTypeNodeToTypeInfo(array.ElementType) : null;
         return new ArrayTypeInfo(array.Dimensions, elementType);
+    }
+
+    /// <summary>
+    /// Checks if a type mismatch should be ignored due to lenient mode settings.
+    /// In lenient/IDE mode, unknown types are treated permissively to avoid false positives
+    /// when the type system hasn't fully resolved built-in functions yet.
+    /// </summary>
+    /// <param name="expectedType">The expected type in the assignment or validation</param>
+    /// <param name="actualType">The actual type being assigned or validated</param>
+    /// <returns>True if the mismatch should be ignored, false otherwise</returns>
+    private bool ShouldIgnoreTypeMismatch(TypeInfo? expectedType, TypeInfo? actualType)
+    {
+        if (!_context.Options.TreatUnknownAsAny)
+        {
+            return false;
+        }
+
+        return expectedType?.Kind == TypeKind.Unknown ||
+               actualType?.Kind == TypeKind.Unknown;
     }
 
     #endregion

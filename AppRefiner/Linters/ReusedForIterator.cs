@@ -18,7 +18,7 @@ namespace AppRefiner.Linters
         public override void VisitFor(ForStatementNode node)
         {
             // Get the iterator variable from the for statement
-            var iterator = node.Variable;
+            var iterator = node.IteratorName;
 
             // Check if the iterator is already in use
             if (forIterators.Contains(iterator))

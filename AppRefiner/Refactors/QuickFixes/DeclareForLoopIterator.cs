@@ -66,7 +66,7 @@ namespace AppRefiner.Refactors.QuickFixes
                 var scope = GetCurrentScope();
                 var varsInScope = GetVariablesInScope(scope);
 
-                string varName = node.Variable;
+                string varName = node.IteratorName;
 
                 // Check if the variable is already defined (with or without & prefix)
                 bool isDefined = varsInScope.Any(v =>

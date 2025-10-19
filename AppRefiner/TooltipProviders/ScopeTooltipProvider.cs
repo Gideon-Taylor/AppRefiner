@@ -301,7 +301,7 @@ namespace AppRefiner.TooltipProviders
             }
             else if (node is ForStatementNode forNode)
             {
-                return $"For {forNode.Variable} = {forNode.FromValue} To {forNode.ToValue}";
+                return $"For {forNode.IteratorName} = {forNode.FromValue} To {forNode.ToValue}";
             }
             else if (node is WhileStatementNode whileNode)
             {

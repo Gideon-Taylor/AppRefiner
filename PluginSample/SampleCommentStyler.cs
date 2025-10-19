@@ -1,34 +1,64 @@
 using AppRefiner.Stylers;
+using PeopleCodeParser.SelfHosted.Nodes; // For AST nodes
+using PeopleCodeParser.SelfHosted.Lexing; // For Token
 
 namespace PluginSample
 {
+    /// <summary>
+    /// Sample styler that highlights all comments.
+    /// Demonstrates how to access and process comments with the new self-hosted parser.
+    /// </summary>
     public class SampleCommentStyler : BaseStyler
     {
         private const uint HIGHLIGHT_COLOR = 0xADD8E6; // Light Blue
 
         public SampleCommentStyler()
         {
-            Description = "Sample: Highlights all comments.";
-            Active = true;
         }
 
-        // Comments are provided as a list `Comments`. We can process this within a suitable listener method.
-        // For simplicity, let's use EnterProgram to iterate over comments.
-        public override void EnterProgram(ProgramContext context)
-        {
-            if (Comments == null) return;
+        public override string Description => "Sample: Highlights all comments.";
 
-            foreach (var commentToken in Comments)
+        /// <summary>
+        /// Processes the entire program to find and highlight comments
+        /// </summary>
+        public override void VisitProgram(ProgramNode node)
+        {
+            Reset();
+
+            // Visit the program AST first
+            base.VisitProgram(node);
+
+            // After visiting the AST, process comments from the ProgramNode
+            ProcessComments(node);
+        }
+
+        /// <summary>
+        /// Processes all comments in the program
+        /// </summary>
+        private void ProcessComments(ProgramNode programNode)
+        {
+            if (programNode.Comments == null)
+                return;
+
+            foreach (var commentToken in programNode.Comments)
             {
-                Indicators?.Add(new Indicator
-                {
-                    Start = commentToken.StartIndex,
-                    Length = commentToken.StopIndex - commentToken.StartIndex + 1,
-                    Color = HIGHLIGHT_COLOR,
-                    Type = IndicatorType.HIGHLIGHTER, // Or TEXTCOLOR, SQUIGGLE
-                    Tooltip = "Sample Styler: This is a comment"
-                });
+                // Add an indicator for each comment using the AddIndicator helper method
+                AddIndicator(
+                    commentToken.SourceSpan,
+                    IndicatorType.HIGHLIGHTER, // Or TEXTCOLOR, SQUIGGLE
+                    HIGHLIGHT_COLOR,
+                    "Sample Styler: This is a comment"
+                );
             }
+        }
+
+        /// <summary>
+        /// Resets the styler to its initial state
+        /// </summary>
+        protected override void OnReset()
+        {
+            // Base class handles clearing indicators automatically
+            base.OnReset();
         }
     }
 }

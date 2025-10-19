@@ -67,7 +67,7 @@ public class UndefinedVariables : BaseStyler
     /// </summary>
     public override void VisitFor(ForStatementNode node)
     {
-        string varName = node.Variable;
+        string varName = node.IteratorName;
 
         // Check if variable is defined in any accessible scope
         var curScope = GetCurrentScope();

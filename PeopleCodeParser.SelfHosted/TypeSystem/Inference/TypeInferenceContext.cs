@@ -219,6 +219,20 @@ public class TypeInferenceContext
     {
         if (!Options.IncludeDetailedErrors) return;
 
+        // In lenient mode, suppress errors involving unknown types
+        // This prevents false positives in IDE scenarios where the type system
+        // hasn't fully resolved built-in functions yet
+        if (Options.TreatUnknownAsAny &&
+            (expectedType?.Kind == TypeKind.Unknown || actualType?.Kind == TypeKind.Unknown))
+        {
+            // Downgrade to warning instead of error
+            if (Options.IncludeWarnings)
+            {
+                ReportWarning($"Type could not be fully determined: {message}", node);
+            }
+            return;
+        }
+
         var error = new TypeError(message, node.SourceSpan, kind, expectedType, actualType);
         Errors.Add(error);
         node.AddTypeError(error);
