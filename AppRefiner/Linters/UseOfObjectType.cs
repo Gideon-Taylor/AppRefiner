@@ -18,7 +18,7 @@ namespace AppRefiner.Linters
         {
             if (typeNode is BuiltInTypeNode builtInType)
             {
-                return builtInType.Type == PeopleCodeParser.SelfHosted.TypeSystem.PeopleCodeType.Object;
+                return builtInType.Type == PeopleCodeTypeInfo.Types.PeopleCodeType.Object;
             }
             return false;
         }

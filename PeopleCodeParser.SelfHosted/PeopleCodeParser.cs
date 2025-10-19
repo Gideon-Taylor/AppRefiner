@@ -1,6 +1,6 @@
 using PeopleCodeParser.SelfHosted.Lexing;
 using PeopleCodeParser.SelfHosted.Nodes;
-using PeopleCodeParser.SelfHosted.TypeSystem;
+using PeopleCodeTypeInfo.Types;
 using System.Diagnostics;
 using System.Net.Http.Headers;
 
@@ -1116,8 +1116,10 @@ public class PeopleCodeParser
         // Check if current token is a generic identifier that might be a built-in object type
         if (Check(TokenType.GenericId, TokenType.GenericIdLimited))
         {
-            if (PeopleCodeTypeRegistry.TryGetPeopleCodeTypeEnum(Current.Text, out var parsedType))
+            // Try to parse as a builtin type using the type extension method
+            try
             {
+                var parsedType = BuiltinTypeExtensions.FromString(Current.Text);
                 var token = Current;
                 _position++;
                 return new BuiltInTypeNode(parsedType)
@@ -1125,6 +1127,10 @@ public class PeopleCodeParser
                     FirstToken = token,
                     LastToken = token
                 };
+            }
+            catch
+            {
+                // Not a builtin type, fall through
             }
         }
 
@@ -5339,104 +5345,8 @@ public class PeopleCodeParser
 
     #region Type Checking Integration
 
-    /// <summary>
-    /// Performs type inference on the parsed program using the specified mode
-    /// </summary>
-    /// <param name="program">The program to analyze (if null, uses the last parsed program)</param>
-    /// <param name="mode">The type inference mode to use</param>
-    /// <param name="resolver">Optional program resolver for thorough mode</param>
-    /// <param name="options">Optional analysis options</param>
-    /// <returns>The results of the type inference operation</returns>
-    public async Task<TypeInferenceResult> InferTypesAsync(
-        ProgramNode? program = null,
-        TypeInferenceMode mode = TypeInferenceMode.Quick,
-        IProgramResolver? resolver = null,
-        TypeInferenceOptions? options = null)
-    {
-        program ??= _workingProgram;
-
-        if (program == null)
-        {
-            throw new InvalidOperationException("No program available for type inference. Parse a program first or provide one explicitly.");
-        }
-
-        var engine = new TypeInferenceEngine();
-        return await engine.InferTypesAsync(program, mode, resolver, options);
-    }
-
-    /// <summary>
-    /// Parses a program and immediately performs type inference
-    /// </summary>
-    /// <param name="mode">The type inference mode to use</param>
-    /// <param name="resolver">Optional program resolver for thorough mode</param>
-    /// <param name="options">Optional analysis options</param>
-    /// <returns>Tuple containing the parsed program and type inference results</returns>
-    public async Task<(ProgramNode Program, TypeInferenceResult TypeResult)> ParseProgramWithTypesAsync(
-        TypeInferenceMode mode = TypeInferenceMode.Quick,
-        IProgramResolver? resolver = null,
-        TypeInferenceOptions? options = null)
-    {
-        var program = ParseProgram();
-        var typeResult = await InferTypesAsync(program, mode, resolver, options);
-        return (program, typeResult);
-    }
-
-    /// <summary>
-    /// Creates a type service instance configured for this parser
-    /// </summary>
-    /// <param name="mode">The initial type inference mode</param>
-    /// <param name="resolver">Optional program resolver for thorough mode</param>
-    /// <returns>A configured type service</returns>
-    public ITypeService CreateTypeService(TypeInferenceMode mode = TypeInferenceMode.Quick, IProgramResolver? resolver = null)
-    {
-        var service = new TypeService();
-        service.Enable(mode);
-
-        if (resolver != null)
-        {
-            service.RegisterProgramResolver(resolver);
-        }
-
-        return service;
-    }
-
-    /// <summary>
-    /// Quick validation to check if the parsed program has type errors
-    /// </summary>
-    /// <param name="program">The program to validate (if null, uses the last parsed program)</param>
-    /// <param name="mode">The type inference mode to use for validation</param>
-    /// <returns>True if the program has no type errors, false otherwise</returns>
-    public async Task<bool> ValidateProgramTypesAsync(ProgramNode? program = null, TypeInferenceMode mode = TypeInferenceMode.Quick)
-    {
-        try
-        {
-            var result = await InferTypesAsync(program, mode);
-            return result.Success && result.Errors.Count == 0;
-        }
-        catch
-        {
-            return false;
-        }
-    }
-
-    /// <summary>
-    /// Gets a summary of type information for the parsed program
-    /// </summary>
-    /// <param name="program">The program to analyze (if null, uses the last parsed program)</param>
-    /// <param name="mode">The type inference mode to use</param>
-    /// <returns>A human-readable summary of type analysis results</returns>
-    public async Task<string> GetTypeSummaryAsync(ProgramNode? program = null, TypeInferenceMode mode = TypeInferenceMode.Quick)
-    {
-        try
-        {
-            var result = await InferTypesAsync(program, mode);
-            return result.GetSummary();
-        }
-        catch (Exception ex)
-        {
-            return $"Type analysis failed: {ex.Message}";
-        }
-    }
+    // NOTE: Old type inference methods have been removed during type system unification.
+    // The new type inference system is simpler - use TypeInferenceVisitor directly.
 
     #endregion
 }

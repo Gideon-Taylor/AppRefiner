@@ -119,27 +119,27 @@ public abstract class TypeInfo
     /// <summary>
     /// Gets the common type for primitive type promotions
     /// </summary>
-    private static PeopleCodeType? GetCommonPrimitiveType(PeopleCodeType type1, PeopleCodeType type2)
+    private static Types.PeopleCodeType? GetCommonPrimitiveType(Types.PeopleCodeType type1, Types.PeopleCodeType type2)
     {
         // Same type
         if (type1 == type2) return type1;
 
         // Integer and Number are bidirectionally compatible, common type is Number
-        if ((type1 == PeopleCodeType.Integer && type2 == PeopleCodeType.Number) ||
-            (type1 == PeopleCodeType.Number && type2 == PeopleCodeType.Integer))
+        if ((type1 == Types.PeopleCodeType.Integer && type2 == Types.PeopleCodeType.Number) ||
+            (type1 == Types.PeopleCodeType.Number && type2 == Types.PeopleCodeType.Integer))
         {
-            return PeopleCodeType.Number;
+            return Types.PeopleCodeType.Number;
         }
 
         // Record and Scroll are bidirectionally compatible, common type is Record
-        if ((type1 == PeopleCodeType.Record && type2 == PeopleCodeType.Scroll) ||
-            (type1 == PeopleCodeType.Scroll && type2 == PeopleCodeType.Record))
+        if ((type1 == Types.PeopleCodeType.Record && type2 == Types.PeopleCodeType.Scroll) ||
+            (type1 == Types.PeopleCodeType.Scroll && type2 == Types.PeopleCodeType.Record))
         {
-            return PeopleCodeType.Record;
+            return Types.PeopleCodeType.Record;
         }
 
         // Date, DateTime, and Time are NOT compatible with each other - no common type
-        var dateTimeTypes = new[] { PeopleCodeType.Date, PeopleCodeType.DateTime, PeopleCodeType.Time };
+        var dateTimeTypes = new[] { Types.PeopleCodeType.Date, Types.PeopleCodeType.DateTime, Types.PeopleCodeType.Time };
         if (Array.IndexOf(dateTimeTypes, type1) >= 0 && Array.IndexOf(dateTimeTypes, type2) >= 0)
         {
             return null; // No common type for date/datetime/time

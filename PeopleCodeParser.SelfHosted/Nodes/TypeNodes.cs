@@ -1,5 +1,5 @@
 using PeopleCodeParser.SelfHosted.Visitors;
-using PeopleCodeParser.SelfHosted.TypeSystem;
+using PeopleCodeTypeInfo.Types;
 
 namespace PeopleCodeParser.SelfHosted.Nodes;
 

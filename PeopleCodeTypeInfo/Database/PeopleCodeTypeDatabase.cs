@@ -89,19 +89,19 @@ public class PeopleCodeTypeDatabase
         // Handle polymorphic types
         if (typeName == "$same")
         {
-            return new SameAsObjectTypeInfo();
+            return SameAsObjectTypeInfo.Instance;
         }
         if (typeName == "$element")
         {
-            return new ElementOfObjectTypeInfo();
+            return ElementOfObjectTypeInfo.Instance;
         }
         if (typeName == "$same_as_first")
         {
-            return new SameAsFirstParameterTypeInfo();
+            return SameAsFirstParameterTypeInfo.Instance;
         }
         if (typeName == "$array_of_first")
         {
-            return new ArrayOfFirstParameterTypeInfo();
+            return ArrayOfFirstParameterTypeInfo.Instance;
         }
 
         // TODO: Implement lookup for builtin types and app classes
