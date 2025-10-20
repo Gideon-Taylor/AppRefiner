@@ -57,7 +57,7 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
     /// </summary>
     public TypeInfo? GetInferredType(AstNode node)
     {
-        return node.Attributes.TryGetValue("TypeInfo", out var t) ? (TypeInfo)t : null;
+        return node.GetInferredType();
     }
 
     /// <summary>
@@ -73,7 +73,7 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
             type = PrimitiveTypeInfo.Number;
         }
 
-        node.Attributes["TypeInfo"] = type;
+        node.SetInferredType(type);
     }
 
     #region Type Conversion Helpers
@@ -387,6 +387,77 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
 
     #endregion
 
+    private FunctionInfo? ResolveFunctionInfo(FunctionCallNode node, TypeInfo[] parameterTypes)
+    {
+        if (node.Function is IdentifierNode identifier)
+        {
+            var func = _program.Functions.FirstOrDefault(f => f.Name.Equals(identifier.Name, StringComparison.OrdinalIgnoreCase));
+            if (func != null)
+            {
+                if (func.IsImplementation)
+                {
+                    _programMetadata.Methods.TryGetValue(identifier.Name, out var method);
+                    return method;
+                }
+                else if (func.IsDeclaration)
+                {
+                    string qualifiedName = $"{func.RecordName}.{func.FieldName}.{func.RecordEvent}";
+                    var sourceMetadata = _typeCache.Get(qualifiedName) ?? _typeResolver.GetTypeMetadata(qualifiedName);
+                    if (sourceMetadata != null && sourceMetadata.Methods.TryGetValue(identifier.Name, out var importedFunc))
+                    {
+                        return importedFunc;
+                    }
+                }
+            }
+
+            var builtinFunc = PeopleCodeTypeDatabase.GetFunction(identifier.Name);
+            if (builtinFunc != null) return builtinFunc;
+
+            var identifierType = GetInferredType(identifier);
+            if (identifierType != null && identifierType.Kind == TypeKind.BuiltinObject)
+            {
+                var obj = PeopleCodeTypeDatabase.GetObject(identifierType.Name);
+                if (obj is not null && obj?.DefaultMethodHash != 0)
+                {
+                    return obj.LookupMethodByHash(obj.DefaultMethodHash);
+                }
+            }
+        }
+        else if (node.Function is MemberAccessNode memberAccess)
+        {
+            var objectType = GetInferredType(memberAccess.Target);
+            if (objectType != null)
+            {
+                if (objectType.Kind == TypeKind.BuiltinObject || objectType.Kind == TypeKind.Primitive)
+                {
+                    return PeopleCodeTypeDatabase.GetMethod(objectType.Name, memberAccess.MemberName);
+                }
+                else if (objectType is AppClassTypeInfo appClassType)
+                {
+                    var metadata = appClassType.QualifiedName.Equals(_programMetadata.QualifiedName, StringComparison.OrdinalIgnoreCase) ? _programMetadata : (_typeCache.Get(appClassType.QualifiedName) ?? _typeResolver.GetTypeMetadata(appClassType.QualifiedName));
+                    if (metadata != null && metadata.Methods.TryGetValue(memberAccess.MemberName, out var method))
+                    {
+                        return method;
+                    }
+                }
+            }
+        }
+        else
+        {
+            var targetType = GetInferredType(node.Function);
+            if (targetType != null && targetType.Kind == TypeKind.BuiltinObject)
+            {
+                var obj = PeopleCodeTypeDatabase.GetObject(targetType.Name);
+                if (obj?.DefaultMethodHash != 0)
+                {
+                    return obj.LookupMethodByHash(obj.DefaultMethodHash);
+                }
+            }
+        }
+
+        return null;
+    }
+
     #region Expression Visitors
 
     /// <summary>
@@ -595,67 +666,33 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
     {
         base.VisitFunctionCall(node);
 
-        // Get parameter types from already-visited arguments
         var parameterTypes = new TypeInfo[node.Arguments.Count];
         for (int i = 0; i < node.Arguments.Count; i++)
         {
             parameterTypes[i] = GetInferredType(node.Arguments[i]) ?? UnknownTypeInfo.Instance;
         }
 
-        TypeInfo returnType;
-
-        // Determine the call pattern
-        if (node.Function is IdentifierNode identifier)
+        var functionInfo = ResolveFunctionInfo(node, parameterTypes);
+        if (functionInfo != null)
         {
-            // Could be either:
-            // 1. Standalone function call: Len(&var), MyFunc(1, 2)
-            // 2. Default method call on variable: &rowset(1)
+            node.SetFunctionInfo(functionInfo);
 
-            // Try resolving as a function first
-            returnType = ResolveFunctionCallReturnType(identifier.Name, parameterTypes);
-
-            // If not found as a function, check if it's a variable being called as default method
-            if (returnType is UnknownTypeInfo)
+            TypeInfo returnType;
+            if (node.Function is MemberAccessNode memberAccess)
             {
-                var identifierType = GetInferredType(identifier);
-
-                if (identifierType != null && !(identifierType is UnknownTypeInfo))
-                {
-                    // It's a variable with a known type, treat as default method call
-                    returnType = ResolveDefaultMethodCall(identifierType, parameterTypes);
-                }
-            }
-        }
-        else if (node.Function is MemberAccessNode memberAccess)
-        {
-            // Member method call: &obj.Method()
-            var objectType = GetInferredType(memberAccess.Target);
-
-            if (objectType != null)
-            {
-                returnType = ResolveMemberAccessReturnType(objectType, memberAccess.MemberName, isMethodCall: true, parameterTypes);
+                var objectType = GetInferredType(memberAccess.Target);
+                returnType = ConvertFunctionInfoToTypeInfo(functionInfo, objectType, parameterTypes);
             }
             else
             {
-                returnType = UnknownTypeInfo.Instance;
+                returnType = ConvertFunctionInfoToTypeInfo(functionInfo, null, parameterTypes);
             }
+            SetInferredType(node, returnType);
         }
         else
         {
-            // Default method call: GetLevel0()(1)
-            var targetType = GetInferredType(node.Function);
-
-            if (targetType != null)
-            {
-                returnType = ResolveDefaultMethodCall(targetType, parameterTypes);
-            }
-            else
-            {
-                returnType = UnknownTypeInfo.Instance;
-            }
+            SetInferredType(node, UnknownTypeInfo.Instance);
         }
-
-        SetInferredType(node, returnType);
     }
 
     /// <summary>

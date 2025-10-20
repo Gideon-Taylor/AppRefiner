@@ -94,8 +94,8 @@ public class TypeInferenceVisitorTests : IDisposable
         var stringLiterals = allLiterals.Where(l => l.LiteralType == LiteralType.String).ToList();
 
         // Diagnostic: Check if any string literals have type info
-        var literalsWithTypeInfo = stringLiterals.Where(l => _visitor.GetInferredType(l) != null).ToList();
-        var literalsWithoutTypeInfo = stringLiterals.Where(l => _visitor.GetInferredType(l) == null).ToList();
+        var literalsWithTypeInfo = stringLiterals.Where(l => l.GetInferredType() != null).ToList();
+        var literalsWithoutTypeInfo = stringLiterals.Where(l => l.GetInferredType() == null).ToList();
 
         // Find the "^" literal
         var literal = allLiterals.FirstOrDefault(l =>
@@ -110,13 +110,13 @@ public class TypeInferenceVisitorTests : IDisposable
             literalsWithoutTypeInfo.Select(l =>
                 $"'{l.Value}' at line {l.SourceSpan.Start.Line}"));
 
-        var hasTypeInfo = _visitor.GetInferredType(literal) != null;
+        var hasTypeInfo = literal.GetInferredType() != null;
         Assert.True(hasTypeInfo,
             $"Found {stringLiterals.Count} string literals, " +
             $"{literalsWithTypeInfo.Count} have type info, " +
             $"{literalsWithoutTypeInfo.Count} missing: [{missingTypeInfoDetails}]");
 
-        var inferredType = _visitor.GetInferredType(literal);
+        var inferredType = literal.GetInferredType();
         Assert.NotNull(inferredType);
         Assert.Equal(TypeKind.Primitive, inferredType.Kind);
         Assert.Equal(PeopleCodeType.String, inferredType.PeopleCodeType);
@@ -134,7 +134,7 @@ public class TypeInferenceVisitorTests : IDisposable
         Assert.NotNull(literal);
         Assert.Equal(LiteralType.Integer, literal.LiteralType);
 
-        var inferredType = _visitor.GetInferredType(literal);
+        var inferredType = literal.GetInferredType();
         Assert.NotNull(inferredType);
         Assert.Equal(TypeKind.Primitive, inferredType.Kind);
         Assert.Equal(PeopleCodeType.Number, inferredType.PeopleCodeType);
@@ -149,7 +149,7 @@ public class TypeInferenceVisitorTests : IDisposable
 
         if (literal != null && literal.LiteralType == LiteralType.Boolean)
         {
-            var inferredType = _visitor.GetInferredType(literal);
+            var inferredType = literal.GetInferredType();
             Assert.NotNull(inferredType);
             Assert.Equal(TypeKind.Primitive, inferredType.Kind);
             Assert.Equal(PeopleCodeType.Boolean, inferredType.PeopleCodeType);
@@ -164,7 +164,7 @@ public class TypeInferenceVisitorTests : IDisposable
 
         Assert.NotNull(functionCall);
 
-        var inferredType = _visitor.GetInferredType(functionCall);
+        var inferredType = functionCall.GetInferredType();
         Assert.NotNull(inferredType);
         Assert.Equal(TypeKind.Primitive, inferredType.Kind);
         Assert.Equal(PeopleCodeType.Number, inferredType.PeopleCodeType);
@@ -178,7 +178,7 @@ public class TypeInferenceVisitorTests : IDisposable
 
         Assert.NotNull(functionCall);
 
-        var inferredType = _visitor.GetInferredType(functionCall);
+        var inferredType = functionCall.GetInferredType();
         Assert.NotNull(inferredType);
         Assert.Equal(TypeKind.Primitive, inferredType.Kind);
         Assert.Equal(PeopleCodeType.String, inferredType.PeopleCodeType);
@@ -192,7 +192,7 @@ public class TypeInferenceVisitorTests : IDisposable
 
         Assert.NotNull(functionCall);
 
-        var inferredType = _visitor.GetInferredType(functionCall);
+        var inferredType = functionCall.GetInferredType();
         Assert.NotNull(inferredType);
         Assert.Equal(TypeKind.BuiltinObject, inferredType.Kind);
         Assert.Equal(PeopleCodeType.Record, inferredType.PeopleCodeType);
@@ -206,7 +206,7 @@ public class TypeInferenceVisitorTests : IDisposable
 
         Assert.NotNull(functionCall);
 
-        var inferredType = _visitor.GetInferredType(functionCall);
+        var inferredType = functionCall.GetInferredType();
         Assert.NotNull(inferredType);
         // Note: Find actually returns Number, not Integer
         Assert.Equal(TypeKind.Primitive, inferredType.Kind);
@@ -221,7 +221,7 @@ public class TypeInferenceVisitorTests : IDisposable
 
         Assert.NotNull(functionCall);
 
-        var inferredType = _visitor.GetInferredType(functionCall);
+        var inferredType = functionCall.GetInferredType();
         Assert.NotNull(inferredType);
         Assert.Equal(TypeKind.Primitive, inferredType.Kind);
         Assert.Equal(PeopleCodeType.Boolean, inferredType.PeopleCodeType);
@@ -236,7 +236,7 @@ public class TypeInferenceVisitorTests : IDisposable
 
         Assert.NotNull(functionCall);
 
-        var inferredType = _visitor.GetInferredType(functionCall);
+        var inferredType = functionCall.GetInferredType();
         Assert.NotNull(inferredType);
         Assert.Equal(TypeKind.Primitive, inferredType.Kind);
         Assert.Equal(PeopleCodeType.Boolean, inferredType.PeopleCodeType);
@@ -250,7 +250,7 @@ public class TypeInferenceVisitorTests : IDisposable
 
         Assert.NotNull(functionCall);
 
-        var inferredType = _visitor.GetInferredType(functionCall);
+        var inferredType = functionCall.GetInferredType();
         Assert.NotNull(inferredType);
         Assert.Equal(TypeKind.Primitive, inferredType.Kind);
         Assert.Equal(PeopleCodeType.String, inferredType.PeopleCodeType);
@@ -264,7 +264,7 @@ public class TypeInferenceVisitorTests : IDisposable
 
         Assert.NotNull(functionCall);
 
-        var inferredType = _visitor.GetInferredType(functionCall);
+        var inferredType = functionCall.GetInferredType();
         Assert.NotNull(inferredType);
         Assert.Equal(TypeKind.BuiltinObject, inferredType.Kind);
         Assert.Equal(PeopleCodeType.Rowset, inferredType.PeopleCodeType);
@@ -278,7 +278,7 @@ public class TypeInferenceVisitorTests : IDisposable
 
         if (functionCall != null && functionCall.Arguments.Count > 0)
         {
-            var inferredType = _visitor.GetInferredType(functionCall);
+            var inferredType = functionCall.GetInferredType();
             Assert.NotNull(inferredType);
             // Note: The create function returns the type specified in its argument
             // This should be an AppClassTypeInfo
@@ -295,7 +295,7 @@ public class TypeInferenceVisitorTests : IDisposable
 
         if (identifier != null)
         {
-            var inferredType = _visitor.GetInferredType(identifier);
+            var inferredType = identifier.GetInferredType();
             Assert.NotNull(inferredType);
             Assert.Equal(PeopleCodeType.String, inferredType.PeopleCodeType);
         }
@@ -427,7 +427,7 @@ end-method;
         Assert.Equal("ParseCriteria", memberAccess.MemberName, ignoreCase: true);
 
         // Get the inferred type for the method call
-        var inferredType = _visitor.GetInferredType(parseCriteriaCall);
+        var inferredType = parseCriteriaCall.GetInferredType();
         Assert.NotNull(inferredType);
 
         // Should be Number (Integer gets normalized to Number)
@@ -462,7 +462,7 @@ end-method;
         Assert.Equal("GetRowset", getRowsetAccess.MemberName, ignoreCase: true);
 
         // Test 3: .GetRowset() should return Rowset
-        var getRowsetType = _visitor.GetInferredType(getRowsetCall);
+        var getRowsetType = getRowsetCall.GetInferredType();
         Assert.NotNull(getRowsetType);
         Assert.Equal(PeopleCodeType.Rowset, getRowsetType.PeopleCodeType);
 
@@ -471,7 +471,7 @@ end-method;
         var defaultMethodCall = (FunctionCallNode)getRowsetAccess.Target;
 
         // Test 2: (1) should call the default method on Rowset and return Row
-        var defaultMethodReturnType = _visitor.GetInferredType(defaultMethodCall);
+        var defaultMethodReturnType = defaultMethodCall.GetInferredType();
         Assert.NotNull(defaultMethodReturnType);
         Assert.Equal(PeopleCodeType.Row, defaultMethodReturnType.PeopleCodeType);
 
@@ -480,7 +480,7 @@ end-method;
         var getLevel0Call = (FunctionCallNode)defaultMethodCall.Function;
 
         // Test 1: GetLevel0() should return Rowset
-        var getLevel0Type = _visitor.GetInferredType(getLevel0Call);
+        var getLevel0Type = getLevel0Call.GetInferredType();
         Assert.NotNull(getLevel0Type);
         Assert.Equal(PeopleCodeType.Rowset, getLevel0Type.PeopleCodeType);
     }
@@ -503,7 +503,7 @@ end-method;
         Assert.IsType<FunctionCallNode>(rowPropertyAccess.Target);
 
         // Get the inferred type for the member access
-        var inferredType = _visitor.GetInferredType(rowPropertyAccess);
+        var inferredType = rowPropertyAccess.GetInferredType();
         Assert.NotNull(inferredType);
 
         // Should be Record type (Row property access acts as GetRecord)
@@ -525,7 +525,7 @@ end-method;
         Assert.NotNull(recordPropertyAccess);
 
         // Get the inferred type for the member access
-        var inferredType = _visitor.GetInferredType(recordPropertyAccess);
+        var inferredType = recordPropertyAccess.GetInferredType();
         Assert.NotNull(inferredType);
 
         // Should be Field type (Record property access acts as GetField)
@@ -554,7 +554,7 @@ end-method;
         var ptadsrelnameAccess = (MemberAccessNode)valueAccess.Target;
         Assert.Equal("PTADSRELNAME", ptadsrelnameAccess.MemberName, ignoreCase: true);
 
-        var fieldType = _visitor.GetInferredType(ptadsrelnameAccess);
+        var fieldType = ptadsrelnameAccess.GetInferredType();
         Assert.NotNull(fieldType);
         Assert.Equal(PeopleCodeType.Field, fieldType.PeopleCodeType);
 
@@ -563,7 +563,7 @@ end-method;
         var psadsrelationAccess = (MemberAccessNode)ptadsrelnameAccess.Target;
         Assert.Equal("PSADSRELATION", psadsrelationAccess.MemberName, ignoreCase: true);
 
-        var recordType = _visitor.GetInferredType(psadsrelationAccess);
+        var recordType = psadsrelationAccess.GetInferredType();
         Assert.NotNull(recordType);
         Assert.Equal(PeopleCodeType.Record, recordType.PeopleCodeType);
 
@@ -571,13 +571,13 @@ end-method;
         Assert.IsType<FunctionCallNode>(psadsrelationAccess.Target);
         var rowCall = (FunctionCallNode)psadsrelationAccess.Target;
 
-        var rowType = _visitor.GetInferredType(rowCall);
+        var rowType = rowCall.GetInferredType();
         Assert.NotNull(rowType);
         Assert.Equal(PeopleCodeType.Row, rowType.PeopleCodeType);
 
         // Finally, verify the Value property access infers correct type
         // Value on Field is typically a string/variant type
-        var valueType = _visitor.GetInferredType(valueAccess);
+        var valueType = valueAccess.GetInferredType();
         Assert.NotNull(valueType);
         // Value property should be resolved from Field's actual property
     }
@@ -601,7 +601,7 @@ end-method;
         Assert.Equal("GetRowset", memberAccess.MemberName, ignoreCase: true);
 
         // Get the inferred type for the method call
-        var inferredType = _visitor.GetInferredType(getRowsetCall);
+        var inferredType = getRowsetCall.GetInferredType();
         Assert.NotNull(inferredType);
 
         // Should be Rowset type (normal method resolution)
@@ -615,7 +615,7 @@ end-method;
         // It helps us identify gaps in the type inference implementation
 
         // Create the unknown type finder and run it on the program
-        var unknownTypeFinder = new UnknownTypeFinder(_visitor);
+        var unknownTypeFinder = new UnknownTypeFinder();
         _program.Accept(unknownTypeFinder);
 
         // Generate diagnostic report
@@ -830,12 +830,10 @@ end-method;
     /// </summary>
     private class UnknownTypeFinder : ScopedAstVisitor<object>
     {
-        private readonly TypeInferenceVisitor _typeInferenceVisitor;
         private readonly List<UnknownTypeInfo> _findings = new();
 
-        public UnknownTypeFinder(TypeInferenceVisitor typeInferenceVisitor)
+        public UnknownTypeFinder()
         {
-            _typeInferenceVisitor = typeInferenceVisitor;
         }
 
         public IReadOnlyList<UnknownTypeInfo> Findings => _findings;
@@ -854,7 +852,7 @@ end-method;
 
         private void CheckExpressionType(ExpressionNode node, string? context = null)
         {
-            var inferredType = _typeInferenceVisitor.GetInferredType(node);
+            var inferredType = node.GetInferredType();
 
             // Check if type is unknown or null
             if (inferredType == null || inferredType.Kind == TypeKind.Unknown)

@@ -84,6 +84,22 @@ public abstract class AstNode
     /// </summary>
     public Dictionary<string, object> Attributes { get; } = new();
 
+    // Attribute keys for semantic analysis
+    /// <summary>
+    /// Attribute key for storing inferred type information (TypeInfo)
+    /// </summary>
+    public const string TypeInfoAttributeKey = "TypeInfo";
+
+    /// <summary>
+    /// Attribute key for storing function information (FunctionInfo)
+    /// </summary>
+    public const string FunctionInfoAttributeKey = "FunctionInfo";
+
+    /// <summary>
+    /// Attribute key for storing type checking errors (TypeError)
+    /// </summary>
+    public const string TypeErrorAttributeKey = "TypeError";
+
     /// <summary>
     /// Accept method for visitor pattern
     /// </summary>
