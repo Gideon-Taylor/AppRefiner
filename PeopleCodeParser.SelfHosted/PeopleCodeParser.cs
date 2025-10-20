@@ -605,7 +605,7 @@ public class PeopleCodeParser
                     {
                         var variable = ParseVariableDeclaration();
                         if (variable != null)
-                            program.ComponentAndGlobalVariables.Add(variable);
+                            program.AddComponentAndGlobalVariable(variable);
 
                     }
                     else if (Check(TokenType.Local))
@@ -615,7 +615,7 @@ public class PeopleCodeParser
                         if (variable != null)
                         {
                             // Add to LocalVariables list (program-level locals)
-                            program.LocalVariables.Add(variable);
+                            program.AddLocalVariable(variable);
                         }
                         else
                         {
@@ -2268,6 +2268,7 @@ public class PeopleCodeParser
 
             // Create setter implementation
             var setterImpl = new MethodImplNode(propertyName, Previous, setterBody);
+            propertyNode.SetSetterImplementation(setterImpl);
 
             
             // Expect END-SET
@@ -4071,8 +4072,8 @@ public class PeopleCodeParser
                     return null;
                 }
 
-                var node = new LocalVariableDeclarationWithAssignmentNode(variableType, firstVariableName, initialValue);
-                node.SetVariableNameWithToken(firstVariableName, firstVarToken);
+                var nameInfo = new VariableNameInfo(firstVariableName, firstVarToken);
+                var node = new LocalVariableDeclarationWithAssignmentNode(variableType, nameInfo, initialValue);
                 return node;
             }
             else

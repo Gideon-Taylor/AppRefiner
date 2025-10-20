@@ -99,6 +99,18 @@ public class ProgramNode : AstNode
         AddChild(constant);
     }
 
+    public void AddComponentAndGlobalVariable(ProgramVariableNode variable)
+    {
+        ComponentAndGlobalVariables.Add(variable);
+        AddChild(variable);
+    }
+
+    public void AddLocalVariable(StatementNode variable)
+    {
+        LocalVariables.Add(variable);
+        AddChild(variable);
+    }
+
     public void AddComment(Lexing.Token comment)
     {
         if (comment.Type.IsCommentType())
@@ -205,6 +217,7 @@ public class ProgramNode : AstNode
             LineToStatementMap[line] = statement;
         }
     }
+
 }
 /// <summary>
 /// Import declaration node

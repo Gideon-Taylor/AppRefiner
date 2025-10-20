@@ -179,6 +179,28 @@ public abstract class AstNode
         return current;
     }
 
+    public IEnumerable<AstNode> FindNodes(Func<AstNode, bool> predicate)
+    {
+        var nodesToVisit = new Stack<AstNode>();
+        nodesToVisit.Push(this);
+
+        while (nodesToVisit.Count > 0)
+        {
+            var currentNode = nodesToVisit.Pop();
+
+            if (predicate(currentNode))
+            {
+                yield return currentNode;
+            }
+
+            // Push children in reverse order to visit them in declaration order
+            for (int i = currentNode.Children.Count - 1; i >= 0; i--)
+            {
+                nodesToVisit.Push(currentNode.Children[i]);
+            }
+        }
+    }
+
     /// <summary>
     /// Get all leading comments (from trivia on the first token)
     /// </summary>

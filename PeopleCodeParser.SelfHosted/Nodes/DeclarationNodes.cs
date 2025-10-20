@@ -232,7 +232,19 @@ public class PropertyNode : DeclarationNode
     /// <summary>
     /// Class or Interface this property implements
     /// </summary>
-    public TypeNode? ImplementedInterface { get; set; }
+    private TypeNode? _implementedInterface;
+    public TypeNode? ImplementedInterface
+    {
+        get => _implementedInterface;
+        set
+        {
+            if (_implementedInterface != null)
+                RemoveChild(_implementedInterface);
+            _implementedInterface = value;
+            if (_implementedInterface != null)
+                AddChild(_implementedInterface);
+        }
+    }
 
     /// <summary>
     /// Gets or sets the name of the implemented property.
@@ -621,7 +633,19 @@ public class ParameterNode : AstNode
     /// <summary>
     /// Parameter type
     /// </summary>
-    public TypeNode Type { get; set; }
+    private TypeNode _type;
+    public TypeNode Type
+    {
+        get => _type;
+        set
+        {
+            if (_type != null)
+                RemoveChild(_type);
+            _type = value;
+            if (_type != null)
+                AddChild(_type);
+        }
+    }
 
     /// <summary>
     /// True if parameter is passed by reference (OUT parameter)
@@ -636,9 +660,8 @@ public class ParameterNode : AstNode
     public ParameterNode(string name, Token nameToken, TypeNode type)
     {
         Name = name ?? throw new ArgumentNullException(nameof(name));
-        Type = type ?? throw new ArgumentNullException(nameof(type));
         NameToken = nameToken;
-        AddChild(type);
+        Type = type ?? throw new ArgumentNullException(nameof(type));
     }
 
     public override void Accept(IAstVisitor visitor)
