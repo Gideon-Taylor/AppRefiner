@@ -257,7 +257,14 @@ public abstract class ScopedAstVisitor<T> : AstVisitorBase
     /// </summary>
     protected VariableInfo? FindVariable(string name)
     {
-        return variableRegistry.FindVariableInScope(name, GetCurrentScope());
+        var info = variableRegistry.FindVariableInScope(name, GetCurrentScope());
+        if (info == null && name.StartsWith('&'))
+        {
+            /* try finding a property ? */
+            info = variableRegistry.FindVariableInScope(name.Substring(1), GetCurrentScope());
+        }
+
+        return info;
     }
 
     #endregion

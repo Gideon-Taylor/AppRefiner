@@ -900,7 +900,10 @@ end-method;
 
         public override void VisitIdentifier(IdentifierNode node)
         {
-            CheckExpressionType(node, $"Identifier: {node.Name}");
+            if (node.Name.StartsWith('&'))
+            {
+                CheckExpressionType(node, $"Identifier: {node.Name}");
+            }
             base.VisitIdentifier(node);
         }
 
@@ -932,12 +935,6 @@ end-method;
         {
             CheckExpressionType(node, "Parenthesized expression");
             base.VisitParenthesized(node);
-        }
-
-        public override void VisitAssignment(AssignmentNode node)
-        {
-            CheckExpressionType(node, "Assignment");
-            base.VisitAssignment(node);
         }
 
         public override void VisitFunctionCall(FunctionCallNode node)

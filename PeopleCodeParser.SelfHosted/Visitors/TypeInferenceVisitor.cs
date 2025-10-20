@@ -394,6 +394,8 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
     /// </summary>
     public override void VisitLiteral(LiteralNode node)
     {
+        base.VisitLiteral(node);
+
         TypeInfo inferredType = node.LiteralType switch
         {
             LiteralType.String => PrimitiveTypeInfo.String,
@@ -405,7 +407,6 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
         };
 
         SetInferredType(node, inferredType);
-        base.VisitLiteral(node);
     }
 
     /// <summary>
@@ -413,6 +414,8 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
     /// </summary>
     public override void VisitIdentifier(IdentifierNode node)
     {
+        base.VisitIdentifier(node);
+
         // Special handling for %This - resolve to current class type
         if (node.Name.Equals("%This", StringComparison.OrdinalIgnoreCase))
         {
@@ -444,29 +447,32 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
                 SetInferredType(node, UnknownTypeInfo.Instance);
             }
         }
-        // Try to find variable in scope
-        else if (FindVariable(node.Name) is var variable && variable != null)
-        {
-            // Convert type name string to TypeInfo
-            var inferredType = ConvertTypeNameToTypeInfo(variable.Type);
-            SetInferredType(node, inferredType);
-        }
         else
         {
-            // Could be a system variable or unknown
-            // Check if it's a system variable
-            var systemVar = PeopleCodeTypeDatabase.GetSystemVariable(node.Name);
-            if (systemVar.HasValue)
+            var variable = FindVariable(node.Name);
+
+            if (variable != null)
             {
-                SetInferredType(node, ConvertPropertyInfoToTypeInfo(systemVar.Value));
+                // Convert type name string to TypeInfo
+                var inferredType = ConvertTypeNameToTypeInfo(variable.Type);
+                SetInferredType(node, inferredType);
             }
             else
             {
-                SetInferredType(node, UnknownTypeInfo.Instance);
+
+                // Not a declared variable, check if it's a system variable.
+                // System variables (like %UserId) are not prefixed with '&'.
+                var systemVar = PeopleCodeTypeDatabase.GetSystemVariable(node.Name);
+                if (systemVar.HasValue)
+                {
+                    SetInferredType(node, ConvertPropertyInfoToTypeInfo(systemVar.Value));
+                }
+                else
+                {
+                    SetInferredType(node, UnknownTypeInfo.Instance);
+                }
             }
         }
-
-        base.VisitIdentifier(node);
     }
 
     /// <summary>
@@ -474,14 +480,7 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
     /// </summary>
     public override void VisitArrayAccess(ArrayAccessNode node)
     {
-        // Visit the array expression first
-        node.Array.Accept(this);
-
-        // Visit all index expressions
-        foreach (var index in node.Indices)
-        {
-            index.Accept(this);
-        }
+        base.VisitArrayAccess(node);
 
         // Get the array type and reduce dimensionality
         var arrayType = GetInferredType(node.Array);
@@ -506,9 +505,7 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
     /// </summary>
     public override void VisitBinaryOperation(BinaryOperationNode node)
     {
-        // Visit both operands
-        node.Left.Accept(this);
-        node.Right.Accept(this);
+        base.VisitBinaryOperation(node);
 
         var leftType = GetInferredType(node.Left);
         var rightType = GetInferredType(node.Right);
@@ -551,8 +548,7 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
     /// </summary>
     public override void VisitUnaryOperation(UnaryOperationNode node)
     {
-        // Visit the operand
-        node.Operand.Accept(this);
+        base.VisitUnaryOperation(node);
 
         var operandType = GetInferredType(node.Operand);
         if (operandType == null)
@@ -577,8 +573,7 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
     /// </summary>
     public override void VisitMemberAccess(MemberAccessNode node)
     {
-        // Visit the target expression
-        node.Target.Accept(this);
+        base.VisitMemberAccess(node);
 
         var objectType = GetInferredType(node.Target);
         if (objectType != null)
@@ -598,11 +593,12 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
     /// </summary>
     public override void VisitFunctionCall(FunctionCallNode node)
     {
-        // Visit all arguments first to get parameter types
+        base.VisitFunctionCall(node);
+
+        // Get parameter types from already-visited arguments
         var parameterTypes = new TypeInfo[node.Arguments.Count];
         for (int i = 0; i < node.Arguments.Count; i++)
         {
-            node.Arguments[i].Accept(this);
             parameterTypes[i] = GetInferredType(node.Arguments[i]) ?? UnknownTypeInfo.Instance;
         }
 
@@ -621,7 +617,6 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
             // If not found as a function, check if it's a variable being called as default method
             if (returnType is UnknownTypeInfo)
             {
-                identifier.Accept(this);
                 var identifierType = GetInferredType(identifier);
 
                 if (identifierType != null && !(identifierType is UnknownTypeInfo))
@@ -634,7 +629,6 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
         else if (node.Function is MemberAccessNode memberAccess)
         {
             // Member method call: &obj.Method()
-            memberAccess.Target.Accept(this);
             var objectType = GetInferredType(memberAccess.Target);
 
             if (objectType != null)
@@ -649,7 +643,6 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
         else
         {
             // Default method call: GetLevel0()(1)
-            node.Function.Accept(this);
             var targetType = GetInferredType(node.Function);
 
             if (targetType != null)
@@ -666,12 +659,24 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
     }
 
     /// <summary>
+    /// Visit object creation expression and infer type from the class being created
+    /// </summary>
+    public override void VisitObjectCreation(ObjectCreationNode node)
+    {
+        // Let the base visitor handle traversal and any other logic first.
+        base.VisitObjectCreation(node);
+
+        // The type of the expression is the type of the object being created.
+        var inferredType = ConvertTypeNodeToTypeInfo(node.Type);
+        SetInferredType(node, inferredType);
+    }
+
+    /// <summary>
     /// Visit parenthesized expression and propagate inner type
     /// </summary>
     public override void VisitParenthesized(ParenthesizedExpressionNode node)
     {
-        // Visit the inner expression
-        node.Expression.Accept(this);
+        base.VisitParenthesized(node);
 
         // Propagate the inner expression's type to the parenthesized node
         var innerType = GetInferredType(node.Expression);
