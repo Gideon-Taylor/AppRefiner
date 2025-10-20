@@ -128,21 +128,20 @@ public class TypeMetadataBuilder : AstVisitorBase
             _interfaceName = ExtractTypeName(node.ImplementedInterface);
         }
 
-        // Visit method declarations (not implementations)
+        // Visit all method signatures
+        // For AppClasses, we extract metadata from all methods (both declared and implemented)
+        // since the method signatures in the class declaration are what matter for type checking
         foreach (var method in node.Methods)
         {
-            if (method.IsDeclaration)
-            {
-                var functionInfo = BuildFunctionInfo(method);
+            var functionInfo = BuildFunctionInfo(method);
 
-                if (method.IsConstructor)
-                {
-                    _constructor = functionInfo;
-                }
-                else
-                {
-                    _methods[method.Name] = functionInfo;
-                }
+            if (method.IsConstructor)
+            {
+                _constructor = functionInfo;
+            }
+            else
+            {
+                _methods[method.Name] = functionInfo;
             }
         }
 

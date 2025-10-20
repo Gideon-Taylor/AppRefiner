@@ -476,7 +476,7 @@ public static class BuiltinTypeExtensions
             "xmldocfactory" => PeopleCodeType.Xmldocfactory,
             "xmllink" => PeopleCodeType.Xmllink,
             "xmlnode" => PeopleCodeType.Xmlnode,
-            _ => PeopleCodeType.Any
+            _ => PeopleCodeType.Unknown
         };
     }
 

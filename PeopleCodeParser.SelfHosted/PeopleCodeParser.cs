@@ -1120,6 +1120,13 @@ public class PeopleCodeParser
             try
             {
                 var parsedType = BuiltinTypeExtensions.FromString(Current.Text);
+
+                // If we get Unknown back, it's not a builtin type - fall through
+                if (parsedType == PeopleCodeType.Unknown)
+                {
+                    return null;
+                }
+
                 var token = Current;
                 _position++;
                 return new BuiltInTypeNode(parsedType)

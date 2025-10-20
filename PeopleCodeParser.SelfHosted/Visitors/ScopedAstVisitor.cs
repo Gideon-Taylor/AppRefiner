@@ -893,6 +893,8 @@ public abstract class ScopedAstVisitor<T> : AstVisitorBase
 
             case LiteralNode:
                 // Literals don't reference variables - no action needed
+                // But we still need to allow other visitors (like TypeInferenceVisitor) to process them
+                expression.Accept(this);
                 break;
 
             default:
