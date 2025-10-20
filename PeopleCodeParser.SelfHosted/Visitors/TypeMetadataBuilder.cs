@@ -108,7 +108,7 @@ public class TypeMetadataBuilder : AstVisitorBase
             _qualifiedName = _name;
 
             // Only visit function declarations (not implementations)
-            foreach (var function in node.Functions.Where(f => f.IsDeclaration))
+            foreach (var function in node.Functions)
             {
                 function.Accept(this);
             }
@@ -178,12 +178,8 @@ public class TypeMetadataBuilder : AstVisitorBase
 
     public override void VisitFunction(FunctionNode node)
     {
-        // Only process function declarations for function libraries
-        if (node.IsDeclaration && _kind == ProgramKind.FunctionLibrary)
-        {
-            var functionInfo = BuildFunctionInfo(node);
-            _methods[node.Name] = functionInfo;
-        }
+        var functionInfo = BuildFunctionInfo(node);
+        _methods[node.Name] = functionInfo;
     }
 
     /// <summary>
