@@ -178,5 +178,39 @@ namespace AppRefiner.Database.Models
             
             return result;
         }
+
+        /// <summary>
+        /// Converts the OpenTarget to a qualified name suitable for type metadata cache keys.
+        /// </summary>
+        /// <returns>
+        /// For Application Classes: "PKG:SUBPKG:Class" (strips method name)
+        /// For other programs: Full path including event (e.g., "RECORD:FIELD:EVENT")
+        /// </returns>
+        public string ToQualifiedName()
+        {
+            switch (Type)
+            {
+                case OpenTargetType.ApplicationClass:
+                    // For app classes, strip the method name (last component)
+                    // ObjectValues: [pkg1, pkg2, ..., class, method]
+                    var appClassParts = ObjectValues
+                        .Where(v => !string.IsNullOrEmpty(v))
+                        .ToList();
+
+                    if (appClassParts.Count > 1)
+                    {
+                        // Remove the last component (method name)
+                        return string.Join(":", appClassParts.Take(appClassParts.Count - 1));
+                    }
+
+                    // Fallback if structure is unexpected
+                    return string.Join(":", appClassParts);
+
+                default:
+                    // For all other program types (record field, component, etc.),
+                    // use the full path including the event/method name
+                    return Path;
+            }
+        }
     }
 }

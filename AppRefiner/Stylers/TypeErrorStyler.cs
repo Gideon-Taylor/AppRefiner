@@ -1,4 +1,5 @@
 using AppRefiner.Database;
+using PeopleCodeParser.SelfHosted;
 using PeopleCodeParser.SelfHosted.Nodes;
 using PeopleCodeParser.SelfHosted.Visitors;
 

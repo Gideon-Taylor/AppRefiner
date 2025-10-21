@@ -146,7 +146,7 @@ namespace AppRefiner.Database
                 var tokens = lexer.TokenizeAll();
 
                 // Parse the source code
-                var parser = new PeopleCodeParser(tokens);
+                var parser = new PeopleCodeParser.SelfHosted.PeopleCodeParser(tokens);
                 var program = parser.ParseProgram();
 
                 // Log parse errors but continue - we want to extract partial metadata

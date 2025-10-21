@@ -2911,6 +2911,9 @@ namespace AppRefiner
                             SaveSnapshot(editorToSave);
                         }
 
+                        // Invalidate type metadata cache for this program
+                        InvalidateTypeCacheForEditor(editorToSave);
+
                         Debug.Log("Event mapping flags: " + chkEventMapping.Checked + ", " + chkEventMapXrefs.Checked);
                         if (editorToSave.Type == EditorType.PeopleCode &&
                             editorToSave.DataManager != null &&
@@ -2934,6 +2937,67 @@ namespace AppRefiner
             {
                 Debug.Log($"Error processing debounced savepoint: {ex.Message}");
                 Debug.Log(ex.StackTrace);
+            }
+        }
+
+        /// <summary>
+        /// Invalidates type metadata caches when an editor is saved.
+        /// This ensures cached type information is refreshed when source code changes.
+        /// </summary>
+        /// <param name="editor">The editor that was saved</param>
+        private void InvalidateTypeCacheForEditor(ScintillaEditor editor)
+        {
+            try
+            {
+                // Only invalidate for PeopleCode editors
+                if (editor.Type != EditorType.PeopleCode)
+                {
+                    return;
+                }
+
+                // Get the AppDesigner process
+                var appDesignerProcess = editor.AppDesignerProcess;
+                if (appDesignerProcess == null)
+                {
+                    Debug.Log("InvalidateTypeCacheForEditor: No AppDesigner process available");
+                    return;
+                }
+
+                // Parse the editor caption to get the OpenTarget
+                var openTarget = OpenTargetBuilder.CreateFromCaption(editor.Caption);
+                if (openTarget == null)
+                {
+                    Debug.Log($"InvalidateTypeCacheForEditor: Could not parse caption '{editor.Caption}'");
+                    return;
+                }
+
+                // Convert OpenTarget to qualified name for cache key
+                string qualifiedName = openTarget.ToQualifiedName();
+
+                // Invalidate in TypeCache (shared cache for TypeMetadata)
+                if (appDesignerProcess.TypeCache != null)
+                {
+                    bool removed = appDesignerProcess.TypeCache.Remove(qualifiedName);
+                    if (removed)
+                    {
+                        Debug.Log($"InvalidateTypeCacheForEditor: Removed '{qualifiedName}' from TypeCache");
+                    }
+                }
+
+                // Invalidate in DatabaseTypeMetadataResolver (resolver's internal cache)
+                if (appDesignerProcess.TypeResolver != null)
+                {
+                    appDesignerProcess.TypeResolver.InvalidateCache(qualifiedName);
+                    Debug.Log($"InvalidateTypeCacheForEditor: Invalidated DatabaseTypeMetadataResolver cache for '{qualifiedName}'");
+                }
+                else
+                {
+                    Debug.Log("InvalidateTypeCacheForEditor: TypeResolver is null (database not connected?)");
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.LogException(ex, "InvalidateTypeCacheForEditor: Error invalidating type cache");
             }
         }
 
