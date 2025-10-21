@@ -342,7 +342,25 @@ public enum PeopleCodeType : byte
     Xmldoc = 129,
     Xmldocfactory = 130,
     Xmllink = 131,
-    Xmlnode = 132
+    Xmlnode = 132,
+
+    // Additional reference type keywords (133-148)
+    Barname = 133,
+    Busactivity = 134,
+    Busevent = 135,
+    Busprocess = 136,
+    Compintfc = 137,
+    Component = 138,
+    Filelayout = 139,
+    Html = 140,
+    Image = 141,
+    Itemname = 142,
+    Menuname = 143,
+    Node = 144,
+    Package = 145,
+    Panelgroup = 146,
+    Stylesheet = 147,
+    Url = 148
 }
 
 public static class BuiltinTypeExtensions
@@ -476,6 +494,22 @@ public static class BuiltinTypeExtensions
             "xmldocfactory" => PeopleCodeType.Xmldocfactory,
             "xmllink" => PeopleCodeType.Xmllink,
             "xmlnode" => PeopleCodeType.Xmlnode,
+            "barname" => PeopleCodeType.Barname,
+            "busactivity" => PeopleCodeType.Busactivity,
+            "busevent" => PeopleCodeType.Busevent,
+            "busprocess" => PeopleCodeType.Busprocess,
+            "compintfc" => PeopleCodeType.Compintfc,
+            "component" => PeopleCodeType.Component,
+            "filelayout" => PeopleCodeType.Filelayout,
+            "html" => PeopleCodeType.Html,
+            "image" => PeopleCodeType.Image,
+            "itemname" => PeopleCodeType.Itemname,
+            "menuname" => PeopleCodeType.Menuname,
+            "node" => PeopleCodeType.Node,
+            "package" => PeopleCodeType.Package,
+            "panelgroup" => PeopleCodeType.Panelgroup,
+            "stylesheet" => PeopleCodeType.Stylesheet,
+            "url" => PeopleCodeType.Url,
             _ => PeopleCodeType.Unknown
         };
     }
@@ -530,7 +564,7 @@ public static class BuiltinTypeExtensions
     /// </summary>
     public static bool IsBuiltinObject(this PeopleCodeType type)
     {
-        return type >= PeopleCodeType.Aesection && type <= PeopleCodeType.Xmlnode;
+        return type >= PeopleCodeType.Aesection && type <= PeopleCodeType.Url;
     }
 
     /// <summary>
@@ -898,26 +932,69 @@ public class UnknownTypeInfo : TypeInfo
 }
 
 /// <summary>
-/// Represents a reference type for named references like HTML.OBJECT_NAME, SQL.FOO, RECORD.FOO
+/// Represents a PeopleCode reference (e.g., Record.MY_RECORD, Field.MY_FIELD, MY_RECORD.MY_FIELD)
+/// References are NOT instances - they are references to definitions that can be passed to functions.
+/// Example: CreateRecord(Record.FOO) - Record.FOO is a reference, the return value is an instance
 /// </summary>
 public class ReferenceTypeInfo : TypeInfo
 {
-    public override string Name => "reference";
+    public override string Name => $"@{ReferenceCategory.GetTypeName().ToUpperInvariant()}";
     public override TypeKind Kind => TypeKind.Reference;
     public override PeopleCodeType? PeopleCodeType => Types.PeopleCodeType.Reference;
 
-    // Singleton instance for generic reference type
-    public static readonly ReferenceTypeInfo Instance = new();
+    /// <summary>
+    /// The category of reference (e.g., Record, Field, SQL)
+    /// </summary>
+    public Types.PeopleCodeType ReferenceCategory { get; }
 
-    private ReferenceTypeInfo() { }
+    /// <summary>
+    /// The name of the referenced item (e.g., "MY_RECORD", "MY_FIELD")
+    /// </summary>
+    public string ReferencedName { get; }
+
+    /// <summary>
+    /// The fully qualified reference (e.g., "Record.MY_RECORD", "MY_RECORD.MY_FIELD")
+    /// </summary>
+    public string FullReference { get; }
+
+    // Singleton instance for generic reference type (backward compatibility)
+    public static readonly ReferenceTypeInfo Instance = new(Types.PeopleCodeType.Any, "", "");
+
+    public ReferenceTypeInfo(Types.PeopleCodeType category, string referencedName, string fullReference)
+    {
+        ReferenceCategory = category;
+        ReferencedName = referencedName;
+        FullReference = fullReference;
+    }
+
+    // Private constructor for singleton
+    private ReferenceTypeInfo() : this(Types.PeopleCodeType.Any, "", "") { }
 
     public override bool IsAssignableFrom(TypeInfo other)
     {
-        // Any can be assigned to reference
         if (other.Kind == TypeKind.Any) return true;
 
-        // Same reference type
-        if (other.Kind == TypeKind.Reference) return true;
+        // References are only assignable from same category references
+        if (other is ReferenceTypeInfo otherRef)
+        {
+            // Any reference category accepts any other reference
+            if (ReferenceCategory == Types.PeopleCodeType.Any || otherRef.ReferenceCategory == Types.PeopleCodeType.Any)
+                return true;
+
+            if (ReferenceCategory == Types.PeopleCodeType.Scroll && otherRef.ReferenceCategory == Types.PeopleCodeType.Record)
+                return true; /* You can pass a @Scroll into a @Record */
+
+            if (ReferenceCategory == Types.PeopleCodeType.Record && otherRef.ReferenceCategory == Types.PeopleCodeType.Scroll)
+                return true; /* You can pass a @Record into a @Scroll */
+
+            if (otherRef.ReferenceCategory == Types.PeopleCodeType.Any)
+            {
+                /* An Any reference category means this was an @() expression, we can't statically know the type) */
+                return true;
+            }
+
+            return ReferenceCategory == otherRef.ReferenceCategory;
+        }
 
         // String can be converted to reference (for dynamic references)
         if (other.Kind == TypeKind.Primitive && other is PrimitiveTypeInfo primitive &&
@@ -928,6 +1005,39 @@ public class ReferenceTypeInfo : TypeInfo
 
         return false;
     }
+
+    /// <summary>
+    /// Check if a name is a special reference keyword
+    /// </summary>
+    public static bool IsSpecialReferenceKeyword(string name)
+    {
+        return SpecialReferenceKeywords.Contains(name);
+    }
+
+    /// <summary>
+    /// Get the PeopleCodeType for a reference category name
+    /// </summary>
+    public static Types.PeopleCodeType GetReferenceCategoryType(string categoryName)
+    {
+        // Try to parse as existing PeopleCodeType
+        var type = BuiltinTypeExtensions.FromString(categoryName.ToLowerInvariant());
+
+        // If not found or unknown, default to Field for non-keyword identifiers
+        if (type == Types.PeopleCodeType.Unknown)
+        {
+            return Types.PeopleCodeType.Field; // Default for record.field pattern
+        }
+
+        return type;
+    }
+
+    private static readonly HashSet<string> SpecialReferenceKeywords = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "BARNAME", "BUSACTIVITY", "BUSEVENT", "BUSPROCESS", "COMPINTFC", "COMPONENT",
+        "FIELD", "FILELAYOUT", "HTML", "IMAGE", "INTERLINK", "ITEMNAME", "MENUNAME",
+        "MESSAGE", "NODE", "OPERATION", "PACKAGE", "PAGE", "PANEL", "PANELGROUP",
+        "RECORD", "SCROLL", "SQL", "STYLESHEET", "URL"
+    };
 }
 
 /// <summary>

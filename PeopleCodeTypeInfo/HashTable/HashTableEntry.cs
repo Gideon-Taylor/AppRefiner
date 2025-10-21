@@ -1,34 +1,66 @@
 namespace PeopleCodeTypeInfo.HashTable;
 
 /// <summary>
-/// Represents a single entry in a hash table, supporting both fixed-size and variable-size data.
+/// Generic hash table entry that can store either fixed-size data directly
+/// or an offset to variable-size data in a separate section.
 /// </summary>
 public struct HashTableEntry<T>
 {
     /// <summary>
-    /// Hash value for this entry (0 indicates empty slot)
+    /// FNV1a32 hash of the key. 0 indicates an empty slot.
     /// </summary>
     public uint Hash { get; set; }
 
     /// <summary>
-    /// File offset for variable-size data (used when data is stored separately)
+    /// For fixed-size strategies: the actual data
+    /// For variable-size strategies: not used (data is accessed via offset)
+    /// </summary>
+    public T Data { get; set; }
+
+    /// <summary>
+    /// For variable-size strategies: offset into the data section
+    /// For fixed-size strategies: not used
     /// </summary>
     public uint Offset { get; set; }
 
     /// <summary>
-    /// Actual data for fixed-size entries (null for variable-size)
+    /// Check if this entry is empty (unused slot in hash table).
     /// </summary>
-    public T? Data { get; set; }
+    public readonly bool IsEmpty => Hash == 0;
 
     /// <summary>
-    /// Whether this entry is empty (Hash == 0)
+    /// Create a new hash table entry for fixed-size data.
     /// </summary>
-    public bool IsEmpty => Hash == 0;
-
-    public HashTableEntry(uint hash, uint offset, T? data = default)
+    public static HashTableEntry<T> CreateFixedSize(uint hash, T data)
     {
-        Hash = hash;
-        Offset = offset;
-        Data = data;
+        return new HashTableEntry<T>
+        {
+            Hash = hash,
+            Data = data,
+            Offset = 0
+        };
     }
+
+    /// <summary>
+    /// Create a new hash table entry for variable-size data.
+    /// </summary>
+    public static HashTableEntry<T> CreateVariableSize(uint hash, uint offset)
+    {
+        return new HashTableEntry<T>
+        {
+            Hash = hash,
+            Data = default(T),
+            Offset = offset
+        };
+    }
+
+    /// <summary>
+    /// Create an empty hash table entry.
+    /// </summary>
+    public static HashTableEntry<T> Empty => new HashTableEntry<T>
+    {
+        Hash = 0,
+        Data = default(T),
+        Offset = 0
+    };
 }

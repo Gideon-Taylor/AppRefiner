@@ -460,6 +460,8 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
 
     #region Expression Visitors
 
+    
+
     /// <summary>
     /// Visit literal expression and infer type from literal value
     /// </summary>
@@ -632,7 +634,7 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
         {
             UnaryOperator.Not => PrimitiveTypeInfo.Boolean,
             UnaryOperator.Negate => operandType,  // Preserve numeric type
-            UnaryOperator.Reference => operandType,  // & prefix doesn't change type
+            UnaryOperator.Reference => new ReferenceTypeInfo(PeopleCodeType.Any, "Dynamic Reference", "Dynamic Reference"), 
             _ => operandType
         };
 
@@ -646,6 +648,35 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
     {
         base.VisitMemberAccess(node);
 
+        // DETECT REFERENCE PATTERN: Identifier.Member (no & or % prefix)
+        if (node.Target is IdentifierNode identifier &&
+            !identifier.Name.StartsWith("&") &&
+            !identifier.Name.StartsWith("%"))
+        {
+            // This is a reference pattern
+            var leftSide = identifier.Name;
+            var rightSide = node.MemberName;
+
+            // Determine reference category
+            PeopleCodeType referenceCategory;
+            if (ReferenceTypeInfo.IsSpecialReferenceKeyword(leftSide))
+            {
+                // Special keyword like Record.MY_RECORD, Field.MY_FIELD
+                referenceCategory = ReferenceTypeInfo.GetReferenceCategoryType(leftSide);
+            }
+            else
+            {
+                // Non-keyword like MY_RECORD.MY_FIELD -> defaults to Field reference
+                referenceCategory = PeopleCodeType.Field;
+            }
+
+            var fullReference = $"{leftSide}.{rightSide}";
+            var refType = new ReferenceTypeInfo(referenceCategory, rightSide, fullReference);
+            SetInferredType(node, refType);
+            return;
+        }
+
+        // NORMAL MEMBER ACCESS (existing logic)
         var objectType = GetInferredType(node.Target);
         if (objectType != null)
         {

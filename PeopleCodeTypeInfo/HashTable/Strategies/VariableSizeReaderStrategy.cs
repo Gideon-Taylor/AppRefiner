@@ -1,8 +1,8 @@
 namespace PeopleCodeTypeInfo.HashTable.Strategies;
 
 /// <summary>
-/// Reader strategy for hash tables with variable-size data.
-/// Reads hash/offset pairs from the hash table section, then reads actual data from the data section.
+/// Base strategy for reading variable-length data from hash table storage.
+/// Hash table entries store offsets to a separate data section.
 /// </summary>
 public class VariableSizeReaderStrategy<T> : IHashTableReaderStrategy<T>
 {
@@ -10,24 +10,33 @@ public class VariableSizeReaderStrategy<T> : IHashTableReaderStrategy<T>
     private readonly Func<BinaryReader, uint, byte[], T> _readDataFunc;
 
     public bool IsFixedSize => false;
+    public int EntrySize => 8; // hash(4) + offset(4)
 
     public VariableSizeReaderStrategy(
         Func<T, uint> hashFunc,
         Func<BinaryReader, uint, byte[], T> readDataFunc)
     {
-        _hashFunc = hashFunc ?? throw new ArgumentNullException(nameof(hashFunc));
-        _readDataFunc = readDataFunc ?? throw new ArgumentNullException(nameof(readDataFunc));
+        _hashFunc = hashFunc;
+        _readDataFunc = readDataFunc;
     }
 
     public HashTableEntry<T> ReadEntry(BinaryReader reader)
     {
-        var hash = reader.ReadUInt32();
-        var offset = reader.ReadUInt32();
-        return new HashTableEntry<T>(hash, offset, default);
+        uint hash = reader.ReadUInt32();
+        uint offset = reader.ReadUInt32();
+
+        return hash == 0
+            ? HashTableEntry<T>.Empty
+            : HashTableEntry<T>.CreateVariableSize(hash, offset);
     }
 
     public T ReadData(BinaryReader reader, uint offset, byte[] dataSection)
     {
         return _readDataFunc(reader, offset, dataSection);
+    }
+
+    public uint GetHash(T data)
+    {
+        return _hashFunc(data);
     }
 }

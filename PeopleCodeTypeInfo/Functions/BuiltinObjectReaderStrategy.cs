@@ -13,10 +13,6 @@ public class BuiltinObjectReaderStrategy : VariableSizeReaderStrategy<BuiltinObj
 {
     private const int DATA_OFFSET_BASE = 4 + (2048 * 8); // header + hash table size for default table
 
-    // Format version for compatibility checking
-    private const byte LEGACY_FORMAT_VERSION = 1;
-    private const byte CURRENT_FORMAT_VERSION = 2;
-
     private readonly INameTable? _nameTable;
 
     public BuiltinObjectReaderStrategy(Func<BuiltinObjectInfo, uint> stringHashFunc, INameTable? nameTable = null, int tableSize = 2048) : base(
@@ -35,10 +31,6 @@ public class BuiltinObjectReaderStrategy : VariableSizeReaderStrategy<BuiltinObj
         uint dataOffset = offset - dataOffsetBase;
         var memoryStream = new MemoryStream(dataSection, (int)dataOffset, dataSection.Length - (int)dataOffset);
         var dataReader = new BinaryReader(memoryStream);
-
-        var version = dataReader.ReadByte();
-        if (version != LEGACY_FORMAT_VERSION && version != CURRENT_FORMAT_VERSION)
-            throw new InvalidDataException($"Unsupported format version: {version}");
 
         var defaultMethodHash = dataReader.ReadUInt32();
 
@@ -111,10 +103,11 @@ public class BuiltinObjectReaderStrategy : VariableSizeReaderStrategy<BuiltinObj
                 var type = (PeopleCodeType)reader.ReadByte();
                 var arrayDim = reader.ReadByte();
                 var appClassPath = ReadString(reader);
+                bool isRef = reader.ReadByte() != 0;
 
                 unionTypes.Add(string.IsNullOrEmpty(appClassPath)
-                    ? new TypeWithDimensionality(type, arrayDim)
-                    : new TypeWithDimensionality(type, arrayDim, appClassPath));
+                    ? new TypeWithDimensionality(type, arrayDim, null, isRef)
+                    : new TypeWithDimensionality(type, arrayDim, appClassPath, isReference: false));
             }
 
             function.ReturnUnionTypes = unionTypes;
@@ -124,7 +117,8 @@ public class BuiltinObjectReaderStrategy : VariableSizeReaderStrategy<BuiltinObj
             // Read single return type
             var returnType = (PeopleCodeType)reader.ReadByte();
             var returnArrayDim = reader.ReadByte();
-            function.ReturnType = new TypeWithDimensionality(returnType, returnArrayDim);
+            bool retIsRef = reader.ReadByte() != 0;
+            function.ReturnType = new TypeWithDimensionality(returnType, returnArrayDim, null, retIsRef);
         }
 
         // Read parameters
@@ -157,6 +151,7 @@ public class BuiltinObjectReaderStrategy : VariableSizeReaderStrategy<BuiltinObj
             ParameterTag.Union => FunctionReaderStrategy.ReadUnionParameter(reader, nameTable),
             ParameterTag.Group => FunctionReaderStrategy.ReadParameterGroup(reader, nameTable),
             ParameterTag.Variable => FunctionReaderStrategy.ReadVariableParameter(reader, nameTable),
+            ParameterTag.Reference => FunctionReaderStrategy.ReadReferenceParameter(reader,nameTable),
             _ => throw new InvalidDataException($"Unknown parameter tag: {tag}")
         };
     }

@@ -2,6 +2,7 @@
 using AppRefiner.Events;
 using DiffPlex.Model;
 using PeopleCodeParser.SelfHosted;
+using PeopleCodeTypeInfo.Inference;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -31,6 +32,36 @@ namespace AppRefiner
         /// </summary>
         public IntPtr ResultsListView { get; set; }
         public IDataManager? DataManager { get; set; }
+
+        /// <summary>
+        /// Type metadata cache shared across all editors in this AppDesigner process.
+        /// Used by type inference and type checking systems.
+        /// </summary>
+        public TypeCache TypeCache { get; private set; }
+
+        private DatabaseTypeMetadataResolver? _typeResolver;
+
+        /// <summary>
+        /// Type metadata resolver that retrieves type information from the database.
+        /// Initialized lazily when DataManager is available.
+        /// </summary>
+        public DatabaseTypeMetadataResolver? TypeResolver
+        {
+            get
+            {
+                // Lazy initialization when DataManager is available
+                if (_typeResolver == null && DataManager != null)
+                {
+                    _typeResolver = new DatabaseTypeMetadataResolver(DataManager);
+                }
+                // Clear resolver if DataManager was disconnected
+                else if (_typeResolver != null && DataManager == null)
+                {
+                    _typeResolver = null;
+                }
+                return _typeResolver;
+            }
+        }
 
         public GeneralSettingsData Settings {  get; set; }
 
@@ -64,6 +95,9 @@ namespace AppRefiner
             ResultsListView = resultsListView;
             Settings = settings;
             ProcessHandle = WinApi.OpenProcess(WinApi.PROCESS_VM_READ | WinApi.PROCESS_VM_WRITE | WinApi.PROCESS_VM_OPERATION, false, ProcessId);
+
+            // Initialize type system infrastructure
+            TypeCache = new TypeCache();
 
             // Check if any module in the process has the name "Lexilla.dll"
             Process process = Process.GetProcessById((int)ProcessId);

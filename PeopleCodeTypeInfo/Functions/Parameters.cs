@@ -10,7 +10,8 @@ public enum ParameterTag : byte
     Single = 1,
     Union = 2,
     Group = 3,
-    Variable = 4
+    Variable = 4,
+    Reference = 5
 }
 
 /// <summary>
@@ -63,12 +64,14 @@ public struct TypeWithDimensionality : IEquatable<TypeWithDimensionality>
     public PeopleCodeType Type { get; set; }
     public byte ArrayDimensionality { get; set; } // 0=scalar, 1=1D array, 2=2D array, etc.
     public string? AppClassPath { get; set; } // For AppClass types: "PACKAGE:Class", "PACKAGE:SubPackage:Class", etc.
+    public bool IsReference { get; set; } // True for references (@RECORD, @FIELD), false for instances
 
-    public TypeWithDimensionality(PeopleCodeType type, byte arrayDimensionality = 0, string? appClassPath = null)
+    public TypeWithDimensionality(PeopleCodeType type, byte arrayDimensionality = 0, string? appClassPath = null, bool isReference = false)
     {
         Type = type;
         ArrayDimensionality = arrayDimensionality;
         AppClassPath = appClassPath;
+        IsReference = isReference;
     }
 
     public bool IsArray => ArrayDimensionality > 0;
@@ -80,9 +83,10 @@ public struct TypeWithDimensionality : IEquatable<TypeWithDimensionality>
     public bool Equals(TypeWithDimensionality other) =>
         Type == other.Type &&
         ArrayDimensionality == other.ArrayDimensionality &&
-        AppClassPath == other.AppClassPath;
+        AppClassPath == other.AppClassPath &&
+        IsReference == other.IsReference;
 
-    public override int GetHashCode() => HashCode.Combine(Type, ArrayDimensionality, AppClassPath);
+    public override int GetHashCode() => HashCode.Combine(Type, ArrayDimensionality, AppClassPath, IsReference);
 
     public static bool operator ==(TypeWithDimensionality left, TypeWithDimensionality right) => left.Equals(right);
     public static bool operator !=(TypeWithDimensionality left, TypeWithDimensionality right) => !left.Equals(right);
@@ -94,7 +98,7 @@ public struct TypeWithDimensionality : IEquatable<TypeWithDimensionality>
             : Type.ToString().ToLowerInvariant();
 
         // Handle reference types with @ prefix
-        if (IsReferenceType())
+        if (IsReference)
         {
             if (ArrayDimensionality == 0)
                 return $"@{baseTypeName}";
@@ -102,33 +106,12 @@ public struct TypeWithDimensionality : IEquatable<TypeWithDimensionality>
             return $"@{refArrayPrefix}{baseTypeName}";
         }
 
-        // Handle regular types with & prefix
+        // Handle regular types
         if (ArrayDimensionality == 0)
             return Type == PeopleCodeType.AppClass ? baseTypeName : $"{baseTypeName}";
 
         var regularArrayPrefix = string.Join("", Enumerable.Repeat("array_", ArrayDimensionality));
         return $"{regularArrayPrefix}{baseTypeName}";
-    }
-
-    /// <summary>
-    /// Check if this type is a reference type that should use @ prefix
-    /// </summary>
-    private bool IsReferenceType()
-    {
-        return Type switch
-        {
-            PeopleCodeType.Field => true,
-            PeopleCodeType.Record => true,
-            PeopleCodeType.Scroll => true,
-            PeopleCodeType.Row => true,
-            PeopleCodeType.Rowset => true,
-            PeopleCodeType.Page => true,
-            PeopleCodeType.Grid => true,
-            PeopleCodeType.Chart => true,
-            PeopleCodeType.Panel => true,
-            PeopleCodeType.Operation => true,
-            _ => false
-        };
     }
 
     /// <summary>
@@ -148,21 +131,24 @@ public struct TypeWithDimensionality : IEquatable<TypeWithDimensionality>
     }
 
     /// <summary>
-    /// Parse a type string that may include AppClass paths like "PACKAGE:Class", reference types like "@FIELD", or arrays
+    /// Parse a type string that may include AppClass paths like "PACKAGE:Class",
+    /// reference types like "@FIELD", and array dimensionality via leading "array_" prefixes.
+    /// Preserves the reference flag indicated by the '@' prefix.
     /// </summary>
     public static TypeWithDimensionality Parse(string typeStr)
     {
+        if (typeStr == null) throw new ArgumentNullException(nameof(typeStr));
         typeStr = typeStr.Trim();
 
-        // Handle reference types: @TYPE
+        // Detect reference '@' first and strip it for further parsing
+        bool isReference = false;
         if (typeStr.StartsWith("@"))
         {
-            var refTypeName = typeStr.Substring(1);
-            var refType = ParseReferenceType(refTypeName);
-            return new TypeWithDimensionality(refType, 0);
+            isReference = true;
+            typeStr = typeStr.Substring(1);
         }
 
-        // Handle array notation: array_type, array_array_type, etc.
+        // Handle array notation: array_type, array_array_type, etc. on the remaining string
         byte arrayDimensionality = 0;
         while (typeStr.StartsWith("array_"))
         {
@@ -170,15 +156,16 @@ public struct TypeWithDimensionality : IEquatable<TypeWithDimensionality>
             typeStr = typeStr.Substring(6); // Remove "array_"
         }
 
-        // Check if it's an AppClass path (contains colon)
+        // AppClass path (contains colon)
         if (typeStr.Contains(':'))
         {
-            return new TypeWithDimensionality(PeopleCodeType.AppClass, arrayDimensionality, typeStr);
+            // AppClass references are not expected; treat as regular AppClass
+            return new TypeWithDimensionality(PeopleCodeType.AppClass, arrayDimensionality, typeStr, isReference: false);
         }
 
-        // Parse as built-in type
+        // Builtin or special type
         var builtinType = BuiltinTypeExtensions.FromString(typeStr);
-        return new TypeWithDimensionality(builtinType, arrayDimensionality);
+        return new TypeWithDimensionality(builtinType, arrayDimensionality, null, isReference);
     }
 
     /// <summary>
@@ -544,5 +531,68 @@ public class VariableParameter : Parameter
         };
 
         return $"{InnerParameter}{suffix}";
+    }
+}
+
+/// <summary>
+/// Represents a reference parameter (e.g., @RECORD, @FIELD, @ANY)
+/// References are not instances - they point to definitions.
+/// Example: CreateRecord(@RECORD) expects a record reference like Record.MY_RECORD
+/// </summary>
+public class ReferenceParameter : Parameter
+{
+    public override ParameterTag Tag => ParameterTag.Reference;
+
+    /// <summary>
+    /// The category of reference required (Field, Record, SQL, etc.)
+    /// Use PeopleCodeType.Any for @ANY (accepts any reference)
+    /// </summary>
+    public PeopleCodeType ReferenceCategory { get; }
+
+    public string Name { get; set; } = "";
+    public int? NameIndex { get; set; }
+
+    public override bool IsOptional { get; }
+    public override int MinArgumentCount => IsOptional ? 0 : 1;
+    public override int MaxArgumentCount => 1;
+
+    public ReferenceParameter(PeopleCodeType referenceCategory, bool isOptional = false)
+    {
+        ReferenceCategory = referenceCategory;
+        IsOptional = isOptional;
+    }
+
+    public override bool ValidateArgumentCount(int argCount)
+    {
+        if (IsOptional) return argCount == 0 || argCount == 1;
+        return argCount == 1;
+    }
+
+    public override bool ValidateArgumentTypes(TypeInfo[] argTypes)
+    {
+        if (argTypes.Length == 0) return IsOptional;
+        if (argTypes.Length > 1) return false;
+
+        var argType = argTypes[0];
+
+        // Must be a reference type
+        if (argType is not ReferenceTypeInfo refType)
+            return false;
+
+        // If we accept any reference (@ANY), allow it
+        if (ReferenceCategory == PeopleCodeType.Any)
+            return true;
+
+        // Otherwise, must match the specific category
+        return refType.ReferenceCategory == ReferenceCategory;
+    }
+
+    public override string ToString()
+    {
+        var refName = ReferenceCategory == PeopleCodeType.Any
+            ? "@ANY"
+            : $"@{ReferenceCategory.GetTypeName().ToUpperInvariant()}";
+
+        return IsOptional ? $"[{refName}]" : refName;
     }
 }

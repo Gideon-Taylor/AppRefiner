@@ -44,6 +44,16 @@ public class TypeCache
     }
 
     /// <summary>
+    /// Removes metadata for a specific type from the cache.
+    /// </summary>
+    /// <param name="qualifiedName">The qualified name of the type to remove</param>
+    /// <returns>True if the entry was removed, false if it didn't exist</returns>
+    public bool Remove(string qualifiedName)
+    {
+        return _cache.TryRemove(qualifiedName, out _);
+    }
+
+    /// <summary>
     /// Clears all cached metadata.
     /// </summary>
     public void Clear()

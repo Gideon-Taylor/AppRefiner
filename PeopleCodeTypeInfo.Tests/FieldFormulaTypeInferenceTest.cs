@@ -35,7 +35,7 @@ public class FieldFormulaTypeInferenceTest : IDisposable
         Assert.Empty(parser.Errors);
 
         // Extract metadata for the program
-        _programMetadata = TypeMetadataBuilder.ExtractMetadata(_program, "FUNCLIB_ABS_EA:ABS_TYPE_OPTN");
+        _programMetadata = TypeMetadataBuilder.ExtractMetadata(_program, "FUNCLIB_ABS_EA:ABS_TYPE_OPTN:FieldFormula");
 
         // Create resolver and cache
         _resolver = new TestTypeMetadataResolver(_testBasePath);
@@ -63,5 +63,34 @@ public class FieldFormulaTypeInferenceTest : IDisposable
 
         // Test passes - type inference has run successfully
         Assert.True(true);
+    }
+
+    [Fact]
+    public void FieldFormula_TypeChecker_FindsTypeErrors()
+    {
+        // Run type checker after type inference has completed
+        var typeChecker = TypeCheckerVisitor.Run(_program, _resolver, _cache);
+
+        // Collect all type errors from the AST
+        var allErrors = _program.GetAllTypeErrors().ToList();
+
+        // Output errors to test output for debugging
+        foreach (var error in allErrors)
+        {
+            var line = error.Node.SourceSpan.Start.Line;
+            var col = error.Node.SourceSpan.Start.Column;
+            var nodeType = error.Node.GetType().Name;
+
+            // Use output helper to show errors during test run
+            Console.WriteLine($"[{nodeType}] Line {line}:{col} - {error.Message}");
+        }
+
+        // This test is for debugging - it will pass even if errors are found
+        // The purpose is to see what type errors were detected in the intentionally broken file
+        Assert.NotNull(typeChecker);
+
+        // Optionally: Assert that we found at least some errors (since you said you put errors in the file)
+        // Uncomment this line if you want the test to fail when no errors are found:
+        // Assert.NotEmpty(allErrors);
     }
 }

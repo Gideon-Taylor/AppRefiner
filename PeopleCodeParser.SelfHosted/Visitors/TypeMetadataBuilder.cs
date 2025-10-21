@@ -231,7 +231,8 @@ public class TypeMetadataBuilder : AstVisitorBase
     private Parameter BuildParameter(ParameterNode paramNode)
     {
         var typeWithDim = BuildTypeWithDimensionality(paramNode.Type);
-        return new SingleParameter(typeWithDim.Type, typeWithDim.ArrayDimensionality, paramNode.Name);
+        
+        return new SingleParameter(typeWithDim, paramNode.Name);
     }
 
     /// <summary>

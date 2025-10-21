@@ -14,8 +14,7 @@ public class FunctionReaderStrategy : VariableSizeReaderStrategy<FunctionInfo>
 {
     private const int DATA_OFFSET_BASE = 4 + (2048 * 8); // header + hash table size for default table
 
-    // Format version for compatibility checking
-    private const byte FORMAT_VERSION = 4; // Union return type support
+    // No explicit format version; reader/writer evolve in lockstep
     private readonly INameTable? _nameTable;
 
     public FunctionReaderStrategy(Func<FunctionInfo, uint> stringHashFunc, INameTable? nameTable = null, int tableSize = 2048) : base(
@@ -31,10 +30,6 @@ public class FunctionReaderStrategy : VariableSizeReaderStrategy<FunctionInfo>
         uint dataOffset = offset - DATA_OFFSET_BASE;
         var memoryStream = new MemoryStream(dataSection, (int)dataOffset, dataSection.Length - (int)dataOffset);
         var dataReader = new BinaryReader(memoryStream);
-
-        var version = dataReader.ReadByte();
-        if (version != FORMAT_VERSION)
-            throw new InvalidDataException($"Unsupported format version: {version}. Expected version {FORMAT_VERSION}.");
 
         return ReadFunctionData(dataReader, nameTable);
     }
@@ -66,10 +61,11 @@ public class FunctionReaderStrategy : VariableSizeReaderStrategy<FunctionInfo>
                 var type = (PeopleCodeType)dataReader.ReadByte();
                 var arrayDim = dataReader.ReadByte();
                 var appClassPath = ReadString(dataReader);
+                bool isRef = dataReader.ReadByte() != 0;
 
                 unionTypes.Add(string.IsNullOrEmpty(appClassPath)
-                    ? new TypeWithDimensionality(type, arrayDim)
-                    : new TypeWithDimensionality(type, arrayDim, appClassPath));
+                    ? new TypeWithDimensionality(type, arrayDim, null, isRef)
+                    : new TypeWithDimensionality(type, arrayDim, appClassPath, isReference: false));
             }
 
             function.ReturnUnionTypes = unionTypes;
@@ -81,12 +77,13 @@ public class FunctionReaderStrategy : VariableSizeReaderStrategy<FunctionInfo>
             // Read single return type
             var returnType = (PeopleCodeType)dataReader.ReadByte();
             var returnArrayDim = dataReader.ReadByte();
-            function.ReturnType = new TypeWithDimensionality(returnType, returnArrayDim);
+            bool retIsRef = dataReader.ReadByte() != 0;
+            function.ReturnType = new TypeWithDimensionality(returnType, returnArrayDim, null, retIsRef);
         }
 
         // Read parameters using name table
         function.Parameters = ReadParameters(dataReader, nameTable);
-
+        
         return function;
     }
 
@@ -114,6 +111,7 @@ public class FunctionReaderStrategy : VariableSizeReaderStrategy<FunctionInfo>
             ParameterTag.Union => ReadUnionParameter(reader, nameTable),
             ParameterTag.Group => ReadParameterGroup(reader, nameTable),
             ParameterTag.Variable => ReadVariableParameter(reader, nameTable),
+            ParameterTag.Reference => ReadReferenceParameter(reader, nameTable),
             _ => throw new InvalidDataException($"Unknown parameter tag: {tag}")
         };
     }
@@ -142,10 +140,11 @@ public class FunctionReaderStrategy : VariableSizeReaderStrategy<FunctionInfo>
             var type = (PeopleCodeType)reader.ReadByte();
             var arrayDim = reader.ReadByte();
             var appClassPath = ReadString(reader);
+            bool isRef = reader.ReadByte() != 0;
 
             var typeWithDim = string.IsNullOrEmpty(appClassPath)
-                ? new TypeWithDimensionality(type, arrayDim)
-                : new TypeWithDimensionality(type, arrayDim, appClassPath);
+                ? new TypeWithDimensionality(type, arrayDim, null, isRef)
+                : new TypeWithDimensionality(type, arrayDim, appClassPath, isReference: false);
 
             allowedTypes.Add(typeWithDim);
         }
@@ -172,6 +171,16 @@ public class FunctionReaderStrategy : VariableSizeReaderStrategy<FunctionInfo>
         var innerParameter = ReadParameter(reader, nameTable);
 
         return new VariableParameter(innerParameter, minCount, maxCount, name) { NameIndex = nameIndex };
+    }
+
+    public static ReferenceParameter ReadReferenceParameter(BinaryReader reader, INameTable? nameTable)
+    {
+        var cat = (PeopleCodeType)reader.ReadByte();
+        var (name, nameIndex) = ReadParameterName(reader, nameTable);
+        var p = new ReferenceParameter(cat);
+        p.Name = name;
+        p.NameIndex = nameIndex;
+        return p;
     }
 
     private static string ReadString(BinaryReader reader)

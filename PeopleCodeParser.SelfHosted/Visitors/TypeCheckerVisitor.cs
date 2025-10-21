@@ -3,6 +3,7 @@ using PeopleCodeParser.SelfHosted.Nodes;
 using PeopleCodeTypeInfo.Contracts;
 using PeopleCodeTypeInfo.Inference;
 using PeopleCodeTypeInfo.Types;
+using PeopleCodeTypeInfo.Validation;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -69,6 +70,35 @@ namespace PeopleCodeParser.SelfHosted.Visitors
                 {
                     RecordTypeError($"Cannot assign type '{rightType}' to '{leftType}'", node);
                 }
+            }
+        }
+
+        public override void VisitFunctionCall(FunctionCallNode node)
+        {
+            base.VisitFunctionCall(node);
+
+            // Get the function info that was stored by TypeInferenceVisitor
+            var functionInfo = node.GetFunctionInfo();
+            if (functionInfo == null)
+            {
+                // Can't validate without function metadata
+                return;
+            }
+
+            // Get argument types
+            var argumentTypes = new TypeInfo[node.Arguments.Count];
+            for (int i = 0; i < node.Arguments.Count; i++)
+            {
+                argumentTypes[i] = node.Arguments[i].GetInferredType() ?? UnknownTypeInfo.Instance;
+            }
+
+            // Validate the call
+            var validator = new FunctionCallValidator(_typeResolver);
+            var result = validator.Validate(functionInfo, argumentTypes);
+
+            if (!result.IsValid)
+            {
+                RecordTypeError(result.GetDetailedError(), node);
             }
         }
 

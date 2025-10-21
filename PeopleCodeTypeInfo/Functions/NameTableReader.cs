@@ -59,51 +59,114 @@ public static class NameTableReader
     }
 
     /// <summary>
-    /// Read-only name table implementation optimized for reading
+    /// Read-only implementation of name table optimized for deserialization scenarios.
+    /// Uses direct array access for O(1) lookups with minimal memory overhead.
     /// </summary>
-    private class ReadOnlyNameTable : INameTable
+    public class ReadOnlyNameTable : INameTable
     {
         private readonly string[] _names;
-        private readonly Dictionary<string, int>? _reverseIndex;
+        private readonly Dictionary<string, int>? _nameToIndex;
+        private readonly int _namesTableSize;
 
-        public int NamesTableSize { get; }
-        public int Count => _names.Length;
-
-        public ReadOnlyNameTable(string[] names, bool buildReverseIndex)
+        /// <summary>
+        /// Create a read-only name table from a string array.
+        /// </summary>
+        /// <param name="names">Array of names where index equals name index</param>
+        /// <param name="buildReverseIndex">Whether to build reverse lookup index for Contains/TryGetIndex operations</param>
+        /// <param name="namesTableSize">Pre-calculated size of the serialized names table in bytes</param>
+        public ReadOnlyNameTable(string[] names, bool buildReverseIndex = false, int namesTableSize = 0)
         {
             _names = names;
+            _namesTableSize = namesTableSize;
 
             if (buildReverseIndex)
             {
-                _reverseIndex = new Dictionary<string, int>();
+                _nameToIndex = new Dictionary<string, int>(names.Length);
                 for (int i = 0; i < names.Length; i++)
                 {
-                    _reverseIndex[names[i]] = i;
+                    if (!string.IsNullOrEmpty(names[i]))
+                        _nameToIndex[names[i]] = i;
                 }
             }
-
-            // Calculate table size
-            int size = 4; // Count header
-            foreach (var name in names)
-            {
-                var byteCount = Encoding.UTF8.GetByteCount(name);
-                size += 1 + Math.Min(byteCount, 255);
-            }
-            NamesTableSize = size;
         }
 
+        /// <summary>
+        /// Not supported in read-only mode.
+        /// </summary>
+        public int RegisterName(string name)
+        {
+            throw new NotSupportedException("Cannot register names in read-only mode");
+        }
+
+        /// <summary>
+        /// Get a name by its index using direct array access.
+        /// Returns null if index is out of range.
+        /// </summary>
         public string? GetNameByIndex(int index)
         {
-            if (index < 0 || index >= _names.Length)
-                return null;
-            return _names[index];
+            return index >= 0 && index < _names.Length ? _names[index] : null;
         }
 
-        public int? GetIndexByName(string name)
+        /// <summary>
+        /// Get all names. Returns reference to internal array for efficiency.
+        /// </summary>
+        public string[] GetAllNames()
         {
-            if (_reverseIndex != null && _reverseIndex.TryGetValue(name, out var index))
-                return index;
-            return null;
+            return _names;
+        }
+
+        /// <summary>
+        /// Get the total number of names.
+        /// </summary>
+        public int Count => _names.Length;
+
+        /// <summary>
+        /// Check if the name table contains a specific name.
+        /// Requires reverse index to be built.
+        /// </summary>
+        public bool Contains(string name)
+        {
+            if (_nameToIndex == null)
+                throw new InvalidOperationException("Reverse index not built. Create with buildReverseIndex=true");
+
+            return _nameToIndex.ContainsKey(name);
+        }
+
+        /// <summary>
+        /// Try to get the index of a name.
+        /// Requires reverse index to be built.
+        /// </summary>
+        public bool TryGetIndex(string name, out int index)
+        {
+            if (_nameToIndex == null)
+            {
+                index = -1;
+                throw new InvalidOperationException("Reverse index not built. Create with buildReverseIndex=true");
+            }
+
+            return _nameToIndex.TryGetValue(name, out index);
+        }
+
+        /// <summary>
+        /// Get the pre-calculated size in bytes of the serialized names table.
+        /// If not provided during construction, calculates it on demand.
+        /// </summary>
+        public int NamesTableSize
+        {
+            get
+            {
+                if (_namesTableSize > 0)
+                    return _namesTableSize;
+
+                // Calculate on demand if not provided
+                int size = 4; // count field
+                foreach (var name in _names)
+                {
+                    var nameBytes = System.Text.Encoding.UTF8.GetBytes(name);
+                    size += 1 + nameBytes.Length; // length byte + string bytes
+                }
+                return size;
+            }
         }
     }
 }
