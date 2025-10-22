@@ -202,12 +202,6 @@ namespace AppRefiner.TooltipProviders
                     string tooltipText = GenerateRichVariableTooltip(variable);
                     RegisterTooltip(span, tooltipText);
                 }
-                else
-                {
-                    // Fallback for variables not found in scope (could be system variables or globals)
-                    string tooltipText = GenerateBasicVariableTooltip(variableName);
-                    RegisterTooltip(span, tooltipText);
-                }
             }
             catch (Exception)
             {

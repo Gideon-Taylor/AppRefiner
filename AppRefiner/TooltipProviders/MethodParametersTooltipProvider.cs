@@ -3,6 +3,8 @@ using PeopleCodeParser.SelfHosted;
 using PeopleCodeParser.SelfHosted.Lexing;
 using PeopleCodeParser.SelfHosted.Nodes;
 using PeopleCodeParser.SelfHosted.Visitors.Models;
+using PeopleCodeTypeInfo.Database;
+using PeopleCodeTypeInfo.Types;
 using System;
 using System.Reflection;
 using System.Text;
@@ -62,16 +64,23 @@ namespace AppRefiner.TooltipProviders
 
 
         /// <summary>
-        /// Override to process function calls that might be method calls
+        /// Override to process function calls that might be method calls or global builtin functions
         /// </summary>
         public override void VisitFunctionCall(FunctionCallNode node)
         {
             if (!node.SourceSpan.ContainsPosition(CurrentPosition)) return;
-            // Check if this is a method call (function is a member access)
-            if (node.Function is MemberAccessNode memberAccess)
+
+            if (node.Function is IdentifierNode identifier)
             {
+                // Global function like Split(), Left(), Right()
+                HandleGlobalFunction(identifier.Name, node.SourceSpan);
+            }
+            else if (node.Function is MemberAccessNode memberAccess)
+            {
+                // Method call - enhanced with type inference
                 ProcessMethodCall(memberAccess, node);
             }
+
             base.VisitFunctionCall(node);
         }
 
@@ -83,6 +92,37 @@ namespace AppRefiner.TooltipProviders
         {
             string methodName = memberAccess.MemberName;
 
+            // Try to get inferred type from type inference (works with or without database)
+            var targetType = memberAccess.Target.GetInferredType();
+
+            if (targetType != null)
+            {
+                // Check if it's a builtin type
+                string? typeName = GetBuiltinTypeName(targetType);
+                if (typeName != null)
+                {
+                    var methodInfo = PeopleCodeTypeDatabase.GetMethod(typeName, methodName);
+                    if (methodInfo != null)
+                    {
+                        var tooltip = FormatBuiltinFunctionTooltip(methodInfo);
+                        RegisterTooltip(memberAccess.SourceSpan, tooltip);
+                        return; // Found builtin, done
+                    }
+                }
+
+                // Check if it's an app class type (requires database)
+                if (targetType is AppClassTypeInfo appClassType)
+                {
+                    var tooltipText = GetMethodTooltipFromClass(appClassType.QualifiedName, methodName);
+                    if (tooltipText != null)
+                    {
+                        RegisterTooltip(memberAccess.SourceSpan, tooltipText);
+                        return;
+                    }
+                }
+            }
+
+            // Fall back to existing logic (variable tracking)
             // Check if target is an identifier (%This, &variable, etc.)
             if (memberAccess.Target is IdentifierNode targetIdentifier)
             {
@@ -256,6 +296,96 @@ namespace AppRefiner.TooltipProviders
         {
             info = GetVariablesAtPosition().FirstOrDefault(v => v.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
             return info != null;
+        }
+
+        /// <summary>
+        /// Handles global builtin function calls like Split(), Left(), Right(), etc.
+        /// </summary>
+        private void HandleGlobalFunction(string functionName, SourceSpan span)
+        {
+            var functionInfo = PeopleCodeTypeDatabase.GetFunction(functionName);
+            if (functionInfo != null)
+            {
+                var tooltip = FormatBuiltinFunctionTooltip(functionInfo);
+                RegisterTooltip(span, tooltip);
+            }
+        }
+
+        /// <summary>
+        /// Maps TypeInfo to PeopleCodeTypeDatabase type names for builtin object lookups.
+        /// </summary>
+        /// <param name="typeInfo">The inferred type from type inference</param>
+        /// <returns>The type name for PeopleCodeTypeDatabase lookup, or null if not a builtin type</returns>
+        private string? GetBuiltinTypeName(PeopleCodeTypeInfo.Types.TypeInfo typeInfo)
+        {
+            // Map TypeInfo to PeopleCodeTypeDatabase type names
+            switch (typeInfo.PeopleCodeType)
+            {
+                case PeopleCodeType.String:
+                case PeopleCodeType.Number:
+                case PeopleCodeType.Integer:
+                case PeopleCodeType.Boolean:
+                case PeopleCodeType.Date:
+                case PeopleCodeType.Time:
+                case PeopleCodeType.DateTime:
+                    return "System"; // Global functions live here
+
+                case PeopleCodeType.Record:
+                    return "Record";
+                case PeopleCodeType.Row:
+                    return "Row";
+                case PeopleCodeType.Rowset:
+                    return "Rowset";
+                case PeopleCodeType.Field:
+                    return "Field";
+                case PeopleCodeType.Apiobject:
+                    return "ApiObject";
+                case PeopleCodeType.Jsonobject:
+                    return "JsonObject";
+                case PeopleCodeType.Jsonarray:
+                    return "JsonArray";
+                case PeopleCodeType.File:
+                    return "File";
+                case PeopleCodeType.Sql:
+                    return "Sql";
+
+                default:
+                    return null; // Not a builtin type
+            }
+        }
+
+        /// <summary>
+        /// Formats a builtin function/method tooltip using PeopleCodeTypeDatabase information.
+        /// </summary>
+        private string FormatBuiltinFunctionTooltip(PeopleCodeTypeInfo.Functions.FunctionInfo functionInfo)
+        {
+            var sb = new StringBuilder();
+
+            // Use PeopleCodeTypeDatabase's signature formatter
+            sb.AppendLine($"Builtin: {PeopleCodeTypeDatabase.GetSignature(functionInfo)}");
+            sb.AppendLine();
+
+            // Parameter details
+            if (functionInfo.Parameters.Count > 0)
+            {
+                sb.AppendLine("Parameters:");
+                foreach (var param in functionInfo.Parameters)
+                {
+                    sb.AppendLine($"   {param}");
+                }
+            }
+            else
+            {
+                sb.AppendLine("Parameters: None");
+            }
+
+            // Argument count info (helpful for overloaded functions)
+            if (functionInfo.MinArgumentCount != functionInfo.MaxArgumentCount)
+            {
+                sb.AppendLine($"Min args: {functionInfo.MinArgumentCount}, Max args: {functionInfo.MaxArgumentCount}");
+            }
+
+            return sb.ToString();
         }
 
     }

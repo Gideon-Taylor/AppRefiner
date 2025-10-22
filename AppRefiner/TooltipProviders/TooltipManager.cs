@@ -1,3 +1,7 @@
+using PeopleCodeParser.SelfHosted;
+using PeopleCodeParser.SelfHosted.Nodes;
+using PeopleCodeParser.SelfHosted.Visitors;
+using PeopleCodeTypeInfo.Inference;
 using System.Reflection;
 
 namespace AppRefiner.TooltipProviders
@@ -195,6 +199,10 @@ namespace AppRefiner.TooltipProviders
                 var parser = new PeopleCodeParser.SelfHosted.PeopleCodeParser(tokens);
                 var program = parser.ParseProgram();
 
+                // Run type inference (works with or without database)
+                // This populates type information on AST nodes for all tooltip providers
+                RunTypeInference(editor, program);
+
                 // Reset and configure each provider
                 foreach (var provider in tooltipProviders)
                 {
@@ -240,6 +248,51 @@ namespace AppRefiner.TooltipProviders
 
             // Hide the tooltip using the existing ScintillaManager method
             ScintillaManager.HideCallTip(editor);
+        }
+
+        /// <summary>
+        /// Runs type inference on the program to populate type information on AST nodes.
+        /// Works with or without database - with database can resolve custom app classes,
+        /// without database still resolves builtins, literals, and local types.
+        /// </summary>
+        private static void RunTypeInference(ScintillaEditor editor, ProgramNode program)
+        {
+            try
+            {
+                // Extract metadata from current program
+                string qualifiedName = DetermineQualifiedName(editor, program);
+                var metadata = TypeMetadataBuilder.ExtractMetadata(program, qualifiedName);
+
+                // Get type resolver (may be null if no database)
+                var typeResolver = editor.AppDesignerProcess?.TypeResolver;
+                var typeCache = editor.AppDesignerProcess?.TypeCache ?? new TypeCache();
+
+                // Run type inference (works even with null resolver)
+                TypeInferenceVisitor.Run(program, metadata, typeResolver, typeCache);
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError($"Error running type inference for tooltips: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Determines the qualified name for the current program for type inference.
+        /// </summary>
+        private static string DetermineQualifiedName(ScintillaEditor editor, ProgramNode program)
+        {
+            // Try to parse from editor caption
+            var openTarget = OpenTargetBuilder.CreateFromCaption(editor.Caption);
+            if (openTarget != null)
+            {
+                return openTarget.ToQualifiedName();
+            }
+
+            // Fall back to program structure
+            if (program.AppClass != null) return program.AppClass.Name;
+            if (program.Interface != null) return program.Interface.Name;
+
+            return "Program";
         }
     }
 }
