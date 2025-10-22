@@ -67,6 +67,9 @@ namespace AppRefiner
         private const int SCI_MARKERDEFINE = 2040;
         private const int SCI_CALLTIPSHOW = 2200;
         private const int SCI_CALLTIPCANCEL = 2201;
+        private const int SCI_CALLTIPACTIVE = 2202;
+        private const int SCI_CALLTIPPOSSTART = 2203;
+        private const int SCI_CALLTIPSETHLT = 2204;
         private const int SC_MARKNUM_FOLDEREND = 25;
         private const int SC_MARKNUM_FOLDEROPENMID = 26;
         private const int SC_MARKNUM_FOLDERMIDTAIL = 27;
@@ -1125,6 +1128,39 @@ namespace AppRefiner
             catch (Exception ex)
             {
                 Debug.LogError($"Error hiding call tip: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Sets the highlight range within the call tip text.
+        /// </summary>
+        /// <param name="editor">The editor containing the call tip</param>
+        /// <param name="highlightStart">Zero-based index of the first character to highlight</param>
+        /// <param name="highlightEnd">Zero-based index of the first character after the highlight</param>
+        internal static void SetCallTipHighlight(ScintillaEditor editor, int highlightStart, int highlightEnd)
+        {
+            try
+            {
+                // Validate editor
+                if (editor == null || !editor.IsValid())
+                {
+                    Debug.LogError("Cannot set call tip highlight - editor is null or invalid");
+                    return;
+                }
+
+                // Validate highlight range
+                if (highlightEnd <= highlightStart)
+                {
+                    Debug.LogError($"Invalid call tip highlight range: end ({highlightEnd}) must be greater than start ({highlightStart})");
+                    return;
+                }
+
+                // Set the highlight range in the call tip
+                editor.SendMessage(SCI_CALLTIPSETHLT, highlightStart, highlightEnd);
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError($"Error setting call tip highlight: {ex.Message}");
             }
         }
 

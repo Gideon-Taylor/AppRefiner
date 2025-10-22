@@ -90,6 +90,7 @@ namespace AppRefiner
         private const int AR_MSGBOX_SHORTHAND = 2508;
         private const int AR_VARIABLE_SUGGEST = 2509; // New constant for variable auto suggest when & is typed
         private const int AR_CURSOR_POSITION_CHANGED = 2510; // New constant for cursor position change detection
+        private const int AR_FUNCTION_CALL_TIP = 2511; // Function call tip notification for '(', ')', and ',' characters
         private const int AR_SUBCLASS_RESULTS_LIST = 1007; // Message to subclass Results list view
         private const int AR_SET_OPEN_TARGET = 1008; // Message to set open target for Results list interception
         private const int SCN_USERLISTSELECTION = 2014; // User list selection notification
@@ -2135,6 +2136,24 @@ namespace AppRefiner
                 // Update last known positions
                 var lastKnownKey = $"{activeEditor.AppDesignerProcess.ProcessId}:{activeEditor.Caption}";
                 lastKnownPositions[lastKnownKey] = (firstVisibleLine, cursorPosition);
+            }
+            else if (m.Msg == AR_FUNCTION_CALL_TIP)
+            {
+                // Only process if we have an active editor
+                if (activeEditor == null || !activeEditor.IsValid()) return;
+
+                // wParam contains the cursor position
+                int position = m.WParam.ToInt32();
+                // lParam contains the character ('(', ')', or ',')
+                char character = (char)m.LParam.ToInt32();
+
+                Debug.Log($"Function call tip: character='{character}' at position={position}");
+
+                // TODO: Delegate to call tip service/manager
+                // This will be implemented later to:
+                // - For '(': Show call tip with function signature if cursor is in a function call
+                // - For ',': Update highlighted parameter in existing call tip
+                // - For ')': Hide call tip or move to outer function call level
             }
         }
 
