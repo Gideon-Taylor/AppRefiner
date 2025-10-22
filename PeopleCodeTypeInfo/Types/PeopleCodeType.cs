@@ -47,6 +47,11 @@ public enum TypeKind
     Unknown,
 
     /// <summary>
+    /// Invalid type resulting from semantically impossible operations
+    /// </summary>
+    Invalid,
+
+    /// <summary>
     /// Reference type for named references like HTML.OBJECT_NAME, SQL.FOO, RECORD.FOO
     /// Also includes dynamic references via @ expressions
     /// </summary>
@@ -928,6 +933,38 @@ public class UnknownTypeInfo : TypeInfo
     {
         // If we can't resolve this type, default to Any
         return AnyTypeInfo.Instance;
+    }
+}
+
+/// <summary>
+/// Represents a type that is semantically invalid due to an impossible operation
+/// (e.g., adding a number to an object, concatenating non-strings, indexing a non-array)
+/// </summary>
+public class InvalidTypeInfo : TypeInfo
+{
+    public override string Name => "invalid";
+    public override TypeKind Kind => TypeKind.Invalid;
+
+    /// <summary>
+    /// The reason why this type is invalid
+    /// </summary>
+    public string Reason { get; }
+
+    public InvalidTypeInfo(string reason)
+    {
+        Reason = reason ?? "Invalid operation";
+    }
+
+    public override bool IsAssignableFrom(TypeInfo other)
+    {
+        // Invalid types cannot accept any assignment
+        return false;
+    }
+
+    public override TypeInfo GetCommonType(TypeInfo other)
+    {
+        // Invalid propagates through expressions
+        return this;
     }
 }
 

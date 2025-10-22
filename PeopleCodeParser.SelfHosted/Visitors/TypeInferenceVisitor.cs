@@ -559,6 +559,17 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
         var arrayType = GetInferredType(node.Array);
         if (arrayType != null)
         {
+            // Check if we're trying to index a non-array type
+            // If invalid, record error on THIS node and propagate Unknown (not Invalid)
+            if (arrayType is not ArrayTypeInfo && arrayType is not AnyTypeInfo && arrayType is not UnknownTypeInfo)
+            {
+                var invalid = new InvalidTypeInfo(
+                    $"Cannot index type '{arrayType}' - indexing requires an array type");
+                node.SetTypeError(new TypeError(invalid.Reason, node));
+                SetInferredType(node, UnknownTypeInfo.Instance);
+                return;
+            }
+
             // Each index reduces dimensionality by 1
             var elementType = arrayType;
             for (int i = 0; i < node.Indices.Count; i++)
@@ -589,6 +600,43 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
             return;
         }
 
+        // Validate operation compatibility before inferring result type
+        // If invalid, record error on THIS node and propagate Unknown (not Invalid)
+        if (IsArithmeticOperator(node.Operator))
+        {
+            if (!CanPerformArithmetic(leftType) || !CanPerformArithmetic(rightType))
+            {
+                var invalid = new InvalidTypeInfo(
+                    $"Cannot perform arithmetic operation '{OperatorToString(node.Operator)}' on types '{leftType}' and '{rightType}'");
+                node.SetTypeError(new TypeError(invalid.Reason, node));
+                SetInferredType(node, UnknownTypeInfo.Instance);
+                return;
+            }
+        }
+        else if (IsLogicalOperator(node.Operator))
+        {
+            if (!CanPerformLogical(leftType) || !CanPerformLogical(rightType))
+            {
+                var invalid = new InvalidTypeInfo(
+                    $"Cannot perform logical operation '{OperatorToString(node.Operator)}' on types '{leftType}' and '{rightType}'");
+                node.SetTypeError(new TypeError(invalid.Reason, node));
+                SetInferredType(node, UnknownTypeInfo.Instance);
+                return;
+            }
+        }
+        else if (node.Operator == BinaryOperator.Concatenate)
+        {
+            if (!CanConcatenate(leftType) || !CanConcatenate(rightType))
+            {
+                var invalid = new InvalidTypeInfo(
+                    $"Cannot concatenate types '{leftType}' and '{rightType}' - concatenation requires string types");
+                node.SetTypeError(new TypeError(invalid.Reason, node));
+                SetInferredType(node, UnknownTypeInfo.Instance);
+                return;
+            }
+        }
+
+        // Existing type inference logic
         TypeInfo resultType = node.Operator switch
         {
             // Comparison operators always return boolean
@@ -757,6 +805,63 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
             SetInferredType(node, UnknownTypeInfo.Instance);
         }
     }
+
+    #endregion
+
+    #region Operation Validation Helpers
+
+    /// <summary>
+    /// Check if an operator is an arithmetic operator
+    /// </summary>
+    private bool IsArithmeticOperator(BinaryOperator op) =>
+        op is BinaryOperator.Add or BinaryOperator.Subtract or
+              BinaryOperator.Multiply or BinaryOperator.Divide or BinaryOperator.Power;
+
+    /// <summary>
+    /// Check if an operator is a logical operator
+    /// </summary>
+    private bool IsLogicalOperator(BinaryOperator op) =>
+        op is BinaryOperator.And or BinaryOperator.Or;
+
+    /// <summary>
+    /// Check if a type can be used in arithmetic operations
+    /// </summary>
+    private bool CanPerformArithmetic(TypeInfo type) =>
+        type is PrimitiveTypeInfo { PeopleCodeType: PeopleCodeType.Number or PeopleCodeType.Integer } ||
+        type is AnyTypeInfo ||
+        type is UnknownTypeInfo;
+
+    /// <summary>
+    /// Check if a type can be used in logical operations
+    /// </summary>
+    private bool CanPerformLogical(TypeInfo type) =>
+        type is PrimitiveTypeInfo { PeopleCodeType: PeopleCodeType.Boolean } ||
+        type is AnyTypeInfo ||
+        type is UnknownTypeInfo;
+
+    /// <summary>
+    /// Check if a type can be concatenated (string concatenation)
+    /// </summary>
+    private bool CanConcatenate(TypeInfo type) =>
+        type is PrimitiveTypeInfo { PeopleCodeType: PeopleCodeType.String } ||
+        type is AnyTypeInfo ||
+        type is UnknownTypeInfo;
+
+    /// <summary>
+    /// Convert a binary operator to its string representation
+    /// </summary>
+    private string OperatorToString(BinaryOperator op) => op switch
+    {
+        BinaryOperator.Add => "+",
+        BinaryOperator.Subtract => "-",
+        BinaryOperator.Multiply => "*",
+        BinaryOperator.Divide => "/",
+        BinaryOperator.Power => "**",
+        BinaryOperator.Concatenate => "|",
+        BinaryOperator.And => "And",
+        BinaryOperator.Or => "Or",
+        _ => op.ToString()
+    };
 
     #endregion
 }
