@@ -20,6 +20,11 @@ public enum ParameterTag : byte
 /// </summary>
 public abstract class Parameter
 {
+
+    public string Name { get; set; } = "";
+    public int? NameIndex { get; set; }
+
+
     /// <summary>
     /// Unique tag ID for this parameter type, used for serialization
     /// </summary>
@@ -228,8 +233,6 @@ public struct TypeWithDimensionality : IEquatable<TypeWithDimensionality>
 public class SingleParameter : Parameter
 {
     public TypeWithDimensionality ParameterType { get; set; }
-    public string Name { get; set; } = "";
-    public int? NameIndex { get; set; }
 
     public override ParameterTag Tag => ParameterTag.Single;
     public override bool IsOptional => false;
@@ -287,7 +290,7 @@ public class SingleParameter : Parameter
         return expectedType.IsAssignableFrom(argType);
     }
 
-    public override string ToString() => $"{ParameterType}";
+    public override string ToString() => $"{(string.IsNullOrEmpty(Name) ? "": Name + ": ")}{ParameterType}";
 }
 
 /// <summary>
@@ -297,8 +300,6 @@ public class SingleParameter : Parameter
 public class UnionParameter : Parameter
 {
     public List<TypeWithDimensionality> AllowedTypes { get; set; } = new();
-    public string Name { get; set; } = "";
-    public int? NameIndex { get; set; }
 
     public override ParameterTag Tag => ParameterTag.Union;
     public override bool IsOptional => false;
@@ -387,8 +388,7 @@ public class UnionParameter : Parameter
         // Check for Any type fallback
         return AllowedTypes.Any(t => t.Type == PeopleCodeType.Any);
     }
-
-    public override string ToString() => string.Join(" | ", AllowedTypes);
+    public override string ToString() => $"{(string.IsNullOrEmpty(Name) ? "" : Name + ": ")}[{string.Join(" | ", AllowedTypes)}]";
 }
 
 /// <summary>
@@ -398,8 +398,6 @@ public class UnionParameter : Parameter
 public class ParameterGroup : Parameter
 {
     public List<Parameter> Parameters { get; set; } = new();
-    public string Name { get; set; } = "";
-    public int? NameIndex { get; set; }
 
     public override ParameterTag Tag => ParameterTag.Group;
     public override bool IsOptional => Parameters.All(p => p.IsOptional);
@@ -442,7 +440,7 @@ public class ParameterGroup : Parameter
         return argIndex == argTypes.Length;
     }
 
-    public override string ToString() => $"({string.Join(", ", Parameters)})";
+    public override string ToString() => $"{(string.IsNullOrEmpty(Name) ? "" : Name + ": ")} ({string.Join(", ", Parameters)})";
 }
 
 
@@ -458,8 +456,6 @@ public class VariableParameter : Parameter
     public Parameter InnerParameter { get; set; } = null!;
     public int MinCount { get; set; } = 1;
     public int MaxCount { get; set; } = int.MaxValue;
-    public string Name { get; set; } = "";
-    public int? NameIndex { get; set; }
 
     public override ParameterTag Tag => ParameterTag.Variable;
     public override bool IsOptional => MinCount == 0;
@@ -530,7 +526,7 @@ public class VariableParameter : Parameter
             var (min, max) => $"{{{min}-{max}}}"
         };
 
-        return $"{InnerParameter}{suffix}";
+        return $"{(string.IsNullOrEmpty(Name) ? "" : Name + ": ")}{InnerParameter}{suffix}";
     }
 }
 
@@ -548,9 +544,6 @@ public class ReferenceParameter : Parameter
     /// Use PeopleCodeType.Any for @ANY (accepts any reference)
     /// </summary>
     public PeopleCodeType ReferenceCategory { get; }
-
-    public string Name { get; set; } = "";
-    public int? NameIndex { get; set; }
 
     public override bool IsOptional { get; }
     public override int MinArgumentCount => IsOptional ? 0 : 1;
@@ -593,6 +586,6 @@ public class ReferenceParameter : Parameter
             ? "@ANY"
             : $"@{ReferenceCategory.GetTypeName().ToUpperInvariant()}";
 
-        return IsOptional ? $"[{refName}]" : refName;
+        return IsOptional ? $"{(string.IsNullOrEmpty(Name) ? "" : Name + ": ")} [{refName}]" : refName;
     }
 }
