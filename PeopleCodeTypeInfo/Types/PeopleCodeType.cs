@@ -196,8 +196,8 @@ public abstract class TypeInfo
             Types.PeopleCodeType.SameAsFirstParameter => SameAsFirstParameterTypeInfo.Instance,
             Types.PeopleCodeType.ArrayOfFirstParameter => ArrayOfFirstParameterTypeInfo.Instance,
 
-            // Special reference types (Object and Scroll are treated as builtin objects)
-            Types.PeopleCodeType.Object => new BuiltinObjectTypeInfo("object", peopleCodeType),
+            // Special reference types (Object uses specialized ObjectTypeInfo, Scroll is a builtin object)
+            Types.PeopleCodeType.Object => ObjectTypeInfo.Instance,
             Types.PeopleCodeType.Scroll => new BuiltinObjectTypeInfo("scroll", peopleCodeType),
 
             // Primitive types
@@ -848,6 +848,63 @@ public class ArrayTypeInfo : TypeInfo
         }
 
         return false;
+    }
+}
+
+/// <summary>
+/// Represents the special "Object" type in PeopleCode.
+/// The "object" type can hold any non-primitive type (builtin objects and AppClasses),
+/// but cannot hold primitive types (string, integer, number, date, datetime, time, boolean).
+/// This is different from "any" which can hold everything including primitives.
+/// </summary>
+public class ObjectTypeInfo : TypeInfo
+{
+    public override string Name => "object";
+    public override TypeKind Kind => TypeKind.BuiltinObject;
+    public override PeopleCodeType? PeopleCodeType => Types.PeopleCodeType.Object;
+
+    // Singleton instance
+    public static readonly ObjectTypeInfo Instance = new();
+
+    private ObjectTypeInfo() { }
+
+    public override bool IsAssignableFrom(TypeInfo other)
+    {
+        // Any can be assigned to object
+        if (other.Kind == TypeKind.Any) return true;
+
+        // Object can accept any builtin object type
+        if (other.Kind == TypeKind.BuiltinObject) return true;
+
+        // Object can accept any AppClass type
+        if (other.Kind == TypeKind.AppClass) return true;
+
+        // Object can accept array types
+        if (other.Kind == TypeKind.Array) return true;
+
+        // Object can accept interface types
+        if (other.Kind == TypeKind.Interface) return true;
+
+        // Object CANNOT accept primitive types
+        if (other.Kind == TypeKind.Primitive) return false;
+
+        // Unknown types - allow for now since we can't verify at compile time
+        if (other.Kind == TypeKind.Unknown) return true;
+
+        // Reject void, invalid, and other types
+        return false;
+    }
+
+    public override TypeInfo GetCommonType(TypeInfo other)
+    {
+        // If the other type is assignable to object, return object
+        if (IsAssignableFrom(other)) return this;
+
+        // If this is assignable to other, return other
+        if (other.IsAssignableFrom(this)) return other;
+
+        // Otherwise, the common type is any
+        return AnyTypeInfo.Instance;
     }
 }
 
