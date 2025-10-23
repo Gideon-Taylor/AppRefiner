@@ -21,7 +21,8 @@ public class FunctionCallValidator
     {
         None,
         TypeMismatch,
-        MissingArgument
+        MissingArgument,
+        TooManyArguments
     }
 
     public FunctionCallValidator(ITypeMetadataResolver typeResolver)
@@ -53,6 +54,18 @@ public class FunctionCallValidator
         if (ok && consumedIndex == argumentTypes.Length)
         {
             return ValidationResult.Success(consumedIndex);
+        }
+
+        // Check for too many arguments: matching succeeded but we have leftover arguments
+        if (ok && consumedIndex < argumentTypes.Length)
+        {
+            var foundType = FormatTypeInfoForDisplay(argumentTypes[consumedIndex]);
+            return ValidationResult.Failure(
+                consumedIndex,
+                new List<string>(),
+                new List<string> { "Too many arguments provided" },
+                foundType,
+                FailureKind.TooManyArguments);
         }
 
         // Build failure info from context
@@ -1175,14 +1188,25 @@ public class ValidationResult
         var parts = new List<string>();
         if (FailedAtArgumentIndex >= 0)
         {
-            parts.Add($"Parameter validation failed at argument {FailedAtArgumentIndex + 1}");
-            if (ExpectedTypesAtFailure.Any())
+            if (FailureKind == FunctionCallValidator.FailureKind.TooManyArguments)
             {
-                parts.Add($"Expected: {string.Join(" | ", ExpectedTypesAtFailure)}");
+                parts.Add($"Too many arguments: unexpected argument at position {FailedAtArgumentIndex + 1}");
+                if (!string.IsNullOrEmpty(FoundTypeAtFailure))
+                {
+                    parts.Add($"Found: {FoundTypeAtFailure}");
+                }
             }
-            if (!string.IsNullOrEmpty(FoundTypeAtFailure))
+            else
             {
-                parts.Add($"Found: {FoundTypeAtFailure}");
+                parts.Add($"Parameter validation failed at argument {FailedAtArgumentIndex + 1}");
+                if (ExpectedTypesAtFailure.Any())
+                {
+                    parts.Add($"Expected: {string.Join(" | ", ExpectedTypesAtFailure)}");
+                }
+                if (!string.IsNullOrEmpty(FoundTypeAtFailure))
+                {
+                    parts.Add($"Found: {FoundTypeAtFailure}");
+                }
             }
         }
         parts.AddRange(ErrorMessages);
