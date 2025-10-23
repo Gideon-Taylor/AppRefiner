@@ -4073,13 +4073,13 @@ public class PeopleCodeParser
                 }
 
                 var nameInfo = new VariableNameInfo(firstVariableName, firstVarToken);
-                var node = new LocalVariableDeclarationWithAssignmentNode(variableType, nameInfo, initialValue);
+                var node = new LocalVariableDeclarationWithAssignmentNode(variableType, nameInfo, initialValue) { FirstToken = localToken, LastToken = Previous };
                 return node;
             }
             else
             {
                 // This is localVariableDefinition: LOCAL type &var1, &var2, ...
-                var node = new LocalVariableDeclarationNode(variableType, new List<(string, Token)> { (firstVariableName, firstVarToken) });
+                var node = new LocalVariableDeclarationNode(variableType, new List<(string, Token)> { (firstVariableName, firstVarToken) }) { FirstToken = localToken };
 
                 // Parse additional variable names separated by commas
                 while (Match(TokenType.Comma))
@@ -4097,7 +4097,7 @@ public class PeopleCodeParser
                         break;
                     }
                 }
-
+                node.LastToken = Previous;
                 return node;
             }
         }
