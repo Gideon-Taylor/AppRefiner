@@ -586,6 +586,7 @@ public class ReferenceParameter : Parameter
             ? "@ANY"
             : $"@{ReferenceCategory.GetTypeName().ToUpperInvariant()}";
 
-        return IsOptional ? $"{(string.IsNullOrEmpty(Name) ? "" : Name + ": ")} [{refName}]" : refName;
+        var namePrefix = string.IsNullOrEmpty(Name) ? "" : Name + ": ";
+        return IsOptional ? $"{namePrefix}[{refName}]" : namePrefix + refName;
     }
 }

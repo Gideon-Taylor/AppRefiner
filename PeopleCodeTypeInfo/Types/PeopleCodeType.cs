@@ -810,7 +810,18 @@ public class AppClassTypeInfo : TypeInfo
 /// </summary>
 public class ArrayTypeInfo : TypeInfo
 {
-    public override string Name => ElementType != null ? $"array of {ElementType.Name}" : "array";
+    public override string Name { 
+        get {
+
+            string prefix = "";
+            for(var x = 0; x < Dimensions; x++)
+            {
+                prefix += "array of ";
+            }
+
+            return ElementType != null ? $"{prefix}{ElementType.Name}" : $"{prefix} any";
+        }
+    }
     public override TypeKind Kind => TypeKind.Array;
 
     /// <summary>
@@ -1319,6 +1330,10 @@ public class ArrayOfFirstParameterTypeInfo : PolymorphicTypeInfo
             throw new InvalidOperationException("ArrayOfFirstParameter polymorphic type requires parameter context");
 
         var firstParamType = parameterTypes[0];
+        if (firstParamType is ArrayTypeInfo ati)
+        {
+            return new ArrayTypeInfo(ati.Dimensions + 1, ati.ElementType);
+        }
 
         // Create an array of the first parameter's type
         return new ArrayTypeInfo(1, firstParamType);
