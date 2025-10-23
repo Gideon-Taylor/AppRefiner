@@ -5,6 +5,7 @@ using AppRefiner.Stylers;
 using PeopleCodeParser.SelfHosted;
 using PeopleCodeParser.SelfHosted.Lexing;
 using PeopleCodeParser.SelfHosted.Nodes;
+using PeopleCodeTypeInfo.Functions;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -133,6 +134,9 @@ namespace AppRefiner
         public event CaptionChangedEventHandler? CaptionChanged;
         public IntPtr ResultsListView;
         public BetterFindDialog? ActiveSearchDialog;
+        public bool FunctionCallTipActive;
+        public FunctionCallNode? FunctionCallNode;
+
         protected virtual void OnCaptionChanged(CaptionChangedEventArgs e)
         {
             CaptionChanged?.Invoke(this, e);

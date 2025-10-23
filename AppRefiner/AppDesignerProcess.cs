@@ -2,6 +2,7 @@
 using AppRefiner.Events;
 using DiffPlex.Model;
 using PeopleCodeParser.SelfHosted;
+using PeopleCodeTypeInfo.Contracts;
 using PeopleCodeTypeInfo.Inference;
 using System;
 using System.Collections.Concurrent;
@@ -14,6 +15,19 @@ using System.Threading.Tasks;
 
 namespace AppRefiner
 {
+    public class NullTypeMetadataResolver : ITypeMetadataResolver
+    {
+        public TypeMetadata? GetTypeMetadata(string qualifiedName)
+        {
+            return null;
+        }
+
+        public Task<TypeMetadata?> GetTypeMetadataAsync(string qualifiedName)
+        {
+            return Task.FromResult<TypeMetadata?>(null);
+        }
+    }
+
     public class AppDesignerProcess
     {
         public static IntPtr CallbackWindow; 
@@ -39,13 +53,13 @@ namespace AppRefiner
         /// </summary>
         public TypeCache TypeCache { get; private set; }
 
-        private DatabaseTypeMetadataResolver? _typeResolver;
+        private ITypeMetadataResolver? _typeResolver;
 
         /// <summary>
         /// Type metadata resolver that retrieves type information from the database.
         /// Initialized lazily when DataManager is available.
         /// </summary>
-        public DatabaseTypeMetadataResolver? TypeResolver
+        public ITypeMetadataResolver? TypeResolver
         {
             get
             {
@@ -55,9 +69,9 @@ namespace AppRefiner
                     _typeResolver = new DatabaseTypeMetadataResolver(DataManager);
                 }
                 // Clear resolver if DataManager was disconnected
-                else if (_typeResolver != null && DataManager == null)
+                else 
                 {
-                    _typeResolver = null;
+                    _typeResolver = new NullTypeMetadataResolver();
                 }
                 return _typeResolver;
             }

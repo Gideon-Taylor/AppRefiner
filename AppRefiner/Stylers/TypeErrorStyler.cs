@@ -30,7 +30,7 @@ public class TypeErrorStyler : BaseStyler
     /// <summary>
     /// Type checking requires database access for resolving custom types
     /// </summary>
-    public override DataManagerRequirement DatabaseRequirement => DataManagerRequirement.Required;
+    public override DataManagerRequirement DatabaseRequirement => DataManagerRequirement.Optional;
 
     public override void VisitProgram(ProgramNode node)
     {

@@ -11,8 +11,12 @@ using AppRefiner.Snapshots;
 using AppRefiner.Stylers;
 using AppRefiner.Templates;
 using AppRefiner.TooltipProviders;
+using DiffPlex.Model;
 using PeopleCodeParser.SelfHosted;
 using PeopleCodeParser.SelfHosted.Lexing;
+using PeopleCodeParser.SelfHosted.Nodes;
+using PeopleCodeParser.SelfHosted.Visitors;
+using PeopleCodeTypeInfo.Inference;
 using System.Data;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
@@ -94,6 +98,7 @@ namespace AppRefiner
         private const int AR_SUBCLASS_RESULTS_LIST = 1007; // Message to subclass Results list view
         private const int AR_SET_OPEN_TARGET = 1008; // Message to set open target for Results list interception
         private const int SCN_USERLISTSELECTION = 2014; // User list selection notification
+        private const int SCN_CALLTIPCLICK = 2021;
         private const int SCI_REPLACESEL = 0x2170; // Constant for SCI_REPLACESEL
 
         private bool isLoadingSettings = false;
@@ -1951,6 +1956,11 @@ namespace AppRefiner
                                 }
                             }
                         }
+
+                        if (activeEditor.FunctionCallTipActive && activeEditor.FunctionCallNode != null)
+                        {
+                            TooltipManager.ShowFunctionCallTooltip(activeEditor, activeEditor.FunctionCallNode);
+                        }
                         break;
                 }
             }
@@ -2148,12 +2158,75 @@ namespace AppRefiner
                 char character = (char)m.LParam.ToInt32();
 
                 Debug.Log($"Function call tip: character='{character}' at position={position}");
+                if (character == ')')
+                {
+                    activeEditor.FunctionCallTipActive = false;
+                    activeEditor.FunctionCallNode = null;
+                    TooltipManager.HideTooltip(activeEditor);
+                }
+                else
+                {
+                    try
+                    {
+                        // Get the current document text
+                        string content = ScintillaManager.GetScintillaText(activeEditor) ?? "";
+                        if (string.IsNullOrEmpty(content))
+                        {
+                            Debug.Log("No content available for variable suggestions.");
+                            return;
+                        }
 
-                // TODO: Delegate to call tip service/manager
-                // This will be implemented later to:
-                // - For '(': Show call tip with function signature if cursor is in a function call
-                // - For ',': Update highlighted parameter in existing call tip
-                // - For ')': Hide call tip or move to outer function call level
+                        // Parse the current document to get AST
+                        var lexer = new PeopleCodeLexer(content);
+                        var tokens = lexer.TokenizeAll();
+                        var parser = new PeopleCodeParser.SelfHosted.PeopleCodeParser(tokens);
+                        var program = parser.ParseProgram();
+
+                        RunTypeInference(activeEditor, program);
+
+                        var targetFunction = program.FindNodes(n => n is FunctionCallNode && n.SourceSpan.ContainsPosition(position)).FirstOrDefault();
+
+                        if (targetFunction != null && targetFunction is FunctionCallNode fcn)
+                        {
+                            activeEditor.FunctionCallNode = fcn;
+                            activeEditor.FunctionCallTipActive = true;
+                            TooltipManager.ShowFunctionCallTooltip(activeEditor, fcn);
+                        }
+
+                    }
+                    catch (Exception ex) { }
+                }
+            }
+        }
+
+        private static void RunTypeInference(ScintillaEditor editor, ProgramNode program)
+        {
+            try
+            {
+                string qualifiedName = "";
+
+                if (editor?.Caption != null && !string.IsNullOrWhiteSpace(editor.Caption))
+                {
+                    // Parse caption to get program identifier
+                    var openTarget = OpenTargetBuilder.CreateFromCaption(editor.Caption);
+                    if (openTarget != null)
+                    {
+                        qualifiedName = openTarget.Path;
+                    }
+                }
+
+                var metadata = TypeMetadataBuilder.ExtractMetadata(program, qualifiedName);
+
+                // Get type resolver (may be null if no database)
+                var typeResolver = editor.AppDesignerProcess?.TypeResolver;
+                var typeCache = editor.AppDesignerProcess?.TypeCache ?? new TypeCache();
+
+                // Run type inference (works even with null resolver)
+                TypeInferenceVisitor.Run(program, metadata, typeResolver, typeCache);
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError($"Error running type inference for tooltips: {ex.Message}");
             }
         }
 
@@ -3006,7 +3079,10 @@ namespace AppRefiner
                 // Invalidate in DatabaseTypeMetadataResolver (resolver's internal cache)
                 if (appDesignerProcess.TypeResolver != null)
                 {
-                    appDesignerProcess.TypeResolver.InvalidateCache(qualifiedName);
+                    if (appDesignerProcess.TypeResolver is DatabaseTypeMetadataResolver dbResolver)
+                    {
+                        dbResolver.InvalidateCache(qualifiedName);
+                    }
                     Debug.Log($"InvalidateTypeCacheForEditor: Invalidated DatabaseTypeMetadataResolver cache for '{qualifiedName}'");
                 }
                 else

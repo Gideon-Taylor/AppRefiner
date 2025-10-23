@@ -1,4 +1,5 @@
 using PeopleCodeTypeInfo.Types;
+using System.Text;
 
 namespace PeopleCodeTypeInfo.Functions;
 
@@ -183,7 +184,6 @@ public class FunctionInfo
     {
         if (resolvedTypeInfo is ArrayTypeInfo arrayInfo)
         {
-            // Handle array types - preserve the resolved array structure
             var elementType = arrayInfo.ElementType?.PeopleCodeType ?? Types.PeopleCodeType.Any;
             return new TypeWithDimensionality(elementType, (byte)arrayInfo.Dimensions);
         }
@@ -234,7 +234,7 @@ public class FunctionInfo
     /// <summary>
     /// Get the return type string representation (handles union types)
     /// </summary>
-    private string GetReturnTypeString()
+    public string GetReturnTypeString()
     {
         if (IsUnionReturn)
         {
@@ -250,6 +250,38 @@ public class FunctionInfo
     public override string ToString()
     {
         return IsProperty ? GetPropertySignature() : GetSignature();
+    }
+
+    public (string, int, int) ToFunctionCallTip(int argIndex)
+    {
+        StringBuilder sb = new StringBuilder();
+        int paramStart = 0;
+        int paramEnd = 0;
+
+        sb.Append($"{Name}(");
+        for (var x = 0; x < Parameters.Count; x++)
+        {
+            if (x == argIndex)
+            {
+                paramStart = sb.Length;
+            }
+            sb.Append(Parameters[x].ToString());
+
+            if (x == argIndex)
+            {
+                paramEnd = sb.Length;
+            }
+            
+
+            if (x < Parameters.Count-1)
+            {
+                sb.Append(", ");
+            }
+        }
+        
+        var returnTypeStr = GetReturnTypeString();
+        sb.Append($") -> {returnTypeStr}");
+        return (sb.ToString(), paramStart, paramEnd);
     }
 }
 

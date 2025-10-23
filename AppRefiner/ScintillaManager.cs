@@ -250,6 +250,15 @@ namespace AppRefiner
         private const int SCI_BEGINUNDOACTION = 2078;
         private const int SCI_ENDUNDOACTION = 2079;
 
+        private const int STYLE_DEFAULT = 32;
+        private const int STYLE_CALLTIP = 38;
+        private const int SCI_STYLEGETFORE = 2481;
+        private const int SCI_STYLEGETBACK = 2482;
+        private const int SCI_CALLTIPSETFOREHLT = 2207;
+        private const int SCI_CALLTIPSETBACK = 2205;
+        private const int SCI_CALLTIPSETFORE = 2206;
+        private const int SCI_CALLTIPUSESTYLE = 2212;
+
         // indicator style
         private const int INDIC_TEXTFORE = 17;
 
@@ -1029,34 +1038,30 @@ namespace AppRefiner
             editor.SendMessage(SCI_SETSAVEPOINT, 0, 0);
         }
 
-        internal static void ShowCallTip(ScintillaEditor editor, IntPtr position)
-        {
-            try
-            {
-                // Validate editor
-                if (editor == null || !editor.IsValid())
-                {
-                    Debug.LogError("Cannot show call tip - editor is null or invalid");
-                    return;
-                }
-
-                // Use the tooltip provider system to show tooltips
-                TooltipProviders.TooltipManager.ShowTooltip(editor, position.ToInt32());
-            }
-            catch (Exception ex)
-            {
-                Debug.LogError($"Error showing call tip: {ex.Message}");
-            }
-        }
-
         /// <summary>
         /// Shows a call tip with the specified text at the given position
         /// </summary>
         /// <param name="editor">The editor to show the call tip in</param>
         /// <param name="position">The position to show the call tip at</param>
         /// <param name="text">The text to display in the call tip</param>
-        internal static void ShowCallTipWithText(ScintillaEditor editor, int position, string text)
+        internal static void ShowCallTipWithText(ScintillaEditor editor, int position, string text, bool isFunctionSig = false)
         {
+            WinApi.SendMessage(editor.hWnd, SCI_CALLTIPUSESTYLE, 0, 0);
+            if (isFunctionSig)
+            {
+                WinApi.SendMessage(editor.hWnd, SCI_CALLTIPSETBACK, 0x201F23FF, 0);
+                WinApi.SendMessage(editor.hWnd, 2055, STYLE_CALLTIP, 12);
+                WinApi.SendMessage(editor.hWnd, SCI_CALLTIPSETFORE , (IntPtr)0xD6D8D9FF, 0);
+                WinApi.SendMessage(editor.hWnd, SCI_CALLTIPSETFOREHLT, 0x453CEFFF, 0);
+            }
+            else
+            {
+                var defaultBack = WinApi.SendMessage(editor.hWnd, SCI_STYLEGETBACK, 27, 0);
+                var defaultFore = WinApi.SendMessage(editor.hWnd, SCI_STYLEGETFORE, 27, 0);
+                WinApi.SendMessage(editor.hWnd, 2055, STYLE_CALLTIP, 10);
+                WinApi.SendMessage(editor.hWnd, SCI_CALLTIPSETFORE, defaultFore, 0);
+                WinApi.SendMessage(editor.hWnd, SCI_CALLTIPSETBACK, defaultBack, 0);
+            }
             try
             {
                 // Validate editor

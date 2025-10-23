@@ -342,7 +342,7 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
                 metadata = _typeCache.Get(appClassType.QualifiedName);
 
                 // If not cached, resolve and cache
-                if (metadata == null)
+                if (metadata == null && _typeResolver != null)
                 {
                     metadata = _typeResolver.GetTypeMetadata(appClassType.QualifiedName);
                     if (metadata != null)

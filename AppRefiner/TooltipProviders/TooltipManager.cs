@@ -1,7 +1,9 @@
 using PeopleCodeParser.SelfHosted;
 using PeopleCodeParser.SelfHosted.Nodes;
 using PeopleCodeParser.SelfHosted.Visitors;
+using PeopleCodeTypeInfo.Functions;
 using PeopleCodeTypeInfo.Inference;
+using PeopleCodeTypeInfo.Validation;
 using System.Reflection;
 
 namespace AppRefiner.TooltipProviders
@@ -34,6 +36,31 @@ namespace AppRefiner.TooltipProviders
             initialized = true;
 
             Debug.Log($"Initialized TooltipManager with {providers.Count} providers");
+        }
+
+        public static void ShowFunctionCallTooltip(ScintillaEditor editor, FunctionCallNode node)
+        {
+            FunctionInfo? funcInfo = node.GetFunctionInfo();
+            string toolTipText;
+            int highlightStart;
+            int highlightEnd;
+
+
+            if (funcInfo != null && node.FirstToken != null)
+            {
+
+                var validator = new FunctionCallValidator(new NullTypeMetadataResolver());
+                var result = validator.Validate(funcInfo, node.Arguments.Select(a => a.GetInferredType()).ToArray());
+
+                var typeInfos = node.Arguments.Select(arg => arg.GetInferredType()).ToArray();
+                var typeInfoArray = typeInfos.Where(t => t != null).ToArray();
+
+                (var text, var start, var end) = funcInfo.ToFunctionCallTip(node.Arguments.Count);
+
+                ScintillaManager.ShowCallTipWithText(editor, editor.FunctionCallNode.FirstToken.SourceSpan.Start.ByteIndex + 1, text, true);
+                ScintillaManager.SetCallTipHighlight(editor, start, end);
+            }
+
         }
 
         /// <summary>
