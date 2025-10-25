@@ -1134,12 +1134,6 @@ public class ReferenceTypeInfo : TypeInfo
             return ReferenceCategory == otherRef.ReferenceCategory;
         }
 
-        // String can be converted to reference (for dynamic references)
-        if (other.Kind == TypeKind.Primitive && other is PrimitiveTypeInfo primitive &&
-            primitive.Name.Equals("string", StringComparison.OrdinalIgnoreCase))
-        {
-            return true;
-        }
 
         return false;
     }
