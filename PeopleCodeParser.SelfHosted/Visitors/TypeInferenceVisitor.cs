@@ -48,8 +48,51 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
         TypeCache typeCache)
     {
         var visitor = new TypeInferenceVisitor(program, programMetadata, typeResolver, typeCache);
+
+        // Pre-resolve all declared functions for efficient lookup
+        visitor.ProcessDeclaredFunctions();
+
         program.Accept(visitor);
         return visitor;
+    }
+
+    /// <summary>
+    /// Pre-processes all declared external functions and caches their FunctionInfo.
+    /// This makes the metadata available for both type inference and tooltips.
+    /// </summary>
+    private void ProcessDeclaredFunctions()
+    {
+        foreach (var func in _program.Functions.Where(f => f.IsDeclaration))
+        {
+            try
+            {
+                // Build qualified name from declaration metadata
+                string qualifiedName = $"{func.RecordName}.{func.FieldName}.{func.RecordEvent}";
+
+                // Try cache first, then resolver
+                TypeMetadata? sourceMetadata = _typeCache.Get(qualifiedName);
+                if (sourceMetadata == null && _typeResolver != null)
+                {
+                    sourceMetadata = _typeResolver.GetTypeMetadata(qualifiedName);
+                    if (sourceMetadata != null)
+                        _typeCache.Set(qualifiedName, sourceMetadata);
+                }
+
+                // Look up the function in source program's methods
+                if (sourceMetadata != null &&
+                    sourceMetadata.Methods.TryGetValue(func.Name, out var importedFunc))
+                {
+                    // Store FunctionInfo on the declaration node for reuse
+                    func.SetFunctionInfo(importedFunc);
+                }
+            }
+            catch (Exception)
+            {
+                // If we can't resolve a declared function, continue processing others
+                // The function will be unknown at call sites but won't break the entire inference
+                continue;
+            }
+        }
     }
 
     /// <summary>
@@ -221,56 +264,7 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
 
     #region Resolution Methods
 
-    /// <summary>
-    /// Resolve return type for a standalone function call
-    /// </summary>
-    private TypeInfo ResolveFunctionCallReturnType(string functionName, TypeInfo[]? parameterTypes)
-    {
-        // 1. Check program's Functions list (works for all program types)
-        //    - AppClass programs: contains imported functions (IsDeclaration)
-        //    - Non-class programs: contains imported (IsDeclaration) + implemented (IsImplementation)
-        var func = _program.Functions
-            .FirstOrDefault(f => f.Name.Equals(functionName, StringComparison.OrdinalIgnoreCase));
-
-        if (func != null)
-        {
-            if (func.IsImplementation)
-            {
-                // Return type is in the AST as TypeNode - convert directly
-                return ConvertTypeNodeToTypeInfo(func.ReturnType);
-            }
-            else if (func.IsDeclaration)
-            {
-                // Need to load source program to get return type
-                string qualifiedName = $"{func.RecordName}.{func.FieldName}.{func.RecordEvent}";
-
-                // Try cache first
-                var sourceMetadata = _typeCache.Get(qualifiedName);
-                if (sourceMetadata == null)
-                {
-                    sourceMetadata = _typeResolver.GetTypeMetadata(qualifiedName);
-                    if (sourceMetadata != null)
-                        _typeCache.Set(qualifiedName, sourceMetadata);
-                }
-
-                // Get function info from source program
-                if (sourceMetadata?.Methods.TryGetValue(functionName, out var importedFunc) == true)
-                {
-                    return ConvertFunctionInfoToTypeInfo(importedFunc, null, parameterTypes);
-                }
-            }
-        }
-
-        // 2. Fallback to builtin function
-        var builtinFunc = PeopleCodeTypeDatabase.GetFunction(functionName);
-        if (builtinFunc != null)
-        {
-            return ConvertFunctionInfoToTypeInfo(builtinFunc, null, parameterTypes);
-        }
-
-        // 3. Could not resolve
-        return UnknownTypeInfo.Instance;
-    }
+   
 
     /// <summary>
     /// Resolve return type for member access (property or method call)
@@ -329,60 +323,142 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
         // Custom types (AppClass/Interface)
         else if (objectType is AppClassTypeInfo appClassType)
         {
-            TypeMetadata? metadata = null;
-
-            // Special case: if this is the current class (%This), use _programMetadata directly
-            if (appClassType.QualifiedName.Equals(_programMetadata.QualifiedName, StringComparison.OrdinalIgnoreCase))
+            if (isMethodCall)
             {
-                metadata = _programMetadata;
+                // Walk up the inheritance chain to find the method
+                var method = LookupMethodInInheritanceChain(appClassType, memberName);
+                if (method != null)
+                    return ConvertFunctionInfoToTypeInfo(method, null, parameterTypes);
             }
             else
             {
-                // Try cache first
-                metadata = _typeCache.Get(appClassType.QualifiedName);
-
-                // If not cached, resolve and cache
-                if (metadata == null && _typeResolver != null)
-                {
-                    metadata = _typeResolver.GetTypeMetadata(appClassType.QualifiedName);
-                    if (metadata != null)
-                        _typeCache.Set(appClassType.QualifiedName, metadata);
-                }
-            }
-
-            if (metadata != null)
-            {
-                if (isMethodCall && metadata.Methods.TryGetValue(memberName, out var method))
-                    return ConvertFunctionInfoToTypeInfo(method, null, parameterTypes);
-
-                if (!isMethodCall && metadata.Properties.TryGetValue(memberName, out var metaProp))
-                    return ConvertPropertyInfoToTypeInfo(metaProp);
+                // Walk up the inheritance chain to find the property
+                var property = LookupPropertyInInheritanceChain(appClassType, memberName);
+                if (property.HasValue)
+                    return ConvertPropertyInfoToTypeInfo(property.Value);
             }
         }
 
         return UnknownTypeInfo.Instance;
     }
 
+
+    #endregion
+
+    #region Inheritance Chain Helpers
+
     /// <summary>
-    /// Resolve return type for default method call (e.g., &rowset(1))
+    /// Look up a method in an AppClass, walking up the inheritance chain if necessary.
     /// </summary>
-    private TypeInfo ResolveDefaultMethodCall(TypeInfo targetType, TypeInfo[]? parameterTypes)
+    /// <param name="appClassType">The type to start searching from</param>
+    /// <param name="methodName">The method name to find</param>
+    /// <returns>The FunctionInfo for the method, or null if not found</returns>
+    private FunctionInfo? LookupMethodInInheritanceChain(AppClassTypeInfo appClassType, string methodName)
     {
-        // Only builtin types support default methods
-        if (targetType.Kind == TypeKind.BuiltinObject)
+        var currentClassName = appClassType.QualifiedName;
+        var visited = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { currentClassName };
+
+        while (!string.IsNullOrEmpty(currentClassName))
         {
-            var obj = PeopleCodeTypeDatabase.GetObject(targetType.Name);
-            if (obj?.DefaultMethodHash != 0)
+            // Get metadata for the current class
+            TypeMetadata? metadata = null;
+
+            // Special case: if this is the current class, use _programMetadata directly
+            if (currentClassName.Equals(_programMetadata.QualifiedName, StringComparison.OrdinalIgnoreCase))
             {
-                var defaultMethod = obj.LookupMethodByHash(obj.DefaultMethodHash);
-                if (defaultMethod != null)
+                metadata = _programMetadata;
+            }
+            else
+            {
+                // Try cache first, then resolver
+                metadata = _typeCache.Get(currentClassName);
+                if (metadata == null && _typeResolver != null)
                 {
-                    return ConvertFunctionInfoToTypeInfo(defaultMethod, targetType, parameterTypes);
+                    metadata = _typeResolver.GetTypeMetadata(currentClassName);
+                    if (metadata != null)
+                        _typeCache.Set(currentClassName, metadata);
                 }
+            }
+
+            // If we have metadata, check for the method
+            if (metadata != null && metadata.Methods.TryGetValue(methodName, out var method))
+            {
+                return method;
+            }
+
+            // Move to the base class
+            if (metadata == null || string.IsNullOrEmpty(metadata.BaseClassName))
+            {
+                break; // No more base classes
+            }
+
+            currentClassName = metadata.BaseClassName;
+
+            // Circular inheritance detection
+            if (!visited.Add(currentClassName))
+            {
+                break; // Detected circular inheritance
             }
         }
 
-        return UnknownTypeInfo.Instance;
+        return null; // Method not found in the hierarchy
+    }
+
+    /// <summary>
+    /// Look up a property in an AppClass, walking up the inheritance chain if necessary.
+    /// </summary>
+    /// <param name="appClassType">The type to start searching from</param>
+    /// <param name="propertyName">The property name to find</param>
+    /// <returns>The PropertyInfo for the property, or null if not found</returns>
+    private PropertyInfo? LookupPropertyInInheritanceChain(AppClassTypeInfo appClassType, string propertyName)
+    {
+        var currentClassName = appClassType.QualifiedName;
+        var visited = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { currentClassName };
+
+        while (!string.IsNullOrEmpty(currentClassName))
+        {
+            // Get metadata for the current class
+            TypeMetadata? metadata = null;
+
+            // Special case: if this is the current class, use _programMetadata directly
+            if (currentClassName.Equals(_programMetadata.QualifiedName, StringComparison.OrdinalIgnoreCase))
+            {
+                metadata = _programMetadata;
+            }
+            else
+            {
+                // Try cache first, then resolver
+                metadata = _typeCache.Get(currentClassName);
+                if (metadata == null && _typeResolver != null)
+                {
+                    metadata = _typeResolver.GetTypeMetadata(currentClassName);
+                    if (metadata != null)
+                        _typeCache.Set(currentClassName, metadata);
+                }
+            }
+
+            // If we have metadata, check for the property
+            if (metadata != null && metadata.Properties.TryGetValue(propertyName, out var property))
+            {
+                return property;
+            }
+
+            // Move to the base class
+            if (metadata == null || string.IsNullOrEmpty(metadata.BaseClassName))
+            {
+                break; // No more base classes
+            }
+
+            currentClassName = metadata.BaseClassName;
+
+            // Circular inheritance detection
+            if (!visited.Add(currentClassName))
+            {
+                break; // Detected circular inheritance
+            }
+        }
+
+        return null; // Property not found in the hierarchy
     }
 
     #endregion
@@ -401,8 +477,14 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
                 }
                 else if (func.IsDeclaration)
                 {
+                    // FunctionInfo should already be cached on the declaration node by ProcessDeclaredFunctions
+                    var cachedFuncInfo = func.GetFunctionInfo();
+                    if (cachedFuncInfo != null)
+                        return cachedFuncInfo;
+
+                    // Fallback: resolve on-demand (shouldn't normally happen after ProcessDeclaredFunctions)
                     string qualifiedName = $"{func.RecordName}.{func.FieldName}.{func.RecordEvent}";
-                    var sourceMetadata = _typeCache.Get(qualifiedName) ?? _typeResolver.GetTypeMetadata(qualifiedName);
+                    var sourceMetadata = _typeCache.Get(qualifiedName) ?? _typeResolver?.GetTypeMetadata(qualifiedName);
                     if (sourceMetadata != null && sourceMetadata.Methods.TryGetValue(identifier.Name, out var importedFunc))
                     {
                         return importedFunc;
@@ -434,11 +516,8 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
                 }
                 else if (objectType is AppClassTypeInfo appClassType)
                 {
-                    var metadata = appClassType.QualifiedName.Equals(_programMetadata.QualifiedName, StringComparison.OrdinalIgnoreCase) ? _programMetadata : (_typeCache.Get(appClassType.QualifiedName) ?? _typeResolver.GetTypeMetadata(appClassType.QualifiedName));
-                    if (metadata != null && metadata.Methods.TryGetValue(memberAccess.MemberName, out var method))
-                    {
-                        return method;
-                    }
+                    // Walk up the inheritance chain to find the method
+                    return LookupMethodInInheritanceChain(appClassType, memberAccess.MemberName);
                 }
             }
         }

@@ -299,10 +299,33 @@ namespace AppRefiner.TooltipProviders
         }
 
         /// <summary>
-        /// Handles global builtin function calls like Split(), Left(), Right(), etc.
+        /// Handles global function calls (both declared external functions and builtin functions).
+        /// Checks declared functions first (which may be imports from other programs),
+        /// then falls back to builtin functions.
         /// </summary>
         private void HandleGlobalFunction(string functionName, SourceSpan span)
         {
+            // First check if this is a declared external function
+            if (Program != null)
+            {
+                var declaredFunc = Program.Functions.FirstOrDefault(f =>
+                    f.IsDeclaration &&
+                    f.Name.Equals(functionName, StringComparison.OrdinalIgnoreCase));
+
+                if (declaredFunc != null)
+                {
+                    // The FunctionInfo should have been pre-resolved by TypeInferenceVisitor.ProcessDeclaredFunctions
+                    var funcInfo = declaredFunc.GetFunctionInfo();
+                    if (funcInfo != null)
+                    {
+                        var tooltip = FormatBuiltinFunctionTooltip(funcInfo);
+                        RegisterTooltip(span, tooltip);
+                        return;
+                    }
+                }
+            }
+
+            // Fallback to builtin functions
             var functionInfo = PeopleCodeTypeDatabase.GetFunction(functionName);
             if (functionInfo != null)
             {

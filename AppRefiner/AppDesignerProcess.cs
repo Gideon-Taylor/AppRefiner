@@ -73,6 +73,12 @@ namespace AppRefiner
                 {
                     _typeResolver = new NullTypeMetadataResolver();
                 }
+
+                if (_typeResolver is NullTypeMetadataResolver && DataManager != null)
+                {
+                    _typeResolver = new DatabaseTypeMetadataResolver(DataManager);
+                }
+
                 return _typeResolver;
             }
         }

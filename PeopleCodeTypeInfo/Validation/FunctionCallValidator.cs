@@ -25,6 +25,38 @@ public class FunctionCallValidator
         TooManyArguments
     }
 
+    /// <summary>
+    /// Represents a parameter type with its associated parameter name for better diagnostics
+    /// </summary>
+    public class ParameterTypeInfo : IEquatable<ParameterTypeInfo>
+    {
+        public string TypeName { get; set; }
+        public string ParameterName { get; set; }
+
+        public ParameterTypeInfo(string typeName, string parameterName)
+        {
+            TypeName = typeName ?? string.Empty;
+            ParameterName = parameterName ?? string.Empty;
+        }
+
+        public override bool Equals(object? obj) => obj is ParameterTypeInfo other && Equals(other);
+
+        public bool Equals(ParameterTypeInfo? other)
+        {
+            if (other is null) return false;
+            return TypeName == other.TypeName && ParameterName == other.ParameterName;
+        }
+
+        public override int GetHashCode() => HashCode.Combine(TypeName, ParameterName);
+
+        public override string ToString()
+        {
+            if (string.IsNullOrEmpty(ParameterName))
+                return TypeName;
+            return $"{TypeName} ({ParameterName})";
+        }
+    }
+
     public FunctionCallValidator(ITypeMetadataResolver typeResolver)
     {
         _typeResolver = typeResolver ?? throw new ArgumentNullException(nameof(typeResolver));
@@ -62,10 +94,11 @@ public class FunctionCallValidator
             var foundType = FormatTypeInfoForDisplay(argumentTypes[consumedIndex]);
             return ValidationResult.Failure(
                 consumedIndex,
-                new List<string>(),
+                new List<ParameterTypeInfo>(),
                 new List<string> { "Too many arguments provided" },
                 foundType,
-                FailureKind.TooManyArguments);
+                FailureKind.TooManyArguments,
+                ctx.FunctionName);
         }
 
         // Build failure info from context
@@ -81,16 +114,16 @@ public class FunctionCallValidator
         var defaultKind = failedIndex >= argumentTypes.Length ? FailureKind.MissingArgument : FailureKind.TypeMismatch;
         var kind = ctx.FailureKind == FailureKind.None ? defaultKind : ctx.FailureKind;
         var errors = ctx.Errors.Count > 0 ? ctx.Errors : new List<string> { kind == FailureKind.MissingArgument ? "Unexpected end of arguments" : "No valid parameter match" };
-        return ValidationResult.Failure(failedIndex, expected, errors, found, kind);
+        return ValidationResult.Failure(failedIndex, expected, errors, found, kind, ctx.FunctionName);
     }
 
     /// <summary>
     /// Computes the set of allowed types for the next argument, given an existing prefix of argument types.
     /// - If the existing argument prefix is a valid prefix of the signature (including incomplete/missing args),
-    ///   returns the allowed next token types at the next position.
+    ///   returns the allowed next token types at the next position with their parameter names.
     /// - If the existing arguments contain an invalid type mismatch, returns an empty list.
     /// </summary>
-    public List<string> GetAllowedNextTypes(FunctionInfo functionInfo, TypeInfo[] argumentTypes)
+    public List<ParameterTypeInfo> GetAllowedNextTypes(FunctionInfo functionInfo, TypeInfo[] argumentTypes)
     {
         return GetAllowedNextTypes(functionInfo.Parameters, argumentTypes);
     }
@@ -98,21 +131,21 @@ public class FunctionCallValidator
     /// <summary>
     /// Core implementation for computing allowed next types over a parameter sequence.
     /// </summary>
-    public List<string> GetAllowedNextTypes(List<Parameter> parameters, TypeInfo[] argumentTypes)
+    public List<ParameterTypeInfo> GetAllowedNextTypes(List<Parameter> parameters, TypeInfo[] argumentTypes)
     {
         var result = Validate(parameters, argumentTypes, "");
         if (!result.IsValid && result.FailureKind == FailureKind.MissingArgument)
         {
             return result.ExpectedTypesAtFailure.Distinct().ToList();
         }
-        return new List<string>();
+        return new List<ParameterTypeInfo>();
     }
 
     /// <summary>
     /// Recursively walks the parameter sequence to (a) verify the provided arguments form a valid prefix,
     /// and (b) when the prefix boundary is reached, collect the FIRST set of allowed next token types.
     /// </summary>
-    private bool CollectNextTypesForPrefix(MatchContext ctx, List<Parameter> parameters, int paramIdx, int argIndex, HashSet<string> outTypes)
+    private bool CollectNextTypesForPrefix(MatchContext ctx, List<Parameter> parameters, int paramIdx, int argIndex, List<ParameterTypeInfo> outTypes)
     {
         // If we've exhausted provided arguments, collect the FIRST set starting from the current parameter index.
         if (argIndex >= ctx.Arguments.Length)
@@ -133,7 +166,7 @@ public class FunctionCallValidator
         {
             case SingleParameter single:
                 {
-                    var res = TryMatchOnePrefix(ctx, single, argIndex, out int used, out List<string> needed);
+                    var res = TryMatchOnePrefix(ctx, single, argIndex, out int used, out List<ParameterTypeInfo> needed);
                     switch (res)
                     {
                         case PrefixMatchResult.Completed:
@@ -147,7 +180,7 @@ public class FunctionCallValidator
                 }
             case UnionParameter union:
                 {
-                var res = TryMatchOnePrefix(ctx, union, argIndex, out int used, out List<string> needed);
+                var res = TryMatchOnePrefix(ctx, union, argIndex, out int used, out List<ParameterTypeInfo> needed);
                     switch (res)
                     {
                         case PrefixMatchResult.Completed:
@@ -161,7 +194,7 @@ public class FunctionCallValidator
                 }
             case ParameterGroup group:
                 {
-                    var res = TryMatchOnePrefix(ctx, group, argIndex, out int used, out List<string> needed);
+                    var res = TryMatchOnePrefix(ctx, group, argIndex, out int used, out List<ParameterTypeInfo> needed);
                     switch (res)
                     {
                         case PrefixMatchResult.Completed:
@@ -179,7 +212,7 @@ public class FunctionCallValidator
                     int count = 0;
                     while (count < variable.MaxCount && idx < ctx.Arguments.Length)
                     {
-                        var res = TryMatchOnePrefix(ctx, variable.InnerParameter, idx, out int used, out List<string> needed);
+                        var res = TryMatchOnePrefix(ctx, variable.InnerParameter, idx, out int used, out List<ParameterTypeInfo> needed);
                         if (res == PrefixMatchResult.Completed)
                         {
                             idx += used;
@@ -234,9 +267,9 @@ public class FunctionCallValidator
     /// Attempts to match exactly one instance of <paramref name="parameter"/> starting at <paramref name="argIndex"/>,
     /// but treats running out of provided args as a valid prefix and returns the next expected types.
     /// </summary>
-    private PrefixMatchResult TryMatchOnePrefix(MatchContext ctx, Parameter parameter, int argIndex, out int consumed, out List<string> nextTypes)
+    private PrefixMatchResult TryMatchOnePrefix(MatchContext ctx, Parameter parameter, int argIndex, out int consumed, out List<ParameterTypeInfo> nextTypes)
     {
-        nextTypes = new List<string>();
+        nextTypes = new List<ParameterTypeInfo>();
         consumed = 0;
         switch (parameter)
         {
@@ -244,7 +277,7 @@ public class FunctionCallValidator
                 {
                     if (argIndex >= ctx.Arguments.Length)
                     {
-                        nextTypes.Add(FormatTypePublic(single.ParameterType));
+                        nextTypes.Add(new ParameterTypeInfo(FormatTypePublic(single.ParameterType), single.Name));
                         return PrefixMatchResult.NeedsMoreArgs;
                     }
                     if (MatchSingle(ctx, single, argIndex, out int used))
@@ -258,7 +291,7 @@ public class FunctionCallValidator
             {
                 if (argIndex >= ctx.Arguments.Length)
                 {
-                    nextTypes.AddRange(union.AllowedTypes.Select(FormatTypePublic));
+                    nextTypes.AddRange(union.AllowedTypes.Select(t => new ParameterTypeInfo(FormatTypePublic(t), union.Name)));
                     return PrefixMatchResult.NeedsMoreArgs;
                 }
                 var arg = ctx.Arguments[argIndex];
@@ -298,12 +331,12 @@ public class FunctionCallValidator
                     {
                         if (idx >= ctx.Arguments.Length)
                         {
-                            var tmp = new HashSet<string>();
+                            var tmp = new List<ParameterTypeInfo>();
                             AddStartTypesForParameter(child, tmp);
-                            nextTypes = tmp.ToList();
+                            nextTypes = tmp;
                             return PrefixMatchResult.NeedsMoreArgs;
                         }
-                        var res = TryMatchOnePrefix(ctx, child, idx, out int used, out List<string> needed);
+                        var res = TryMatchOnePrefix(ctx, child, idx, out int used, out List<ParameterTypeInfo> needed);
                         switch (res)
                         {
                             case PrefixMatchResult.Completed:
@@ -331,7 +364,7 @@ public class FunctionCallValidator
                         var refTypeName = reference.ReferenceCategory == PeopleCodeType.Any
                             ? "@ANY"
                             : $"@{reference.ReferenceCategory.GetTypeName().ToUpperInvariant()}";
-                        nextTypes.Add(refTypeName);
+                        nextTypes.Add(new ParameterTypeInfo(refTypeName, reference.Name));
                         return PrefixMatchResult.NeedsMoreArgs;
                     }
                     if (MatchReference(ctx, reference, argIndex, out int used))
@@ -349,27 +382,52 @@ public class FunctionCallValidator
     /// <summary>
     /// Adds the FIRST set for a single parameter to the output set.
     /// </summary>
-    private void AddStartTypesForParameter(Parameter parameter, HashSet<string> set)
+    private void AddStartTypesForParameter(Parameter parameter, List<ParameterTypeInfo> list)
     {
         switch (parameter)
         {
             case SingleParameter s:
-                set.Add(FormatTypePublic(s.ParameterType));
+                {
+                    var typeInfo = new ParameterTypeInfo(FormatTypePublic(s.ParameterType), s.Name);
+                    if (!list.Contains(typeInfo)) list.Add(typeInfo);
+                }
                 break;
             case UnionParameter u:
-                foreach (var t in u.AllowedTypes) set.Add(FormatTypePublic(t));
+                foreach (var t in u.AllowedTypes)
+                {
+                    var typeInfo = new ParameterTypeInfo(FormatTypePublic(t), u.Name);
+                    if (!list.Contains(typeInfo)) list.Add(typeInfo);
+                }
                 break;
             case ParameterGroup g:
-                if (g.Parameters.Count > 0) AddStartTypesForParameter(g.Parameters[0], set);
+                if (g.Parameters.Count > 0) AddStartTypesForParameter(g.Parameters[0], list);
                 break;
             case VariableParameter v:
-                AddStartTypesForParameter(v.InnerParameter, set);
+                // Use the variable's name if set, otherwise get from inner parameter
+                if (!string.IsNullOrEmpty(v.Name))
+                {
+                    // Get types from inner and apply variable's name
+                    var innerTypes = new List<ParameterTypeInfo>();
+                    AddStartTypesForParameter(v.InnerParameter, innerTypes);
+                    foreach (var innerType in innerTypes)
+                    {
+                        var typeInfo = new ParameterTypeInfo(innerType.TypeName, v.Name);
+                        if (!list.Contains(typeInfo)) list.Add(typeInfo);
+                    }
+                }
+                else
+                {
+                    AddStartTypesForParameter(v.InnerParameter, list);
+                }
                 break;
             case ReferenceParameter r:
                 var refTypeName = r.ReferenceCategory == PeopleCodeType.Any
                     ? "@ANY"
                     : $"@{r.ReferenceCategory.GetTypeName().ToUpperInvariant()}";
-                set.Add(refTypeName);
+                {
+                    var typeInfo = new ParameterTypeInfo(refTypeName, r.Name);
+                    if (!list.Contains(typeInfo)) list.Add(typeInfo);
+                }
                 break;
         }
     }
@@ -378,13 +436,13 @@ public class FunctionCallValidator
     /// Adds the FIRST set for a parameter sequence starting at <paramref name="startParamIdx"/>,
     /// including epsilon-closures over optional/zero-min variable parameters.
     /// </summary>
-    private void AddStartTypesForSequence(List<Parameter> parameters, int startParamIdx, HashSet<string> set)
+    private void AddStartTypesForSequence(List<Parameter> parameters, int startParamIdx, List<ParameterTypeInfo> list)
     {
         int idx = startParamIdx;
         while (idx < parameters.Count)
         {
             var p = parameters[idx];
-            AddStartTypesForParameter(p, set);
+            AddStartTypesForParameter(p, list);
 
             if (p is VariableParameter v && v.MinCount == 0)
             {
@@ -401,32 +459,87 @@ public class FunctionCallValidator
     /// This is a fallback to hint at likely first tokens from the current and next parameter
     /// (especially when optional/zero-min varargs are present).
     /// </summary>
-    private List<string> BuildExpectedFromParameters(List<Parameter> parameters, TypeInfo[] args, int paramIdx, int argIdx)
+    private List<ParameterTypeInfo> BuildExpectedFromParameters(List<Parameter> parameters, TypeInfo[] args, int paramIdx, int argIdx)
     {
-        var set = new HashSet<string>();
-        if (paramIdx >= parameters.Count) return set.ToList();
+        var list = new List<ParameterTypeInfo>();
+        if (paramIdx >= parameters.Count) return list;
 
         void AddFrom(Parameter p)
         {
             switch (p)
             {
                 case SingleParameter s:
-                    set.Add(FormatTypePublic(s.ParameterType));
+                    {
+                        var typeInfo = new ParameterTypeInfo(FormatTypePublic(s.ParameterType), s.Name);
+                        if (!list.Contains(typeInfo)) list.Add(typeInfo);
+                    }
                     break;
                 case UnionParameter u:
-                    foreach (var t in u.AllowedTypes) set.Add(FormatTypePublic(t));
+                    foreach (var t in u.AllowedTypes)
+                    {
+                        var typeInfo = new ParameterTypeInfo(FormatTypePublic(t), u.Name);
+                        if (!list.Contains(typeInfo)) list.Add(typeInfo);
+                    }
                     break;
                 case ParameterGroup g:
                     if (g.Parameters.Count > 0) AddFrom(g.Parameters[0]);
                     break;
                 case VariableParameter v:
-                    AddFrom(v.InnerParameter);
+                    // Use the variable's name if set, otherwise recurse to inner parameter
+                    if (!string.IsNullOrEmpty(v.Name))
+                    {
+                        // Get the types from inner and apply the variable's name
+                        var innerList = new List<ParameterTypeInfo>();
+                        void AddFromInner(Parameter inner)
+                        {
+                            switch (inner)
+                            {
+                                case SingleParameter s:
+                                    {
+                                        var typeInfo = new ParameterTypeInfo(FormatTypePublic(s.ParameterType), v.Name);
+                                        if (!innerList.Contains(typeInfo)) innerList.Add(typeInfo);
+                                    }
+                                    break;
+                                case UnionParameter u:
+                                    foreach (var t in u.AllowedTypes)
+                                    {
+                                        var typeInfo = new ParameterTypeInfo(FormatTypePublic(t), v.Name);
+                                        if (!innerList.Contains(typeInfo)) innerList.Add(typeInfo);
+                                    }
+                                    break;
+                                case ParameterGroup g:
+                                    if (g.Parameters.Count > 0) AddFromInner(g.Parameters[0]);
+                                    break;
+                                case ReferenceParameter r:
+                                    var refTypeName = r.ReferenceCategory == PeopleCodeType.Any
+                                        ? "@ANY"
+                                        : $"@{r.ReferenceCategory.GetTypeName().ToUpperInvariant()}";
+                                    {
+                                        var typeInfo = new ParameterTypeInfo(refTypeName, v.Name);
+                                        if (!innerList.Contains(typeInfo)) innerList.Add(typeInfo);
+                                    }
+                                    break;
+                            }
+                        }
+                        AddFromInner(v.InnerParameter);
+                        foreach (var item in innerList)
+                        {
+                            if (!list.Contains(item)) list.Add(item);
+                        }
+                    }
+                    else
+                    {
+                        AddFrom(v.InnerParameter);
+                    }
                     break;
                 case ReferenceParameter r:
                     var refTypeName = r.ReferenceCategory == PeopleCodeType.Any
                         ? "@ANY"
                         : $"@{r.ReferenceCategory.GetTypeName().ToUpperInvariant()}";
-                    set.Add(refTypeName);
+                    {
+                        var typeInfo = new ParameterTypeInfo(refTypeName, r.Name);
+                        if (!list.Contains(typeInfo)) list.Add(typeInfo);
+                    }
                     break;
             }
         }
@@ -438,7 +551,7 @@ public class FunctionCallValidator
         {
             AddFrom(parameters[paramIdx + 1]);
         }
-        return set.ToList();
+        return list;
     }
 
     /// <summary>
@@ -561,7 +674,7 @@ public class FunctionCallValidator
                     // If we could accept more repetitions of this variable and we've run out of arguments, record that expectation
                     if (count < variable.MaxCount && innerIndex >= ctx.Arguments.Length)
                     {
-                        ctx.RecordExpectation(innerIndex, variable.InnerParameter);
+                        ctx.RecordExpectation(innerIndex, variable);
                     }
                 }
             }
@@ -1041,7 +1154,7 @@ public class FunctionCallValidator
         public List<Parameter> Parameters { get; }
         public TypeInfo[] Arguments { get; }
         public int BestFailureArgIndex { get; private set; } = -1;
-        private readonly Dictionary<int, HashSet<string>> _expectedAtIndex = new();
+        private readonly Dictionary<int, List<ParameterTypeInfo>> _expectedAtIndex = new();
         public List<string> Errors { get; } = new();
         public FailureKind FailureKind { get; private set; } = FailureKind.None;
 
@@ -1061,15 +1174,22 @@ public class FunctionCallValidator
         public void RecordExpectation(int argIndex, Parameter parameter)
         {
             if (argIndex > BestFailureArgIndex) BestFailureArgIndex = argIndex;
-            var set = GetOrCreate(argIndex);
-            foreach (var t in GetAcceptableTypes(parameter)) set.Add(t);
+            var list = GetOrCreate(argIndex);
+            foreach (var t in GetAcceptableTypes(parameter))
+            {
+                if (!list.Contains(t)) list.Add(t);
+            }
         }
 
         public void RecordUnionExpectation(int argIndex, UnionParameter union)
         {
             if (argIndex > BestFailureArgIndex) BestFailureArgIndex = argIndex;
-            var set = GetOrCreate(argIndex);
-            foreach (var t in union.AllowedTypes) set.Add(FormatType(t));
+            var list = GetOrCreate(argIndex);
+            foreach (var t in union.AllowedTypes)
+            {
+                var typeInfo = new ParameterTypeInfo(FormatType(t), union.Name);
+                if (!list.Contains(typeInfo)) list.Add(typeInfo);
+            }
         }
 
         /// <summary>
@@ -1105,49 +1225,55 @@ public class FunctionCallValidator
             if (argIndex > BestFailureArgIndex) BestFailureArgIndex = argIndex;
         }
 
-        public List<string> GetExpectedTypesAtFailure()
+        public List<ParameterTypeInfo> GetExpectedTypesAtFailure()
         {
-            if (BestFailureArgIndex < 0) return new List<string>();
-            if (_expectedAtIndex.TryGetValue(BestFailureArgIndex, out var set))
+            if (BestFailureArgIndex < 0) return new List<ParameterTypeInfo>();
+            if (_expectedAtIndex.TryGetValue(BestFailureArgIndex, out var list))
             {
-                return set.ToList();
+                return list;
             }
-            return new List<string>();
+            return new List<ParameterTypeInfo>();
         }
 
-        private HashSet<string> GetOrCreate(int idx)
+        private List<ParameterTypeInfo> GetOrCreate(int idx)
         {
-            if (!_expectedAtIndex.TryGetValue(idx, out var set))
+            if (!_expectedAtIndex.TryGetValue(idx, out var list))
             {
-                set = new HashSet<string>();
-                _expectedAtIndex[idx] = set;
+                list = new List<ParameterTypeInfo>();
+                _expectedAtIndex[idx] = list;
             }
-            return set;
+            return list;
         }
 
-        private static IEnumerable<string> GetAcceptableTypes(Parameter parameter)
+        private static IEnumerable<ParameterTypeInfo> GetAcceptableTypes(Parameter parameter)
         {
             switch (parameter)
             {
                 case SingleParameter single:
-                    return new[] { FormatType(single.ParameterType) };
+                    return new[] { new ParameterTypeInfo(FormatType(single.ParameterType), single.Name) };
                 case UnionParameter union:
-                    return union.AllowedTypes.Select(FormatType);
+                    return union.AllowedTypes.Select(t => new ParameterTypeInfo(FormatType(t), union.Name));
                 case ParameterGroup group:
                     // Expected types come from the first element of the group
-                    if (group.Parameters.Count == 0) return Array.Empty<string>();
+                    if (group.Parameters.Count == 0) return Array.Empty<ParameterTypeInfo>();
                     return GetAcceptableTypes(group.Parameters[0]);
                 case VariableParameter variable:
                     // Expected types come from the inner parameter's first token
-                    return GetAcceptableTypes(variable.InnerParameter);
+                    // Use the variable's name if set, otherwise use the inner parameter's name
+                    var innerTypes = GetAcceptableTypes(variable.InnerParameter);
+                    if (!string.IsNullOrEmpty(variable.Name))
+                    {
+                        return innerTypes.Select(t => new ParameterTypeInfo(t.TypeName, variable.Name));
+                    }
+                    return innerTypes;
                 case ReferenceParameter reference:
                     // Format reference parameter as @TYPE
                     var refTypeName = reference.ReferenceCategory == PeopleCodeType.Any
                         ? "@ANY"
                         : $"@{reference.ReferenceCategory.GetTypeName().ToUpperInvariant()}";
-                    return new[] { refTypeName };
+                    return new[] { new ParameterTypeInfo(refTypeName, reference.Name) };
                 default:
-                    return Array.Empty<string>();
+                    return Array.Empty<ParameterTypeInfo>();
             }
         }
 
@@ -1174,43 +1300,49 @@ public class ValidationResult
 {
     public bool IsValid { get; set; }
     public int FailedAtArgumentIndex { get; set; } = -1;
-    public List<string> ExpectedTypesAtFailure { get; set; } = new();
+    public List<FunctionCallValidator.ParameterTypeInfo> ExpectedTypesAtFailure { get; set; } = new();
     public List<string> ErrorMessages { get; set; } = new();
     public string FoundTypeAtFailure { get; set; } = "";
     public FunctionCallValidator.FailureKind FailureKind { get; set; } = FunctionCallValidator.FailureKind.None;
+    public string FunctionName { get; set; } = "";
 
     /// <summary>
     /// Builds a human-friendly error message that includes position, expected types, and found type (if any).
+    /// Format: "FunctionName(): Argument N should be <expected>, found <actual>"
     /// </summary>
     public string GetDetailedError()
     {
         if (IsValid) return "Validation successful";
-        var parts = new List<string>();
+
+        // Build function name prefix
+        var functionPrefix = string.IsNullOrEmpty(FunctionName) ? "" : $"{FunctionName}(): ";
+
         if (FailedAtArgumentIndex >= 0)
         {
             if (FailureKind == FunctionCallValidator.FailureKind.TooManyArguments)
             {
-                parts.Add($"Too many arguments: unexpected argument at position {FailedAtArgumentIndex + 1}");
-                if (!string.IsNullOrEmpty(FoundTypeAtFailure))
-                {
-                    parts.Add($"Found: {FoundTypeAtFailure}");
-                }
+                return $"{functionPrefix}Too many arguments (unexpected argument at position {FailedAtArgumentIndex + 1})";
             }
             else
             {
-                parts.Add($"Parameter validation failed at argument {FailedAtArgumentIndex + 1}");
-                if (ExpectedTypesAtFailure.Any())
-                {
-                    parts.Add($"Expected: {string.Join(" | ", ExpectedTypesAtFailure)}");
-                }
-                if (!string.IsNullOrEmpty(FoundTypeAtFailure))
-                {
-                    parts.Add($"Found: {FoundTypeAtFailure}");
-                }
+                // Format expected types without parameter names
+                var expectedTypes = ExpectedTypesAtFailure
+                    .Select(p => p.TypeName)
+                    .Distinct()
+                    .ToList();
+
+                var expectedStr = expectedTypes.Count > 1
+                    ? string.Join(" or ", expectedTypes)
+                    : expectedTypes.FirstOrDefault() ?? "unknown";
+
+                var foundStr = string.IsNullOrEmpty(FoundTypeAtFailure) ? "unknown" : FoundTypeAtFailure;
+
+                return $"{functionPrefix}Argument {FailedAtArgumentIndex + 1} should be {expectedStr}, found {foundStr}";
             }
         }
-        parts.AddRange(ErrorMessages);
-        return string.Join(". ", parts);
+
+        // Fallback for other errors
+        return string.Join(". ", ErrorMessages);
     }
 
     public static ValidationResult Success(int consumed)
@@ -1221,7 +1353,7 @@ public class ValidationResult
     /// <summary>
     /// Factory for a failure result with all contextual information.
     /// </summary>
-    public static ValidationResult Failure(int failedAtIndex, List<string> expected, List<string> errors, string found, FunctionCallValidator.FailureKind kind)
+    public static ValidationResult Failure(int failedAtIndex, List<FunctionCallValidator.ParameterTypeInfo> expected, List<string> errors, string found, FunctionCallValidator.FailureKind kind, string functionName = "")
     {
         return new ValidationResult
         {
@@ -1230,7 +1362,8 @@ public class ValidationResult
             ExpectedTypesAtFailure = expected,
             ErrorMessages = errors,
             FoundTypeAtFailure = found,
-            FailureKind = kind
+            FailureKind = kind,
+            FunctionName = functionName
         };
     }
 }
@@ -1252,10 +1385,10 @@ public static class DirectParameterNextTypesExtensions
     }
 
     /// <summary>
-    /// Convenience extension: returns the allowed next types for this function given an argument prefix.
+    /// Convenience extension: returns the allowed next types with parameter names for this function given an argument prefix.
     /// Empty list indicates the prefix is invalid.
     /// </summary>
-    public static List<string> GetAllowedNextTypes(this FunctionInfo functionInfo, TypeInfo[] argumentTypes, ITypeMetadataResolver typeResolver)
+    public static List<FunctionCallValidator.ParameterTypeInfo> GetAllowedNextTypes(this FunctionInfo functionInfo, TypeInfo[] argumentTypes, ITypeMetadataResolver typeResolver)
     {
         var validator = new FunctionCallValidator(typeResolver);
         return validator.GetAllowedNextTypes(functionInfo, argumentTypes);

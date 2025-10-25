@@ -5,6 +5,7 @@ using PeopleCodeTypeInfo.Functions;
 using PeopleCodeTypeInfo.Inference;
 using PeopleCodeTypeInfo.Validation;
 using System.Reflection;
+using System.Text;
 
 namespace AppRefiner.TooltipProviders
 {
@@ -50,17 +51,51 @@ namespace AppRefiner.TooltipProviders
             {
 
                 var validator = new FunctionCallValidator(new NullTypeMetadataResolver());
-                var result = validator.Validate(funcInfo, node.Arguments.Select(a => a.GetInferredType()).ToArray());
+                
+                var allowedTypes = validator.GetAllowedNextTypes(funcInfo, node.Arguments.Select(a => a.GetInferredType()).ToArray());
 
-                var typeInfos = node.Arguments.Select(arg => arg.GetInferredType()).ToArray();
-                var typeInfoArray = typeInfos.Where(t => t != null).ToArray();
-
-                (var text, var start, var end) = funcInfo.ToFunctionCallTip(node.Arguments.Count);
+                (var text, var start, var end) = FormatFunctionCallTip(funcInfo, allowedTypes);
 
                 ScintillaManager.ShowCallTipWithText(editor, editor.FunctionCallNode.FirstToken.SourceSpan.Start.ByteIndex + 1, text, true);
                 ScintillaManager.SetCallTipHighlight(editor, start, end);
             }
 
+        }
+
+        private static (string, int, int) FormatFunctionCallTip(FunctionInfo funcInfo, List<FunctionCallValidator.ParameterTypeInfo> allowedTypes)
+        {
+            StringBuilder sb = new StringBuilder();
+            int paramStart = 0;
+            int paramEnd = 0;
+
+            sb.Append($"{funcInfo.Name}(");
+            for (var x = 0; x < funcInfo.Parameters.Count; x++)
+            {
+                sb.Append(funcInfo.Parameters[x].ToString());
+
+                if (x < funcInfo.Parameters.Count - 1)
+                {
+                    sb.Append(", ");
+                }
+            }
+
+            var returnTypeStr = funcInfo.GetReturnTypeString();
+            sb.Append($") -> {returnTypeStr}");
+            sb.Append("\n\n");
+            paramStart = sb.Length;
+            sb.Append($"Next allowed type{(allowedTypes.Count > 1 ? "(s)" : "")}:\n");
+            paramEnd = sb.Length;
+            foreach(var type in allowedTypes)
+            {
+                if (!string.IsNullOrEmpty(type.ParameterName))
+                {
+                    sb.Append($"{type.ParameterName}: {type.TypeName}\n");
+                } else
+                {
+                    sb.Append($"{type.TypeName}\n");
+                }
+            }
+            return (sb.ToString(), paramStart, paramEnd);
         }
 
         /// <summary>

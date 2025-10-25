@@ -5074,7 +5074,16 @@ public class PeopleCodeParser
 
         do
         {
+            var positionBackup = _position;
             var arg = ParseExpression();
+
+            /* Heuristic to try and handle when we are parsing incomplete code, like someone is in the 
+             * middle of writing a function call, to not accidentally consume the next statement as an argument */
+            if (Check(TokenType.Semicolon) || StatementSyncTokens.Contains(Current.Type))
+            {
+                _position = positionBackup;
+                break;
+            }
             if (arg != null)
             {
                 args.Add(arg);
@@ -5096,6 +5105,7 @@ public class PeopleCodeParser
 
             do
             {
+                var positionBackup = _position;
                 var index = ParseExpression();
                 if (index == null)
                 {
@@ -5104,6 +5114,17 @@ public class PeopleCodeParser
                     indices.Add(new LiteralNode(0, LiteralType.Integer));
                     break;
                 }
+
+                /* Heuristic to try and handle when we are parsing incomplete code, like someone is in the 
+                 * middle of writing a an array access, to not accidentally consume the next statement as the 
+                 * indices expression 
+                 */
+                if (Check(TokenType.Semicolon) || StatementSyncTokens.Contains(Current.Type))
+                {
+                    _position = positionBackup;
+                    break;
+                }
+
                 indices.Add(index);
             } while (Match(TokenType.Comma));
 

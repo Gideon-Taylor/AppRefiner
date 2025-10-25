@@ -1046,19 +1046,21 @@ namespace AppRefiner
         /// <param name="text">The text to display in the call tip</param>
         internal static void ShowCallTipWithText(ScintillaEditor editor, int position, string text, bool isFunctionSig = false)
         {
-            WinApi.SendMessage(editor.hWnd, SCI_CALLTIPUSESTYLE, 0, 0);
+            WinApi.SendMessage(editor.hWnd, SCI_CALLTIPUSESTYLE, 20, 20);
             if (isFunctionSig)
             {
-                WinApi.SendMessage(editor.hWnd, SCI_CALLTIPSETBACK, 0x201F23FF, 0);
-                WinApi.SendMessage(editor.hWnd, 2055, STYLE_CALLTIP, 12);
-                WinApi.SendMessage(editor.hWnd, SCI_CALLTIPSETFORE , (IntPtr)0xD6D8D9FF, 0);
-                WinApi.SendMessage(editor.hWnd, SCI_CALLTIPSETFOREHLT, 0x453CEFFF, 0);
+                WinApi.SendMessage(editor.hWnd, SCI_CALLTIPSETBACK, (IntPtr)0xFFFFFF, 0);
+                WinApi.SendMessage(editor.hWnd, 2055, STYLE_CALLTIP, 10);
+                WinApi.SendMessage(editor.hWnd, 2053, STYLE_CALLTIP, 1); /* SCI_STYLESETBOLD */
+                WinApi.SendMessage(editor.hWnd, SCI_CALLTIPSETFORE , (IntPtr)0x3E2F23, 0);
+                WinApi.SendMessage(editor.hWnd, SCI_CALLTIPSETFOREHLT, (IntPtr)0xFF661E, 0);
             }
             else
             {
-                var defaultBack = WinApi.SendMessage(editor.hWnd, SCI_STYLEGETBACK, 27, 0);
-                var defaultFore = WinApi.SendMessage(editor.hWnd, SCI_STYLEGETFORE, 27, 0);
+                var defaultBack = WinApi.SendMessage(editor.hWnd, SCI_STYLEGETBACK, 31, 0);
+                var defaultFore = WinApi.SendMessage(editor.hWnd, SCI_STYLEGETFORE, 31, 0);
                 WinApi.SendMessage(editor.hWnd, 2055, STYLE_CALLTIP, 10);
+                WinApi.SendMessage(editor.hWnd, 2053, STYLE_CALLTIP, 0); /* SCI_STYLESETBOLD */
                 WinApi.SendMessage(editor.hWnd, SCI_CALLTIPSETFORE, defaultFore, 0);
                 WinApi.SendMessage(editor.hWnd, SCI_CALLTIPSETBACK, defaultBack, 0);
             }

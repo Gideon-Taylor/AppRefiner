@@ -1863,6 +1863,12 @@ namespace AppRefiner
                 ScintillaManager.ApplyBetterSQL(editor);
             } */
 
+            // Clear annotations
+            ScintillaManager.ClearAnnotations(editor);
+
+            // Reset styles
+            ScintillaManager.ResetStyles(editor);
+
             // Apply dark mode whenever content changes if auto dark mode is enabled
             if (chkAutoDark.Checked)
             {

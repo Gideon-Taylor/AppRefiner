@@ -93,6 +93,9 @@ public abstract class TypeInfo
     /// </summary>
     public virtual TypeInfo GetCommonType(TypeInfo other)
     {
+        // Null safety - should never happen, but protect against edge cases
+        if (other == null) return AnyTypeInfo.Instance;
+
         // Fast path: if both have the same PeopleCodeType, return this
         if (PeopleCodeType.HasValue && other.PeopleCodeType.HasValue && PeopleCodeType.Value == other.PeopleCodeType.Value)
         {
@@ -634,6 +637,9 @@ public class PrimitiveTypeInfo : TypeInfo
 
     public override bool IsAssignableFrom(TypeInfo other)
     {
+        // Null safety - should never happen, but protect against edge cases
+        if (other == null) return false;
+
         // Any can be assigned to any primitive
         if (other.Kind == TypeKind.Any) return true;
 
@@ -709,6 +715,9 @@ public class BuiltinObjectTypeInfo : TypeInfo
 
     public override bool IsAssignableFrom(TypeInfo other)
     {
+        // Null safety - should never happen, but protect against edge cases
+        if (other == null) return false;
+
         // Any can be assigned to any builtin object
         if (other.Kind == TypeKind.Any) return true;
 
@@ -791,6 +800,9 @@ public class AppClassTypeInfo : TypeInfo
 
     public override bool IsAssignableFrom(TypeInfo other)
     {
+        // Null safety - should never happen, but protect against edge cases
+        if (other == null) return false;
+
         // Any can be assigned to any app class
         if (other.Kind == TypeKind.Any) return true;
 
@@ -845,6 +857,9 @@ public class ArrayTypeInfo : TypeInfo
 
     public override bool IsAssignableFrom(TypeInfo other)
     {
+        // Null safety - should never happen, but protect against edge cases
+        if (other == null) return false;
+
         // Any can be assigned to any array
         if (other.Kind == TypeKind.Any) return true;
 
@@ -854,8 +869,8 @@ public class ArrayTypeInfo : TypeInfo
             // Untyped arrays are compatible
             if (ElementType == null || array.ElementType == null) return true;
 
-            // Check element type compatibility
-            return ElementType.IsAssignableFrom(array.ElementType);
+            // Check element type compatibility (with null safety)
+            return ElementType?.IsAssignableFrom(array.ElementType) ?? true;
         }
 
         return false;
@@ -881,6 +896,9 @@ public class ObjectTypeInfo : TypeInfo
 
     public override bool IsAssignableFrom(TypeInfo other)
     {
+        // Null safety - should never happen, but protect against edge cases
+        if (other == null) return false;
+
         // Any can be assigned to object
         if (other.Kind == TypeKind.Any) return true;
 
@@ -935,6 +953,9 @@ public class AnyTypeInfo : TypeInfo
 
     public override bool IsAssignableFrom(TypeInfo other)
     {
+        // Null safety - should never happen, but protect against edge cases
+        if (other == null) return false;
+
         // Any can accept any type
         return true;
     }
@@ -963,6 +984,9 @@ public class VoidTypeInfo : TypeInfo
 
     public override bool IsAssignableFrom(TypeInfo other)
     {
+        // Null safety - should never happen, but protect against edge cases
+        if (other == null) return false;
+
         // Void cannot accept any assignment
         return false;
     }
@@ -993,6 +1017,9 @@ public class UnknownTypeInfo : TypeInfo
 
     public override bool IsAssignableFrom(TypeInfo other)
     {
+        // Null safety - should never happen, but protect against edge cases
+        if (other == null) return false;
+
         // Unknown types are not assignable (except from Any)
         return other.Kind == TypeKind.Any;
     }
@@ -1025,6 +1052,9 @@ public class InvalidTypeInfo : TypeInfo
 
     public override bool IsAssignableFrom(TypeInfo other)
     {
+        // Null safety - should never happen, but protect against edge cases
+        if (other == null) return false;
+
         // Invalid types cannot accept any assignment
         return false;
     }
@@ -1077,6 +1107,9 @@ public class ReferenceTypeInfo : TypeInfo
 
     public override bool IsAssignableFrom(TypeInfo other)
     {
+        // Null safety - should never happen, but protect against edge cases
+        if (other == null) return false;
+
         if (other.Kind == TypeKind.Any) return true;
 
         // References are only assignable from same category references
@@ -1158,6 +1191,9 @@ public class StringTypeInfo : PrimitiveTypeInfo
 
     public override bool IsAssignableFrom(TypeInfo other)
     {
+        // Null safety - should never happen, but protect against edge cases
+        if (other == null) return false;
+
         // Any can be assigned to string
         if (other.Kind == TypeKind.Any) return true;
 
@@ -1181,6 +1217,9 @@ public class NumberTypeInfo : PrimitiveTypeInfo
 
     public override bool IsAssignableFrom(TypeInfo other)
     {
+        // Null safety - should never happen, but protect against edge cases
+        if (other == null) return false;
+
         // Any can be assigned to number
         if (other.Kind == TypeKind.Any) return true;
 
@@ -1218,6 +1257,9 @@ public abstract class PolymorphicTypeInfo : TypeInfo
 
     public override bool IsAssignableFrom(TypeInfo other)
     {
+        // Null safety - should never happen, but protect against edge cases
+        if (other == null) return false;
+
         // Polymorphic types can't be assigned to directly - they need to be resolved first
         return false;
     }
@@ -1384,6 +1426,9 @@ public class UnionReturnTypeInfo : TypeInfo
 
     public override bool IsAssignableFrom(TypeInfo other)
     {
+        // Null safety - should never happen, but protect against edge cases
+        if (other == null) return false;
+
         // Any can be assigned to union
         if (other.Kind == TypeKind.Any) return true;
 

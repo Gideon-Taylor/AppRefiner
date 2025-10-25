@@ -1,3 +1,4 @@
+using AppRefiner.Database.Models;
 using PeopleCodeParser.SelfHosted;
 using PeopleCodeParser.SelfHosted.Lexing;
 using PeopleCodeParser.SelfHosted.Visitors;
@@ -69,10 +70,10 @@ namespace AppRefiner.Database
             var metadata = TryResolveAsAppClass(qualifiedName);
 
             // TODO: Add function library resolution strategy
-            // if (metadata == null)
-            // {
-            //     metadata = TryResolveAsFunctionLibrary(qualifiedName);
-            // }
+            if (metadata == null)
+            {
+                metadata = TryResolveAsFunctionLibrary(qualifiedName);
+            }
 
             // Cache the result if found
             if (metadata != null)
@@ -118,6 +119,42 @@ namespace AppRefiner.Database
                 if (string.IsNullOrEmpty(sourceCode))
                 {
                     Debug.Log($"DatabaseTypeMetadataResolver: App class '{qualifiedName}' exists but has no source code");
+                    return null;
+                }
+
+                // Parse and extract metadata
+                return ParseAndExtractMetadata(sourceCode, qualifiedName);
+            }
+            catch (Exception ex)
+            {
+                Debug.Log($"DatabaseTypeMetadataResolver: Error resolving app class '{qualifiedName}': {ex.Message}");
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// Attempts to resolve the qualified name as an application class
+        /// </summary>
+        private TypeMetadata? TryResolveAsFunctionLibrary(string qualifiedName)
+        {
+            var parts = qualifiedName.Split('.');
+            var openTarget = new OpenTarget(
+                OpenTargetType.RecordFieldPeopleCode, 
+                qualifiedName, "", 
+                [
+                    (PSCLASSID.RECORD, parts[0]),
+                    (PSCLASSID.FIELD, parts[1]),
+                    (PSCLASSID.METHOD, parts[2]),
+                ]
+            );
+
+            try
+            {
+                // Get the source code
+                var sourceCode = _dataManager.GetPeopleCodeProgram(openTarget);
+                if (string.IsNullOrEmpty(sourceCode))
+                {
+                    Debug.Log($"DatabaseTypeMetadataResolver: Funclib '{qualifiedName}' exists but has no source code");
                     return null;
                 }
 

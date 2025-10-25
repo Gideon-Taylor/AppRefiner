@@ -1,6 +1,7 @@
 
 using PeopleCodeParser.SelfHosted.Nodes;
 using PeopleCodeTypeInfo.Contracts;
+using PeopleCodeTypeInfo.Functions;
 using PeopleCodeTypeInfo.Inference;
 using PeopleCodeTypeInfo.Types;
 using PeopleCodeTypeInfo.Validation;
@@ -73,6 +74,27 @@ namespace PeopleCodeParser.SelfHosted.Visitors
             }
         }
 
+        public override void VisitExpressionStatement(ExpressionStatementNode node)
+        {
+            base.VisitExpressionStatement(node);
+            var typeInfo = node.Expression.GetInferredType();
+            if (typeInfo == null) { return; }
+
+            if (typeInfo.PeopleCodeType != PeopleCodeType.Void && typeInfo.PeopleCodeType != PeopleCodeType.Unknown)
+            {
+
+                if (node.Expression is FunctionCallNode fcn && fcn.GetFunctionInfo() is FunctionInfo fi && fi is not null)
+                {
+                    RecordTypeError($"Return values must assigned to a variable. Function {fi.Name}() returns type '{fi.ReturnType}.", node);
+                }
+                else
+                {
+                    /* This expression statement returns a value, but its ignored */
+                    RecordTypeError($"Expression values must be assigned to a variable.", node);
+                }
+            }
+
+        }
         public override void VisitFunctionCall(FunctionCallNode node)
         {
             base.VisitFunctionCall(node);
@@ -98,7 +120,16 @@ namespace PeopleCodeParser.SelfHosted.Visitors
 
             if (!result.IsValid)
             {
-                RecordTypeError(result.GetDetailedError(), node);
+                // Record the error on the specific argument that failed, if available
+                AstNode errorNode = node; // Default to the whole function call
+
+                if (result.FailedAtArgumentIndex >= 0 && result.FailedAtArgumentIndex < node.Arguments.Count)
+                {
+                    // Record error on the specific argument that failed
+                    errorNode = node.Arguments[result.FailedAtArgumentIndex];
+                }
+
+                RecordTypeError(result.GetDetailedError(), errorNode);
             }
         }
 
@@ -121,6 +152,13 @@ namespace PeopleCodeParser.SelfHosted.Visitors
             // Integer and Number are bidirectionally compatible
             if ((targetType.PeopleCodeType == PeopleCodeType.Integer && valueType.PeopleCodeType == PeopleCodeType.Number) ||
                 (targetType.PeopleCodeType == PeopleCodeType.Number && valueType.PeopleCodeType == PeopleCodeType.Integer))
+            {
+                return true;
+            }
+
+            // Use the TypeInfo's IsAssignableFrom method for proper type compatibility
+            // This handles Object accepting AppClass, arrays, builtins, etc.
+            if (targetType.IsAssignableFrom(valueType))
             {
                 return true;
             }

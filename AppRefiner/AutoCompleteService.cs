@@ -1,10 +1,12 @@
 using AppRefiner.Refactors; // For ScopedRefactor, AddImport, CreateAutoComplete
-using System.Runtime.InteropServices; // For DllImport
 using PeopleCodeParser.SelfHosted;
-using PeopleCodeParser.SelfHosted.Visitors.Models;
-using PeopleCodeParser.SelfHosted.Visitors;
-using PeopleCodeParser.SelfHosted.Nodes;
 using PeopleCodeParser.SelfHosted.Lexing;
+using PeopleCodeParser.SelfHosted.Nodes;
+using PeopleCodeParser.SelfHosted.Visitors;
+using PeopleCodeParser.SelfHosted.Visitors.Models;
+using PeopleCodeTypeInfo.Inference;
+using PeopleCodeTypeInfo.Validation;
+using System.Runtime.InteropServices; // For DllImport
 
 namespace AppRefiner
 {
@@ -284,6 +286,7 @@ namespace AppRefiner
                 var tokens = lexer.TokenizeAll();
                 var parser = new PeopleCodeParser.SelfHosted.PeopleCodeParser(tokens);
                 var program = parser.ParseProgram();
+                RunTypeInference(editor, program);
 
                 if (program == null)
                 {
@@ -299,11 +302,54 @@ namespace AppRefiner
                     return;
                 }
 
+                var currentToken = program.FindNodes(n => n.SourceSpan.ContainsPosition(position)).LastOrDefault();
+                List<FunctionCallValidator.ParameterTypeInfo>? allowedTypes = null;
+                if (currentToken != null)
+                {
+                    var parent = currentToken.Parent;
+                    FunctionCallNode? funcCallNode = null;
+                    while (parent != null) {
+                        if (parent is UnaryOperationNode u && u.Operator == UnaryOperator.Reference)
+                        {
+                            break;
+                        } else if (parent is FunctionCallNode) {
+                            funcCallNode = parent as FunctionCallNode;
+                        }
+                        parent = parent.Parent;
+                    }
+
+                    /* Are we inside a dynamic reference ? */
+
+                    if (funcCallNode != null)
+                    {
+                        var matchingArg = funcCallNode.Arguments.Where(a => a.SourceSpan.ContainsPosition(position)).FirstOrDefault();
+                        if (matchingArg != null)
+                        {
+                            var argIndex = funcCallNode.Arguments.IndexOf(matchingArg);
+                            var funcInfo = funcCallNode.GetFunctionInfo();
+                            if (funcInfo != null)
+                            {
+                                allowedTypes = funcInfo.GetAllowedNextTypes(funcCallNode.Arguments.Select(a => a.GetInferredType()).Take(argIndex).ToArray(), editor.AppDesignerProcess.TypeResolver);
+                            }
+                        }
+                    }
+                }
+
+
+
                 // Use the variable collector to get accessible variables at the current position
                 var collector = new VariableCollector(position);
                 collector.VisitProgram(program);
 
                 var accessibleVariables = collector.GetAccessibleVariables();
+
+                if (allowedTypes != null)
+                {
+                    var allowedTypeStrings = allowedTypes.Select(a => a.TypeName.ToLower()).ToList();
+                    allowedTypeStrings.Add("any");
+                    allowedTypeStrings.Add("object");
+                    accessibleVariables = accessibleVariables.Where(v => allowedTypeStrings.Contains(v.Type)).ToList();
+                }
 
                 // Convert to list of strings for autocomplete, filtering out duplicates by name
                 List<string> suggestions = new();
@@ -337,6 +383,37 @@ namespace AppRefiner
             catch (Exception ex)
             {
                 Debug.LogException(ex, "Error getting variable suggestions");
+            }
+        }
+
+        private static void RunTypeInference(ScintillaEditor editor, ProgramNode program)
+        {
+            try
+            {
+                string qualifiedName = "";
+
+                if (editor?.Caption != null && !string.IsNullOrWhiteSpace(editor.Caption))
+                {
+                    // Parse caption to get program identifier
+                    var openTarget = OpenTargetBuilder.CreateFromCaption(editor.Caption);
+                    if (openTarget != null)
+                    {
+                        qualifiedName = openTarget.Path;
+                    }
+                }
+
+                var metadata = TypeMetadataBuilder.ExtractMetadata(program, qualifiedName);
+
+                // Get type resolver (may be null if no database)
+                var typeResolver = editor.AppDesignerProcess?.TypeResolver;
+                var typeCache = editor.AppDesignerProcess?.TypeCache ?? new TypeCache();
+
+                // Run type inference (works even with null resolver)
+                TypeInferenceVisitor.Run(program, metadata, typeResolver, typeCache);
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError($"Error running type inference for tooltips: {ex.Message}");
             }
         }
 
