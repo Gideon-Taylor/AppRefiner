@@ -60,7 +60,7 @@ public class NullTypeMetadataResolver : ITypeMetadataResolver
     /// </summary>
     public static readonly NullTypeMetadataResolver Instance = new();
 
-    private NullTypeMetadataResolver() { }
+    public NullTypeMetadataResolver() { }
 
     /// <summary>
     /// Always returns null indicating no type metadata was found.
