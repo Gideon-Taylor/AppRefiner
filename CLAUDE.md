@@ -20,7 +20,6 @@ AppRefiner is a Windows Forms application that enhances PeopleSoft's Application
 ### Prerequisites
 - Windows with Visual Studio 2022 (C++ development tools)
 - .NET 8 SDK
-- Java 17+ (for ANTLR parser generation)
 - PowerShell 5.1+
 
 ### Development Workflow
@@ -34,15 +33,15 @@ dotnet build AppRefiner/AppRefiner.csproj
 # Build C++ hook DLL (requires Visual Studio)
 msbuild AppRefinerHook/AppRefinerHook.vcxproj /p:Configuration=Release /p:Platform=x64
 
-# Generate ANTLR parsers (automatic during build)
-# Located in PeopleCodeParser project
+# Parser is self-hosted in PeopleCodeParser.SelfHosted project
+# No code generation required - pure C# implementation
 ```
 
 **IMPORTANT FOR CLAUDE CODE USERS**: Do not attempt to build the project directly when working in WSL environments. AppRefiner is a Windows-specific application that relies on Windows Forms, Win32 APIs, and Visual Studio C++ build tools. Building should only be done on Windows with proper development tools installed.
 
 ### Project Structure
 - **AppRefiner/**: Main Windows Forms application (.NET 8)
-- **PeopleCodeParser/**: ANTLR-based PeopleCode parser (.NET 8)
+- **PeopleCodeParser.SelfHosted/**: Self-hosted C# recursive descent parser (.NET 8)
 - **AppRefinerHook/**: Win32 API hook DLL (C++)
 - **PluginSample/**: Example plugin implementation
 
@@ -59,7 +58,7 @@ The application uses a service-oriented architecture with dependency injection:
 Services are constructor-injected into managers and use concurrent collections for thread safety.
 
 ### Plugin/Extension System
-The core extensibility model is based on abstract base classes with ANTLR visitor pattern:
+The core extensibility model is based on abstract base classes with the visitor pattern:
 
 **Base Classes:**
 - `BaseLintRule`: For code analysis and issue detection
@@ -85,37 +84,95 @@ Uses Repository pattern with interface abstraction:
 - `DataManagerRequirement`: Dependency declaration system
 - Connection pooling and caching for performance
 
-### AST Model
-Simplified AST representation using Composite pattern:
-- `Program`: Root AST node with dependency resolution
-- `AppClass`, `Interface`, `Method`, `Property`: Core language constructs
-- ANTLR-generated parser with custom AST transformation
-- Caching with invalidation support
+### Parser and AST Architecture
 
-**IMPORTANT**: When working with ANTLR parse trees, always reference the grammar file at `PeopleCodeParser/PeopleCodeParser.g4` to ensure correct navigation of parser rule contexts. The grammar defines the exact structure and naming of parser rules that must be used for proper tree traversal.
+AppRefiner uses a self-hosted recursive descent parser written entirely in C# with no external dependencies:
+
+**Parser Components:**
+- **PeopleCodeLexer**: Tokenizes source text with UTF-8 byte index tracking for Scintilla integration
+  - Case-insensitive keyword recognition
+  - System variable identification (%, &)
+  - Comment and whitespace handling (trivia)
+  - Comprehensive error reporting
+
+- **PeopleCodeParser**: Recursive descent parser with advanced error recovery
+  - Synchronization tokens for resilient parsing during live editing
+  - Directive preprocessing support (#If, #Else, #End-If)
+  - Produces strongly-typed AST nodes
+  - Detailed parse error reporting
+
+**AST Node Hierarchy:**
+- **AstNode**: Base class for all AST nodes
+  - Token-based source location tracking (`FirstToken`, `LastToken`, `SourceSpan`)
+  - Parent-child relationships built-in
+  - Visitor pattern support (`Accept(IAstVisitor)`)
+  - Attributes dictionary for semantic analysis (types, errors, etc.)
+  - Helper methods: `FindAncestor<T>()`, `FindDescendants<T>()`, `GetRoot()`
+
+**Core Node Types** (in `PeopleCodeParser.SelfHosted.Nodes` namespace):
+- **Program Structure**: `ProgramNode`, `AppClassNode`, `InterfaceNode`, `ImportNode`
+- **Declarations**: `MethodNode`, `FunctionNode`, `PropertyNode`, `ProgramVariableNode`, `ConstantNode`
+- **Statements**: `IfStatementNode`, `ForStatementNode`, `WhileStatementNode`, `TryStatementNode`, `BlockNode`, etc.
+- **Expressions**: `BinaryOperationNode`, `FunctionCallNode`, `IdentifierNode`, `LiteralNode`, `AssignmentNode`, etc.
+- **Types**: `BuiltInTypeNode`, `ArrayTypeNode`, `AppClassTypeNode`
+
+**Visitor Pattern:**
+- **IAstVisitor**: Interface for traversing AST without return values
+- **IAstVisitor\<TResult\>**: Interface for traversing AST with return values
+- **AstVisitorBase**: Base implementation with default depth-first traversal
+- **ScopedAstVisitor\<T\>**: Enhanced visitor with comprehensive scope and variable tracking
+  - Automatic scope management (global, class, method, function, property getter/setter)
+  - Variable declaration and reference tracking
+  - Variable registry with accessibility queries
+  - Custom scope data support
+
+**Scope and Variable Tracking:**
+- **ScopeContext**: Represents a code scope with type (Global, Class, Method, Function, PropertyGetter, PropertySetter)
+- **VariableRegistry**: Central registry for all variables and scopes in the program
+- **VariableInfo**: Tracks variable declarations with type, kind (Local, Global, Instance, Parameter, etc.), and all references
+- **VariableReference**: Tracks individual variable usages with Read/Write classification
+
+**Type System:**
+- **TypeInferenceVisitor**: Infers types for expressions and attaches type information to AST nodes
+- **TypeCheckerVisitor**: Validates type correctness and reports type errors
+- Type information stored in node Attributes dictionary using `AstNode.TypeInfoAttributeKey`
+
+**Key Differences from ANTLR Approach:**
+- No grammar file to reference - work directly with strongly-typed C# AST nodes
+- Visitor methods are named after node types: `VisitMethod(MethodNode node)`, `VisitIf(IfStatementNode node)`, etc.
+- IntelliSense provides full API discovery for AST nodes and their properties
+- Source location tracking uses tokens, not parse tree contexts
+- Built-in parent-child navigation without tree walking
 
 ## Development Guidelines
 
 ### Adding New Linters
-1. Inherit from `BaseLintRule` or `ScopedLintRule<T>`
-2. Override `GetName()`, `GetDescription()`, and ANTLR visitor methods
-3. Use `AddReport()` to generate findings
-4. Configure through `GetConfiguration()` and `ApplyConfiguration()`
-5. **Always reference `PeopleCodeParser/PeopleCodeParser.g4` when implementing ANTLR visitor methods**
+1. Inherit from `BaseLintRule` (which extends `ScopedAstVisitor<object>`)
+2. Implement required properties: `LINTER_ID`, `Description`, `Type`
+3. Override visitor methods for AST nodes of interest (e.g., `VisitMethod(MethodNode node)`)
+4. Use `AddReport()` to generate findings with line numbers and source spans
+5. Access scope and variable information via inherited `ScopedAstVisitor` methods:
+   - `GetCurrentScope()`: Get current scope context
+   - `FindVariable(name)`: Find variable in accessible scopes
+   - `GetAllVariables()`: Query all variables in the program
+   - `GetUnusedVariables()`: Find unused variables
+6. Use IntelliSense to discover available AST node types and properties
 
 ### Adding New Stylers
-1. Inherit from `BaseStyler` or `ScopedStyler<T>`
-2. Override required methods and ANTLR visitors
-3. Use `AddIndicator()` for visual feedback
+1. Inherit from `BaseStyler` (which extends `ScopedAstVisitor<object>`)
+2. Override visitor methods for AST nodes of interest
+3. Use `AddIndicator()` for visual feedback with source spans
 4. Consider adding Quick Fixes through `GetQuickFixes()`
-5. **Always reference `PeopleCodeParser/PeopleCodeParser.g4` when implementing ANTLR visitor methods**
+5. Access AST node properties directly (e.g., `node.Name`, `node.SourceSpan`, `node.Parameters`)
+6. Use node navigation methods: `node.FindAncestor<T>()`, `node.FindDescendants<T>()`, `node.Children`
 
 ### Adding New Refactors
-1. Inherit from `ScopedRefactor` (unified base class)
+1. Inherit from `ScopedRefactor` (unified base class with automatic scope tracking)
 2. Override static properties for metadata (`RefactorName`, `RefactorDescription`, etc.)
 3. Use `EditText()`, `InsertText()`, `DeleteText()` methods to track modifications
 4. Handle user input through dialogs if needed via `ShowRefactorDialog()`
-5. **Always reference `PeopleCodeParser/PeopleCodeParser.g4` when implementing AST visitor methods**
+5. Override visitor methods to identify refactoring opportunities
+6. Access source locations via `node.SourceSpan` for precise text editing
 
 ### Plugin Development
 1. Create new .NET 8 class library project
@@ -255,7 +312,86 @@ The Better Find functionality is integrated into the command palette system:
 - **Services/**: Core service implementations
 - **Linters/**, **Stylers/**, **Refactors/**: Extension implementations
 - **Database/**: Data access layer
-- **Ast/**: AST model definitions
+- **PeopleCodeParser.SelfHosted/**: Self-hosted parser implementation
+  - **PeopleCodeLexer.cs**: Lexer/tokenizer
+  - **PeopleCodeParser.cs**: Recursive descent parser
+  - **AstNode.cs**: Base AST node class
+  - **Nodes/**: AST node type definitions (ExpressionNodes, StatementNodes, DeclarationNodes, etc.)
+  - **Visitors/**: Visitor interfaces and base implementations
+    - **IAstVisitor.cs**: Visitor pattern interfaces
+    - **ScopedAstVisitor.cs**: Base visitor with scope/variable tracking
+    - **TypeInferenceVisitor.cs**: Type inference implementation
+    - **TypeCheckerVisitor.cs**: Type checking/validation
 - **Templates/**: Code generation templates
 - **Dialogs/**: UI dialog implementations
 - **Dialogs/BetterFindDialog.cs**: Advanced search and replace dialog
+
+## Parser Usage Examples
+
+### Basic Parsing
+```csharp
+using PeopleCodeParser.SelfHosted;
+using PeopleCodeParser.SelfHosted.Lexing;
+using PeopleCodeParser.SelfHosted.Nodes;
+
+// Tokenize source code
+var lexer = new PeopleCodeLexer(sourceCode);
+var tokens = lexer.Tokenize();
+
+// Parse tokens into AST
+var parser = new PeopleCodeParser(tokens);
+var program = parser.ParseProgram();
+
+// Check for parse errors
+if (parser.Errors.Any())
+{
+    foreach (var error in parser.Errors)
+    {
+        Console.WriteLine($"Line {error.Line}: {error.Message}");
+    }
+}
+```
+
+### Implementing a Custom Visitor
+```csharp
+using PeopleCodeParser.SelfHosted.Visitors;
+using PeopleCodeParser.SelfHosted.Nodes;
+
+public class MyAnalyzer : ScopedAstVisitor<object>
+{
+    public override void VisitMethod(MethodNode node)
+    {
+        // Access method properties
+        var methodName = node.Name;
+        var paramCount = node.Parameters.Count;
+        var returnType = node.ReturnType?.TypeName;
+
+        // Get current scope information
+        var scope = GetCurrentScope();
+        var localVars = GetVariablesInScope(scope)
+            .Where(v => v.Kind == VariableKind.Local);
+
+        // Access source location
+        var span = node.SourceSpan;
+        Console.WriteLine($"Method {methodName} at line {span.Start.Line}");
+
+        // Continue traversal
+        base.VisitMethod(node);
+    }
+
+    public override void VisitFunctionCall(FunctionCallNode node)
+    {
+        // Find what function is being called
+        if (node.Function is IdentifierNode funcName)
+        {
+            Console.WriteLine($"Calling function: {funcName.Name}");
+        }
+
+        base.VisitFunctionCall(node);
+    }
+}
+
+// Use the visitor
+var analyzer = new MyAnalyzer();
+program.Accept(analyzer);
+```
