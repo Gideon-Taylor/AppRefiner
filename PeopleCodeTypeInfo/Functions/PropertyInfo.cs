@@ -30,6 +30,12 @@ public struct PropertyInfo : IEquatable<PropertyInfo>
     /// </summary>
     public List<TypeWithDimensionality>? UnionTypes { get; set; }
 
+    /// <summary>
+    /// Whether the return value is optional (caller can ignore it)
+    /// Indicated by ? suffix in return type (e.g., "-> string?")
+    /// </summary>
+    public bool IsOptionalReturn { get; set; }
+
     public PropertyInfo(PeopleCodeType type, byte arrayDimensionality = 0, string? appClassPath = null)
     {
         Type = type;
@@ -158,6 +164,7 @@ public static class PropertyInfoExtensions
         // Write flags byte to indicate features (union types, etc.)
         byte flags = 0;
         if (propertyInfo.IsUnion) flags |= 0x01; // Bit 0: Has union types
+        if (propertyInfo.IsOptionalReturn) flags |= 0x02; // Bit 1: Optional return
 
         writer.Write(flags);
 
@@ -188,6 +195,7 @@ public static class PropertyInfoExtensions
     {
         byte flags = reader.ReadByte();
         bool hasUnionTypes = (flags & 0x01) != 0;
+        bool isOptionalReturn = (flags & 0x02) != 0;
 
         if (hasUnionTypes)
         {
@@ -206,7 +214,9 @@ public static class PropertyInfoExtensions
                     : new TypeWithDimensionality(type, arrayDim, appClassPath));
             }
 
-            return PropertyInfo.CreateUnion(unionTypes.ToArray());
+            var propertyInfo = PropertyInfo.CreateUnion(unionTypes.ToArray());
+            propertyInfo.IsOptionalReturn = isOptionalReturn;
+            return propertyInfo;
         }
         else
         {
@@ -215,9 +225,11 @@ public static class PropertyInfoExtensions
             var arrayDim = reader.ReadByte();
             var appClassPath = ReadString(reader);
 
-            return string.IsNullOrEmpty(appClassPath)
+            var propertyInfo = string.IsNullOrEmpty(appClassPath)
                 ? new PropertyInfo(type, arrayDim)
                 : new PropertyInfo(type, arrayDim, appClassPath);
+            propertyInfo.IsOptionalReturn = isOptionalReturn;
+            return propertyInfo;
         }
     }
 

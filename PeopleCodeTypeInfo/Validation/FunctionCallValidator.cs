@@ -65,9 +65,9 @@ public class FunctionCallValidator
     /// <summary>
     /// Entry point for validating a concrete <see cref="FunctionInfo"/> using the direct (non-graph) strategy.
     /// </summary>
-    public ValidationResult Validate(FunctionInfo functionInfo, TypeInfo[] argumentTypes)
+    public ValidationResult Validate(FunctionInfo functionInfo, ArgumentInfo[] arguments)
     {
-        return Validate(functionInfo.Parameters, argumentTypes, functionInfo.Name);
+        return Validate(functionInfo.Parameters, arguments, functionInfo.Name);
     }
 
     /// <summary>
@@ -79,19 +79,19 @@ public class FunctionCallValidator
     /// - Produces rich diagnostics via MatchContext (furthest failure index, expected types, failure kind).
     /// - If traversal succeeds and we consumed all arguments, returns Success; otherwise builds a focused failure.
     /// </summary>
-    public ValidationResult Validate(List<Parameter> parameters, TypeInfo[] argumentTypes, string functionName = "")
+    public ValidationResult Validate(List<Parameter> parameters, ArgumentInfo[] arguments, string functionName = "")
     {
-        var ctx = new MatchContext(functionName, parameters, argumentTypes);
+        var ctx = new MatchContext(functionName, parameters, arguments);
         var ok = MatchSequence(ctx, parameters, 0, 0, out int consumedIndex);
-        if (ok && consumedIndex == argumentTypes.Length)
+        if (ok && consumedIndex == arguments.Length)
         {
             return ValidationResult.Success(consumedIndex);
         }
 
         // Check for too many arguments: matching succeeded but we have leftover arguments
-        if (ok && consumedIndex < argumentTypes.Length)
+        if (ok && consumedIndex < arguments.Length)
         {
-            var foundType = FormatTypeInfoForDisplay(argumentTypes[consumedIndex]);
+            var foundType = FormatArgumentInfoForDisplay(arguments[consumedIndex]);
             return ValidationResult.Failure(
                 consumedIndex,
                 new List<ParameterTypeInfo>(),
@@ -102,38 +102,38 @@ public class FunctionCallValidator
         }
 
         // Build failure info from context
-        var failedIndex = ctx.BestFailureArgIndex >= 0 ? ctx.BestFailureArgIndex : Math.Min(consumedIndex, argumentTypes.Length);
+        var failedIndex = ctx.BestFailureArgIndex >= 0 ? ctx.BestFailureArgIndex : Math.Min(consumedIndex, arguments.Length);
         var expected = ctx.GetExpectedTypesAtFailure();
         if (expected.Count == 0)
         {
-            expected = BuildExpectedFromParameters(parameters, argumentTypes, 0, 0);
+            expected = BuildExpectedFromParameters(parameters, arguments, 0, 0);
         }
-        var found = failedIndex >= 0 && failedIndex < argumentTypes.Length
-            ? FormatTypeInfoForDisplay(argumentTypes[failedIndex])
+        var found = failedIndex >= 0 && failedIndex < arguments.Length
+            ? FormatArgumentInfoForDisplay(arguments[failedIndex])
             : "";
-        var defaultKind = failedIndex >= argumentTypes.Length ? FailureKind.MissingArgument : FailureKind.TypeMismatch;
+        var defaultKind = failedIndex >= arguments.Length ? FailureKind.MissingArgument : FailureKind.TypeMismatch;
         var kind = ctx.FailureKind == FailureKind.None ? defaultKind : ctx.FailureKind;
         var errors = ctx.Errors.Count > 0 ? ctx.Errors : new List<string> { kind == FailureKind.MissingArgument ? "Unexpected end of arguments" : "No valid parameter match" };
         return ValidationResult.Failure(failedIndex, expected, errors, found, kind, ctx.FunctionName);
     }
 
     /// <summary>
-    /// Computes the set of allowed types for the next argument, given an existing prefix of argument types.
+    /// Computes the set of allowed types for the next argument, given an existing prefix of arguments.
     /// - If the existing argument prefix is a valid prefix of the signature (including incomplete/missing args),
     ///   returns the allowed next token types at the next position with their parameter names.
     /// - If the existing arguments contain an invalid type mismatch, returns an empty list.
     /// </summary>
-    public List<ParameterTypeInfo> GetAllowedNextTypes(FunctionInfo functionInfo, TypeInfo[] argumentTypes)
+    public List<ParameterTypeInfo> GetAllowedNextTypes(FunctionInfo functionInfo, ArgumentInfo[] arguments)
     {
-        return GetAllowedNextTypes(functionInfo.Parameters, argumentTypes);
+        return GetAllowedNextTypes(functionInfo.Parameters, arguments);
     }
 
     /// <summary>
     /// Core implementation for computing allowed next types over a parameter sequence.
     /// </summary>
-    public List<ParameterTypeInfo> GetAllowedNextTypes(List<Parameter> parameters, TypeInfo[] argumentTypes)
+    public List<ParameterTypeInfo> GetAllowedNextTypes(List<Parameter> parameters, ArgumentInfo[] arguments)
     {
-        var result = Validate(parameters, argumentTypes, "");
+        var result = Validate(parameters, arguments, "");
         if (!result.IsValid && result.FailureKind == FailureKind.MissingArgument)
         {
             return result.ExpectedTypesAtFailure.Distinct().ToList();
@@ -280,6 +280,14 @@ public class FunctionCallValidator
                         nextTypes.Add(new ParameterTypeInfo(FormatTypePublic(single.ParameterType), single.Name));
                         return PrefixMatchResult.NeedsMoreArgs;
                     }
+
+                    /* We don't know what type it is. it'll be figured out at runtime */
+                    if (ctx.Arguments[argIndex].Type.PeopleCodeType == PeopleCodeType.Unknown)
+                    {
+                        consumed = 1;
+                        return PrefixMatchResult.Completed;
+                    }
+
                     if (MatchSingle(ctx, single, argIndex, out int used))
                     {
                         consumed = used;
@@ -295,14 +303,23 @@ public class FunctionCallValidator
                     return PrefixMatchResult.NeedsMoreArgs;
                 }
                 var arg = ctx.Arguments[argIndex];
+
+                /* We don't know what type it is. it'll be figured out at runtime */
+                if (arg.Type.PeopleCodeType == PeopleCodeType.Unknown)
+                {
+                    consumed = 1;
+                    return PrefixMatchResult.Completed;
+                }
+
                 foreach (var t in union.AllowedTypes)
                 {
                     // Handle reference types
                     if (t.IsReference)
                     {
-                        if (arg is ReferenceTypeInfo refType)
+                        if (arg.Type is ReferenceTypeInfo refType)
                         {
-                            if (t.Type == PeopleCodeType.Any || refType.ReferenceCategory == t.Type)
+                            // Match if: parameter accepts Any, OR categories match, OR argument is @ANY (unknown reference)
+                            if (t.Type == PeopleCodeType.Any || refType.ReferenceCategory == t.Type || refType.ReferenceCategory == PeopleCodeType.Any)
                             {
                                 consumed = 1;
                                 return PrefixMatchResult.Completed;
@@ -316,7 +333,7 @@ public class FunctionCallValidator
                     {
                         expectedTypeInfo = new ArrayTypeInfo(t.ArrayDimensionality, expectedTypeInfo);
                     }
-                    if (expectedTypeInfo.IsAssignableFrom(arg))
+                    if (expectedTypeInfo.IsAssignableFrom(arg.Type))
                     {
                         consumed = 1;
                         return PrefixMatchResult.Completed;
@@ -367,6 +384,14 @@ public class FunctionCallValidator
                         nextTypes.Add(new ParameterTypeInfo(refTypeName, reference.Name));
                         return PrefixMatchResult.NeedsMoreArgs;
                     }
+
+                    /* We don't know what type it is. it'll be figured out at runtime */
+                    if (ctx.Arguments[argIndex].Type.PeopleCodeType == PeopleCodeType.Unknown)
+                    {
+                        consumed = 1;
+                        return PrefixMatchResult.Completed;
+                    }
+
                     if (MatchReference(ctx, reference, argIndex, out int used))
                     {
                         consumed = used;
@@ -459,7 +484,7 @@ public class FunctionCallValidator
     /// This is a fallback to hint at likely first tokens from the current and next parameter
     /// (especially when optional/zero-min varargs are present).
     /// </summary>
-    private List<ParameterTypeInfo> BuildExpectedFromParameters(List<Parameter> parameters, TypeInfo[] args, int paramIdx, int argIdx)
+    private List<ParameterTypeInfo> BuildExpectedFromParameters(List<Parameter> parameters, ArgumentInfo[] args, int paramIdx, int argIdx)
     {
         var list = new List<ParameterTypeInfo>();
         if (paramIdx >= parameters.Count) return list;
@@ -598,6 +623,16 @@ public class FunctionCallValidator
             }
         }
         return typeInfo.Name;
+    }
+
+    /// <summary>
+    /// Formats an <see cref="ArgumentInfo"/> as the 'Found:' token at failure sites.
+    /// Includes variable prefix (&amp;) if the argument is a variable.
+    /// </summary>
+    private static string FormatArgumentInfoForDisplay(ArgumentInfo argument)
+    {
+        var typeDisplay = FormatTypeInfoForDisplay(argument.Type);
+        return argument.IsVariable ? $"&{typeDisplay}" : typeDisplay;
     }
 
     /// <summary>
@@ -752,6 +787,15 @@ public class FunctionCallValidator
         var arg = ctx.Arguments[argIndex];
         // Reuse TypeNode acceptance logic equivalently
         var expected = single.ParameterType;
+
+        // Check if parameter requires variable but argument is not a variable
+        if (expected.MustBeVariable && !arg.IsVariable)
+        {
+            ctx.RecordError(argIndex, "Expected variable argument");
+            ctx.RecordTypeMismatch(argIndex, single);
+            return false;
+        }
+
         TypeInfo expectedTypeInfo = expected.IsAppClass
             ? new AppClassTypeInfo(expected.AppClassPath!)
             : TypeInfo.FromPeopleCodeType(expected.Type);
@@ -761,7 +805,7 @@ public class FunctionCallValidator
         }
 
         // Check AppClass inheritance if both are AppClass types
-        if (expectedTypeInfo is AppClassTypeInfo expectedAppClass && arg is AppClassTypeInfo argAppClass)
+        if (expectedTypeInfo is AppClassTypeInfo expectedAppClass && arg.Type is AppClassTypeInfo argAppClass)
         {
             if (IsAppClassCompatible(expectedAppClass, argAppClass))
             {
@@ -769,14 +813,14 @@ public class FunctionCallValidator
                 return true;
             }
         }
-        else if (expectedTypeInfo.IsAssignableFrom(arg))
+        else if (expectedTypeInfo.IsAssignableFrom(arg.Type))
         {
             consumed = 1;
             return true;
         }
 
         /* We don't know what type it is. it'll be figured out at runtime */
-        if (arg.PeopleCodeType == PeopleCodeType.Unknown)
+        if (arg.Type.PeopleCodeType == PeopleCodeType.Unknown)
         {
             consumed = 1;
             return true;
@@ -800,13 +844,26 @@ public class FunctionCallValidator
 
         var arg = ctx.Arguments[argIndex];
 
+        /* We don't know what type it is. it'll be figured out at runtime */
+        if (arg.Type.PeopleCodeType == PeopleCodeType.Unknown)
+        {
+            consumed = 1;
+            return true;
+        }
+
         // Backtracking across union alternatives
         foreach (var t in union.AllowedTypes)
         {
+            // Check if this alternative requires variable but argument is not a variable
+            if (t.MustBeVariable && !arg.IsVariable)
+            {
+                continue; // Skip this alternative
+            }
+
             // Handle reference types
             if (t.IsReference)
             {
-                if (arg is ReferenceTypeInfo refType)
+                if (arg.Type is ReferenceTypeInfo refType)
                 {
                     // Check if reference category matches (or if ANY is allowed)
                     if (t.Type == PeopleCodeType.Any || refType.ReferenceCategory == t.Type || refType.ReferenceCategory == PeopleCodeType.Any)
@@ -827,13 +884,13 @@ public class FunctionCallValidator
 
             // Check AppClass inheritance if both are AppClass types
             bool isMatch = false;
-            if (expectedTypeInfo is AppClassTypeInfo expectedAppClass && arg is AppClassTypeInfo argAppClass)
+            if (expectedTypeInfo is AppClassTypeInfo expectedAppClass && arg.Type is AppClassTypeInfo argAppClass)
             {
                 isMatch = IsAppClassCompatible(expectedAppClass, argAppClass);
             }
             else
             {
-                isMatch = expectedTypeInfo.IsAssignableFrom(arg);
+                isMatch = expectedTypeInfo.IsAssignableFrom(arg.Type);
             }
 
             if (!isMatch)
@@ -851,29 +908,19 @@ public class FunctionCallValidator
     }
 
     /// <summary>
-    /// Matches a parameter group by consuming its children in order. If we run out of args midway,
-    /// we classify as MissingArgument at the first unmet child.
+    /// Matches a parameter group by consuming its children in order.
+    /// Delegates to MatchSequence to enable backtracking for nested VariableParameters.
     /// </summary>
     private bool MatchGroup(MatchContext ctx, ParameterGroup group, int argIndex, out int consumed)
     {
-        int idx = argIndex;
-        foreach (var child in group.Parameters)
+        // Delegate to MatchSequence which has proper backtracking support for VariableParameters
+        if (MatchSequence(ctx, group.Parameters, 0, argIndex, out int nextArgIndex))
         {
-            if (idx >= ctx.Arguments.Length)
-            {
-                ctx.RecordMissingArgument(idx, child);
-                consumed = 0;
-                return false;
-            }
-            if (!MatchParameter(ctx, child, idx, out int used))
-            {
-                consumed = 0;
-                return false;
-            }
-            idx += used;
+            consumed = nextArgIndex - argIndex;
+            return true;
         }
-        consumed = idx - argIndex;
-        return true;
+        consumed = 0;
+        return false;
     }
 
     /// <summary>
@@ -925,8 +972,15 @@ public class FunctionCallValidator
 
         var arg = ctx.Arguments[argIndex];
 
+        /* We don't know what type it is. it'll be figured out at runtime */
+        if (arg.Type.PeopleCodeType == PeopleCodeType.Unknown)
+        {
+            consumed = 1;
+            return true;
+        }
+
         // Must be a reference type
-        if (arg is not ReferenceTypeInfo refType)
+        if (arg.Type is not ReferenceTypeInfo refType)
         {
             ctx.RecordTypeMismatch(argIndex, reference);
             return false;
@@ -976,7 +1030,7 @@ public class FunctionCallValidator
                 }
 
                 var currentArg = ctx.Arguments[idx];
-                if (Accepts(child, currentArg))
+                if (Accepts(child, currentArg.Type))
                 {
                     idx += 1; // progress one argument
                     continue;
@@ -1002,6 +1056,12 @@ public class FunctionCallValidator
     /// </summary>
     private bool Accepts(Parameter parameter, TypeInfo arg)
     {
+        /* We don't know what type it is. it'll be figured out at runtime */
+        if (arg.PeopleCodeType == PeopleCodeType.Unknown)
+        {
+            return true;
+        }
+
         switch (parameter)
         {
             case SingleParameter single:
@@ -1152,13 +1212,13 @@ public class FunctionCallValidator
     {
         public string FunctionName { get; }
         public List<Parameter> Parameters { get; }
-        public TypeInfo[] Arguments { get; }
+        public ArgumentInfo[] Arguments { get; }
         public int BestFailureArgIndex { get; private set; } = -1;
         private readonly Dictionary<int, List<ParameterTypeInfo>> _expectedAtIndex = new();
         public List<string> Errors { get; } = new();
         public FailureKind FailureKind { get; private set; } = FailureKind.None;
 
-        public MatchContext(string functionName, List<Parameter> parameters, TypeInfo[] arguments)
+        public MatchContext(string functionName, List<Parameter> parameters, ArgumentInfo[] arguments)
         {
             FunctionName = functionName;
             Parameters = parameters;
@@ -1376,7 +1436,8 @@ public static class DirectParameterNextTypesExtensions
     public static ValidationResult ValidateDirect(this FunctionInfo functionInfo, TypeInfo[] argumentTypes, ITypeMetadataResolver typeResolver)
     {
         var validator = new FunctionCallValidator(typeResolver);
-        return validator.Validate(functionInfo, argumentTypes);
+        var arguments = argumentTypes.Select(t => ArgumentInfo.NonVariable(t)).ToArray();
+        return validator.Validate(functionInfo, arguments);
     }
 
     public static bool IsValidCallDirect(this FunctionInfo functionInfo, TypeInfo[] argumentTypes, ITypeMetadataResolver typeResolver)
@@ -1391,7 +1452,8 @@ public static class DirectParameterNextTypesExtensions
     public static List<FunctionCallValidator.ParameterTypeInfo> GetAllowedNextTypes(this FunctionInfo functionInfo, TypeInfo[] argumentTypes, ITypeMetadataResolver typeResolver)
     {
         var validator = new FunctionCallValidator(typeResolver);
-        return validator.GetAllowedNextTypes(functionInfo, argumentTypes);
+        var arguments = argumentTypes.Select(t => ArgumentInfo.NonVariable(t)).ToArray();
+        return validator.GetAllowedNextTypes(functionInfo, arguments);
     }
 }
 

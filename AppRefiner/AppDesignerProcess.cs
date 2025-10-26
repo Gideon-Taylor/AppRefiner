@@ -26,6 +26,16 @@ namespace AppRefiner
         {
             return Task.FromResult<TypeMetadata?>(null);
         }
+
+        public PeopleCodeTypeInfo.Types.TypeInfo GetFieldType(string recordName, string fieldName)
+        {
+            return PeopleCodeTypeInfo.Types.AnyTypeInfo.Instance;
+        }
+
+        public Task<PeopleCodeTypeInfo.Types.TypeInfo> GetFieldTypeAsync(string recordName, string fieldName)
+        {
+            return Task.FromResult<PeopleCodeTypeInfo.Types.TypeInfo>(PeopleCodeTypeInfo.Types.AnyTypeInfo.Instance);
+        }
     }
 
     public class AppDesignerProcess

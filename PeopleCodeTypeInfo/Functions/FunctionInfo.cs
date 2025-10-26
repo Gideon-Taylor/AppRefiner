@@ -43,6 +43,12 @@ public class FunctionInfo
     public bool IsProperty { get; set; } = false;
 
     /// <summary>
+    /// Whether the return value is optional (caller can ignore it)
+    /// Indicated by ? suffix in return type (e.g., "-> string?")
+    /// </summary>
+    public bool IsOptionalReturn { get; set; } = false;
+
+    /// <summary>
     /// Additional metadata or description
     /// </summary>
     public string? Description { get; set; }
@@ -331,6 +337,15 @@ public class FunctionBuilder
     public FunctionBuilder AsProperty()
     {
         _function.IsProperty = true;
+        return this;
+    }
+
+    /// <summary>
+    /// Mark return value as optional (can be ignored by caller)
+    /// </summary>
+    public FunctionBuilder WithOptionalReturn()
+    {
+        _function.IsOptionalReturn = true;
         return this;
     }
 

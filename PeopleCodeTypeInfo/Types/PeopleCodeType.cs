@@ -640,6 +640,15 @@ public class PrimitiveTypeInfo : TypeInfo
         // Null safety - should never happen, but protect against edge cases
         if (other == null) return false;
 
+        // Check if other is a FieldTypeInfo - resolve its data type for implicit .Value access
+        // This allows Field objects to be used where their data type is expected
+        // Example: AddToDate(AAP_YEAR.START_DT, ...) where START_DT is a Date field
+        if (other is FieldTypeInfo fieldType)
+        {
+            var actualFieldType = fieldType.GetFieldDataType();
+            return IsAssignableFrom(actualFieldType);
+        }
+
         // Any can be assigned to any primitive
         if (other.Kind == TypeKind.Any) return true;
 
@@ -717,6 +726,14 @@ public class BuiltinObjectTypeInfo : TypeInfo
     {
         // Null safety - should never happen, but protect against edge cases
         if (other == null) return false;
+
+        // Check if other is a FieldTypeInfo - resolve its data type for implicit .Value access
+        // This allows Field objects to be used where their data type is expected
+        if (other is FieldTypeInfo fieldType)
+        {
+            var actualFieldType = fieldType.GetFieldDataType();
+            return IsAssignableFrom(actualFieldType);
+        }
 
         // Any can be assigned to any builtin object
         if (other.Kind == TypeKind.Any) return true;

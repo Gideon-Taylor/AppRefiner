@@ -619,6 +619,15 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
                 {
                     SetInferredType(node, ConvertPropertyInfoToTypeInfo(systemVar.Value));
                 }
+                // If not found and has no prefix, assume it's a Field identifier with unknown record context
+                // Pattern: [recordname.]fieldname where recordname is inferred at runtime
+                // Example: START_DT (no & or %) → Field type with empty record name
+                else if (!node.Name.StartsWith("&") && !node.Name.StartsWith("%"))
+                {
+                    // Create FieldTypeInfo with empty record name to indicate runtime context dependency
+                    var fieldType = new FieldTypeInfo("", node.Name, _typeResolver);
+                    SetInferredType(node, fieldType);
+                }
                 else
                 {
                     SetInferredType(node, UnknownTypeInfo.Instance);
@@ -775,41 +784,51 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
     {
         base.VisitMemberAccess(node);
 
-        // DETECT REFERENCE PATTERN: Identifier.Member (no & or % prefix)
+        // Check for special reference keywords (Record.X, Field.Y, etc.)
+        // These create ReferenceTypeInfo, not builtin types
         if (node.Target is IdentifierNode identifier &&
             !identifier.Name.StartsWith("&") &&
-            !identifier.Name.StartsWith("%"))
+            !identifier.Name.StartsWith("%") &&
+            ReferenceTypeInfo.IsSpecialReferenceKeyword(identifier.Name))
         {
-            // This is a reference pattern
-            var leftSide = identifier.Name;
-            var rightSide = node.MemberName;
-
-            // Determine reference category
-            PeopleCodeType referenceCategory;
-            if (ReferenceTypeInfo.IsSpecialReferenceKeyword(leftSide))
-            {
-                // Special keyword like Record.MY_RECORD, Field.MY_FIELD
-                referenceCategory = ReferenceTypeInfo.GetReferenceCategoryType(leftSide);
-            }
-            else
-            {
-                // Non-keyword like MY_RECORD.MY_FIELD -> defaults to Field reference
-                referenceCategory = PeopleCodeType.Field;
-            }
-
-            var fullReference = $"{leftSide}.{rightSide}";
-            var refType = new ReferenceTypeInfo(referenceCategory, rightSide, fullReference);
+            // Special keyword like Record.MY_RECORD, Field.MY_FIELD
+            var referenceCategory = ReferenceTypeInfo.GetReferenceCategoryType(identifier.Name);
+            var fullReference = $"{identifier.Name}.{node.MemberName}";
+            var refType = new ReferenceTypeInfo(referenceCategory, node.MemberName, fullReference);
             SetInferredType(node, refType);
             return;
         }
 
-        // NORMAL MEMBER ACCESS (existing logic)
+        // Normal member access - get target type and resolve member
         var objectType = GetInferredType(node.Target);
         if (objectType != null)
         {
+            // Special case: Field with empty record name in member access position
+            // This means RECORD.FIELD pattern where RECORD was inferred as Field with empty record
+            // Treat the field name as the record name for this access
+            if (objectType is FieldTypeInfo fieldWithEmptyRecord &&
+                string.IsNullOrEmpty(fieldWithEmptyRecord.RecordName) &&
+                node.Target is IdentifierNode targetIdentifier)
+            {
+                // Create FieldTypeInfo with record context: RECORD.FIELD
+                var memberType = new FieldTypeInfo(targetIdentifier.Name, node.MemberName, _typeResolver);
+                SetInferredType(node, memberType);
+                return;
+            }
+
             // Resolve member as property (not method call)
-            var memberType = ResolveMemberAccessReturnType(objectType, node.MemberName, isMethodCall: false, parameterTypes: null);
-            SetInferredType(node, memberType);
+            var memberType2 = ResolveMemberAccessReturnType(objectType, node.MemberName, isMethodCall: false, parameterTypes: null);
+
+            // If result is Field type and target is Record, create FieldTypeInfo for implicit .Value support
+            if (memberType2.PeopleCodeType == PeopleCodeType.Field &&
+                objectType.PeopleCodeType == PeopleCodeType.Record &&
+                node.Target is IdentifierNode recordIdentifier)
+            {
+                // Create FieldTypeInfo with record/field context for data type resolution
+                memberType2 = new FieldTypeInfo(recordIdentifier.Name, node.MemberName, _typeResolver);
+            }
+
+            SetInferredType(node, memberType2);
         }
         else
         {

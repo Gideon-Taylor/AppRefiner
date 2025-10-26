@@ -252,9 +252,12 @@ public class TypeMetadataBuilder : AstVisitorBase
 
             case ArrayTypeNode array when array.ElementType != null:
                 var elementTypeWithDim = BuildTypeWithDimensionality(array.ElementType);
+
+
                 return new TypeWithDimensionality(
                     elementTypeWithDim.Type,
-                    (byte)(elementTypeWithDim.ArrayDimensionality + array.Dimensions)
+                    (byte)(elementTypeWithDim.ArrayDimensionality + array.Dimensions),
+                    elementTypeWithDim.AppClassPath
                 );
 
             case AppClassTypeNode appClass:

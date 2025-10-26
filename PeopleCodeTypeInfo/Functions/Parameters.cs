@@ -1,4 +1,5 @@
 using PeopleCodeTypeInfo.Types;
+using System.Text;
 
 namespace PeopleCodeTypeInfo.Functions;
 
@@ -70,13 +71,15 @@ public struct TypeWithDimensionality : IEquatable<TypeWithDimensionality>
     public byte ArrayDimensionality { get; set; } // 0=scalar, 1=1D array, 2=2D array, etc.
     public string? AppClassPath { get; set; } // For AppClass types: "PACKAGE:Class", "PACKAGE:SubPackage:Class", etc.
     public bool IsReference { get; set; } // True for references (@RECORD, @FIELD), false for instances
+    public bool MustBeVariable { get; set; } // True when caller must pass a variable (not a literal), indicated by & prefix
 
-    public TypeWithDimensionality(PeopleCodeType type, byte arrayDimensionality = 0, string? appClassPath = null, bool isReference = false)
+    public TypeWithDimensionality(PeopleCodeType type, byte arrayDimensionality = 0, string? appClassPath = null, bool isReference = false, bool mustBeVariable = false)
     {
         Type = type;
         ArrayDimensionality = arrayDimensionality;
         AppClassPath = appClassPath;
         IsReference = isReference;
+        MustBeVariable = mustBeVariable;
     }
 
     public bool IsArray => ArrayDimensionality > 0;
@@ -89,9 +92,10 @@ public struct TypeWithDimensionality : IEquatable<TypeWithDimensionality>
         Type == other.Type &&
         ArrayDimensionality == other.ArrayDimensionality &&
         AppClassPath == other.AppClassPath &&
-        IsReference == other.IsReference;
+        IsReference == other.IsReference &&
+        MustBeVariable == other.MustBeVariable;
 
-    public override int GetHashCode() => HashCode.Combine(Type, ArrayDimensionality, AppClassPath, IsReference);
+    public override int GetHashCode() => HashCode.Combine(Type, ArrayDimensionality, AppClassPath, IsReference, MustBeVariable);
 
     public static bool operator ==(TypeWithDimensionality left, TypeWithDimensionality right) => left.Equals(right);
     public static bool operator !=(TypeWithDimensionality left, TypeWithDimensionality right) => !left.Equals(right);
@@ -102,21 +106,32 @@ public struct TypeWithDimensionality : IEquatable<TypeWithDimensionality>
             ? AppClassPath
             : Type.ToString().ToLowerInvariant();
 
+        // Build the result starting with optional & prefix
+        var result = new StringBuilder();
+        if (MustBeVariable)
+            result.Append('&');
+
         // Handle reference types with @ prefix
         if (IsReference)
         {
-            if (ArrayDimensionality == 0)
-                return $"@{baseTypeName}";
-            var refArrayPrefix = string.Join("", Enumerable.Repeat("array_", ArrayDimensionality));
-            return $"@{refArrayPrefix}{baseTypeName}";
+            result.Append('@');
+            if (ArrayDimensionality > 0)
+            {
+                var refArrayPrefix = string.Join("", Enumerable.Repeat("array_", ArrayDimensionality));
+                result.Append(refArrayPrefix);
+            }
+            result.Append(baseTypeName);
+            return result.ToString();
         }
 
         // Handle regular types
-        if (ArrayDimensionality == 0)
-            return Type == PeopleCodeType.AppClass ? baseTypeName : $"{baseTypeName}";
-
-        var regularArrayPrefix = string.Join("", Enumerable.Repeat("array_", ArrayDimensionality));
-        return $"{regularArrayPrefix}{baseTypeName}";
+        if (ArrayDimensionality > 0)
+        {
+            var regularArrayPrefix = string.Join("", Enumerable.Repeat("array_", ArrayDimensionality));
+            result.Append(regularArrayPrefix);
+        }
+        result.Append(Type == PeopleCodeType.AppClass ? baseTypeName : baseTypeName);
+        return result.ToString();
     }
 
     /// <summary>
@@ -137,15 +152,23 @@ public struct TypeWithDimensionality : IEquatable<TypeWithDimensionality>
 
     /// <summary>
     /// Parse a type string that may include AppClass paths like "PACKAGE:Class",
-    /// reference types like "@FIELD", and array dimensionality via leading "array_" prefixes.
-    /// Preserves the reference flag indicated by the '@' prefix.
+    /// reference types like "@FIELD", must-be-variable indicator "&", and array dimensionality via leading "array_" prefixes.
+    /// Preserves the reference flag indicated by the '@' prefix and mustBeVariable flag indicated by '&' prefix.
     /// </summary>
     public static TypeWithDimensionality Parse(string typeStr)
     {
         if (typeStr == null) throw new ArgumentNullException(nameof(typeStr));
         typeStr = typeStr.Trim();
 
-        // Detect reference '@' first and strip it for further parsing
+        // Detect must-be-variable '&' first and strip it for further parsing
+        bool mustBeVariable = false;
+        if (typeStr.StartsWith("&"))
+        {
+            mustBeVariable = true;
+            typeStr = typeStr.Substring(1).Trim();
+        }
+
+        // Detect reference '@' and strip it for further parsing
         bool isReference = false;
         if (typeStr.StartsWith("@"))
         {
@@ -165,12 +188,12 @@ public struct TypeWithDimensionality : IEquatable<TypeWithDimensionality>
         if (typeStr.Contains(':'))
         {
             // AppClass references are not expected; treat as regular AppClass
-            return new TypeWithDimensionality(PeopleCodeType.AppClass, arrayDimensionality, typeStr, isReference: false);
+            return new TypeWithDimensionality(PeopleCodeType.AppClass, arrayDimensionality, typeStr, isReference: false, mustBeVariable);
         }
 
         // Builtin or special type
         var builtinType = BuiltinTypeExtensions.FromString(typeStr);
-        return new TypeWithDimensionality(builtinType, arrayDimensionality, null, isReference);
+        return new TypeWithDimensionality(builtinType, arrayDimensionality, null, isReference, mustBeVariable);
     }
 
     /// <summary>

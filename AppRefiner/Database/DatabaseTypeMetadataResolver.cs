@@ -102,6 +102,49 @@ namespace AppRefiner.Database
         }
 
         /// <summary>
+        /// Resolves the data type of a field on a record by querying the database.
+        /// </summary>
+        /// <param name="recordName">The record name (e.g., "AAP_YEAR")</param>
+        /// <param name="fieldName">The field name (e.g., "START_DT")</param>
+        /// <returns>TypeInfo representing the field's data type, or AnyTypeInfo if unknown</returns>
+        public PeopleCodeTypeInfo.Types.TypeInfo GetFieldType(string recordName, string fieldName)
+        {
+            // Check if database is connected
+            if (!_dataManager.IsConnected)
+            {
+                return PeopleCodeTypeInfo.Types.AnyTypeInfo.Instance;
+            }
+
+            try
+            {
+                // TODO: Query database for field metadata
+                // For now, return Any until database schema is implemented
+                // Future implementation should call something like:
+                // var fieldMetadata = _dataManager.GetFieldMetadata(recordName, fieldName);
+                // return ConvertFieldTypeToTypeInfo(fieldMetadata.DataType);
+
+                return PeopleCodeTypeInfo.Types.AnyTypeInfo.Instance;
+            }
+            catch (Exception ex)
+            {
+                Debug.Log($"DatabaseTypeMetadataResolver: Error resolving field type '{recordName}.{fieldName}': {ex.Message}");
+                return PeopleCodeTypeInfo.Types.AnyTypeInfo.Instance;
+            }
+        }
+
+        /// <summary>
+        /// Resolves the data type of a field on a record asynchronously.
+        /// </summary>
+        /// <param name="recordName">The record name (e.g., "AAP_YEAR")</param>
+        /// <param name="fieldName">The field name (e.g., "START_DT")</param>
+        /// <returns>Task that resolves to TypeInfo representing the field's data type, or AnyTypeInfo if unknown</returns>
+        public Task<PeopleCodeTypeInfo.Types.TypeInfo> GetFieldTypeAsync(string recordName, string fieldName)
+        {
+            // Wrap synchronous call in a Task
+            return Task.FromResult(GetFieldType(recordName, fieldName));
+        }
+
+        /// <summary>
         /// Attempts to resolve the qualified name as an application class
         /// </summary>
         private TypeMetadata? TryResolveAsAppClass(string qualifiedName)

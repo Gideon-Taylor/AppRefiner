@@ -83,12 +83,14 @@ public class BuiltinObjectReaderStrategy : VariableSizeReaderStrategy<BuiltinObj
         bool hasUnionReturn = (flags & 0x01) != 0;
         bool isDefault = (flags & 0x02) != 0;
         bool isProperty = (flags & 0x04) != 0;
+        bool isOptionalReturn = (flags & 0x08) != 0;
 
         var function = new FunctionInfo
         {
             Name = "", // Name will be set externally or derived from hash
             IsDefaultMethod = isDefault,
-            IsProperty = isProperty
+            IsProperty = isProperty,
+            IsOptionalReturn = isOptionalReturn
         };
 
         // Read return type information

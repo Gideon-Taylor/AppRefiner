@@ -91,4 +91,23 @@ public class TestTypeMetadataResolver : ITypeMetadataResolver
 
         return metadata;
     }
+
+    public Types.TypeInfo GetFieldType(string recordName, string fieldName)
+    {
+        // Empty record name means runtime-inferred context - return any
+        if (string.IsNullOrEmpty(recordName))
+            return Types.AnyTypeInfo.Instance;
+
+        // For testing purposes, return AnyTypeInfo
+        return Types.AnyTypeInfo.Instance;
+    }
+
+    public Task<Types.TypeInfo> GetFieldTypeAsync(string recordName, string fieldName)
+    {
+        // Empty record name means runtime-inferred context - return any
+        if (string.IsNullOrEmpty(recordName))
+            return Task.FromResult<Types.TypeInfo>(Types.AnyTypeInfo.Instance);
+
+        return Task.FromResult<Types.TypeInfo>(Types.AnyTypeInfo.Instance);
+    }
 }

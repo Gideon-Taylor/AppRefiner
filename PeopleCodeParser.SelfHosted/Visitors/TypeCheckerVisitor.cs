@@ -107,16 +107,19 @@ namespace PeopleCodeParser.SelfHosted.Visitors
                 return;
             }
 
-            // Get argument types
-            var argumentTypes = new TypeInfo[node.Arguments.Count];
+            // Build arguments with type and variable tracking
+            var arguments = new ArgumentInfo[node.Arguments.Count];
             for (int i = 0; i < node.Arguments.Count; i++)
             {
-                argumentTypes[i] = node.Arguments[i].GetInferredType() ?? UnknownTypeInfo.Instance;
+                var argNode = node.Arguments[i];
+                var argType = argNode.GetInferredType() ?? UnknownTypeInfo.Instance;
+                bool isVariable = IsVariableReference(argNode);
+                arguments[i] = new ArgumentInfo(argType, isVariable);
             }
 
             // Validate the call
             var validator = new FunctionCallValidator(_typeResolver);
-            var result = validator.Validate(functionInfo, argumentTypes);
+            var result = validator.Validate(functionInfo, arguments);
 
             if (!result.IsValid)
             {
@@ -242,6 +245,32 @@ namespace PeopleCodeParser.SelfHosted.Visitors
                 AppClassTypeNode appClass => new AppClassTypeInfo(
                     string.Join(":", appClass.PackagePath.Concat(new [] { appClass.ClassName }))),
                 _ => UnknownTypeInfo.Instance
+            };
+        }
+
+        /// <summary>
+        /// Determines if an expression node represents a variable reference (assignable location).
+        /// Returns true for identifiers, field access, and array access - things that can be assigned to.
+        /// Returns false for literals, function calls, and other expressions.
+        /// </summary>
+        private bool IsVariableReference(AstNode node)
+        {
+            return node switch
+            {
+                // Simple variable identifier
+                IdentifierNode => true,
+
+                // Property access (e.g., obj.Property)
+                PropertyAccessNode => true,
+
+                // Member access (e.g., obj.Member)
+                MemberAccessNode => true,
+
+                // Array element access (e.g., arr[0])
+                ArrayAccessNode => true,
+
+                // Everything else: literals, function calls, operators, etc.
+                _ => false
             };
         }
     }

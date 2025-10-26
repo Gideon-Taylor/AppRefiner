@@ -47,6 +47,22 @@ public interface ITypeMetadataResolver
     /// Task that resolves to TypeMetadata if the type is found, null otherwise.
     /// </returns>
     Task<TypeMetadata?> GetTypeMetadataAsync(string qualifiedName);
+
+    /// <summary>
+    /// Resolves the data type of a field on a record.
+    /// </summary>
+    /// <param name="recordName">The record name (e.g., "AAP_YEAR")</param>
+    /// <param name="fieldName">The field name (e.g., "START_DT")</param>
+    /// <returns>TypeInfo representing the field's data type, or AnyTypeInfo if unknown</returns>
+    Types.TypeInfo GetFieldType(string recordName, string fieldName);
+
+    /// <summary>
+    /// Resolves the data type of a field on a record asynchronously.
+    /// </summary>
+    /// <param name="recordName">The record name (e.g., "AAP_YEAR")</param>
+    /// <param name="fieldName">The field name (e.g., "START_DT")</param>
+    /// <returns>Task that resolves to TypeInfo representing the field's data type, or AnyTypeInfo if unknown</returns>
+    Task<Types.TypeInfo> GetFieldTypeAsync(string recordName, string fieldName);
 }
 
 /// <summary>
@@ -76,5 +92,31 @@ public class NullTypeMetadataResolver : ITypeMetadataResolver
     public Task<TypeMetadata?> GetTypeMetadataAsync(string qualifiedName)
     {
         return Task.FromResult<TypeMetadata?>(null);
+    }
+
+    /// <summary>
+    /// Always returns AnyTypeInfo.Instance indicating field type is unknown.
+    /// Empty record name means runtime-inferred context.
+    /// </summary>
+    public Types.TypeInfo GetFieldType(string recordName, string fieldName)
+    {
+        // Empty record name means runtime-inferred context - return any
+        if (string.IsNullOrEmpty(recordName))
+            return Types.AnyTypeInfo.Instance;
+
+        return Types.AnyTypeInfo.Instance;
+    }
+
+    /// <summary>
+    /// Always returns AnyTypeInfo.Instance indicating field type is unknown.
+    /// Empty record name means runtime-inferred context.
+    /// </summary>
+    public Task<Types.TypeInfo> GetFieldTypeAsync(string recordName, string fieldName)
+    {
+        // Empty record name means runtime-inferred context - return any
+        if (string.IsNullOrEmpty(recordName))
+            return Task.FromResult<Types.TypeInfo>(Types.AnyTypeInfo.Instance);
+
+        return Task.FromResult<Types.TypeInfo>(Types.AnyTypeInfo.Instance);
     }
 }

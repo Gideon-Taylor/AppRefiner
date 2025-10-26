@@ -41,12 +41,14 @@ public class FunctionReaderStrategy : VariableSizeReaderStrategy<FunctionInfo>
         bool hasUnionReturn = (flags & 0x01) != 0;
         bool isDefault = (flags & 0x02) != 0;
         bool isProperty = (flags & 0x04) != 0;
+        bool isOptionalReturn = (flags & 0x08) != 0;
 
         var function = new FunctionInfo
         {
             Name = "", // Name will be set externally by hash table
             IsDefaultMethod = isDefault,
-            IsProperty = isProperty
+            IsProperty = isProperty,
+            IsOptionalReturn = isOptionalReturn
         };
 
         // Read return type information
@@ -121,11 +123,17 @@ public class FunctionReaderStrategy : VariableSizeReaderStrategy<FunctionInfo>
         var type = (PeopleCodeType)reader.ReadByte();
         var arrayDim = reader.ReadByte();
         var appClassPath = ReadString(reader);
+
+        // Read flags byte for parameter features
+        byte flags = reader.ReadByte();
+        bool isReference = (flags & 0x01) != 0;
+        bool mustBeVariable = (flags & 0x02) != 0;
+
         var (name, nameIndex) = ReadParameterName(reader, nameTable);
 
         var paramType = string.IsNullOrEmpty(appClassPath)
-            ? new TypeWithDimensionality(type, arrayDim)
-            : new TypeWithDimensionality(type, arrayDim, appClassPath);
+            ? new TypeWithDimensionality(type, arrayDim, null, isReference, mustBeVariable)
+            : new TypeWithDimensionality(type, arrayDim, appClassPath, isReference, mustBeVariable);
 
         return new SingleParameter(paramType, name) { NameIndex = nameIndex };
     }
@@ -140,11 +148,15 @@ public class FunctionReaderStrategy : VariableSizeReaderStrategy<FunctionInfo>
             var type = (PeopleCodeType)reader.ReadByte();
             var arrayDim = reader.ReadByte();
             var appClassPath = ReadString(reader);
-            bool isRef = reader.ReadByte() != 0;
+
+            // Read flags byte for type features
+            byte flags = reader.ReadByte();
+            bool isRef = (flags & 0x01) != 0;
+            bool mustBeVariable = (flags & 0x02) != 0;
 
             var typeWithDim = string.IsNullOrEmpty(appClassPath)
-                ? new TypeWithDimensionality(type, arrayDim, null, isRef)
-                : new TypeWithDimensionality(type, arrayDim, appClassPath, isReference: false);
+                ? new TypeWithDimensionality(type, arrayDim, null, isRef, mustBeVariable)
+                : new TypeWithDimensionality(type, arrayDim, appClassPath, isRef, mustBeVariable);
 
             allowedTypes.Add(typeWithDim);
         }
