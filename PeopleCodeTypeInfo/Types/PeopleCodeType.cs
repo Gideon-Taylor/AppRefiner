@@ -146,6 +146,13 @@ public abstract class TypeInfo
             return Types.PeopleCodeType.Record;
         }
 
+        // Page and Panel are bidirectionally compatible, common type is Page
+        if ((type1 == Types.PeopleCodeType.Page && type2 == Types.PeopleCodeType.Panel) ||
+            (type1 == Types.PeopleCodeType.Panel && type2 == Types.PeopleCodeType.Page))
+        {
+            return Types.PeopleCodeType.Page;
+        }
+
         // Date, DateTime, and Time are NOT compatible with each other - no common type
         var dateTimeTypes = new[] { Types.PeopleCodeType.Date, Types.PeopleCodeType.DateTime, Types.PeopleCodeType.Time };
         if (Array.IndexOf(dateTimeTypes, type1) >= 0 && Array.IndexOf(dateTimeTypes, type2) >= 0)
@@ -652,6 +659,13 @@ public class PrimitiveTypeInfo : TypeInfo
         // Any can be assigned to any primitive
         if (other.Kind == TypeKind.Any) return true;
 
+        // @ANY references (dynamic references) can resolve to any type at runtime
+        // Example: @("RECORD." | &FIELD) where we can't statically determine the target
+        if (other is ReferenceTypeInfo refType && refType.ReferenceCategory == Types.PeopleCodeType.Any)
+        {
+            return true;
+        }
+
         // Fast path: if both have PeopleCodeType values, compare those first
         if (PeopleCodeType.HasValue && other.PeopleCodeType.HasValue)
         {
@@ -738,6 +752,13 @@ public class BuiltinObjectTypeInfo : TypeInfo
         // Any can be assigned to any builtin object
         if (other.Kind == TypeKind.Any) return true;
 
+        // @ANY references (dynamic references) can resolve to any type at runtime
+        // Example: @("RECORD." | &FIELD) where we can't statically determine the target
+        if (other is ReferenceTypeInfo refType && refType.ReferenceCategory == Types.PeopleCodeType.Any)
+        {
+            return true;
+        }
+
         // Fast path: if both have PeopleCodeType values, compare those first
         if (PeopleCodeType.HasValue && other.PeopleCodeType.HasValue)
         {
@@ -747,6 +768,13 @@ public class BuiltinObjectTypeInfo : TypeInfo
             // Special compatibility: RECORD and SCROLL are bidirectionally compatible
             if ((PeopleCodeType.Value == Types.PeopleCodeType.Record && other.PeopleCodeType.Value == Types.PeopleCodeType.Scroll) ||
                 (PeopleCodeType.Value == Types.PeopleCodeType.Scroll && other.PeopleCodeType.Value == Types.PeopleCodeType.Record))
+            {
+                return true;
+            }
+
+            // Special compatibility: PAGE and PANEL are bidirectionally compatible
+            if ((PeopleCodeType.Value == Types.PeopleCodeType.Page && other.PeopleCodeType.Value == Types.PeopleCodeType.Panel) ||
+                (PeopleCodeType.Value == Types.PeopleCodeType.Panel && other.PeopleCodeType.Value == Types.PeopleCodeType.Page))
             {
                 return true;
             }
@@ -766,6 +794,13 @@ public class BuiltinObjectTypeInfo : TypeInfo
 
             if ((thisName == "record" && otherName == "scroll") ||
                 (thisName == "scroll" && otherName == "record"))
+            {
+                return true;
+            }
+
+            // Name-based compatibility for PAGE and PANEL
+            if ((thisName == "page" && otherName == "panel") ||
+                (thisName == "panel" && otherName == "page"))
             {
                 return true;
             }
@@ -1142,6 +1177,12 @@ public class ReferenceTypeInfo : TypeInfo
             if (ReferenceCategory == Types.PeopleCodeType.Record && otherRef.ReferenceCategory == Types.PeopleCodeType.Scroll)
                 return true; /* You can pass a @Record into a @Scroll */
 
+            if (ReferenceCategory == Types.PeopleCodeType.Page && otherRef.ReferenceCategory == Types.PeopleCodeType.Panel)
+                return true; /* You can pass a @Page into a @Panel */
+
+            if (ReferenceCategory == Types.PeopleCodeType.Panel && otherRef.ReferenceCategory == Types.PeopleCodeType.Page)
+                return true; /* You can pass a @Panel into a @Page */
+
             if (otherRef.ReferenceCategory == Types.PeopleCodeType.Any)
             {
                 /* An Any reference category means this was an @() expression, we can't statically know the type) */
@@ -1205,14 +1246,30 @@ public class StringTypeInfo : PrimitiveTypeInfo
         // Null safety - should never happen, but protect against edge cases
         if (other == null) return false;
 
+        // Check if other is a FieldTypeInfo - resolve its data type for implicit .Value access
+        // This allows Field objects to be used where their data type is expected
+        // Example: Substitute(REC.FIELD, " ", "") where FIELD is a String field
+        if (other is FieldTypeInfo fieldType)
+        {
+            var actualFieldType = fieldType.GetFieldDataType();
+            return IsAssignableFrom(actualFieldType);
+        }
+
         // Any can be assigned to string
         if (other.Kind == TypeKind.Any) return true;
+
+        // Reference types can be assigned to string (Record.NAME, SQL.NAME, etc.)
+        // Example: &str = Record.FOO; or ScrollSelectNew(..., "", Record.FOO, ...)
+        if (other is ReferenceTypeInfo)
+        {
+            return true;
+        }
 
         // Same type (string)
         if (other.PeopleCodeType.HasValue && other.PeopleCodeType.Value == Types.PeopleCodeType.String) return true;
         if (other is PrimitiveTypeInfo primitive && primitive.Name.Equals("string", StringComparison.OrdinalIgnoreCase)) return true;
 
-        // String can ONLY accept string values - no implicit conversions
+        // String can ONLY accept string values - no implicit conversions (except references handled above)
         return false;
     }
 }
@@ -1231,8 +1288,24 @@ public class NumberTypeInfo : PrimitiveTypeInfo
         // Null safety - should never happen, but protect against edge cases
         if (other == null) return false;
 
+        // Check if other is a FieldTypeInfo - resolve its data type for implicit .Value access
+        // This allows Field objects to be used where their data type is expected
+        // Example: Multiply(REC.QUANTITY, 2) where QUANTITY is a Number field
+        if (other is FieldTypeInfo fieldType)
+        {
+            var actualFieldType = fieldType.GetFieldDataType();
+            return IsAssignableFrom(actualFieldType);
+        }
+
         // Any can be assigned to number
         if (other.Kind == TypeKind.Any) return true;
+
+        // @ANY references (dynamic references) can resolve to any type at runtime
+        // Example: UpdateValue(@("FIELD_" | &NAME), ...) where we can't statically determine the field
+        if (other is ReferenceTypeInfo refType && refType.ReferenceCategory == Types.PeopleCodeType.Any)
+        {
+            return true;
+        }
 
         // Same type (number)
         if (other.PeopleCodeType.HasValue && other.PeopleCodeType.Value == Types.PeopleCodeType.Number) return true;

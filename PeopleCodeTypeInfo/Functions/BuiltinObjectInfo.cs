@@ -49,13 +49,15 @@ public class BuiltinObjectInfo : IObjectInfo
     }
 
     /// <summary>
-    /// Add a method to this object
+    /// Add a method to this object.
+    /// Note: Overloads should be pre-merged into the FunctionInfo.ParameterOverloads before calling this.
     /// </summary>
     public void AddMethod(FunctionInfo method)
     {
         Methods ??= new Dictionary<uint, FunctionInfo>();
         var hash = HashUtilities.FNV1a32Hash(method.Name);
         Methods[hash] = method;
+
         if (method.IsDefaultMethod)
         {
             DefaultMethodHash = hash;

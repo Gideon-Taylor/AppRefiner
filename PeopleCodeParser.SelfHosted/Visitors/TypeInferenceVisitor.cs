@@ -194,6 +194,12 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
     /// </summary>
     private TypeInfo ConvertTypeNameToTypeInfo(string typeName)
     {
+        // Handle "any" type (used for auto-declared variables)
+        if (typeName.Equals("any", StringComparison.OrdinalIgnoreCase))
+        {
+            return AnyTypeInfo.Instance;
+        }
+
         // Handle array types - look for "array of" pattern
         if (typeName.ToLowerInvariant().Contains("array of"))
         {
@@ -537,9 +543,41 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
         return null;
     }
 
+    #region Statement Visitors
+
+    /// <summary>
+    /// Visit assignment and update auto-declared variable types on first assignment
+    /// </summary>
+    public override void VisitAssignment(AssignmentNode node)
+    {
+        // Let base class handle the assignment (reference tracking, etc.)
+        base.VisitAssignment(node);
+
+        // Check if the assignment target is an identifier (simple variable assignment)
+        if (node.Target is IdentifierNode identifier)
+        {
+            // Find the variable in scope
+            var variable = FindVariable(identifier.Name);
+
+            // If it's an auto-declared variable with type "any", update its type from the right-hand side
+            if (variable != null && variable.IsAutoDeclared && variable.Type.Equals("any", StringComparison.OrdinalIgnoreCase))
+            {
+                // Infer type from the right-hand side expression
+                var rightHandType = GetInferredType(node.Value);
+                if (rightHandType != null && rightHandType.Name != null && !rightHandType.Name.Equals("any", StringComparison.OrdinalIgnoreCase))
+                {
+                    // Update the variable's type
+                    variable.UpdateType(rightHandType.Name);
+                }
+            }
+        }
+    }
+
+    #endregion
+
     #region Expression Visitors
 
-    
+
 
     /// <summary>
     /// Visit literal expression and infer type from literal value

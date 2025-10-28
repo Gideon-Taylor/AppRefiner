@@ -61,12 +61,18 @@ public class VariableInfo
     /// <summary>
     /// Variable data type
     /// </summary>
-    public string Type { get; }
+    public string Type { get; private set; }
 
     /// <summary>
     /// Kind of variable (local, instance, global, etc.)
     /// </summary>
     public VariableKind Kind { get; }
+
+    /// <summary>
+    /// True if this variable was implicitly declared (auto-declared on first use in non-class programs)
+    /// Used by type checker to differentiate error vs warning severity
+    /// </summary>
+    public bool IsAutoDeclared { get; init; }
 
     /// <summary>
     /// Scope where this variable is declared
@@ -123,7 +129,8 @@ public class VariableInfo
         string type,
         VariableKind kind,
         ScopeContext declarationScope,
-        AstNode declaringNode)
+        AstNode declaringNode,
+        bool isAutoDeclared = false)
     {
         Name = variableNameInfo?.Name ?? throw new ArgumentNullException(nameof(variableNameInfo));
         Type = type ?? throw new ArgumentNullException(nameof(type));
@@ -131,6 +138,7 @@ public class VariableInfo
         DeclarationScope = declarationScope ?? throw new ArgumentNullException(nameof(declarationScope));
         VariableNameInfo = variableNameInfo;
         DeclarationNode = declaringNode;
+        IsAutoDeclared = isAutoDeclared;
 
         // Add the declaration reference
         AddReference(VariableReference.FromVariableNameInfo(
@@ -157,6 +165,17 @@ public class VariableInfo
         {
             References.Add(reference);
         }
+    }
+
+    /// <summary>
+    /// Updates the type of this variable (used during type inference for auto-declared variables)
+    /// </summary>
+    public void UpdateType(string newType)
+    {
+        if (string.IsNullOrEmpty(newType))
+            throw new ArgumentNullException(nameof(newType));
+
+        Type = newType;
     }
 
     /// <summary>

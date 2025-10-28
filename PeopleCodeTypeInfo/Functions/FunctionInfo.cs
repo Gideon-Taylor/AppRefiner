@@ -16,9 +16,33 @@ public class FunctionInfo
     public string Name { get; set; } = "";
 
     /// <summary>
-    /// List of parameters using the composable parameter system
+    /// List of parameter overloads for this function.
+    /// Each entry represents one signature variant (parameter list).
+    /// Most functions have only one entry (single signature).
+    /// Multiple entries indicate overloaded functions that accept different parameter combinations.
     /// </summary>
-    public List<Parameter> Parameters { get; set; } = new();
+    public List<List<Parameter>> ParameterOverloads { get; set; } = new() { new List<Parameter>() };
+
+    /// <summary>
+    /// Convenience property for accessing parameters when there's only one signature.
+    /// Gets/sets the first parameter list. For backward compatibility with existing code.
+    /// </summary>
+    public List<Parameter> Parameters
+    {
+        get => ParameterOverloads.Count > 0 ? ParameterOverloads[0] : new List<Parameter>();
+        set
+        {
+            if (ParameterOverloads.Count == 0)
+                ParameterOverloads.Add(value);
+            else
+                ParameterOverloads[0] = value;
+        }
+    }
+
+    /// <summary>
+    /// Whether this function has multiple signature overloads
+    /// </summary>
+    public bool HasMultipleSignatures => ParameterOverloads.Count > 1;
 
     /// <summary>
     /// Return type of the function with dimensionality and AppClass support
@@ -75,32 +99,35 @@ public class FunctionInfo
         ReturnType.ArrayDimensionality > 0;
 
     /// <summary>
-    /// Get minimum number of arguments required
+    /// Get minimum number of arguments required across all overloads
     /// </summary>
-    public int MinArgumentCount => Parameters.Sum(p => p.MinArgumentCount);
+    public int MinArgumentCount => ParameterOverloads.Min(paramList => paramList.Sum(p => p.MinArgumentCount));
 
     /// <summary>
-    /// Get maximum number of arguments that can be accepted
+    /// Get maximum number of arguments that can be accepted across all overloads
     /// </summary>
     public int MaxArgumentCount
     {
         get
         {
-            if (Parameters.Any(p => p.MaxArgumentCount == int.MaxValue))
-                return int.MaxValue;
-            return Parameters.Sum(p => p.MaxArgumentCount);
+            return ParameterOverloads.Max(paramList =>
+            {
+                if (paramList.Any(p => p.MaxArgumentCount == int.MaxValue))
+                    return int.MaxValue;
+                return paramList.Sum(p => p.MaxArgumentCount);
+            });
         }
     }
 
     /// <summary>
-    /// Whether this function can accept a variable number of arguments
+    /// Whether this function can accept a variable number of arguments (in any overload)
     /// </summary>
-    public bool HasVarArgs => Parameters.Any(p => p is VariableParameter);
+    public bool HasVarArgs => ParameterOverloads.Any(paramList => paramList.Any(p => p is VariableParameter));
 
     /// <summary>
-    /// Whether this function has optional parameters
+    /// Whether this function has optional parameters (in any overload)
     /// </summary>
-    public bool HasOptionalParameters => Parameters.Any(p => p.IsOptional);
+    public bool HasOptionalParameters => ParameterOverloads.Any(paramList => paramList.Any(p => p.IsOptional));
 
     /// <summary>
     /// Whether this function has a polymorphic return type that requires context resolution
@@ -215,17 +242,35 @@ public class FunctionInfo
     }
 
     /// <summary>
-    /// Get a string representation of the function signature
+    /// Get a string representation of the function signature.
+    /// For functions with multiple overloads, returns all signatures separated by newlines.
     /// </summary>
     public string GetSignature()
     {
-        var parameterStrings = Parameters.Select(p => p.ToString());
-        var parametersStr = string.Join(", ", parameterStrings);
-
         var returnTypeStr = GetReturnTypeString();
-
         var prefix = IsDefaultMethod ? "*default* " : "";
-        return $"{prefix}{Name}({parametersStr}) -> {returnTypeStr}";
+
+        if (!HasMultipleSignatures)
+        {
+            // Single signature
+            var parameterStrings = Parameters.Select(p => p.ToString());
+            var parametersStr = string.Join(", ", parameterStrings);
+            return $"{prefix}{Name}({parametersStr}) -> {returnTypeStr}";
+        }
+        else
+        {
+            // Multiple signatures - show all
+            var signatures = new List<string>();
+
+            foreach (var paramList in ParameterOverloads)
+            {
+                var parameterStrings = paramList.Select(p => p.ToString());
+                var parametersStr = string.Join(", ", parameterStrings);
+                signatures.Add($"{prefix}{Name}({parametersStr}) -> {returnTypeStr}");
+            }
+
+            return string.Join("\n", signatures);
+        }
     }
 
     /// <summary>

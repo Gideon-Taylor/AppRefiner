@@ -123,8 +123,16 @@ public class BuiltinObjectReaderStrategy : VariableSizeReaderStrategy<BuiltinObj
             function.ReturnType = new TypeWithDimensionality(returnType, returnArrayDim, null, retIsRef);
         }
 
-        // Read parameters
-        function.Parameters = ReadParameters(reader, nameTable);
+        // Read number of parameter overload variants
+        byte overloadCount = reader.ReadByte();
+        function.ParameterOverloads = new List<List<Parameter>>();
+
+        // Read each parameter list variant
+        for (int i = 0; i < overloadCount; i++)
+        {
+            var paramList = ReadParameters(reader, nameTable);
+            function.ParameterOverloads.Add(paramList);
+        }
 
         return function;
     }

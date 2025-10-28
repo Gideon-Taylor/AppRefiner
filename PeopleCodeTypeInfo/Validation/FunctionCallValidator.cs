@@ -64,10 +64,66 @@ public class FunctionCallValidator
 
     /// <summary>
     /// Entry point for validating a concrete <see cref="FunctionInfo"/> using the direct (non-graph) strategy.
+    /// For functions with multiple overloads, tries each parameter list in order until one validates.
+    /// If all overloads fail, aggregates expected types from all overloads at the failure position.
     /// </summary>
     public ValidationResult Validate(FunctionInfo functionInfo, ArgumentInfo[] arguments)
     {
-        return Validate(functionInfo.Parameters, arguments, functionInfo.Name);
+        ValidationResult? bestResult = null;
+        var allExpectedTypesByPosition = new Dictionary<int, HashSet<ParameterTypeInfo>>();
+        int bestFailureIndex = -1;
+
+        // Try each parameter list overload
+        foreach (var paramList in functionInfo.ParameterOverloads)
+        {
+            var result = Validate(paramList, arguments, functionInfo.Name);
+
+            if (result.IsValid)
+            {
+                return result; // Found a matching overload
+            }
+
+            // Track the best failure:
+            // - Prefer TypeMismatch over Missing/TooMany (more specific)
+            // - Among same kind, prefer the one that got furthest
+            bool isBetterFailure = bestResult == null ||
+                (result.FailureKind == FailureKind.TypeMismatch && bestResult.FailureKind != FailureKind.TypeMismatch) ||
+                (result.FailureKind == bestResult.FailureKind && result.FailedAtArgumentIndex > bestFailureIndex);
+
+            if (isBetterFailure)
+            {
+                bestResult = result;
+                bestFailureIndex = result.FailedAtArgumentIndex;
+            }
+
+            // Collect expected types from this overload, grouped by failure position
+            int failPos = result.FailedAtArgumentIndex;
+            if (!allExpectedTypesByPosition.ContainsKey(failPos))
+            {
+                allExpectedTypesByPosition[failPos] = new HashSet<ParameterTypeInfo>();
+            }
+
+            foreach (var expectedType in result.ExpectedTypesAtFailure)
+            {
+                allExpectedTypesByPosition[failPos].Add(expectedType);
+            }
+        }
+
+        // All overloads failed - return aggregated error with combined expected types at best position
+        if (bestResult != null && allExpectedTypesByPosition.ContainsKey(bestFailureIndex))
+        {
+            return ValidationResult.Failure(
+                bestFailureIndex,
+                allExpectedTypesByPosition[bestFailureIndex].ToList(),
+                new List<string> { $"No matching overload found for {functionInfo.Name}" },
+                bestResult.FoundTypeAtFailure,
+                bestResult.FailureKind,
+                functionInfo.Name
+            );
+        }
+
+        return ValidationResult.Failure(0, new List<ParameterTypeInfo>(),
+            new List<string> { "No matching overload found" }, "", FailureKind.TypeMismatch, functionInfo.Name);
     }
 
     /// <summary>
@@ -122,10 +178,26 @@ public class FunctionCallValidator
     /// - If the existing argument prefix is a valid prefix of the signature (including incomplete/missing args),
     ///   returns the allowed next token types at the next position with their parameter names.
     /// - If the existing arguments contain an invalid type mismatch, returns an empty list.
+    /// - For overloaded functions, combines allowed next types from all overloads that accept the prefix.
     /// </summary>
     public List<ParameterTypeInfo> GetAllowedNextTypes(FunctionInfo functionInfo, ArgumentInfo[] arguments)
     {
-        return GetAllowedNextTypes(functionInfo.Parameters, arguments);
+        var allAllowedTypes = new List<ParameterTypeInfo>();
+
+        // Try each parameter list overload and collect allowed next types
+        foreach (var paramList in functionInfo.ParameterOverloads)
+        {
+            var allowedTypes = GetAllowedNextTypes(paramList, arguments);
+            foreach (var type in allowedTypes)
+            {
+                if (!allAllowedTypes.Contains(type))
+                {
+                    allAllowedTypes.Add(type);
+                }
+            }
+        }
+
+        return allAllowedTypes;
     }
 
     /// <summary>
@@ -318,8 +390,9 @@ public class FunctionCallValidator
                     {
                         if (arg.Type is ReferenceTypeInfo refType)
                         {
-                            // Match if: parameter accepts Any, OR categories match, OR argument is @ANY (unknown reference)
-                            if (t.Type == PeopleCodeType.Any || refType.ReferenceCategory == t.Type || refType.ReferenceCategory == PeopleCodeType.Any)
+                            // Use IsAssignableFrom to support interchangeability (e.g., @RECORD/@SCROLL, @PAGE/@PANEL)
+                            var expectedRefType = new ReferenceTypeInfo(t.Type, "", "");
+                            if (expectedRefType.IsAssignableFrom(refType))
                             {
                                 consumed = 1;
                                 return PrefixMatchResult.Completed;
@@ -865,8 +938,9 @@ public class FunctionCallValidator
             {
                 if (arg.Type is ReferenceTypeInfo refType)
                 {
-                    // Check if reference category matches (or if ANY is allowed)
-                    if (t.Type == PeopleCodeType.Any || refType.ReferenceCategory == t.Type || refType.ReferenceCategory == PeopleCodeType.Any)
+                    // Use IsAssignableFrom to support interchangeability (e.g., @RECORD/@SCROLL, @PAGE/@PANEL)
+                    var expectedRefType = new ReferenceTypeInfo(t.Type, "", "");
+                    if (expectedRefType.IsAssignableFrom(refType))
                     {
                         consumed = 1;
                         return true;
@@ -986,29 +1060,17 @@ public class FunctionCallValidator
             return false;
         }
 
-        // Check category match
-
-        /* If the actual type is an @ANY, this means @() was used in the code. we cannot know it statically
-         * so just say its OK 
-         
-         if the argument accepts any ref type, then we just say its OK
-         */
-        if (refType.ReferenceCategory == PeopleCodeType.Any || reference.ReferenceCategory == PeopleCodeType.Any)
+        // Check category match using IsAssignableFrom to support interchangeability
+        // (e.g., @RECORD/@SCROLL, @PAGE/@PANEL)
+        var expectedRefType = new ReferenceTypeInfo(reference.ReferenceCategory, "", "");
+        if (expectedRefType.IsAssignableFrom(refType))
         {
             consumed = 1;
             return true;
         }
 
-        if (reference.ReferenceCategory != PeopleCodeType.Any &&
-            refType.ReferenceCategory != reference.ReferenceCategory)
-        {
-
-            ctx.RecordTypeMismatch(argIndex, reference);
-            return false;
-        }
-
-        consumed = 1;
-        return true;
+        ctx.RecordTypeMismatch(argIndex, reference);
+        return false;
     }
 
     /// <summary>
@@ -1103,7 +1165,9 @@ public class FunctionCallValidator
                         {
                             if (arg is ReferenceTypeInfo refType)
                             {
-                                if (t.Type == PeopleCodeType.Any || refType.ReferenceCategory == t.Type)
+                                // Use IsAssignableFrom to support interchangeability (e.g., @RECORD/@SCROLL, @PAGE/@PANEL)
+                                var expectedRefType = new ReferenceTypeInfo(t.Type, "", "");
+                                if (expectedRefType.IsAssignableFrom(refType))
                                     return true;
                             }
                             continue;
@@ -1137,10 +1201,9 @@ public class FunctionCallValidator
                     if (arg is not ReferenceTypeInfo refType)
                         return false;
 
-                    if (reference.ReferenceCategory == PeopleCodeType.Any)
-                        return true;
-
-                    return refType.ReferenceCategory == reference.ReferenceCategory;
+                    // Use IsAssignableFrom to support interchangeability (e.g., @RECORD/@SCROLL, @PAGE/@PANEL)
+                    var expectedRefType = new ReferenceTypeInfo(reference.ReferenceCategory, "", "");
+                    return expectedRefType.IsAssignableFrom(refType);
                 }
             default:
                 return false;

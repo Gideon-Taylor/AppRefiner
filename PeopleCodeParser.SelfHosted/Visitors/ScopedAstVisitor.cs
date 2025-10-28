@@ -40,6 +40,12 @@ public abstract class ScopedAstVisitor<T> : AstVisitorBase
     /// </summary>
     private bool isInAssignmentContext = false;
 
+    /// <summary>
+    /// Reference to the program node being analyzed
+    /// Used to determine if auto-declaration is allowed (non-class programs)
+    /// </summary>
+    private ProgramNode? _program;
+
     #endregion
 
     #region Public Properties
@@ -245,6 +251,45 @@ public abstract class ScopedAstVisitor<T> : AstVisitorBase
     protected void AddVariableReference(string variableName, SourceSpan location, ReferenceType referenceType, string? context = null)
     {
         var current = GetCurrentScope(); // Will throw if no current scope
+
+        // Check if variable exists in the current scope or any parent scope
+        var variable = FindVariable(variableName);
+
+        // ONLY auto-declare variables (starting with &), not plain identifiers
+        // Plain identifiers like DEPOSIT_CONTROL are field references, not variables
+        if (variable == null &&
+            variableName.StartsWith("&") &&
+            _program != null &&
+            !_program.IsClassProgram)
+        {
+            // Get the global scope for auto-declaration
+            var globalScope = variableRegistry.GetGlobalScope();
+            if (globalScope != null)
+            {
+                // Create a synthetic token for the auto-declared variable
+                var syntheticToken = new Token(TokenType.UserVariable, variableName, location);
+                var nameInfo = new VariableNameInfo(variableName, syntheticToken);
+
+                // Create a synthetic AST node to serve as the declaring node
+                // We use the first reference location as the pseudo-declaration location
+                var syntheticNode = new IdentifierNode(variableName, IdentifierType.UserVariable);
+
+                // Auto-register the variable at global scope with type "any"
+                var autoVariable = new VariableInfo(
+                    nameInfo,
+                    "any",
+                    VariableKind.Local,
+                    globalScope,
+                    syntheticNode,
+                    isAutoDeclared: true);
+
+                variableRegistry.RegisterVariable(autoVariable);
+
+                // Call event handler for auto-declared variable
+                OnVariableDeclared(autoVariable);
+            }
+        }
+
         var reference = new VariableReference(variableName, referenceType, location, current, context: context);
         variableRegistry.AddVariableReference(variableName, current, reference);
 
@@ -332,6 +377,9 @@ public abstract class ScopedAstVisitor<T> : AstVisitorBase
     /// </summary>
     public override void VisitProgram(ProgramNode node)
     {
+        // Store program reference for auto-declaration checks
+        _program = node;
+
         // Initialize global scope
         EnterScope(EnhancedScopeType.Global, "Global", node);
 
@@ -712,6 +760,7 @@ public abstract class ScopedAstVisitor<T> : AstVisitorBase
         variableRegistry.Clear();
         currentScope = null;
         isInAssignmentContext = false;
+        _program = null;
 
         OnReset();
     }

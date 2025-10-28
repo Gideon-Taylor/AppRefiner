@@ -5,6 +5,7 @@ using PeopleCodeParser.SelfHosted.Visitors;
 using PeopleCodeTypeInfo.Contracts;
 using PeopleCodeTypeInfo.Inference;
 using PeopleCodeTypeInfo.Types;
+using PeopleCodeTypeInfo.Validation;
 
 namespace PeopleCodeTypeInfo.Tests;
 
@@ -606,6 +607,116 @@ end-method;
 
         // Should be Rowset type (normal method resolution)
         Assert.Equal(PeopleCodeType.Rowset, inferredType.PeopleCodeType);
+    }
+
+    [Fact]
+    public void TypeInferenceVisitor_AutoDeclaredVariables_TypeCheckerShowsCorrectType()
+    {
+        // Test that undeclared variables in non-class programs show as "&any" in type errors (not "&unknown")
+        var source = @"RowScrollSelectNew(2, Record.ASSET_MAINT_SCH, &MAINT_S_LOOP, Record.ASSET_MAINT, Record.ASSET_MAINT, ""where business_unit  = :1 and asset_id = :2 AND MAINT_DTTM = %DateTimeIn(:3) "", &CUR_BUS_UNIT, &CUR_ASSET_ID, &MAINT_S_DTTM)";
+
+        var lexer = new PeopleCodeLexer(source);
+        var tokens = lexer.TokenizeAll();
+        var parser = new PeopleCodeParser.SelfHosted.PeopleCodeParser(tokens);
+        var program = parser.ParseProgram();
+
+        Assert.Empty(parser.Errors);
+
+        // This is a non-class program (no class definition)
+        Assert.False(program.IsClassProgram);
+
+        // Extract metadata
+        var metadata = TypeMetadataBuilder.ExtractMetadata(program, "TestFieldFormula");
+        var cache = new TypeCache();
+
+        // Run type inference
+        var inferenceVisitor = TypeInferenceVisitor.Run(program, metadata, NullTypeMetadataResolver.Instance, cache);
+
+        // Run type checker (which calls FunctionCallValidator)
+        var typeChecker = TypeCheckerVisitor.Run(program, NullTypeMetadataResolver.Instance, cache);
+
+        // Collect all type errors
+        var typeErrors = program.GetAllTypeErrors().ToList();
+
+        // Print diagnostic information
+        Console.WriteLine($"\nTotal type errors: {typeErrors.Count}");
+        foreach (var error in typeErrors)
+        {
+            Console.WriteLine($"  {error.Message}");
+        }
+
+        // If there are validation errors, they should mention "&any", NOT "&unknown"
+        foreach (var error in typeErrors)
+        {
+            Assert.DoesNotContain("&unknown", error.Message, StringComparison.OrdinalIgnoreCase);
+        }
+
+        // The variables should all have been inferred as "any"
+        var curBusUnit = FindIdentifierByNameInProgram(program, "&CUR_BUS_UNIT");
+        var curAssetId = FindIdentifierByNameInProgram(program, "&CUR_ASSET_ID");
+        var maintSDttm = FindIdentifierByNameInProgram(program, "&MAINT_S_DTTM");
+
+        Assert.NotNull(curBusUnit);
+        Assert.NotNull(curAssetId);
+        Assert.NotNull(maintSDttm);
+
+        var curBusUnitType = inferenceVisitor.GetInferredType(curBusUnit);
+        var curAssetIdType = inferenceVisitor.GetInferredType(curAssetId);
+        var maintSDttmType = inferenceVisitor.GetInferredType(maintSDttm);
+
+        // Diagnostic output
+        Console.WriteLine($"\n&CUR_BUS_UNIT type: {curBusUnitType?.GetType().Name} - {curBusUnitType?.Name}");
+        Console.WriteLine($"&CUR_ASSET_ID type: {curAssetIdType?.GetType().Name} - {curAssetIdType?.Name}");
+        Console.WriteLine($"&MAINT_S_DTTM type: {maintSDttmType?.GetType().Name} - {maintSDttmType?.Name}");
+
+        Assert.NotNull(curBusUnitType);
+        Assert.NotNull(curAssetIdType);
+        Assert.NotNull(maintSDttmType);
+
+        Assert.IsType<AnyTypeInfo>(curBusUnitType);
+        Assert.IsType<AnyTypeInfo>(curAssetIdType);
+        Assert.IsType<AnyTypeInfo>(maintSDttmType);
+    }
+
+    [Fact]
+    public void TypeInferenceVisitor_PlainIdentifiers_NotAutoDeclared()
+    {
+        // Test that plain identifiers (without &) are NOT auto-declared as variables
+        // They should be treated as field references instead
+        var source = @"DEPOSIT_CONTROL.DEPOSIT_BU";
+
+        var lexer = new PeopleCodeLexer(source);
+        var tokens = lexer.TokenizeAll();
+        var parser = new PeopleCodeParser.SelfHosted.PeopleCodeParser(tokens);
+        var program = parser.ParseProgram();
+
+        Assert.Empty(parser.Errors);
+
+        // Extract metadata
+        var metadata = TypeMetadataBuilder.ExtractMetadata(program, "TestFieldFormula");
+        var cache = new TypeCache();
+
+        // Run type inference
+        var visitor = TypeInferenceVisitor.Run(program, metadata, NullTypeMetadataResolver.Instance, cache);
+
+        // Verify DEPOSIT_CONTROL was NOT auto-declared as a variable
+        var allVariables = visitor.GetAllVariables().ToList();
+        var depositControlVar = allVariables.FirstOrDefault(v => v.Name.Equals("DEPOSIT_CONTROL", StringComparison.OrdinalIgnoreCase));
+
+        Assert.Null(depositControlVar); // Should NOT be in variable registry
+
+        // Find the identifier and check its type
+        var depositControlIdent = FindIdentifierByNameInProgram(program, "DEPOSIT_CONTROL");
+        Assert.NotNull(depositControlIdent);
+
+        var identType = visitor.GetInferredType(depositControlIdent);
+        Console.WriteLine($"DEPOSIT_CONTROL type: {identType?.GetType().Name} - {identType?.Name}");
+
+        // Should be FieldTypeInfo (field reference with empty record name)
+        Assert.IsType<FieldTypeInfo>(identType);
+        var fieldType = (FieldTypeInfo)identType;
+        Assert.Equal("", fieldType.RecordName); // Empty record name
+        Assert.Equal("DEPOSIT_CONTROL", fieldType.FieldName);
     }
 
     [Fact]
