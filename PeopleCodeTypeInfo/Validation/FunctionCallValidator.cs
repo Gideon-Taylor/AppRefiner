@@ -798,7 +798,48 @@ public class FunctionCallValidator
             return false;
         }
 
-        // Non-variable: attempt to match and advance, with backtracking handled by recursion on the rest
+        // Handle ParameterGroup with backtracking when it contains variable parameters
+        if (param is ParameterGroup group && ContainsVariableParameters(group))
+        {
+            // Try different consumption amounts from high to low
+            int minRequired = group.MinArgumentCount;
+            int remainingArgs = ctx.Arguments.Length - argIndex;
+            int maxPossible = remainingArgs;
+
+            for (int tryCount = maxPossible; tryCount >= minRequired; tryCount--)
+            {
+                // Create a limited context that restricts matching to tryCount arguments
+                var windowedArgs = ctx.Arguments.Take(argIndex).Concat(
+                    ctx.Arguments.Skip(argIndex).Take(tryCount)
+                ).ToArray();
+
+                var limitedCtx = new MatchContext(ctx.FunctionName, group.Parameters, windowedArgs);
+
+                // Try to match the group's internal sequence with the limited arguments
+                if (MatchSequence(limitedCtx, group.Parameters, 0, argIndex, out int groupEndIndex))
+                {
+                    int actualConsumed = groupEndIndex - argIndex;
+
+                    // Only accept if it consumed within our limit
+                    if (actualConsumed <= tryCount)
+                    {
+                        // Now try to match the remainder of the outer sequence
+                        if (MatchSequence(ctx, parameters, paramIdx + 1, argIndex + actualConsumed, out nextArgIndex))
+                        {
+                            return true;
+                        }
+                        // If remainder failed, continue loop to try fewer arguments for the group
+                    }
+                }
+            }
+
+            // All attempts failed
+            ctx.RecordExpectation(argIndex, param);
+            nextArgIndex = argIndex;
+            return false;
+        }
+
+        // Non-variable, non-group-with-variables: attempt to match and advance
         if (MatchParameter(ctx, param, argIndex, out int consumed))
         {
             if (MatchSequence(ctx, parameters, paramIdx + 1, argIndex + consumed, out nextArgIndex))
@@ -982,8 +1023,24 @@ public class FunctionCallValidator
     }
 
     /// <summary>
+    /// Checks if a parameter or parameter group contains any variable parameters.
+    /// This is used to determine if backtracking across group boundaries is needed.
+    /// </summary>
+    private bool ContainsVariableParameters(Parameter parameter)
+    {
+        return parameter switch
+        {
+            VariableParameter => true,
+            ParameterGroup group => group.Parameters.Any(ContainsVariableParameters),
+            _ => false
+        };
+    }
+
+    /// <summary>
     /// Matches a parameter group by consuming its children in order.
     /// Delegates to MatchSequence to enable backtracking for nested VariableParameters.
+    /// Note: Backtracking across group boundaries for groups containing variables
+    /// is handled by MatchSequence, not here.
     /// </summary>
     private bool MatchGroup(MatchContext ctx, ParameterGroup group, int argIndex, out int consumed)
     {

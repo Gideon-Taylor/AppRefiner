@@ -287,4 +287,187 @@ public class FunctionCallValidatorTests
             }
         };
     }
+
+    /// <summary>
+    /// Tests backtracking for FetchValue signature where scrollpath is a required ParameterGroup
+    /// containing a variable parameter.
+    ///
+    /// Signature: FetchValue(scrollpath: ((recname: @Record|field, row_num: number){0-2}, target_rec_or_field: @Record|field), target_row: number, fieldname: field|string?) -> any
+    ///
+    /// Test case: @RECORD, number, field
+    /// Expected: Valid - the {0-2} should match 0 times, target_rec_or_field should consume @RECORD,
+    ///           target_row should consume number, fieldname should consume field
+    /// </summary>
+    [Fact]
+    public void ValidateFetchValue_WithZeroScrollpathRepetitions_ShouldSucceed()
+    {
+        var functionInfo = BuildFetchValueSignature();
+
+        var argumentTypes = new TypeInfo[]
+        {
+            new ReferenceTypeInfo(PeopleCodeType.Record, "test", "test"),
+            TypeInfo.FromPeopleCodeType(PeopleCodeType.Number),
+            TypeInfo.FromPeopleCodeType(PeopleCodeType.Field)
+        };
+
+        var arguments = argumentTypes.Select(t => ArgumentInfo.NonVariable(t)).ToArray();
+        var validator = new FunctionCallValidator(NullTypeMetadataResolver.Instance);
+        var result = validator.Validate(functionInfo, arguments);
+
+        Assert.True(result.IsValid, $"Validation failed: {result.GetDetailedError()}");
+    }
+
+    /// <summary>
+    /// Tests FetchValue with 1 repetition of the scrollpath inner group
+    /// Test case: @RECORD, number, @RECORD, number, field
+    /// </summary>
+    [Fact]
+    public void ValidateFetchValue_WithOneScrollpathRepetition_ShouldSucceed()
+    {
+        var functionInfo = BuildFetchValueSignature();
+
+        var argumentTypes = new TypeInfo[]
+        {
+            new ReferenceTypeInfo(PeopleCodeType.Record, "test", "test"),
+            TypeInfo.FromPeopleCodeType(PeopleCodeType.Number),
+            new ReferenceTypeInfo(PeopleCodeType.Record, "test", "test"),
+            TypeInfo.FromPeopleCodeType(PeopleCodeType.Number),
+            TypeInfo.FromPeopleCodeType(PeopleCodeType.Field)
+        };
+
+        var arguments = argumentTypes.Select(t => ArgumentInfo.NonVariable(t)).ToArray();
+        var validator = new FunctionCallValidator(NullTypeMetadataResolver.Instance);
+        var result = validator.Validate(functionInfo, arguments);
+
+        Assert.True(result.IsValid, $"Validation failed: {result.GetDetailedError()}");
+    }
+
+    /// <summary>
+    /// Tests FetchValue with 2 repetitions of the scrollpath inner group
+    /// Test case: @RECORD, number, @RECORD, number, @RECORD, number, field
+    /// </summary>
+    [Fact]
+    public void ValidateFetchValue_WithTwoScrollpathRepetitions_ShouldSucceed()
+    {
+        var functionInfo = BuildFetchValueSignature();
+
+        var argumentTypes = new TypeInfo[]
+        {
+            new ReferenceTypeInfo(PeopleCodeType.Record, "test", "test"),
+            TypeInfo.FromPeopleCodeType(PeopleCodeType.Number),
+            new ReferenceTypeInfo(PeopleCodeType.Record, "test", "test"),
+            TypeInfo.FromPeopleCodeType(PeopleCodeType.Number),
+            new ReferenceTypeInfo(PeopleCodeType.Record, "test", "test"),
+            TypeInfo.FromPeopleCodeType(PeopleCodeType.Number),
+            TypeInfo.FromPeopleCodeType(PeopleCodeType.Field)
+        };
+
+        var arguments = argumentTypes.Select(t => ArgumentInfo.NonVariable(t)).ToArray();
+        var validator = new FunctionCallValidator(NullTypeMetadataResolver.Instance);
+        var result = validator.Validate(functionInfo, arguments);
+
+        Assert.True(result.IsValid, $"Validation failed: {result.GetDetailedError()}");
+    }
+
+    /// <summary>
+    /// Tests FetchValue with field type for recname (testing the union @Record|field)
+    /// Test case: field, number, @RECORD, number, field
+    /// </summary>
+    [Fact]
+    public void ValidateFetchValue_WithFieldInScrollpath_ShouldSucceed()
+    {
+        var functionInfo = BuildFetchValueSignature();
+
+        var argumentTypes = new TypeInfo[]
+        {
+            TypeInfo.FromPeopleCodeType(PeopleCodeType.Field),  // recname can be field
+            TypeInfo.FromPeopleCodeType(PeopleCodeType.Number),
+            new ReferenceTypeInfo(PeopleCodeType.Record, "test", "test"),
+            TypeInfo.FromPeopleCodeType(PeopleCodeType.Number),
+            TypeInfo.FromPeopleCodeType(PeopleCodeType.Field)
+        };
+
+        var arguments = argumentTypes.Select(t => ArgumentInfo.NonVariable(t)).ToArray();
+        var validator = new FunctionCallValidator(NullTypeMetadataResolver.Instance);
+        var result = validator.Validate(functionInfo, arguments);
+
+        Assert.True(result.IsValid, $"Validation failed: {result.GetDetailedError()}");
+    }
+
+    private static FunctionInfo BuildFetchValueSignature()
+    {
+        return new FunctionInfo
+        {
+            Name = "FetchValue",
+            ReturnType = new TypeWithDimensionality(PeopleCodeType.Any),
+            Parameters = new List<Parameter>
+            {
+                // scrollpath is a REQUIRED ParameterGroup (not wrapped in VariableParameter like GetPageField)
+                new ParameterGroup
+                {
+                    Name = "scrollpath",
+                    Parameters = new List<Parameter>
+                    {
+                        // Variable parameter: (recname: @Record|field, row_num: number){0-2}
+                        new VariableParameter
+                        {
+                            MinCount = 0,
+                            MaxCount = 2,
+                            InnerParameter = new ParameterGroup
+                            {
+                                Parameters = new List<Parameter>
+                                {
+                                    new UnionParameter
+                                    {
+                                        Name = "recname",
+                                        AllowedTypes = new List<TypeWithDimensionality>
+                                        {
+                                            new TypeWithDimensionality(PeopleCodeType.Record, isReference: true),
+                                            TypeWithDimensionality.CreateBuiltIn(PeopleCodeType.Field)
+                                        }
+                                    },
+                                    new SingleParameter
+                                    {
+                                        Name = "row_num",
+                                        ParameterType = new TypeWithDimensionality(PeopleCodeType.Number)
+                                    }
+                                }
+                            }
+                        },
+                        // target_rec_or_field: @Record|field (required within the group)
+                        new UnionParameter
+                        {
+                            Name = "target_rec_or_field",
+                            AllowedTypes = new List<TypeWithDimensionality>
+                            {
+                                new TypeWithDimensionality(PeopleCodeType.Record, isReference: true),
+                                TypeWithDimensionality.CreateBuiltIn(PeopleCodeType.Field)
+                            }
+                        }
+                    }
+                },
+                // target_row: number (REQUIRED - not optional)
+                new SingleParameter
+                {
+                    Name = "target_row",
+                    ParameterType = new TypeWithDimensionality(PeopleCodeType.Number)
+                },
+                // fieldname: field|string? (OPTIONAL)
+                new VariableParameter
+                {
+                    Name = "fieldname",
+                    MinCount = 0,
+                    MaxCount = 1,
+                    InnerParameter = new UnionParameter
+                    {
+                        AllowedTypes = new List<TypeWithDimensionality>
+                        {
+                            TypeWithDimensionality.CreateBuiltIn(PeopleCodeType.Field),
+                            TypeWithDimensionality.CreateBuiltIn(PeopleCodeType.String)
+                        }
+                    }
+                }
+            }
+        };
+    }
 }

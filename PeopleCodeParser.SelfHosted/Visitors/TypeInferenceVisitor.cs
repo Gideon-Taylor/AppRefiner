@@ -942,6 +942,18 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
         }
     }
 
+    /// <summary>
+    /// Visit type cast (AS) expression and infer the target type
+    /// </summary>
+    public override void VisitTypeCast(TypeCastNode node)
+    {
+        base.VisitTypeCast(node);
+
+        // The result type of a cast is always the target type
+        var targetType = ConvertTypeNodeToTypeInfo(node.TargetType);
+        SetInferredType(node, targetType);
+    }
+
     #endregion
 
     #region Operation Validation Helpers
