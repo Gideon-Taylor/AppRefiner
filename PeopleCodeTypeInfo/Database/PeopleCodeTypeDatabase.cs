@@ -9,17 +9,11 @@ namespace PeopleCodeTypeInfo.Database;
 /// <summary>
 /// Static database providing type information for builtin PeopleCode objects, methods, and properties.
 /// Loads data from embedded typeinfo.dat resource using lazy initialization.
-/// Thread-safe with LRU caching for performance.
+/// Thread-safe with generational cache eviction for performance.
 /// </summary>
 public static class PeopleCodeTypeDatabase
 {
     private static readonly Lazy<DatabaseState> _state = new(() => Initialize());
-
-    /// <summary>
-    /// Maximum number of items to cache (default: 256).
-    /// Must be set before first access to take effect.
-    /// </summary>
-    public static int MaxCacheSize { get; set; } = 256;
 
     private static DatabaseState Initialize()
     {
@@ -31,7 +25,7 @@ public static class PeopleCodeTypeDatabase
         try
         {
             var reader = BuiltinObjectReaderStrategyExtensions.LoadBuiltinObjectHashFile(tempPath);
-            var state = new DatabaseState(reader, MaxCacheSize);
+            var state = new DatabaseState(reader);
 
             // Verify the binary format (basic smoke test)
             VerifyBinaryFormat(state);
@@ -190,40 +184,98 @@ public static class PeopleCodeTypeDatabase
     /// </summary>
     private class DatabaseState
     {
-        private readonly HashTableReader<BuiltinObjectInfo> _reader;
-        private readonly ConcurrentDictionary<string, BuiltinObjectInfo> _objectCache;
-        private readonly ConcurrentDictionary<string, object> _namedItemCache;
-        private readonly ConcurrentQueue<string> _objectLruQueue;
-        private readonly ConcurrentQueue<string> _namedItemLruQueue;
-        private readonly int _maxCacheSize;
+        /// <summary>
+        /// Wrapper for cache entries that tracks last access generation
+        /// </summary>
+        private class CacheEntry<T>
+        {
+            public T Value { get; }
+            public long LastAccessGeneration { get; set; }
 
-        public DatabaseState(HashTableReader<BuiltinObjectInfo> reader, int maxCacheSize)
+            public CacheEntry(T value, long generation)
+            {
+                Value = value;
+                LastAccessGeneration = generation;
+            }
+        }
+
+        private readonly HashTableReader<BuiltinObjectInfo> _reader;
+        private readonly ConcurrentDictionary<string, CacheEntry<BuiltinObjectInfo>> _objectCache;
+        private readonly ConcurrentDictionary<string, CacheEntry<object>> _namedItemCache;
+        private long _currentGeneration;
+        private readonly int _generationsBeforeCleanup;
+        private readonly int _generationEvictionThreshold;
+        private readonly ReaderWriterLockSlim _evictionLock = new();
+
+        public DatabaseState(HashTableReader<BuiltinObjectInfo> reader)
         {
             _reader = reader;
-            _maxCacheSize = maxCacheSize;
-            _objectCache = new ConcurrentDictionary<string, BuiltinObjectInfo>();
-            _objectLruQueue = new ConcurrentQueue<string>();
-            _namedItemCache = new ConcurrentDictionary<string, object>();
-            _namedItemLruQueue = new ConcurrentQueue<string>();
+            // Use aggressive defaults: cleanup every 5000 operations, evict after 2500
+            _generationsBeforeCleanup = 5000;
+            _generationEvictionThreshold = 2500;
+            _objectCache = new ConcurrentDictionary<string, CacheEntry<BuiltinObjectInfo>>();
+            _namedItemCache = new ConcurrentDictionary<string, CacheEntry<object>>();
         }
 
         public BuiltinObjectInfo? GetObject(string name)
         {
-            var cacheKey = name.ToLowerInvariant();
-            if (_maxCacheSize > 0 && _objectCache.TryGetValue(cacheKey, out var cachedObj))
-            {
-                _objectLruQueue.Enqueue(cacheKey);
-                return cachedObj;
-            }
+            // Increment generation counter
+            var generation = Interlocked.Increment(ref _currentGeneration);
 
-            var obj = BuiltinObjectReaderStrategyExtensions.LookupObject(_reader, name);
-            if (obj != null && _maxCacheSize > 0)
+            var cacheKey = name.ToLowerInvariant();
+
+            // Acquire read lock to prevent eviction during access
+            _evictionLock.EnterReadLock();
+            try
             {
-                EvictIfNeeded(_objectCache, _objectLruQueue);
-                _objectCache[cacheKey] = obj;
-                _objectLruQueue.Enqueue(cacheKey);
+                // Check cache
+                if (_objectCache.TryGetValue(cacheKey, out var cachedEntry))
+                {
+                    // Update last access generation
+                    cachedEntry.LastAccessGeneration = generation;
+
+                    // Check if we need to trigger eviction
+                    if (generation % _generationsBeforeCleanup == 0)
+                    {
+                        _evictionLock.ExitReadLock();
+                        EvictStaleEntries();
+                        return cachedEntry.Value;
+                    }
+
+                    return cachedEntry.Value;
+                }
+
+                // Check eviction even on cache miss
+                if (generation % _generationsBeforeCleanup == 0)
+                {
+                    _evictionLock.ExitReadLock();
+                    EvictStaleEntries();
+                    // Don't reacquire lock, we're about to do a read operation
+                }
+                else
+                {
+                    _evictionLock.ExitReadLock();
+                }
+
+                // Lookup from reader (outside of lock)
+                var obj = BuiltinObjectReaderStrategyExtensions.LookupObject(_reader, name);
+
+                // Cache the result
+                if (obj != null)
+                {
+                    var entry = new CacheEntry<BuiltinObjectInfo>(obj, generation);
+                    _objectCache[cacheKey] = entry;
+                }
+
+                return obj;
             }
-            return obj;
+            finally
+            {
+                if (_evictionLock.IsReadLockHeld)
+                {
+                    _evictionLock.ExitReadLock();
+                }
+            }
         }
 
         public FunctionInfo? GetMethod(string objectName, string methodName)
@@ -231,28 +283,63 @@ public static class PeopleCodeTypeDatabase
             var obj = GetObject(objectName) as IObjectInfo;
             if (obj == null) return null;
 
+            // Increment generation counter for method lookup
+            var generation = Interlocked.Increment(ref _currentGeneration);
+
             var methodHash = HashUtilities.FNV1a32Hash(methodName);
             var cacheKey = $"{objectName.ToLowerInvariant()}:{methodHash}";
 
-            if (_maxCacheSize > 0 && _namedItemCache.TryGetValue(cacheKey, out var cachedItem) && cachedItem is FunctionInfo cachedMethod)
+            // Acquire read lock to prevent eviction during access
+            _evictionLock.EnterReadLock();
+            try
             {
-                _namedItemLruQueue.Enqueue(cacheKey);
-                cachedMethod.Name = methodName;
-                return cachedMethod;
-            }
-
-            var method = obj.LookupMethodByHash(methodHash);
-            if (method != null)
-            {
-                method.Name = methodName;
-                if (_maxCacheSize > 0)
+                // Check cache
+                if (_namedItemCache.TryGetValue(cacheKey, out var cachedEntry) && cachedEntry.Value is FunctionInfo cachedMethod)
                 {
-                    EvictIfNeeded(_namedItemCache, _namedItemLruQueue);
-                    _namedItemCache[cacheKey] = method;
-                    _namedItemLruQueue.Enqueue(cacheKey);
+                    // Update last access generation
+                    cachedEntry.LastAccessGeneration = generation;
+                    cachedMethod.Name = methodName;
+
+                    // Check if we need to trigger eviction
+                    if (generation % _generationsBeforeCleanup == 0)
+                    {
+                        _evictionLock.ExitReadLock();
+                        EvictStaleEntries();
+                        return cachedMethod;
+                    }
+
+                    return cachedMethod;
+                }
+
+                // Check eviction even on cache miss
+                if (generation % _generationsBeforeCleanup == 0)
+                {
+                    _evictionLock.ExitReadLock();
+                    EvictStaleEntries();
+                }
+                else
+                {
+                    _evictionLock.ExitReadLock();
+                }
+
+                // Lookup from object (outside of lock)
+                var method = obj.LookupMethodByHash(methodHash);
+                if (method != null)
+                {
+                    method.Name = methodName;
+                    var entry = new CacheEntry<object>(method, generation);
+                    _namedItemCache[cacheKey] = entry;
+                }
+
+                return method;
+            }
+            finally
+            {
+                if (_evictionLock.IsReadLockHeld)
+                {
+                    _evictionLock.ExitReadLock();
                 }
             }
-            return method;
         }
 
         public IEnumerable<FunctionInfo> GetAllMethods(string objectName)
@@ -266,23 +353,61 @@ public static class PeopleCodeTypeDatabase
             var obj = GetObject(objectName) as IObjectInfo;
             if (obj == null) return null;
 
+            // Increment generation counter for property lookup
+            var generation = Interlocked.Increment(ref _currentGeneration);
+
             var propertyHash = HashUtilities.FNV1a32Hash(propertyName);
             var cacheKey = $"{objectName.ToLowerInvariant()}:{propertyHash}_prop";
 
-            if (_maxCacheSize > 0 && _namedItemCache.TryGetValue(cacheKey, out var cachedItem) && cachedItem is Functions.PropertyInfo cachedProp)
+            // Acquire read lock to prevent eviction during access
+            _evictionLock.EnterReadLock();
+            try
             {
-                _namedItemLruQueue.Enqueue(cacheKey);
-                return cachedProp;
-            }
+                // Check cache
+                if (_namedItemCache.TryGetValue(cacheKey, out var cachedEntry) && cachedEntry.Value is Functions.PropertyInfo cachedProp)
+                {
+                    // Update last access generation
+                    cachedEntry.LastAccessGeneration = generation;
 
-            var property = obj.LookupPropertyByHash(propertyHash);
-            if (property != null && _maxCacheSize > 0)
-            {
-                EvictIfNeeded(_namedItemCache, _namedItemLruQueue);
-                _namedItemCache[cacheKey] = property;
-                _namedItemLruQueue.Enqueue(cacheKey);
+                    // Check if we need to trigger eviction
+                    if (generation % _generationsBeforeCleanup == 0)
+                    {
+                        _evictionLock.ExitReadLock();
+                        EvictStaleEntries();
+                        return cachedProp;
+                    }
+
+                    return cachedProp;
+                }
+
+                // Check eviction even on cache miss
+                if (generation % _generationsBeforeCleanup == 0)
+                {
+                    _evictionLock.ExitReadLock();
+                    EvictStaleEntries();
+                }
+                else
+                {
+                    _evictionLock.ExitReadLock();
+                }
+
+                // Lookup from object (outside of lock)
+                var property = obj.LookupPropertyByHash(propertyHash);
+                if (property != null)
+                {
+                    var entry = new CacheEntry<object>(property, generation);
+                    _namedItemCache[cacheKey] = entry;
+                }
+
+                return property;
             }
-            return property;
+            finally
+            {
+                if (_evictionLock.IsReadLockHeld)
+                {
+                    _evictionLock.ExitReadLock();
+                }
+            }
         }
 
         public IEnumerable<Functions.PropertyInfo> GetAllProperties(string objectName)
@@ -291,25 +416,57 @@ public static class PeopleCodeTypeDatabase
             return obj?.GetAllProperties() ?? Enumerable.Empty<Functions.PropertyInfo>();
         }
 
-        private void EvictIfNeeded(ConcurrentDictionary<string, object> cache, ConcurrentQueue<string> lruQueue)
+        /// <summary>
+        /// Performs generational cache eviction by removing entries that haven't been accessed
+        /// within the eviction threshold. Resets all generations after cleanup.
+        /// </summary>
+        private void EvictStaleEntries()
         {
-            while (cache.Count > _maxCacheSize)
+            _evictionLock.EnterWriteLock();
+            try
             {
-                if (lruQueue.TryDequeue(out var key))
-                {
-                    cache.TryRemove(key, out _);
-                }
-            }
-        }
+                var currentGen = _currentGeneration;
+                var evictionThreshold = currentGen - _generationEvictionThreshold;
 
-        private void EvictIfNeeded(ConcurrentDictionary<string, BuiltinObjectInfo> cache, ConcurrentQueue<string> lruQueue)
-        {
-            while (cache.Count > _maxCacheSize)
-            {
-                if (lruQueue.TryDequeue(out var key))
+                // Evict stale entries from object cache
+                var objectKeysToRemove = _objectCache
+                    .Where(kvp => kvp.Value.LastAccessGeneration < evictionThreshold)
+                    .Select(kvp => kvp.Key)
+                    .ToList();
+
+                foreach (var key in objectKeysToRemove)
                 {
-                    cache.TryRemove(key, out _);
+                    _objectCache.TryRemove(key, out _);
                 }
+
+                // Evict stale entries from named item cache (methods/properties)
+                var namedItemKeysToRemove = _namedItemCache
+                    .Where(kvp => kvp.Value.LastAccessGeneration < evictionThreshold)
+                    .Select(kvp => kvp.Key)
+                    .ToList();
+
+                foreach (var key in namedItemKeysToRemove)
+                {
+                    _namedItemCache.TryRemove(key, out _);
+                }
+
+                // Reset generations for all remaining entries
+                foreach (var kvp in _objectCache)
+                {
+                    kvp.Value.LastAccessGeneration = 0;
+                }
+
+                foreach (var kvp in _namedItemCache)
+                {
+                    kvp.Value.LastAccessGeneration = 0;
+                }
+
+                // Reset generation counter
+                _currentGeneration = 0;
+            }
+            finally
+            {
+                _evictionLock.ExitWriteLock();
             }
         }
     }

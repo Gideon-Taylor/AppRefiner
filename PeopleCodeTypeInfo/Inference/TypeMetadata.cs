@@ -54,6 +54,13 @@ public class TypeMetadata
         new Dictionary<string, PropertyInfo>(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
+    /// Instance variables defined in this class (only applicable for app classes)
+    /// Key is the property name (case-insensitive)
+    /// </summary>
+    public IReadOnlyDictionary<string, PropertyInfo> InstanceVariables { get; init; } =
+        new Dictionary<string, PropertyInfo>(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
     /// Constructor declaration in this class (PeopleCode allows at most 1 explicit constructor)
     /// Null indicates an implicit/default constructor
     /// </summary>

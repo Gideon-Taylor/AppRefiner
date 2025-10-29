@@ -4,7 +4,6 @@ using PeopleCodeParser.SelfHosted.Lexing;
 using PeopleCodeParser.SelfHosted.Visitors;
 using PeopleCodeTypeInfo.Contracts;
 using PeopleCodeTypeInfo.Inference;
-using System.Collections.Concurrent;
 
 namespace AppRefiner.Database
 {
@@ -14,7 +13,7 @@ namespace AppRefiner.Database
     /// </summary>
     /// <remarks>
     /// This resolver:
-    /// - Caches parsed TypeMetadata for performance
+    /// - Uses generational cache eviction (provided by base class) for performance
     /// - Retrieves source code from the database via IDataManager
     /// - Parses source using PeopleCodeParser
     /// - Extracts metadata using TypeMetadataBuilder
@@ -23,20 +22,19 @@ namespace AppRefiner.Database
     public class DatabaseTypeMetadataResolver : ITypeMetadataResolver
     {
         private readonly IDataManager _dataManager;
-        private readonly ConcurrentDictionary<string, TypeMetadata> _cache;
 
         /// <summary>
         /// Creates a new DatabaseTypeMetadataResolver
         /// </summary>
         /// <param name="dataManager">The data manager to use for retrieving source code</param>
-        public DatabaseTypeMetadataResolver(IDataManager dataManager)
+        public DatabaseTypeMetadataResolver(IDataManager dataManager) : base()
         {
             _dataManager = dataManager ?? throw new ArgumentNullException(nameof(dataManager));
-            _cache = new ConcurrentDictionary<string, TypeMetadata>(StringComparer.OrdinalIgnoreCase);
         }
 
         /// <summary>
         /// Attempts to retrieve type metadata for a custom type.
+        /// Caching is handled by the base class.
         /// </summary>
         /// <param name="qualifiedName">
         /// The qualified name of the type:
@@ -46,17 +44,11 @@ namespace AppRefiner.Database
         /// <returns>
         /// TypeMetadata if the type is found and parsed, null otherwise.
         /// </returns>
-        public TypeMetadata? GetTypeMetadata(string qualifiedName)
+        protected override TypeMetadata? GetTypeMetadataCore(string qualifiedName)
         {
             if (string.IsNullOrWhiteSpace(qualifiedName))
             {
                 return null;
-            }
-
-            // Check cache first
-            if (_cache.TryGetValue(qualifiedName, out var cached))
-            {
-                return cached;
             }
 
             // Check if database is connected
@@ -75,17 +67,12 @@ namespace AppRefiner.Database
                 metadata = TryResolveAsFunctionLibrary(qualifiedName);
             }
 
-            // Cache the result if found
-            if (metadata != null)
-            {
-                _cache[qualifiedName] = metadata;
-            }
-
             return metadata;
         }
 
         /// <summary>
         /// Attempts to retrieve type metadata for a custom type asynchronously.
+        /// Caching is handled by the base class.
         /// </summary>
         /// <param name="qualifiedName">
         /// The qualified name of the type:
@@ -95,10 +82,10 @@ namespace AppRefiner.Database
         /// <returns>
         /// Task that resolves to TypeMetadata if the type is found, null otherwise.
         /// </returns>
-        public Task<TypeMetadata?> GetTypeMetadataAsync(string qualifiedName)
+        protected override Task<TypeMetadata?> GetTypeMetadataCoreAsync(string qualifiedName)
         {
             // Wrap synchronous call in a Task
-            return Task.FromResult(GetTypeMetadata(qualifiedName));
+            return Task.FromResult(GetTypeMetadataCore(qualifiedName));
         }
 
         /// <summary>
@@ -107,7 +94,7 @@ namespace AppRefiner.Database
         /// <param name="recordName">The record name (e.g., "AAP_YEAR")</param>
         /// <param name="fieldName">The field name (e.g., "START_DT")</param>
         /// <returns>TypeInfo representing the field's data type, or AnyTypeInfo if unknown</returns>
-        public PeopleCodeTypeInfo.Types.TypeInfo GetFieldType(string recordName, string fieldName)
+        protected override PeopleCodeTypeInfo.Types.TypeInfo GetFieldTypeCore(string recordName, string fieldName)
         {
             // Check if database is connected
             if (!_dataManager.IsConnected)
@@ -138,10 +125,10 @@ namespace AppRefiner.Database
         /// <param name="recordName">The record name (e.g., "AAP_YEAR")</param>
         /// <param name="fieldName">The field name (e.g., "START_DT")</param>
         /// <returns>Task that resolves to TypeInfo representing the field's data type, or AnyTypeInfo if unknown</returns>
-        public Task<PeopleCodeTypeInfo.Types.TypeInfo> GetFieldTypeAsync(string recordName, string fieldName)
+        protected override Task<PeopleCodeTypeInfo.Types.TypeInfo> GetFieldTypeCoreAsync(string recordName, string fieldName)
         {
             // Wrap synchronous call in a Task
-            return Task.FromResult(GetFieldType(recordName, fieldName));
+            return Task.FromResult(GetFieldTypeCore(recordName, fieldName));
         }
 
         /// <summary>
@@ -246,27 +233,5 @@ namespace AppRefiner.Database
                 return null;
             }
         }
-
-        /// <summary>
-        /// Invalidates the cache entry for a specific type
-        /// </summary>
-        /// <param name="qualifiedName">The qualified name of the type to invalidate</param>
-        public void InvalidateCache(string qualifiedName)
-        {
-            _cache.TryRemove(qualifiedName, out _);
-        }
-
-        /// <summary>
-        /// Clears the entire metadata cache
-        /// </summary>
-        public void ClearCache()
-        {
-            _cache.Clear();
-        }
-
-        /// <summary>
-        /// Gets the number of cached metadata entries
-        /// </summary>
-        public int CacheSize => _cache.Count;
     }
 }
