@@ -22,6 +22,7 @@ public class TypeMetadataBuilder : AstVisitorBase
 {
     private readonly Dictionary<string, FunctionInfo> _methods = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, PropertyInfo> _properties = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, PropertyInfo> _instanceVariables = new(StringComparer.OrdinalIgnoreCase);
     private FunctionInfo? _constructor;
     private string _qualifiedName = string.Empty;
     private string _name = string.Empty;
@@ -61,6 +62,7 @@ public class TypeMetadataBuilder : AstVisitorBase
             InterfaceName = builder._interfaceName,
             Methods = builder._methods,
             Properties = builder._properties,
+            InstanceVariables = builder._instanceVariables,
             Constructor = builder._constructor
         };
     }
@@ -151,6 +153,18 @@ public class TypeMetadataBuilder : AstVisitorBase
             var propertyInfo = BuildPropertyInfo(property);
             _properties[property.Name] = propertyInfo;
         }
+
+        foreach(var instanceVar in node.InstanceVariables)
+        {
+            var propertyInfo = BuildPropertyInfo(instanceVar);
+            _instanceVariables[instanceVar.Name] = propertyInfo;
+    }
+    }
+
+    private PropertyInfo BuildPropertyInfo(ProgramVariableNode instanceVar)
+    {
+        var typeWithDim = BuildTypeWithDimensionality(instanceVar.Type);
+        return PropertyInfo.FromTypeWithDimensionality(typeWithDim);
     }
 
     public override void VisitInterface(InterfaceNode node)
@@ -248,7 +262,7 @@ public class TypeMetadataBuilder : AstVisitorBase
         switch (typeNode)
         {
             case BuiltInTypeNode builtIn:
-                return new TypeWithDimensionality(MapBuiltInType(builtIn.TypeName), 0);
+                return new TypeWithDimensionality(BuiltinTypeExtensions.FromString(builtIn.TypeName), 0);
 
             case ArrayTypeNode array when array.ElementType != null:
                 var elementTypeWithDim = BuildTypeWithDimensionality(array.ElementType);
@@ -291,35 +305,5 @@ public class TypeMetadataBuilder : AstVisitorBase
             default:
                 return typeNode.ToString() ?? "Unknown";
         }
-    }
-
-    /// <summary>
-    /// Map PeopleCode type name string to PeopleCodeType enum.
-    /// </summary>
-    private PeopleCodeType MapBuiltInType(string typeName)
-    {
-        return typeName.ToLowerInvariant() switch
-        {
-            "string" => PeopleCodeType.String,
-            "number" => PeopleCodeType.Number,
-            "integer" => PeopleCodeType.Integer,
-            "boolean" => PeopleCodeType.Boolean,
-            "date" => PeopleCodeType.Date,
-            "time" => PeopleCodeType.Time,
-            "datetime" => PeopleCodeType.DateTime,
-            "any" => PeopleCodeType.Any,
-            "object" => PeopleCodeType.Object,
-            "record" => PeopleCodeType.Record,
-            "row" => PeopleCodeType.Row,
-            "rowset" => PeopleCodeType.Rowset,
-            "field" => PeopleCodeType.Field,
-            "apiobject" => PeopleCodeType.Apiobject,
-            "jsonobject" => PeopleCodeType.Jsonobject,
-            "jsonarray" => PeopleCodeType.Jsonarray,
-            "file" => PeopleCodeType.File,
-            "sql" => PeopleCodeType.Sql,
-            "void" => PeopleCodeType.Void,
-            _ => PeopleCodeType.Any // Unknown types default to Any
-        };
     }
 }

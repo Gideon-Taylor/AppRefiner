@@ -342,6 +342,11 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
                 var property = LookupPropertyInInheritanceChain(appClassType, memberName);
                 if (property.HasValue)
                     return ConvertPropertyInfoToTypeInfo(property.Value);
+
+                /* %This.foo can reference a private variable &foo */
+                property = LookupPrivateInstanceVariable(appClassType, memberName);
+                if (property.HasValue)
+                    return ConvertPropertyInfoToTypeInfo(property.Value);
             }
         }
 
@@ -408,6 +413,17 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
         }
 
         return null; // Method not found in the hierarchy
+    }
+
+    private PropertyInfo? LookupPrivateInstanceVariable(AppClassTypeInfo classType, string propertyName)
+    {
+
+        // If we have metadata, check for the property
+        if (_programMetadata != null && _programMetadata.InstanceVariables.TryGetValue($"&{propertyName}", out var property))
+        {
+            return property;
+        }
+        return null;
     }
 
     /// <summary>
