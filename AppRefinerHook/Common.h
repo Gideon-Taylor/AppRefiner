@@ -62,7 +62,8 @@ enum ShortcutType : unsigned int {
     SHORTCUT_COMMAND_PALETTE = 1 << 0,  // Always enabled - Ctrl+Shift+P
     SHORTCUT_OPEN = 1 << 1,             // Override Ctrl+O
     SHORTCUT_SEARCH = 1 << 2,           // Override Ctrl+F, Ctrl+H, F3
-    SHORTCUT_ALL = SHORTCUT_COMMAND_PALETTE | SHORTCUT_OPEN | SHORTCUT_SEARCH
+    SHORTCUT_LINE_SELECTION = 1 << 3,   // Override Shift+Up/Down for line selection
+    SHORTCUT_ALL = SHORTCUT_COMMAND_PALETTE | SHORTCUT_OPEN | SHORTCUT_SEARCH | SHORTCUT_LINE_SELECTION
 };
 
 extern unsigned int g_enabledShortcuts;

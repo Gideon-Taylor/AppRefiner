@@ -95,6 +95,7 @@ namespace AppRefiner
             cmbTemplates = new ComboBox();
             progressBar1 = new ProgressBar();
             lblStatus = new Label();
+            chkLineSelectionFix = new CheckBox();
             ((System.ComponentModel.ISupportInitialize)splitContainer1).BeginInit();
             splitContainer1.Panel1.SuspendLayout();
             splitContainer1.Panel2.SuspendLayout();
@@ -292,6 +293,7 @@ namespace AppRefiner
             // 
             // grpEditorSettings
             // 
+            grpEditorSettings.Controls.Add(chkLineSelectionFix);
             grpEditorSettings.Controls.Add(chkMultiSelection);
             grpEditorSettings.Controls.Add(chkAutoCenterDialogs);
             grpEditorSettings.Controls.Add(btnConfigSmartOpen);
@@ -772,6 +774,16 @@ namespace AppRefiner
             lblStatus.Text = "Stopped";
             lblStatus.TextAlign = ContentAlignment.MiddleCenter;
             // 
+            // checkBox1
+            // 
+            chkLineSelectionFix.AutoSize = true;
+            chkLineSelectionFix.Location = new Point(259, 93);
+            chkLineSelectionFix.Name = "chkLineSelectionFix";
+            chkLineSelectionFix.Size = new Size(143, 19);
+            chkLineSelectionFix.TabIndex = 36;
+            chkLineSelectionFix.Text = "Line Selection Fix";
+            chkLineSelectionFix.UseVisualStyleBackColor = true;
+            // 
             // MainForm
             // 
             AutoScaleDimensions = new SizeF(7F, 15F);
@@ -880,5 +892,6 @@ namespace AppRefiner
         private Button btnConfigSmartOpen;
         private CheckBox chkAutoCenterDialogs;
         private CheckBox chkMultiSelection;
+        private CheckBox chkLineSelectionFix;
     }
 }

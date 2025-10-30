@@ -575,12 +575,13 @@ LRESULT CALLBACK MainWindowSubclassProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPA
         // Handle WM_SET_MAIN_WINDOW_SHORTCUTS message for setting shortcut flags
         if (uMsg == WM_SET_MAIN_WINDOW_SHORTCUTS) {
             g_enabledShortcuts = (unsigned int)wParam;
-            char debugMsg[200];
-            sprintf_s(debugMsg, "Main window shortcuts set to: %u (CommandPalette: %s, Open: %s, Search: %s)\n", 
+            char debugMsg[256];
+            sprintf_s(debugMsg, "Main window shortcuts set to: %u (CommandPalette: %s, Open: %s, Search: %s, LineSelection: %s)\n", 
                       g_enabledShortcuts,
                       (g_enabledShortcuts & SHORTCUT_COMMAND_PALETTE) ? "On" : "Off",
                       (g_enabledShortcuts & SHORTCUT_OPEN) ? "On" : "Off",
-                      (g_enabledShortcuts & SHORTCUT_SEARCH) ? "On" : "Off");
+                      (g_enabledShortcuts & SHORTCUT_SEARCH) ? "On" : "Off",
+                      (g_enabledShortcuts & SHORTCUT_LINE_SELECTION) ? "On" : "Off");
             OutputDebugStringA(debugMsg);
             
             // Return 1 to indicate success
@@ -825,6 +826,45 @@ LRESULT CALLBACK KeyboardHook(int nCode, WPARAM wParam, LPARAM lParam) {
                 else if ((g_enabledShortcuts & SHORTCUT_COMMAND_PALETTE) && hasCtrl && hasShift && wParam == 'P') {
                     // Ctrl Shift P is for opening the command palette
                     shouldIntercept = true;
+                }
+                else if ((g_enabledShortcuts & SHORTCUT_LINE_SELECTION) && hasShift && !hasCtrl && !hasAlt && (wParam == VK_UP || wParam == VK_DOWN)) {
+                    // Shift + Up/Down arrow for line selection extension in Scintilla
+                    HWND focusedWindow = GetFocus();
+                    
+                    if (focusedWindow && IsWindow(focusedWindow)) {
+                        char className[256] = { 0 };
+                        char windowTitle[256] = { 0 };
+                        GetClassNameA(focusedWindow, className, sizeof(className));
+                        GetWindowTextA(focusedWindow, windowTitle, sizeof(windowTitle));
+                        
+                        char debugMsg[512];
+                        sprintf_s(debugMsg, "Shift+%s detected - Focused HWND: %p, Title: '%s', Class: '%s'\n",
+                                  wParam == VK_UP ? "Up" : "Down",
+                                  focusedWindow, 
+                                  windowTitle[0] ? windowTitle : "(no title)",
+                                  className);
+                        OutputDebugStringA(debugMsg);
+                        
+                        // Check if it's a Scintilla control
+                        if (strncmp(className, "Scintilla", 9) == 0) {
+                            // Send the appropriate Scintilla message
+                            UINT sciMessage = (wParam == VK_UP) ? SCI_LINEUPEXTEND : SCI_LINEDOWNEXTEND;
+                            SendMessage(focusedWindow, sciMessage, 0, 0);
+                            
+                            sprintf_s(debugMsg, "Sent %s to Scintilla HWND: %p\n",
+                                      wParam == VK_UP ? "SCI_LINEUPEXTEND" : "SCI_LINEDOWNEXTEND",
+                                      focusedWindow);
+                            OutputDebugStringA(debugMsg);
+                            
+                            // Intercept this keystroke to prevent default handling
+                            shouldIntercept = true;
+                        } else {
+                            sprintf_s(debugMsg, "Not a Scintilla window - no message sent\n");
+                            OutputDebugStringA(debugMsg);
+                        }
+                    } else {
+                        OutputDebugStringA("No valid focused window found\n");
+                    }
                 }
 
                 

@@ -26,6 +26,7 @@ namespace AppRefiner
         public bool OverrideOpen { get; set; }
         public bool AutoCenterDialogs { get; set; } = false;
         public bool MultiSelection { get; set; }
+        public bool LineSelectionFix { get; set; }
     }
 
     public class SettingsService
@@ -62,6 +63,7 @@ namespace AppRefiner
                 settings.OverrideOpen = Properties.Settings.Default.overrideOpen;
                 settings.AutoCenterDialogs = Properties.Settings.Default.AutoCenterDialogs;
                 settings.MultiSelection = Properties.Settings.Default.multiSelection;
+                settings.LineSelectionFix = Properties.Settings.Default.lineSelectionFix;
             }
             catch (Exception ex)
             {
@@ -93,6 +95,7 @@ namespace AppRefiner
             Properties.Settings.Default.overrideOpen = settings.OverrideOpen;
             Properties.Settings.Default.AutoCenterDialogs = settings.AutoCenterDialogs;
             Properties.Settings.Default.multiSelection = settings.MultiSelection;
+            Properties.Settings.Default.lineSelectionFix = settings.LineSelectionFix;
         }
 
         public void SaveChanges()

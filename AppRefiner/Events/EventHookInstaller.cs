@@ -22,7 +22,8 @@ namespace AppRefiner.Events
             CommandPalette = 1 << 0,  // Always enabled - Ctrl+Shift+P
             Open = 1 << 1,            // Override Ctrl+O
             Search = 1 << 2,          // Override Ctrl+F, Ctrl+H, F3
-            All = CommandPalette | Open | Search
+            LineSelection = 1 << 3,   // Override Shift+Up/Down for line selection
+            All = CommandPalette | Open | Search | LineSelection
         }
 
         private static Dictionary<uint, IntPtr> _activeHooks = new();

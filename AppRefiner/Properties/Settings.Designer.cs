@@ -358,5 +358,17 @@ namespace AppRefiner.Properties {
                 this["multiSelection"] = value;
             }
         }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("False")]
+        public bool lineSelectionFix {
+            get {
+                return ((bool)(this["lineSelectionFix"]));
+            }
+            set {
+                this["lineSelectionFix"] = value;
+            }
+        }
     }
 }

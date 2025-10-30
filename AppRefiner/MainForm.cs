@@ -1,4 +1,3 @@
-
 using AppRefiner.Database;
 using AppRefiner.Database.Models;
 using AppRefiner.Dialogs;
@@ -186,6 +185,7 @@ namespace AppRefiner
             chkAutoCenterDialogs.Checked = generalSettings.AutoCenterDialogs;
             chkMultiSelection.Checked = generalSettings.MultiSelection;
             chkOverrideOpen.Checked = generalSettings.OverrideOpen;
+            chkLineSelectionFix.Checked = generalSettings.LineSelectionFix;
 
             linterManager = new LinterManager(this, dataGridView1, lblStatus, progressBar1, lintReportPath, settingsService);
             linterManager.InitializeLinterOptions(); // Initialize linters via the manager
@@ -243,7 +243,7 @@ namespace AppRefiner
             applicationKeyboardService?.RegisterShortcut("NavigateForward", AppRefiner.ModifierKeys.Alt, Keys.Right, navigateForwardHandler); // Alt + Right
             applicationKeyboardService?.RegisterShortcut("PlaceBookmark", AppRefiner.ModifierKeys.Control, Keys.B, placeBookmarkHandler);
             applicationKeyboardService?.RegisterShortcut("GoToPreviousBookmark", AppRefiner.ModifierKeys.Control, Keys.OemMinus, goToPreviousBookmarkHandler);
-
+            
             // Register refactor shortcuts using the RefactorManager
             RegisterRefactorShortcuts();
 
@@ -289,6 +289,7 @@ namespace AppRefiner
             chkOverrideOpen.CheckedChanged += GeneralSetting_Changed;
             chkAutoCenterDialogs.CheckedChanged += GeneralSetting_Changed;
             chkMultiSelection.CheckedChanged += GeneralSetting_Changed;
+            chkLineSelectionFix.CheckedChanged += GeneralSetting_Changed;
             // DataGridViews CellValueChanged events will also call SaveSettings
         }
 
@@ -297,7 +298,7 @@ namespace AppRefiner
             if (isLoadingSettings) return;
 
             // Check if this is a shortcut-related checkbox change
-            if (sender == chkOverrideOpen || sender == chkOverrideFindReplace)
+            if (sender == chkOverrideOpen || sender == chkOverrideFindReplace || sender == chkLineSelectionFix)
             {
                 UpdateShortcutFlags();
             }
@@ -311,7 +312,9 @@ namespace AppRefiner
 
         private void UpdateShortcutFlags()
         {
-            // Start with Command Palette always enabled
+            // Start with Command Palette and LineSelection always enabled? Wait, no, LineSelection is optional
+            // From original: CommandPalette and LineExtend always? But now LineSelection is toggleable
+            // Original had LineExtend always, but now it's toggleable, so remove always
             currentShortcutFlags = EventHookInstaller.ShortcutType.CommandPalette;
 
             // Add Open shortcut if checkbox is checked
@@ -324,6 +327,12 @@ namespace AppRefiner
             if (chkOverrideFindReplace.Checked)
             {
                 currentShortcutFlags |= EventHookInstaller.ShortcutType.Search;
+            }
+
+            // Add Line Selection shortcut if checkbox is checked
+            if (chkLineSelectionFix.Checked)
+            {
+                currentShortcutFlags |= EventHookInstaller.ShortcutType.LineSelection;
             }
 
             // Notify all processes of the change
@@ -332,7 +341,7 @@ namespace AppRefiner
 
         private void InitializeShortcutFlags()
         {
-            // Start with Command Palette always enabled
+            // Start with Command Palette only, since LineSelection is now toggleable
             currentShortcutFlags = EventHookInstaller.ShortcutType.CommandPalette;
 
             // Add Open shortcut if checkbox is checked
@@ -345,6 +354,12 @@ namespace AppRefiner
             if (chkOverrideFindReplace.Checked)
             {
                 currentShortcutFlags |= EventHookInstaller.ShortcutType.Search;
+            }
+
+            // Add Line Selection if checked
+            if (chkLineSelectionFix.Checked)
+            {
+                currentShortcutFlags |= EventHookInstaller.ShortcutType.LineSelection;
             }
 
             // Don't notify processes during initialization - they will be notified when they connect
@@ -371,7 +386,8 @@ namespace AppRefiner
                 OverrideFindReplace = chkOverrideFindReplace.Checked,
                 OverrideOpen = chkOverrideOpen.Checked,
                 AutoCenterDialogs = chkAutoCenterDialogs.Checked,
-                MultiSelection = chkMultiSelection.Checked
+                MultiSelection = chkMultiSelection.Checked,
+                LineSelectionFix = chkLineSelectionFix.Checked
             };
         }
 
@@ -2226,10 +2242,9 @@ namespace AppRefiner
 
                 // Get type resolver (may be null if no database)
                 var typeResolver = editor.AppDesignerProcess?.TypeResolver;
-                var typeCache = editor.AppDesignerProcess?.TypeCache ?? new TypeCache();
 
                 // Run type inference (works even with null resolver)
-                TypeInferenceVisitor.Run(program, metadata, typeResolver, typeCache);
+                TypeInferenceVisitor.Run(program, metadata, typeResolver);
             }
             catch (Exception ex)
             {
@@ -2869,6 +2884,15 @@ namespace AppRefiner
 
             EnableUIActions();
 
+            int SCMOD_SHIFT = 1;
+            int SCK_DOWN = 300;
+            int SCK_UP = 301;
+            int SCI_LINEUPEXTEND = 2303;
+            int SCI_LINEDOWNEXTEND = 2301;
+            int SCI_ASSIGNCMDKEY = 2070;
+            WinApi.SendMessage(editor.hWnd, SCI_ASSIGNCMDKEY, SCK_UP + (SCMOD_SHIFT << 16), SCI_LINEUPEXTEND);
+            WinApi.SendMessage(editor.hWnd, SCI_ASSIGNCMDKEY, SCK_DOWN + (SCMOD_SHIFT << 16), SCI_LINEDOWNEXTEND);
+
             // If "only PPC" is checked and the editor is not PPC, skip
             if (chkOnlyPPC.Checked && editor.Type != EditorType.PeopleCode)
             {
@@ -3074,9 +3098,9 @@ namespace AppRefiner
                 string qualifiedName = openTarget.ToQualifiedName();
 
                 // Invalidate in TypeCache (shared cache for TypeMetadata)
-                if (appDesignerProcess.TypeCache != null)
+                if (appDesignerProcess.TypeResolver != null)
                 {
-                    bool removed = appDesignerProcess.TypeCache.Remove(qualifiedName);
+                    bool removed = appDesignerProcess.TypeResolver.Cache.Remove(qualifiedName);
                     if (removed)
                     {
                         Debug.Log($"InvalidateTypeCacheForEditor: Removed '{qualifiedName}' from TypeCache");
