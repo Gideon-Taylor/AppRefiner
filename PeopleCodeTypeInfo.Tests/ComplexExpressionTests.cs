@@ -55,7 +55,7 @@ end-function;
 
         // Run type inference
         var cache = new TypeCache();
-        var visitor = TypeInferenceVisitor.Run(program, metadata, NullTypeMetadataResolver.Instance, cache);
+        var visitor = TypeInferenceVisitor.Run(program, metadata, NullTypeMetadataResolver.Instance);
 
         // Find the assignment statement: &newValue = (Split(&helloWorld, " ")[1] | " Dave")
         var function = program.Functions[0];
@@ -144,7 +144,7 @@ end-function;
 
         // Run type inference
         var cache = new TypeCache();
-        var visitor = TypeInferenceVisitor.Run(program, metadata, NullTypeMetadataResolver.Instance, cache);
+        var visitor = TypeInferenceVisitor.Run(program, metadata, NullTypeMetadataResolver.Instance);
 
         // Find the assignment statement: &test = (Len(&newValue) + 3) * 2
         var function = program.Functions[0];
@@ -215,7 +215,7 @@ end-function;
 
         var metadata = TypeMetadataBuilder.ExtractMetadata(program, "TestProgram");
         var cache = new TypeCache();
-        var visitor = TypeInferenceVisitor.Run(program, metadata, NullTypeMetadataResolver.Instance, cache);
+        var visitor = TypeInferenceVisitor.Run(program, metadata, NullTypeMetadataResolver.Instance);
 
         var function = program.Functions[0];
         var assignments = FindAllAssignments(function);
@@ -253,7 +253,7 @@ end-function;
 
         var metadata = TypeMetadataBuilder.ExtractMetadata(program, "TestProgram");
         var cache = new TypeCache();
-        var visitor = TypeInferenceVisitor.Run(program, metadata, NullTypeMetadataResolver.Instance, cache);
+        var visitor = TypeInferenceVisitor.Run(program, metadata, NullTypeMetadataResolver.Instance);
 
         var function = program.Functions[0];
         var assignments = FindAllAssignments(function);
@@ -290,7 +290,7 @@ end-function;
 
         var metadata = TypeMetadataBuilder.ExtractMetadata(program, "TestProgram");
         var cache = new TypeCache();
-        var visitor = TypeInferenceVisitor.Run(program, metadata, NullTypeMetadataResolver.Instance, cache);
+        var visitor = TypeInferenceVisitor.Run(program, metadata, NullTypeMetadataResolver.Instance);
 
         var function = program.Functions[0];
         var assignments = FindAllAssignments(function);
@@ -303,6 +303,213 @@ end-function;
         var multiplyType = visitor.GetInferredType(multiplyExpr);
         Assert.NotNull(multiplyType);
         Assert.Equal(PeopleCodeType.Number, multiplyType.PeopleCodeType);
+    }
+
+    /// <summary>
+    /// Test pipe operator with number: "Value: " | 123
+    /// Verifies that the pipe operator accepts numbers and coerces to string at runtime
+    /// </summary>
+    [Fact]
+    public void PipeOperator_StringAndNumber_InfersStringType()
+    {
+        var source = @"
+function test();
+   local any &result;
+   local number &num;
+   &num = 123;
+   &result = ""Value: "" | &num;
+end-function;
+";
+
+        var lexer = new PeopleCodeLexer(source);
+        var tokens = lexer.TokenizeAll();
+        var parser = new PeopleCodeParser.SelfHosted.PeopleCodeParser(tokens);
+        var program = parser.ParseProgram();
+
+        Assert.Empty(parser.Errors);
+
+        var metadata = TypeMetadataBuilder.ExtractMetadata(program, "TestProgram");
+        var cache = new TypeCache();
+        var visitor = TypeInferenceVisitor.Run(program, metadata, NullTypeMetadataResolver.Instance);
+
+        var function = program.Functions[0];
+        var assignments = FindAllAssignments(function);
+        var assignment = assignments.FirstOrDefault(a =>
+            a.Target is IdentifierNode id && id.Name.Equals("&result", StringComparison.OrdinalIgnoreCase));
+
+        Assert.NotNull(assignment);
+
+        var pipeExpr = assignment.Value as BinaryOperationNode;
+        Assert.NotNull(pipeExpr);
+        Assert.Equal(BinaryOperator.Concatenate, pipeExpr.Operator);
+
+        // The pipe operator should return string regardless of operand types
+        var pipeType = visitor.GetInferredType(pipeExpr);
+        Assert.NotNull(pipeType);
+        Assert.Equal(PeopleCodeType.String, pipeType.PeopleCodeType);
+    }
+
+    /// <summary>
+    /// Test pipe operator with number literal: 100 | " items"
+    /// </summary>
+    [Fact]
+    public void PipeOperator_NumberAndString_InfersStringType()
+    {
+        var source = @"
+function test();
+   local any &result;
+   &result = 100 | "" items"";
+end-function;
+";
+
+        var lexer = new PeopleCodeLexer(source);
+        var tokens = lexer.TokenizeAll();
+        var parser = new PeopleCodeParser.SelfHosted.PeopleCodeParser(tokens);
+        var program = parser.ParseProgram();
+
+        Assert.Empty(parser.Errors);
+
+        var metadata = TypeMetadataBuilder.ExtractMetadata(program, "TestProgram");
+        var cache = new TypeCache();
+        var visitor = TypeInferenceVisitor.Run(program, metadata, NullTypeMetadataResolver.Instance);
+
+        var function = program.Functions[0];
+        var assignments = FindAllAssignments(function);
+        var assignment = assignments.First();
+
+        var pipeExpr = assignment.Value as BinaryOperationNode;
+        Assert.NotNull(pipeExpr);
+        Assert.Equal(BinaryOperator.Concatenate, pipeExpr.Operator);
+
+        var pipeType = visitor.GetInferredType(pipeExpr);
+        Assert.NotNull(pipeType);
+        Assert.Equal(PeopleCodeType.String, pipeType.PeopleCodeType);
+    }
+
+    /// <summary>
+    /// Test pipe operator with date: "Date: " | %Date
+    /// </summary>
+    [Fact]
+    public void PipeOperator_StringAndDate_InfersStringType()
+    {
+        var source = @"
+function test();
+   local any &result;
+   local date &dt;
+   &dt = %Date;
+   &result = ""Date: "" | &dt;
+end-function;
+";
+
+        var lexer = new PeopleCodeLexer(source);
+        var tokens = lexer.TokenizeAll();
+        var parser = new PeopleCodeParser.SelfHosted.PeopleCodeParser(tokens);
+        var program = parser.ParseProgram();
+
+        Assert.Empty(parser.Errors);
+
+        var metadata = TypeMetadataBuilder.ExtractMetadata(program, "TestProgram");
+        var cache = new TypeCache();
+        var visitor = TypeInferenceVisitor.Run(program, metadata, NullTypeMetadataResolver.Instance);
+
+        var function = program.Functions[0];
+        var assignments = FindAllAssignments(function);
+        var assignment = assignments.FirstOrDefault(a =>
+            a.Target is IdentifierNode id && id.Name.Equals("&result", StringComparison.OrdinalIgnoreCase));
+
+        Assert.NotNull(assignment);
+
+        var pipeExpr = assignment.Value as BinaryOperationNode;
+        Assert.NotNull(pipeExpr);
+        Assert.Equal(BinaryOperator.Concatenate, pipeExpr.Operator);
+
+        var pipeType = visitor.GetInferredType(pipeExpr);
+        Assert.NotNull(pipeType);
+        Assert.Equal(PeopleCodeType.String, pipeType.PeopleCodeType);
+    }
+
+    /// <summary>
+    /// Test pipe operator with boolean: "Result: " | True
+    /// </summary>
+    [Fact]
+    public void PipeOperator_StringAndBoolean_InfersStringType()
+    {
+        var source = @"
+function test();
+   local any &result;
+   local boolean &flag;
+   &flag = True;
+   &result = ""Result: "" | &flag;
+end-function;
+";
+
+        var lexer = new PeopleCodeLexer(source);
+        var tokens = lexer.TokenizeAll();
+        var parser = new PeopleCodeParser.SelfHosted.PeopleCodeParser(tokens);
+        var program = parser.ParseProgram();
+
+        Assert.Empty(parser.Errors);
+
+        var metadata = TypeMetadataBuilder.ExtractMetadata(program, "TestProgram");
+        var cache = new TypeCache();
+        var visitor = TypeInferenceVisitor.Run(program, metadata, NullTypeMetadataResolver.Instance);
+
+        var function = program.Functions[0];
+        var assignments = FindAllAssignments(function);
+        var assignment = assignments.FirstOrDefault(a =>
+            a.Target is IdentifierNode id && id.Name.Equals("&result", StringComparison.OrdinalIgnoreCase));
+
+        Assert.NotNull(assignment);
+
+        var pipeExpr = assignment.Value as BinaryOperationNode;
+        Assert.NotNull(pipeExpr);
+        Assert.Equal(BinaryOperator.Concatenate, pipeExpr.Operator);
+
+        var pipeType = visitor.GetInferredType(pipeExpr);
+        Assert.NotNull(pipeType);
+        Assert.Equal(PeopleCodeType.String, pipeType.PeopleCodeType);
+    }
+
+    /// <summary>
+    /// Test pipe operator with Record object: "Record: " | &myRecord
+    /// </summary>
+    [Fact]
+    public void PipeOperator_StringAndRecord_InfersStringType()
+    {
+        var source = @"
+function test();
+   local any &result;
+   local Record &rec;
+   &rec = CreateRecord(Record.ASSET);
+   &result = ""Record: "" | &rec;
+end-function;
+";
+
+        var lexer = new PeopleCodeLexer(source);
+        var tokens = lexer.TokenizeAll();
+        var parser = new PeopleCodeParser.SelfHosted.PeopleCodeParser(tokens);
+        var program = parser.ParseProgram();
+
+        Assert.Empty(parser.Errors);
+
+        var metadata = TypeMetadataBuilder.ExtractMetadata(program, "TestProgram");
+        var cache = new TypeCache();
+        var visitor = TypeInferenceVisitor.Run(program, metadata, NullTypeMetadataResolver.Instance);
+
+        var function = program.Functions[0];
+        var assignments = FindAllAssignments(function);
+        var assignment = assignments.FirstOrDefault(a =>
+            a.Target is IdentifierNode id && id.Name.Equals("&result", StringComparison.OrdinalIgnoreCase));
+
+        Assert.NotNull(assignment);
+
+        var pipeExpr = assignment.Value as BinaryOperationNode;
+        Assert.NotNull(pipeExpr);
+        Assert.Equal(BinaryOperator.Concatenate, pipeExpr.Operator);
+
+        var pipeType = visitor.GetInferredType(pipeExpr);
+        Assert.NotNull(pipeType);
+        Assert.Equal(PeopleCodeType.String, pipeType.PeopleCodeType);
     }
 
     // Helper method to find all assignments in a function

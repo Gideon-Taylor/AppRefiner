@@ -151,7 +151,7 @@ namespace AppRefiner.TooltipProviders
             foreach (var prop in propertiesToShow.OrderBy(p => p.Name))
             {
                 addedMembers = true;
-                string accessors = (prop.HasGet ? "Get" : "") + (prop.HasSetter ? prop.HasGet ? "/Set" : "Set" : "");
+                string accessors = (prop.HasGet ? "Get" : "") + (prop.HasSet ? prop.HasGet ? "/Set" : "Set" : "");
                 if (prop.IsReadOnly) accessors = "ReadOnly";
                 string typeName = prop.Type?.TypeName ?? "any";
                 sb.AppendLine($"({prop.Visibility}) Property: {typeName} {prop.Name} {{{accessors}}}");
@@ -198,7 +198,7 @@ namespace AppRefiner.TooltipProviders
             foreach (var prop in propertiesToShow.OrderBy(p => p.Name))
             {
                 addedMembers = true;
-                string accessors = (prop.HasGet ? "Get" : "") + (prop.HasSetter ? prop.HasGet ? "/Set" : "Set" : "");
+                string accessors = (prop.HasGet ? "Get" : "") + (prop.HasSet ? prop.HasGet ? "/Set" : "Set" : "");
                 if (prop.IsReadOnly) accessors = "ReadOnly";
                 string typeName = prop.Type?.TypeName ?? "any";
                 sb.AppendLine($"({prop.Visibility}) Property: {typeName} {prop.Name} {{{accessors}}}");

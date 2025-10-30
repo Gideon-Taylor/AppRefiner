@@ -133,17 +133,13 @@ namespace AppRefiner.TooltipProviders
         /// </summary>
         public override void VisitAppClass(AppClassNode node)
         {
-            // Process property getters and setters from the class
-            foreach (var property in node.PropertyGetters)
+            foreach (var property in node.Properties)
             {
                 if (property.GetterBody != null)
                 {
                     ProcessScope(property, "get");
                 }
-            }
 
-            foreach (var property in node.PropertySetters)
-            {
                 if (property.SetterBody != null)
                 {
                     ProcessScope(property, "set");

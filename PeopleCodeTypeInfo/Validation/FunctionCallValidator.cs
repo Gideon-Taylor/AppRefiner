@@ -141,7 +141,7 @@ public class FunctionCallValidator
         var ok = MatchSequence(ctx, parameters, 0, 0, out int consumedIndex);
         if (ok && consumedIndex == arguments.Length)
         {
-            return ValidationResult.Success(consumedIndex);
+            return ValidationResult.Success(consumedIndex, ctx.Warnings.Count > 0 ? ctx.Warnings : null);
         }
 
         // Check for too many arguments: matching succeeded but we have leftover arguments
@@ -927,7 +927,27 @@ public class FunctionCallValidator
                 return true;
             }
         }
-        else if (expectedTypeInfo.IsAssignableFrom(arg.Type))
+
+        // Special case: implicit narrowing from 'any' or 'object' to AppClass
+        // This is technically valid (works at runtime) but risky - issue warning
+        // IMPORTANT: This must come BEFORE IsAssignableFrom check because AppClass.IsAssignableFrom(any) returns true
+        if (expectedTypeInfo is AppClassTypeInfo expectedAppClassType &&
+            (arg.Type is AnyTypeInfo || arg.Type is ObjectTypeInfo))
+        {
+            var warning = new TypeWarning
+            {
+                Kind = TypeWarningKind.ImplicitNarrowingToAppClass,
+                ArgumentIndex = argIndex,
+                ExpectedType = expectedAppClassType.QualifiedName,
+                FoundType = arg.Type.ToString(),
+                FunctionName = ctx.FunctionName
+            };
+            ctx.RecordWarning(warning);
+            consumed = 1;
+            return true;
+        }
+
+        if (expectedTypeInfo.IsAssignableFrom(arg.Type))
         {
             consumed = 1;
             return true;
@@ -1336,6 +1356,7 @@ public class FunctionCallValidator
         public int BestFailureArgIndex { get; private set; } = -1;
         private readonly Dictionary<int, List<ParameterTypeInfo>> _expectedAtIndex = new();
         public List<string> Errors { get; } = new();
+        public List<TypeWarning> Warnings { get; } = new();
         public FailureKind FailureKind { get; private set; } = FailureKind.None;
 
         public MatchContext(string functionName, List<Parameter> parameters, ArgumentInfo[] arguments)
@@ -1393,6 +1414,14 @@ public class FunctionCallValidator
                 FailureKind = FailureKind.TypeMismatch;
             }
             RecordExpectation(argIndex, parameter);
+        }
+
+        /// <summary>
+        /// Records a type warning for potentially unsafe but valid type conversions.
+        /// </summary>
+        public void RecordWarning(TypeWarning warning)
+        {
+            Warnings.Add(warning);
         }
 
         /// <summary>
@@ -1485,6 +1514,7 @@ public class ValidationResult
     public string FoundTypeAtFailure { get; set; } = "";
     public FunctionCallValidator.FailureKind FailureKind { get; set; } = FunctionCallValidator.FailureKind.None;
     public string FunctionName { get; set; } = "";
+    public List<TypeWarning> Warnings { get; set; } = new();
 
     /// <summary>
     /// Builds a human-friendly error message that includes position, expected types, and found type (if any).
@@ -1525,9 +1555,13 @@ public class ValidationResult
         return string.Join(". ", ErrorMessages);
     }
 
-    public static ValidationResult Success(int consumed)
+    public static ValidationResult Success(int consumed, List<TypeWarning>? warnings = null)
     {
-        return new ValidationResult { IsValid = true };
+        return new ValidationResult
+        {
+            IsValid = true,
+            Warnings = warnings ?? new List<TypeWarning>()
+        };
     }
 
     /// <summary>

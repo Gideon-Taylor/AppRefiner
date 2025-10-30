@@ -134,6 +134,7 @@ namespace AppRefiner
         public event CaptionChangedEventHandler? CaptionChanged;
         public IntPtr ResultsListView;
         public BetterFindDialog? ActiveSearchDialog;
+        public ProgramNode? FunctionCallTipProgram;
         public bool FunctionCallTipActive;
         public FunctionCallNode? FunctionCallNode;
 

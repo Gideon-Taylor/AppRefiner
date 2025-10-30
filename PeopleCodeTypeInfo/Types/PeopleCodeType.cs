@@ -375,7 +375,9 @@ public enum PeopleCodeType : byte
     Package = 145,
     Panelgroup = 146,
     Stylesheet = 147,
-    Url = 148
+    Url = 148,
+
+    Exception = 149
 }
 
 public static class BuiltinTypeExtensions
@@ -579,7 +581,7 @@ public static class BuiltinTypeExtensions
     /// </summary>
     public static bool IsBuiltinObject(this PeopleCodeType type)
     {
-        return type >= PeopleCodeType.Aesection && type <= PeopleCodeType.Url;
+        return type >= PeopleCodeType.Aesection && type <= PeopleCodeType.Exception;
     }
 
     /// <summary>
@@ -806,6 +808,16 @@ public class BuiltinObjectTypeInfo : TypeInfo
             }
         }
 
+        // Check if other is an AppClass that extends this builtin type
+        if (other is AppClassTypeInfo appClass && appClass.ExtendsBuiltinType && appClass.BuiltinBaseType.HasValue)
+        {
+            // Check if the AppClass's builtin base type matches this type
+            if (PeopleCodeType.HasValue && appClass.BuiltinBaseType.Value == PeopleCodeType.Value)
+            {
+                return true;
+            }
+        }
+
         return false;
     }
 }
@@ -833,7 +845,17 @@ public class AppClassTypeInfo : TypeInfo
     /// </summary>
     public string ClassName { get; }
 
-    public AppClassTypeInfo(string qualifiedName)
+    /// <summary>
+    /// True if this AppClass extends a builtin type (like Record, Field, etc.)
+    /// </summary>
+    public bool ExtendsBuiltinType { get; }
+
+    /// <summary>
+    /// The PeopleCodeType of the builtin base class, if ExtendsBuiltinType is true
+    /// </summary>
+    public PeopleCodeType? BuiltinBaseType { get; }
+
+    public AppClassTypeInfo(string qualifiedName, bool extendsBuiltinType = false, PeopleCodeType? builtinBaseType = null)
     {
         QualifiedName = qualifiedName ?? throw new ArgumentNullException(nameof(qualifiedName));
 
@@ -848,6 +870,9 @@ public class AppClassTypeInfo : TypeInfo
             PackagePath = parts.Take(parts.Length - 1).ToArray();
             ClassName = parts[parts.Length - 1];
         }
+
+        ExtendsBuiltinType = extendsBuiltinType;
+        BuiltinBaseType = builtinBaseType;
     }
 
     public override bool IsAssignableFrom(TypeInfo other)

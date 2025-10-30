@@ -1,5 +1,6 @@
 using PeopleCodeParser.SelfHosted.Lexing;
 using PeopleCodeParser.SelfHosted.Visitors;
+using PeopleCodeParser.SelfHosted.Visitors.Models;
 
 namespace PeopleCodeParser.SelfHosted.Nodes;
 
@@ -37,6 +38,8 @@ public class ProgramNode : AstNode
     /// Program-level local variable declarations (includes both LocalVariableDeclarationNode and LocalVariableDeclarationWithAssignmentNode)
     /// </summary>
     public List<StatementNode> LocalVariables { get; } = new();
+
+    public List<VariableInfo> AutoDeclaredVariables { get; } = new();
 
     /// <summary>
     /// Constant declarations
@@ -357,10 +360,14 @@ public class AppClassNode : AstNode
     /// </summary>
     public List<MethodNode> Methods { get; } = new();
 
+    public List<MethodImplNode> OrphanedMethodImpls { get; } = new();
+
     /// <summary>
     /// Property declarations
     /// </summary>
     public List<PropertyNode> Properties { get; } = new();
+
+    public List<PropertyImplNode> OrphanedPropertyImpls { get; } = new();
 
     /// <summary>
     /// Instance variable declarations
@@ -376,16 +383,6 @@ public class AppClassNode : AstNode
     /// Method implementations (outside the class declaration)
     /// </summary>
     public List<MethodNode> MethodImplementations { get; } = new();
-
-    /// <summary>
-    /// Property getter implementations
-    /// </summary>
-    public List<PropertyNode> PropertyGetters { get; } = new();
-
-    /// <summary>
-    /// Property setter implementations
-    /// </summary>
-    public List<PropertyNode> PropertySetters { get; } = new();
 
     /// <summary>
     /// Visibility sections
@@ -423,6 +420,17 @@ public class AppClassNode : AstNode
             AddChild(implementedInterface);
     }
 
+    public void AddOrphanedMethodImplementation(MethodImplNode methodImplementation)
+    {
+        OrphanedMethodImpls.Add(methodImplementation);
+        AddChild(methodImplementation);
+    }
+
+    public void AddOrphanedPropertyImplementation(PropertyImplNode node)
+    {
+        OrphanedPropertyImpls.Add(node);
+        AddChild(node);
+    }
     public void AddMember(AstNode member, VisibilityModifier visibility = VisibilityModifier.Public)
     {
         VisibilitySections[visibility].Add(member);
@@ -438,12 +446,7 @@ public class AppClassNode : AstNode
                     Methods.Add(method);
                 break;
             case PropertyNode property:
-                if (property.IsGetter)
-                    PropertyGetters.Add(property);
-                else if (property.IsSetter)
-                    PropertySetters.Add(property);
-                else
-                    Properties.Add(property);
+                Properties.Add(property);
                 break;
             case ProgramVariableNode variable:
                 InstanceVariables.Add(variable);

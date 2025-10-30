@@ -69,8 +69,7 @@ end-method;
         var metadata = TypeMetadataBuilder.ExtractMetadata(program, "TestProgram:A");
 
         // Run type inference
-        var cache = new TypeCache();
-        var visitor = TypeInferenceVisitor.Run(program, metadata, NullTypeMetadataResolver.Instance, cache);
+        var visitor = TypeInferenceVisitor.Run(program, metadata, NullTypeMetadataResolver.Instance);
 
         // Find the Test method implementation
         Assert.NotNull(program.AppClass);

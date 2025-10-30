@@ -35,6 +35,16 @@ public class TypeMetadata
     public string? BaseClassName { get; init; }
 
     /// <summary>
+    /// True if BaseClassName refers to a builtin type (like Record, Field, etc.)
+    /// </summary>
+    public bool IsBaseClassBuiltin { get; init; }
+
+    /// <summary>
+    /// The PeopleCodeType of the builtin base class, if IsBaseClassBuiltin is true
+    /// </summary>
+    public PeopleCodeType? BuiltinBaseType { get; init; }
+
+    /// <summary>
     /// Interface that this class implements (PeopleCode allows at most 1 interface)
     /// </summary>
     public string? InterfaceName { get; init; }

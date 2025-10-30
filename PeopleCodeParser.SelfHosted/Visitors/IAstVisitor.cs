@@ -23,6 +23,7 @@ public interface IAstVisitor
     void VisitMethod(MethodNode node);
     void VisitMethodImpl(MethodImplNode node);
     void VisitProperty(PropertyNode node);
+    void VisitPropertyImpl(PropertyImplNode node);
     void VisitProgramVariable(ProgramVariableNode node);
     void VisitConstant(ConstantNode node);
     void VisitFunction(FunctionNode node);
@@ -35,6 +36,7 @@ public interface IAstVisitor
     void VisitRepeat(RepeatStatementNode node);
     void VisitEvaluate(EvaluateStatementNode node);
     void VisitTry(TryStatementNode node);
+    void VisitCatch(CatchStatementNode node);
     void VisitReturn(ReturnStatementNode node);
     void VisitThrow(ThrowStatementNode node);
     void VisitBreak(BreakStatementNode node);
@@ -59,7 +61,6 @@ public interface IAstVisitor
     void VisitMemberAccess(MemberAccessNode node);
     void VisitLocalVariableDeclaration(LocalVariableDeclarationNode node);
     void VisitLocalVariableDeclarationWithAssignment(LocalVariableDeclarationWithAssignmentNode node);
-    void VisitCatch(CatchStatementNode node);
     void VisitMetadataExpression(MetadataExpressionNode node);
     void VisitClassConstant(ClassConstantNode classConstantNode);
 
@@ -88,6 +89,7 @@ public interface IAstVisitor<out TResult>
     TResult VisitMethod(MethodNode node);
     TResult VisitMethodImpl(MethodImplNode node);
     TResult VisitProperty(PropertyNode node);
+    TResult VisitPropertyImpl(PropertyImplNode node);
     TResult VisitProgramVariable(ProgramVariableNode node);
     TResult VisitConstant(ConstantNode node);
     TResult VisitFunction(FunctionNode node);
@@ -100,6 +102,7 @@ public interface IAstVisitor<out TResult>
     TResult VisitRepeat(RepeatStatementNode node);
     TResult VisitEvaluate(EvaluateStatementNode node);
     TResult VisitTry(TryStatementNode node);
+    TResult VisitCatch(CatchStatementNode node);
     TResult VisitReturn(ReturnStatementNode node);
     TResult VisitThrow(ThrowStatementNode node);
     TResult VisitBreak(BreakStatementNode node);
@@ -124,7 +127,6 @@ public interface IAstVisitor<out TResult>
     TResult VisitMemberAccess(MemberAccessNode node);
     TResult VisitLocalVariableDeclaration(LocalVariableDeclarationNode node);
     TResult VisitLocalVariableDeclarationWithAssignment(LocalVariableDeclarationWithAssignmentNode node);
-    TResult VisitCatch(CatchStatementNode node);
     TResult VisitMetadataExpression(MetadataExpressionNode node);
     TResult VisitClassConstant(ClassConstantNode classConstantNode);
 
@@ -241,14 +243,10 @@ public abstract class AstVisitorBase : IAstVisitor
             method.Accept(this);
         }
 
-        foreach (var getter in node.PropertyGetters)
+        foreach(var property in node.Properties)
         {
-            getter.Accept(this);
-        }
-
-        foreach (var setter in node.PropertySetters)
-        {
-            setter.Accept(this);
+            property.Getter?.Accept(this);
+            property.Setter?.Accept(this);
         }
 
         // 6. Finally visit any other children that might not be in the specialized collections
@@ -259,9 +257,7 @@ public abstract class AstVisitorBase : IAstVisitor
                 node.Properties.Contains(child) ||
                 node.Constants.Contains(child) ||
                 node.Methods.Contains(child) ||
-                node.MethodImplementations.Contains(child) ||
-                node.PropertyGetters.Contains(child) ||
-                node.PropertySetters.Contains(child))
+                node.MethodImplementations.Contains(child))
             {
                 continue;
             }
@@ -365,24 +361,6 @@ public abstract class AstVisitorBase : IAstVisitor
     {
         // Visit property type first
         node.Type.Accept(this);
-
-        // Visit implemented interface if present
-        if (node.ImplementedInterface != null)
-        {
-            node.ImplementedInterface.Accept(this);
-        }
-
-        // Visit getter body if present
-        if (node.GetterBody != null)
-        {
-            node.GetterBody.Accept(this);
-        }
-
-        // Visit setter body if present
-        if (node.SetterBody != null)
-        {
-            node.SetterBody.Accept(this);
-        }
     }
     public virtual void VisitProgramVariable(ProgramVariableNode node)
     {
@@ -665,4 +643,10 @@ public abstract class AstVisitorBase : IAstVisitor
     }
 
     public virtual void VisitObjectCreateShortHand(ObjectCreateShortHand node) => DefaultVisit(node);
+
+    public virtual void VisitPropertyImpl(PropertyImplNode node)
+    {
+        node.ImplementedInterface?.Accept(this);
+        node.Body?.Accept(this);
+    }
 }

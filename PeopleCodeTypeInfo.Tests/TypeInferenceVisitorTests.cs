@@ -42,7 +42,7 @@ public class TypeInferenceVisitorTests : IDisposable
         _cache = new TypeCache();
 
         // Run type inference
-        _visitor = TypeInferenceVisitor.Run(_program, _programMetadata, _resolver, _cache);
+        _visitor = TypeInferenceVisitor.Run(_program, _programMetadata, _resolver);
     }
 
     public void Dispose()
@@ -355,7 +355,7 @@ end-method;
 
         var metadata = TypeMetadataBuilder.ExtractMetadata(program, "TestClass");
         var cache = new TypeCache();
-        var visitor = TypeInferenceVisitor.Run(program, metadata, NullTypeMetadataResolver.Instance, cache);
+        var visitor = TypeInferenceVisitor.Run(program, metadata, NullTypeMetadataResolver.Instance);
 
         // Find %This identifier
         var thisIdentifier = FindIdentifierByNameInProgram(program, "%This");
@@ -396,7 +396,7 @@ end-method;
         Assert.Equal("ParentClass", metadata.BaseClassName);
 
         var cache = new TypeCache();
-        var visitor = TypeInferenceVisitor.Run(program, metadata, NullTypeMetadataResolver.Instance, cache);
+        var visitor = TypeInferenceVisitor.Run(program, metadata, NullTypeMetadataResolver.Instance);
 
         // Find %Super identifier
         var superIdentifier = FindIdentifierByNameInProgram(program, "%Super");
@@ -630,7 +630,7 @@ end-method;
         var cache = new TypeCache();
 
         // Run type inference
-        var inferenceVisitor = TypeInferenceVisitor.Run(program, metadata, NullTypeMetadataResolver.Instance, cache);
+        var inferenceVisitor = TypeInferenceVisitor.Run(program, metadata, NullTypeMetadataResolver.Instance);
 
         // Run type checker (which calls FunctionCallValidator)
         var typeChecker = TypeCheckerVisitor.Run(program, NullTypeMetadataResolver.Instance, cache);
@@ -697,7 +697,7 @@ end-method;
         var cache = new TypeCache();
 
         // Run type inference
-        var visitor = TypeInferenceVisitor.Run(program, metadata, NullTypeMetadataResolver.Instance, cache);
+        var visitor = TypeInferenceVisitor.Run(program, metadata, NullTypeMetadataResolver.Instance);
 
         // Verify DEPOSIT_CONTROL was NOT auto-declared as a variable
         var allVariables = visitor.GetAllVariables().ToList();

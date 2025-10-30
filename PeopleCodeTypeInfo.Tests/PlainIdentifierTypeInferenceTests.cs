@@ -42,7 +42,7 @@ end-function;
 
         // Run type inference
         var cache = new TypeCache();
-        var visitor = TypeInferenceVisitor.Run(program, metadata, NullTypeMetadataResolver.Instance, cache);
+        var visitor = TypeInferenceVisitor.Run(program, metadata, NullTypeMetadataResolver.Instance);
 
         // Find the assignment: &result = A
         var function = program.Functions[0];
@@ -98,7 +98,7 @@ end-function;
 
         // Run type inference
         var cache = new TypeCache();
-        var visitor = TypeInferenceVisitor.Run(program, metadata, NullTypeMetadataResolver.Instance, cache);
+        var visitor = TypeInferenceVisitor.Run(program, metadata, NullTypeMetadataResolver.Instance);
 
         // Find the assignment: &result = MY_RECORD.MY_FIELD
         var function = program.Functions[0];
@@ -150,7 +150,7 @@ end-function;
 
         // Run type inference
         var cache = new TypeCache();
-        var visitor = TypeInferenceVisitor.Run(program, metadata, NullTypeMetadataResolver.Instance, cache);
+        var visitor = TypeInferenceVisitor.Run(program, metadata, NullTypeMetadataResolver.Instance);
 
         // Find all assignments
         var function = program.Functions[0];
@@ -200,7 +200,7 @@ end-function;
 
         // Run type inference
         var cache = new TypeCache();
-        var visitor = TypeInferenceVisitor.Run(program, metadata, NullTypeMetadataResolver.Instance, cache);
+        var visitor = TypeInferenceVisitor.Run(program, metadata, NullTypeMetadataResolver.Instance);
 
         // Find the assignment: &result = &myVar
         var function = program.Functions[0];
@@ -233,6 +233,90 @@ end-function;
         var collector = new AssignmentCollector();
         function.Accept(collector);
         return collector.Assignments;
+    }
+
+    /// <summary>
+    /// Test: Multi-variable instance declarations should properly register all variables.
+    /// Bug: Previously only the first variable in "instance Rowset &a, &b, &c;" was registered.
+    /// </summary>
+    [Fact]
+    public void MultiVariableInstanceDeclaration_ShouldRegisterAllVariables()
+    {
+        var source = @"
+class LoadDistribs
+   method LoadDistribs();
+private
+   instance Rowset &SPH_RST, &SPD_RST, &rowset_distrib;
+end-class;
+
+method LoadDistribs
+   %This.rowset_distrib.Flush();
+end-method;
+";
+
+        // Parse the source
+        var lexer = new PeopleCodeLexer(source);
+        var tokens = lexer.TokenizeAll();
+        var parser = new PeopleCodeParser.SelfHosted.PeopleCodeParser(tokens);
+        var program = parser.ParseProgram();
+
+        Assert.Empty(parser.Errors);
+
+        // Extract metadata
+        var metadata = TypeMetadataBuilder.ExtractMetadata(program, "LoadDistribs");
+
+        // Verify all three instance variables are registered
+        Assert.Equal(3, metadata.InstanceVariables.Count);
+
+        Assert.True(metadata.InstanceVariables.ContainsKey("&SPH_RST"));
+        Assert.True(metadata.InstanceVariables.ContainsKey("&SPD_RST"));
+        Assert.True(metadata.InstanceVariables.ContainsKey("&rowset_distrib"));
+
+        // Verify they all have the correct type
+        Assert.Equal(PeopleCodeType.Rowset, metadata.InstanceVariables["&SPH_RST"].Type);
+        Assert.Equal(PeopleCodeType.Rowset, metadata.InstanceVariables["&SPD_RST"].Type);
+        Assert.Equal(PeopleCodeType.Rowset, metadata.InstanceVariables["&rowset_distrib"].Type);
+
+        // Run type inference
+        var visitor = TypeInferenceVisitor.Run(program, metadata, NullTypeMetadataResolver.Instance);
+
+        // Find the member access expression %This.rowset_distrib
+        var memberAccess = FindMemberAccess(program, "rowset_distrib");
+        Assert.NotNull(memberAccess);
+
+        // Get the inferred type - should be Rowset, not 'any'
+        var inferredType = visitor.GetInferredType(memberAccess);
+        Assert.NotNull(inferredType);
+        Assert.Equal(PeopleCodeType.Rowset, inferredType.PeopleCodeType);
+    }
+
+    // Helper method to find a member access expression by member name
+    private static MemberAccessNode? FindMemberAccess(ProgramNode program, string memberName)
+    {
+        var collector = new MemberAccessCollector(memberName);
+        program.Accept(collector);
+        return collector.FoundNode;
+    }
+
+    // Helper visitor to find member access expressions
+    private class MemberAccessCollector : AstVisitorBase
+    {
+        private readonly string _memberName;
+        public MemberAccessNode? FoundNode { get; private set; }
+
+        public MemberAccessCollector(string memberName)
+        {
+            _memberName = memberName;
+        }
+
+        public override void VisitMemberAccess(MemberAccessNode node)
+        {
+            if (node.MemberName.Equals(_memberName, StringComparison.OrdinalIgnoreCase))
+            {
+                FoundNode = node;
+            }
+            base.VisitMemberAccess(node);
+        }
     }
 
     // Helper visitor to collect all assignment nodes

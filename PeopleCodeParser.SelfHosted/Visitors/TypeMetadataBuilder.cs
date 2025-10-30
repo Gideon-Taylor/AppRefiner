@@ -29,6 +29,8 @@ public class TypeMetadataBuilder : AstVisitorBase
     private string? _packageName;
     private ProgramKind _kind = ProgramKind.FunctionLibrary;
     private string? _baseClassName;
+    private bool _isBaseClassBuiltin;
+    private PeopleCodeType? _builtinBaseType;
     private string? _interfaceName;
 
     /// <summary>
@@ -59,6 +61,8 @@ public class TypeMetadataBuilder : AstVisitorBase
             PackageName = builder._packageName,
             Kind = builder._kind,
             BaseClassName = builder._baseClassName,
+            IsBaseClassBuiltin = builder._isBaseClassBuiltin,
+            BuiltinBaseType = builder._builtinBaseType,
             InterfaceName = builder._interfaceName,
             Methods = builder._methods,
             Properties = builder._properties,
@@ -123,6 +127,13 @@ public class TypeMetadataBuilder : AstVisitorBase
         if (node.BaseClass != null)
         {
             _baseClassName = ExtractTypeName(node.BaseClass);
+
+            // Check if base class is a builtin type
+            if (node.BaseClass is BuiltInTypeNode builtInNode)
+            {
+                _isBaseClassBuiltin = true;
+                _builtinBaseType = BuiltinTypeExtensions.FromString(builtInNode.TypeName);
+            }
         }
 
         if (node.ImplementedInterface != null)
@@ -157,8 +168,12 @@ public class TypeMetadataBuilder : AstVisitorBase
         foreach(var instanceVar in node.InstanceVariables)
         {
             var propertyInfo = BuildPropertyInfo(instanceVar);
-            _instanceVariables[instanceVar.Name] = propertyInfo;
-    }
+            // Handle all variable names in multi-variable declarations
+            foreach (var nameInfo in instanceVar.NameInfos)
+            {
+                _instanceVariables[nameInfo.Name] = propertyInfo;
+            }
+        }
     }
 
     private PropertyInfo BuildPropertyInfo(ProgramVariableNode instanceVar)

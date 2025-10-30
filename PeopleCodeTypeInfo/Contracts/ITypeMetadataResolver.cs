@@ -176,6 +176,11 @@ public abstract class ITypeMetadataResolver
     /// <param name="fieldName">The field name</param>
     /// <returns>Task that resolves to TypeInfo representing the field's data type</returns>
     protected abstract Task<Types.TypeInfo> GetFieldTypeCoreAsync(string recordName, string fieldName);
+
+    public TypeCache Cache
+    {
+        get { return _cache; }
+    }
 }
 
 /// <summary>

@@ -470,4 +470,207 @@ public class FunctionCallValidatorTests
             }
         };
     }
+
+    /// <summary>
+    /// Tests that passing 'object' to an AppClass parameter issues a warning.
+    /// Should pass validation but generate ImplicitNarrowingToAppClass warning.
+    /// </summary>
+    [Fact]
+    public void ValidateObjectToAppClass_ShouldPassWithWarning()
+    {
+        // Create a function that accepts an AppClass parameter
+        var functionInfo = new FunctionInfo
+        {
+            Name = "acceptVisitor",
+            ReturnType = new TypeWithDimensionality(PeopleCodeType.Void),
+            Parameters = new List<Parameter>
+            {
+                new SingleParameter
+                {
+                    Name = "oVisitor",
+                    ParameterType = new TypeWithDimensionality(
+                        PeopleCodeType.AppClass,
+                        0,
+                        "AUC_TREE:AbstractVisitor")
+                }
+            }
+        };
+
+        // Pass an 'object' type argument
+        var argumentTypes = new TypeInfo[]
+        {
+            ObjectTypeInfo.Instance
+        };
+
+        var validator = new FunctionCallValidator(NullTypeMetadataResolver.Instance);
+        var arguments = argumentTypes.Select(t => ArgumentInfo.NonVariable(t)).ToArray();
+        var result = validator.Validate(functionInfo, arguments);
+
+        // Should be valid
+        Assert.True(result.IsValid, $"Validation should pass but failed: {result.GetDetailedError()}");
+
+        // Should have exactly one warning
+        Assert.Single(result.Warnings);
+
+        // Check warning details
+        var warning = result.Warnings[0];
+        Assert.Equal(TypeWarningKind.ImplicitNarrowingToAppClass, warning.Kind);
+        Assert.Equal(0, warning.ArgumentIndex);
+        Assert.Equal("AUC_TREE:AbstractVisitor", warning.ExpectedType);
+        Assert.Equal("object", warning.FoundType);
+        Assert.Equal("acceptVisitor", warning.FunctionName);
+
+        // Check default message contains useful info
+        var message = warning.GetDefaultMessage();
+        Assert.Contains("object", message);
+        Assert.Contains("AUC_TREE:AbstractVisitor", message);
+        Assert.Contains("cast", message);
+    }
+
+    /// <summary>
+    /// Tests that passing 'any' to an AppClass parameter issues a warning.
+    /// Should pass validation but generate ImplicitNarrowingToAppClass warning.
+    /// </summary>
+    [Fact]
+    public void ValidateAnyToAppClass_ShouldPassWithWarning()
+    {
+        // Create a function that accepts an AppClass parameter
+        var functionInfo = new FunctionInfo
+        {
+            Name = "processNode",
+            ReturnType = new TypeWithDimensionality(PeopleCodeType.Void),
+            Parameters = new List<Parameter>
+            {
+                new SingleParameter
+                {
+                    Name = "node",
+                    ParameterType = new TypeWithDimensionality(
+                        PeopleCodeType.AppClass,
+                        0,
+                        "MyPackage:TreeNode")
+                }
+            }
+        };
+
+        // Pass an 'any' type argument
+        var argumentTypes = new TypeInfo[]
+        {
+            AnyTypeInfo.Instance
+        };
+
+        var validator = new FunctionCallValidator(NullTypeMetadataResolver.Instance);
+        var arguments = argumentTypes.Select(t => ArgumentInfo.NonVariable(t)).ToArray();
+        var result = validator.Validate(functionInfo, arguments);
+
+        // Should be valid
+        Assert.True(result.IsValid, $"Validation should pass but failed: {result.GetDetailedError()}");
+
+        // Should have exactly one warning
+        Assert.Single(result.Warnings);
+
+        // Check warning details
+        var warning = result.Warnings[0];
+        Assert.Equal(TypeWarningKind.ImplicitNarrowingToAppClass, warning.Kind);
+        Assert.Equal(0, warning.ArgumentIndex);
+        Assert.Equal("MyPackage:TreeNode", warning.ExpectedType);
+        Assert.Equal("any", warning.FoundType);
+        Assert.Equal("processNode", warning.FunctionName);
+    }
+
+    /// <summary>
+    /// Tests that passing a matching AppClass type does NOT generate a warning.
+    /// </summary>
+    [Fact]
+    public void ValidateMatchingAppClass_ShouldPassWithoutWarning()
+    {
+        var functionInfo = new FunctionInfo
+        {
+            Name = "acceptVisitor",
+            ReturnType = new TypeWithDimensionality(PeopleCodeType.Void),
+            Parameters = new List<Parameter>
+            {
+                new SingleParameter
+                {
+                    Name = "oVisitor",
+                    ParameterType = new TypeWithDimensionality(
+                        PeopleCodeType.AppClass,
+                        0,
+                        "AUC_TREE:AbstractVisitor")
+                }
+            }
+        };
+
+        // Pass a matching AppClass type
+        var argumentTypes = new TypeInfo[]
+        {
+            new AppClassTypeInfo("AUC_TREE:AbstractVisitor")
+        };
+
+        var validator = new FunctionCallValidator(NullTypeMetadataResolver.Instance);
+        var arguments = argumentTypes.Select(t => ArgumentInfo.NonVariable(t)).ToArray();
+        var result = validator.Validate(functionInfo, arguments);
+
+        // Should be valid
+        Assert.True(result.IsValid);
+
+        // Should have NO warnings
+        Assert.Empty(result.Warnings);
+    }
+
+    /// <summary>
+    /// Tests that passing object to multiple AppClass parameters generates multiple warnings.
+    /// </summary>
+    [Fact]
+    public void ValidateMultipleObjectToAppClass_ShouldGenerateMultipleWarnings()
+    {
+        var functionInfo = new FunctionInfo
+        {
+            Name = "compareNodes",
+            ReturnType = new TypeWithDimensionality(PeopleCodeType.Boolean),
+            Parameters = new List<Parameter>
+            {
+                new SingleParameter
+                {
+                    Name = "node1",
+                    ParameterType = new TypeWithDimensionality(
+                        PeopleCodeType.AppClass,
+                        0,
+                        "TreeNode")
+                },
+                new SingleParameter
+                {
+                    Name = "node2",
+                    ParameterType = new TypeWithDimensionality(
+                        PeopleCodeType.AppClass,
+                        0,
+                        "TreeNode")
+                }
+            }
+        };
+
+        // Pass two 'any' arguments
+        var argumentTypes = new TypeInfo[]
+        {
+            AnyTypeInfo.Instance,
+            AnyTypeInfo.Instance
+        };
+
+        var validator = new FunctionCallValidator(NullTypeMetadataResolver.Instance);
+        var arguments = argumentTypes.Select(t => ArgumentInfo.NonVariable(t)).ToArray();
+        var result = validator.Validate(functionInfo, arguments);
+
+        // Should be valid
+        Assert.True(result.IsValid);
+
+        // Should have TWO warnings
+        Assert.Equal(2, result.Warnings.Count);
+
+        // Check first warning
+        Assert.Equal(0, result.Warnings[0].ArgumentIndex);
+        Assert.Equal("TreeNode", result.Warnings[0].ExpectedType);
+
+        // Check second warning
+        Assert.Equal(1, result.Warnings[1].ArgumentIndex);
+        Assert.Equal("TreeNode", result.Warnings[1].ExpectedType);
+    }
 }

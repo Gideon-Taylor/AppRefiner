@@ -224,7 +224,7 @@ namespace AppRefiner.Refactors
             {
                 if (scope.Type == EnhancedScopeType.PropertyGetter)
                 {
-                    if (propertyNode.HasGet && propertyNode.GetterBody is not null)
+                    if (propertyNode.GetterBody is not null)
                     {
                         InsertAndCleanBody(propertyNode.GetterBody, newString, localVariables);
                     }
@@ -232,9 +232,9 @@ namespace AppRefiner.Refactors
 
                 if (scope.Type == EnhancedScopeType.PropertySetter)
                 {
-                    if (propertyNode.HasGet && propertyNode.GetterBody is not null)
+                    if (propertyNode.SetterBody is not null)
                     {
-                        InsertAndCleanBody(propertyNode.GetterBody, newString, localVariables);
+                        InsertAndCleanBody(propertyNode.SetterBody, newString, localVariables);
                     }
                 }
 
@@ -337,12 +337,12 @@ namespace AppRefiner.Refactors
 
         protected override void OnExitPropertyGetterScope(ScopeContext scope, PropertyNode node, Dictionary<string, object> customData)
         {
-            if (node.GetterImplementation is not null)
+            if (node.Getter is not null)
             {
                 if (selectedScopeMode == ScopeProcessingMode.AllScopes ||
-                    (selectedScopeMode == ScopeProcessingMode.CurrentScopeOnly && node.GetterImplementation.SourceSpan.ContainsPosition(CurrentPosition)))
+                    (selectedScopeMode == ScopeProcessingMode.CurrentScopeOnly && node.Getter.SourceSpan.ContainsPosition(CurrentPosition)))
                 {
-                    CollectVariables(scope, node.GetterImplementation);
+                    CollectVariables(scope, node.Getter);
                 }
             }
             base.OnExitPropertyGetterScope(scope, node, customData);
@@ -350,12 +350,12 @@ namespace AppRefiner.Refactors
 
         protected override void OnExitPropertySetterScope(ScopeContext scope, PropertyNode node, Dictionary<string, object> customData)
         {
-            if (node.SetterImplementation is not null)
+            if (node.Setter is not null)
             {
                 if (selectedScopeMode == ScopeProcessingMode.AllScopes ||
-                    (selectedScopeMode == ScopeProcessingMode.CurrentScopeOnly && node.SetterImplementation.SourceSpan.ContainsPosition(CurrentPosition)))
+                    (selectedScopeMode == ScopeProcessingMode.CurrentScopeOnly && node.Setter.SourceSpan.ContainsPosition(CurrentPosition)))
                 {
-                    CollectVariables(scope, node.SetterImplementation);
+                    CollectVariables(scope, node.Setter);
                 }
             }
             base.OnExitPropertySetterScope(scope, node, customData);

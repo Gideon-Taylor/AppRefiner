@@ -4,6 +4,7 @@ using DiffPlex.Model;
 using PeopleCodeParser.SelfHosted;
 using PeopleCodeTypeInfo.Contracts;
 using PeopleCodeTypeInfo.Inference;
+using PeopleCodeTypeInfo.Types;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -17,24 +18,34 @@ namespace AppRefiner
 {
     public class NullTypeMetadataResolver : ITypeMetadataResolver
     {
-        public TypeMetadata? GetTypeMetadata(string qualifiedName)
+
+        protected override TypeMetadata? GetTypeMetadataCore(string qualifiedName)
         {
             return null;
         }
 
-        public Task<TypeMetadata?> GetTypeMetadataAsync(string qualifiedName)
+        protected override Task<TypeMetadata?> GetTypeMetadataCoreAsync(string qualifiedName)
         {
             return Task.FromResult<TypeMetadata?>(null);
         }
 
-        public PeopleCodeTypeInfo.Types.TypeInfo GetFieldType(string recordName, string fieldName)
+        protected override TypeInfo GetFieldTypeCore(string recordName, string fieldName)
         {
-            return PeopleCodeTypeInfo.Types.AnyTypeInfo.Instance;
+            // Empty record name means runtime-inferred context - return any
+            if (string.IsNullOrEmpty(recordName))
+                return AnyTypeInfo.Instance;
+
+            // For testing purposes, return AnyTypeInfo
+            return AnyTypeInfo.Instance;
         }
 
-        public Task<PeopleCodeTypeInfo.Types.TypeInfo> GetFieldTypeAsync(string recordName, string fieldName)
+        protected override Task<TypeInfo> GetFieldTypeCoreAsync(string recordName, string fieldName)
         {
-            return Task.FromResult<PeopleCodeTypeInfo.Types.TypeInfo>(PeopleCodeTypeInfo.Types.AnyTypeInfo.Instance);
+            // Empty record name means runtime-inferred context - return any
+            if (string.IsNullOrEmpty(recordName))
+                return Task.FromResult<TypeInfo>(AnyTypeInfo.Instance);
+
+            return Task.FromResult<TypeInfo>(AnyTypeInfo.Instance);
         }
     }
 

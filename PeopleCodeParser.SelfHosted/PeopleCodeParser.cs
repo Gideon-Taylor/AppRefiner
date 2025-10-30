@@ -3,6 +3,7 @@ using PeopleCodeParser.SelfHosted.Nodes;
 using PeopleCodeTypeInfo.Types;
 using System.Diagnostics;
 using System.Net.Http.Headers;
+using System.Reflection.Metadata;
 
 namespace PeopleCodeParser.SelfHosted;
 
@@ -1795,6 +1796,43 @@ public class PeopleCodeParser
         }
     }
 
+    private void AddToMatchingClassMember(AppClassNode appClass, AstNode node)
+    {
+        if (node is MethodImplNode methodImpl)
+        {
+            var matchingMethod = appClass.Methods.Where(m => m.Name == methodImpl.Name).FirstOrDefault();
+            if (matchingMethod != null)
+            {
+                matchingMethod.SetImplementation(methodImpl);
+            }
+            else
+            {
+                ReportError($"Method implementation '{methodImpl.Name}' has no matching declaration");
+                appClass.AddOrphanedMethodImplementation(methodImpl);
+            }
+        }
+
+        else if (node is PropertyImplNode propImplNode)
+        {
+            var matchingProperty = appClass.Properties.Where(p => p.Name == propImplNode.Name).FirstOrDefault();
+            if (matchingProperty != null)
+            {
+                if (propImplNode.IsGetter)
+                {
+                    matchingProperty.Getter = propImplNode;
+                }
+                else if (propImplNode.IsSetter)
+                {
+                    matchingProperty.SetSetterImplementation(propImplNode);
+                }
+            }
+            else
+            {
+                ReportError($"Property getter '{propImplNode.Name}' has no matching declaration");
+                appClass.AddOrphanedPropertyImplementation(propImplNode);
+            }
+        }
+    }
 
     /// <summary>
     /// Parse class body and add members to existing app class (Phase 2 of app class parsing)
@@ -1805,26 +1843,12 @@ public class PeopleCodeParser
         {
             EnterRule("classBody");
 
-            // Create lookup tables for method and property unification
-            var methodDeclarations = new Dictionary<string, MethodNode>(StringComparer.OrdinalIgnoreCase);
-            var propertyDeclarations = new Dictionary<string, PropertyNode>(StringComparer.OrdinalIgnoreCase);
-
-            // Populate lookup tables from existing declarations in the class
-            foreach (var method in appClass.Methods)
-            {
-                methodDeclarations[method.Name] = method;
-            }
-            foreach (var property in appClass.Properties)
-            {
-                propertyDeclarations[property.Name] = property;
-            }
-
             // Parse first class member
             var firstMember = ParseClassMember();
 
             if (firstMember != null)
             {
-                UnifyClassMember(firstMember, appClass, methodDeclarations, propertyDeclarations);
+                AddToMatchingClassMember(appClass, firstMember);
             }
 
             // Parse additional members separated by semicolons
@@ -1849,8 +1873,7 @@ public class PeopleCodeParser
                 var member = ParseClassMember();
                 if (member != null)
                 {
-                    
-                    UnifyClassMember(member, appClass, methodDeclarations, propertyDeclarations);
+                    AddToMatchingClassMember(appClass, member);
                 }
                 else
                 {
@@ -1858,9 +1881,6 @@ public class PeopleCodeParser
                     break;
                 }
             }
-
-            // After parsing all implementations, check for orphaned declarations
-            ValidateMethodDeclarationImplementationPairs(appClass, methodDeclarations, propertyDeclarations);
         }
         catch (Exception ex)
         {
@@ -1870,114 +1890,6 @@ public class PeopleCodeParser
         finally
         {
             ExitRule();
-        }
-    }
-
-    /// <summary>
-    /// Unify class member with existing declarations (for method/property implementation unification)
-    /// </summary>
-    private void UnifyClassMember(AstNode member, AppClassNode appClass, Dictionary<string, MethodNode> methodDeclarations, Dictionary<string, PropertyNode> propertyDeclarations)
-    {
-        switch (member)
-        {
-            case MethodImplNode methodImplementation:
-                // Try to find matching method declaration
-                if (methodDeclarations.TryGetValue(methodImplementation.Name, out var declarationMethod))
-                {
-                    // Unify: attach implementation to existing declaration
-                    declarationMethod.SetImplementation(methodImplementation);
-
-                    // Copy any annotations from implementation
-                    // Note: The implementation already contains all annotations, so we don't need to duplicate them
-                    
-                    // The unified method is already in appClass.Methods, so we're done
-                }
-                else
-                {
-                    // Implementation without declaration - report error and add as-is
-                    ReportError($"Method implementation '{methodImplementation.Name}' has no matching declaration");
-                    // Convert MethodImplNode to MethodNode for adding to class
-                    var orphanedMethod = new MethodNode(methodImplementation.Name, methodImplementation.NameToken);
-                    orphanedMethod.SetImplementation(methodImplementation);
-                    appClass.AddMember(orphanedMethod, VisibilityModifier.Public);
-                }
-                break;
-
-            case MethodNode implementationMethod:
-                // Handle legacy MethodNode implementations (for backward compatibility)
-                if (methodDeclarations.TryGetValue(implementationMethod.Name, out var legacyDeclarationMethod))
-                {
-                    // Legacy: attach body from implementation to existing declaration
-                    if (implementationMethod.Body != null)
-                    {
-                        legacyDeclarationMethod.SetBody(implementationMethod.Body);
-                        legacyDeclarationMethod.ParameterAnnotations = implementationMethod.ParameterAnnotations;
-                    }
-
-                    // Copy any annotations from implementation
-                    if (!string.IsNullOrEmpty(implementationMethod.Documentation))
-                        legacyDeclarationMethod.Documentation = implementationMethod.Documentation;
-                }
-                else
-                {
-                    // Implementation without declaration - report error and add as-is
-                    ReportError($"Method implementation '{implementationMethod.Name}' has no matching declaration");
-                    appClass.AddMember(implementationMethod, VisibilityModifier.Public);
-                }
-                break;
-
-            case PropertyNode implementationProperty:
-                // Handle property getter/setter implementations
-                if (propertyDeclarations.TryGetValue(implementationProperty.Name, out var declarationProperty))
-                {
-                    // Unify: attach getter/setter implementation to existing declaration
-                    if (implementationProperty.IsGetter && implementationProperty.GetterImplementation != null)
-                        declarationProperty.SetGetterImplementation(implementationProperty.GetterImplementation);
-                    else if (implementationProperty.IsSetter && implementationProperty.SetterImplementation != null)
-                        declarationProperty.SetSetterImplementation(implementationProperty.SetterImplementation);
-
-                    // The unified property is already in appClass.Properties, so we're done
-                }
-                else
-                {
-                    // Implementation without declaration - report error and add as-is
-                    string implType = implementationProperty.IsGetter ? "getter" : "setter";
-                    ReportError($"Property {implType} implementation '{implementationProperty.Name}' has no matching declaration");
-                    appClass.AddMember(implementationProperty, VisibilityModifier.Public);
-                }
-                break;
-
-            default:
-                // Other member types (shouldn't happen in class body, but handle gracefully)
-                appClass.AddMember(member, VisibilityModifier.Public);
-                break;
-        }
-    }
-
-    /// <summary>
-    /// Validate that all method/property declarations have matching implementations
-    /// </summary>
-    private void ValidateMethodDeclarationImplementationPairs(AppClassNode appClass, Dictionary<string, MethodNode> methodDeclarations, Dictionary<string, PropertyNode> propertyDeclarations)
-    {
-        // Check for method declarations without implementations
-        foreach (var method in appClass.Methods.Where(m => m.IsDeclaration && !m.IsAbstract))
-        {
-            ReportError($"Method declaration '{method.Name}' has no matching implementation");
-        }
-
-        // Check for property declarations without getter/setter implementations (if required)
-        foreach (var property in appClass.Properties.Where(p => !p.IsImplementation && !p.IsReadOnly))
-        {
-            if (property.HasGet && property.GetterBody == null)
-            {
-                // Note: Not all properties require explicit getter implementations
-                // This could be a warning rather than an error depending on PeopleCode semantics
-            }
-            if (property.HasSet && property.SetterBody == null)
-            {
-                // Note: Not all properties require explicit setter implementations
-                // This could be a warning rather than an error depending on PeopleCode semantics
-            }
         }
     }
 
@@ -1997,13 +1909,9 @@ public class PeopleCodeParser
             {
                 return ParseMethodImplementation();
             }
-            else if (Check(TokenType.Get))
+            else if (Check(TokenType.Get) || Check(TokenType.Set))
             {
-                return ParseGetterImplementation();
-            }
-            else if (Check(TokenType.Set))
-            {
-                return ParseSetterImplementation();
+                return ParsePropertyImplementation();
             }
             else
             {
@@ -2139,42 +2047,49 @@ public class PeopleCodeParser
     /// Parse getter implementation according to ANTLR grammar:
     /// getter: GET genericID methodReturnAnnotation SEMI* statements END_GET
     /// </summary>
-    private PropertyNode? ParseGetterImplementation()
+    private PropertyImplNode? ParsePropertyImplementation()
     {
         try
         {
-            EnterRule("getterImplementation");
+            EnterRule("propertyImplementation");
+            bool isGetter = Check(TokenType.Get);
+            bool isSetter = Check(TokenType.Set);
 
-            if (!Match(TokenType.Get))
+            if (!isGetter && !isSetter)
             {
-                ReportError("Expected 'GET' keyword");
+                ReportError("Expected 'GET' or 'SET' keyword");
                 return null;
             }
+            _position++;
 
-            /* Register the "get" statement #*/
+            /* Register the "get"/"set" statement #*/
             _workingProgram!.SetStatementNumber( Previous.SourceSpan.Start.Line);
 
             // Parse property name
             var propertyName = ParseGenericId();
             if (propertyName == null)
             {
-                ReportError("Expected property name after 'GET'");
+                ReportError("Expected property name after 'GET' or 'SET'");
                 return null;
             }
 
-            // Create property node with unknown type for now (will be inferred)
-            var propertyNode = new PropertyNode(propertyName, Previous, new BuiltInTypeNode(PeopleCodeType.Any));
-
+            var propImplNode = new PropertyImplNode() { Name = propertyName, NameToken = Previous, IsGetter = isGetter, IsSetter = isSetter };
             // Parse method return annotation (contains the actual property type)
             // Try to parse a return annotation - it's fine if there isn't one
             int startPosition = _position;
-            if (!ParseMethodReturnAnnotation(propertyNode))
+            if (isGetter && !ParseMethodReturnAnnotation(propImplNode))
             {
                 _position = startPosition;
             }
 
             startPosition = _position;
-            if (!ParsePropertyExtendsAnnotation(propertyNode))
+            if (isSetter && !ParseMethodParameterAnnotation(propImplNode))
+            {
+                _position = startPosition;
+            }
+
+            startPosition = _position;
+            if (!ParsePropertyExtendsAnnotation(propImplNode))
             {
                 _position = startPosition;
             }
@@ -2184,108 +2099,32 @@ public class PeopleCodeParser
             while (Match(TokenType.Semicolon)) { }
 
             // Parse getter body
-            var getterBody = ParseStatementList(TokenType.EndGet);
+            var getterBody = ParseStatementList(TokenType.EndGet,TokenType.EndSet);
             getterBody.RegisterStatementNumbers(this, _workingProgram!);
-
-            // Create getter implementation
-            var getterImpl = new MethodImplNode(propertyName, Previous, getterBody);
-            propertyNode.SetGetterImplementation(getterImpl);
+            propImplNode.SetBody(getterBody);
 
             // Expect END-GET
-            Consume(TokenType.EndGet, "Expected 'END-GET' after getter implementation");
+            if (isGetter)
+            {
+                Consume(TokenType.EndGet, "Expected 'END-GET' after getter implementation");
+            } else if (isSetter)
+            {
+                Consume(TokenType.EndSet, "Expected 'END-SET' after setter implementation");
+            }
 
             /* register the end-set if blank or last statement had semicolon */
             if (getterBody.Statements.Count == 0 || getterBody.Statements.Last().HasSemicolon)
             {
-                _workingProgram!.SetStatementNumber( Previous.SourceSpan.Start.Line);
+                _workingProgram!.SetStatementNumber(Previous.SourceSpan.Start.Line);
             }
-            
 
-            return propertyNode;
+
+            return propImplNode;
         }
         catch (Exception ex)
         {
             ReportError($"Error parsing getter implementation: {ex.Message}");
             PanicRecover(new HashSet<TokenType> { TokenType.EndGet });
-            return null;
-        }
-        finally
-        {
-            ExitRule();
-        }
-    }
-
-    /// <summary>
-    /// Parse setter implementation according to ANTLR grammar:
-    /// setter: SET genericID methodParameterAnnotation SEMI* statements? END_SET
-    /// </summary>
-    private PropertyNode? ParseSetterImplementation()
-    {
-        try
-        {
-            EnterRule("setterImplementation");
-
-            if (!Match(TokenType.Set))
-            {
-                ReportError("Expected 'SET' keyword");
-                return null;
-            }
-
-            /* Register the "set" statement #*/
-            _workingProgram!.SetStatementNumber( Previous.SourceSpan.Start.Line);
-
-            // Parse property name
-            var propertyName = ParseGenericId();
-            if (propertyName == null)
-            {
-                ReportError("Expected property name after 'SET'");
-                return null;
-            }
-
-            // Create property node with unknown type for now
-            var propertyNode = new PropertyNode(propertyName, Previous, new BuiltInTypeNode(PeopleCodeType.Any));
-
-            // Parse method parameter annotation (contains the property type)
-            // Try to parse a parameter annotation - it's fine if there isn't one
-            int startPosition = _position;
-            if (!ParseMethodParameterAnnotation(propertyNode))
-            {
-                _position = startPosition;
-            }
-
-            startPosition = _position;
-            if (!ParsePropertyExtendsAnnotation(propertyNode))
-            {
-                _position = startPosition;
-            }
-
-            // Optional semicolons
-            while (Match(TokenType.Semicolon)) { }
-
-
-            var setterBody = ParseStatementList(TokenType.EndSet);
-            setterBody.RegisterStatementNumbers(this, _workingProgram!);
-
-            // Create setter implementation
-            var setterImpl = new MethodImplNode(propertyName, Previous, setterBody);
-            propertyNode.SetSetterImplementation(setterImpl);
-
-            
-            // Expect END-SET
-            Consume(TokenType.EndSet, "Expected 'END-SET' after setter implementation");
-
-            /* register the end-set if blank or last statement had semicolon */
-            if (setterBody.Statements.Count == 0 || setterBody.Statements.Last().HasSemicolon)
-            {
-                _workingProgram!.SetStatementNumber( Previous.SourceSpan.Start.Line);
-            }
-
-            return propertyNode;
-        }
-        catch (Exception ex)
-        {
-            ReportError($"Error parsing setter implementation: {ex.Message}");
-            PanicRecover(new HashSet<TokenType> { TokenType.EndSet });
             return null;
         }
         finally
@@ -2393,7 +2232,7 @@ public class PeopleCodeParser
     /// Parse method parameter annotation for property setter
     /// </summary>
     /// <returns>True if a parameter annotation was successfully parsed, false otherwise</returns>
-    private bool ParseMethodParameterAnnotation(PropertyNode propertyNode)
+    private bool ParseMethodParameterAnnotation(PropertyImplNode propImplNode)
     {
         try
         {
@@ -2413,6 +2252,10 @@ public class PeopleCodeParser
 
             // Parse parameter - for setter this gives us the property type
             var parameter = ParseMethodAnnotationArgument();
+            if (parameter != null)
+            {
+                propImplNode.AddParameterAnnotation(parameter);
+            }
             // Could update property type based on parameter type here
 
             // Optional comma
@@ -2471,7 +2314,7 @@ public class PeopleCodeParser
     /// Parse method return annotation for property getter
     /// </summary>
     /// <returns>True if a return annotation was successfully parsed, false otherwise</returns>
-    private bool ParseMethodReturnAnnotation(PropertyNode propertyNode)
+    private bool ParseMethodReturnAnnotation(PropertyImplNode getterNode)
     {
         try
         {
@@ -2582,7 +2425,7 @@ public class PeopleCodeParser
     /// Parse method extends annotation: SLASH_PLUS EXTENDS DIV IMPLEMENTS appClassPath DOT genericID PLUS_SLASH
     /// </summary>
     /// <returns>True if an extends annotation was successfully parsed, false otherwise</returns>
-    private bool ParsePropertyExtendsAnnotation(PropertyNode propertyNode)
+    private bool ParsePropertyExtendsAnnotation(PropertyImplNode getterNode)
     {
         try
         {
@@ -2621,7 +2464,7 @@ public class PeopleCodeParser
             else
             {
                 // Store the implemented interface in the method node
-                propertyNode.ImplementedInterface = classType;
+                getterNode.SetImplementationType(classType);
             }
 
             // Expect DOT
@@ -2635,7 +2478,7 @@ public class PeopleCodeParser
             {
                 string propertyName = Current.Text;
                 // Store the implemented method name in the property node
-                propertyNode.ImplementedPropertyName = propertyName;
+                getterNode.ImplementedPropertyName = propertyName;
             }
             else
             {
@@ -3834,7 +3677,7 @@ public class PeopleCodeParser
                 // Parse exception type (EXCEPTION or appClassPath)
                 if (Match(TokenType.Exception))
                 {
-                    exceptionType = new BuiltInTypeNode(PeopleCodeType.Any);
+                    exceptionType = new BuiltInTypeNode(PeopleCodeType.Exception);
                 }
                 else
                 {

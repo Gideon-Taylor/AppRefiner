@@ -118,7 +118,8 @@ namespace AppRefiner
         protected override void OnExitPropertyGetterScope(ScopeContext scope, PropertyNode node, Dictionary<string, object> customData)
         {
             base.OnExitPropertyGetterScope(scope, node, customData);
-            if (node.GetterBody != null && node.GetterBody.SourceSpan.ContainsPosition(targetPosition))
+            if (node.Getter == null) return;
+            if (node.Getter.Body != null && node.Getter.Body.SourceSpan.ContainsPosition(targetPosition))
             {
                 accessibleVariables = GetAccessibleVariables(scope).ToList();
             }
@@ -127,7 +128,8 @@ namespace AppRefiner
         protected override void OnExitPropertySetterScope(ScopeContext scope, PropertyNode node, Dictionary<string, object> customData)
         {
             base.OnExitPropertySetterScope(scope, node, customData);
-            if (node.SetterBody != null && node.SetterBody.SourceSpan.ContainsPosition(targetPosition))
+            if (node.Setter == null) return;
+            if (node.Setter.Body != null && node.Setter.Body.SourceSpan.ContainsPosition(targetPosition))
             {
                 accessibleVariables = GetAccessibleVariables(scope).ToList();
             }

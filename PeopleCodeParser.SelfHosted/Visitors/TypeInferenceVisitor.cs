@@ -25,7 +25,6 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
     private readonly TypeMetadata _programMetadata;
     private readonly ITypeMetadataResolver _typeResolver;
     private readonly TypeCache _typeCache;
-
     private TypeInferenceVisitor(
         ProgramNode program,
         TypeMetadata programMetadata,
@@ -44,10 +43,9 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
     public static TypeInferenceVisitor Run(
         ProgramNode program,
         TypeMetadata programMetadata,
-        ITypeMetadataResolver typeResolver,
-        TypeCache typeCache)
+        ITypeMetadataResolver typeResolver)
     {
-        var visitor = new TypeInferenceVisitor(program, programMetadata, typeResolver, typeCache);
+        var visitor = new TypeInferenceVisitor(program, programMetadata, typeResolver, typeResolver.Cache);
 
         // Pre-resolve all declared functions for efficient lookup
         visitor.ProcessDeclaredFunctions();
@@ -135,7 +133,7 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
             ArrayTypeNode array => new ArrayTypeInfo(
                 array.Dimensions,
                 ConvertTypeNodeToTypeInfo(array.ElementType)),
-            AppClassTypeNode appClass => new AppClassTypeInfo(
+            AppClassTypeNode appClass => CreateAppClassTypeInfo(
                 string.Join(":", appClass.PackagePath.Append(appClass.ClassName))),
             _ => UnknownTypeInfo.Instance
         };
@@ -147,12 +145,64 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
     private TypeInfo ConvertTypeWithDimensionalityToTypeInfo(TypeWithDimensionality twd)
     {
         TypeInfo baseType = twd.IsAppClass
-            ? new AppClassTypeInfo(twd.AppClassPath!)
+            ? CreateAppClassTypeInfo(twd.AppClassPath!)
             : TypeInfo.FromPeopleCodeType(twd.Type);
 
         return twd.IsArray
             ? new ArrayTypeInfo(twd.ArrayDimensionality, baseType)
             : baseType;
+    }
+
+    /// <summary>
+    /// Create an AppClassTypeInfo with builtin base class information if available.
+    /// Traverses the inheritance chain to find the ultimate builtin base type.
+    /// </summary>
+    private AppClassTypeInfo CreateAppClassTypeInfo(string qualifiedName)
+    {
+        // Traverse the inheritance chain to find the ultimate builtin base type
+        var currentClassName = qualifiedName;
+        var visited = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { currentClassName };
+
+        while (!string.IsNullOrEmpty(currentClassName))
+        {
+            // Try to get metadata - check cache first, then resolver
+            TypeMetadata? metadata = _typeCache.Get(currentClassName);
+            if (metadata == null && _typeResolver != null)
+            {
+                metadata = _typeResolver.GetTypeMetadata(currentClassName);
+                if (metadata != null)
+                    _typeCache.Set(currentClassName, metadata);
+            }
+
+            if (metadata == null)
+            {
+                break; // Can't resolve metadata
+            }
+
+            // Check if this class directly extends a builtin type
+            if (metadata.IsBaseClassBuiltin && metadata.BuiltinBaseType.HasValue)
+            {
+                return new AppClassTypeInfo(qualifiedName, true, metadata.BuiltinBaseType.Value);
+            }
+
+            // Check if this class has a base class
+            if (string.IsNullOrEmpty(metadata.BaseClassName))
+            {
+                break; // No more base classes
+            }
+
+            // Move to the base class
+            currentClassName = metadata.BaseClassName;
+
+            // Circular inheritance detection
+            if (!visited.Add(currentClassName))
+            {
+                break; // Detected circular inheritance
+            }
+        }
+
+        // No builtin base class found in the inheritance chain
+        return new AppClassTypeInfo(qualifiedName);
     }
 
     /// <summary>
@@ -230,7 +280,7 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
         // The resolver will handle it if it's queried later
         if (typeName.Contains(':'))
         {
-            return new AppClassTypeInfo(typeName);
+            return CreateAppClassTypeInfo(typeName);
         }
 
         // Unknown type
@@ -350,7 +400,7 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
             }
         }
 
-        return UnknownTypeInfo.Instance;
+        return AnyTypeInfo.Instance;
     }
 
 
@@ -395,6 +445,19 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
             if (metadata != null && metadata.Methods.TryGetValue(methodName, out var method))
             {
                 return method;
+            }
+
+            // Check if we've reached a builtin base class
+            if (metadata != null && metadata.IsBaseClassBuiltin && metadata.BuiltinBaseType.HasValue)
+            {
+                // Look up method in the builtin type database
+                var builtinTypeName = metadata.BuiltinBaseType.Value.GetTypeName();
+                var builtinMethod = PeopleCodeTypeDatabase.GetMethod(builtinTypeName, methodName);
+                if (builtinMethod != null)
+                {
+                    return builtinMethod;
+                }
+                break; // Builtin types don't have further inheritance to traverse
             }
 
             // Move to the base class
@@ -463,6 +526,19 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
             if (metadata != null && metadata.Properties.TryGetValue(propertyName, out var property))
             {
                 return property;
+            }
+
+            // Check if we've reached a builtin base class
+            if (metadata != null && metadata.IsBaseClassBuiltin && metadata.BuiltinBaseType.HasValue)
+            {
+                // Look up property in the builtin type database
+                var builtinTypeName = metadata.BuiltinBaseType.Value.GetTypeName();
+                var builtinProperty = PeopleCodeTypeDatabase.GetProperty(builtinTypeName, propertyName);
+                if (builtinProperty != null)
+                {
+                    return builtinProperty;
+                }
+                break; // Builtin types don't have further inheritance to traverse
             }
 
             // Move to the base class
@@ -628,7 +704,7 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
             // %This refers to the current instance of the class being analyzed
             if (_programMetadata.Kind == ProgramKind.AppClass || _programMetadata.Kind == ProgramKind.Interface)
             {
-                var thisType = new AppClassTypeInfo(_programMetadata.QualifiedName);
+                var thisType = CreateAppClassTypeInfo(_programMetadata.QualifiedName);
                 SetInferredType(node, thisType);
             }
             else
@@ -644,8 +720,19 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
             if ((_programMetadata.Kind == ProgramKind.AppClass || _programMetadata.Kind == ProgramKind.Interface)
                 && !string.IsNullOrEmpty(_programMetadata.BaseClassName))
             {
-                var superType = new AppClassTypeInfo(_programMetadata.BaseClassName);
-                SetInferredType(node, superType);
+                // Check if the base class is a builtin type
+                if (_programMetadata.IsBaseClassBuiltin && _programMetadata.BuiltinBaseType.HasValue)
+                {
+                    // %Super refers to a builtin type - use the builtin type directly
+                    var superType = TypeInfo.FromPeopleCodeType(_programMetadata.BuiltinBaseType.Value);
+                    SetInferredType(node, superType);
+                }
+                else
+                {
+                    // %Super refers to another AppClass
+                    var superType = CreateAppClassTypeInfo(_programMetadata.BaseClassName);
+                    SetInferredType(node, superType);
+                }
             }
             else
             {
@@ -766,42 +853,41 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
                 return;
             }
         }
-        else if (node.Operator == BinaryOperator.Concatenate)
+        // Concatenation operator (|) accepts any type and coerces to string at runtime
+        // No type checking needed for BinaryOperator.Concatenate
+
+        // Special handling for date/time arithmetic (Add and Subtract only)
+        TypeInfo resultType;
+        if (node.Operator is BinaryOperator.Add or BinaryOperator.Subtract)
         {
-            if (!CanConcatenate(leftType) || !CanConcatenate(rightType))
-            {
-                var invalid = new InvalidTypeInfo(
-                    $"Cannot concatenate types '{leftType}' and '{rightType}' - concatenation requires string types");
-                node.SetTypeError(new TypeError(invalid.Reason, node));
-                SetInferredType(node, UnknownTypeInfo.Instance);
-                return;
-            }
+            resultType = InferDateTimeArithmetic(node, leftType, rightType);
         }
-
-        // Existing type inference logic
-        TypeInfo resultType = node.Operator switch
+        else
         {
-            // Comparison operators always return boolean
-            BinaryOperator.Equal or BinaryOperator.NotEqual or
-            BinaryOperator.LessThan or BinaryOperator.LessThanOrEqual or
-            BinaryOperator.GreaterThan or BinaryOperator.GreaterThanOrEqual
-                => PrimitiveTypeInfo.Boolean,
+            // Non-date/time operators use standard logic
+            resultType = node.Operator switch
+            {
+                // Comparison operators always return boolean
+                BinaryOperator.Equal or BinaryOperator.NotEqual or
+                BinaryOperator.LessThan or BinaryOperator.LessThanOrEqual or
+                BinaryOperator.GreaterThan or BinaryOperator.GreaterThanOrEqual
+                    => PrimitiveTypeInfo.Boolean,
 
-            // Logical operators return boolean
-            BinaryOperator.And or BinaryOperator.Or
-                => PrimitiveTypeInfo.Boolean,
+                // Logical operators return boolean
+                BinaryOperator.And or BinaryOperator.Or
+                    => PrimitiveTypeInfo.Boolean,
 
-            // String concatenation (pipe operator) always returns string
-            BinaryOperator.Concatenate
-                => PrimitiveTypeInfo.String,
+                // String concatenation (pipe operator) always returns string
+                BinaryOperator.Concatenate
+                    => PrimitiveTypeInfo.String,
 
-            // Arithmetic operators - apply type promotion
-            BinaryOperator.Add or BinaryOperator.Subtract or
-            BinaryOperator.Multiply or BinaryOperator.Divide or BinaryOperator.Power
-                => leftType.GetCommonType(rightType),
+                // Other arithmetic operators - apply type promotion
+                BinaryOperator.Multiply or BinaryOperator.Divide or BinaryOperator.Power
+                    => leftType.GetCommonType(rightType),
 
-            _ => leftType.GetCommonType(rightType)
-        };
+                _ => leftType.GetCommonType(rightType)
+            };
+        }
 
         SetInferredType(node, resultType);
     }
@@ -922,7 +1008,7 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
         }
         else
         {
-            SetInferredType(node, UnknownTypeInfo.Instance);
+            SetInferredType(node, AnyTypeInfo.Instance);
         }
     }
 
@@ -989,9 +1075,15 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
 
     /// <summary>
     /// Check if a type can be used in arithmetic operations
+    /// Includes numeric types (Number, Integer) and date/time types (Date, Time, DateTime)
     /// </summary>
     private bool CanPerformArithmetic(TypeInfo type) =>
-        type is PrimitiveTypeInfo { PeopleCodeType: PeopleCodeType.Number or PeopleCodeType.Integer } ||
+        type is PrimitiveTypeInfo { PeopleCodeType:
+            PeopleCodeType.Number or
+            PeopleCodeType.Integer or
+            PeopleCodeType.Date or
+            PeopleCodeType.Time or
+            PeopleCodeType.DateTime } ||
         type is AnyTypeInfo ||
         type is UnknownTypeInfo;
 
@@ -1004,12 +1096,218 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
         type is UnknownTypeInfo;
 
     /// <summary>
-    /// Check if a type can be concatenated (string concatenation)
+    /// Infer the result type for date/time arithmetic operations
+    /// Handles special rules for Add and Subtract with Date, Time, and DateTime types
     /// </summary>
-    private bool CanConcatenate(TypeInfo type) =>
-        type is PrimitiveTypeInfo { PeopleCodeType: PeopleCodeType.String } ||
-        type is AnyTypeInfo ||
-        type is UnknownTypeInfo;
+    private TypeInfo InferDateTimeArithmetic(BinaryOperationNode node, TypeInfo leftType, TypeInfo rightType)
+    {
+        var left = (leftType as PrimitiveTypeInfo)?.PeopleCodeType;
+        var right = (rightType as PrimitiveTypeInfo)?.PeopleCodeType;
+
+        // Handle Any and Unknown types - they can participate in date/time arithmetic
+        if (leftType is AnyTypeInfo || rightType is AnyTypeInfo ||
+            leftType is UnknownTypeInfo || rightType is UnknownTypeInfo)
+        {
+            // If one side is a known date/time type and the other is any/unknown,
+            // we can't infer a specific result type
+            if (left.HasValue || right.HasValue)
+            {
+                return leftType.GetCommonType(rightType);
+            }
+        }
+
+        // Both must be primitive types for date/time arithmetic
+        if (!left.HasValue || !right.HasValue)
+        {
+            return leftType.GetCommonType(rightType);
+        }
+
+        // Apply date/time arithmetic rules
+        var isAdd = node.Operator == BinaryOperator.Add;
+        var isSubtract = node.Operator == BinaryOperator.Subtract;
+
+        // time + number => time (both orders)
+        if (isAdd && ((left == PeopleCodeType.Time && right == PeopleCodeType.Number) ||
+                      (left == PeopleCodeType.Number && right == PeopleCodeType.Time)))
+        {
+            return PrimitiveTypeInfo.Time;
+        }
+
+        // time - number => time (only left to right)
+        if (isSubtract && left == PeopleCodeType.Time && right == PeopleCodeType.Number)
+        {
+            return PrimitiveTypeInfo.Time;
+        }
+
+        // date + number => date (both orders)
+        if (isAdd && ((left == PeopleCodeType.Date && right == PeopleCodeType.Number) ||
+                      (left == PeopleCodeType.Number && right == PeopleCodeType.Date)))
+        {
+            return PrimitiveTypeInfo.Date;
+        }
+
+        // date - number => date (only left to right)
+        if (isSubtract && left == PeopleCodeType.Date && right == PeopleCodeType.Number)
+        {
+            return PrimitiveTypeInfo.Date;
+        }
+
+        // date - date => number
+        if (isSubtract && left == PeopleCodeType.Date && right == PeopleCodeType.Date)
+        {
+            return PrimitiveTypeInfo.Number;
+        }
+
+        // time - time => number
+        if (isSubtract && left == PeopleCodeType.Time && right == PeopleCodeType.Time)
+        {
+            return PrimitiveTypeInfo.Number;
+        }
+
+        // date + time => datetime (both orders)
+        if (isAdd && ((left == PeopleCodeType.Date && right == PeopleCodeType.Time) ||
+                      (left == PeopleCodeType.Time && right == PeopleCodeType.Date)))
+        {
+            return PrimitiveTypeInfo.DateTime;
+        }
+
+        // datetime - datetime => number
+        if (isSubtract && left == PeopleCodeType.DateTime && right == PeopleCodeType.DateTime)
+        {
+            return PrimitiveTypeInfo.Number;
+        }
+
+        // Invalid combinations - generate type errors
+
+        // datetime - time is not allowed
+        if (isSubtract && left == PeopleCodeType.DateTime && right == PeopleCodeType.Time)
+        {
+            var invalid = new InvalidTypeInfo(
+                "Cannot subtract time from datetime - this operation is not supported");
+            node.SetTypeError(new TypeError(invalid.Reason, node));
+            return UnknownTypeInfo.Instance;
+        }
+
+        // time - datetime is not allowed
+        if (isSubtract && left == PeopleCodeType.Time && right == PeopleCodeType.DateTime)
+        {
+            var invalid = new InvalidTypeInfo(
+                "Cannot subtract datetime from time - this operation is not supported");
+            node.SetTypeError(new TypeError(invalid.Reason, node));
+            return UnknownTypeInfo.Instance;
+        }
+
+        // datetime + datetime is not allowed
+        if (isAdd && left == PeopleCodeType.DateTime && right == PeopleCodeType.DateTime)
+        {
+            var invalid = new InvalidTypeInfo(
+                "Cannot add datetime to datetime - this operation is not supported");
+            node.SetTypeError(new TypeError(invalid.Reason, node));
+            return UnknownTypeInfo.Instance;
+        }
+
+        // datetime + time is not allowed (date + time is allowed, but datetime + time is not)
+        if (isAdd && left == PeopleCodeType.DateTime && right == PeopleCodeType.Time)
+        {
+            var invalid = new InvalidTypeInfo(
+                "Cannot add time to datetime - this operation is not supported");
+            node.SetTypeError(new TypeError(invalid.Reason, node));
+            return UnknownTypeInfo.Instance;
+        }
+
+        // time + datetime is not allowed
+        if (isAdd && left == PeopleCodeType.Time && right == PeopleCodeType.DateTime)
+        {
+            var invalid = new InvalidTypeInfo(
+                "Cannot add datetime to time - this operation is not supported");
+            node.SetTypeError(new TypeError(invalid.Reason, node));
+            return UnknownTypeInfo.Instance;
+        }
+
+        // datetime + date is not allowed
+        if (isAdd && left == PeopleCodeType.DateTime && right == PeopleCodeType.Date)
+        {
+            var invalid = new InvalidTypeInfo(
+                "Cannot add date to datetime - this operation is not supported");
+            node.SetTypeError(new TypeError(invalid.Reason, node));
+            return UnknownTypeInfo.Instance;
+        }
+
+        // date + datetime is not allowed
+        if (isAdd && left == PeopleCodeType.Date && right == PeopleCodeType.DateTime)
+        {
+            var invalid = new InvalidTypeInfo(
+                "Cannot add datetime to date - this operation is not supported");
+            node.SetTypeError(new TypeError(invalid.Reason, node));
+            return UnknownTypeInfo.Instance;
+        }
+
+        // datetime - date is not allowed
+        if (isSubtract && left == PeopleCodeType.DateTime && right == PeopleCodeType.Date)
+        {
+            var invalid = new InvalidTypeInfo(
+                "Cannot subtract date from datetime - this operation is not supported");
+            node.SetTypeError(new TypeError(invalid.Reason, node));
+            return UnknownTypeInfo.Instance;
+        }
+
+        // date - datetime is not allowed
+        if (isSubtract && left == PeopleCodeType.Date && right == PeopleCodeType.DateTime)
+        {
+            var invalid = new InvalidTypeInfo(
+                "Cannot subtract datetime from date - this operation is not supported");
+            node.SetTypeError(new TypeError(invalid.Reason, node));
+            return UnknownTypeInfo.Instance;
+        }
+
+        // date - time is not allowed
+        if (isSubtract && left == PeopleCodeType.Date && right == PeopleCodeType.Time)
+        {
+            var invalid = new InvalidTypeInfo(
+                "Cannot subtract time from date - this operation is not supported");
+            node.SetTypeError(new TypeError(invalid.Reason, node));
+            return UnknownTypeInfo.Instance;
+        }
+
+        // time - date is not allowed
+        if (isSubtract && left == PeopleCodeType.Time && right == PeopleCodeType.Date)
+        {
+            var invalid = new InvalidTypeInfo(
+                "Cannot subtract date from time - this operation is not supported");
+            node.SetTypeError(new TypeError(invalid.Reason, node));
+            return UnknownTypeInfo.Instance;
+        }
+
+        // datetime + number is not allowed
+        if (isAdd && left == PeopleCodeType.DateTime && right == PeopleCodeType.Number)
+        {
+            var invalid = new InvalidTypeInfo(
+                "Cannot add number to datetime - this operation is not supported");
+            node.SetTypeError(new TypeError(invalid.Reason, node));
+            return UnknownTypeInfo.Instance;
+        }
+
+        // number + datetime is not allowed
+        if (isAdd && left == PeopleCodeType.Number && right == PeopleCodeType.DateTime)
+        {
+            var invalid = new InvalidTypeInfo(
+                "Cannot add datetime to number - this operation is not supported");
+            node.SetTypeError(new TypeError(invalid.Reason, node));
+            return UnknownTypeInfo.Instance;
+        }
+
+        // datetime - number is not allowed
+        if (isSubtract && left == PeopleCodeType.DateTime && right == PeopleCodeType.Number)
+        {
+            var invalid = new InvalidTypeInfo(
+                "Cannot subtract number from datetime - this operation is not supported");
+            node.SetTypeError(new TypeError(invalid.Reason, node));
+            return UnknownTypeInfo.Instance;
+        }
+
+        // If we get here, it's a normal numeric operation
+        return leftType.GetCommonType(rightType);
+    }
 
     /// <summary>
     /// Convert a binary operator to its string representation

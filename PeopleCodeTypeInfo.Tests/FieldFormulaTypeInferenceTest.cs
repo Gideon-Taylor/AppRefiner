@@ -42,7 +42,7 @@ public class FieldFormulaTypeInferenceTest : IDisposable
         _cache = new TypeCache();
 
         // Run type inference
-        _visitor = TypeInferenceVisitor.Run(_program, _programMetadata, _resolver, _cache);
+        _visitor = TypeInferenceVisitor.Run(_program, _programMetadata, _resolver);
     }
 
     public void Dispose()

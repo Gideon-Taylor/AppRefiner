@@ -38,7 +38,7 @@ public class ArrayAccessInferenceTests : IDisposable
         Assert.Empty(parser.Errors);
 
         var metadata = TypeMetadataBuilder.ExtractMetadata(program, "ArrayAccessTest");
-        var visitor = TypeInferenceVisitor.Run(program, metadata, NullTypeMetadataResolver.Instance, _cache);
+        var visitor = TypeInferenceVisitor.Run(program, metadata, NullTypeMetadataResolver.Instance);
 
         return (program, visitor);
     }

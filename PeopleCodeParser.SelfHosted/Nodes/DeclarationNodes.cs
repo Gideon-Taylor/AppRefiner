@@ -207,17 +207,12 @@ public class PropertyNode : DeclarationNode
     /// <summary>
     /// True if property has a getter
     /// </summary>
-    public bool HasGet { get; set; } = true;
+    public bool HasGet { get; set; } = false;
 
     /// <summary>
     /// True if property has a setter
     /// </summary>
-    public bool HasSet { get; set; } = true;
-
-    /// <summary>
-    /// True if property has a setter (compatibility property)
-    /// </summary>
-    public bool HasSetter => HasSet;
+    public bool HasSet { get; set; } = false;
 
     /// <summary>
     /// True if property is read-only
@@ -230,61 +225,18 @@ public class PropertyNode : DeclarationNode
     public bool IsAbstract { get; set; }
 
     /// <summary>
-    /// Class or Interface this property implements
-    /// </summary>
-    private TypeNode? _implementedInterface;
-    public TypeNode? ImplementedInterface
-    {
-        get => _implementedInterface;
-        set
-        {
-            if (_implementedInterface != null)
-                RemoveChild(_implementedInterface);
-            _implementedInterface = value;
-            if (_implementedInterface != null)
-                AddChild(_implementedInterface);
-        }
-    }
-
-    /// <summary>
-    /// Gets or sets the name of the implemented property.
-    /// </summary>
-    public string? ImplementedPropertyName { get; set; }
-
-    /// <summary>
     /// Property getter implementation (for implementations)
     /// </summary>
-    public MethodImplNode? GetterImplementation { get; set; }
+    public PropertyImplNode? Getter { get; set; } 
 
     /// <summary>
     /// Property setter implementation (for implementations)
     /// </summary>
-    public MethodImplNode? SetterImplementation { get; set; }
 
-    /// <summary>
-    /// Property getter body (compatibility property - returns GetterImplementation?.Body)
-    /// </summary>
-    public BlockNode? GetterBody => GetterImplementation?.Body;
+    public PropertyImplNode? Setter { get; set; }
 
-    /// <summary>
-    /// Property setter body (compatibility property - returns SetterImplementation?.Body)
-    /// </summary>
-    public BlockNode? SetterBody => SetterImplementation?.Body;
-
-    /// <summary>
-    /// True if this is a getter implementation
-    /// </summary>
-    public bool IsGetter => GetterBody != null && SetterBody == null;
-
-    /// <summary>
-    /// True if this is a setter implementation
-    /// </summary>
-    public bool IsSetter => SetterBody != null && GetterBody == null;
-
-    /// <summary>
-    /// True if this is a property implementation (has getter or setter body)
-    /// </summary>
-    public bool IsImplementation => GetterBody != null || SetterBody != null;
+    public BlockNode? GetterBody { get { return Getter?.Body ?? null; } }
+    public BlockNode? SetterBody { get { return Setter?.Body ?? null; } }
 
     /// <summary>
     /// Class this property belongs to (for implementations outside class)
@@ -297,24 +249,24 @@ public class PropertyNode : DeclarationNode
         AddChild(type);
     }
 
-    public void SetGetterImplementation(MethodImplNode getterImplementation)
+    public void SetGetterImplementation(PropertyImplNode getterImplementation)
     {
-        if (GetterImplementation != null)
-            RemoveChild(GetterImplementation);
+        if (Getter != null)
+            RemoveChild(Getter);
 
-        GetterImplementation = getterImplementation;
+        Getter = getterImplementation;
         if (getterImplementation != null)
             AddChild(getterImplementation);
 
         
     }
 
-    public void SetSetterImplementation(MethodImplNode setterImplementation)
+    public void SetSetterImplementation(PropertyImplNode setterImplementation)
     {
-        if (SetterImplementation != null)
-            RemoveChild(SetterImplementation);
+        if (Setter != null)
+            RemoveChild(Setter);
 
-        SetterImplementation = setterImplementation;
+        Setter = setterImplementation;
         if (setterImplementation != null)
             AddChild(setterImplementation);
     }
@@ -341,8 +293,7 @@ public class PropertyNode : DeclarationNode
             (true, _, true) => " readonly",
             _ => ""
         };
-        var impl = IsImplementation ? " (impl)" : "";
-        return $"{className}{Type} {Name}{access}{impl}";
+        return $"{className}{Type} {Name}{access}";
     }
 
     public override void RegisterStatementNumbers(PeopleCodeParser parser, ProgramNode programNode)
@@ -353,6 +304,61 @@ public class PropertyNode : DeclarationNode
     }
 }
 
+public class PropertyImplNode : AstNode
+{
+    public string Name { get; set; }
+    public Token NameToken { get; set; }
+
+    public bool IsGetter { get; set; } = false;
+    public bool IsSetter { get; set; } = false;
+
+    public List<ParameterNode> ParameterAnnotations { get; } = new();
+
+    public void AddParameterAnnotation(ParameterNode annotation)
+    {
+        ParameterAnnotations.Add(annotation);
+        AddChild(annotation);
+    }
+    public void SetBody(BlockNode body)
+    {
+        if (Body != null)
+        {
+            RemoveChild(Body);
+        }
+        Body = body;
+        AddChild(Body);
+    }
+
+    public void SetImplementationType(TypeNode type)
+    {
+        if (ImplementedInterface != null)
+        {
+            RemoveChild(ImplementedInterface);
+        }
+        ImplementedInterface = type;
+    }
+    /// <summary>
+    /// Class or Interface this property implements
+    /// </summary>
+    public TypeNode? ImplementedInterface { get; set; }
+
+    /// <summary>
+    /// Gets or sets the name of the implemented property.
+    /// </summary>
+    public string? ImplementedPropertyName { get; set; }
+
+    public BlockNode? Body { get; set; }
+
+    public override void Accept(IAstVisitor visitor)
+    {
+        visitor.VisitPropertyImpl(this);
+    }
+
+    public override TResult Accept<TResult>(IAstVisitor<TResult> visitor)
+    {
+        return visitor.VisitPropertyImpl(this);
+    }
+}
 /// <summary>
 /// Program-level variable declaration (Component, Global, or Instance scope)
 /// Does not include local variables - use LocalVariableDeclarationNode for those

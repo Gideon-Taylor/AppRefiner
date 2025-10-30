@@ -3,7 +3,9 @@ using PeopleCodeParser.SelfHosted.Nodes;
 using PeopleCodeParser.SelfHosted.Visitors;
 using PeopleCodeTypeInfo.Functions;
 using PeopleCodeTypeInfo.Inference;
+using PeopleCodeTypeInfo.Types;
 using PeopleCodeTypeInfo.Validation;
+using System.Diagnostics;
 using System.Reflection;
 using System.Text;
 
@@ -39,7 +41,7 @@ namespace AppRefiner.TooltipProviders
             Debug.Log($"Initialized TooltipManager with {providers.Count} providers");
         }
 
-        public static void ShowFunctionCallTooltip(ScintillaEditor editor, FunctionCallNode node)
+        public static void ShowFunctionCallTooltip(ScintillaEditor editor, ProgramNode program, FunctionCallNode node)
         {
             FunctionInfo? funcInfo = node.GetFunctionInfo();
             string toolTipText;
@@ -51,8 +53,30 @@ namespace AppRefiner.TooltipProviders
             {
 
                 var validator = new FunctionCallValidator(new NullTypeMetadataResolver());
-                
-                var allowedTypes = validator.GetAllowedNextTypes(funcInfo, node.Arguments.Select(a => a.GetInferredType()).ToArray());
+
+                List<ArgumentInfo> arguments = [];
+                foreach (var a in node.Arguments)
+                {
+                    if (a is IdentifierNode ident && ident.Name.StartsWith("&"))
+                    {
+                        var autoDeclareCheck = program.AutoDeclaredVariables.Where(v => v.Name == ident.Name).FirstOrDefault();
+
+                        if (autoDeclareCheck is not null)
+                        {
+                            arguments.Add(ArgumentInfo.Variable(AnyTypeInfo.Instance));
+                        }
+                        else
+                        {
+                            arguments.Add(ArgumentInfo.Variable(a.GetInferredType()));
+                        }
+                    }
+                    else
+                    {
+                        arguments.Add(ArgumentInfo.NonVariable(a.GetInferredType()));
+                    }
+                }
+
+                var allowedTypes = validator.GetAllowedNextTypes(funcInfo, arguments.ToArray());
 
                 (var text, var start, var end) = FormatFunctionCallTip(funcInfo, allowedTypes);
 

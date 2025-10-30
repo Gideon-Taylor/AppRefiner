@@ -152,10 +152,10 @@ public abstract class ScopedAstVisitor<T> : AstVisitorBase
                 OnEnterFunctionScope(scope, (FunctionNode)sourceNode);
                 break;
             case EnhancedScopeType.PropertyGetter:
-                OnEnterPropertyGetterScope(scope, (PropertyNode)sourceNode);
+                OnEnterPropertyGetterScope(scope, (PropertyImplNode)sourceNode);
                 break;
             case EnhancedScopeType.PropertySetter:
-                OnEnterPropertySetterScope(scope, (PropertyNode)sourceNode);
+                OnEnterPropertySetterScope(scope, (PropertyImplNode)sourceNode);
                 break;
             case EnhancedScopeType.Class:
                 OnEnterClassScope(scope, (AppClassNode)sourceNode);
@@ -180,10 +180,10 @@ public abstract class ScopedAstVisitor<T> : AstVisitorBase
                 OnExitFunctionScope(scope, (FunctionNode)sourceNode, customData);
                 break;
             case EnhancedScopeType.PropertyGetter:
-                OnExitPropertyGetterScope(scope, (PropertyNode)sourceNode, customData);
+                OnExitPropertyGetterScope(scope, (PropertyImplNode)sourceNode, customData);
                 break;
             case EnhancedScopeType.PropertySetter:
-                OnExitPropertySetterScope(scope, (PropertyNode)sourceNode, customData);
+                OnExitPropertySetterScope(scope, (PropertyImplNode)sourceNode, customData);
                 break;
             case EnhancedScopeType.Class:
                 OnExitClassScope(scope, (AppClassNode)sourceNode, customData);
@@ -282,8 +282,8 @@ public abstract class ScopedAstVisitor<T> : AstVisitorBase
                     globalScope,
                     syntheticNode,
                     isAutoDeclared: true);
-
                 variableRegistry.RegisterVariable(autoVariable);
+                _program.AutoDeclaredVariables.Add(autoVariable);
 
                 // Call event handler for auto-declared variable
                 OnVariableDeclared(autoVariable);
@@ -489,54 +489,7 @@ public abstract class ScopedAstVisitor<T> : AstVisitorBase
         var nameInfo = new VariableNameInfo(node.Name, node.NameToken);
         RegisterVariable(nameInfo, node.Type.TypeName, VariableKind.Property, node);
 
-        // Handle getter scope if getter exists (explicit implementation)
-        if (node.GetterImplementation != null)
-        {
-            var getterScopeName = $"{node.Name}_Get";
-            EnterScope(EnhancedScopeType.PropertyGetter, getterScopeName, node);
-
-            try
-            {
-                // Register getter parameter annotations as references
-                foreach (var annotation in node.GetterImplementation.ParameterAnnotations)
-                {
-                    AddVariableReference(annotation.Name, annotation.NameToken.SourceSpan, ReferenceType.ParameterAnnotation, "property getter parameter annotation");
-                }
-
-                // Visit the getter implementation
-                node.GetterImplementation.Accept(this);
-            }
-            finally
-            {
-                ExitScope();
-            }
-        }
-
-        // Handle setter scope if setter exists (explicit implementation)
-        if (node.SetterImplementation != null)
-        {
-            var setterScopeName = $"{node.Name}_Set";
-            EnterScope(EnhancedScopeType.PropertySetter, setterScopeName, node);
-
-            try
-            {
-                // Register the implicit &NewValue parameter for setter
-                RegisterImplicitNewValueParameter(node);
-
-                // Register setter parameter annotations as references
-                foreach (var annotation in node.SetterImplementation.ParameterAnnotations)
-                {
-                    AddVariableReference(annotation.Name, annotation.NameToken.SourceSpan, ReferenceType.ParameterAnnotation, "property setter parameter annotation");
-                }
-
-                // Visit the setter implementation
-                node.SetterImplementation.Accept(this);
-            }
-            finally
-            {
-                ExitScope();
-            }
-        }
+        /* Getter and setter get visisted after methods */
     }
     /// <summary>
     /// Visits a program variable node and registers it in the appropriate scope
@@ -588,7 +541,7 @@ public abstract class ScopedAstVisitor<T> : AstVisitorBase
     {
         var typeName = AstTypeExtractor.GetDefaultTypeForExpression(node.Value);
         var nameInfo = new VariableNameInfo(node.Name, node.FirstToken);
-        RegisterVariable(nameInfo, $"Constant({typeName})", VariableKind.Constant, node);
+        RegisterVariable(nameInfo, typeName, VariableKind.Constant, node);
 
         base.VisitConstant(node);
     }
@@ -730,6 +683,58 @@ public abstract class ScopedAstVisitor<T> : AstVisitorBase
         }
     }
 
+    public override void VisitPropertyImpl(PropertyImplNode node)
+    {
+
+        // Handle getter scope if getter exists (explicit implementation)
+        if (node.IsGetter)
+        {
+            var getterScopeName = $"{node.Name}_Get";
+            EnterScope(EnhancedScopeType.PropertyGetter, getterScopeName, node);
+
+            try
+            {
+                // Register getter parameter annotations as references
+                foreach (var annotation in node.ParameterAnnotations)
+                {
+                    AddVariableReference(annotation.Name, annotation.NameToken.SourceSpan, ReferenceType.ParameterAnnotation, "property getter parameter annotation");
+                }
+
+                base.VisitPropertyImpl(node);
+            }
+            finally
+            {
+                ExitScope();
+            }
+        }
+
+        // Handle setter scope if setter exists (explicit implementation)
+        if (node.IsSetter)
+        {
+            var setterScopeName = $"{node.Name}_Set";
+            EnterScope(EnhancedScopeType.PropertySetter, setterScopeName, node);
+
+            try
+            {
+                // Register the implicit &NewValue parameter for setter
+                RegisterImplicitNewValueParameter(node);
+
+                // Register setter parameter annotations as references
+                foreach (var annotation in node.ParameterAnnotations)
+                {
+                    AddVariableReference(annotation.Name, annotation.NameToken.SourceSpan, ReferenceType.ParameterAnnotation, "property setter parameter annotation");
+                }
+
+                // Visit the setter implementation
+                base.VisitPropertyImpl(node);
+            }
+            finally
+            {
+                ExitScope();
+            }
+        }
+
+    }
 
     #endregion
 
@@ -768,14 +773,18 @@ public abstract class ScopedAstVisitor<T> : AstVisitorBase
     /// <summary>
     /// Registers the implicit &NewValue parameter in property setter scopes
     /// </summary>
-    private void RegisterImplicitNewValueParameter(PropertyNode propertyNode)
+    private void RegisterImplicitNewValueParameter(PropertyImplNode propImplNode)
     {
         // Create a synthetic token for the &NewValue parameter using the setter implementation's location
-        var newValueToken = new Token(TokenType.UserVariable, "&NewValue", propertyNode.SetterImplementation!.SourceSpan);
+        var newValueToken = new Token(TokenType.UserVariable, "&NewValue", propImplNode.SourceSpan);
         var newValueNameInfo = new VariableNameInfo("&NewValue", newValueToken);
-        
+
         // Register &NewValue as a parameter with the property's type, using the setter implementation as the declaring node
-        RegisterVariable(newValueNameInfo, propertyNode.Type.TypeName, VariableKind.Parameter, propertyNode.SetterImplementation);
+        if (propImplNode.Parent is not null)
+        {
+            PropertyNode parent = (PropertyNode)propImplNode.Parent;
+            RegisterVariable(newValueNameInfo, parent.Type.TypeName, VariableKind.Parameter, propImplNode);
+        }
     }
 
     /// <summary>
@@ -1007,22 +1016,22 @@ public abstract class ScopedAstVisitor<T> : AstVisitorBase
     /// <summary>
     /// Called when entering a property getter scope
     /// </summary>
-    protected virtual void OnEnterPropertyGetterScope(ScopeContext scope, PropertyNode node) { }
+    protected virtual void OnEnterPropertyGetterScope(ScopeContext scope, PropertyImplNode node) { }
 
     /// <summary>
     /// Called when exiting a property getter scope (BEFORE scope is popped from stack)
     /// </summary>
-    protected virtual void OnExitPropertyGetterScope(ScopeContext scope, PropertyNode node, Dictionary<string, T> customData) { }
+    protected virtual void OnExitPropertyGetterScope(ScopeContext scope, PropertyImplNode node, Dictionary<string, T> customData) { }
 
     /// <summary>
     /// Called when entering a property setter scope
     /// </summary>
-    protected virtual void OnEnterPropertySetterScope(ScopeContext scope, PropertyNode node) { }
+    protected virtual void OnEnterPropertySetterScope(ScopeContext scope, PropertyImplNode node) { }
 
     /// <summary>
     /// Called when exiting a property setter scope (BEFORE scope is popped from stack)
     /// </summary>
-    protected virtual void OnExitPropertySetterScope(ScopeContext scope, PropertyNode node, Dictionary<string, T> customData) { }
+    protected virtual void OnExitPropertySetterScope(ScopeContext scope, PropertyImplNode node, Dictionary<string, T> customData) { }
 
     /// <summary>
     /// Called when a variable is declared in any scope

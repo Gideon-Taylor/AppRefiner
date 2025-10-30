@@ -1963,9 +1963,9 @@ namespace AppRefiner
                             }
                         }
 
-                        if (activeEditor.FunctionCallTipActive && activeEditor.FunctionCallNode != null)
+                        if (activeEditor.FunctionCallTipActive && activeEditor.FunctionCallNode != null && activeEditor.FunctionCallTipProgram != null)
                         {
-                            TooltipManager.ShowFunctionCallTooltip(activeEditor, activeEditor.FunctionCallNode);
+                            TooltipManager.ShowFunctionCallTooltip(activeEditor, activeEditor.FunctionCallTipProgram, activeEditor.FunctionCallNode);
                         }
                         break;
                 }
@@ -2194,9 +2194,10 @@ namespace AppRefiner
 
                         if (targetFunction != null && targetFunction is FunctionCallNode fcn)
                         {
+                            activeEditor.FunctionCallTipProgram = program;
                             activeEditor.FunctionCallNode = fcn;
                             activeEditor.FunctionCallTipActive = true;
-                            TooltipManager.ShowFunctionCallTooltip(activeEditor, fcn);
+                            TooltipManager.ShowFunctionCallTooltip(activeEditor, program, fcn);
                         }
 
                     }
@@ -3087,7 +3088,7 @@ namespace AppRefiner
                 {
                     if (appDesignerProcess.TypeResolver is DatabaseTypeMetadataResolver dbResolver)
                     {
-                        dbResolver.InvalidateCache(qualifiedName);
+                        dbResolver.Clear();
                     }
                     Debug.Log($"InvalidateTypeCacheForEditor: Invalidated DatabaseTypeMetadataResolver cache for '{qualifiedName}'");
                 }

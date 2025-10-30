@@ -15,7 +15,7 @@ public class TestTypeMetadataResolver : ITypeMetadataResolver
 {
     private readonly LocalDirectorySourceProvider _sourceProvider;
 
-    public TestTypeMetadataResolver(string basePath) : base()
+    public TestTypeMetadataResolver(string basePath, int cacheGenerationsBeforeCleanup = 5000, int cacheGenerationEvictionThreshold = 2500) : base(cacheGenerationsBeforeCleanup, cacheGenerationEvictionThreshold)
     {
         _sourceProvider = new LocalDirectorySourceProvider(basePath);
     }
@@ -88,8 +88,8 @@ public class TestTypeMetadataResolver : ITypeMetadataResolver
     {
         // Empty record name means runtime-inferred context - return any
         if (string.IsNullOrEmpty(recordName))
-            return Task.FromResult<Types.TypeInfo>(Types.AnyTypeInfo.Instance);
+            return Task.FromResult<Types.TypeInfo?>(Types.AnyTypeInfo.Instance);
 
-        return Task.FromResult<Types.TypeInfo>(Types.AnyTypeInfo.Instance);
+        return Task.FromResult<Types.TypeInfo?>(Types.AnyTypeInfo.Instance);
     }
 }
