@@ -72,7 +72,6 @@ namespace AppRefiner
         /// Type metadata cache shared across all editors in this AppDesigner process.
         /// Used by type inference and type checking systems.
         /// </summary>
-        public TypeCache TypeCache { get; private set; }
 
         private ITypeMetadataResolver? _typeResolver;
 
@@ -136,9 +135,6 @@ namespace AppRefiner
             ResultsListView = resultsListView;
             Settings = settings;
             ProcessHandle = WinApi.OpenProcess(WinApi.PROCESS_VM_READ | WinApi.PROCESS_VM_WRITE | WinApi.PROCESS_VM_OPERATION, false, ProcessId);
-
-            // Initialize type system infrastructure
-            TypeCache = new TypeCache();
 
             // Check if any module in the process has the name "Lexilla.dll"
             Process process = Process.GetProcessById((int)ProcessId);

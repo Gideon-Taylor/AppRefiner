@@ -45,14 +45,7 @@ public class TypeErrorStyler : BaseStyler
         }
 
         // Get type system infrastructure
-        var typeCache = appDesignerProcess.TypeCache;
         var typeResolver = appDesignerProcess.TypeResolver;
-
-        if (typeCache == null)
-        {
-            Debug.Log("TypeErrorStyler: TypeCache is null");
-            return;
-        }
 
         if (typeResolver == null)
         {
@@ -69,10 +62,10 @@ public class TypeErrorStyler : BaseStyler
             var programMetadata = TypeMetadataBuilder.ExtractMetadata(node, qualifiedName);
 
             // Run type inference
-            TypeInferenceVisitor.Run(node, programMetadata, typeResolver, typeCache);
+            TypeInferenceVisitor.Run(node, programMetadata, typeResolver);
 
             // Run type checking
-            TypeCheckerVisitor.Run(node, typeResolver, typeCache);
+            TypeCheckerVisitor.Run(node, typeResolver, typeResolver.Cache);
 
             // Collect all type errors from the AST
             var typeErrors = node.GetAllTypeErrors();

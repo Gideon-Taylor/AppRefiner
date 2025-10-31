@@ -115,21 +115,19 @@ namespace AppRefiner
             }
         }
 
-        protected override void OnExitPropertyGetterScope(ScopeContext scope, PropertyNode node, Dictionary<string, object> customData)
+        protected override void OnExitPropertyGetterScope(ScopeContext scope, PropertyImplNode node, Dictionary<string, object> customData)
         {
             base.OnExitPropertyGetterScope(scope, node, customData);
-            if (node.Getter == null) return;
-            if (node.Getter.Body != null && node.Getter.Body.SourceSpan.ContainsPosition(targetPosition))
+            if (node.Body != null && node.Body.SourceSpan.ContainsPosition(targetPosition))
             {
                 accessibleVariables = GetAccessibleVariables(scope).ToList();
             }
         }
 
-        protected override void OnExitPropertySetterScope(ScopeContext scope, PropertyNode node, Dictionary<string, object> customData)
+        protected override void OnExitPropertySetterScope(ScopeContext scope, PropertyImplNode node, Dictionary<string, object> customData)
         {
             base.OnExitPropertySetterScope(scope, node, customData);
-            if (node.Setter == null) return;
-            if (node.Setter.Body != null && node.Setter.Body.SourceSpan.ContainsPosition(targetPosition))
+            if (node.Body != null && node.Body.SourceSpan.ContainsPosition(targetPosition))
             {
                 accessibleVariables = GetAccessibleVariables(scope).ToList();
             }
@@ -408,10 +406,9 @@ namespace AppRefiner
 
                 // Get type resolver (may be null if no database)
                 var typeResolver = editor.AppDesignerProcess?.TypeResolver;
-                var typeCache = editor.AppDesignerProcess?.TypeCache ?? new TypeCache();
 
                 // Run type inference (works even with null resolver)
-                TypeInferenceVisitor.Run(program, metadata, typeResolver, typeCache);
+                TypeInferenceVisitor.Run(program, metadata, typeResolver);
             }
             catch (Exception ex)
             {

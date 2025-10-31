@@ -335,27 +335,27 @@ namespace AppRefiner.Refactors
             base.OnExitMethodScope(scope, node, customData);
         }
 
-        protected override void OnExitPropertyGetterScope(ScopeContext scope, PropertyNode node, Dictionary<string, object> customData)
+        protected override void OnExitPropertyGetterScope(ScopeContext scope, PropertyImplNode node, Dictionary<string, object> customData)
         {
-            if (node.Getter is not null)
+            if (node is not null)
             {
                 if (selectedScopeMode == ScopeProcessingMode.AllScopes ||
-                    (selectedScopeMode == ScopeProcessingMode.CurrentScopeOnly && node.Getter.SourceSpan.ContainsPosition(CurrentPosition)))
+                    (selectedScopeMode == ScopeProcessingMode.CurrentScopeOnly && node.SourceSpan.ContainsPosition(CurrentPosition)))
                 {
-                    CollectVariables(scope, node.Getter);
+                    CollectVariables(scope, node);
                 }
             }
             base.OnExitPropertyGetterScope(scope, node, customData);
         }
 
-        protected override void OnExitPropertySetterScope(ScopeContext scope, PropertyNode node, Dictionary<string, object> customData)
+        protected override void OnExitPropertySetterScope(ScopeContext scope, PropertyImplNode node, Dictionary<string, object> customData)
         {
-            if (node.Setter is not null)
+            if (node is not null)
             {
                 if (selectedScopeMode == ScopeProcessingMode.AllScopes ||
-                    (selectedScopeMode == ScopeProcessingMode.CurrentScopeOnly && node.Setter.SourceSpan.ContainsPosition(CurrentPosition)))
+                    (selectedScopeMode == ScopeProcessingMode.CurrentScopeOnly && node.SourceSpan.ContainsPosition(CurrentPosition)))
                 {
-                    CollectVariables(scope, node.Setter);
+                    CollectVariables(scope, node);
                 }
             }
             base.OnExitPropertySetterScope(scope, node, customData);

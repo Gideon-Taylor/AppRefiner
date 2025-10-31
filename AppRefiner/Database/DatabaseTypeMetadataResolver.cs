@@ -168,6 +168,7 @@ namespace AppRefiner.Database
         private TypeMetadata? TryResolveAsFunctionLibrary(string qualifiedName)
         {
             var parts = qualifiedName.Split('.');
+            if (parts.Length < 3) { return null; }
             var openTarget = new OpenTarget(
                 OpenTargetType.RecordFieldPeopleCode, 
                 qualifiedName, "", 

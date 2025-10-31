@@ -351,10 +351,9 @@ namespace AppRefiner.TooltipProviders
 
                 // Get type resolver (may be null if no database)
                 var typeResolver = editor.AppDesignerProcess?.TypeResolver;
-                var typeCache = editor.AppDesignerProcess?.TypeCache ?? new TypeCache();
 
                 // Run type inference (works even with null resolver)
-                TypeInferenceVisitor.Run(program, metadata, typeResolver, typeCache);
+                TypeInferenceVisitor.Run(program, metadata, typeResolver);
             }
             catch (Exception ex)
             {
