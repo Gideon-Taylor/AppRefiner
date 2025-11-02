@@ -115,7 +115,7 @@ public class FunctionCallValidator
             return ValidationResult.Failure(
                 bestFailureIndex,
                 allExpectedTypesByPosition[bestFailureIndex].ToList(),
-                new List<string> { $"No matching overload found for {functionInfo.Name}" },
+                bestResult.ErrorMessages,
                 bestResult.FoundTypeAtFailure,
                 bestResult.FailureKind,
                 functionInfo.Name
@@ -678,22 +678,8 @@ public class FunctionCallValidator
         if (typeInfo.PeopleCodeType.HasValue)
         {
             var pct = typeInfo.PeopleCodeType.Value;
-            // Reference-like types use '@'
-            switch (pct)
-            {
-                case PeopleCodeType.Field:
-                case PeopleCodeType.Record:
-                case PeopleCodeType.Scroll:
-                case PeopleCodeType.Row:
-                case PeopleCodeType.Rowset:
-                case PeopleCodeType.Page:
-                case PeopleCodeType.Grid:
-                case PeopleCodeType.Chart:
-                case PeopleCodeType.Panel:
-                    return "@" + pct.ToString().ToUpperInvariant();
-                default:
-                    return pct.ToString().ToLowerInvariant();
-            }
+
+            return pct.ToString();
         }
         return typeInfo.Name;
     }
@@ -1296,47 +1282,14 @@ public class FunctionCallValidator
     /// <returns>True if valueType or any of its base classes match targetType</returns>
     private bool IsAppClassCompatible(AppClassTypeInfo targetType, AppClassTypeInfo valueType)
     {
-        // Direct match
-        if (valueType.QualifiedName.Equals(targetType.QualifiedName, StringComparison.OrdinalIgnoreCase))
+        // Use the pre-computed inheritance chain for efficient lookup
+        // Check if targetType appears anywhere in valueType's inheritance chain
+        // This includes checking both base classes and implemented interfaces
+        foreach (var entry in valueType.InheritanceChain)
         {
-            return true;
-        }
-
-        // Walk up the inheritance chain of valueType to see if we find targetType
-        var currentClassName = valueType.QualifiedName;
-        var visited = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { currentClassName };
-
-        while (!string.IsNullOrEmpty(currentClassName))
-        {
-            // Try to get metadata for the current class
-            var metadata = _typeResolver.GetTypeMetadata(currentClassName);
-            if (metadata == null)
-            {
-                // Can't resolve metadata, assume incompatible
-                break;
-            }
-
-            // Check if this class has a base class
-            if (string.IsNullOrEmpty(metadata.BaseClassName))
-            {
-                // Reached the top of the hierarchy without finding targetType
-                break;
-            }
-
-            // Check if the base class matches our target
-            if (metadata.BaseClassName.Equals(targetType.QualifiedName, StringComparison.OrdinalIgnoreCase))
+            if (entry.QualifiedName.Equals(targetType.QualifiedName, StringComparison.OrdinalIgnoreCase))
             {
                 return true;
-            }
-
-            // Move to the base class for next iteration
-            currentClassName = metadata.BaseClassName;
-
-            // Circular inheritance detection
-            if (!visited.Add(currentClassName))
-            {
-                // Detected circular inheritance, bail out
-                break;
             }
         }
 
