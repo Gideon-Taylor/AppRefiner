@@ -791,11 +791,6 @@ public class MethodImplNode : AstNode
     public VisibilityModifier Visibility => Declaration?.Visibility ?? VisibilityModifier.Public;
 
     /// <summary>
-    /// Convenience property to check if this is an abstract method from the declaration
-    /// </summary>
-    public bool IsAbstract => Declaration?.IsAbstract ?? false;
-
-    /// <summary>
     /// Convenience property to check if this is a constructor from the declaration
     /// </summary>
     public bool IsConstructor => Declaration?.IsConstructor ?? false;
