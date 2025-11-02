@@ -823,6 +823,28 @@ public class BuiltinObjectTypeInfo : TypeInfo
 }
 
 /// <summary>
+/// Represents an entry in an application class's inheritance chain
+/// </summary>
+public readonly struct InheritanceChainEntry
+{
+    /// <summary>
+    /// Qualified name of the class or interface (e.g., "PKG:MyClass" or "Record")
+    /// </summary>
+    public string QualifiedName { get; }
+
+    /// <summary>
+    /// True if this is a builtin type (no package - determined by absence of ':')
+    /// </summary>
+    public bool IsBuiltin { get; }
+
+    public InheritanceChainEntry(string qualifiedName, bool isBuiltin)
+    {
+        QualifiedName = qualifiedName ?? throw new ArgumentNullException(nameof(qualifiedName));
+        IsBuiltin = isBuiltin;
+    }
+}
+
+/// <summary>
 /// Represents a user-defined application class type
 /// </summary>
 public class AppClassTypeInfo : TypeInfo

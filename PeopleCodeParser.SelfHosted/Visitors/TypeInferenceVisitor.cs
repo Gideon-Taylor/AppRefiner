@@ -156,14 +156,25 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
     }
 
     /// <summary>
-    /// Create an AppClassTypeInfo with builtin base class information if available.
-    /// Traverses the inheritance chain to find the ultimate builtin base type.
+    /// Create an AppClassTypeInfo with complete inheritance chain and builtin base class information if available.
+    /// Traverses the inheritance chain (checking both BaseClassName and InterfaceName) to build the complete hierarchy.
     /// </summary>
     private AppClassTypeInfo CreateAppClassTypeInfo(string qualifiedName)
     {
-        // Traverse the inheritance chain to find the ultimate builtin base type
+        // Build the complete inheritance chain
+        var chain = new List<InheritanceChainEntry>();
         var currentClassName = qualifiedName;
         var visited = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { currentClassName };
+
+        // Track builtin base information for backward compatibility
+        bool extendsBuiltinType = false;
+        PeopleCodeType? builtinBaseType = null;
+
+        // Add the starting class to the chain
+        chain.Add(new InheritanceChainEntry(
+            qualifiedName,
+            isBuiltin: !qualifiedName.Contains(':')
+        ));
 
         while (!string.IsNullOrEmpty(currentClassName))
         {
@@ -184,27 +195,53 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
             // Check if this class directly extends a builtin type
             if (metadata.IsBaseClassBuiltin && metadata.BuiltinBaseType.HasValue)
             {
-                return new AppClassTypeInfo(qualifiedName, true, metadata.BuiltinBaseType.Value);
+                extendsBuiltinType = true;
+                builtinBaseType = metadata.BuiltinBaseType.Value;
+
+                // Add builtin to chain
+                var builtinTypeName = metadata.BuiltinBaseType.Value.GetTypeName();
+                chain.Add(new InheritanceChainEntry(
+                    builtinTypeName,
+                    isBuiltin: true
+                ));
+
+                break; // Builtin is terminal
             }
 
-            // Check if this class has a base class
-            if (string.IsNullOrEmpty(metadata.BaseClassName))
+            // Check for next class in hierarchy - check both BaseClassName and InterfaceName
+            // (PeopleCode allows either extends or implements, but not both, and they're interchangeable)
+            string? nextClassName = null;
+            if (!string.IsNullOrEmpty(metadata.BaseClassName))
             {
-                break; // No more base classes
+                nextClassName = metadata.BaseClassName;
+            }
+            else if (!string.IsNullOrEmpty(metadata.InterfaceName))
+            {
+                nextClassName = metadata.InterfaceName;
             }
 
-            // Move to the base class
-            currentClassName = metadata.BaseClassName;
+            if (nextClassName == null)
+            {
+                break; // No more base classes/interfaces
+            }
 
             // Circular inheritance detection
-            if (!visited.Add(currentClassName))
+            if (!visited.Add(nextClassName))
             {
                 break; // Detected circular inheritance
             }
+
+            // Add base class/interface to chain
+            chain.Add(new InheritanceChainEntry(
+                nextClassName,
+                isBuiltin: !nextClassName.Contains(':')
+            ));
+
+            // Move to the next class in hierarchy
+            currentClassName = nextClassName;
         }
 
-        // No builtin base class found in the inheritance chain
-        return new AppClassTypeInfo(qualifiedName);
+        return new AppClassTypeInfo(qualifiedName, extendsBuiltinType, builtinBaseType, chain);
     }
 
     /// <summary>
@@ -474,19 +511,33 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
                 break; // Builtin types don't have further inheritance to traverse
             }
 
-            // Move to the base class
-            if (metadata == null || string.IsNullOrEmpty(metadata.BaseClassName))
+            // Move to the next class in hierarchy - check both BaseClassName and InterfaceName
+            // (PeopleCode allows either extends or implements, but not both, and they're interchangeable)
+            string? nextClassName = null;
+            if (metadata != null)
             {
-                break; // No more base classes
+                if (!string.IsNullOrEmpty(metadata.BaseClassName))
+                {
+                    nextClassName = metadata.BaseClassName;
+            }
+                else if (!string.IsNullOrEmpty(metadata.InterfaceName))
+                {
+                    nextClassName = metadata.InterfaceName;
+                }
             }
 
-            currentClassName = metadata.BaseClassName;
+            if (nextClassName == null)
+            {
+                break; // No more base classes/interfaces
+            }
 
             // Circular inheritance detection
-            if (!visited.Add(currentClassName))
+            if (!visited.Add(nextClassName))
             {
                 break; // Detected circular inheritance
             }
+
+            currentClassName = nextClassName;
         }
 
         return null; // Method not found in the hierarchy
@@ -555,19 +606,33 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
                 break; // Builtin types don't have further inheritance to traverse
             }
 
-            // Move to the base class
-            if (metadata == null || string.IsNullOrEmpty(metadata.BaseClassName))
+            // Move to the next class in hierarchy - check both BaseClassName and InterfaceName
+            // (PeopleCode allows either extends or implements, but not both, and they're interchangeable)
+            string? nextClassName = null;
+            if (metadata != null)
             {
-                break; // No more base classes
+                if (!string.IsNullOrEmpty(metadata.BaseClassName))
+                {
+                    nextClassName = metadata.BaseClassName;
+                }
+                else if (!string.IsNullOrEmpty(metadata.InterfaceName))
+            {
+                    nextClassName = metadata.InterfaceName;
+            }
             }
 
-            currentClassName = metadata.BaseClassName;
+            if (nextClassName == null)
+            {
+                break; // No more base classes/interfaces
+            }
 
             // Circular inheritance detection
             if (!visited.Add(currentClassName))
             {
                 break; // Detected circular inheritance
             }
+
+            currentClassName = nextClassName;
         }
 
         return null; // Property not found in the hierarchy
