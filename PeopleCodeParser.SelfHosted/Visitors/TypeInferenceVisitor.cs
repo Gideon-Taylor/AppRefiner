@@ -132,7 +132,9 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
             BuiltInTypeNode builtin => TypeInfo.FromPeopleCodeType(builtin.Type),
             ArrayTypeNode array => new ArrayTypeInfo(
                 array.Dimensions,
-                ConvertTypeNodeToTypeInfo(array.ElementType)),
+                array.ElementType != null
+                    ? ConvertTypeNodeToTypeInfo(array.ElementType)
+                    : TypeInfo.FromPeopleCodeType(PeopleCodeType.Any)),
             AppClassTypeNode appClass => CreateAppClassTypeInfo(
                 string.Join(":", appClass.PackagePath.Append(appClass.ClassName))),
             _ => UnknownTypeInfo.Instance
@@ -261,11 +263,23 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
                 if (part.Trim().ToLowerInvariant() == "array")
                     dimensions++;
             }
+            var elementTypeName = "any";
+
+            if (parts.Length > dimensions)
+            {
+                /* they used something like "array of array" which has an implicit "any" */
+                elementTypeName = parts[^1].Trim();
+            }
 
             var elementTypeName = parts.Length > 0 ? parts[^1].Trim() : "any";
             var elementType = ConvertTypeNameToTypeInfo(elementTypeName);
 
             return new ArrayTypeInfo(dimensions, elementType);
+        }
+
+        if (typeName.ToLowerInvariant().Equals("array"))
+        {
+            return new ArrayTypeInfo(1, AnyTypeInfo.Instance);
         }
 
         // Try to parse as a builtin type

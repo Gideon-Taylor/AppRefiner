@@ -284,9 +284,12 @@ public class TypeMetadataBuilder : AstVisitorBase
             case BuiltInTypeNode builtIn:
                 return new TypeWithDimensionality(BuiltinTypeExtensions.FromString(builtIn.TypeName), 0);
 
-            case ArrayTypeNode array when array.ElementType != null:
-                var elementTypeWithDim = BuildTypeWithDimensionality(array.ElementType);
-
+            case ArrayTypeNode array:
+                // Handle both explicit and implicit (null) element types
+                // When ElementType is null, default to Any (e.g., "array &arr" without "of type")
+                var elementTypeWithDim = array.ElementType != null
+                    ? BuildTypeWithDimensionality(array.ElementType)
+                    : new TypeWithDimensionality(PeopleCodeType.Any, 0);
 
                 return new TypeWithDimensionality(
                     elementTypeWithDim.Type,
