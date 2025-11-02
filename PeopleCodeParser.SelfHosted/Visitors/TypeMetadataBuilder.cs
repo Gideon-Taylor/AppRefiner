@@ -261,6 +261,11 @@ public class TypeMetadataBuilder : AstVisitorBase
     {
         var typeWithDim = BuildTypeWithDimensionality(paramNode.Type);
         
+        if (paramNode.IsOut)
+        {
+            typeWithDim.MustBeVariable = true;
+        }
+
         return new SingleParameter(typeWithDim, paramNode.Name);
     }
 
