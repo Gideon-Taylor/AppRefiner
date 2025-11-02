@@ -4,6 +4,23 @@ using PeopleCodeTypeEnum = PeopleCodeTypeInfo.Types.PeopleCodeType;
 namespace PeopleCodeTypeInfo.Types;
 
 /// <summary>
+/// This is used to represent a field.Value. This is only necessary so we can allow this to be used when a variable is required (out parms)
+/// </summary>
+public class FieldValueTypeInfo : PrimitiveTypeInfo
+{
+    public FieldTypeInfo FieldTypeInfo { get; }
+    public FieldValueTypeInfo(FieldTypeInfo fieldType) : base(fieldType.Name, fieldType.GetFieldDataType().PeopleCodeType)
+    {
+        FieldTypeInfo = fieldType;
+    }
+
+    public override string ToString()
+    {
+        return $"{FieldTypeInfo}.Value";
+    }
+}
+
+/// <summary>
 /// Represents a Field builtin type with knowledge of which record/field it refers to,
 /// enabling resolution of the underlying field data type for type compatibility checking.
 /// This allows implicit .Value access - a Field can be used where its data type is expected.

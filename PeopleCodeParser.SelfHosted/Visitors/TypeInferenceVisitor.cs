@@ -308,7 +308,6 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
                 elementTypeName = parts[^1].Trim();
             }
 
-            var elementTypeName = parts.Length > 0 ? parts[^1].Trim() : "any";
             var elementType = ConvertTypeNameToTypeInfo(elementTypeName);
 
             return new ArrayTypeInfo(dimensions, elementType);
@@ -519,7 +518,7 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
                 if (!string.IsNullOrEmpty(metadata.BaseClassName))
                 {
                     nextClassName = metadata.BaseClassName;
-            }
+                }
                 else if (!string.IsNullOrEmpty(metadata.InterfaceName))
                 {
                     nextClassName = metadata.InterfaceName;
@@ -616,9 +615,9 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
                     nextClassName = metadata.BaseClassName;
                 }
                 else if (!string.IsNullOrEmpty(metadata.InterfaceName))
-            {
+                {
                     nextClassName = metadata.InterfaceName;
-            }
+                }
             }
 
             if (nextClassName == null)
@@ -627,7 +626,7 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
             }
 
             // Circular inheritance detection
-            if (!visited.Add(currentClassName))
+            if (!visited.Add(nextClassName))
             {
                 break; // Detected circular inheritance
             }
@@ -748,7 +747,15 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
 
     #region Expression Visitors
 
-
+    /// <summary>
+    /// Visits class constant references like those used in %metadata:Key
+    /// </summary>
+    /// <param name="node"></param>
+    public override void VisitClassConstant(ClassConstantNode node)
+    {
+        base.VisitClassConstant(node);
+        SetInferredType(node, AnyTypeInfo.Instance);
+    }
 
     /// <summary>
     /// Visit literal expression and infer type from literal value
@@ -1035,6 +1042,13 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
                 return;
             }
 
+            if (objectType is FieldTypeInfo fieldType && node.MemberName == "Value")
+            {
+                var memberType = new FieldValueTypeInfo(fieldType);
+                SetInferredType(node, memberType);
+                return;
+            }
+
             // Resolve member as property (not method call)
             var memberType2 = ResolveMemberAccessReturnType(objectType, node.MemberName, isMethodCall: false, parameterTypes: null);
 
@@ -1045,6 +1059,14 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
             {
                 // Create FieldTypeInfo with record/field context for data type resolution
                 memberType2 = new FieldTypeInfo(recordIdentifier.Name, node.MemberName, _typeResolver);
+            }
+
+            
+
+            /* This handles the pattern &rowset.GetRow(1).RECORD_NAME) */
+            if (objectType.PeopleCodeType == PeopleCodeType.Row && memberType2.PeopleCodeType == PeopleCodeType.Record)
+            {
+                memberType2 = BuiltinObjectTypeInfo.Record;
             }
 
             SetInferredType(node, memberType2);

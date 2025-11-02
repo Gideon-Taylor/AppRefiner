@@ -658,6 +658,11 @@ public class PrimitiveTypeInfo : TypeInfo
             return IsAssignableFrom(actualFieldType);
         }
 
+        if (other is FieldValueTypeInfo fieldValue)
+        {
+            return IsAssignableFrom(fieldValue.FieldTypeInfo);
+        }
+
         // Any can be assigned to any primitive
         if (other.Kind == TypeKind.Any) return true;
 
@@ -751,8 +756,17 @@ public class BuiltinObjectTypeInfo : TypeInfo
             return IsAssignableFrom(actualFieldType);
         }
 
+        if (other is FieldValueTypeInfo fieldValue)
+        {
+            return IsAssignableFrom(fieldValue.FieldTypeInfo);
+        }
+
         // Any can be assigned to any builtin object
         if (other.Kind == TypeKind.Any) return true;
+
+        // Object can be assigned to any builtin object (implicit widening)
+        // This allows &variable As object to be passed where specific types like ApiObject are expected
+        if (other is ObjectTypeInfo) return true;
 
         // @ANY references (dynamic references) can resolve to any type at runtime
         // Example: @("RECORD." | &FIELD) where we can't statically determine the target
@@ -877,7 +891,14 @@ public class AppClassTypeInfo : TypeInfo
     /// </summary>
     public PeopleCodeType? BuiltinBaseType { get; }
 
-    public AppClassTypeInfo(string qualifiedName, bool extendsBuiltinType = false, PeopleCodeType? builtinBaseType = null)
+    /// <summary>
+    /// The complete inheritance hierarchy chain from this class to its ultimate base.
+    /// First entry is this class, subsequent entries are base classes/interfaces (extends or implements).
+    /// Empty list if no inheritance information is available.
+    /// </summary>
+    public IReadOnlyList<InheritanceChainEntry> InheritanceChain { get; }
+
+    public AppClassTypeInfo(string qualifiedName, bool extendsBuiltinType = false, PeopleCodeType? builtinBaseType = null, IReadOnlyList<InheritanceChainEntry>? inheritanceChain = null)
     {
         QualifiedName = qualifiedName ?? throw new ArgumentNullException(nameof(qualifiedName));
 
@@ -895,6 +916,7 @@ public class AppClassTypeInfo : TypeInfo
 
         ExtendsBuiltinType = extendsBuiltinType;
         BuiltinBaseType = builtinBaseType;
+        InheritanceChain = inheritanceChain ?? Array.Empty<InheritanceChainEntry>();
     }
 
     public override bool IsAssignableFrom(TypeInfo other)
@@ -904,6 +926,10 @@ public class AppClassTypeInfo : TypeInfo
 
         // Any can be assigned to any app class
         if (other.Kind == TypeKind.Any) return true;
+
+        // Object can be assigned to any AppClass (implicit widening)
+        // This allows &variable As object to be passed where specific AppClass types are expected
+        if (other is ObjectTypeInfo) return true;
 
         // Same app class type
         if (other is AppClassTypeInfo appClass &&
@@ -1302,6 +1328,11 @@ public class StringTypeInfo : PrimitiveTypeInfo
             return IsAssignableFrom(actualFieldType);
         }
 
+        if (other is FieldValueTypeInfo fieldValue)
+        {
+            return IsAssignableFrom(fieldValue.FieldTypeInfo);
+        }
+
         // Any can be assigned to string
         if (other.Kind == TypeKind.Any) return true;
 
@@ -1342,6 +1373,11 @@ public class NumberTypeInfo : PrimitiveTypeInfo
         {
             var actualFieldType = fieldType.GetFieldDataType();
             return IsAssignableFrom(actualFieldType);
+        }
+
+        if (other is FieldValueTypeInfo fieldValue)
+        {
+            return IsAssignableFrom(fieldValue.FieldTypeInfo);
         }
 
         // Any can be assigned to number
