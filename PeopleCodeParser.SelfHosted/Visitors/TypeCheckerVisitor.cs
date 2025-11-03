@@ -107,14 +107,12 @@ namespace PeopleCodeParser.SelfHosted.Visitors
                 return;
             }
 
-            // Build arguments with type and variable tracking
-            var arguments = new ArgumentInfo[node.Arguments.Count];
+            // Build arguments array - IsAssignable should already be set during type inference
+            var arguments = new TypeInfo[node.Arguments.Count];
             for (int i = 0; i < node.Arguments.Count; i++)
             {
                 var argNode = node.Arguments[i];
-                var argType = argNode.GetInferredType() ?? UnknownTypeInfo.Instance;
-                bool isVariable = IsVariableReference(argNode);
-                arguments[i] = new ArgumentInfo(argType, isVariable);
+                arguments[i] = argNode.GetInferredType() ?? UnknownTypeInfo.Instance;
             }
 
             // Validate the call

@@ -54,26 +54,12 @@ namespace AppRefiner.TooltipProviders
 
                 var validator = new FunctionCallValidator(new NullTypeMetadataResolver());
 
-                List<ArgumentInfo> arguments = [];
+                List<TypeInfo> arguments = [];
                 foreach (var a in node.Arguments)
                 {
-                    if (a is IdentifierNode ident && ident.Name.StartsWith("&"))
-                    {
-                        var autoDeclareCheck = program.AutoDeclaredVariables.Where(v => v.Name == ident.Name).FirstOrDefault();
-
-                        if (autoDeclareCheck is not null)
-                        {
-                            arguments.Add(ArgumentInfo.Variable(AnyTypeInfo.Instance));
-                        }
-                        else
-                        {
-                            arguments.Add(ArgumentInfo.Variable(a.GetInferredType()));
-                        }
-                    }
-                    else
-                    {
-                        arguments.Add(ArgumentInfo.NonVariable(a.GetInferredType()));
-                    }
+                    var inferredType = a.GetInferredType();
+                    // Note: IsAssignable flag should already be set during type inference
+                    arguments.Add(inferredType);
                 }
 
                 var allowedTypes = validator.GetAllowedNextTypes(funcInfo, arguments.ToArray());

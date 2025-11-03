@@ -1,4 +1,5 @@
 using PeopleCodeParser.SelfHosted.Nodes;
+using PeopleCodeTypeInfo.Types;
 
 namespace PeopleCodeParser.SelfHosted.Visitors.Models;
 
@@ -62,6 +63,8 @@ public class VariableInfo
     /// Variable data type
     /// </summary>
     public string Type { get; private set; }
+
+    public TypeInfo InferredType { get; private set; }
 
     /// <summary>
     /// Kind of variable (local, instance, global, etc.)
@@ -176,6 +179,12 @@ public class VariableInfo
             throw new ArgumentNullException(nameof(newType));
 
         Type = newType;
+    }
+
+    public void SetInferredType(TypeInfo typeInfo)
+    {
+        InferredType = typeInfo;
+        UpdateType(typeInfo.Name);
     }
 
     /// <summary>

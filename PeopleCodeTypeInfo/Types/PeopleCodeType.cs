@@ -84,6 +84,13 @@ public abstract class TypeInfo
     public virtual bool IsNullable => true;
 
     /// <summary>
+    /// Indicates whether this expression represents a variable or other assignable location
+    /// that can receive an 'out' parameter. This property does NOT propagate through expressions.
+    /// For example: &myVar has IsAssignable=true, but &myVar | " cat" has IsAssignable=false.
+    /// </summary>
+    public bool IsAssignable { get; set; } = false;
+
+    /// <summary>
     /// Determines if a value of 'other' type can be assigned to this type
     /// </summary>
     public abstract bool IsAssignableFrom(TypeInfo other);
@@ -658,17 +665,18 @@ public class PrimitiveTypeInfo : TypeInfo
             return IsAssignableFrom(actualFieldType);
         }
 
-        if (other is FieldValueTypeInfo fieldValue)
-        {
-            return IsAssignableFrom(fieldValue.FieldTypeInfo);
-        }
-
         // Any can be assigned to any primitive
         if (other.Kind == TypeKind.Any) return true;
 
         // @ANY references (dynamic references) can resolve to any type at runtime
         // Example: @("RECORD." | &FIELD) where we can't statically determine the target
         if (other is ReferenceTypeInfo refType && refType.ReferenceCategory == Types.PeopleCodeType.Any)
+        {
+            return true;
+        }
+
+        /* We can pass in references to string parameters */
+        if (PeopleCodeType.HasValue && PeopleCodeType == Types.PeopleCodeType.String && other is ReferenceTypeInfo)
         {
             return true;
         }
@@ -754,11 +762,6 @@ public class BuiltinObjectTypeInfo : TypeInfo
         {
             var actualFieldType = fieldType.GetFieldDataType();
             return IsAssignableFrom(actualFieldType);
-        }
-
-        if (other is FieldValueTypeInfo fieldValue)
-        {
-            return IsAssignableFrom(fieldValue.FieldTypeInfo);
         }
 
         // Any can be assigned to any builtin object
@@ -1328,11 +1331,6 @@ public class StringTypeInfo : PrimitiveTypeInfo
             return IsAssignableFrom(actualFieldType);
         }
 
-        if (other is FieldValueTypeInfo fieldValue)
-        {
-            return IsAssignableFrom(fieldValue.FieldTypeInfo);
-        }
-
         // Any can be assigned to string
         if (other.Kind == TypeKind.Any) return true;
 
@@ -1373,11 +1371,6 @@ public class NumberTypeInfo : PrimitiveTypeInfo
         {
             var actualFieldType = fieldType.GetFieldDataType();
             return IsAssignableFrom(actualFieldType);
-        }
-
-        if (other is FieldValueTypeInfo fieldValue)
-        {
-            return IsAssignableFrom(fieldValue.FieldTypeInfo);
         }
 
         // Any can be assigned to number

@@ -111,7 +111,7 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
         // Normalize Integer to Number - PeopleCode doesn't meaningfully distinguish them
         if (type.PeopleCodeType == PeopleCodeType.Integer)
         {
-            type = PrimitiveTypeInfo.Number;
+            type = new PrimitiveTypeInfo("number",PeopleCodeType.Number) { IsAssignable = type.IsAssignable };
         }
 
         node.SetInferredType(type);
@@ -737,7 +737,7 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
                 if (rightHandType != null && rightHandType.Name != null && !rightHandType.Name.Equals("any", StringComparison.OrdinalIgnoreCase))
                 {
                     // Update the variable's type
-                    variable.UpdateType(rightHandType.Name);
+                    variable.SetInferredType(rightHandType);
                 }
             }
         }
@@ -833,7 +833,31 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
             if (variable != null)
             {
                 // Convert type name string to TypeInfo
-                var inferredType = ConvertTypeNameToTypeInfo(variable.Type);
+                var inferredType = variable.InferredType ?? ConvertTypeNameToTypeInfo(variable.Type);
+
+                // Variables (identifiers starting with &) are assignable
+                // Create a new instance if needed to avoid modifying singletons
+                if (node.Name.StartsWith("&"))
+                {
+                    if (inferredType is PrimitiveTypeInfo primitive)
+                    {
+                        // Create new instance for primitives to avoid modifying singletons
+                        inferredType = new PrimitiveTypeInfo(primitive.Name, primitive.PeopleCodeType);
+                        inferredType.IsAssignable = true;
+                    }
+                    else if (inferredType is ArrayTypeInfo arrayType)
+                    {
+                        // Arrays are created fresh, can modify directly
+                        inferredType.IsAssignable = true;
+                    }
+                    else if (inferredType is BuiltinObjectTypeInfo || inferredType is AppClassTypeInfo)
+                    {
+                        // These are typically created fresh or can be marked assignable
+                        inferredType.IsAssignable = true;
+                    }
+                    // For other types (Any, Unknown, etc.), leave as-is since they're singletons
+                }
+
                 SetInferredType(node, inferredType);
             }
             else
@@ -891,6 +915,25 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
             {
                 elementType = ReduceDimensionality(elementType);
             }
+
+            // Array access is assignable if the base array is assignable
+            // e.g., &arr[1] is assignable if &arr is a variable
+            // Create a new instance to avoid modifying singletons
+            if (arrayType.IsAssignable)
+            {
+                if (elementType is PrimitiveTypeInfo primitive)
+                {
+                    elementType = new PrimitiveTypeInfo(primitive.Name, primitive.PeopleCodeType);
+                    elementType.IsAssignable = true;
+                }
+                else if (elementType is ArrayTypeInfo || elementType is BuiltinObjectTypeInfo || elementType is AppClassTypeInfo)
+                {
+                    // These types can be marked assignable (they're either fresh or safe to modify)
+                    elementType.IsAssignable = true;
+                }
+                // For singletons like Any, Unknown, leave as-is
+            }
+
             SetInferredType(node, elementType);
         }
         else
@@ -1037,14 +1080,33 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
                 node.Target is IdentifierNode targetIdentifier)
             {
                 // Create FieldTypeInfo with record context: RECORD.FIELD
+                // This is assignable (can be used for out parameters)
                 var memberType = new FieldTypeInfo(targetIdentifier.Name, node.MemberName, _typeResolver);
+                memberType.IsAssignable = true;
                 SetInferredType(node, memberType);
                 return;
             }
 
             if (objectType is FieldTypeInfo fieldType && node.MemberName == "Value")
             {
-                var memberType = new FieldValueTypeInfo(fieldType);
+                // field.Value is assignable (can be used for out parameters)
+                // Get the field's data type and create a new instance to set IsAssignable
+                var underlyingType = fieldType.GetFieldDataType();
+                TypeInfo memberType;
+
+                if (underlyingType is PrimitiveTypeInfo primitive)
+                {
+                    // Create a new PrimitiveTypeInfo instance so we don't modify singletons
+                    memberType = new PrimitiveTypeInfo(primitive.Name, primitive.PeopleCodeType);
+                }
+                else
+                {
+                    // For other types, use the instance directly
+                    // (builtin objects, app classes, etc. should be assignable as-is)
+                    memberType = underlyingType;
+                }
+
+                memberType.IsAssignable = true;
                 SetInferredType(node, memberType);
                 return;
             }
@@ -1058,15 +1120,20 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
                 node.Target is IdentifierNode recordIdentifier)
             {
                 // Create FieldTypeInfo with record/field context for data type resolution
+                // This is assignable (can be used for out parameters)
                 memberType2 = new FieldTypeInfo(recordIdentifier.Name, node.MemberName, _typeResolver);
+                memberType2.IsAssignable = true;
             }
 
-            
+
 
             /* This handles the pattern &rowset.GetRow(1).RECORD_NAME) */
             if (objectType.PeopleCodeType == PeopleCodeType.Row && memberType2.PeopleCodeType == PeopleCodeType.Record)
             {
-                memberType2 = BuiltinObjectTypeInfo.Record;
+                // Create a new Record instance that can be marked as assignable
+                memberType2 = new BuiltinObjectTypeInfo("Record", PeopleCodeType.Record);
+                // Record/Row/Field can be used for out parameters
+                memberType2.IsAssignable = true;
             }
 
             SetInferredType(node, memberType2);
@@ -1103,6 +1170,12 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
             }
             else
             {
+                /* Special case to support CreateArray() with no args */
+                if (node.Function is IdentifierNode ident && ident.Name.ToLower().Equals("createarray") && parameterTypes.Length == 0)
+                {
+                    /* Artificially put in an "any" as the parameter type */
+                    parameterTypes = [AnyTypeInfo.Instance];
+                }
                 returnType = ConvertFunctionInfoToTypeInfo(functionInfo, null, parameterTypes);
             }
             SetInferredType(node, returnType);

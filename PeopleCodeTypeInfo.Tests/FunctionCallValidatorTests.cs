@@ -113,7 +113,7 @@ public class FunctionCallValidatorTests
         };
 
         var validator = new FunctionCallValidator(NullTypeMetadataResolver.Instance);
-        var arguments = argumentTypes.Select(t => ArgumentInfo.NonVariable(t)).ToArray();
+        var arguments = argumentTypes;
         var result = validator.Validate(functionInfo, arguments);
 
         // Assert: Should be valid
@@ -140,7 +140,7 @@ public class FunctionCallValidatorTests
         };
 
         var validator = new FunctionCallValidator(NullTypeMetadataResolver.Instance);
-        var arguments = argumentTypes.Select(t => ArgumentInfo.NonVariable(t)).ToArray();
+        var arguments = argumentTypes;
         var result = validator.Validate(functionInfo, arguments);
 
         Assert.True(result.IsValid, $"Validation failed: {result.GetDetailedError()}");
@@ -168,7 +168,7 @@ public class FunctionCallValidatorTests
         };
 
         var validator = new FunctionCallValidator(NullTypeMetadataResolver.Instance);
-        var arguments = argumentTypes.Select(t => ArgumentInfo.NonVariable(t)).ToArray();
+        var arguments = argumentTypes;
         var result = validator.Validate(functionInfo, arguments);
 
         Assert.True(result.IsValid, $"Validation failed: {result.GetDetailedError()}");
@@ -190,7 +190,7 @@ public class FunctionCallValidatorTests
         };
 
         var validator = new FunctionCallValidator(NullTypeMetadataResolver.Instance);
-        var arguments = argumentTypes.Select(t => ArgumentInfo.NonVariable(t)).ToArray();
+        var arguments = argumentTypes;
         var result = validator.Validate(functionInfo, arguments);
 
         Assert.True(result.IsValid, $"Validation failed: {result.GetDetailedError()}");
@@ -213,7 +213,7 @@ public class FunctionCallValidatorTests
         };
 
         var validator = new FunctionCallValidator(NullTypeMetadataResolver.Instance);
-        var arguments = argumentTypes.Select(t => ArgumentInfo.NonVariable(t)).ToArray();
+        var arguments = argumentTypes;
         var result = validator.Validate(functionInfo, arguments);
 
         Assert.True(result.IsValid, $"Validation failed: {result.GetDetailedError()}");
@@ -310,7 +310,7 @@ public class FunctionCallValidatorTests
             TypeInfo.FromPeopleCodeType(PeopleCodeType.Field)
         };
 
-        var arguments = argumentTypes.Select(t => ArgumentInfo.NonVariable(t)).ToArray();
+        var arguments = argumentTypes;
         var validator = new FunctionCallValidator(NullTypeMetadataResolver.Instance);
         var result = validator.Validate(functionInfo, arguments);
 
@@ -335,7 +335,7 @@ public class FunctionCallValidatorTests
             TypeInfo.FromPeopleCodeType(PeopleCodeType.Field)
         };
 
-        var arguments = argumentTypes.Select(t => ArgumentInfo.NonVariable(t)).ToArray();
+        var arguments = argumentTypes;
         var validator = new FunctionCallValidator(NullTypeMetadataResolver.Instance);
         var result = validator.Validate(functionInfo, arguments);
 
@@ -362,7 +362,7 @@ public class FunctionCallValidatorTests
             TypeInfo.FromPeopleCodeType(PeopleCodeType.Field)
         };
 
-        var arguments = argumentTypes.Select(t => ArgumentInfo.NonVariable(t)).ToArray();
+        var arguments = argumentTypes;
         var validator = new FunctionCallValidator(NullTypeMetadataResolver.Instance);
         var result = validator.Validate(functionInfo, arguments);
 
@@ -387,7 +387,7 @@ public class FunctionCallValidatorTests
             TypeInfo.FromPeopleCodeType(PeopleCodeType.Field)
         };
 
-        var arguments = argumentTypes.Select(t => ArgumentInfo.NonVariable(t)).ToArray();
+        var arguments = argumentTypes;
         var validator = new FunctionCallValidator(NullTypeMetadataResolver.Instance);
         var result = validator.Validate(functionInfo, arguments);
 
@@ -503,7 +503,7 @@ public class FunctionCallValidatorTests
         };
 
         var validator = new FunctionCallValidator(NullTypeMetadataResolver.Instance);
-        var arguments = argumentTypes.Select(t => ArgumentInfo.NonVariable(t)).ToArray();
+        var arguments = argumentTypes;
         var result = validator.Validate(functionInfo, arguments);
 
         // Should be valid
@@ -559,7 +559,7 @@ public class FunctionCallValidatorTests
         };
 
         var validator = new FunctionCallValidator(NullTypeMetadataResolver.Instance);
-        var arguments = argumentTypes.Select(t => ArgumentInfo.NonVariable(t)).ToArray();
+        var arguments = argumentTypes;
         var result = validator.Validate(functionInfo, arguments);
 
         // Should be valid
@@ -607,7 +607,7 @@ public class FunctionCallValidatorTests
         };
 
         var validator = new FunctionCallValidator(NullTypeMetadataResolver.Instance);
-        var arguments = argumentTypes.Select(t => ArgumentInfo.NonVariable(t)).ToArray();
+        var arguments = argumentTypes;
         var result = validator.Validate(functionInfo, arguments);
 
         // Should be valid
@@ -656,7 +656,7 @@ public class FunctionCallValidatorTests
         };
 
         var validator = new FunctionCallValidator(NullTypeMetadataResolver.Instance);
-        var arguments = argumentTypes.Select(t => ArgumentInfo.NonVariable(t)).ToArray();
+        var arguments = argumentTypes;
         var result = validator.Validate(functionInfo, arguments);
 
         // Should be valid
