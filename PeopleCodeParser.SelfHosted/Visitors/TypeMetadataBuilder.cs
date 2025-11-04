@@ -98,12 +98,36 @@ public class TypeMetadataBuilder : AstVisitorBase
             _name = node.AppClass.Name;
             _qualifiedName = _name; // Will be updated if package is known
             node.AppClass.Accept(this);
+
+            /* Check to see if we have an explicit constructor, if not lets add an empty one */
+            if(_constructor == null) 
+            {
+                var defaultConstructor = new FunctionInfo()
+                {
+                    Name = _name,
+                    ParameterOverloads = [[]],
+                    ReturnType = new TypeWithDimensionality(PeopleCodeType.Void, 0),
+                };
+                _constructor = defaultConstructor;
+            }
+
         }
         else if (node.Interface != null)
         {
             _kind = ProgramKind.Interface;
             _name = node.Interface.Name;
             _qualifiedName = _name; // Will be updated if package is known
+
+            /* Apparently interfaces can have constructors... you can create MY:Interface() */
+            /* Check to see if we have an explicit constructor, if not lets add an empty one */
+            var defaultConstructor = new FunctionInfo()
+            {
+                Name = _name,
+                ParameterOverloads = [[]],
+                ReturnType = new TypeWithDimensionality(PeopleCodeType.Void, 0),
+            };
+            _constructor = defaultConstructor;
+
             node.Interface.Accept(this);
         }
         else

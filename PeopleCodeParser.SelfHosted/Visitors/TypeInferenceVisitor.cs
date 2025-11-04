@@ -4,6 +4,7 @@ using PeopleCodeTypeInfo.Database;
 using PeopleCodeTypeInfo.Functions;
 using PeopleCodeTypeInfo.Inference;
 using PeopleCodeTypeInfo.Types;
+using System;
 
 namespace PeopleCodeParser.SelfHosted.Visitors;
 
@@ -1113,7 +1114,7 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
 
             // Resolve member as property (not method call)
             var memberType2 = ResolveMemberAccessReturnType(objectType, node.MemberName, isMethodCall: false, parameterTypes: null);
-
+            memberType2.IsAssignable = true;
             // If result is Field type and target is Record, create FieldTypeInfo for implicit .Value support
             if (memberType2.PeopleCodeType == PeopleCodeType.Field &&
                 objectType.PeopleCodeType == PeopleCodeType.Record &&
@@ -1197,6 +1198,30 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
         // The type of the expression is the type of the object being created.
         var inferredType = ConvertTypeNodeToTypeInfo(node.Type);
         SetInferredType(node, inferredType);
+
+        //var qualifiedName = node.Type
+        if (node.Type is AppClassTypeNode act)
+        {
+            var qualifiedName = act.QualifiedName;
+
+            // Try cache first, then resolver
+            TypeMetadata? sourceMetadata = _typeCache.Get(qualifiedName);
+            if (sourceMetadata == null && _typeResolver != null)
+            {
+                sourceMetadata = _typeResolver.GetTypeMetadata(qualifiedName);
+                if (sourceMetadata != null)
+                    _typeCache.Set(qualifiedName, sourceMetadata);
+            }
+
+            // Look up the constructor 
+            if (sourceMetadata != null &&
+                sourceMetadata.Constructor != null && sourceMetadata.Constructor.Name == act.ClassName)
+            {
+                node.SetFunctionInfo(sourceMetadata.Constructor);
+            }
+
+        }
+
     }
 
     /// <summary>

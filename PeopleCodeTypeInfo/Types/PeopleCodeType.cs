@@ -383,8 +383,11 @@ public enum PeopleCodeType : byte
     Panelgroup = 146,
     Stylesheet = 147,
     Url = 148,
+    Portal = 149,
+    Market = 150,
+    Exception = 151,
+    
 
-    Exception = 149
 }
 
 public static class BuiltinTypeExtensions
@@ -461,6 +464,7 @@ public static class BuiltinTypeExtensions
             "jsonparser" => PeopleCodeType.Jsonparser,
             "jsonvalue" => PeopleCodeType.Jsonvalue,
             "ledgauge" => PeopleCodeType.Ledgauge,
+            "market" => PeopleCodeType.Market,
             "map" => PeopleCodeType.Map,
             "mapelement" => PeopleCodeType.Mapelement,
             "mappage" => PeopleCodeType.Mappage,
@@ -472,6 +476,7 @@ public static class BuiltinTypeExtensions
             "orgchart" => PeopleCodeType.Orgchart,
             "page" => PeopleCodeType.Page,
             "panel" => PeopleCodeType.Panel,
+            "portal" => PeopleCodeType.Portal,
             "postreport" => PeopleCodeType.Postreport,
             "ppmclass" => PeopleCodeType.Ppmclass,
             "primitive" => PeopleCodeType.Primitive,
@@ -1001,6 +1006,8 @@ public class ArrayTypeInfo : TypeInfo
             return ElementType?.IsAssignableFrom(array.ElementType) ?? true;
         }
 
+        if (other is ObjectTypeInfo obj && obj.PeopleCodeType == Types.PeopleCodeType.Object) return true;
+
         return false;
     }
 }
@@ -1299,9 +1306,9 @@ public class ReferenceTypeInfo : TypeInfo
 
     private static readonly HashSet<string> SpecialReferenceKeywords = new(StringComparer.OrdinalIgnoreCase)
     {
-        "BARNAME", "BUSACTIVITY", "BUSEVENT", "BUSPROCESS", "COMPINTFC", "COMPONENT",
-        "FIELD", "FILELAYOUT", "HTML", "IMAGE", "INTERLINK", "ITEMNAME", "MENUNAME",
-        "MESSAGE", "NODE", "OPERATION", "PACKAGE", "PAGE", "PANEL", "PANELGROUP",
+        "ANALYTICMODEL", "BARNAME", "BUSACTIVITY", "BUSEVENT", "BUSPROCESS", "COMPINTFC", "COMPONENT",
+        "FIELD", "FILELAYOUT", "HTML", "IMAGE", "INTERLINK", "ITEMNAME", "MARKET", "MENUNAME",
+        "MESSAGE", "NODE", "OPERATION", "PACKAGE", "PAGE", "PANEL", "PANELGROUP", "PORTAL",
         "RECORD", "SCROLL", "SQL", "STYLESHEET", "URL"
     };
 }
@@ -1535,6 +1542,12 @@ public class ArrayOfFirstParameterTypeInfo : PolymorphicTypeInfo
         if (firstParamType is ArrayTypeInfo ati)
         {
             return new ArrayTypeInfo(ati.Dimensions + 1, ati.ElementType);
+        }
+
+        if (firstParamType is FieldTypeInfo fieldType)
+        {
+            var resolvedType = fieldType.GetFieldDataType();
+            return new ArrayTypeInfo(1, resolvedType);
         }
 
         // Create an array of the first parameter's type
