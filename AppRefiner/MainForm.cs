@@ -15,7 +15,6 @@ using PeopleCodeParser.SelfHosted;
 using PeopleCodeParser.SelfHosted.Lexing;
 using PeopleCodeParser.SelfHosted.Nodes;
 using PeopleCodeParser.SelfHosted.Visitors;
-using PeopleCodeTypeInfo.Analysis;
 using PeopleCodeTypeInfo.Functions;
 using PeopleCodeTypeInfo.Inference;
 using PeopleCodeTypeInfo.Types;
@@ -2434,7 +2433,7 @@ namespace AppRefiner
                         var typeInfo = AstNodeExtensions.GetInferredType(nodeBeforeDot);
 
                         /* We need to work out the minimum visibility for methods/properties */
-                        var maxVisibility = MemberAccessibility.Public;
+                        var maxVisibility = MemberVisibility.Public;
 
                         if (typeInfo is AppClassTypeInfo act && program.AppClass != null)
                         {
@@ -2442,12 +2441,12 @@ namespace AppRefiner
 
                             if (activeClassTypeInfo.InheritanceChain.Any(e => e.QualifiedName == act.QualifiedName))
                             {
-                                maxVisibility = MemberAccessibility.Protected;
+                                maxVisibility = MemberVisibility.Protected;
                             }
 
                             if (activeClassTypeInfo.QualifiedName == act.QualifiedName)
                             {
-                                maxVisibility = MemberAccessibility.Private;
+                                maxVisibility = MemberVisibility.Private;
                             }
                         }
 

@@ -1,8 +1,14 @@
-using PeopleCodeTypeInfo.Analysis;
 using PeopleCodeTypeInfo.Types;
 using System.Text;
 
 namespace PeopleCodeTypeInfo.Functions;
+
+public enum MemberVisibility
+{
+    Public,
+    Protected,
+    Private
+}
 
 /// <summary>
 /// Represents a property with type information including array dimensionality and AppClass path support.
@@ -23,7 +29,7 @@ public class PropertyInfo : IEquatable<PropertyInfo>
     /// <summary>
     /// Visibility modifier for this function (set at runtime for app class methods)
     /// </summary>
-    public MemberAccessibility Visibility { get; set; } = MemberAccessibility.Public;
+    public MemberVisibility Visibility { get; set; } = MemberVisibility.Public;
 
     /// <summary>
     /// The base type of the property

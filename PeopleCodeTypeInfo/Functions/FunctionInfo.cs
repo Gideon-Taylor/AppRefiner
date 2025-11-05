@@ -1,4 +1,3 @@
-using PeopleCodeTypeInfo.Analysis;
 using PeopleCodeTypeInfo.Types;
 using PeopleCodeTypeInfo.Validation;
 using System.Text;
@@ -24,7 +23,7 @@ public class FunctionInfo
     /// <summary>
     /// Visibility modifier for this function (set at runtime for app class methods)
     /// </summary>
-    public MemberAccessibility Visibility { get; set; } = MemberAccessibility.Public;
+    public MemberVisibility Visibility { get; set; } = MemberVisibility.Public;
 
     /// <summary>
     /// List of parameter overloads for this function.

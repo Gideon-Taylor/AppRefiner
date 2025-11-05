@@ -6,7 +6,6 @@ using PeopleCodeParser.SelfHosted.Lexing;
 using PeopleCodeParser.SelfHosted.Nodes;
 using PeopleCodeParser.SelfHosted.Visitors;
 using PeopleCodeParser.SelfHosted.Visitors.Models;
-using PeopleCodeTypeInfo.Analysis;
 using PeopleCodeTypeInfo.Database;  // For PeopleCodeTypeDatabase
 using PeopleCodeTypeInfo.Functions; // For FunctionInfo, PropertyInfo, BuiltinObjectInfo
 using PeopleCodeTypeInfo.Inference;
@@ -422,7 +421,7 @@ namespace AppRefiner
         /// <param name="editor">The current Scintilla editor.</param>
         /// <param name="position">Current cursor position.</param>
         /// <param name="typeInfo">The TypeInfo to enumerate members from.</param>
-        public void ShowObjectMembers(ScintillaEditor editor, int position, TypeInfo typeInfo, MemberAccessibility maximumVisibility = MemberAccessibility.Public)
+        public void ShowObjectMembers(ScintillaEditor editor, int position, TypeInfo typeInfo, MemberVisibility maximumVisibility = MemberVisibility.Public)
         {
             if (editor == null || !editor.IsValid()) return;
             if (typeInfo == null) return;
