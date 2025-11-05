@@ -17,6 +17,11 @@
     <Content Include="AppRefiner.ico" />
   </ItemGroup>
 
+  <!-- Automatically include all .rgba theme files as embedded resources -->
+  <ItemGroup>
+    <EmbeddedResource Include="Themes\**\*.rgba" />
+  </ItemGroup>
+
   <ItemGroup>
     <PackageReference Include="Hogimn.Sql.Formatter" Version="2.0.2" />
     <PackageReference Include="Microsoft.Data.Sqlite" Version="9.0.8" />
