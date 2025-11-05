@@ -40,6 +40,14 @@ namespace AppRefiner
             splitContainer1 = new SplitContainer();
             tabControl1 = new TabControl();
             tabPage1 = new TabPage();
+            groupBox3 = new GroupBox();
+            chkFilled = new CheckBox();
+            cmbTheme = new ComboBox();
+            label1 = new Label();
+            chkSystemVariables = new CheckBox();
+            chkObjectMembers = new CheckBox();
+            chkFunctionSignatures = new CheckBox();
+            chkVariableSuggestions = new CheckBox();
             linkDocs = new LinkLabel();
             groupBox2 = new GroupBox();
             chkEventMapXrefs = new CheckBox();
@@ -52,6 +60,7 @@ namespace AppRefiner
             btnTNSADMIN = new Button();
             btnDebugLog = new Button();
             grpEditorSettings = new GroupBox();
+            chkLineSelectionFix = new CheckBox();
             chkMultiSelection = new CheckBox();
             chkAutoCenterDialogs = new CheckBox();
             btnConfigSmartOpen = new Button();
@@ -95,13 +104,13 @@ namespace AppRefiner
             cmbTemplates = new ComboBox();
             progressBar1 = new ProgressBar();
             lblStatus = new Label();
-            chkLineSelectionFix = new CheckBox();
             ((System.ComponentModel.ISupportInitialize)splitContainer1).BeginInit();
             splitContainer1.Panel1.SuspendLayout();
             splitContainer1.Panel2.SuspendLayout();
             splitContainer1.SuspendLayout();
             tabControl1.SuspendLayout();
             tabPage1.SuspendLayout();
+            groupBox3.SuspendLayout();
             groupBox2.SuspendLayout();
             groupBox4.SuspendLayout();
             groupBox1.SuspendLayout();
@@ -140,8 +149,8 @@ namespace AppRefiner
             // 
             splitContainer1.Panel2.Controls.Add(progressBar1);
             splitContainer1.Panel2.Controls.Add(lblStatus);
-            splitContainer1.Size = new Size(570, 561);
-            splitContainer1.SplitterDistance = 493;
+            splitContainer1.Size = new Size(570, 638);
+            splitContainer1.SplitterDistance = 560;
             splitContainer1.TabIndex = 0;
             // 
             // tabControl1
@@ -156,11 +165,12 @@ namespace AppRefiner
             tabControl1.Location = new Point(0, 0);
             tabControl1.Name = "tabControl1";
             tabControl1.SelectedIndex = 0;
-            tabControl1.Size = new Size(570, 493);
+            tabControl1.Size = new Size(570, 560);
             tabControl1.TabIndex = 3;
             // 
             // tabPage1
             // 
+            tabPage1.Controls.Add(groupBox3);
             tabPage1.Controls.Add(linkDocs);
             tabPage1.Controls.Add(groupBox2);
             tabPage1.Controls.Add(groupBox1);
@@ -169,15 +179,100 @@ namespace AppRefiner
             tabPage1.Location = new Point(4, 24);
             tabPage1.Name = "tabPage1";
             tabPage1.Padding = new Padding(3);
-            tabPage1.Size = new Size(562, 465);
+            tabPage1.Size = new Size(562, 532);
             tabPage1.TabIndex = 0;
             tabPage1.Text = "Editor Tweaks";
             tabPage1.UseVisualStyleBackColor = true;
             // 
+            // groupBox3
+            // 
+            groupBox3.Controls.Add(chkFilled);
+            groupBox3.Controls.Add(cmbTheme);
+            groupBox3.Controls.Add(label1);
+            groupBox3.Controls.Add(chkSystemVariables);
+            groupBox3.Controls.Add(chkObjectMembers);
+            groupBox3.Controls.Add(chkFunctionSignatures);
+            groupBox3.Controls.Add(chkVariableSuggestions);
+            groupBox3.Location = new Point(8, 144);
+            groupBox3.Name = "groupBox3";
+            groupBox3.Size = new Size(258, 137);
+            groupBox3.TabIndex = 34;
+            groupBox3.TabStop = false;
+            groupBox3.Text = "Auto Suggest Settings";
+            // 
+            // chkFilled
+            // 
+            chkFilled.AutoSize = true;
+            chkFilled.Location = new Point(181, 97);
+            chkFilled.Name = "chkFilled";
+            chkFilled.Size = new Size(54, 19);
+            chkFilled.TabIndex = 43;
+            chkFilled.Text = "Filled";
+            chkFilled.UseVisualStyleBackColor = true;
+            chkFilled.CheckedChanged += ThemeSetting_Changed;
+            // 
+            // cmbTheme
+            // 
+            cmbTheme.FormattingEnabled = true;
+            cmbTheme.Location = new Point(60, 94);
+            cmbTheme.Name = "cmbTheme";
+            cmbTheme.Size = new Size(115, 23);
+            cmbTheme.TabIndex = 42;
+            cmbTheme.SelectedIndexChanged += ThemeSetting_Changed;
+            // 
+            // label1
+            // 
+            label1.AutoSize = true;
+            label1.Location = new Point(7, 97);
+            label1.Name = "label1";
+            label1.Size = new Size(47, 15);
+            label1.TabIndex = 41;
+            label1.Text = "Theme:";
+            // 
+            // chkSystemVariables
+            // 
+            chkSystemVariables.AutoSize = true;
+            chkSystemVariables.Location = new Point(128, 56);
+            chkSystemVariables.Name = "chkSystemVariables";
+            chkSystemVariables.Size = new Size(113, 19);
+            chkSystemVariables.TabIndex = 40;
+            chkSystemVariables.Text = "System Variables";
+            chkSystemVariables.UseVisualStyleBackColor = true;
+            // 
+            // chkObjectMembers
+            // 
+            chkObjectMembers.AutoSize = true;
+            chkObjectMembers.Location = new Point(14, 56);
+            chkObjectMembers.Name = "chkObjectMembers";
+            chkObjectMembers.Size = new Size(108, 19);
+            chkObjectMembers.TabIndex = 39;
+            chkObjectMembers.Text = "Methods/Props";
+            chkObjectMembers.UseVisualStyleBackColor = true;
+            // 
+            // chkFunctionSignatures
+            // 
+            chkFunctionSignatures.AutoSize = true;
+            chkFunctionSignatures.Location = new Point(128, 31);
+            chkFunctionSignatures.Name = "chkFunctionSignatures";
+            chkFunctionSignatures.Size = new Size(104, 19);
+            chkFunctionSignatures.TabIndex = 38;
+            chkFunctionSignatures.Text = "Call Signatures";
+            chkFunctionSignatures.UseVisualStyleBackColor = true;
+            // 
+            // chkVariableSuggestions
+            // 
+            chkVariableSuggestions.AutoSize = true;
+            chkVariableSuggestions.Location = new Point(14, 31);
+            chkVariableSuggestions.Name = "chkVariableSuggestions";
+            chkVariableSuggestions.Size = new Size(72, 19);
+            chkVariableSuggestions.TabIndex = 37;
+            chkVariableSuggestions.Text = "Variables";
+            chkVariableSuggestions.UseVisualStyleBackColor = true;
+            // 
             // linkDocs
             // 
             linkDocs.AutoSize = true;
-            linkDocs.Location = new Point(6, 444);
+            linkDocs.Location = new Point(6, 498);
             linkDocs.Name = "linkDocs";
             linkDocs.Size = new Size(127, 15);
             linkDocs.TabIndex = 33;
@@ -190,9 +285,9 @@ namespace AppRefiner
             groupBox2.Controls.Add(chkEventMapXrefs);
             groupBox2.Controls.Add(groupBox4);
             groupBox2.Controls.Add(chkEventMapping);
-            groupBox2.Location = new Point(8, 264);
+            groupBox2.Location = new Point(8, 287);
             groupBox2.Name = "groupBox2";
-            groupBox2.Size = new Size(544, 119);
+            groupBox2.Size = new Size(546, 157);
             groupBox2.TabIndex = 0;
             groupBox2.TabStop = false;
             groupBox2.Text = "Event Mapping";
@@ -200,7 +295,7 @@ namespace AppRefiner
             // chkEventMapXrefs
             // 
             chkEventMapXrefs.AutoSize = true;
-            chkEventMapXrefs.Location = new Point(164, 22);
+            chkEventMapXrefs.Location = new Point(155, 22);
             chkEventMapXrefs.Name = "chkEventMapXrefs";
             chkEventMapXrefs.Size = new Size(194, 19);
             chkEventMapXrefs.TabIndex = 35;
@@ -211,7 +306,7 @@ namespace AppRefiner
             // 
             groupBox4.Controls.Add(optClassText);
             groupBox4.Controls.Add(optClassPath);
-            groupBox4.Location = new Point(6, 45);
+            groupBox4.Location = new Point(8, 47);
             groupBox4.Name = "groupBox4";
             groupBox4.Size = new Size(127, 68);
             groupBox4.TabIndex = 34;
@@ -254,9 +349,9 @@ namespace AppRefiner
             // 
             groupBox1.Controls.Add(btnReportDirectory);
             groupBox1.Controls.Add(btnTNSADMIN);
-            groupBox1.Location = new Point(8, 158);
+            groupBox1.Location = new Point(277, 146);
             groupBox1.Name = "groupBox1";
-            groupBox1.Size = new Size(544, 100);
+            groupBox1.Size = new Size(277, 135);
             groupBox1.TabIndex = 32;
             groupBox1.TabStop = false;
             groupBox1.Text = "Directories";
@@ -283,7 +378,7 @@ namespace AppRefiner
             // 
             // btnDebugLog
             // 
-            btnDebugLog.Location = new Point(469, 436);
+            btnDebugLog.Location = new Point(469, 490);
             btnDebugLog.Name = "btnDebugLog";
             btnDebugLog.Size = new Size(85, 23);
             btnDebugLog.TabIndex = 27;
@@ -314,6 +409,16 @@ namespace AppRefiner
             grpEditorSettings.TabIndex = 20;
             grpEditorSettings.TabStop = false;
             grpEditorSettings.Text = "Settings";
+            // 
+            // chkLineSelectionFix
+            // 
+            chkLineSelectionFix.AutoSize = true;
+            chkLineSelectionFix.Location = new Point(259, 93);
+            chkLineSelectionFix.Name = "chkLineSelectionFix";
+            chkLineSelectionFix.Size = new Size(116, 19);
+            chkLineSelectionFix.TabIndex = 36;
+            chkLineSelectionFix.Text = "Line Selection Fix";
+            chkLineSelectionFix.UseVisualStyleBackColor = true;
             // 
             // chkMultiSelection
             // 
@@ -462,7 +567,7 @@ namespace AppRefiner
             tabPage4.Location = new Point(4, 24);
             tabPage4.Name = "tabPage4";
             tabPage4.Padding = new Padding(3);
-            tabPage4.Size = new Size(562, 465);
+            tabPage4.Size = new Size(562, 532);
             tabPage4.TabIndex = 3;
             tabPage4.Text = "Stylers";
             tabPage4.UseVisualStyleBackColor = true;
@@ -478,7 +583,7 @@ namespace AppRefiner
             dataGridView3.Location = new Point(3, 3);
             dataGridView3.Name = "dataGridView3";
             dataGridView3.RowHeadersVisible = false;
-            dataGridView3.Size = new Size(556, 459);
+            dataGridView3.Size = new Size(556, 526);
             dataGridView3.TabIndex = 3;
             dataGridView3.CellContentClick += dataGridView3_CellContentClick;
             dataGridView3.CellValueChanged += dataGridView3_CellValueChanged;
@@ -504,7 +609,7 @@ namespace AppRefiner
             tabPage3.Location = new Point(4, 24);
             tabPage3.Name = "tabPage3";
             tabPage3.Padding = new Padding(3);
-            tabPage3.Size = new Size(562, 465);
+            tabPage3.Size = new Size(562, 532);
             tabPage3.TabIndex = 7;
             tabPage3.Text = "Linters";
             tabPage3.UseVisualStyleBackColor = true;
@@ -525,8 +630,8 @@ namespace AppRefiner
             // splitContainer4.Panel2
             // 
             splitContainer4.Panel2.Controls.Add(dataGridView1);
-            splitContainer4.Size = new Size(556, 459);
-            splitContainer4.SplitterDistance = 49;
+            splitContainer4.Size = new Size(556, 526);
+            splitContainer4.SplitterDistance = 56;
             splitContainer4.TabIndex = 0;
             // 
             // btnConnectDB
@@ -534,7 +639,7 @@ namespace AppRefiner
             btnConnectDB.Dock = DockStyle.Right;
             btnConnectDB.Location = new Point(449, 0);
             btnConnectDB.Name = "btnConnectDB";
-            btnConnectDB.Size = new Size(107, 49);
+            btnConnectDB.Size = new Size(107, 56);
             btnConnectDB.TabIndex = 14;
             btnConnectDB.Text = "Connect DB...";
             btnConnectDB.UseVisualStyleBackColor = true;
@@ -546,7 +651,7 @@ namespace AppRefiner
             btnClearLint.Enabled = false;
             btnClearLint.Location = new Point(239, 0);
             btnClearLint.Name = "btnClearLint";
-            btnClearLint.Size = new Size(123, 49);
+            btnClearLint.Size = new Size(123, 56);
             btnClearLint.TabIndex = 13;
             btnClearLint.Text = "Clear Annotations";
             btnClearLint.UseVisualStyleBackColor = true;
@@ -558,7 +663,7 @@ namespace AppRefiner
             btnLintCode.Enabled = false;
             btnLintCode.Location = new Point(0, 0);
             btnLintCode.Name = "btnLintCode";
-            btnLintCode.Size = new Size(239, 49);
+            btnLintCode.Size = new Size(239, 56);
             btnLintCode.TabIndex = 12;
             btnLintCode.Text = "Lint Code";
             btnLintCode.UseVisualStyleBackColor = true;
@@ -575,7 +680,7 @@ namespace AppRefiner
             dataGridView1.Location = new Point(0, 0);
             dataGridView1.Name = "dataGridView1";
             dataGridView1.RowHeadersVisible = false;
-            dataGridView1.Size = new Size(556, 406);
+            dataGridView1.Size = new Size(556, 466);
             dataGridView1.TabIndex = 6;
             dataGridView1.CellContentClick += dataGridView1_CellContentClick;
             dataGridView1.CellPainting += dataGridView1_CellPainting;
@@ -611,7 +716,7 @@ namespace AppRefiner
             tabPageTooltips.Location = new Point(4, 24);
             tabPageTooltips.Name = "tabPageTooltips";
             tabPageTooltips.Padding = new Padding(3);
-            tabPageTooltips.Size = new Size(562, 465);
+            tabPageTooltips.Size = new Size(562, 532);
             tabPageTooltips.TabIndex = 6;
             tabPageTooltips.Text = "Tooltips";
             tabPageTooltips.UseVisualStyleBackColor = true;
@@ -627,7 +732,7 @@ namespace AppRefiner
             dataGridViewTooltips.Location = new Point(3, 3);
             dataGridViewTooltips.Name = "dataGridViewTooltips";
             dataGridViewTooltips.RowHeadersVisible = false;
-            dataGridViewTooltips.Size = new Size(556, 459);
+            dataGridViewTooltips.Size = new Size(556, 526);
             dataGridViewTooltips.TabIndex = 3;
             dataGridViewTooltips.CellContentClick += dataGridViewTooltips_CellContentClick;
             dataGridViewTooltips.CellValueChanged += dataGridViewTooltips_CellValueChanged;
@@ -653,7 +758,7 @@ namespace AppRefiner
             tabPage2.Location = new Point(4, 24);
             tabPage2.Name = "tabPage2";
             tabPage2.Padding = new Padding(3);
-            tabPage2.Size = new Size(562, 465);
+            tabPage2.Size = new Size(562, 532);
             tabPage2.TabIndex = 8;
             tabPage2.Text = "Refactors";
             tabPage2.UseVisualStyleBackColor = true;
@@ -669,7 +774,7 @@ namespace AppRefiner
             gridRefactors.Location = new Point(3, 3);
             gridRefactors.Name = "gridRefactors";
             gridRefactors.RowHeadersVisible = false;
-            gridRefactors.Size = new Size(556, 459);
+            gridRefactors.Size = new Size(556, 526);
             gridRefactors.TabIndex = 7;
             gridRefactors.CellContentClick += gridRefactors_CellContentClick;
             gridRefactors.CellPainting += gridRefactors_CellPainting;
@@ -704,7 +809,7 @@ namespace AppRefiner
             tabPage5.Location = new Point(4, 24);
             tabPage5.Name = "tabPage5";
             tabPage5.Padding = new Padding(3);
-            tabPage5.Size = new Size(562, 465);
+            tabPage5.Size = new Size(562, 532);
             tabPage5.TabIndex = 5;
             tabPage5.Text = "Templates";
             tabPage5.UseVisualStyleBackColor = true;
@@ -723,8 +828,8 @@ namespace AppRefiner
             // splitContainer3.Panel2
             // 
             splitContainer3.Panel2.Controls.Add(btnApplyTemplate);
-            splitContainer3.Size = new Size(556, 436);
-            splitContainer3.SplitterDistance = 403;
+            splitContainer3.Size = new Size(556, 503);
+            splitContainer3.SplitterDistance = 464;
             splitContainer3.TabIndex = 1;
             // 
             // pnlTemplateParams
@@ -732,7 +837,7 @@ namespace AppRefiner
             pnlTemplateParams.Dock = DockStyle.Fill;
             pnlTemplateParams.Location = new Point(0, 0);
             pnlTemplateParams.Name = "pnlTemplateParams";
-            pnlTemplateParams.Size = new Size(556, 403);
+            pnlTemplateParams.Size = new Size(556, 464);
             pnlTemplateParams.TabIndex = 3;
             // 
             // btnApplyTemplate
@@ -740,7 +845,7 @@ namespace AppRefiner
             btnApplyTemplate.Dock = DockStyle.Fill;
             btnApplyTemplate.Location = new Point(0, 0);
             btnApplyTemplate.Name = "btnApplyTemplate";
-            btnApplyTemplate.Size = new Size(556, 29);
+            btnApplyTemplate.Size = new Size(556, 35);
             btnApplyTemplate.TabIndex = 1;
             btnApplyTemplate.Text = "Generate Template";
             btnApplyTemplate.UseVisualStyleBackColor = true;
@@ -759,7 +864,7 @@ namespace AppRefiner
             // progressBar1
             // 
             progressBar1.Dock = DockStyle.Bottom;
-            progressBar1.Location = new Point(0, 9);
+            progressBar1.Location = new Point(0, 19);
             progressBar1.Name = "progressBar1";
             progressBar1.Size = new Size(570, 25);
             progressBar1.TabIndex = 22;
@@ -767,28 +872,18 @@ namespace AppRefiner
             // lblStatus
             // 
             lblStatus.Dock = DockStyle.Bottom;
-            lblStatus.Location = new Point(0, 34);
+            lblStatus.Location = new Point(0, 44);
             lblStatus.Name = "lblStatus";
             lblStatus.Size = new Size(570, 30);
             lblStatus.TabIndex = 21;
             lblStatus.Text = "Stopped";
             lblStatus.TextAlign = ContentAlignment.MiddleCenter;
             // 
-            // checkBox1
-            // 
-            chkLineSelectionFix.AutoSize = true;
-            chkLineSelectionFix.Location = new Point(259, 93);
-            chkLineSelectionFix.Name = "chkLineSelectionFix";
-            chkLineSelectionFix.Size = new Size(143, 19);
-            chkLineSelectionFix.TabIndex = 36;
-            chkLineSelectionFix.Text = "Line Selection Fix";
-            chkLineSelectionFix.UseVisualStyleBackColor = true;
-            // 
             // MainForm
             // 
             AutoScaleDimensions = new SizeF(7F, 15F);
             AutoScaleMode = AutoScaleMode.Font;
-            ClientSize = new Size(570, 561);
+            ClientSize = new Size(570, 638);
             Controls.Add(splitContainer1);
             Icon = (Icon)resources.GetObject("$this.Icon");
             Name = "MainForm";
@@ -800,6 +895,8 @@ namespace AppRefiner
             tabControl1.ResumeLayout(false);
             tabPage1.ResumeLayout(false);
             tabPage1.PerformLayout();
+            groupBox3.ResumeLayout(false);
+            groupBox3.PerformLayout();
             groupBox2.ResumeLayout(false);
             groupBox2.PerformLayout();
             groupBox4.ResumeLayout(false);
@@ -893,5 +990,13 @@ namespace AppRefiner
         private CheckBox chkAutoCenterDialogs;
         private CheckBox chkMultiSelection;
         private CheckBox chkLineSelectionFix;
+        private GroupBox groupBox3;
+        private CheckBox chkFunctionSignatures;
+        private CheckBox chkVariableSuggestions;
+        private CheckBox chkObjectMembers;
+        private CheckBox chkSystemVariables;
+        private ComboBox cmbTheme;
+        private Label label1;
+        private CheckBox chkFilled;
     }
 }

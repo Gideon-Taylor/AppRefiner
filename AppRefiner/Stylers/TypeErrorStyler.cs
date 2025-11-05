@@ -18,7 +18,7 @@ namespace AppRefiner.Stylers;
 public class TypeErrorStyler : BaseStyler
 {
     private const uint ERROR_COLOR = 0x0000FFA0; // Harsh red color with high alpha (matches UndefinedVariables)
-
+    private const uint WARNING_COLOR = 0x32FF32FF; // Light green 
     public TypeErrorStyler()
     {
         // Enable by default
@@ -81,6 +81,17 @@ public class TypeErrorStyler : BaseStyler
                 );
             }
 
+            var typeWarnings = node.GetAllTypeWarnings();
+            foreach ( var warning in typeWarnings)
+            {
+                AddIndicator(
+                    warning.Node.SourceSpan,
+                    IndicatorType.SQUIGGLE,
+                    WARNING_COLOR,
+                    warning.Message
+                );
+            }
+
             if (typeErrors.Any())
             {
                 Debug.Log($"TypeErrorStyler: Found {typeErrors.Count()} type errors in '{qualifiedName}'");
@@ -100,19 +111,32 @@ public class TypeErrorStyler : BaseStyler
     private string DetermineQualifiedName(ProgramNode node)
     {
         // Try to extract from AST structure first
-        if (node.AppClass != null)
+        if (node.AppClass != null || node.Interface != null)
         {
             // For app classes, try to build qualified name from imports or use simple name
-            var className = node.AppClass.Name;
+            var className = node.AppClass != null ? node.AppClass.Name : node.Interface!.Name;
 
-            // TODO: In the future, we could parse package path from import statements
-            // For now, just use the class name
-            return className;
-        }
-        else if (node.Interface != null)
-        {
-            // For interfaces, use interface name
-            return node.Interface.Name;
+            if (Editor?.Caption != null && !string.IsNullOrWhiteSpace(Editor.Caption))
+            {
+                // Parse caption to get program identifier
+                var openTarget = OpenTargetBuilder.CreateFromCaption(Editor.Caption);
+                if (openTarget != null)
+                {
+                    var methodIndex = Array.IndexOf(openTarget.ObjectIDs, PSCLASSID.METHOD);
+                    openTarget.ObjectIDs[methodIndex] = PSCLASSID.NONE;
+                    openTarget.ObjectValues[methodIndex] = null;
+                    return openTarget.Path;
+                }
+                else
+                {
+                    /* probably never what you want but we have to return something? */
+                    return className;
+                }
+            } else
+            {
+                /* probably never what you want but we have to return something? */
+                return className;
+            }
         }
         else
         {

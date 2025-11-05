@@ -1,12 +1,19 @@
+using AppRefiner.Database;
 using AppRefiner.Refactors; // For ScopedRefactor, AddImport, CreateAutoComplete
+using AppRefiner.TooltipProviders; // For DllImport
 using PeopleCodeParser.SelfHosted;
 using PeopleCodeParser.SelfHosted.Lexing;
 using PeopleCodeParser.SelfHosted.Nodes;
 using PeopleCodeParser.SelfHosted.Visitors;
 using PeopleCodeParser.SelfHosted.Visitors.Models;
+using PeopleCodeTypeInfo.Analysis;
+using PeopleCodeTypeInfo.Database;  // For PeopleCodeTypeDatabase
+using PeopleCodeTypeInfo.Functions; // For FunctionInfo, PropertyInfo, BuiltinObjectInfo
 using PeopleCodeTypeInfo.Inference;
+using PeopleCodeTypeInfo.Types;     // For TypeInfo and subclasses
 using PeopleCodeTypeInfo.Validation;
-using System.Runtime.InteropServices; // For DllImport
+using System.Runtime.InteropServices;
+using static AppRefiner.AppDesignerProcess;
 
 namespace AppRefiner
 {
@@ -153,7 +160,9 @@ namespace AppRefiner
         {
             AppPackage = 1,
             QuickFix = 2,
-            Variable = 3
+            Variable = 3,
+            ObjectMembers = 4,
+            SystemVariables = 5
         }
 
         // Constants related to Scintilla messages (can be kept private if only used here)
@@ -314,6 +323,7 @@ namespace AppRefiner
                             break;
                         } else if (parent is FunctionCallNode) {
                             funcCallNode = parent as FunctionCallNode;
+                            break;
                         }
                         parent = parent.Parent;
                     }
@@ -335,40 +345,60 @@ namespace AppRefiner
                     }
                 }
 
-
-
                 // Use the variable collector to get accessible variables at the current position
                 var collector = new VariableCollector(position);
                 collector.VisitProgram(program);
 
                 var accessibleVariables = collector.GetAccessibleVariables();
-
+                
+                /* remove the & variable */
+                accessibleVariables = accessibleVariables.Where(v => v.Name != "&").ToList();
+                List<string> suggestions = new();
+                List<VariableInfo> sortedVariables = new();
                 if (allowedTypes != null)
                 {
                     var allowedTypeStrings = allowedTypes.Select(a => a.TypeName.ToLower()).ToList();
                     allowedTypeStrings.Add("any");
                     allowedTypeStrings.Add("object");
-                    accessibleVariables = accessibleVariables.Where(v => allowedTypeStrings.Contains(v.Type)).ToList();
+                    var matchingTypeVars = accessibleVariables.Where(v => allowedTypeStrings.Contains(v.Type)).DistinctBy(v => v.Name).OrderBy(v => v.Name);
+                    var nonMatchingTypes = accessibleVariables.Where(v => !allowedTypeStrings.Contains(v.Type)).DistinctBy(v => v.Name).OrderBy(v => v.Name);
+
+                    sortedVariables.AddRange(matchingTypeVars);
+                    sortedVariables.AddRange(nonMatchingTypes);
+                } else
+                {
+                    sortedVariables.AddRange(accessibleVariables.DistinctBy(v => v.Name).OrderBy(v => v.Name));
                 }
 
-                // Convert to list of strings for autocomplete, filtering out duplicates by name
-                List<string> suggestions = new();
-                var variableGroups = accessibleVariables
-                    .GroupBy(v => v.Name)
-                    .Select(g => g.First()) // Take first occurrence of each variable name
-                    .OrderBy(v => v.Name);
-
-                foreach (var variable in variableGroups)
+                foreach (var variable in sortedVariables)
                 {
-                    // Format variable with its type and kind for better context
-                    string suggestion = FormatVariableSuggestion(variable);
-                    suggestions.Add(suggestion);
+                    int iconNumber = variable.Kind switch
+                    {
+                        VariableKind.Local => (int)AutoCompleteIcons.LocalVariable,
+                        VariableKind.Instance => (int)AutoCompleteIcons.InstanceVariable,
+                        VariableKind.Global => (int)AutoCompleteIcons.GlobalVariable,
+                        VariableKind.Component => (int)AutoCompleteIcons.ComponentVariable,
+                        VariableKind.Parameter => (int)AutoCompleteIcons.Parameter,
+                        VariableKind.Constant => (int)AutoCompleteIcons.ConstantValue,
+                        VariableKind.Property => (int)AutoCompleteIcons.Property,
+                        VariableKind.Exception => (int)AutoCompleteIcons.LocalVariable,
+                        _ => -1
+                    };
+
+                    if (iconNumber >= 0) 
+                    {
+                        suggestions.Add($"{FormatVariableSuggestion(variable)}?{iconNumber}");
+                    } else
+                    {
+                        suggestions.Add(FormatVariableSuggestion(variable));
+                    }
+
                 }
 
                 if (suggestions.Count > 0)
                 {
                     Debug.Log($"Showing {suggestions.Count} variable suggestions at position {position}");
-                    bool result = ScintillaManager.ShowUserList(editor, UserListType.Variable, position, suggestions);
+                    bool result = ScintillaManager.ShowUserList(editor, UserListType.Variable, position, suggestions, true);
 
                     if (!result)
                     {
@@ -386,21 +416,307 @@ namespace AppRefiner
             }
         }
 
+        /// <summary>
+        /// Shows object member suggestions (methods and properties) for a given type.
+        /// </summary>
+        /// <param name="editor">The current Scintilla editor.</param>
+        /// <param name="position">Current cursor position.</param>
+        /// <param name="typeInfo">The TypeInfo to enumerate members from.</param>
+        public void ShowObjectMembers(ScintillaEditor editor, int position, TypeInfo typeInfo, MemberAccessibility maximumVisibility = MemberAccessibility.Public)
+        {
+            if (editor == null || !editor.IsValid()) return;
+            if (typeInfo == null) return;
+
+            try
+            {
+                List<string> suggestions = new();
+
+                // Handle builtin object types
+                if (typeInfo is BuiltinObjectTypeInfo builtinType && builtinType.PeopleCodeType.HasValue)
+                {
+                    string typeName = builtinType.PeopleCodeType.Value.GetTypeName();
+                    var objectInfo = PeopleCodeTypeDatabase.GetObject(typeName);
+
+                    if (objectInfo != null)
+                    {
+                        // Add all methods
+                        foreach (var method in objectInfo.GetAllMethods().OrderBy(m => m.Name))
+                        {
+                            if (method.Visibility <= maximumVisibility)
+                            {
+                                suggestions.Add($"{method.Name}() -> {FormatReturnType(method.ReturnType)} (Method)?{(int)AutoCompleteIcons.ClassMethod}");
+                            }
+                        }
+
+                        // Add all properties
+                        foreach (var prop in objectInfo.GetAllProperties().OrderBy(p => p.Name))
+                        {
+                            suggestions.Add($"{prop.Name} -> {FormatPropertyType(prop)} (Property)?{(int)AutoCompleteIcons.Property}");
+                        }
+                    }
+                }
+                // Handle AppClass types
+                else if (typeInfo is AppClassTypeInfo appClass)
+                {
+                    var typeResolver = editor.AppDesignerProcess?.TypeResolver;
+                    if (typeResolver != null)
+                    {
+                        var metadata = typeResolver.GetTypeMetadata(appClass.QualifiedName);
+                        if (metadata != null)
+                        {
+                            // Add methods from metadata
+                            foreach (var method in metadata.Methods.Values.OrderBy(m => m.Name))
+                            {
+                                string returnTypeStr = method.ReturnType != null
+                                    ? method.ReturnType.ToString()
+                                    : "void";
+                                suggestions.Add($"{method.Name}() -> {returnTypeStr}?{(int)AutoCompleteIcons.ClassMethod}");
+                            }
+
+                            // Add properties from metadata
+                            foreach (var prop in metadata.Properties.OrderBy(p => p.Key))
+                            {
+                                string propTypeStr = prop.Value.Type.ToString();
+                                suggestions.Add($"{prop.Key} -> {propTypeStr}?{(int)AutoCompleteIcons.Property}");
+                            }
+                        }
+
+                        foreach(var item in appClass.InheritanceChain)
+                        {
+                            if (item.QualifiedName == appClass.QualifiedName) continue;
+
+                            metadata = typeResolver.GetTypeMetadata(item.QualifiedName);
+                            if (metadata != null)
+                            {
+                                // Add methods from metadata
+                                foreach (var method in metadata.Methods.Values.OrderBy(m => m.Name))
+                                {
+                                    string returnTypeStr = method.ReturnType != null
+                                        ? method.ReturnType.ToString()
+                                        : "void";
+                                    suggestions.Add($"{method.Name}() -> {returnTypeStr}?{(int)AutoCompleteIcons.ClassMethod}");
+                                }
+
+                                // Add properties from metadata
+                                foreach (var prop in metadata.Properties.OrderBy(p => p.Key))
+                                {
+                                    string propTypeStr = prop.Value.Type.ToString();
+                                    suggestions.Add($"{prop.Key} -> {propTypeStr}?{(int)AutoCompleteIcons.Property}");
+                                }
+                            }
+
+
+                        }
+
+                    }
+                }
+
+                if (suggestions.Count > 0)
+                {
+                    Debug.Log($"Showing {suggestions.Count} object member suggestions at position {position}");
+                    bool result = ScintillaManager.ShowUserList(editor, UserListType.ObjectMembers, position, suggestions);
+
+                    if (!result)
+                    {
+                        Debug.Log("Failed to show user list popup for object members.");
+                    }
+                }
+                else
+                {
+                    Debug.Log($"No members found for type: {typeInfo.Name}");
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.LogException(ex, "Error showing object members");
+            }
+        }
+
+        /// <summary>
+        /// Shows system variable suggestions that match the expected type.
+        /// </summary>
+        /// <param name="editor">The current Scintilla editor.</param>
+        /// <param name="position">Current cursor position.</param>
+        /// <param name="expectedType">The expected TypeInfo to filter system variables.</param>
+        public void ShowSystemVariables(ScintillaEditor editor, ProgramNode program, int position, TypeInfo expectedType)
+        {
+            if (editor == null || !editor.IsValid()) return;
+            if (expectedType == null) return;
+
+            try
+            {
+                List<string> suggestions = new();
+
+                // Get System object
+                var systemObj = PeopleCodeTypeDatabase.GetObject("System");
+                if (systemObj == null)
+                {
+                    Debug.Log("System builtin object not found");
+                    return;
+                }
+
+                // Get all system variable properties
+                var allProperties = systemObj.GetAllProperties();
+
+                /* Add in synthetic %This and %Super is appropriate */
+                List<PropertyInfo> synthetics = new();
+                if (program.AppClass != null)
+                {
+                    synthetics.Add(new PropertyInfo(PeopleCodeType.AppClass, 0, DetermineQualifiedName(editor)) { Name = "%This" });
+
+                    if (program.AppClass.BaseClass != null)
+                    {
+                        synthetics.Add(new PropertyInfo(PeopleCodeType.AppClass, 0, program.AppClass.BaseClass.TypeName) { Name = "%Super" });
+                    } else if (program.AppClass.ImplementedInterface != null)
+                    {
+                        synthetics.Add(new PropertyInfo(PeopleCodeType.AppClass, 0, program.AppClass.ImplementedInterface.TypeName) { Name = "%Super" });
+                    }
+                }
+
+                if (program.Interface != null)
+                {
+                    synthetics.Add(new PropertyInfo(PeopleCodeType.AppClass, 0, DetermineQualifiedName(editor)) { Name = "%This" });
+
+                    if (program.Interface.BaseInterface != null)
+                    {
+                        synthetics.Add(new PropertyInfo(PeopleCodeType.AppClass, 0, program.Interface.BaseInterface.TypeName) { Name = "%Super" });
+                    }
+                }
+
+                // Convert and filter by expected type
+                var matchingProperties = allProperties
+                    .Where(prop =>
+                    {
+                        var propType = ConvertPropertyToTypeInfo(prop);
+                        return expectedType.IsAssignableFrom(propType);
+                    })
+                    .OrderBy(prop => prop.Name);
+
+                foreach(var prop in synthetics)
+                {
+                    string typeName = prop.IsAppClass && !string.IsNullOrEmpty(prop.AppClassPath)
+                        ? prop.AppClassPath
+                        : prop.Type.GetTypeName();
+
+                    string arrayIndicator = prop.IsArray ? $"[{prop.ArrayDimensionality}]" : "";
+                    suggestions.Add($"{prop.Name.Substring(1)} -> {typeName}{arrayIndicator}?{(int)AutoCompleteIcons.SystemVariable}");
+                }
+
+                // Format suggestions
+                foreach (var prop in matchingProperties)
+                {
+                    string typeName = prop.IsAppClass && !string.IsNullOrEmpty(prop.AppClassPath)
+                        ? prop.AppClassPath
+                        : prop.Type.GetTypeName();
+
+                    string arrayIndicator = prop.IsArray ? $"[{prop.ArrayDimensionality}]" : "";
+                    suggestions.Add($"{prop.Name.Substring(1)} -> {typeName}{arrayIndicator}?{(int)AutoCompleteIcons.SystemVariable}");
+                }
+
+                if (suggestions.Count > 0)
+                {
+                    Debug.Log($"Showing {suggestions.Count} system variable suggestions at position {position}");
+                    bool result = ScintillaManager.ShowUserList(editor, UserListType.SystemVariables, position, suggestions, customOrder: true);
+
+                    if (!result)
+                    {
+                        Debug.Log("Failed to show user list popup for system variables.");
+                    }
+                }
+                else
+                {
+                    Debug.Log($"No matching system variables found for type: {expectedType.Name}");
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.LogException(ex, "Error showing system variables");
+            }
+        }
+
+        /// <summary>
+        /// Converts a PropertyInfo to TypeInfo for type compatibility checking.
+        /// </summary>
+        private TypeInfo ConvertPropertyToTypeInfo(PeopleCodeTypeInfo.Functions.PropertyInfo prop)
+        {
+            if (prop.IsAppClass && !string.IsNullOrEmpty(prop.AppClassPath))
+            {
+                var baseType = new AppClassTypeInfo(prop.AppClassPath);
+                return prop.IsArray
+                    ? new ArrayTypeInfo(prop.ArrayDimensionality, baseType)
+                    : baseType;
+            }
+            else
+            {
+                var baseType = TypeInfo.FromPeopleCodeType(prop.Type);
+                return prop.IsArray
+                    ? new ArrayTypeInfo(prop.ArrayDimensionality, baseType)
+                    : baseType;
+            }
+        }
+
+        /// <summary>
+        /// Formats a method return type for display.
+        /// </summary>
+        private string FormatReturnType(TypeWithDimensionality returnType)
+        {
+            var arrayIndicator = returnType.IsArray ? $"[{returnType.ArrayDimensionality}]" : "";
+            return $"{returnType}{arrayIndicator}";
+        }
+
+        /// <summary>
+        /// Formats a property type for display.
+        /// </summary>
+        private string FormatPropertyType(PeopleCodeTypeInfo.Functions.PropertyInfo prop)
+        {
+            string typeName;
+            if (prop.IsAppClass && !string.IsNullOrEmpty(prop.AppClassPath))
+            {
+                typeName = prop.AppClassPath;
+            }
+            else
+            {
+                typeName = prop.Type.GetTypeName();
+            }
+
+            string arrayIndicator = prop.IsArray ? $"[{prop.ArrayDimensionality}]" : "";
+            return $"{typeName}{arrayIndicator}";
+        }
+
+        /// <summary>
+        /// Determines the qualified name for the current program for type inference.
+        /// </summary>
+        private static string DetermineQualifiedName(ScintillaEditor editor)
+        {
+            if (editor?.Caption != null && !string.IsNullOrWhiteSpace(editor.Caption))
+            {
+                // Parse caption to get program identifier
+                var openTarget = OpenTargetBuilder.CreateFromCaption(editor.Caption);
+                if (openTarget != null && editor.Caption.Contains("Application Package"))
+                {
+                    var methodIndex = Array.IndexOf(openTarget.ObjectIDs, PSCLASSID.METHOD);
+                    openTarget.ObjectIDs[methodIndex] = PSCLASSID.NONE;
+                    openTarget.ObjectValues[methodIndex] = null;
+                    return openTarget.Path;
+                }
+                else
+                {
+                    /* probably never what you want but we have to return something? */
+                    return "Program";
+                }
+            }
+            else
+            {
+                /* probably never what you want but we have to return something? */
+                return "Program";
+            }
+        }
+
         private static void RunTypeInference(ScintillaEditor editor, ProgramNode program)
         {
             try
             {
-                string qualifiedName = "";
-
-                if (editor?.Caption != null && !string.IsNullOrWhiteSpace(editor.Caption))
-                {
-                    // Parse caption to get program identifier
-                    var openTarget = OpenTargetBuilder.CreateFromCaption(editor.Caption);
-                    if (openTarget != null)
-                    {
-                        qualifiedName = openTarget.Path;
-                    }
-                }
+                string qualifiedName = DetermineQualifiedName(editor);
 
                 var metadata = TypeMetadataBuilder.ExtractMetadata(program, qualifiedName);
 
@@ -440,11 +756,11 @@ namespace AppRefiner
             // Include type information if available
             if (!string.IsNullOrEmpty(variable.Type) && variable.Type != "any")
             {
-                return $"{displayName} ({variable.Type} {kindText})";
+                return $"{displayName} -> {variable.Type} ({kindText})";
             }
             else
             {
-                return $"{displayName} ({kindText})";
+                return $"{displayName} -> any ({kindText})";
             }
         }
 
@@ -626,6 +942,140 @@ namespace AppRefiner
             return null;
         }
 
+        private BaseRefactor? HandleSystemVariableListSelection(ScintillaEditor editor, string selection)
+        {
+            // Extract the variable name and kind from the formatted selection
+            // Format is: "variableName (Type Kind)" or "variableName (Kind)"
+            string variableName = selection;
+            bool isProperty = false;
+
+            var variableEndIndex = selection.IndexOf(" -> ");
+            if (variableEndIndex > 0)
+            {
+                variableName = selection.Substring(0, variableEndIndex);
+            }
+
+            // Replace the partial variable reference with the complete variable name
+            try
+            {
+                // Get current cursor position
+                int currentPos = (int)editor.SendMessage(SCI_GETCURRENTPOS, 0, 0);
+
+                // Find the start of the variable reference by looking backwards for the & character
+                string content = ScintillaManager.GetScintillaText(editor) ?? "";
+
+                int percentPos = -1;
+                for (int i = currentPos - 1; i >= 0; i--)
+                {
+                    if (i < content.Length && content[i] == '%')
+                    {
+                        percentPos = i;
+                        break;
+                    }
+                    // Stop if we hit whitespace or other non-identifier characters
+                    if (i < content.Length && !char.IsLetterOrDigit(content[i]) && content[i] != '_')
+                    {
+                        break;
+                    }
+                }
+
+                if (percentPos >= 0)
+                {
+                    // Replace from & position to current position with the full variable name
+                    editor.SendMessage(SCI_SETSEL, percentPos + 1, currentPos);
+                    ScintillaManager.InsertTextAtCursor(editor, variableName);
+                    Debug.Log($"Replaced text from position {percentPos + 1} to {currentPos} with {variableName}");
+                }
+                else
+                {
+                    // Fallback: just insert the full variable name
+                    ScintillaManager.InsertTextAtCursor(editor, variableName);
+                    Debug.Log($"Could not find & start position, inserted {variableName} at cursor");
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.LogException(ex, "Error handling variable selection");
+                // Fallback to simple insertion
+                ScintillaManager.InsertTextAtCursor(editor, variableName);
+            }
+
+            return null; // No refactoring needed for variable insertion
+        }
+        private BaseRefactor? HandleObjectMemberListSelection(ScintillaEditor editor, string selection)
+        {
+            // Extract the variable name and kind from the formatted selection
+            // Format is: "variableName (Type Kind)" or "variableName (Kind)"
+            string memberName = selection;
+            bool isMethod = false;
+
+            var memberEndIndex = selection.IndexOf(" -> ");
+            if (memberEndIndex > 0)
+            {
+                memberName = selection.Substring(0, memberEndIndex);
+
+                isMethod = memberName.EndsWith("()");
+                if (isMethod)
+                {
+                    memberName = memberName.Substring(0, memberName.Length - 2);
+                }
+            }
+            Debug.Log($"Variable selected: {memberName} from formatted text: {selection}");
+
+            // Replace the partial variable reference with the complete variable name
+            try
+            {
+                // Get current cursor position
+                int currentPos = (int)editor.SendMessage(SCI_GETCURRENTPOS, 0, 0);
+
+                // Find the start of the variable reference by looking backwards for the & character
+                string content = ScintillaManager.GetScintillaText(editor) ?? "";
+
+                int dotPos = -1;
+                for (int i = currentPos - 1; i >= 0; i--)
+                {
+                    if (i < content.Length && content[i] == '.')
+                    {
+                        dotPos = i;
+                        break;
+                    }
+                    // Stop if we hit whitespace or other non-identifier characters
+                    if (i < content.Length && !char.IsLetterOrDigit(content[i]) && content[i] != '_')
+                    {
+                        break;
+                    }
+                }
+
+                if (dotPos >= 0)
+                {
+                    // Replace from & position to current position with the full variable name
+                    editor.SendMessage(SCI_SETSEL, dotPos + 1, currentPos);
+                    ScintillaManager.InsertTextAtCursor(editor, memberName + (isMethod ? "(" : ""));
+                    var newPosition = ScintillaManager.GetCursorPosition(editor);
+                    Task.Delay(100).ContinueWith((a) =>
+                    {
+                        WinApi.SendMessage(AppDesignerProcess.CallbackWindow, MainForm.AR_FUNCTION_CALL_TIP, newPosition, '(');
+                    });
+
+                    Debug.Log($"Replaced text from position {dotPos + 1} to {currentPos} with {memberName}");
+                }
+                else
+                {
+                    // Fallback: just insert the full variable name
+                    ScintillaManager.InsertTextAtCursor(editor, memberName);
+                    Debug.Log($"Could not find & start position, inserted {memberName} at cursor");
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.LogException(ex, "Error handling variable selection");
+                // Fallback to simple insertion
+                ScintillaManager.InsertTextAtCursor(editor, memberName);
+            }
+
+            return null; // No refactoring needed for variable insertion
+        }
+
         private BaseRefactor? HandleVariableListSelection(ScintillaEditor editor, string selection)
         {
             // Extract the variable name and kind from the formatted selection
@@ -633,20 +1083,12 @@ namespace AppRefiner
             string variableName = selection;
             bool isProperty = false;
 
-            var openParenIndex = selection.IndexOf(" (");
-            if (openParenIndex > 0)
+            var variableEndIndex = selection.IndexOf(" -> ");
+            if (variableEndIndex > 0)
             {
-                variableName = selection.Substring(0, openParenIndex);
+                variableName = selection.Substring(0, variableEndIndex);
 
-                // Extract the kind information to determine if it's a property
-                string kindInfo = selection.Substring(openParenIndex + 2); // Skip " ("
-                var closeParenIndex = kindInfo.LastIndexOf(')');
-                if (closeParenIndex > 0)
-                {
-                    kindInfo = kindInfo.Substring(0, closeParenIndex);
-                    // Check if the kind contains "Property"
-                    isProperty = kindInfo.Contains("Property");
-                }
+                isProperty = selection.Contains("(Property)");                
             }
 
             // Determine the appropriate prefix based on variable kind
@@ -723,6 +1165,10 @@ namespace AppRefiner
                     return HandleQuickFixSelection(editor, selection);
                 case UserListType.Variable:
                     return HandleVariableListSelection(editor, selection);
+                case UserListType.ObjectMembers:
+                    return HandleObjectMemberListSelection(editor, selection);
+                case UserListType.SystemVariables:
+                    return HandleSystemVariableListSelection(editor, selection);
                 default:
                     Debug.Log($"Unknown list type: {listType}");
                     return null;

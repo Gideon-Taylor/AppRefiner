@@ -85,6 +85,20 @@ public static class AstNodeExtensions
     }
 
     /// <summary>
+    /// Gets the type error for this node, if one has been recorded.
+    /// </summary>
+    /// <param name="node">The AST node to query</param>
+    /// <returns>The TypeError if a type checking error was found, null otherwise</returns>
+    public static TypeError? GetTypeWarning(this AstNode node)
+    {
+        if (node.Attributes.TryGetValue(AstNode.TypeWarningAttributeKey, out var error))
+        {
+            return error as TypeError;
+        }
+        return null;
+    }
+
+    /// <summary>
     /// Sets the type error for this node.
     /// </summary>
     /// <param name="node">The AST node to update</param>
@@ -95,6 +109,16 @@ public static class AstNodeExtensions
     }
 
     /// <summary>
+    /// Sets the type warning for this node.
+    /// </summary>
+    /// <param name="node">The AST node to update</param>
+    /// <param name="error">The type error to record</param>
+    public static void SetTypeWarning(this AstNode node, TypeError error)
+    {
+        node.Attributes[AstNode.TypeWarningAttributeKey] = error;
+    }
+
+    /// <summary>
     /// Checks if this node has a type error.
     /// </summary>
     /// <param name="node">The AST node to check</param>
@@ -102,6 +126,16 @@ public static class AstNodeExtensions
     public static bool HasTypeError(this AstNode node)
     {
         return node.Attributes.ContainsKey(AstNode.TypeErrorAttributeKey);
+    }
+
+    /// <summary>
+    /// Checks if this node has a type warning.
+    /// </summary>
+    /// <param name="node">The AST node to check</param>
+    /// <returns>True if the node has a type error, false otherwise</returns>
+    public static bool HasTypeWarning(this AstNode node)
+    {
+        return node.Attributes.ContainsKey(AstNode.TypeWarningAttributeKey);
     }
 
     /// <summary>
@@ -123,6 +157,31 @@ public static class AstNodeExtensions
         foreach (var child in root.Children)
         {
             foreach (var childError in child.GetAllTypeErrors())
+            {
+                yield return childError;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Gets all type warnings from this node and all its descendants.
+    /// Useful for collecting all type errors from a program after type checking.
+    /// </summary>
+    /// <param name="root">The root node to start searching from (typically a ProgramNode)</param>
+    /// <returns>All type errors found in the tree</returns>
+    public static IEnumerable<TypeError> GetAllTypeWarnings(this AstNode root)
+    {
+        // Check if this node has an error
+        var error = root.GetTypeWarning();
+        if (error != null)
+        {
+            yield return error;
+        }
+
+        // Recursively check all children
+        foreach (var child in root.Children)
+        {
+            foreach (var childError in child.GetAllTypeWarnings())
             {
                 yield return childError;
             }

@@ -370,5 +370,41 @@ namespace AppRefiner.Properties {
                 this["lineSelectionFix"] = value;
             }
         }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("{}")]
+        public string autoSuggestSettings {
+            get {
+                return ((string)(this["autoSuggestSettings"]));
+            }
+            set {
+                this["autoSuggestSettings"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("Default")]
+        public string theme {
+            get {
+                return ((string)(this["theme"]));
+            }
+            set {
+                this["theme"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("False")]
+        public bool theme_filled {
+            get {
+                return ((bool)(this["theme_filled"]));
+            }
+            set {
+                this["theme_filled"] = value;
+            }
+        }
     }
 }

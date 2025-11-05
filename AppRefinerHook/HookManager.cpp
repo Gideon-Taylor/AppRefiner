@@ -313,6 +313,66 @@ void HandleScintillaNotification(HWND hwnd, SCNotification* scn, HWND callbackWi
                 SendMessage(callbackWindow, WM_AR_FUNCTION_CALL_TIP, (WPARAM)currentPos, (LPARAM)',');
             }
 
+            // Check for dot character to trigger object member suggestions
+            if (scn->ch == '.' && callbackWindow && IsWindow(callbackWindow)) {
+                int currentPos = SendMessage(hwnd, SCI_GETCURRENTPOS, 0, 0);
+
+                // Check next character to avoid triggering when adding '.' mid-identifier
+                int nextCharValue = SendMessage(hwnd, SCI_GETCHARAT, currentPos, 0);
+
+                // Check if next character is whitespace, common symbol, or end of document
+                bool shouldTriggerAutocomplete = (nextCharValue <= 0) ||  // End of document or invalid
+                    nextCharValue == ' ' ||   // Space
+                    nextCharValue == '\t' ||  // Tab
+                    nextCharValue == '\r' ||  // Carriage return
+                    nextCharValue == '\n' ||  // Newline
+                    nextCharValue == '(' ||   // Opening parenthesis
+                    nextCharValue == ')' ||   // Closing parenthesis
+                    nextCharValue == '[' ||   // Opening bracket
+                    nextCharValue == ']' ||   // Closing bracket
+                    nextCharValue == ',' ||   // Comma
+                    nextCharValue == ';' ||   // Semicolon
+                    nextCharValue == '=' ||   // Equals
+                    nextCharValue == '&' ||   // Ampersand
+                    nextCharValue == '.' ||   // Dot (chained member access)
+                    nextCharValue == '%';     // Percent
+
+                if (shouldTriggerAutocomplete) {
+                    // Send the object members message with current position as wParam
+                    SendMessage(callbackWindow, WM_AR_OBJECT_MEMBERS, (WPARAM)currentPos, 0);
+                }
+            }
+
+            // Check for percent character to trigger system variable suggestions
+            if (scn->ch == '%' && callbackWindow && IsWindow(callbackWindow)) {
+                int currentPos = SendMessage(hwnd, SCI_GETCURRENTPOS, 0, 0);
+
+                // Check next character to avoid triggering when adding '%' mid-identifier
+                int nextCharValue = SendMessage(hwnd, SCI_GETCHARAT, currentPos, 0);
+
+                // Check if next character is whitespace, common symbol, or end of document
+                bool shouldTriggerAutocomplete = (nextCharValue <= 0) ||  // End of document or invalid
+                    nextCharValue == ' ' ||   // Space
+                    nextCharValue == '\t' ||  // Tab
+                    nextCharValue == '\r' ||  // Carriage return
+                    nextCharValue == '\n' ||  // Newline
+                    nextCharValue == '(' ||   // Opening parenthesis
+                    nextCharValue == ')' ||   // Closing parenthesis
+                    nextCharValue == '[' ||   // Opening bracket
+                    nextCharValue == ']' ||   // Closing bracket
+                    nextCharValue == ',' ||   // Comma
+                    nextCharValue == ';' ||   // Semicolon
+                    nextCharValue == '=' ||   // Equals
+                    nextCharValue == '&' ||   // Ampersand
+                    nextCharValue == '.' ||   // Dot
+                    nextCharValue == '%';     // Percent
+
+                if (shouldTriggerAutocomplete) {
+                    // Send the system variable suggest message with current position as wParam
+                    SendMessage(callbackWindow, WM_AR_SYSTEM_VARIABLE_SUGGEST, (WPARAM)currentPos, 0);
+                }
+            }
+
             // Check for += shorthand
             if (scn->ch == '=' && callbackWindow && IsWindow(callbackWindow)) {
                 int currentPos = SendMessage(hwnd, SCI_GETCURRENTPOS, 0, 0); // Position after '='

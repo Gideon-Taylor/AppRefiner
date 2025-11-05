@@ -1,3 +1,4 @@
+using PeopleCodeTypeInfo.Analysis;
 using PeopleCodeTypeInfo.Types;
 using PeopleCodeTypeInfo.Validation;
 using System.Text;
@@ -14,6 +15,16 @@ public class FunctionInfo
     /// Function name
     /// </summary>
     public string Name { get; set; } = "";
+
+    /// <summary>
+    /// Index into the name table for efficient storage (when using name table format)
+    /// </summary>
+    public int? NameIndex { get; set; }
+
+    /// <summary>
+    /// Visibility modifier for this function (set at runtime for app class methods)
+    /// </summary>
+    public MemberAccessibility Visibility { get; set; } = MemberAccessibility.Public;
 
     /// <summary>
     /// List of parameter overloads for this function.

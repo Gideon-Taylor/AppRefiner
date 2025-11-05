@@ -15,11 +15,15 @@ using PeopleCodeParser.SelfHosted;
 using PeopleCodeParser.SelfHosted.Lexing;
 using PeopleCodeParser.SelfHosted.Nodes;
 using PeopleCodeParser.SelfHosted.Visitors;
+using PeopleCodeTypeInfo.Analysis;
+using PeopleCodeTypeInfo.Functions;
 using PeopleCodeTypeInfo.Inference;
+using PeopleCodeTypeInfo.Types;
 using System.Data;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Text;
+using System.Text.Json;
 using System.Threading;
 using static AppRefiner.AutoCompleteService;
 
@@ -52,7 +56,8 @@ namespace AppRefiner
         private AutoCompleteService? autoCompleteService; // Added AutoCompleteService
         private RefactorManager? refactorManager; // Added RefactorManager
         private SettingsService? settingsService; // Added SettingsService
-        private FunctionCacheManager? functionCacheManager; 
+        private FunctionCacheManager? functionCacheManager;
+        private AutoSuggestSettings autoSuggestSettings = AutoSuggestSettings.GetDefault(); // Auto suggest configuration 
         private ScintillaEditor? activeEditor = null;
         private AppDesignerProcess? activeAppDesigner = null;
         private Dictionary<uint, AppDesignerProcess> AppDesignerProcesses = [];
@@ -93,7 +98,9 @@ namespace AppRefiner
         private const int AR_MSGBOX_SHORTHAND = 2508;
         private const int AR_VARIABLE_SUGGEST = 2509; // New constant for variable auto suggest when & is typed
         private const int AR_CURSOR_POSITION_CHANGED = 2510; // New constant for cursor position change detection
-        private const int AR_FUNCTION_CALL_TIP = 2511; // Function call tip notification for '(', ')', and ',' characters
+        public const int AR_FUNCTION_CALL_TIP = 2511; // Function call tip notification for '(', ')', and ',' characters
+        private const int AR_OBJECT_MEMBERS = 2512; // Object member suggestions when '.' is typed
+        private const int AR_SYSTEM_VARIABLE_SUGGEST = 2513; // System variable suggestions when '%' is typed
         private const int AR_SUBCLASS_RESULTS_LIST = 1007; // Message to subclass Results list view
         private const int AR_SET_OPEN_TARGET = 1008; // Message to set open target for Results list interception
         private const int SCN_USERLISTSELECTION = 2014; // User list selection notification
@@ -144,6 +151,7 @@ namespace AppRefiner
         public MainForm()
         {
             InitializeComponent();
+            
         }
 
         protected override void OnLoad(EventArgs e)
@@ -186,6 +194,32 @@ namespace AppRefiner
             chkMultiSelection.Checked = generalSettings.MultiSelection;
             chkOverrideOpen.Checked = generalSettings.OverrideOpen;
             chkLineSelectionFix.Checked = generalSettings.LineSelectionFix;
+
+            // Initialize theme combo box with all available themes
+            cmbTheme.Items.Clear();
+            foreach (var theme in Enum.GetNames(typeof(Theme)))
+            {
+                cmbTheme.Items.Add(theme);
+            }
+
+            // Load theme settings
+            if (Enum.TryParse<Theme>(generalSettings.Theme, out var selectedTheme))
+            {
+                cmbTheme.SelectedItem = selectedTheme.ToString();
+            }
+            else
+            {
+                cmbTheme.SelectedItem = Theme.Default.ToString();
+            }
+
+            chkFilled.Checked = generalSettings.ThemeFilled;
+
+            // Load AutoSuggest settings
+            autoSuggestSettings = settingsService.LoadAutoSuggestSettings();
+            chkVariableSuggestions.Checked = autoSuggestSettings.VariableSuggestions;
+            chkFunctionSignatures.Checked = autoSuggestSettings.FunctionSignatures;
+            chkObjectMembers.Checked = autoSuggestSettings.ObjectMembers;
+            chkSystemVariables.Checked = autoSuggestSettings.SystemVariables;
 
             linterManager = new LinterManager(this, dataGridView1, lblStatus, progressBar1, lintReportPath, settingsService);
             linterManager.InitializeLinterOptions(); // Initialize linters via the manager
@@ -290,6 +324,17 @@ namespace AppRefiner
             chkAutoCenterDialogs.CheckedChanged += GeneralSetting_Changed;
             chkMultiSelection.CheckedChanged += GeneralSetting_Changed;
             chkLineSelectionFix.CheckedChanged += GeneralSetting_Changed;
+
+            // Theme controls
+            cmbTheme.SelectedIndexChanged += ThemeSetting_Changed;
+            chkFilled.CheckedChanged += ThemeSetting_Changed;
+
+            // AutoSuggest checkboxes
+            chkVariableSuggestions.CheckedChanged += AutoSuggestSetting_Changed;
+            chkFunctionSignatures.CheckedChanged += AutoSuggestSetting_Changed;
+            chkObjectMembers.CheckedChanged += AutoSuggestSetting_Changed;
+            chkSystemVariables.CheckedChanged += AutoSuggestSetting_Changed;
+
             // DataGridViews CellValueChanged events will also call SaveSettings
         }
 
@@ -308,6 +353,89 @@ namespace AppRefiner
             }
 
             SaveSettings(); // Call the consolidated SaveSettings method
+        }
+
+        private void AutoSuggestSetting_Changed(object? sender, EventArgs e)
+        {
+            if (isLoadingSettings) return;
+
+            // Update the in-memory settings object
+            autoSuggestSettings.VariableSuggestions = chkVariableSuggestions.Checked;
+            autoSuggestSettings.FunctionSignatures = chkFunctionSignatures.Checked;
+            autoSuggestSettings.ObjectMembers = chkObjectMembers.Checked;
+            autoSuggestSettings.SystemVariables = chkSystemVariables.Checked;
+
+            // Save to settings service
+            settingsService?.SaveAutoSuggestSettings(autoSuggestSettings);
+            settingsService?.SaveChanges();
+        }
+
+        /// <summary>
+        /// Handles changes to theme-related settings (combo box or checkbox)
+        /// </summary>
+        private void ThemeSetting_Changed(object? sender, EventArgs e)
+        {
+            if (isLoadingSettings) return;
+            if (cmbTheme.SelectedItem == null) return;
+
+            // Parse the selected theme
+            if (!Enum.TryParse<Theme>(cmbTheme.SelectedItem.ToString(), out var selectedTheme))
+            {
+                Debug.Log("Invalid theme selected");
+                return;
+            }
+
+            // Determine the theme style based on checkbox
+            var themeStyle = chkFilled.Checked ? ThemeStyle.Filled : ThemeStyle.Outline;
+
+            Debug.Log($"Applying theme: {selectedTheme} with style: {themeStyle}");
+
+            // Apply the theme to all known AppDesigner processes
+            foreach (var appDesigner in AppDesignerProcesses.Values)
+            {
+                try
+                {
+                    bool success = ThemeManager.ApplyTheme(appDesigner, selectedTheme, themeStyle);
+                    if (success)
+                    {
+                        Debug.Log($"Successfully applied theme to process {appDesigner.ProcessId}");
+                    }
+                    else
+                    {
+                        Debug.Log($"Failed to fully apply theme to process {appDesigner.ProcessId}");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Debug.LogException(ex, $"Error applying theme to process {appDesigner.ProcessId}");
+                }
+            }
+
+            // Save the settings
+            SaveSettings();
+        }
+
+        /// <summary>
+        /// Applies the current theme settings to a newly created AppDesigner process
+        /// </summary>
+        /// <param name="process">The AppDesigner process to apply the theme to</param>
+        private void ApplyCurrentThemeToProcess(AppDesignerProcess process)
+        {
+            if (process == null || cmbTheme.SelectedItem == null) return;
+
+            if (Enum.TryParse<Theme>(cmbTheme.SelectedItem.ToString(), out var theme))
+            {
+                var style = chkFilled.Checked ? ThemeStyle.Filled : ThemeStyle.Outline;
+                try
+                {
+                    ThemeManager.ApplyTheme(process, theme, style);
+                    Debug.Log($"Applied theme {theme} ({style}) to new process {process.ProcessId}");
+                }
+                catch (Exception ex)
+                {
+                    Debug.LogException(ex, $"Failed to apply theme to process {process.ProcessId}");
+                }
+            }
         }
 
         private void UpdateShortcutFlags()
@@ -387,7 +515,9 @@ namespace AppRefiner
                 OverrideOpen = chkOverrideOpen.Checked,
                 AutoCenterDialogs = chkAutoCenterDialogs.Checked,
                 MultiSelection = chkMultiSelection.Checked,
-                LineSelectionFix = chkLineSelectionFix.Checked
+                LineSelectionFix = chkLineSelectionFix.Checked,
+                Theme = cmbTheme.SelectedItem?.ToString() ?? Theme.Default.ToString(),
+                ThemeFilled = chkFilled.Checked
             };
         }
 
@@ -1840,6 +1970,9 @@ namespace AppRefiner
                         trackedProcessIds.Add(pid);
                         activeEditor = newProcess.GetOrInitEditor(hwnd);
                         activeEditor.AppDesignerProcess = newProcess;
+
+                        // Apply current theme to newly created process
+                        ApplyCurrentThemeToProcess(newProcess);
                         activeAppDesigner = activeEditor.AppDesignerProcess;
                         return;
                     }
@@ -1881,6 +2014,23 @@ namespace AppRefiner
 
             // Clear annotations
             ScintillaManager.ClearAnnotations(editor);
+
+            /* Try to detect JSON if type is HTML */
+            if (editor.Type == EditorType.HTML)
+            {
+                var contents = ScintillaManager.GetScintillaText(editor);
+                if (contents != null)
+                {
+                    try
+                    {
+                        var parseResult = JsonDocument.Parse(contents);
+                        ScintillaManager.SetJSONLexer(editor);
+                    }
+                    catch (Exception e)
+                    {
+                    }
+                }
+            }
 
             // Reset styles
             ScintillaManager.ResetStyles(editor);
@@ -2004,6 +2154,9 @@ namespace AppRefiner
             {
                 // Only process if we have an active editor and service
                 if (activeEditor == null || !activeEditor.IsValid() || autoCompleteService == null) return;
+
+                // Check if variable suggestions are enabled
+                if (!autoSuggestSettings.VariableSuggestions) return;
 
                 /* Handle variable suggestion request */
                 Debug.Log($"Received variable suggest message. WParam: {m.WParam}, LParam: {m.LParam}");
@@ -2162,9 +2315,23 @@ namespace AppRefiner
                 // Extract first visible line from wParam, cursor position from lParam
                 int firstVisibleLine = m.WParam.ToInt32();
                 int cursorPosition = m.LParam.ToInt32();
-
+                
                 Debug.Log($"Cursor position changed: first visible line {firstVisibleLine}, position {cursorPosition}");
+                if (activeEditor.FunctionCallTipActive)
+                {
+                    var calltipLine = activeEditor.FunctionCallNode.SourceSpan.Start.Line;
+                    var currentLine = ScintillaManager.GetCurrentLineNumber(activeEditor);
 
+                    if (currentLine != calltipLine)
+                    {
+                        /* Cancel out the call tip, user went elsewhere */
+                        activeEditor.FunctionCallTipActive = false;
+                        activeEditor.FunctionCallNode = null;
+                        activeEditor.FunctionCallTipProgram = null;
+                        TooltipManager.HideTooltip(activeEditor);
+                    }
+
+                }
                 // Update last known positions
                 var lastKnownKey = $"{activeEditor.AppDesignerProcess.ProcessId}:{activeEditor.Caption}";
                 lastKnownPositions[lastKnownKey] = (firstVisibleLine, cursorPosition);
@@ -2173,6 +2340,9 @@ namespace AppRefiner
             {
                 // Only process if we have an active editor
                 if (activeEditor == null || !activeEditor.IsValid()) return;
+
+                // Check if function signatures are enabled
+                if (!autoSuggestSettings.FunctionSignatures) return;
 
                 // wParam contains the cursor position
                 int position = m.WParam.ToInt32();
@@ -2184,6 +2354,7 @@ namespace AppRefiner
                 {
                     activeEditor.FunctionCallTipActive = false;
                     activeEditor.FunctionCallNode = null;
+                    activeEditor.FunctionCallTipProgram = null;
                     TooltipManager.HideTooltip(activeEditor);
                 }
                 else
@@ -2220,23 +2391,138 @@ namespace AppRefiner
                     catch (Exception ex) { }
                 }
             }
+            else if (m.Msg == AR_OBJECT_MEMBERS)
+            {
+                // Only process if we have an active editor and service
+                if (activeEditor == null || !activeEditor.IsValid() || autoCompleteService == null) return;
+
+                // Check if object member suggestions are enabled
+                if (!autoSuggestSettings.ObjectMembers) return;
+
+                /* Handle object member suggestion request */
+                Debug.Log($"Received object member suggest message. WParam: {m.WParam}, LParam: {m.LParam}");
+
+                // WParam contains the current cursor position
+                int position = m.WParam.ToInt32();
+
+                try
+                {
+                    // Get the current document text
+                    string content = ScintillaManager.GetScintillaText(activeEditor) ?? "";
+                    if (string.IsNullOrEmpty(content))
+                    {
+                        Debug.Log("No content available for object member suggestions.");
+                        return;
+                    }
+
+                    // Parse the current document to get AST
+                    var lexer = new PeopleCodeLexer(content);
+                    var tokens = lexer.TokenizeAll();
+                    var parser = new PeopleCodeParser.SelfHosted.PeopleCodeParser(tokens);
+                    var program = parser.ParseProgram();
+
+                    RunTypeInference(activeEditor, program);
+
+                    // Find the node just before the '.' character (position - 1)
+                    // The position is after the '.', so we need to look at what comes before it
+                    var targetPosition = position - 1;
+                    var nodeBeforeDot = program.FindNodes(n => n.SourceSpan.ContainsPosition(targetPosition))
+                        .LastOrDefault();
+
+                    if (nodeBeforeDot != null)
+                    {
+                        var typeInfo = AstNodeExtensions.GetInferredType(nodeBeforeDot);
+
+                        /* We need to work out the minimum visibility for methods/properties */
+                        var maxVisibility = MemberAccessibility.Public;
+
+                        if (typeInfo is AppClassTypeInfo act && program.AppClass != null)
+                        {
+                            var activeClassTypeInfo = program.AppClass.GetInferredType() as AppClassTypeInfo;
+
+                            if (activeClassTypeInfo.InheritanceChain.Any(e => e.QualifiedName == act.QualifiedName))
+                            {
+                                maxVisibility = MemberAccessibility.Protected;
+                            }
+
+                            if (activeClassTypeInfo.QualifiedName == act.QualifiedName)
+                            {
+                                maxVisibility = MemberAccessibility.Private;
+                            }
+                        }
+
+                        if (typeInfo != null)
+                        {
+                            Debug.Log($"Found type {typeInfo.Name} before dot at position {targetPosition}");
+                            autoCompleteService.ShowObjectMembers(activeEditor, position, typeInfo, maxVisibility);
+                        }
+                        else
+                        {
+                            Debug.Log($"No type information available for node at position {targetPosition}");
+                        }
+                    }
+                    else
+                    {
+                        Debug.Log($"No AST node found at position {targetPosition}");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Debug.LogException(ex, "Error processing object member suggestion");
+                }
+            }
+            else if (m.Msg == AR_SYSTEM_VARIABLE_SUGGEST)
+            {
+                // Only process if we have an active editor and service
+                if (activeEditor == null || !activeEditor.IsValid() || autoCompleteService == null) return;
+
+                // Check if system variable suggestions are enabled
+                if (!autoSuggestSettings.SystemVariables) return;
+
+                /* Handle system variable suggestion request */
+                Debug.Log($"Received system variable suggest message. WParam: {m.WParam}, LParam: {m.LParam}");
+
+                // WParam contains the current cursor position
+                int position = m.WParam.ToInt32();
+
+                try
+                {
+                    // Get the current document text
+                    string content = ScintillaManager.GetScintillaText(activeEditor) ?? "";
+                    if (string.IsNullOrEmpty(content))
+                    {
+                        Debug.Log("No content available for system variable suggestions.");
+                        return;
+                    }
+
+                    // Parse the current document to get AST
+                    var lexer = new PeopleCodeLexer(content);
+                    var tokens = lexer.TokenizeAll();
+                    var parser = new PeopleCodeParser.SelfHosted.PeopleCodeParser(tokens);
+                    var program = parser.ParseProgram();
+
+                    RunTypeInference(activeEditor, program);
+
+                    // Try to determine expected type from context
+                    // For now, use AnyTypeInfo to show all system variables
+                    // TODO: Enhance to detect expected type from assignment/parameter context
+                    var expectedType = PeopleCodeTypeInfo.Types.AnyTypeInfo.Instance;
+
+                    Debug.Log($"Showing system variables with expected type: {expectedType.Name}");
+                    autoCompleteService.ShowSystemVariables(activeEditor, program, position, expectedType);
+                }
+                catch (Exception ex)
+                {
+                    Debug.LogException(ex, "Error processing system variable suggestion");
+                }
+            }
         }
 
         private static void RunTypeInference(ScintillaEditor editor, ProgramNode program)
         {
             try
             {
-                string qualifiedName = "";
-
-                if (editor?.Caption != null && !string.IsNullOrWhiteSpace(editor.Caption))
-                {
-                    // Parse caption to get program identifier
-                    var openTarget = OpenTargetBuilder.CreateFromCaption(editor.Caption);
-                    if (openTarget != null)
-                    {
-                        qualifiedName = openTarget.Path;
-                    }
-                }
+                var qualifiedName = DetermineQualifiedName(editor);
 
                 var metadata = TypeMetadataBuilder.ExtractMetadata(program, qualifiedName);
 
@@ -3064,6 +3350,37 @@ namespace AppRefiner
         }
 
         /// <summary>
+        /// Determines the qualified name for the current program for type inference.
+        /// </summary>
+        private static string DetermineQualifiedName(ScintillaEditor editor)
+        {
+                if (editor?.Caption != null && !string.IsNullOrWhiteSpace(editor.Caption))
+                {
+                    // Parse caption to get program identifier
+                    var openTarget = OpenTargetBuilder.CreateFromCaption(editor.Caption);
+                    if (openTarget != null && editor.Caption.Contains("Application Package"))
+                    {
+                        var methodIndex = Array.IndexOf(openTarget.ObjectIDs, PSCLASSID.METHOD);
+                        openTarget.ObjectIDs[methodIndex] = PSCLASSID.NONE;
+                        openTarget.ObjectValues[methodIndex] = null;
+                        return openTarget.Path;
+                    }
+                    else
+                    {
+                        /* probably never what you want but we have to return something? */
+                        return "Program";
+                    }
+                }
+                else
+                {
+                    /* probably never what you want but we have to return something? */
+                    return "Program";
+                }
+        }
+    
+
+
+        /// <summary>
         /// Invalidates type metadata caches when an editor is saved.
         /// This ensures cached type information is refreshed when source code changes.
         /// </summary>
@@ -3086,16 +3403,7 @@ namespace AppRefiner
                     return;
                 }
 
-                // Parse the editor caption to get the OpenTarget
-                var openTarget = OpenTargetBuilder.CreateFromCaption(editor.Caption);
-                if (openTarget == null)
-                {
-                    Debug.Log($"InvalidateTypeCacheForEditor: Could not parse caption '{editor.Caption}'");
-                    return;
-                }
-
-                // Convert OpenTarget to qualified name for cache key
-                string qualifiedName = openTarget.ToQualifiedName();
+                var qualifiedName = DetermineQualifiedName(editor);
 
                 // Invalidate in TypeCache (shared cache for TypeMetadata)
                 if (appDesignerProcess.TypeResolver != null)
@@ -3537,6 +3845,10 @@ namespace AppRefiner
                 AppDesignerProcesses.Add(processId, newProcess);
                 trackedProcessIds.Add(processId);
                 activeAppDesigner = newProcess;
+
+                // Apply current theme to newly created process
+                ApplyCurrentThemeToProcess(newProcess);
+
                 // Add delayed "AppRefiner Connected!" message to Results ListView
                 _ = ResultsListHelper.AddDelayedMessageToResultsList(newProcess, resultsListView, "AppRefiner Connected!", 2000);
 

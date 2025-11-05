@@ -99,6 +99,7 @@ public abstract class AstNode
     /// Attribute key for storing type checking errors (TypeError)
     /// </summary>
     public const string TypeErrorAttributeKey = "TypeError";
+    public const string TypeWarningAttributeKey = "TypeWarning";
 
     /// <summary>
     /// Accept method for visitor pattern

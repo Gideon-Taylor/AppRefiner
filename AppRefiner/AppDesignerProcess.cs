@@ -61,7 +61,7 @@ namespace AppRefiner
         public bool HasLexilla { get; set; }
         public uint MainThreadId { get; private set; }
         public IntPtr MainWindowHandle { get; set; }
-
+        public Dictionary<string, IntPtr> iconBuffers = new();
         /// <summary>
         /// Handle to the Results ListView for this Application Designer process, if known.
         /// </summary>
@@ -161,6 +161,24 @@ namespace AppRefiner
 
             EventHookInstaller.SubclassResultsList(MainThreadId, ResultsListView, IntPtr.Zero);
         }
+
+        private const int ICON_BASE = 90;
+
+        public enum AutoCompleteIcons : int
+        {
+            ClassMethod = ICON_BASE,
+            SystemVariable,
+            LocalVariable,
+            InstanceVariable,
+            ComponentVariable,
+            GlobalVariable,
+            Parameter,
+            Property,
+            ExternalFunction,
+            ConstantValue
+        }
+
+
         public ScintillaEditor GetOrInitEditor(IntPtr hwnd)
         {
             if (Editors.TryGetValue(hwnd, out ScintillaEditor? editor))
@@ -183,10 +201,14 @@ namespace AppRefiner
             // Get the process ID associated with the Scintilla window.
             var threadId = WinApi.GetWindowThreadProcessId(hWnd, out uint processId);
 
+
             var editor = new ScintillaEditor(this, hWnd, caption);
             editor.DataManager = DataManager;
             editor.AppDesignerProcess = this;
             Editors.Add(hWnd, editor);
+
+            ScintillaManager.SetAutoCompleteIcons(editor);
+
             if (Settings.OnlyPPC && editor.Type != EditorType.PeopleCode)
             {
                 /* Skip the rest of the editor initialization */

@@ -394,9 +394,9 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
             else
             {
                 var prop = PeopleCodeTypeDatabase.GetProperty(objectType.Name, memberName);
-                if (prop.HasValue)
+                if (prop != null)
                 {
-                    return ConvertPropertyInfoToTypeInfo(prop.Value);
+                    return ConvertPropertyInfoToTypeInfo(prop);
                 }
             }
 
@@ -441,13 +441,13 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
             {
                 // Walk up the inheritance chain to find the property
                 var property = LookupPropertyInInheritanceChain(appClassType, memberName);
-                if (property.HasValue)
-                    return ConvertPropertyInfoToTypeInfo(property.Value);
+                if (property != null)
+                    return ConvertPropertyInfoToTypeInfo(property);
 
                 /* %This.foo can reference a private variable &foo */
                 property = LookupPrivateInstanceVariable(appClassType, memberName);
-                if (property.HasValue)
-                    return ConvertPropertyInfoToTypeInfo(property.Value);
+                if (property != null)
+                    return ConvertPropertyInfoToTypeInfo(property);
             }
         }
 
@@ -695,6 +695,9 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
                 {
                     // Walk up the inheritance chain to find the method
                     return LookupMethodInInheritanceChain(appClassType, memberAccess.MemberName);
+                } else if (objectType.Kind == TypeKind.Array)
+                {
+                    return PeopleCodeTypeDatabase.GetMethod("Array", memberAccess.MemberName);
                 }
             }
         }
@@ -737,6 +740,7 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
                 var rightHandType = GetInferredType(node.Value);
                 if (rightHandType != null && rightHandType.Name != null && !rightHandType.Name.Equals("any", StringComparison.OrdinalIgnoreCase))
                 {
+                    rightHandType.IsAutoDeclared = true;
                     // Update the variable's type
                     variable.SetInferredType(rightHandType);
                 }
@@ -789,8 +793,9 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
         if (node.Name.Equals("%This", StringComparison.OrdinalIgnoreCase))
         {
             // %This refers to the current instance of the class being analyzed
-            if (_programMetadata.Kind == ProgramKind.AppClass || _programMetadata.Kind == ProgramKind.Interface)
+           if (_programMetadata.Kind == ProgramKind.AppClass || _programMetadata.Kind == ProgramKind.Interface)
             {
+                
                 var thisType = CreateAppClassTypeInfo(_programMetadata.QualifiedName);
                 SetInferredType(node, thisType);
             }
@@ -835,6 +840,7 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
             {
                 // Convert type name string to TypeInfo
                 var inferredType = variable.InferredType ?? ConvertTypeNameToTypeInfo(variable.Type);
+                var isAutoDeclared = variable.IsAutoDeclared;
 
                 // Variables (identifiers starting with &) are assignable
                 // Create a new instance if needed to avoid modifying singletons
@@ -845,16 +851,19 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
                         // Create new instance for primitives to avoid modifying singletons
                         inferredType = new PrimitiveTypeInfo(primitive.Name, primitive.PeopleCodeType);
                         inferredType.IsAssignable = true;
+                        inferredType.IsAutoDeclared = isAutoDeclared;
                     }
                     else if (inferredType is ArrayTypeInfo arrayType)
                     {
                         // Arrays are created fresh, can modify directly
                         inferredType.IsAssignable = true;
+                        inferredType.IsAutoDeclared = isAutoDeclared;
                     }
                     else if (inferredType is BuiltinObjectTypeInfo || inferredType is AppClassTypeInfo)
                     {
                         // These are typically created fresh or can be marked assignable
                         inferredType.IsAssignable = true;
+                        inferredType.IsAutoDeclared = isAutoDeclared;
                     }
                     // For other types (Any, Unknown, etc.), leave as-is since they're singletons
                 }
@@ -867,9 +876,9 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
                 // Not a declared variable, check if it's a system variable.
                 // System variables (like %UserId) are not prefixed with '&'.
                 var systemVar = PeopleCodeTypeDatabase.GetSystemVariable(node.Name);
-                if (systemVar.HasValue)
+                if (systemVar != null)
                 {
-                    SetInferredType(node, ConvertPropertyInfoToTypeInfo(systemVar.Value));
+                    SetInferredType(node, ConvertPropertyInfoToTypeInfo(systemVar));
                 }
                 // If not found and has no prefix, assume it's a Field identifier with unknown record context
                 // Pattern: [recordname.]fieldname where recordname is inferred at runtime
@@ -1183,7 +1192,7 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
         }
         else
         {
-            SetInferredType(node, AnyTypeInfo.Instance);
+            SetInferredType(node, UnknownTypeInfo.Instance);
         }
     }
 

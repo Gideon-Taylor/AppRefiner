@@ -57,7 +57,29 @@ public class BuiltinObjectReaderStrategy : VariableSizeReaderStrategy<BuiltinObj
         for (int i = 0; i < methodCount; i++)
         {
             var hash = reader.ReadUInt32();
+
+            // Read function name index if present
+            string? resolvedName = null;
+            int? nameIndex = null;
+            if (nameTable != null)
+            {
+                var firstByte = reader.ReadByte();
+                if ((firstByte & 0x01) != 0)
+                {
+                    // Has name index - read remaining 3 bytes and decode
+                    var byte2 = reader.ReadByte();
+                    var byte3 = reader.ReadByte();
+                    var byte4 = reader.ReadByte();
+                    uint encodedValue = (uint)(firstByte | (byte2 << 8) | (byte3 << 16) | (byte4 << 24));
+                    nameIndex = (int)(encodedValue >> 1);
+                    resolvedName = nameTable.GetNameByIndex(nameIndex.Value);
+                }
+                // else: firstByte is 0x00, no name index
+            }
+
             var method = ReadFunctionInfo(reader, nameTable);
+            method.Name = resolvedName ?? "";
+            method.NameIndex = nameIndex;
             obj.Methods[hash] = method;
         }
     }
@@ -71,7 +93,29 @@ public class BuiltinObjectReaderStrategy : VariableSizeReaderStrategy<BuiltinObj
         for (int i = 0; i < propertyCount; i++)
         {
             var hash = reader.ReadUInt32();
+
+            // Read property name index if present
+            string? resolvedName = null;
+            int? nameIndex = null;
+            if (nameTable != null)
+            {
+                var firstByte = reader.ReadByte();
+                if ((firstByte & 0x01) != 0)
+                {
+                    // Has name index - read remaining 3 bytes and decode
+                    var byte2 = reader.ReadByte();
+                    var byte3 = reader.ReadByte();
+                    var byte4 = reader.ReadByte();
+                    uint encodedValue = (uint)(firstByte | (byte2 << 8) | (byte3 << 16) | (byte4 << 24));
+                    nameIndex = (int)(encodedValue >> 1);
+                    resolvedName = nameTable.GetNameByIndex(nameIndex.Value);
+                }
+                // else: firstByte is 0x00, no name index
+            }
+
             var property = reader.ReadPropertyInfo();
+            property.Name = resolvedName ?? "";
+            property.NameIndex = nameIndex;
             obj.Properties[hash] = property;
         }
     }

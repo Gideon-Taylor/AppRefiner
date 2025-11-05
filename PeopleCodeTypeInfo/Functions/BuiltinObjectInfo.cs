@@ -70,6 +70,7 @@ public class BuiltinObjectInfo : IObjectInfo
     public void AddProperty(string name, PropertyInfo property)
     {
         Properties ??= new Dictionary<uint, PropertyInfo>();
+        property.Name = name; // Set the name on the property
         var hash = HashUtilities.FNV1a32Hash(name);
         Properties[hash] = property;
     }

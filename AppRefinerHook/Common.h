@@ -48,6 +48,8 @@
 #define WM_AR_VARIABLE_SUGGEST 2509 // New message for variable auto-suggest when & is typed
 #define WM_AR_CURSOR_POSITION_CHANGED 2510 // Cursor position changed notification (debounced)
 #define WM_AR_FUNCTION_CALL_TIP 2511 // Function call tip notification for '(', ')', and ',' characters
+#define WM_AR_OBJECT_MEMBERS 2512 // Object member suggestions when '.' is typed
+#define WM_AR_SYSTEM_VARIABLE_SUGGEST 2513 // System variable suggestions when '%' is typed
 #define WM_SCN_USERLIST_SELECTION WM_SCN(SCN_USERLISTSELECTION) // User list selection notification
 
 // Global variables (defined in HookManager.cpp)

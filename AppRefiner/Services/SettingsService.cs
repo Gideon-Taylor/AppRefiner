@@ -27,6 +27,8 @@ namespace AppRefiner
         public bool AutoCenterDialogs { get; set; } = false;
         public bool MultiSelection { get; set; }
         public bool LineSelectionFix { get; set; }
+        public string Theme { get; set; } = "Default";
+        public bool ThemeFilled { get; set; } = false;
     }
 
     public class SettingsService
@@ -64,6 +66,8 @@ namespace AppRefiner
                 settings.AutoCenterDialogs = Properties.Settings.Default.AutoCenterDialogs;
                 settings.MultiSelection = Properties.Settings.Default.multiSelection;
                 settings.LineSelectionFix = Properties.Settings.Default.lineSelectionFix;
+                settings.Theme = Properties.Settings.Default.theme;
+                settings.ThemeFilled = Properties.Settings.Default.theme_filled;
             }
             catch (Exception ex)
             {
@@ -96,6 +100,8 @@ namespace AppRefiner
             Properties.Settings.Default.AutoCenterDialogs = settings.AutoCenterDialogs;
             Properties.Settings.Default.multiSelection = settings.MultiSelection;
             Properties.Settings.Default.lineSelectionFix = settings.LineSelectionFix;
+            Properties.Settings.Default.theme = settings.Theme;
+            Properties.Settings.Default.theme_filled = settings.ThemeFilled;
         }
 
         public void SaveChanges()
@@ -328,6 +334,54 @@ namespace AppRefiner
             catch (Exception ex)
             {
                 Debug.LogException(ex, "Error saving Smart Open configuration");
+            }
+        }
+
+        // --- Auto Suggest Configuration ---
+
+        /// <summary>
+        /// Loads the Auto Suggest configuration from settings
+        /// </summary>
+        /// <returns>AutoSuggestSettings object with current settings or default if not found</returns>
+        public AutoSuggestSettings LoadAutoSuggestSettings()
+        {
+            try
+            {
+                var configJson = Properties.Settings.Default.autoSuggestSettings;
+
+                if (string.IsNullOrEmpty(configJson))
+                {
+                    return AutoSuggestSettings.GetDefault();
+                }
+
+                var config = JsonSerializer.Deserialize<AutoSuggestSettings>(configJson);
+                return config ?? AutoSuggestSettings.GetDefault();
+            }
+            catch (JsonException ex)
+            {
+                Debug.LogException(ex, "Error deserializing AutoSuggestSettings - using defaults.");
+                return AutoSuggestSettings.GetDefault();
+            }
+            catch (Exception ex)
+            {
+                Debug.LogException(ex, "Error loading Auto Suggest configuration");
+                return AutoSuggestSettings.GetDefault();
+            }
+        }
+
+        /// <summary>
+        /// Saves the Auto Suggest configuration to settings
+        /// </summary>
+        /// <param name="config">The AutoSuggestSettings to save</param>
+        public void SaveAutoSuggestSettings(AutoSuggestSettings config)
+        {
+            try
+            {
+                Properties.Settings.Default.autoSuggestSettings = JsonSerializer.Serialize(config);
+            }
+            catch (Exception ex)
+            {
+                Debug.LogException(ex, "Error saving Auto Suggest configuration");
             }
         }
     }

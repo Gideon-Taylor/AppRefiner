@@ -1,3 +1,5 @@
+using AppRefiner.Database;
+using DiffPlex.Model;
 using PeopleCodeParser.SelfHosted;
 using PeopleCodeParser.SelfHosted.Nodes;
 using PeopleCodeParser.SelfHosted.Visitors;
@@ -54,7 +56,7 @@ namespace AppRefiner.TooltipProviders
 
                 var validator = new FunctionCallValidator(new NullTypeMetadataResolver());
 
-                List<TypeInfo> arguments = [];
+                List<PeopleCodeTypeInfo.Types.TypeInfo> arguments = [];
                 foreach (var a in node.Arguments)
                 {
                     var inferredType = a.GetInferredType();
@@ -350,20 +352,54 @@ namespace AppRefiner.TooltipProviders
         /// <summary>
         /// Determines the qualified name for the current program for type inference.
         /// </summary>
-        private static string DetermineQualifiedName(ScintillaEditor editor, ProgramNode program)
+        private static string DetermineQualifiedName(ScintillaEditor editor, ProgramNode node)
         {
-            // Try to parse from editor caption
-            var openTarget = OpenTargetBuilder.CreateFromCaption(editor.Caption);
-            if (openTarget != null)
+            // Try to extract from AST structure first
+            if (node.AppClass != null || node.Interface != null)
             {
-                return openTarget.ToQualifiedName();
+                // For app classes, try to build qualified name from imports or use simple name
+                var className = node.AppClass != null ? node.AppClass.Name : node.Interface!.Name;
+
+                if (editor?.Caption != null && !string.IsNullOrWhiteSpace(editor.Caption))
+                {
+                    // Parse caption to get program identifier
+                    var openTarget = OpenTargetBuilder.CreateFromCaption(editor.Caption);
+                    if (openTarget != null)
+                    {
+                        var methodIndex = Array.IndexOf(openTarget.ObjectIDs, PSCLASSID.METHOD);
+                        openTarget.ObjectIDs[methodIndex] = PSCLASSID.NONE;
+                        openTarget.ObjectValues[methodIndex] = null;
+                        return openTarget.Path;
+                    }
+                    else
+                    {
+                        /* probably never what you want but we have to return something? */
+                        return className;
+                    }
+                }
+                else
+                {
+                    /* probably never what you want but we have to return something? */
+                    return className;
+                }
             }
+            else
+            {
+                // For function libraries or other programs, use a generic name
+                // Try to extract from editor caption if available
+                if (editor?.Caption != null && !string.IsNullOrWhiteSpace(editor.Caption))
+                {
+                    // Parse caption to get program identifier
+                    var openTarget = OpenTargetBuilder.CreateFromCaption(editor.Caption);
+                    if (openTarget != null)
+                    {
+                        return openTarget.Path;
+                    }
+                }
 
-            // Fall back to program structure
-            if (program.AppClass != null) return program.AppClass.Name;
-            if (program.Interface != null) return program.Interface.Name;
-
-            return "Program";
+                // Fallback to generic name
+                return "Program";
+            }
         }
     }
 }

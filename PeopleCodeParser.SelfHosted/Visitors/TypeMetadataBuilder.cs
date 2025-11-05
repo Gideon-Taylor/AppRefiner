@@ -1,4 +1,5 @@
 using PeopleCodeParser.SelfHosted.Nodes;
+using PeopleCodeTypeInfo.Analysis;
 using PeopleCodeTypeInfo.Functions;
 using PeopleCodeTypeInfo.Inference;
 using PeopleCodeTypeInfo.Types;
@@ -180,6 +181,14 @@ public class TypeMetadataBuilder : AstVisitorBase
             {
                 _methods[method.Name] = functionInfo;
             }
+
+            functionInfo.Visibility = method.Visibility switch
+            {
+                VisibilityModifier.Public => MemberAccessibility.Public,
+                VisibilityModifier.Protected => MemberAccessibility.Protected,
+                VisibilityModifier.Private => MemberAccessibility.Private,
+                _ => MemberAccessibility.Public,
+            };
         }
 
         // Visit property declarations
@@ -187,6 +196,14 @@ public class TypeMetadataBuilder : AstVisitorBase
         {
             var propertyInfo = BuildPropertyInfo(property);
             _properties[property.Name] = propertyInfo;
+
+            propertyInfo.Visibility = property.Visibility switch
+            {
+                VisibilityModifier.Public => MemberAccessibility.Public,
+                VisibilityModifier.Protected => MemberAccessibility.Protected,
+                VisibilityModifier.Private => MemberAccessibility.Private,
+                _ => MemberAccessibility.Public,
+            };
         }
 
         foreach(var instanceVar in node.InstanceVariables)

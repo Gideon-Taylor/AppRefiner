@@ -4922,10 +4922,17 @@ public class PeopleCodeParser
 
             /* Heuristic to try and handle when we are parsing incomplete code, like someone is in the 
              * middle of writing a function call, to not accidentally consume the next statement as an argument */
+
             if (Check(TokenType.Semicolon) || StatementSyncTokens.Contains(Current.Type))
             {
-                _position = positionBackup;
-                break;
+                /* NOTE: special casing here for if the arg is *just* a & sign. this is common when variable auto
+                 * suggest is enabled in app refiner. in this case we *do* want the & to be considered an argument so
+                 * that its parent is properly set to the function call */
+                if (arg is not IdentifierNode || (arg is IdentifierNode id && id.Name != "&"))
+                {
+                    _position = positionBackup;
+                    break;
+                }
             }
             if (arg != null)
             {

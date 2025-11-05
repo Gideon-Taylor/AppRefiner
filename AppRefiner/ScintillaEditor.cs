@@ -224,7 +224,7 @@ namespace AppRefiner
 
         public Dictionary<string, IntPtr> AnnotationPointers = new();
         public List<IntPtr> PropertyBuffers = new();
-
+        public IntPtr AutoCompleteFillupsBuffer = IntPtr.Zero;
         // Self-hosted parser cached fields
         private int selfHostedContentHash;
         private ProgramNode? selfHostedParsedProgram;

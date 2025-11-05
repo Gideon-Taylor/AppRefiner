@@ -91,6 +91,12 @@ public abstract class TypeInfo
     public bool IsAssignable { get; set; } = false;
 
     /// <summary>
+    /// Indicates that this type info came from an auto-declar inferal. So we can warn instead of error
+    /// on type errors.
+    /// </summary>
+    public bool IsAutoDeclared { get; set; } = false;
+
+    /// <summary>
     /// Determines if a value of 'other' type can be assigned to this type
     /// </summary>
     public abstract bool IsAssignableFrom(TypeInfo other);

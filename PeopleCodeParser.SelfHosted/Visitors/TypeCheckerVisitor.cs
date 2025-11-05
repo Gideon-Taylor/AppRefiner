@@ -53,7 +53,14 @@ namespace PeopleCodeParser.SelfHosted.Visitors
             {
                 if (!AreTypesCompatible(leftType, rightType))
                 {
-                    RecordTypeError($"Cannot assign type '{rightType}' to '{leftType}'", node);
+                    if (leftType.IsAutoDeclared)
+                    {
+                        RecordTypeWarning($"Auto declared variable type changed. Was '{leftType}' and now '{rightType}'", node);
+                    }
+                    else
+                    {
+                        RecordTypeError($"Cannot assign type '{rightType}' to '{leftType}'", node);
+                    }
                 }
             }
         }
@@ -85,7 +92,10 @@ namespace PeopleCodeParser.SelfHosted.Visitors
 
                 if (node.Expression is FunctionCallNode fcn && fcn.GetFunctionInfo() is FunctionInfo fi && fi is not null)
                 {
-                    RecordTypeError($"Return values must assigned to a variable. Function {fi.Name}() returns type '{fi.ReturnType}.", node);
+                    if (!fi.IsOptionalReturn)
+                    {
+                        RecordTypeError($"Return values must assigned to a variable. Function {fi.Name}() returns type '{fi.ReturnType}'.", node);
+                    }
                 }
                 else
                 {
@@ -132,6 +142,14 @@ namespace PeopleCodeParser.SelfHosted.Visitors
 
                 RecordTypeError(result.GetDetailedError(), errorNode);
             }
+        }
+
+        /// <summary>
+        /// Record a type error on the given AST node
+        /// </summary>
+        private void RecordTypeWarning(string message, AstNode node)
+        {
+            node.SetTypeWarning(new TypeError(message, node));
         }
 
         /// <summary>

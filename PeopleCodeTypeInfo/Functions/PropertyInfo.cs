@@ -1,3 +1,4 @@
+using PeopleCodeTypeInfo.Analysis;
 using PeopleCodeTypeInfo.Types;
 using System.Text;
 
@@ -7,8 +8,23 @@ namespace PeopleCodeTypeInfo.Functions;
 /// Represents a property with type information including array dimensionality and AppClass path support.
 /// Used for both system variables and object properties.
 /// </summary>
-public struct PropertyInfo : IEquatable<PropertyInfo>
+public class PropertyInfo : IEquatable<PropertyInfo>
 {
+    /// <summary>
+    /// The name of the property
+    /// </summary>
+    public string Name { get; set; } = "";
+
+    /// <summary>
+    /// Index into the name table for efficient storage (when using name table format)
+    /// </summary>
+    public int? NameIndex { get; set; }
+
+    /// <summary>
+    /// Visibility modifier for this function (set at runtime for app class methods)
+    /// </summary>
+    public MemberAccessibility Visibility { get; set; } = MemberAccessibility.Public;
+
     /// <summary>
     /// The base type of the property
     /// </summary>
@@ -121,15 +137,25 @@ public struct PropertyInfo : IEquatable<PropertyInfo>
 
     public override bool Equals(object? obj) => obj is PropertyInfo other && Equals(other);
 
-    public bool Equals(PropertyInfo other) =>
-        Type == other.Type &&
-        ArrayDimensionality == other.ArrayDimensionality &&
-        AppClassPath == other.AppClassPath;
+    public bool Equals(PropertyInfo? other)
+    {
+        if (other is null) return false;
+        if (ReferenceEquals(this, other)) return true;
+
+        return Type == other.Type &&
+               ArrayDimensionality == other.ArrayDimensionality &&
+               AppClassPath == other.AppClassPath;
+    }
 
     public override int GetHashCode() => HashCode.Combine(Type, ArrayDimensionality, AppClassPath);
 
-    public static bool operator ==(PropertyInfo left, PropertyInfo right) => left.Equals(right);
-    public static bool operator !=(PropertyInfo left, PropertyInfo right) => !left.Equals(right);
+    public static bool operator ==(PropertyInfo? left, PropertyInfo? right)
+    {
+        if (left is null) return right is null;
+        return left.Equals(right);
+    }
+
+    public static bool operator !=(PropertyInfo? left, PropertyInfo? right) => !(left == right);
 
     public override string ToString()
     {

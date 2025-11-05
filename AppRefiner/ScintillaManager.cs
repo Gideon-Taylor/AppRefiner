@@ -2,6 +2,7 @@ using AppRefiner.Dialogs;
 using AppRefiner.Stylers;
 using DiffPlex.Model;
 using PeopleCodeParser.SelfHosted;
+using PeopleCodeTypeInfo.Database;
 using SQL.Formatter;
 using SQL.Formatter.Core;
 using SQL.Formatter.Language;
@@ -10,7 +11,9 @@ using System.Diagnostics;
 using System.IO.Hashing;
 using System.Runtime.InteropServices;
 using System.Text;
+using static AppRefiner.AppDesignerProcess;
 using static AppRefiner.AutoCompleteService;
+using static SqlParser.Ast.AlterRoleOperation;
 
 namespace AppRefiner
 {
@@ -157,10 +160,16 @@ namespace AppRefiner
         private const int SCI_AUTOCGETSEPARATOR = 2107;
         private const int SCI_AUTOCSETFILLUPS = 2112;
         private const int SCI_AUTOCSETSEPARATOR = 2106;
+        private const int SCI_AUTOCGETTYPESEPARATOR = 2285;
+        private const int SCI_AUTOCSETTYPESEPARATOR = 2286;
         private const int SCI_AUTOCSETORDER = 2660;
         private const int SCI_AUTOCGETORDER = 2661;
         private const int SCI_AUTOCSETIGNORECASE = 2115;
+        private const int SCI_RGBAIMAGESETWIDTH = 2624;
+        private const int SCI_RGBAIMAGESETHEIGHT = 2625;
+        private const int SCI_REGISTERRGBAIMAGE = 2627;
         private const int SC_ORDER_PERFORMSORT = 1;
+        private const int SC_ORDER_CUSTOM = 2;
         /* ignore case */
 
         // User list constants
@@ -331,6 +340,22 @@ namespace AppRefiner
             if (stringLength < 0)
                 stringLength = buffer.Length;
             return Encoding.Default.GetString(buffer, 0, stringLength);
+        }
+
+        public static void SetJSONLexer(ScintillaEditor editor)
+        {
+           /* int SCI_SETLEXER = 4001;
+            int SCI_GETLEXER = 4002;
+
+            int SCLEX_JSON = 120;
+
+            var currentLexer = editor.SendMessage(SCI_GETLEXER, 0, 0);
+            if (currentLexer != SCLEX_JSON)
+            {
+                editor.SendMessage(SCI_SETLEXER, SCLEX_JSON, 0);
+                editor.SendMessage(SCI_COLOURISE, 0, 0);
+            }
+           */
         }
 
         /// <summary>
@@ -1630,6 +1655,25 @@ namespace AppRefiner
 
         }
 
+        public static void SetAutoCompleteIcons(ScintillaEditor editor)
+        {
+            var process = editor.AppDesignerProcess;
+
+            editor.SendMessage(SCI_RGBAIMAGESETHEIGHT, 16, 0);
+            editor.SendMessage(SCI_RGBAIMAGESETWIDTH, 16, 0);
+
+            var iconNames = Enum.GetNames(typeof(AutoCompleteIcons));
+
+            for (var x = 0; x < iconNames.Length; x++)
+            {
+                var icon = iconNames[x];
+
+                if (process.iconBuffers.TryGetValue(icon, out nint value))
+                {
+                    editor.SendMessage(SCI_REGISTERRGBAIMAGE, (int)Enum.Parse(typeof(AutoCompleteIcons), icon), value);
+                }
+            }
+        }
 
         /// <summary>
         /// Sets the separator character used for autocompletion lists
@@ -1645,6 +1689,56 @@ namespace AppRefiner
 
             editor.SendMessage(SCI_AUTOCSETSEPARATOR, new IntPtr(separator), IntPtr.Zero);
         }
+        public static void SetAutoCompleteFillups(ScintillaEditor editor)
+        {
+            if (editor.AutoCompleteFillupsBuffer != IntPtr.Zero) return;
+
+            // Create a string with all options separated by spaces
+            string fillups = "([. )]";
+
+            // Get the required buffer size - including null terminator
+            int bufferSize = Encoding.UTF8.GetByteCount(fillups) + 1; // +1 for null terminator
+
+            // Allocate memory in the target process for storing the options
+            IntPtr remoteBuffer = WinApi.VirtualAllocEx(
+                editor.AppDesignerProcess.ProcessHandle,
+                IntPtr.Zero,
+                (uint)bufferSize,
+                WinApi.MEM_COMMIT,
+                WinApi.PAGE_READWRITE);
+
+            if (remoteBuffer == IntPtr.Zero)
+            {
+                Debug.Log("SetAutoCompleteFillups: Failed to allocate memory in remote process");
+                return;
+            }
+
+            // Store the pointer for later cleanup
+            editor.AutoCompleteFillupsBuffer = remoteBuffer;
+
+            // Convert the string to a byte array with a null terminator
+            byte[] buffer = new byte[bufferSize];
+            Encoding.UTF8.GetBytes(fillups, 0, fillups.Length, buffer, 0);
+            buffer[bufferSize - 1] = 0; // Ensure null termination
+
+            // Write the options to the remote process memory
+            int bytesWritten;
+            bool result = WinApi.WriteProcessMemory(
+                editor.AppDesignerProcess.ProcessHandle,
+                remoteBuffer,
+                buffer,
+                bufferSize,
+                out bytesWritten);
+
+            if (!result || bytesWritten != bufferSize)
+            {
+                Debug.Log($"SetAutoCompleteFillups: Failed to write to remote process memory. Written {bytesWritten} of {bufferSize} bytes");
+                WinApi.VirtualFreeEx(editor.AppDesignerProcess.ProcessHandle, remoteBuffer, 0, WinApi.MEM_RELEASE);
+                editor.AutoCompleteFillupsBuffer = IntPtr.Zero;
+            }
+
+            editor.SendMessage(SCI_AUTOCSETFILLUPS, 0, remoteBuffer);
+        }
 
         /// <summary>
         /// Shows a user list with the provided options
@@ -1654,16 +1748,19 @@ namespace AppRefiner
         /// <param name="position">The position to show the list at</param>
         /// <param name="options">List of strings to show as user list options</param>
         /// <returns>True if the user list was shown successfully</returns>
-        public static bool ShowUserList(ScintillaEditor editor, UserListType listType, int position, List<string> options, bool acceptSingle = true)
+        public static bool ShowUserList(ScintillaEditor editor, UserListType listType, int position, List<string> options, bool customOrder = false)
         {
+            
             if (editor == null || editor.AppDesignerProcess.ProcessHandle == IntPtr.Zero || options == null || options.Count == 0)
             {
                 Debug.Log("ShowUserList: Invalid parameters");
                 return false;
             }
+            SetAutoCompleteFillups(editor);
             SetAutoCompletionSeparator(editor, '/');
+            
             var sortOrder = editor.SendMessage(SCI_AUTOCGETORDER, 0, 0);
-            editor.SendMessage(SCI_AUTOCSETORDER, SC_ORDER_PERFORMSORT, 0);
+            editor.SendMessage(SCI_AUTOCSETORDER, customOrder ? SC_ORDER_CUSTOM: SC_ORDER_PERFORMSORT, 0);
             editor.SendMessage(SCI_AUTOCSETIGNORECASE, 1, 0);
             try
             {
@@ -1712,8 +1809,10 @@ namespace AppRefiner
                     return false;
                 }
 
+
                 // Send the Scintilla message to show the user list
                 IntPtr ret = editor.SendMessage(SCI_USERLISTSHOW, (IntPtr)listType, remoteBuffer);
+                //IntPtr ret = editor.SendMessage(SCI_AUTOCSHOW, 1, remoteBuffer);
                 SetAutoCompletionSeparator(editor, ' '); // Reset separator to default
                 return ret != IntPtr.Zero;
             }
