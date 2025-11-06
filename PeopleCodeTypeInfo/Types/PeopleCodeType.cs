@@ -88,13 +88,39 @@ public abstract class TypeInfo
     /// that can receive an 'out' parameter. This property does NOT propagate through expressions.
     /// For example: &myVar has IsAssignable=true, but &myVar | " cat" has IsAssignable=false.
     /// </summary>
-    public bool IsAssignable { get; set; } = false;
+    public bool IsAssignable { get; init; } = false;
 
     /// <summary>
     /// Indicates that this type info came from an auto-declar inferal. So we can warn instead of error
     /// on type errors.
     /// </summary>
-    public bool IsAutoDeclared { get; set; } = false;
+    public bool IsAutoDeclared { get; init; } = false;
+
+    /// <summary>
+    /// Creates a shallow copy of this TypeInfo instance with optional state modifications.
+    /// Subclasses must implement this to support the immutable builder pattern.
+    /// </summary>
+    protected abstract TypeInfo CloneWithState(bool? isAssignable = null, bool? isAutoDeclared = null);
+
+    /// <summary>
+    /// Returns a new TypeInfo instance with the specified IsAssignable value.
+    /// If the value is the same as the current value, returns this instance.
+    /// </summary>
+    public TypeInfo WithAssignable(bool isAssignable)
+    {
+        if (IsAssignable == isAssignable) return this;
+        return CloneWithState(isAssignable: isAssignable, isAutoDeclared: IsAutoDeclared);
+    }
+
+    /// <summary>
+    /// Returns a new TypeInfo instance with the specified IsAutoDeclared value.
+    /// If the value is the same as the current value, returns this instance.
+    /// </summary>
+    public TypeInfo WithAutoDeclared(bool isAutoDeclared)
+    {
+        if (IsAutoDeclared == isAutoDeclared) return this;
+        return CloneWithState(isAssignable: IsAssignable, isAutoDeclared: isAutoDeclared);
+    }
 
     /// <summary>
     /// Determines if a value of 'other' type can be assigned to this type
@@ -741,6 +767,15 @@ public class PrimitiveTypeInfo : TypeInfo
 
         return false;
     }
+
+    protected override TypeInfo CloneWithState(bool? isAssignable = null, bool? isAutoDeclared = null)
+    {
+        return new PrimitiveTypeInfo(Name, PeopleCodeType)
+        {
+            IsAssignable = isAssignable ?? IsAssignable,
+            IsAutoDeclared = isAutoDeclared ?? IsAutoDeclared
+        };
+    }
 }
 
 /// <summary>
@@ -848,6 +883,15 @@ public class BuiltinObjectTypeInfo : TypeInfo
         }
 
         return false;
+    }
+
+    protected override TypeInfo CloneWithState(bool? isAssignable = null, bool? isAutoDeclared = null)
+    {
+        return new BuiltinObjectTypeInfo(Name, PeopleCodeType)
+        {
+            IsAssignable = isAssignable ?? IsAssignable,
+            IsAutoDeclared = isAutoDeclared ?? IsAutoDeclared
+        };
     }
 }
 
@@ -1051,6 +1095,15 @@ public class AppClassTypeInfo : TypeInfo
 
         return false;
     }
+
+    protected override TypeInfo CloneWithState(bool? isAssignable = null, bool? isAutoDeclared = null)
+    {
+        return new AppClassTypeInfo(QualifiedName, ExtendsBuiltinType, BuiltinBaseType, InheritanceChain)
+        {
+            IsAssignable = isAssignable ?? IsAssignable,
+            IsAutoDeclared = isAutoDeclared ?? IsAutoDeclared
+        };
+    }
 }
 
 /// <summary>
@@ -1113,6 +1166,15 @@ public class ArrayTypeInfo : TypeInfo
 
         return false;
     }
+
+    protected override TypeInfo CloneWithState(bool? isAssignable = null, bool? isAutoDeclared = null)
+    {
+        return new ArrayTypeInfo(Dimensions, ElementType)
+        {
+            IsAssignable = isAssignable ?? IsAssignable,
+            IsAutoDeclared = isAutoDeclared ?? IsAutoDeclared
+        };
+    }
 }
 
 /// <summary>
@@ -1130,7 +1192,7 @@ public class ObjectTypeInfo : TypeInfo
     // Singleton instance
     public static readonly ObjectTypeInfo Instance = new();
 
-    private ObjectTypeInfo() { }
+    internal ObjectTypeInfo() { }
 
     public override bool IsAssignableFrom(TypeInfo other)
     {
@@ -1173,6 +1235,15 @@ public class ObjectTypeInfo : TypeInfo
         // Otherwise, the common type is any
         return AnyTypeInfo.Instance;
     }
+
+    protected override TypeInfo CloneWithState(bool? isAssignable = null, bool? isAutoDeclared = null)
+    {
+        return new ObjectTypeInfo()
+        {
+            IsAssignable = isAssignable ?? IsAssignable,
+            IsAutoDeclared = isAutoDeclared ?? IsAutoDeclared
+        };
+    }
 }
 
 /// <summary>
@@ -1186,9 +1257,8 @@ public class AnyTypeInfo : TypeInfo
 
     // Singleton instance
     public static readonly AnyTypeInfo Instance = new();
-    public static readonly AnyTypeInfo AssignableInstance = new() { IsAssignable = true };
 
-    private AnyTypeInfo() { }
+    internal AnyTypeInfo() { }
 
     public override bool IsAssignableFrom(TypeInfo other)
     {
@@ -1203,6 +1273,15 @@ public class AnyTypeInfo : TypeInfo
     {
         // Any is the ultimate common type
         return this;
+    }
+
+    protected override TypeInfo CloneWithState(bool? isAssignable = null, bool? isAutoDeclared = null)
+    {
+        return new AnyTypeInfo()
+        {
+            IsAssignable = isAssignable ?? IsAssignable,
+            IsAutoDeclared = isAutoDeclared ?? IsAutoDeclared
+        };
     }
 }
 
@@ -1219,7 +1298,7 @@ public class VoidTypeInfo : TypeInfo
     // Singleton instance
     public static readonly VoidTypeInfo Instance = new();
 
-    private VoidTypeInfo() { }
+    internal VoidTypeInfo() { }
 
     public override bool IsAssignableFrom(TypeInfo other)
     {
@@ -1234,6 +1313,15 @@ public class VoidTypeInfo : TypeInfo
     {
         // Void has no meaningful common type with anything
         return UnknownTypeInfo.Instance;
+    }
+
+    protected override TypeInfo CloneWithState(bool? isAssignable = null, bool? isAutoDeclared = null)
+    {
+        return new VoidTypeInfo()
+        {
+            IsAssignable = isAssignable ?? IsAssignable,
+            IsAutoDeclared = isAutoDeclared ?? IsAutoDeclared
+        };
     }
 }
 
@@ -1267,6 +1355,15 @@ public class UnknownTypeInfo : TypeInfo
     {
         // If we can't resolve this type, default to Any
         return AnyTypeInfo.Instance;
+    }
+
+    protected override TypeInfo CloneWithState(bool? isAssignable = null, bool? isAutoDeclared = null)
+    {
+        return new UnknownTypeInfo(Name)
+        {
+            IsAssignable = isAssignable ?? IsAssignable,
+            IsAutoDeclared = isAutoDeclared ?? IsAutoDeclared
+        };
     }
 }
 
@@ -1302,6 +1399,15 @@ public class InvalidTypeInfo : TypeInfo
     {
         // Invalid propagates through expressions
         return this;
+    }
+
+    protected override TypeInfo CloneWithState(bool? isAssignable = null, bool? isAutoDeclared = null)
+    {
+        return new InvalidTypeInfo(Reason)
+        {
+            IsAssignable = isAssignable ?? IsAssignable,
+            IsAutoDeclared = isAutoDeclared ?? IsAutoDeclared
+        };
     }
 }
 
@@ -1415,6 +1521,15 @@ public class ReferenceTypeInfo : TypeInfo
         "MESSAGE", "NODE", "OPERATION", "PACKAGE", "PAGE", "PANEL", "PANELGROUP", "PORTAL",
         "RECORD", "SCROLL", "SQL", "STYLESHEET", "URL"
     };
+
+    protected override TypeInfo CloneWithState(bool? isAssignable = null, bool? isAutoDeclared = null)
+    {
+        return new ReferenceTypeInfo(ReferenceCategory, ReferencedName, FullReference)
+        {
+            IsAssignable = isAssignable ?? IsAssignable,
+            IsAutoDeclared = isAutoDeclared ?? IsAutoDeclared
+        };
+    }
 }
 
 /// <summary>
@@ -1458,6 +1573,15 @@ public class StringTypeInfo : PrimitiveTypeInfo
 
         // String can ONLY accept string values - no implicit conversions (except references handled above)
         return false;
+    }
+
+    protected override TypeInfo CloneWithState(bool? isAssignable = null, bool? isAutoDeclared = null)
+    {
+        return new StringTypeInfo()
+        {
+            IsAssignable = isAssignable ?? IsAssignable,
+            IsAutoDeclared = isAutoDeclared ?? IsAutoDeclared
+        };
     }
 }
 
@@ -1504,6 +1628,15 @@ public class NumberTypeInfo : PrimitiveTypeInfo
 
         return false;
     }
+
+    protected override TypeInfo CloneWithState(bool? isAssignable = null, bool? isAutoDeclared = null)
+    {
+        return new NumberTypeInfo()
+        {
+            IsAssignable = isAssignable ?? IsAssignable,
+            IsAutoDeclared = isAutoDeclared ?? IsAutoDeclared
+        };
+    }
 }
 
 /// <summary>
@@ -1548,7 +1681,7 @@ public class SameAsObjectTypeInfo : PolymorphicTypeInfo
     // Singleton instance
     public static readonly SameAsObjectTypeInfo Instance = new();
 
-    private SameAsObjectTypeInfo() { }
+    internal SameAsObjectTypeInfo() { }
 
     public override TypeInfo Resolve(TypeInfo? objectType = null, TypeInfo[]? parameterTypes = null)
     {
@@ -1556,6 +1689,15 @@ public class SameAsObjectTypeInfo : PolymorphicTypeInfo
             throw new InvalidOperationException("SameAsObject polymorphic type requires object context");
 
         return objectType;
+    }
+
+    protected override TypeInfo CloneWithState(bool? isAssignable = null, bool? isAutoDeclared = null)
+    {
+        return new SameAsObjectTypeInfo()
+        {
+            IsAssignable = isAssignable ?? IsAssignable,
+            IsAutoDeclared = isAutoDeclared ?? IsAutoDeclared
+        };
     }
 }
 
@@ -1571,7 +1713,7 @@ public class ElementOfObjectTypeInfo : PolymorphicTypeInfo
     // Singleton instance
     public static readonly ElementOfObjectTypeInfo Instance = new();
 
-    private ElementOfObjectTypeInfo() { }
+    internal ElementOfObjectTypeInfo() { }
 
     public override TypeInfo Resolve(TypeInfo? objectType = null, TypeInfo[]? parameterTypes = null)
     {
@@ -1598,6 +1740,15 @@ public class ElementOfObjectTypeInfo : PolymorphicTypeInfo
         // For now, return Any as fallback
         return AnyTypeInfo.Instance;
     }
+
+    protected override TypeInfo CloneWithState(bool? isAssignable = null, bool? isAutoDeclared = null)
+    {
+        return new ElementOfObjectTypeInfo()
+        {
+            IsAssignable = isAssignable ?? IsAssignable,
+            IsAutoDeclared = isAutoDeclared ?? IsAutoDeclared
+        };
+    }
 }
 
 /// <summary>
@@ -1612,7 +1763,7 @@ public class SameAsFirstParameterTypeInfo : PolymorphicTypeInfo
     // Singleton instance
     public static readonly SameAsFirstParameterTypeInfo Instance = new();
 
-    private SameAsFirstParameterTypeInfo() { }
+    internal SameAsFirstParameterTypeInfo() { }
 
     public override TypeInfo Resolve(TypeInfo? objectType = null, TypeInfo[]? parameterTypes = null)
     {
@@ -1620,6 +1771,15 @@ public class SameAsFirstParameterTypeInfo : PolymorphicTypeInfo
             throw new InvalidOperationException("SameAsFirstParameter polymorphic type requires parameter context");
 
         return parameterTypes[0];
+    }
+
+    protected override TypeInfo CloneWithState(bool? isAssignable = null, bool? isAutoDeclared = null)
+    {
+        return new SameAsFirstParameterTypeInfo()
+        {
+            IsAssignable = isAssignable ?? IsAssignable,
+            IsAutoDeclared = isAutoDeclared ?? IsAutoDeclared
+        };
     }
 }
 
@@ -1635,7 +1795,7 @@ public class ArrayOfFirstParameterTypeInfo : PolymorphicTypeInfo
     // Singleton instance
     public static readonly ArrayOfFirstParameterTypeInfo Instance = new();
 
-    private ArrayOfFirstParameterTypeInfo() { }
+    internal ArrayOfFirstParameterTypeInfo() { }
 
     public override TypeInfo Resolve(TypeInfo? objectType = null, TypeInfo[]? parameterTypes = null)
     {
@@ -1656,6 +1816,15 @@ public class ArrayOfFirstParameterTypeInfo : PolymorphicTypeInfo
 
         // Create an array of the first parameter's type
         return new ArrayTypeInfo(1, firstParamType);
+    }
+
+    protected override TypeInfo CloneWithState(bool? isAssignable = null, bool? isAutoDeclared = null)
+    {
+        return new ArrayOfFirstParameterTypeInfo()
+        {
+            IsAssignable = isAssignable ?? IsAssignable,
+            IsAutoDeclared = isAutoDeclared ?? IsAutoDeclared
+        };
     }
 }
 
@@ -1748,5 +1917,14 @@ public class UnionReturnTypeInfo : TypeInfo
         // Add the other type to our union
         var expandedTypes = PossibleTypes.Concat(new[] { other });
         return new UnionReturnTypeInfo(expandedTypes);
+    }
+
+    protected override TypeInfo CloneWithState(bool? isAssignable = null, bool? isAutoDeclared = null)
+    {
+        return new UnionReturnTypeInfo(PossibleTypes)
+        {
+            IsAssignable = isAssignable ?? IsAssignable,
+            IsAutoDeclared = isAutoDeclared ?? IsAutoDeclared
+        };
     }
 }

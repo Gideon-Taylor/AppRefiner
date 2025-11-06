@@ -39,4 +39,13 @@ public class RecordTypeInfo : BuiltinObjectTypeInfo
         return $"record({RecordName})";
     }
 
+    protected override TypeInfo CloneWithState(bool? isAssignable = null, bool? isAutoDeclared = null)
+    {
+        return new RecordTypeInfo(RecordName, _resolver)
+        {
+            IsAssignable = isAssignable ?? IsAssignable,
+            IsAutoDeclared = isAutoDeclared ?? IsAutoDeclared
+        };
+    }
+
 }

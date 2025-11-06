@@ -68,4 +68,13 @@ public class FieldTypeInfo : BuiltinObjectTypeInfo
         // Use alias to avoid ambiguity with parent class property
         return PeopleCodeTypeEnum.Field;
     }
+
+    protected override TypeInfo CloneWithState(bool? isAssignable = null, bool? isAutoDeclared = null)
+    {
+        return new FieldTypeInfo(RecordName, FieldName, _resolver)
+        {
+            IsAssignable = isAssignable ?? IsAssignable,
+            IsAutoDeclared = isAutoDeclared ?? IsAutoDeclared
+        };
+    }
 }

@@ -79,7 +79,6 @@ public class TypeErrorStyler : BaseStyler
 
             // Collect all type errors from the AST
             var typeErrors = node.GetAllTypeErrors();
-
             // Add squiggle indicators for each type error
             foreach (var error in typeErrors)
             {
@@ -104,7 +103,7 @@ public class TypeErrorStyler : BaseStyler
 
             if (typeErrors.Any())
             {
-                Debug.Log($"TypeErrorStyler: Found {typeErrors.Count()} type errors in '{qualifiedName}'");
+                Debug.Log($"TypeErrorStyler: Found {typeErrors.Count()} type errors and {typeWarnings.Count()} warnings in '{qualifiedName}'");
             }
         }
         catch (Exception ex)
