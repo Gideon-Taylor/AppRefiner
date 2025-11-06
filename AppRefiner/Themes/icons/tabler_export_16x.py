@@ -25,9 +25,11 @@ THEMES = {
         "InstanceVariable":  {"slug": "cube",             "color": "#84d3e5"},
         "ComponentVariable": {"slug": "components",       "color": "#ff6b00"},
         "GlobalVariable":    {"slug": "world",            "color": "#231f20"},
-        "Property":           {"slug": "key",              "color": "#d3549f"},
+        "Property":          {"slug": "key",              "color": "#d3549f"},
         "ExternalFunction":  {"slug": "external-link",    "color": "#ef3c45"},
         "ConstantValue":     {"slug": "lock",             "color": "#ff9e18"},
+        "Field":             {"slug": "circle-letter-f",  "color": "#0dcaf0"},  # info blue/tea
+        
     },
     "geometric": {
         "ClassMethod":       {"slug": "braces",       "color": "#5b9bd5"},  # blue
@@ -37,9 +39,10 @@ THEMES = {
         "InstanceVariable":  {"slug": "circle",       "color": "#44d4e8"},  # cyan
         "ComponentVariable": {"slug": "box",          "color": "#ff8c42"},  # orange
         "GlobalVariable":    {"slug": "world",        "color": "#2c3e50"},  # dark blue-gray
-        "Property":           {"slug": "diamond",      "color": "#e74c9c"},  # pink
+        "Property":          {"slug": "diamond",      "color": "#e74c9c"},  # pink
         "ExternalFunction":  {"slug": "brackets",     "color": "#e74c3c"},  # red
         "ConstantValue":     {"slug": "lock",         "color": "#f39c12"},  # amber
+        "Field":             {"slug": "square-dot",   "color": "#17a2b8"},  # teal
     },
     "alphabet": {
         "ClassMethod":       {"slug": "square-letter-m", "color": "#4472c4"},  # royal blue
@@ -49,9 +52,10 @@ THEMES = {
         "InstanceVariable":  {"slug": "circle-letter-i", "color": "#56c5d0"},  # turquoise
         "ComponentVariable": {"slug": "square-letter-c", "color": "#ff7733"},  # burnt orange
         "GlobalVariable":    {"slug": "circle-letter-g", "color": "#34495e"},  # charcoal
-        "Property":           {"slug": "square-letter-p", "color": "#d946a8"},  # magenta
+        "Property":          {"slug": "square-letter-p", "color": "#d946a8"},  # magenta
         "ExternalFunction":  {"slug": "square-letter-f", "color": "#dc3545"},  # crimson
         "ConstantValue":     {"slug": "square-letter-k", "color": "#ffc107"},  # gold
+        "Field":             {"slug": "square-letter-f", "color": "#14b8a6"},  # teal
     },
     "devs": {
     "ClassMethod":       {"slug": "code",           "color": "#4a90e2"},  # blue
@@ -61,9 +65,10 @@ THEMES = {
     "InstanceVariable":  {"slug": "circle-dot",     "color": "#00d4ff"},  # electric cyan
     "ComponentVariable": {"slug": "puzzle",         "color": "#ff6b35"},  # coral
     "GlobalVariable":    {"slug": "world-code",     "color": "#2d3436"},  # near black
-    "Property":           {"slug": "key",            "color": "#e056fd"},  # purple
+    "Property":          {"slug": "key",            "color": "#e056fd"},  # purple
     "ExternalFunction":  {"slug": "external-link",  "color": "#ff3838"},  # bright red
     "ConstantValue":     {"slug": "shield-lock",    "color": "#ffb142"},  # golden orange
+    "Field":             {"slug": "file-text",      "color": "#0d9488"},  # dark teal
 },
 "Monogram": {
     "ClassMethod":       {"slug": "circle-letter-m", "color": "#4a6fa5"},  # blue
@@ -73,9 +78,10 @@ THEMES = {
     "InstanceVariable":  {"slug": "circle-letter-i", "color": "#22d3ee"},  # cyan
     "ComponentVariable": {"slug": "circle-letter-c", "color": "#fd7e14"},  # orange
     "GlobalVariable":    {"slug": "circle-letter-g", "color": "#212529"},  # charcoal
-    "Property":           {"slug": "circle-letter-p", "color": "#e64980"},  # magenta
+    "Property":          {"slug": "circle-letter-p", "color": "#e64980"},  # magenta
     "ExternalFunction":  {"slug": "circle-letter-f", "color": "#fa5252"},  # red
     "ConstantValue":     {"slug": "circle-letter-k", "color": "#fab005"},  # amber
+    "Field":             {"slug": "circle-letter-f", "color": "#20c997"},  # teal
 },
 
 "Semantic":{
@@ -86,9 +92,10 @@ THEMES = {
     "InstanceVariable":  {"slug": "circle-dot",   "color": "#44d4e8"},  # cyan
     "ComponentVariable": {"slug": "box",          "color": "#ff8c42"},  # orange
     "GlobalVariable":    {"slug": "world",        "color": "#2c3e50"},  # dark blue-gray
-    "Property":           {"slug": "key",          "color": "#e74c9c"},  # pink
+    "Property":          {"slug": "key",          "color": "#e74c9c"},  # pink
     "ExternalFunction":  {"slug": "world-code",   "color": "#e74c3c"},  # red
     "ConstantValue":     {"slug": "lock",         "color": "#f39c12"},  # amber
+    "Field":             {"slug": "square-dot",   "color": "#17a2b8"},  # teal
 },
 
 "Hierarchy": {
@@ -99,9 +106,10 @@ THEMES = {
     "InstanceVariable":  {"slug": "circle",         "color": "#5bc0de"},  # cyan
     "ComponentVariable": {"slug": "box",            "color": "#ff9f40"},  # orange
     "GlobalVariable":    {"slug": "globe",          "color": "#34495e"},  # slate
-    "Property":           {"slug": "diamond",        "color": "#ee6fa8"},  # pink
+    "Property":          {"slug": "diamond",        "color": "#ee6fa8"},  # pink
     "ExternalFunction":  {"slug": "brackets-angle", "color": "#ee6666"},  # red
     "ConstantValue":     {"slug": "lock-square",    "color": "#fac858"},  # gold
+    "Field":             {"slug": "square-dot",     "color": "#14b8a6"},  # teal
 },
 "Hybrid": {
     "ClassMethod":       {"slug": "braces",          "color": "#4169e1"},  # royal blue
@@ -111,9 +119,10 @@ THEMES = {
     "InstanceVariable":  {"slug": "circle-letter-i", "color": "#00bfff"},  # deep sky blue
     "ComponentVariable": {"slug": "box",             "color": "#ff8c00"},  # dark orange
     "GlobalVariable":    {"slug": "world",           "color": "#2f4f4f"},  # dark slate
-    "Property":           {"slug": "key",             "color": "#da70d6"},  # orchid
+    "Property":          {"slug": "key",             "color": "#da70d6"},  # orchid
     "ExternalFunction":  {"slug": "brackets-angle",  "color": "#dc143c"},  # crimson
     "ConstantValue":     {"slug": "lock",            "color": "#ffa500"},  # orange
+    "Field":             {"slug": "circle-letter-f", "color": "#0dcaf0"},  # info blue/teal
 },
 
 "Terminal": {
@@ -124,9 +133,10 @@ THEMES = {
     "InstanceVariable":  {"slug": "circle-dot",    "color": "#06b6d4"},  # cyan
     "ComponentVariable": {"slug": "box",           "color": "#f97316"},  # orange
     "GlobalVariable":    {"slug": "world-code",    "color": "#1e293b"},  # dark slate
-    "Property":           {"slug": "brackets",      "color": "#ec4899"},  # pink
+    "Property":          {"slug": "brackets",      "color": "#ec4899"},  # pink
     "ExternalFunction":  {"slug": "external-link", "color": "#ef4444"},  # red
     "ConstantValue":     {"slug": "diamond",       "color": "#eab308"},  # yellow
+    "Field":             {"slug": "file-code",     "color": "#06b6d4"},  # cyan
 }
 }
 

@@ -29,22 +29,14 @@ namespace AppRefiner
             return Task.FromResult<TypeMetadata?>(null);
         }
 
-        protected override TypeInfo GetFieldTypeCore(string recordName, string fieldName)
+        protected override TypeInfo GetFieldTypeCore(string fieldName)
         {
-            // Empty record name means runtime-inferred context - return any
-            if (string.IsNullOrEmpty(recordName))
-                return AnyTypeInfo.Instance;
-
             // For testing purposes, return AnyTypeInfo
             return AnyTypeInfo.Instance;
         }
 
-        protected override Task<TypeInfo> GetFieldTypeCoreAsync(string recordName, string fieldName)
+        protected override Task<TypeInfo> GetFieldTypeCoreAsync(string fieldName)
         {
-            // Empty record name means runtime-inferred context - return any
-            if (string.IsNullOrEmpty(recordName))
-                return Task.FromResult<TypeInfo>(AnyTypeInfo.Instance);
-
             return Task.FromResult<TypeInfo>(AnyTypeInfo.Instance);
         }
     }
@@ -175,7 +167,8 @@ namespace AppRefiner
             Parameter,
             Property,
             ExternalFunction,
-            ConstantValue
+            ConstantValue,
+            Field
         }
 
 

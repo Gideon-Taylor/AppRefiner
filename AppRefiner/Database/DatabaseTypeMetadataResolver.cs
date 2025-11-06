@@ -4,6 +4,7 @@ using PeopleCodeParser.SelfHosted.Lexing;
 using PeopleCodeParser.SelfHosted.Visitors;
 using PeopleCodeTypeInfo.Contracts;
 using PeopleCodeTypeInfo.Inference;
+using PeopleCodeTypeInfo.Types;
 
 namespace AppRefiner.Database
 {
@@ -94,12 +95,12 @@ namespace AppRefiner.Database
         /// <param name="recordName">The record name (e.g., "AAP_YEAR")</param>
         /// <param name="fieldName">The field name (e.g., "START_DT")</param>
         /// <returns>TypeInfo representing the field's data type, or AnyTypeInfo if unknown</returns>
-        protected override PeopleCodeTypeInfo.Types.TypeInfo GetFieldTypeCore(string recordName, string fieldName)
+        protected override TypeInfo GetFieldTypeCore(string fieldName)
         {
             // Check if database is connected
             if (!_dataManager.IsConnected)
             {
-                return PeopleCodeTypeInfo.Types.AnyTypeInfo.Instance;
+                return AnyTypeInfo.Instance;
             }
 
             try
@@ -109,13 +110,15 @@ namespace AppRefiner.Database
                 // Future implementation should call something like:
                 // var fieldMetadata = _dataManager.GetFieldMetadata(recordName, fieldName);
                 // return ConvertFieldTypeToTypeInfo(fieldMetadata.DataType);
+                var fieldType = _dataManager.GetFieldType(fieldName);
+                if (fieldType == PeopleCodeType.Unknown) fieldType = PeopleCodeType.Any;
 
-                return PeopleCodeTypeInfo.Types.AnyTypeInfo.Instance;
+                return new PrimitiveTypeInfo(fieldType.ToString(), fieldType) { IsAssignable = true};
             }
             catch (Exception ex)
             {
-                Debug.Log($"DatabaseTypeMetadataResolver: Error resolving field type '{recordName}.{fieldName}': {ex.Message}");
-                return PeopleCodeTypeInfo.Types.AnyTypeInfo.Instance;
+                Debug.Log($"DatabaseTypeMetadataResolver: Error resolving field type '{fieldName}': {ex.Message}");
+                return AnyTypeInfo.Instance;
             }
         }
 
@@ -125,10 +128,10 @@ namespace AppRefiner.Database
         /// <param name="recordName">The record name (e.g., "AAP_YEAR")</param>
         /// <param name="fieldName">The field name (e.g., "START_DT")</param>
         /// <returns>Task that resolves to TypeInfo representing the field's data type, or AnyTypeInfo if unknown</returns>
-        protected override Task<PeopleCodeTypeInfo.Types.TypeInfo> GetFieldTypeCoreAsync(string recordName, string fieldName)
+        protected override Task<TypeInfo> GetFieldTypeCoreAsync(string fieldName)
         {
             // Wrap synchronous call in a Task
-            return Task.FromResult(GetFieldTypeCore(recordName, fieldName));
+            return Task.FromResult(GetFieldTypeCore(fieldName));
         }
 
         /// <summary>
