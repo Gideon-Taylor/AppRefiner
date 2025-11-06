@@ -24,6 +24,35 @@ namespace AppRefiner.Stylers
         public Indicator()
         {
         }
+
+        // Implement equality based on position and visual properties
+        // QuickFixes are intentionally excluded from equality comparison
+        public override bool Equals(object? obj)
+        {
+            if (obj is not Indicator other)
+                return false;
+
+            return Start == other.Start &&
+                   Length == other.Length &&
+                   Color == other.Color &&
+                   Type == other.Type &&
+                   Tooltip == other.Tooltip;
+        }
+
+        public override int GetHashCode()
+        {
+            return HashCode.Combine(Start, Length, Color, Type, Tooltip);
+        }
+
+        public static bool operator ==(Indicator left, Indicator right)
+        {
+            return left.Equals(right);
+        }
+
+        public static bool operator !=(Indicator left, Indicator right)
+        {
+            return !(left == right);
+        }
     }
 
     // Unified self-hosted parser-based scoped styler - now the single base class for all stylers

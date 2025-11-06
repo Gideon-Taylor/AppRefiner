@@ -126,6 +126,9 @@ namespace AppRefiner
     {
         // Note: P/Invoke declarations moved to WinApi.cs for centralized access
 
+        // Lock object for thread-safe indicator operations
+        internal readonly object IndicatorLock = new object();
+
         public IntPtr hWnd;
         public EventMapInfo? EventMapInfo = null;
         public string ClassPath = string.Empty;

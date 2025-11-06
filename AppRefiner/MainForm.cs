@@ -1996,6 +1996,8 @@ namespace AppRefiner
         {
             if (editor == null) return;
 
+            Debug.Log($"CheckForContentChanges: Called for editor {editor.RelativePath ?? "unknown"}");
+
             /* Update editor caption */
             var caption = WindowHelper.GetGrandparentWindowCaption(editor.hWnd);
             if (caption == "Suppress")
@@ -2004,15 +2006,23 @@ namespace AppRefiner
                 caption = WindowHelper.GetGrandparentWindowCaption(editor.hWnd);
             }
 
+            // Capture previous caption to detect reuse of editor for different program
+            var previousCaption = editor.Caption;
             editor.Caption = caption;
+
+            // If caption changed, the CaptionChanged event handler will call CheckForContentChanges
+            // recursively and do all the work. Return early to avoid duplicate processing.
+            if (previousCaption != null && caption != null && !previousCaption.Equals(caption))
+            {
+                Debug.Log($"CheckForContentChanges: Caption changed from '{previousCaption}' to '{caption}' - " +
+                         "returning early as CaptionChanged event will handle processing");
+                return;
+            }
 
             /* if (chkBetterSQL.Checked && editor.Type == EditorType.SQL)
             {
                 ScintillaManager.ApplyBetterSQL(editor);
             } */
-
-            // Clear annotations
-            ScintillaManager.ClearAnnotations(editor);
 
             /* Try to detect JSON if type is HTML */
             if (editor.Type == EditorType.HTML)
@@ -2031,24 +2041,46 @@ namespace AppRefiner
                 }
             }
 
-            // Reset styles
-            ScintillaManager.ResetStyles(editor);
-
-            // Apply dark mode whenever content changes if auto dark mode is enabled
-            if (chkAutoDark.Checked)
-            {
-                ScintillaManager.SetDarkMode(editor);
-            }
-
             // Process stylers for PeopleCode with debouncing to prevent double execution
+            // IMPORTANT: Clear/reset ONLY happens if we're going to re-process stylers
+            // This prevents clearing indicators without re-adding them when debounced
             if (editor.Type == EditorType.PeopleCode)
             {
                 var now = DateTime.UtcNow;
                 if (!lastStylerProcessingTime.TryGetValue(editor, out var lastProcessed) ||
                     (now - lastProcessed).TotalMilliseconds > STYLER_PROCESSING_DEBOUNCE_MS)
                 {
+                    Debug.Log($"CheckForContentChanges: Processing stylers for {editor.RelativePath ?? "unknown"}");
+
+                    // Clear annotations and reset styles BEFORE processing stylers
+                    ScintillaManager.ClearAnnotations(editor);
+                    ScintillaManager.ResetStyles(editor);
+
+                    // Apply dark mode if enabled
+                    if (chkAutoDark.Checked)
+                    {
+                        ScintillaManager.SetDarkMode(editor);
+                    }
+
                     lastStylerProcessingTime[editor] = now;
                     stylerManager?.ProcessStylersForEditor(editor);
+                }
+                else
+                {
+                    var timeSinceLastProcess = (now - lastProcessed).TotalMilliseconds;
+                    Debug.Log($"CheckForContentChanges: Skipping ALL processing (debounce) for {editor.RelativePath ?? "unknown"} - " +
+                             $"only {timeSinceLastProcess}ms since last process (need {STYLER_PROCESSING_DEBOUNCE_MS}ms)");
+                }
+            }
+            else
+            {
+                // For non-PeopleCode editors, always clear and reset (no stylers to worry about)
+                ScintillaManager.ClearAnnotations(editor);
+                ScintillaManager.ResetStyles(editor);
+
+                if (chkAutoDark.Checked)
+                {
+                    ScintillaManager.SetDarkMode(editor);
                 }
             }
 
@@ -3317,9 +3349,9 @@ namespace AppRefiner
                             }
                         }
 
-                        // Clear annotations and reset styles
-                        ScintillaManager.ClearAnnotations(editorToSave);
-                        ScintillaManager.ResetStyles(editorToSave);
+                        // Note: We no longer unconditionally clear stylers on save
+                        // Stylers remain active since saving doesn't change code structure
+                        // Only clear if content actually changed, which will be handled by CheckForContentChanges
 
                         // Save content to Snapshot database
                         if (!string.IsNullOrEmpty(editorToSave.RelativePath))
@@ -3544,6 +3576,9 @@ namespace AppRefiner
                         {
                             activeEditor.CaptionChanged += (s, e) =>
                             {
+                                Debug.Log($"CaptionChanged event: Editor reused for different program. " +
+                                         $"Old: '{e.OldCaption}', New: '{e.NewCaption}'");
+
                                 var lastKnownKey = $"{activeEditor.AppDesignerProcess.ProcessId}:{activeEditor.Caption}";
                                 if (lastKnownPositions.TryGetValue(lastKnownKey, out var position))
                                 {
@@ -3572,8 +3607,14 @@ namespace AppRefiner
                                     }
                                 }
 
+                                // Clear the styler processing debounce for this editor since it's a new program
+                                // This ensures stylers will run immediately even if they ran recently for the previous program
+                                lastStylerProcessingTime.Remove(activeEditor);
+                                Debug.Log($"CaptionChanged event: Cleared styler debounce timer for reused editor");
+
+                                Debug.Log($"CaptionChanged event: Calling CheckForContentChanges to process new program content");
                                 CheckForContentChanges(activeEditor);
- 
+
                             };
                         }
 

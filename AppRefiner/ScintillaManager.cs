@@ -621,11 +621,12 @@ namespace AppRefiner
         /// Removes an indicator from a range of text
         /// </summary>
         /// <param name="editor">The ScintillaEditor to remove the indicator from</param>
-        /// <param name="highlighterNumber">The highlighter number</param>
-        /// <param name="start">The start position of the text</param>
-        /// <param name="length">The length of the text</param>
+        /// <param name="indicator">The indicator to remove</param>
         public static void RemoveIndicator(ScintillaEditor editor, Indicator indicator)
         {
+            if (editor == null || editor.ActiveIndicators == null)
+                return;
+
             int indicatorNumber = 0;
             switch (indicator.Type)
             {
@@ -640,11 +641,13 @@ namespace AppRefiner
                     break;
             }
 
-
             editor.SendMessage(SCI_SETINDICATORCURRENT, indicatorNumber, IntPtr.Zero);
             editor.SendMessage(SCI_INDICATORCLEARRANGE, indicator.Start, indicator.Length);
 
-            editor.ActiveIndicators.Remove(indicator);
+            lock (editor.IndicatorLock)
+            {
+                editor.ActiveIndicators.Remove(indicator);
+            }
         }
 
 
@@ -654,13 +657,40 @@ namespace AppRefiner
         /// <param name="editor">The ScintillaEditor to clear all indicators from</param>
         public static void ClearAllIndicators(ScintillaEditor editor)
         {
-            for (var x = 0; x < editor.ActiveIndicators.Count; x++)
-            {
-                RemoveIndicator(editor, editor.ActiveIndicators[x]);
-            }
+            if (editor == null || editor.ActiveIndicators == null)
+                return;
 
-            // Clear the active indicators list
-            //editor.ActiveIndicators.Clear();
+            lock (editor.IndicatorLock)
+            {
+                var count = editor.ActiveIndicators.Count;
+                Debug.Log($"ClearAllIndicators: Clearing {count} indicators from editor {editor.RelativePath ?? "unknown"}");
+
+                // Iterate backwards to safely remove items during iteration
+                for (var x = editor.ActiveIndicators.Count - 1; x >= 0; x--)
+                {
+                    // Note: RemoveIndicator also locks, but we're already in the lock
+                    // We need to remove the lock from RemoveIndicator's ActiveIndicators.Remove call
+                    int indicatorNumber = 0;
+                    switch (editor.ActiveIndicators[x].Type)
+                    {
+                        case IndicatorType.HIGHLIGHTER:
+                            indicatorNumber = editor.GetHighlighter(editor.ActiveIndicators[x].Color);
+                            break;
+                        case IndicatorType.SQUIGGLE:
+                            indicatorNumber = editor.GetSquiggle(editor.ActiveIndicators[x].Color);
+                            break;
+                        case IndicatorType.TEXTCOLOR:
+                            indicatorNumber = editor.GetTextColor(editor.ActiveIndicators[x].Color);
+                            break;
+                    }
+
+                    editor.SendMessage(SCI_SETINDICATORCURRENT, indicatorNumber, IntPtr.Zero);
+                    editor.SendMessage(SCI_INDICATORCLEARRANGE, editor.ActiveIndicators[x].Start, editor.ActiveIndicators[x].Length);
+                }
+
+                // Clear the active indicators list to ensure state consistency
+                editor.ActiveIndicators.Clear();
+            }
         }
 
         public static void InitAnnotationStyles(ScintillaEditor editor)
@@ -1406,7 +1436,8 @@ namespace AppRefiner
             // Clear all indicators
             ClearAllIndicators(activeEditor);
 
-            ClearAnnotations(activeEditor);
+            // Note: ClearAnnotations is intentionally removed to avoid redundant clearing
+            // Caller should clear annotations before calling ResetStyles if needed
 
             // Recolorize the document
             var docLength = activeEditor.SendMessage(SCI_GETLENGTH, 0, 0);
@@ -1634,6 +1665,8 @@ namespace AppRefiner
 
         public static void AddIndicator(ScintillaEditor editor, Indicator indicator)
         {
+            if (editor == null || editor.ActiveIndicators == null)
+                return;
 
             switch (indicator.Type)
             {
@@ -1651,8 +1684,10 @@ namespace AppRefiner
                     break;
             }
 
-            editor.ActiveIndicators.Add(indicator);
-
+            lock (editor.IndicatorLock)
+            {
+                editor.ActiveIndicators.Add(indicator);
+            }
         }
 
         public static void SetAutoCompleteIcons(ScintillaEditor editor)
