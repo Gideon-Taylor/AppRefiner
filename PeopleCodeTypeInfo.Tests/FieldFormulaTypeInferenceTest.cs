@@ -14,7 +14,7 @@ namespace PeopleCodeTypeInfo.Tests;
 /// </summary>
 public class FieldFormulaTypeInferenceTest : IDisposable
 {
-    private readonly string _testBasePath = @"C:\temp\IH91U019\PeopleCode";
+    private readonly string _testBasePath = @"C:\temp\ALL_COMBINED\PeopleCode";
     private readonly ProgramNode _program;
     private readonly TypeMetadata _programMetadata;
     private readonly TypeInferenceVisitor _visitor;
@@ -24,7 +24,7 @@ public class FieldFormulaTypeInferenceTest : IDisposable
     public FieldFormulaTypeInferenceTest()
     {
         // Read and parse FieldFormula.pcode
-        var sourceFilePath = @"C:\temp\IH91U019\PeopleCode\Records\FUNCLIB_ABS_EA\ABS_TYPE_OPTN\FieldFormula.pcode";
+        var sourceFilePath = @"C:\temp\ALL_COMBINED\PeopleCode\Records\FUNCLIB_ABS_EA\ABS_TYPE_OPTN\FieldFormula.pcode";
         var source = File.ReadAllText(sourceFilePath);
 
         var lexer = new PeopleCodeLexer(source);

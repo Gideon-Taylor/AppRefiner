@@ -74,22 +74,13 @@ public class TestTypeMetadataResolver : ITypeMetadataResolver
         return metadata;
     }
 
-    protected override Types.TypeInfo GetFieldTypeCore(string recordName, string fieldName)
+    protected override Types.TypeInfo GetFieldTypeCore(string fieldName)
     {
-        // Empty record name means runtime-inferred context - return any
-        if (string.IsNullOrEmpty(recordName))
-            return Types.AnyTypeInfo.Instance;
-
-        // For testing purposes, return AnyTypeInfo
         return Types.AnyTypeInfo.Instance;
     }
 
-    protected override Task<Types.TypeInfo> GetFieldTypeCoreAsync(string recordName, string fieldName)
+    protected override Task<Types.TypeInfo> GetFieldTypeCoreAsync(string fieldName)
     {
-        // Empty record name means runtime-inferred context - return any
-        if (string.IsNullOrEmpty(recordName))
-            return Task.FromResult<Types.TypeInfo?>(Types.AnyTypeInfo.Instance);
-
         return Task.FromResult<Types.TypeInfo?>(Types.AnyTypeInfo.Instance);
     }
 }

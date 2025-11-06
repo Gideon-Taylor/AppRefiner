@@ -107,9 +107,9 @@ public abstract class ITypeMetadataResolver
     /// <param name="recordName">The record name (e.g., "AAP_YEAR")</param>
     /// <param name="fieldName">The field name (e.g., "START_DT")</param>
     /// <returns>TypeInfo representing the field's data type, or AnyTypeInfo if unknown</returns>
-    public Types.TypeInfo GetFieldType(string recordName, string fieldName)
+    public Types.TypeInfo GetFieldType(string fieldName)
     {
-        return GetFieldTypeCore(recordName, fieldName);
+        return GetFieldTypeCore(fieldName);
     }
 
     /// <summary>
@@ -118,9 +118,9 @@ public abstract class ITypeMetadataResolver
     /// <param name="recordName">The record name (e.g., "AAP_YEAR")</param>
     /// <param name="fieldName">The field name (e.g., "START_DT")</param>
     /// <returns>Task that resolves to TypeInfo representing the field's data type, or AnyTypeInfo if unknown</returns>
-    public Task<Types.TypeInfo> GetFieldTypeAsync(string recordName, string fieldName)
+    public Task<Types.TypeInfo> GetFieldTypeAsync( string fieldName)
     {
-        return GetFieldTypeCoreAsync(recordName, fieldName);
+        return GetFieldTypeCoreAsync(fieldName);
     }
 
     /// <summary>
@@ -167,7 +167,7 @@ public abstract class ITypeMetadataResolver
     /// <param name="recordName">The record name</param>
     /// <param name="fieldName">The field name</param>
     /// <returns>TypeInfo representing the field's data type</returns>
-    protected abstract Types.TypeInfo GetFieldTypeCore(string recordName, string fieldName);
+    protected abstract Types.TypeInfo GetFieldTypeCore(string fieldName);
 
     /// <summary>
     /// Subclasses implement this method to perform the actual field type resolution asynchronously.
@@ -175,7 +175,7 @@ public abstract class ITypeMetadataResolver
     /// <param name="recordName">The record name</param>
     /// <param name="fieldName">The field name</param>
     /// <returns>Task that resolves to TypeInfo representing the field's data type</returns>
-    protected abstract Task<Types.TypeInfo> GetFieldTypeCoreAsync(string recordName, string fieldName);
+    protected abstract Task<Types.TypeInfo> GetFieldTypeCoreAsync(string fieldName);
 
     public TypeCache Cache
     {
@@ -216,12 +216,8 @@ public class NullTypeMetadataResolver : ITypeMetadataResolver
     /// Always returns AnyTypeInfo.Instance indicating field type is unknown.
     /// Empty record name means runtime-inferred context.
     /// </summary>
-    protected override Types.TypeInfo GetFieldTypeCore(string recordName, string fieldName)
+    protected override Types.TypeInfo GetFieldTypeCore(string fieldName)
     {
-        // Empty record name means runtime-inferred context - return any
-        if (string.IsNullOrEmpty(recordName))
-            return Types.AnyTypeInfo.Instance;
-
         return Types.AnyTypeInfo.Instance;
     }
 
@@ -229,12 +225,9 @@ public class NullTypeMetadataResolver : ITypeMetadataResolver
     /// Always returns AnyTypeInfo.Instance indicating field type is unknown.
     /// Empty record name means runtime-inferred context.
     /// </summary>
-    protected override Task<Types.TypeInfo> GetFieldTypeCoreAsync(string recordName, string fieldName)
+    protected override Task<Types.TypeInfo> GetFieldTypeCoreAsync(string fieldName)
     {
         // Empty record name means runtime-inferred context - return any
-        if (string.IsNullOrEmpty(recordName))
-            return Task.FromResult<Types.TypeInfo>(Types.AnyTypeInfo.Instance);
-
         return Task.FromResult<Types.TypeInfo>(Types.AnyTypeInfo.Instance);
     }
 }

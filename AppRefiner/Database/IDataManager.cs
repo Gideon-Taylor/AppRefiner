@@ -1,5 +1,6 @@
 using AppRefiner.Database.Models;
 using PeopleCodeParser.SelfHosted.Nodes;
+using PeopleCodeTypeInfo.Types;
 using static SqlParser.Ast.DataType;
 
 namespace AppRefiner.Database
@@ -286,6 +287,8 @@ namespace AppRefiner.Database
         /// <returns>List of tuples containing object IDs and values for matching programs</returns>
         List<(PSCLASSID[] ObjectIds, string[] ObjectValues)> GetProgramObjectIds(string[] objectValues);
 
+        PeopleCodeType GetFieldType(string fieldName);
+
 
         public static bool TryMapStringToTargetType(string typeName, out OpenTargetType targetType)
         {
@@ -518,17 +521,6 @@ namespace AppRefiner.Database
             return pairs;
         }
 
-        private static bool IsValidFieldMethod(string method)
-        {
-            var fieldMethods = new HashSet<string>
-            {
-                "FieldChange", "FieldDefault", "FieldEdit",
-                "FieldFormula", "PrePopup", "RowDelete",
-                "RowInit", "RowInsert", "RowSelect",
-                "SaveEdit", "SavePostChange", "SavePreChange",
-                "SearchInit", "SearchSave", "Workflow"
-            };
-            return fieldMethods.Contains(method);
-        }
+
     }
 }

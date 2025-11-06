@@ -2437,7 +2437,8 @@ namespace AppRefiner
 
                         if (typeInfo is AppClassTypeInfo act && program.AppClass != null)
                         {
-                            var activeClassTypeInfo = program.AppClass.GetInferredType() as AppClassTypeInfo;
+                            var currentQualifiedName = DetermineQualifiedName(activeEditor);
+                            var activeClassTypeInfo = AppClassTypeInfo.CreateWithInheritanceChain(currentQualifiedName, activeAppDesigner.TypeResolver, activeAppDesigner.TypeResolver.Cache);
 
                             if (activeClassTypeInfo.InheritanceChain.Any(e => e.QualifiedName == act.QualifiedName))
                             {
@@ -2528,8 +2529,17 @@ namespace AppRefiner
                 // Get type resolver (may be null if no database)
                 var typeResolver = editor.AppDesignerProcess?.TypeResolver;
 
+                string? defaultRecord = null;
+                string? defaultField = null;
+                if (editor.Caption.EndsWith("(Record PeopleCode)"))
+                {
+                    var parts = qualifiedName.Split('.');
+                    defaultRecord = parts[0];
+                    defaultField = parts[1];
+                }
+
                 // Run type inference (works even with null resolver)
-                TypeInferenceVisitor.Run(program, metadata, typeResolver);
+                TypeInferenceVisitor.Run(program, metadata, typeResolver, defaultRecord, defaultField);
             }
             catch (Exception ex)
             {
@@ -3353,28 +3363,28 @@ namespace AppRefiner
         /// </summary>
         private static string DetermineQualifiedName(ScintillaEditor editor)
         {
-                if (editor?.Caption != null && !string.IsNullOrWhiteSpace(editor.Caption))
+            if (editor?.Caption != null && !string.IsNullOrWhiteSpace(editor.Caption))
+            {
+                // Parse caption to get program identifier
+                var openTarget = OpenTargetBuilder.CreateFromCaption(editor.Caption);
+                if (openTarget != null && editor.Caption.Contains("Application Package"))
                 {
-                    // Parse caption to get program identifier
-                    var openTarget = OpenTargetBuilder.CreateFromCaption(editor.Caption);
-                    if (openTarget != null && editor.Caption.Contains("Application Package"))
-                    {
-                        var methodIndex = Array.IndexOf(openTarget.ObjectIDs, PSCLASSID.METHOD);
-                        openTarget.ObjectIDs[methodIndex] = PSCLASSID.NONE;
-                        openTarget.ObjectValues[methodIndex] = null;
-                        return openTarget.Path;
-                    }
-                    else
-                    {
-                        /* probably never what you want but we have to return something? */
-                        return "Program";
-                    }
+                    var methodIndex = Array.IndexOf(openTarget.ObjectIDs, PSCLASSID.METHOD);
+                    openTarget.ObjectIDs[methodIndex] = PSCLASSID.NONE;
+                    openTarget.ObjectValues[methodIndex] = null;
+                    return openTarget.Path;
                 }
                 else
                 {
                     /* probably never what you want but we have to return something? */
-                    return "Program";
+                    return string.Join(".", openTarget.ObjectValues);
                 }
+            }
+            else
+            {
+                /* probably never what you want but we have to return something? */
+                return "Program";
+            }
         }
     
 

@@ -34,7 +34,7 @@ namespace AppRefiner.Database.Models
         }
     }
 
-    public enum PeopleCodeType
+    public enum PeopleCodeProgramType
     {
         ApplicationEngine = 66,
         ApplicationPackage = 104,
@@ -74,7 +74,7 @@ namespace AppRefiner.Database.Models
         /// </summary>
         public List<NameReference> NameReferences { get; private set; }
 
-        public PeopleCodeType Type;
+        public PeopleCodeProgramType Type;
 
         /// <summary>
         /// Creates a new PeopleCode item with the specified object ID/value pairs and program text
@@ -165,20 +165,20 @@ namespace AppRefiner.Database.Models
             if (ObjectIDs[0] == 10)
             {
                 if (ObjectIDs[2] == 12)
-                    Type = PeopleCodeType.Component;
+                    Type = PeopleCodeProgramType.Component;
                 if (ObjectIDs[2] == 1 && ObjectIDs[3] == 12)
-                    Type = PeopleCodeType.ComponentRecord;
+                    Type = PeopleCodeProgramType.ComponentRecord;
                 if (ObjectIDs[2] == 1 && ObjectIDs[3] == 2)
-                    Type = PeopleCodeType.ComponentRecField;
+                    Type = PeopleCodeProgramType.ComponentRecField;
                 return;
             }
             else if (ObjectIDs[0] == 60)
             {
-                Type = ObjectIDs[1] == 12 ? PeopleCodeType.Message : PeopleCodeType.Subscription;
+                Type = ObjectIDs[1] == 12 ? PeopleCodeProgramType.Message : PeopleCodeProgramType.Subscription;
                 return;
             }
 
-            Type = (PeopleCodeType)ObjectIDs[0];
+            Type = (PeopleCodeProgramType)ObjectIDs[0];
         }
 
         /// <summary>
@@ -223,44 +223,44 @@ namespace AppRefiner.Database.Models
 
             switch (Type)
             {
-                case PeopleCodeType.ApplicationEngine:
+                case PeopleCodeProgramType.ApplicationEngine:
                     pathParts.Add(ObjectValues[0]);
                     pathParts.Add($"{ObjectValues[1]}.{ObjectValues[5]}.{ObjectValues[6]}");
                     break;
-                case PeopleCodeType.ApplicationPackage:
+                case PeopleCodeProgramType.ApplicationPackage:
                     pathParts.Add(string.Join(":", ObjectValues.Where((value, index) => ObjectIDs[index] != 12 && ObjectIDs[index] != 0)));
                     break;
-                case PeopleCodeType.ComponentInterface:
+                case PeopleCodeProgramType.ComponentInterface:
                     pathParts.Add(ObjectValues[0]);
                     pathParts.Add($"{ObjectValues[1]}");
                     break;
-                case PeopleCodeType.Component:
+                case PeopleCodeProgramType.Component:
                     pathParts.Add(ObjectValues[0]);
                     pathParts.Add($"{ObjectValues[1]}");
                     break;
-                case PeopleCodeType.ComponentRecField:
+                case PeopleCodeProgramType.ComponentRecField:
                     pathParts.Add(ObjectValues[0]);
                     pathParts.Add($"{ObjectValues[2]}.{ObjectValues[3]}.{ObjectValues[4]}");
                     break;
-                case PeopleCodeType.ComponentRecord:
+                case PeopleCodeProgramType.ComponentRecord:
                     pathParts.Add(ObjectValues[0]);
                     pathParts.Add($"{ObjectValues[2]}.{ObjectValues[3]}");
                     break;
-                case PeopleCodeType.Menu:
+                case PeopleCodeProgramType.Menu:
                     pathParts.Add(ObjectValues[0]);
                     pathParts.Add($"{ObjectValues[1]}.{ObjectValues[2]}.{ObjectValues[3]}");
                     break;
-                case PeopleCodeType.Message:
+                case PeopleCodeProgramType.Message:
                     pathParts.Add(ObjectValues[0]);
                     pathParts.Add($"{ObjectValues[1]}{(ObjectIDs[3] != 0 ? $".{ObjectValues[3]}" : "")}");
                     break;
-                case PeopleCodeType.Page:
+                case PeopleCodeProgramType.Page:
                     pathParts.Add($"{ObjectValues[0]}.{ObjectValues[1]}");
                     break;
-                case PeopleCodeType.RecordField:
+                case PeopleCodeProgramType.RecordField:
                     pathParts.Add($"{ObjectValues[0]}.{ObjectValues[1]}.{ObjectValues[2]}");
                     break;
-                case PeopleCodeType.Subscription:
+                case PeopleCodeProgramType.Subscription:
                     pathParts.Add(ObjectValues[0]);
                     pathParts.Add($"\"{ObjectValues[1]}\"");
                     // Add logic here if needed

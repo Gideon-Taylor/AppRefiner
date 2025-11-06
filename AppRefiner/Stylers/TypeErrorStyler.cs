@@ -1,4 +1,5 @@
 using AppRefiner.Database;
+using DiffPlex.Model;
 using PeopleCodeParser.SelfHosted;
 using PeopleCodeParser.SelfHosted.Nodes;
 using PeopleCodeParser.SelfHosted.Visitors;
@@ -61,8 +62,17 @@ public class TypeErrorStyler : BaseStyler
             // Extract metadata from the program
             var programMetadata = TypeMetadataBuilder.ExtractMetadata(node, qualifiedName);
 
+            string? defaultRecord = null;
+            string? defaultField = null;
+            if (Editor.Caption.EndsWith("(Record PeopleCode)"))
+            {
+                var parts = qualifiedName.Split('.');
+                defaultRecord = parts[0];
+                defaultField = parts[1];
+            }
+
             // Run type inference
-            TypeInferenceVisitor.Run(node, programMetadata, typeResolver);
+            TypeInferenceVisitor.Run(node, programMetadata, typeResolver, defaultRecord, defaultField);
 
             // Run type checking
             TypeCheckerVisitor.Run(node, typeResolver, typeResolver.Cache);
@@ -148,7 +158,7 @@ public class TypeErrorStyler : BaseStyler
                 var openTarget = OpenTargetBuilder.CreateFromCaption(Editor.Caption);
                 if (openTarget != null)
                 {
-                    return openTarget.Path;
+                    return string.Join(".", openTarget.ObjectValues);
                 }
             }
 

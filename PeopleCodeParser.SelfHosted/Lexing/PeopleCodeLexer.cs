@@ -426,6 +426,7 @@ public class PeopleCodeLexer
             '&' => ScanUserVariable(),
             '%' => ScanSystemIdentifier(),
             '#' when IsDirectiveStart() => ScanDirective(),
+            '^' => ScanSingleCharOperator(TokenType.Caret),
 
             // Letters and identifiers  
             _ when char.IsLetter(ch) || ch == '_' || ch == '$' || ch == '#' => ScanIdentifierOrKeyword(),

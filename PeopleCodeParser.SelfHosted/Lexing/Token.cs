@@ -274,6 +274,7 @@ public enum TokenType
     UserVariable,         // &variable
     SystemVariable,       // %USERID, %DATE, etc.
     SystemConstant,       // %THIS, etc.
+    Caret,              // ^, used while editing peoplecode to refer to "current field"
 
     // Special identifiers
     Metadata,             // %METADATA
@@ -319,7 +320,7 @@ public static class TokenTypeExtensions
     {
         return (type >= TokenType.Plus && type <= TokenType.PlusSlash) ||
                type == TokenType.DirectiveAnd ||
-               type == TokenType.DirectiveOr;
+               type == TokenType.DirectiveOr || type == TokenType.Caret;
     }
 
     /// <summary>
@@ -417,6 +418,7 @@ public static class TokenTypeExtensions
             TokenType.At => "@",
             TokenType.Boolean => "boolean",
             TokenType.Break => "break",
+            TokenType.Caret => "^",
             TokenType.Catch => "catch",
             TokenType.Class => "Class",
             TokenType.Component => "Component",

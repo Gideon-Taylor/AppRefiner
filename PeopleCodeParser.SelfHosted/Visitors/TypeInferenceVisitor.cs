@@ -26,16 +26,22 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
     private readonly TypeMetadata _programMetadata;
     private readonly ITypeMetadataResolver _typeResolver;
     private readonly TypeCache _typeCache;
+    private readonly string? _defaultRecordName;
+    private readonly string? _defaultFieldName;
     private TypeInferenceVisitor(
         ProgramNode program,
         TypeMetadata programMetadata,
         ITypeMetadataResolver typeResolver,
-        TypeCache typeCache)
+        TypeCache typeCache,
+        string? defaultRecordName = null,
+        string? defaultFieldName = null)
     {
         _program = program;
         _programMetadata = programMetadata;
         _typeResolver = typeResolver;
         _typeCache = typeCache;
+        _defaultRecordName = defaultRecordName;
+        _defaultFieldName = defaultFieldName;
     }
 
     /// <summary>
@@ -44,9 +50,11 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
     public static TypeInferenceVisitor Run(
         ProgramNode program,
         TypeMetadata programMetadata,
-        ITypeMetadataResolver typeResolver)
+        ITypeMetadataResolver typeResolver,
+        string? defaultRecordName = null,
+        string? defaultFieldName = null)
     {
-        var visitor = new TypeInferenceVisitor(program, programMetadata, typeResolver, typeResolver.Cache);
+        var visitor = new TypeInferenceVisitor(program, programMetadata, typeResolver, typeResolver.Cache, defaultRecordName, defaultFieldName);
 
         // Pre-resolve all declared functions for efficient lookup
         visitor.ProcessDeclaredFunctions();
@@ -136,8 +144,8 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
                 array.ElementType != null
                     ? ConvertTypeNodeToTypeInfo(array.ElementType)
                     : TypeInfo.FromPeopleCodeType(PeopleCodeType.Any)),
-            AppClassTypeNode appClass => CreateAppClassTypeInfo(
-                string.Join(":", appClass.PackagePath.Append(appClass.ClassName))),
+            AppClassTypeNode appClass => AppClassTypeInfo.CreateWithInheritanceChain(
+                string.Join(":", appClass.PackagePath.Append(appClass.ClassName)), _typeResolver, _typeCache),
             _ => UnknownTypeInfo.Instance
         };
     }
@@ -148,101 +156,12 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
     private TypeInfo ConvertTypeWithDimensionalityToTypeInfo(TypeWithDimensionality twd)
     {
         TypeInfo baseType = twd.IsAppClass
-            ? CreateAppClassTypeInfo(twd.AppClassPath!)
+            ? AppClassTypeInfo.CreateWithInheritanceChain(twd.AppClassPath!, _typeResolver, _typeCache)
             : TypeInfo.FromPeopleCodeType(twd.Type);
 
         return twd.IsArray
             ? new ArrayTypeInfo(twd.ArrayDimensionality, baseType)
             : baseType;
-    }
-
-    /// <summary>
-    /// Create an AppClassTypeInfo with complete inheritance chain and builtin base class information if available.
-    /// Traverses the inheritance chain (checking both BaseClassName and InterfaceName) to build the complete hierarchy.
-    /// </summary>
-    private AppClassTypeInfo CreateAppClassTypeInfo(string qualifiedName)
-    {
-        // Build the complete inheritance chain
-        var chain = new List<InheritanceChainEntry>();
-        var currentClassName = qualifiedName;
-        var visited = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { currentClassName };
-
-        // Track builtin base information for backward compatibility
-        bool extendsBuiltinType = false;
-        PeopleCodeType? builtinBaseType = null;
-
-        // Add the starting class to the chain
-        chain.Add(new InheritanceChainEntry(
-            qualifiedName,
-            isBuiltin: !qualifiedName.Contains(':')
-        ));
-
-        while (!string.IsNullOrEmpty(currentClassName))
-        {
-            // Try to get metadata - check cache first, then resolver
-            TypeMetadata? metadata = _typeCache.Get(currentClassName);
-            if (metadata == null && _typeResolver != null)
-            {
-                metadata = _typeResolver.GetTypeMetadata(currentClassName);
-                if (metadata != null)
-                    _typeCache.Set(currentClassName, metadata);
-            }
-
-            if (metadata == null)
-            {
-                break; // Can't resolve metadata
-            }
-
-            // Check if this class directly extends a builtin type
-            if (metadata.IsBaseClassBuiltin && metadata.BuiltinBaseType.HasValue)
-            {
-                extendsBuiltinType = true;
-                builtinBaseType = metadata.BuiltinBaseType.Value;
-
-                // Add builtin to chain
-                var builtinTypeName = metadata.BuiltinBaseType.Value.GetTypeName();
-                chain.Add(new InheritanceChainEntry(
-                    builtinTypeName,
-                    isBuiltin: true
-                ));
-
-                break; // Builtin is terminal
-            }
-
-            // Check for next class in hierarchy - check both BaseClassName and InterfaceName
-            // (PeopleCode allows either extends or implements, but not both, and they're interchangeable)
-            string? nextClassName = null;
-            if (!string.IsNullOrEmpty(metadata.BaseClassName))
-            {
-                nextClassName = metadata.BaseClassName;
-            }
-            else if (!string.IsNullOrEmpty(metadata.InterfaceName))
-            {
-                nextClassName = metadata.InterfaceName;
-            }
-
-            if (nextClassName == null)
-            {
-                break; // No more base classes/interfaces
-            }
-
-            // Circular inheritance detection
-            if (!visited.Add(nextClassName))
-            {
-                break; // Detected circular inheritance
-            }
-
-            // Add base class/interface to chain
-            chain.Add(new InheritanceChainEntry(
-                nextClassName,
-                isBuiltin: !nextClassName.Contains(':')
-            ));
-
-            // Move to the next class in hierarchy
-            currentClassName = nextClassName;
-        }
-
-        return new AppClassTypeInfo(qualifiedName, extendsBuiltinType, builtinBaseType, chain);
     }
 
     /// <summary>
@@ -331,7 +250,7 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
         // The resolver will handle it if it's queried later
         if (typeName.Contains(':'))
         {
-            return CreateAppClassTypeInfo(typeName);
+            return AppClassTypeInfo.CreateWithInheritanceChain(typeName, _typeResolver, _typeCache);
         }
 
         // Unknown type
@@ -789,14 +708,23 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
     {
         base.VisitIdentifier(node);
 
+        if (node.Name.Equals("^"))
+        {
+            if (_defaultRecordName != null && _defaultFieldName != null)
+            {
+                var fieldType = new FieldTypeInfo(_defaultRecordName, _defaultFieldName, _typeResolver);
+                SetInferredType(node, fieldType);
+                return;
+            }
+        }
+
         // Special handling for %This - resolve to current class type
         if (node.Name.Equals("%This", StringComparison.OrdinalIgnoreCase))
         {
             // %This refers to the current instance of the class being analyzed
            if (_programMetadata.Kind == ProgramKind.AppClass || _programMetadata.Kind == ProgramKind.Interface)
             {
-                
-                var thisType = CreateAppClassTypeInfo(_programMetadata.QualifiedName);
+                var thisType = AppClassTypeInfo.CreateWithInheritanceChain(_programMetadata.QualifiedName, _typeResolver, _typeCache);
                 SetInferredType(node, thisType);
             }
             else
@@ -822,7 +750,7 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
                 else
                 {
                     // %Super refers to another AppClass
-                    var superType = CreateAppClassTypeInfo(_programMetadata.BaseClassName);
+                    var superType = AppClassTypeInfo.CreateWithInheritanceChain(_programMetadata.BaseClassName, _typeResolver, _typeCache);
                     SetInferredType(node, superType);
                 }
             }
@@ -885,9 +813,18 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
                 // Example: START_DT (no & or %) → Field type with empty record name
                 else if (!node.Name.StartsWith("&") && !node.Name.StartsWith("%"))
                 {
-                    // Create FieldTypeInfo with empty record name to indicate runtime context dependency
-                    var fieldType = new FieldTypeInfo("", node.Name, _typeResolver);
-                    SetInferredType(node, fieldType);
+                    if (_defaultRecordName != null)
+                    {
+                        /* We're in a record field PPC and have a default record name */
+                        var fieldType = new FieldTypeInfo(_defaultRecordName, node.Name, _typeResolver);
+                        SetInferredType(node, fieldType);
+                    }
+                    else
+                    {
+                        // Create RecordTypeInfo
+                        var recordType = new RecordTypeInfo(node.Name, _typeResolver);
+                        SetInferredType(node, recordType);
+                    }
                 }
                 else
                 {

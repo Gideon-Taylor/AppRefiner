@@ -202,7 +202,7 @@ public abstract class TypeInfo
     /// <summary>
     /// Creates a TypeInfo instance from a PeopleCodeType enum value
     /// </summary>
-    public static TypeInfo FromPeopleCodeType(PeopleCodeType peopleCodeType)
+    public static TypeInfo FromPeopleCodeType(PeopleCodeType peopleCodeType, bool assignable = false)
     {
         return peopleCodeType switch
         {
@@ -771,6 +771,7 @@ public class BuiltinObjectTypeInfo : TypeInfo
         // This allows Field objects to be used where their data type is expected
         if (other is FieldTypeInfo fieldType)
         {
+            if (this.PeopleCodeType == Types.PeopleCodeType.Field) return true;
             var actualFieldType = fieldType.GetFieldDataType();
             return IsAssignableFrom(actualFieldType);
         }
@@ -933,6 +934,102 @@ public class AppClassTypeInfo : TypeInfo
         InheritanceChain = inheritanceChain ?? Array.Empty<InheritanceChainEntry>();
     }
 
+    /// <summary>
+    /// Create an AppClassTypeInfo with complete inheritance chain and builtin base class information if available.
+    /// Traverses the inheritance chain (checking both BaseClassName and InterfaceName) to build the complete hierarchy.
+    /// </summary>
+    /// <param name="qualifiedName">The fully qualified name of the AppClass (e.g., "PKG:MyClass")</param>
+    /// <param name="resolver">Type metadata resolver to resolve base class metadata</param>
+    /// <param name="cache">Type cache for performance optimization</param>
+    /// <returns>AppClassTypeInfo with complete inheritance chain information</returns>
+    public static AppClassTypeInfo CreateWithInheritanceChain(
+        string qualifiedName,
+        Contracts.ITypeMetadataResolver resolver,
+        Inference.TypeCache cache)
+    {
+        // Build the complete inheritance chain
+        var chain = new List<InheritanceChainEntry>();
+        var currentClassName = qualifiedName;
+        var visited = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { currentClassName };
+
+        // Track builtin base information for backward compatibility
+        bool extendsBuiltinType = false;
+        PeopleCodeType? builtinBaseType = null;
+
+        // Add the starting class to the chain
+        chain.Add(new InheritanceChainEntry(
+            qualifiedName,
+            isBuiltin: !qualifiedName.Contains(':')
+        ));
+
+        while (!string.IsNullOrEmpty(currentClassName))
+        {
+            // Try to get metadata - check cache first, then resolver
+            Inference.TypeMetadata? metadata = cache.Get(currentClassName);
+            if (metadata == null && resolver != null)
+            {
+                metadata = resolver.GetTypeMetadata(currentClassName);
+                if (metadata != null)
+                    cache.Set(currentClassName, metadata);
+            }
+
+            if (metadata == null)
+            {
+                break; // Can't resolve metadata
+            }
+
+            // Check if this class directly extends a builtin type
+            if (metadata.IsBaseClassBuiltin && metadata.BuiltinBaseType.HasValue)
+            {
+                extendsBuiltinType = true;
+                builtinBaseType = metadata.BuiltinBaseType.Value;
+
+                // Add builtin to chain
+                var builtinTypeName = metadata.BuiltinBaseType.Value.GetTypeName();
+                chain.Add(new InheritanceChainEntry(
+                    builtinTypeName,
+                    isBuiltin: true
+                ));
+
+                break; // Builtin is terminal
+            }
+
+            // Check for next class in hierarchy - check both BaseClassName and InterfaceName
+            // (PeopleCode allows either extends or implements, but not both, and they're interchangeable)
+            string? nextClassName = null;
+            if (!string.IsNullOrEmpty(metadata.BaseClassName))
+            {
+                nextClassName = metadata.BaseClassName;
+            }
+            else if (!string.IsNullOrEmpty(metadata.InterfaceName))
+            {
+                nextClassName = metadata.InterfaceName;
+            }
+
+            if (nextClassName == null)
+            {
+                break; // No more base classes/interfaces
+            }
+
+            // Circular inheritance detection
+            if (!visited.Add(nextClassName))
+            {
+                break; // Detected circular inheritance
+            }
+
+            // Add base class/interface to chain
+            chain.Add(new InheritanceChainEntry(
+                nextClassName,
+                isBuiltin: !nextClassName.Contains(':')
+            ));
+
+            // Move to the next class in hierarchy
+            currentClassName = nextClassName;
+        }
+
+        return new AppClassTypeInfo(qualifiedName, extendsBuiltinType, builtinBaseType, chain);
+    }
+
     public override bool IsAssignableFrom(TypeInfo other)
     {
         // Null safety - should never happen, but protect against edge cases
@@ -1089,6 +1186,7 @@ public class AnyTypeInfo : TypeInfo
 
     // Singleton instance
     public static readonly AnyTypeInfo Instance = new();
+    public static readonly AnyTypeInfo AssignableInstance = new() { IsAssignable = true };
 
     private AnyTypeInfo() { }
 

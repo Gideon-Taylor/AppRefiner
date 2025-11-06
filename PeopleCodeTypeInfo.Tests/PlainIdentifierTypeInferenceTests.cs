@@ -20,7 +20,7 @@ public class PlainIdentifierTypeInferenceTests
     /// with empty record name to indicate runtime context dependency.
     /// </summary>
     [Fact]
-    public void PlainIdentifier_ShouldBeInferredAsField()
+    public void PlainIdentifier_ShouldBeInferredAsRecord()
     {
         var source = @"
 function test();
@@ -59,16 +59,11 @@ end-function;
         Assert.NotNull(inferredType);
 
         // Should be FieldTypeInfo (not Record, not Unknown)
-        Assert.IsType<FieldTypeInfo>(inferredType);
-        var fieldType = (FieldTypeInfo)inferredType;
+        Assert.IsType<RecordTypeInfo>(inferredType);
+        var recordType = (RecordTypeInfo)inferredType;
 
         // Record name should be empty (runtime context)
-        Assert.Equal("", fieldType.RecordName);
-        Assert.Equal("A", fieldType.FieldName);
-
-        // Field data type should resolve to Any (since record context is unknown)
-        var fieldDataType = fieldType.GetFieldDataType();
-        Assert.IsType<AnyTypeInfo>(fieldDataType);
+        Assert.Equal("A", recordType.RecordName);
     }
 
     /// <summary>
@@ -126,7 +121,7 @@ end-function;
     /// Test: Multiple plain identifiers should all be inferred as Fields
     /// </summary>
     [Fact]
-    public void MultiplePlainIdentifiers_ShouldAllBeFields()
+    public void MultiplePlainIdentifiers_ShouldAllBeRecords()
     {
         var source = @"
 function test();
@@ -165,11 +160,10 @@ end-function;
             Assert.NotNull(identifier);
 
             var inferredType = visitor.GetInferredType(identifier);
-            Assert.IsType<FieldTypeInfo>(inferredType);
+            Assert.IsType<RecordTypeInfo>(inferredType);
 
-            var fieldType = (FieldTypeInfo)inferredType;
-            Assert.Equal("", fieldType.RecordName);
-            Assert.Equal(expectedFieldNames[i], fieldType.FieldName);
+            var recordType = (RecordTypeInfo)inferredType;
+            Assert.Equal(expectedFieldNames[i], recordType.RecordName);
         }
     }
 

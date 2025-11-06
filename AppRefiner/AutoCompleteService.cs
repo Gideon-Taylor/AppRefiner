@@ -13,6 +13,7 @@ using PeopleCodeTypeInfo.Types;     // For TypeInfo and subclasses
 using PeopleCodeTypeInfo.Validation;
 using System.Runtime.InteropServices;
 using static AppRefiner.AppDesignerProcess;
+using static SqlParser.Ast.Statement;
 
 namespace AppRefiner
 {
@@ -429,9 +430,17 @@ namespace AppRefiner
             try
             {
                 List<string> suggestions = new();
+                if (typeInfo is RecordTypeInfo ri && editor.DataManager != null)
+                {
+                    var fields = editor.DataManager.GetRecordFields(ri.RecordName) ?? [];
 
+                    foreach (var field in fields.OrderBy(f => f.FieldName))
+                    {
+                        suggestions.Insert(0, $"{field.FieldName} -> {field.FieldTypeName}?{(int)AutoCompleteIcons.Field}");
+                    }
+                }
                 // Handle builtin object types
-                if (typeInfo is BuiltinObjectTypeInfo builtinType && builtinType.PeopleCodeType.HasValue)
+                else if (typeInfo is BuiltinObjectTypeInfo builtinType && builtinType.PeopleCodeType.HasValue)
                 {
                     string typeName = builtinType.PeopleCodeType.Value.GetTypeName();
                     var objectInfo = PeopleCodeTypeDatabase.GetObject(typeName);
@@ -466,17 +475,23 @@ namespace AppRefiner
                             // Add methods from metadata
                             foreach (var method in metadata.Methods.Values.OrderBy(m => m.Name))
                             {
-                                string returnTypeStr = method.ReturnType != null
+                                if (method.Visibility <= maximumVisibility)
+                                {
+                                    string returnTypeStr = method.ReturnType != null
                                     ? method.ReturnType.ToString()
                                     : "void";
-                                suggestions.Add($"{method.Name}() -> {returnTypeStr}?{(int)AutoCompleteIcons.ClassMethod}");
+                                    suggestions.Add($"{method.Name}() -> {returnTypeStr}?{(int)AutoCompleteIcons.ClassMethod}");
+                                }
                             }
 
                             // Add properties from metadata
                             foreach (var prop in metadata.Properties.OrderBy(p => p.Key))
                             {
-                                string propTypeStr = prop.Value.Type.ToString();
-                                suggestions.Add($"{prop.Key} -> {propTypeStr}?{(int)AutoCompleteIcons.Property}");
+                                if (prop.Value.Visibility <= maximumVisibility)
+                                {
+                                    string propTypeStr = prop.Value.Type.ToString();
+                                    suggestions.Add($"{prop.Key} -> {propTypeStr}?{(int)AutoCompleteIcons.Property}");
+                                }
                             }
                         }
 
@@ -490,17 +505,23 @@ namespace AppRefiner
                                 // Add methods from metadata
                                 foreach (var method in metadata.Methods.Values.OrderBy(m => m.Name))
                                 {
-                                    string returnTypeStr = method.ReturnType != null
+                                    if (method.Visibility <= MemberVisibility.Protected)
+                                    {
+                                        string returnTypeStr = method.ReturnType != null
                                         ? method.ReturnType.ToString()
                                         : "void";
-                                    suggestions.Add($"{method.Name}() -> {returnTypeStr}?{(int)AutoCompleteIcons.ClassMethod}");
+                                        suggestions.Add($"{method.Name}() -> {returnTypeStr}?{(int)AutoCompleteIcons.ClassMethod}");
+                                    }
                                 }
 
                                 // Add properties from metadata
                                 foreach (var prop in metadata.Properties.OrderBy(p => p.Key))
                                 {
-                                    string propTypeStr = prop.Value.Type.ToString();
-                                    suggestions.Add($"{prop.Key} -> {propTypeStr}?{(int)AutoCompleteIcons.Property}");
+                                    if (prop.Value.Visibility <= MemberVisibility.Protected)
+                                    {
+                                        string propTypeStr = prop.Value.Type.ToString();
+                                        suggestions.Add($"{prop.Key} -> {propTypeStr}?{(int)AutoCompleteIcons.Property}");
+                                    }
                                 }
                             }
 
@@ -510,10 +531,19 @@ namespace AppRefiner
                     }
                 }
 
+                /* we are going to do the sorting and not let Scintilla do it
+                 * this is so we can keep Value at the top */
+                suggestions.Sort();
+
+                if (typeInfo is FieldTypeInfo fi)
+                {
+                    suggestions.Insert(0, $"Value -> {fi.GetFieldDataType()}?{(int)AutoCompleteIcons.Property}");
+                }
+
                 if (suggestions.Count > 0)
                 {
                     Debug.Log($"Showing {suggestions.Count} object member suggestions at position {position}");
-                    bool result = ScintillaManager.ShowUserList(editor, UserListType.ObjectMembers, position, suggestions);
+                    bool result = ScintillaManager.ShowUserList(editor, UserListType.ObjectMembers, position, suggestions, customOrder: true);
 
                     if (!result)
                     {
@@ -721,9 +751,17 @@ namespace AppRefiner
 
                 // Get type resolver (may be null if no database)
                 var typeResolver = editor.AppDesignerProcess?.TypeResolver;
+                string? defaultRecord = null;
+                string? defaultField = null;
+                if (editor.Caption.EndsWith("(Record PeopleCode)"))
+                {
+                    var parts = qualifiedName.Split('.');
+                    defaultRecord = parts[0];
+                    defaultField = parts[1];
+                }
 
                 // Run type inference (works even with null resolver)
-                TypeInferenceVisitor.Run(program, metadata, typeResolver);
+                TypeInferenceVisitor.Run(program, metadata, typeResolver, defaultRecord, defaultField);
             }
             catch (Exception ex)
             {

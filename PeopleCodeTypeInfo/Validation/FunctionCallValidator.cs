@@ -202,15 +202,23 @@ public class FunctionCallValidator
 
     /// <summary>
     /// Core implementation for computing allowed next types over a parameter sequence.
+    /// Returns allowed types for any valid prefix of arguments, including cases where
+    /// optional parameters remain or variable parameters can continue.
+    /// Returns empty list only for invalid prefixes (type mismatches).
     /// </summary>
     public List<ParameterTypeInfo> GetAllowedNextTypes(List<Parameter> parameters, TypeInfo[] arguments)
     {
-        var result = Validate(parameters, arguments, "");
-        if (!result.IsValid && result.FailureKind == FailureKind.MissingArgument)
+        var ctx = new MatchContext("", parameters, arguments);
+        var outTypes = new List<ParameterTypeInfo>();
+
+        var isValidPrefix = CollectNextTypesForPrefix(ctx, parameters, 0, 0, outTypes);
+
+        if (!isValidPrefix)
         {
-            return result.ExpectedTypesAtFailure.Distinct().ToList();
+            return new List<ParameterTypeInfo>(); // Invalid prefix - no suggestions
         }
-        return new List<ParameterTypeInfo>();
+
+        return outTypes.Distinct().ToList();
     }
 
     /// <summary>
@@ -533,18 +541,39 @@ public class FunctionCallValidator
     /// <summary>
     /// Adds the FIRST set for a parameter sequence starting at <paramref name="startParamIdx"/>,
     /// including epsilon-closures over optional/zero-min variable parameters.
+    /// For positional argument systems, only adds the first occurrence of each distinct type
+    /// to avoid ambiguity when multiple sequential optional parameters have the same type.
     /// </summary>
     private void AddStartTypesForSequence(List<Parameter> parameters, int startParamIdx, List<ParameterTypeInfo> list)
     {
         int idx = startParamIdx;
+        var seenTypes = new HashSet<string>(); // Track type names we've already added
+
         while (idx < parameters.Count)
         {
             var p = parameters[idx];
+            var beforeCount = list.Count;
             AddStartTypesForParameter(p, list);
+
+            // Track the type names that were just added
+            for (int i = beforeCount; i < list.Count; i++)
+            {
+                var typeName = list[i].TypeName;
+                if (seenTypes.Contains(typeName))
+                {
+                    // Remove duplicate - we already have this type from an earlier optional param
+                    list.RemoveAt(i);
+                    i--;
+                }
+                else
+                {
+                    seenTypes.Add(typeName);
+                }
+            }
 
             if (p is VariableParameter v && v.MinCount == 0)
             {
-                // Optional/zero-minimal variable: we can also start at the next parameter
+                // Optional/zero-minimal variable: continue to next parameter
                 idx++;
                 continue;
             }
@@ -1445,6 +1474,11 @@ public class FunctionCallValidator
             {
                 return "@" + s.Substring(1).ToUpperInvariant();
             }
+            if (s.StartsWith("&"))
+            {
+                return "an assignable " + s.Substring(1);
+            }
+
             return s;
         }
     }

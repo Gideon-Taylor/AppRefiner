@@ -1,4 +1,5 @@
 using AppRefiner.Database.Models;
+using PeopleCodeTypeInfo.Types;
 using System.Data;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -1838,6 +1839,51 @@ WHERE (OBJECTID1 = 60 OR OBJECTID1 = 87)
             }
 
             return results;
+        }
+
+        public PeopleCodeType GetFieldType(string fieldName)
+        {
+            string sql = @"
+                SELECT FIELDTYPE FROM PSDBFIELD WHERE FIELDNAME = @fieldName";
+
+            var results = new List<(PSCLASSID[] ObjectIds, string[] ObjectValues)>();
+
+            try
+            {
+                var parameters = new Dictionary<string, object>
+                {
+                    ["fieldName"] = fieldName
+                };
+
+                DataTable result = _connection.ExecuteQuery(sql, parameters);
+                if (result.Rows.Count == 0)
+                {
+                    return PeopleCodeType.Unknown;
+                }
+
+                var fieldType = (int)result.Rows[0][0];
+
+                return fieldType switch
+                {
+                    0 => PeopleCodeType.String,
+                    1 => PeopleCodeType.String,
+                    2 => PeopleCodeType.Number,
+                    3 => PeopleCodeType.Number,
+                    4 => PeopleCodeType.Date,
+                    5 => PeopleCodeType.Time,
+                    6 => PeopleCodeType.DateTime,
+                    8 => PeopleCodeType.Any,
+                    9 => PeopleCodeType.Any,
+                    _ => PeopleCodeType.Unknown,
+                };
+
+            }
+            catch (Exception ex)
+            {
+                Debug.Log($"Error querying PSDBFIELD for field type: {ex.Message}");
+            }
+
+            return PeopleCodeType.Unknown;
         }
     }
 }

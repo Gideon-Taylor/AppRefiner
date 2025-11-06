@@ -14,7 +14,7 @@ namespace PeopleCodeTypeInfo.Tests;
 /// </summary>
 public class TypeInferenceVisitorTests : IDisposable
 {
-    private readonly string _testBasePath = @"C:\temp\IH91U019\PeopleCode";
+    private readonly string _testBasePath = @"C:\temp\ALL_COMBINED\PeopleCode";
     private readonly ProgramNode _program;
     private readonly TypeMetadata _programMetadata;
     private readonly TypeInferenceVisitor _visitor;
@@ -713,10 +713,9 @@ end-method;
         Console.WriteLine($"DEPOSIT_CONTROL type: {identType?.GetType().Name} - {identType?.Name}");
 
         // Should be FieldTypeInfo (field reference with empty record name)
-        Assert.IsType<FieldTypeInfo>(identType);
-        var fieldType = (FieldTypeInfo)identType;
-        Assert.Equal("", fieldType.RecordName); // Empty record name
-        Assert.Equal("DEPOSIT_CONTROL", fieldType.FieldName);
+        Assert.IsType<RecordTypeInfo>(identType);
+        var fieldType = (RecordTypeInfo)identType;
+        Assert.Equal("DEPOSIT_CONTROL", fieldType.RecordName);
     }
 
     [Fact]

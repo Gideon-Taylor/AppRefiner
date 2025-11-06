@@ -5060,6 +5060,7 @@ public class PeopleCodeParser
                 TokenType.UserVariable => IdentifierType.UserVariable,
                 TokenType.SystemVariable => IdentifierType.SystemVariable,
                 TokenType.SystemConstant => IdentifierType.SystemConstant,
+                TokenType.Caret => IdentifierType.Generic,
                 TokenType.Super => IdentifierType.Super,
                 _ => IdentifierType.Generic
             };

@@ -1,4 +1,4 @@
-using PeopleCodeTypeInfo.Contracts;
+﻿using PeopleCodeTypeInfo.Contracts;
 using PeopleCodeTypeEnum = PeopleCodeTypeInfo.Types.PeopleCodeType;
 
 namespace PeopleCodeTypeInfo.Types;
@@ -8,17 +8,12 @@ namespace PeopleCodeTypeInfo.Types;
 /// enabling resolution of the underlying field data type for type compatibility checking.
 /// This allows implicit .Value access - a Field can be used where its data type is expected.
 /// </summary>
-public class FieldTypeInfo : BuiltinObjectTypeInfo
+public class RecordTypeInfo : BuiltinObjectTypeInfo
 {
     /// <summary>
     /// The record name this field belongs to (e.g., "AAP_YEAR")
     /// </summary>
     public string RecordName { get; }
-
-    /// <summary>
-    /// The field name (e.g., "START_DT")
-    /// </summary>
-    public string FieldName { get; }
 
     private readonly ITypeMetadataResolver? _resolver;
     private TypeInfo? _cachedFieldDataType;
@@ -29,27 +24,11 @@ public class FieldTypeInfo : BuiltinObjectTypeInfo
     /// <param name="recordName">The record name (e.g., "AAP_YEAR")</param>
     /// <param name="fieldName">The field name (e.g., "START_DT")</param>
     /// <param name="resolver">Optional type resolver to get actual field data type</param>
-    public FieldTypeInfo(string recordName, string fieldName, ITypeMetadataResolver? resolver)
-        : base("field", GetFieldEnumValue())
+    public RecordTypeInfo(string recordName, ITypeMetadataResolver? resolver)
+        : base("record", PeopleCodeTypeEnum.Record)
     {
         RecordName = recordName ?? throw new ArgumentNullException(nameof(recordName));
-        FieldName = fieldName ?? throw new ArgumentNullException(nameof(fieldName));
         _resolver = resolver;
-    }
-
-    /// <summary>
-    /// Get the actual data type of this field (e.g., Date, String, Number).
-    /// This represents the type of the field's .Value property.
-    /// </summary>
-    /// <returns>The field's data type, or Any if unknown</returns>
-    public TypeInfo GetFieldDataType()
-    {
-        if (_cachedFieldDataType == null)
-        {
-            _cachedFieldDataType = _resolver?.GetFieldType(FieldName)
-                ?? AnyTypeInfo.Instance;
-        }
-        return _cachedFieldDataType;
     }
 
     /// <summary>
@@ -57,15 +36,7 @@ public class FieldTypeInfo : BuiltinObjectTypeInfo
     /// </summary>
     public override string ToString()
     {
-        return $"field({RecordName}.{FieldName})";
+        return $"record({RecordName})";
     }
 
-    /// <summary>
-    /// Helper to get the Field enum value without naming conflict
-    /// </summary>
-    private static PeopleCodeType? GetFieldEnumValue()
-    {
-        // Use alias to avoid ambiguity with parent class property
-        return PeopleCodeTypeEnum.Field;
-    }
 }
