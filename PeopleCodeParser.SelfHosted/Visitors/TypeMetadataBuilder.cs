@@ -32,7 +32,6 @@ public class TypeMetadataBuilder : AstVisitorBase
     private bool _isBaseClassBuiltin;
     private PeopleCodeType? _builtinBaseType;
     private string? _interfaceName;
-
     /// <summary>
     /// Extracts TypeMetadata from a parsed ProgramNode.
     /// </summary>
@@ -45,7 +44,7 @@ public class TypeMetadataBuilder : AstVisitorBase
     public static TypeMetadata ExtractMetadata(ProgramNode program, string? qualifiedName = null)
     {
         var builder = new TypeMetadataBuilder();
-        program.Accept(builder);
+        
 
         // Use provided qualified name or build from program
         if (!string.IsNullOrEmpty(qualifiedName))
@@ -53,6 +52,8 @@ public class TypeMetadataBuilder : AstVisitorBase
             builder._qualifiedName = qualifiedName;
             builder.ParseQualifiedName(qualifiedName);
         }
+
+        program.Accept(builder);
 
         return new TypeMetadata
         {
@@ -96,7 +97,6 @@ public class TypeMetadataBuilder : AstVisitorBase
         {
             _kind = ProgramKind.AppClass;
             _name = node.AppClass.Name;
-            _qualifiedName = _name; // Will be updated if package is known
             node.AppClass.Accept(this);
 
             /* Check to see if we have an explicit constructor, if not lets add an empty one */
@@ -116,7 +116,6 @@ public class TypeMetadataBuilder : AstVisitorBase
         {
             _kind = ProgramKind.Interface;
             _name = node.Interface.Name;
-            _qualifiedName = _name; // Will be updated if package is known
 
             /* Apparently interfaces can have constructors... you can create MY:Interface() */
             /* Check to see if we have an explicit constructor, if not lets add an empty one */
@@ -135,7 +134,6 @@ public class TypeMetadataBuilder : AstVisitorBase
             // Function library - extract top-level function declarations
             _kind = ProgramKind.FunctionLibrary;
             _name = "FunctionLibrary"; // Generic name for function libraries
-            _qualifiedName = _name;
 
             // Only visit function declarations (not implementations)
             foreach (var function in node.Functions)
@@ -163,6 +161,12 @@ public class TypeMetadataBuilder : AstVisitorBase
         if (node.ImplementedInterface != null)
         {
             _interfaceName = ExtractTypeName(node.ImplementedInterface);
+            // Check if implemented class is a builtin type
+            if (node.ImplementedInterface is BuiltInTypeNode builtInNode)
+            {
+                _isBaseClassBuiltin = true;
+                _builtinBaseType = BuiltinTypeExtensions.FromString(builtInNode.TypeName);
+            }
         }
 
         // Visit all method signatures
@@ -171,9 +175,9 @@ public class TypeMetadataBuilder : AstVisitorBase
         foreach (var method in node.Methods)
         {
             var functionInfo = BuildFunctionInfo(method);
-
             if (method.IsConstructor)
             {
+                functionInfo.ReturnType = new TypeWithDimensionality(PeopleCodeType.AppClass, 0, _qualifiedName);
                 _constructor = functionInfo;
             }
             else
@@ -234,7 +238,16 @@ public class TypeMetadataBuilder : AstVisitorBase
         foreach (var method in node.Methods)
         {
             var functionInfo = BuildFunctionInfo(method);
-            _methods[method.Name] = functionInfo;
+
+            if (method.IsConstructor)
+            {
+                functionInfo.ReturnType = new TypeWithDimensionality(PeopleCodeType.AppClass, 0, _qualifiedName);
+                _constructor = functionInfo;
+            }
+            else
+            {
+                _methods[method.Name] = functionInfo;
+            }
         }
 
         // Visit property signatures

@@ -67,7 +67,7 @@ public class FunctionCallValidator
     /// For functions with multiple overloads, tries each parameter list in order until one validates.
     /// If all overloads fail, aggregates expected types from all overloads at the failure position.
     /// </summary>
-    public ValidationResult Validate(FunctionInfo functionInfo, TypeInfo[] arguments)
+    public ValidationResult Validate(FunctionInfo functionInfo, TypeInfo[] arguments, TypeInfo? objectType = null)
     {
         ValidationResult? bestResult = null;
         var allExpectedTypesByPosition = new Dictionary<int, HashSet<ParameterTypeInfo>>();
@@ -76,7 +76,7 @@ public class FunctionCallValidator
         // Try each parameter list overload
         foreach (var paramList in functionInfo.ParameterOverloads)
         {
-            var result = Validate(paramList, arguments, functionInfo.Name);
+            var result = Validate(paramList, arguments, functionInfo.Name, objectType);
 
             if (result.IsValid)
             {
@@ -135,9 +135,9 @@ public class FunctionCallValidator
     /// - Produces rich diagnostics via MatchContext (furthest failure index, expected types, failure kind).
     /// - If traversal succeeds and we consumed all arguments, returns Success; otherwise builds a focused failure.
     /// </summary>
-    public ValidationResult Validate(List<Parameter> parameters, TypeInfo[] arguments, string functionName = "")
+    public ValidationResult Validate(List<Parameter> parameters, TypeInfo[] arguments, string functionName = "", TypeInfo? objectType = null)
     {
-        var ctx = new MatchContext(functionName, parameters, arguments);
+        var ctx = new MatchContext(functionName, parameters, arguments, objectType);
         var ok = MatchSequence(ctx, parameters, 0, 0, out int consumedIndex);
         if (ok && consumedIndex == arguments.Length)
         {
@@ -180,14 +180,14 @@ public class FunctionCallValidator
     /// - If the existing arguments contain an invalid type mismatch, returns an empty list.
     /// - For overloaded functions, combines allowed next types from all overloads that accept the prefix.
     /// </summary>
-    public List<ParameterTypeInfo> GetAllowedNextTypes(FunctionInfo functionInfo, TypeInfo[] arguments)
+    public List<ParameterTypeInfo> GetAllowedNextTypes(FunctionInfo functionInfo, TypeInfo[] arguments, TypeInfo? objectType = null)
     {
         var allAllowedTypes = new List<ParameterTypeInfo>();
 
         // Try each parameter list overload and collect allowed next types
         foreach (var paramList in functionInfo.ParameterOverloads)
         {
-            var allowedTypes = GetAllowedNextTypes(paramList, arguments);
+            var allowedTypes = GetAllowedNextTypes(paramList, arguments, objectType);
             foreach (var type in allowedTypes)
             {
                 if (!allAllowedTypes.Contains(type))
@@ -206,9 +206,9 @@ public class FunctionCallValidator
     /// optional parameters remain or variable parameters can continue.
     /// Returns empty list only for invalid prefixes (type mismatches).
     /// </summary>
-    public List<ParameterTypeInfo> GetAllowedNextTypes(List<Parameter> parameters, TypeInfo[] arguments)
+    public List<ParameterTypeInfo> GetAllowedNextTypes(List<Parameter> parameters, TypeInfo[] arguments, TypeInfo? objectType = null)
     {
-        var ctx = new MatchContext("", parameters, arguments);
+        var ctx = new MatchContext("", parameters, arguments, objectType);
         var outTypes = new List<ParameterTypeInfo>();
 
         var isValidPrefix = CollectNextTypesForPrefix(ctx, parameters, 0, 0, outTypes);
@@ -409,7 +409,33 @@ public class FunctionCallValidator
                         continue;
                     }
 
-                    TypeInfo expectedTypeInfo = t.IsAppClass ? new AppClassTypeInfo(t.AppClassPath!) : TypeInfo.FromPeopleCodeType(t.Type);
+                    // Resolve polymorphic types if needed
+                    TypeInfo expectedTypeInfo;
+                    if (t.Type.IsPolymorphic())
+                    {
+                        var polymorphicTypeInfo = TypeInfo.FromPeopleCodeType(t.Type);
+                        if (polymorphicTypeInfo is PolymorphicTypeInfo polymorphic)
+                        {
+                            try
+                            {
+                                expectedTypeInfo = polymorphic.Resolve(ctx.ObjectType, ctx.Arguments);
+                            }
+                            catch (InvalidOperationException)
+                            {
+                                // Can't resolve without proper context - fall back to Any
+                                expectedTypeInfo = AnyTypeInfo.Instance;
+                            }
+                        }
+                        else
+                        {
+                            expectedTypeInfo = AnyTypeInfo.Instance;
+                        }
+                    }
+                    else
+                    {
+                        expectedTypeInfo = t.IsAppClass ? new AppClassTypeInfo(t.AppClassPath!) : TypeInfo.FromPeopleCodeType(t.Type);
+                    }
+
                     if (t.IsArray)
                     {
                         expectedTypeInfo = new ArrayTypeInfo(t.ArrayDimensionality, expectedTypeInfo);
@@ -921,9 +947,36 @@ public class FunctionCallValidator
             return false;
         }
 
-        TypeInfo expectedTypeInfo = expected.IsAppClass
-            ? new AppClassTypeInfo(expected.AppClassPath!)
-            : TypeInfo.FromPeopleCodeType(expected.Type);
+        // Resolve polymorphic parameter types if needed
+        TypeInfo expectedTypeInfo;
+        if (expected.Type.IsPolymorphic())
+        {
+            var polymorphicTypeInfo = TypeInfo.FromPeopleCodeType(expected.Type);
+            if (polymorphicTypeInfo is PolymorphicTypeInfo polymorphic)
+            {
+                try
+                {
+                    expectedTypeInfo = polymorphic.Resolve(ctx.ObjectType, ctx.Arguments);
+                }
+                catch (InvalidOperationException)
+                {
+                    // Can't resolve without proper context - fall back to Any
+                    expectedTypeInfo = AnyTypeInfo.Instance;
+                }
+            }
+            else
+            {
+                // Should not happen, but handle gracefully
+                expectedTypeInfo = AnyTypeInfo.Instance;
+            }
+        }
+        else
+        {
+            expectedTypeInfo = expected.IsAppClass
+                ? new AppClassTypeInfo(expected.AppClassPath!)
+                : TypeInfo.FromPeopleCodeType(expected.Type);
+        }
+
         if (expected.IsArray)
         {
             expectedTypeInfo = new ArrayTypeInfo(expected.ArrayDimensionality, expectedTypeInfo);
@@ -1022,7 +1075,34 @@ public class FunctionCallValidator
             }
 
             // Handle regular types (instances, not references)
-            TypeInfo expectedTypeInfo = t.IsAppClass ? new AppClassTypeInfo(t.AppClassPath!) : TypeInfo.FromPeopleCodeType(t.Type);
+            // Resolve polymorphic types if needed
+            TypeInfo expectedTypeInfo;
+            if (t.Type.IsPolymorphic())
+            {
+                var polymorphicTypeInfo = TypeInfo.FromPeopleCodeType(t.Type);
+                if (polymorphicTypeInfo is PolymorphicTypeInfo polymorphic)
+                {
+                    try
+                    {
+                        expectedTypeInfo = polymorphic.Resolve(ctx.ObjectType, ctx.Arguments);
+                    }
+                    catch (InvalidOperationException)
+                    {
+                        // Can't resolve without proper context - fall back to Any
+                        expectedTypeInfo = AnyTypeInfo.Instance;
+                    }
+                }
+                else
+                {
+                    // Should not happen, but handle gracefully
+                    expectedTypeInfo = AnyTypeInfo.Instance;
+                }
+            }
+            else
+            {
+                expectedTypeInfo = t.IsAppClass ? new AppClassTypeInfo(t.AppClassPath!) : TypeInfo.FromPeopleCodeType(t.Type);
+            }
+
             if (t.IsArray)
             {
                 expectedTypeInfo = new ArrayTypeInfo(t.ArrayDimensionality, expectedTypeInfo);
@@ -1180,7 +1260,7 @@ public class FunctionCallValidator
                 }
 
                 var currentArg = ctx.Arguments[idx];
-                if (Accepts(child, currentArg))
+                if (Accepts(ctx, child, currentArg))
                 {
                     idx += 1; // progress one argument
                     continue;
@@ -1204,7 +1284,7 @@ public class FunctionCallValidator
     /// Lightweight predicate to check whether a parameter would accept a given runtime type.
     /// Used for expectation projection; does not mutate traversal state.
     /// </summary>
-    private bool Accepts(Parameter parameter, TypeInfo arg)
+    private bool Accepts(MatchContext ctx, Parameter parameter, TypeInfo arg)
     {
         /* We don't know what type it is. it'll be figured out at runtime */
         if (arg.PeopleCodeType == PeopleCodeType.Unknown)
@@ -1228,9 +1308,35 @@ public class FunctionCallValidator
                         return refType.ReferenceCategory == expected.Type;
                     }
 
-                    TypeInfo expectedTypeInfo = expected.IsAppClass
-                        ? new AppClassTypeInfo(expected.AppClassPath!)
-                        : TypeInfo.FromPeopleCodeType(expected.Type);
+                    // Resolve polymorphic types if needed
+                    TypeInfo expectedTypeInfo;
+                    if (expected.Type.IsPolymorphic())
+                    {
+                        var polymorphicTypeInfo = TypeInfo.FromPeopleCodeType(expected.Type);
+                        if (polymorphicTypeInfo is PolymorphicTypeInfo polymorphic)
+                        {
+                            try
+                            {
+                                expectedTypeInfo = polymorphic.Resolve(ctx.ObjectType, ctx.Arguments);
+                            }
+                            catch (InvalidOperationException)
+                            {
+                                // Can't resolve without proper context - fall back to Any
+                                expectedTypeInfo = AnyTypeInfo.Instance;
+                            }
+                        }
+                        else
+                        {
+                            expectedTypeInfo = AnyTypeInfo.Instance;
+                        }
+                    }
+                    else
+                    {
+                        expectedTypeInfo = expected.IsAppClass
+                            ? new AppClassTypeInfo(expected.AppClassPath!)
+                            : TypeInfo.FromPeopleCodeType(expected.Type);
+                    }
+
                     if (expected.IsArray)
                     {
                         expectedTypeInfo = new ArrayTypeInfo(expected.ArrayDimensionality, expectedTypeInfo);
@@ -1261,7 +1367,33 @@ public class FunctionCallValidator
                             continue;
                         }
 
-                        TypeInfo expectedTypeInfo = t.IsAppClass ? new AppClassTypeInfo(t.AppClassPath!) : TypeInfo.FromPeopleCodeType(t.Type);
+                        // Resolve polymorphic types if needed
+                        TypeInfo expectedTypeInfo;
+                        if (t.Type.IsPolymorphic())
+                        {
+                            var polymorphicTypeInfo = TypeInfo.FromPeopleCodeType(t.Type);
+                            if (polymorphicTypeInfo is PolymorphicTypeInfo polymorphic)
+                            {
+                                try
+                                {
+                                    expectedTypeInfo = polymorphic.Resolve(ctx.ObjectType, ctx.Arguments);
+                                }
+                                catch (InvalidOperationException)
+                                {
+                                    // Can't resolve without proper context - fall back to Any
+                                    expectedTypeInfo = AnyTypeInfo.Instance;
+                                }
+                            }
+                            else
+                            {
+                                expectedTypeInfo = AnyTypeInfo.Instance;
+                            }
+                        }
+                        else
+                        {
+                            expectedTypeInfo = t.IsAppClass ? new AppClassTypeInfo(t.AppClassPath!) : TypeInfo.FromPeopleCodeType(t.Type);
+                        }
+
                         if (t.IsArray)
                         {
                             expectedTypeInfo = new ArrayTypeInfo(t.ArrayDimensionality, expectedTypeInfo);
@@ -1281,9 +1413,9 @@ public class FunctionCallValidator
                     return false;
                 }
             case ParameterGroup group:
-                return group.Parameters.Count > 0 && Accepts(group.Parameters[0], arg);
+                return group.Parameters.Count > 0 && Accepts(ctx, group.Parameters[0], arg);
             case VariableParameter variable:
-                return Accepts(variable.InnerParameter, arg);
+                return Accepts(ctx, variable.InnerParameter, arg);
             case ReferenceParameter reference:
                 {
                     if (arg is not ReferenceTypeInfo refType)
@@ -1331,17 +1463,19 @@ public class FunctionCallValidator
         public string FunctionName { get; }
         public List<Parameter> Parameters { get; }
         public TypeInfo[] Arguments { get; }
+        public TypeInfo? ObjectType { get; }
         public int BestFailureArgIndex { get; private set; } = -1;
         private readonly Dictionary<int, List<ParameterTypeInfo>> _expectedAtIndex = new();
         public List<string> Errors { get; } = new();
         public List<TypeWarning> Warnings { get; } = new();
         public FailureKind FailureKind { get; private set; } = FailureKind.None;
 
-        public MatchContext(string functionName, List<Parameter> parameters, TypeInfo[] arguments)
+        public MatchContext(string functionName, List<Parameter> parameters, TypeInfo[] arguments, TypeInfo? objectType = null)
         {
             FunctionName = functionName;
             Parameters = parameters;
             Arguments = arguments;
+            ObjectType = objectType;
         }
 
         public void RecordError(int argIndex, string message)
@@ -1570,25 +1704,25 @@ public class ValidationResult
 /// </summary>
 public static class DirectParameterNextTypesExtensions
 {
-    public static ValidationResult ValidateDirect(this FunctionInfo functionInfo, TypeInfo[] argumentTypes, ITypeMetadataResolver typeResolver)
+    public static ValidationResult ValidateDirect(this FunctionInfo functionInfo, TypeInfo[] argumentTypes, ITypeMetadataResolver typeResolver, TypeInfo? objectType = null)
     {
         var validator = new FunctionCallValidator(typeResolver);
-        return validator.Validate(functionInfo, argumentTypes);
+        return validator.Validate(functionInfo, argumentTypes, objectType);
     }
 
-    public static bool IsValidCallDirect(this FunctionInfo functionInfo, TypeInfo[] argumentTypes, ITypeMetadataResolver typeResolver)
+    public static bool IsValidCallDirect(this FunctionInfo functionInfo, TypeInfo[] argumentTypes, ITypeMetadataResolver typeResolver, TypeInfo? objectType = null)
     {
-        return functionInfo.ValidateDirect(argumentTypes, typeResolver).IsValid;
+        return functionInfo.ValidateDirect(argumentTypes, typeResolver, objectType).IsValid;
     }
 
     /// <summary>
     /// Convenience extension: returns the allowed next types with parameter names for this function given an argument prefix.
     /// Empty list indicates the prefix is invalid.
     /// </summary>
-    public static List<FunctionCallValidator.ParameterTypeInfo> GetAllowedNextTypes(this FunctionInfo functionInfo, TypeInfo[] argumentTypes, ITypeMetadataResolver typeResolver)
+    public static List<FunctionCallValidator.ParameterTypeInfo> GetAllowedNextTypes(this FunctionInfo functionInfo, TypeInfo[] argumentTypes, ITypeMetadataResolver typeResolver, TypeInfo? objectType = null)
     {
         var validator = new FunctionCallValidator(typeResolver);
-        return validator.GetAllowedNextTypes(functionInfo, argumentTypes);
+        return validator.GetAllowedNextTypes(functionInfo, argumentTypes, objectType);
     }
 }
 

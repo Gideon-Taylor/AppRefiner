@@ -60,7 +60,7 @@ public class PeopleCodeParser
         TokenType.EndGet,
         TokenType.EndSet,
         TokenType.EndClass,
-        TokenType.EndInterface
+        TokenType.EndInterface,
     };
 
     // Store original tokens for directive reprocessing
@@ -802,10 +802,10 @@ public class PeopleCodeParser
             }
             else if (Match(TokenType.Implements))
             {
-                var interfaceType = ParseAppClassPath();
-                if (interfaceType != null)
+                var superclass = ParseSuperclass();
+                if (superclass != null)
                 {
-                    classNode.SetImplementedInterface(interfaceType);
+                    classNode.SetImplementedInterface(superclass);
                 }
                 else
                 {
@@ -997,34 +997,25 @@ public class PeopleCodeParser
         {
             EnterRule("superclass");
 
-            if (Match(TokenType.Array) || Match(TokenType.Exception))
+            // Could be an app class path or simple type
+            // Try to parse as app class path first (with colons)
+            var appClassPath = ParseAppClassPath();
+            if (appClassPath != null)
             {
-                // Special built-in exception type
-                var token = Previous;
-                return new BuiltInTypeNode(PeopleCodeType.Any)
-                {
-                    FirstToken = token,
-                    LastToken = token
-                };
+                return appClassPath;
             }
-            else if (Current.Type.IsIdentifier() || Check(TokenType.GenericId))
-            {
-                // Could be an app class path or simple type
-                // Try to parse as app class path first (with colons)
-                var appClassPath = ParseAppClassPath();
-                if (appClassPath != null)
-                {
-                    return appClassPath;
-                }
 
-                // Fall back to simple type
-                return ParseSimpleType();
-            }
-            else
+            // Fall back to simple type
+            var before = _position;
+            var simpleType = ParseSimpleType();
+            if (simpleType == null)
             {
-                ReportError("Expected superclass type after 'EXTENDS'");
-                return null;
+                _position = before; // Reset position if both attempts failed
+                ReportError("Expected AppClass or Builtin type as extending superclass.");
+                    
             }
+            return simpleType;
+
         }
         catch (Exception ex)
         {
@@ -1058,19 +1049,14 @@ public class PeopleCodeParser
                 return builtInType;
             }
 
-            // Check for generic identifier
-            if (Check(TokenType.GenericId, TokenType.GenericIdLimited))
+            if (Check(TokenType.Array))
             {
-                var typeName = Current.Text;
-                var token = Current;
+                var arrayToken = Current;
                 _position++;
-
-                // Could be a simple class name without package
-                return new AppClassTypeNode(typeName)
-                {
-                    FirstToken = token,
-                    LastToken = token
-                };
+                var arrayType = new ArrayTypeNode(1);
+                arrayType.FirstToken = arrayToken;
+                arrayType.LastToken = arrayToken;
+                return arrayType;
             }
 
             ReportError("Expected type name");
@@ -1087,63 +1073,33 @@ public class PeopleCodeParser
     /// </summary>
     private BuiltInTypeNode? TryParseBuiltInType()
     {
-        // First check for primitive type tokens
-        var builtInType = Current.Type switch
-        {
-            TokenType.Any => PeopleCodeType.Any,
-            TokenType.Boolean => PeopleCodeType.Boolean,
-            TokenType.Date => PeopleCodeType.Date,
-            TokenType.DateTime => PeopleCodeType.DateTime,
-            TokenType.Exception => PeopleCodeType.Any, // Map to Any since Exception type isn't in the authoritative enum
-            TokenType.Float => PeopleCodeType.Number, // Map to number since Float isn't in the authoritative enum
-            TokenType.Integer => PeopleCodeType.Integer,
-            TokenType.Number => PeopleCodeType.Number,
-            TokenType.String => PeopleCodeType.String,
-            TokenType.Time => PeopleCodeType.Time,
-            _ => (PeopleCodeType?)null
-        };
 
-        if (builtInType.HasValue)
+        // Try to parse as a builtin type using the type extension method
+        try
         {
+            var parsedType = BuiltinTypeExtensions.FromString(Current.Text);
+
+            // If we get Unknown back, it's not a builtin type - fall through
+            if (parsedType == PeopleCodeType.Unknown)
+            {
+                return null;
+            }
+
             var token = Current;
             _position++;
-            return new BuiltInTypeNode(builtInType.Value)
+            return new BuiltInTypeNode(parsedType)
             {
                 FirstToken = token,
                 LastToken = token
             };
         }
-
-        // Check if current token is a generic identifier that might be a built-in object type
-        if (Check(TokenType.GenericId, TokenType.GenericIdLimited))
+        catch
         {
-            // Try to parse as a builtin type using the type extension method
-            try
-            {
-                var parsedType = BuiltinTypeExtensions.FromString(Current.Text);
-
-                // If we get Unknown back, it's not a builtin type - fall through
-                if (parsedType == PeopleCodeType.Unknown)
-                {
-                    return null;
-                }
-
-                var token = Current;
-                _position++;
-                return new BuiltInTypeNode(parsedType)
-                {
-                    FirstToken = token,
-                    LastToken = token
-                };
-            }
-            catch
-            {
-                // Not a builtin type, fall through
-            }
+            // Not a builtin type, fall through
         }
-
         return null;
     }
+
 
     /// <summary>
     /// Parse type specifier for type casting: (appClassPath | genericID)
@@ -1535,17 +1491,6 @@ public class PeopleCodeParser
             if (Check(TokenType.Array))
             {
                 return ParseArrayType();
-            }
-
-            // Check for EXCEPTION type
-            if (Match(TokenType.Exception))
-            {
-                var token = Previous;
-                return new BuiltInTypeNode(PeopleCodeType.Any)
-                {
-                    FirstToken = token,
-                    LastToken = token
-                };
             }
 
             // Try to parse as app class path or simple type
@@ -2664,6 +2609,9 @@ public class PeopleCodeParser
                     {
                         // All interface methods are abstract by definition
                         methodNode.IsAbstract = true;
+
+                        methodNode.IsConstructor = methodNode.Name == interfaceNode.Name;
+
                         interfaceNode.AddMethod(methodNode);
                     }
 
@@ -3796,9 +3744,29 @@ public class PeopleCodeParser
         _position++;
 
         ExpressionNode? exitCode = null;
-        if (Peek().Type == TokenType.LeftParen)
+        if (Check(TokenType.LeftParen))
         {
             exitCode = ParseExpression();
+        } else
+        {
+            if (StatementSyncTokens.Contains(Current.Type) || BlockSyncTokens.Contains(Current.Type) || Check(TokenType.Semicolon))
+            {
+                /* leave early since it looks like the next thing isn't an expression? */
+                return new ExitStatementNode(exitCode)
+                {
+                    FirstToken = token,
+                    LastToken = token
+                };
+            }
+
+            var backup = _position;
+
+            exitCode = ParseExpression();
+            if (exitCode == null)
+            {
+                _position = backup;
+                exitCode = null;
+            }
         }
 
         return new ExitStatementNode(exitCode)

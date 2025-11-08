@@ -42,6 +42,45 @@ namespace PeopleCodeParser.SelfHosted.Visitors
             return visitor;
         }
 
+        public override void VisitObjectCreation(ObjectCreationNode node)
+        {
+            base.VisitObjectCreation(node);
+
+            // Get the function info that was stored by TypeInferenceVisitor
+            var functionInfo = node.GetFunctionInfo();
+            if (functionInfo == null)
+            {
+                // Can't validate without function metadata
+                return;
+            }
+
+            // Build arguments array - IsAssignable should already be set during type inference
+            var arguments = new TypeInfo[node.Arguments.Count];
+            for (int i = 0; i < node.Arguments.Count; i++)
+            {
+                var argNode = node.Arguments[i];
+                arguments[i] = argNode.GetInferredType() ?? UnknownTypeInfo.Instance;
+            }
+
+            // Validate the call
+            var validator = new FunctionCallValidator(_typeResolver);
+            var result = validator.Validate(functionInfo, arguments);
+
+            if (!result.IsValid)
+            {
+                // Record the error on the specific argument that failed, if available
+                AstNode errorNode = node; // Default to the whole function call
+
+                if (result.FailedAtArgumentIndex >= 0 && result.FailedAtArgumentIndex < node.Arguments.Count)
+                {
+                    // Record error on the specific argument that failed
+                    errorNode = node.Arguments[result.FailedAtArgumentIndex];
+                }
+
+                RecordTypeError(result.GetDetailedError(), errorNode);
+            }
+        }
+
         public override void VisitAssignment(AssignmentNode node)
         {
             base.VisitAssignment(node);
@@ -188,6 +227,15 @@ namespace PeopleCodeParser.SelfHosted.Visitors
                 return IsAppClassCompatible(targetAppClass, valueAppClass);
             }
 
+            if (targetType is FieldTypeInfo fti)
+            {
+                var fieldDataType = fti.GetFieldDataType();
+                if (fieldDataType != null)
+                {
+                    return AreTypesCompatible(fieldDataType, valueType);
+                }
+            }
+
             return false;
         }
 
@@ -206,45 +254,7 @@ namespace PeopleCodeParser.SelfHosted.Visitors
                 return true;
             }
 
-            // Walk up the inheritance chain of valueType to see if we find targetType
-            var currentClassName = valueType.QualifiedName;
-            var visited = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { currentClassName };
-
-            while (!string.IsNullOrEmpty(currentClassName))
-            {
-                // Try to get metadata for the current class
-                var metadata = _typeResolver.GetTypeMetadata(currentClassName);
-                if (metadata == null)
-                {
-                    // Can't resolve metadata, assume incompatible
-                    break;
-                }
-
-                // Check if this class has a base class
-                if (string.IsNullOrEmpty(metadata.BaseClassName))
-                {
-                    // Reached the top of the hierarchy without finding targetType
-                    break;
-                }
-
-                // Check if the base class matches our target
-                if (metadata.BaseClassName.Equals(targetType.QualifiedName, StringComparison.OrdinalIgnoreCase))
-                {
-                    return true;
-                }
-
-                // Move to the base class for next iteration
-                currentClassName = metadata.BaseClassName;
-
-                // Circular inheritance detection
-                if (!visited.Add(currentClassName))
-                {
-                    // Detected circular inheritance, bail out
-                    break;
-                }
-            }
-
-            return false;
+            return valueType.InheritanceChain.Any(c => c.QualifiedName.Equals(targetType.QualifiedName));
         }
 
         private TypeInfo ConvertTypeNodeToTypeInfo(TypeNode? typeNode)

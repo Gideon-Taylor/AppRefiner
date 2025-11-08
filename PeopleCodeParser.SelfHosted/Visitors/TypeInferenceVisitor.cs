@@ -28,13 +28,15 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
     private readonly TypeCache _typeCache;
     private readonly string? _defaultRecordName;
     private readonly string? _defaultFieldName;
+    private readonly bool _inferAutoDeclaredTypes;
     private TypeInferenceVisitor(
         ProgramNode program,
         TypeMetadata programMetadata,
         ITypeMetadataResolver typeResolver,
         TypeCache typeCache,
         string? defaultRecordName = null,
-        string? defaultFieldName = null)
+        string? defaultFieldName = null,
+        bool inferAutoDeclaredTypes = false)
     {
         _program = program;
         _programMetadata = programMetadata;
@@ -42,6 +44,7 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
         _typeCache = typeCache;
         _defaultRecordName = defaultRecordName;
         _defaultFieldName = defaultFieldName;
+        _inferAutoDeclaredTypes = inferAutoDeclaredTypes;
     }
 
     /// <summary>
@@ -52,7 +55,8 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
         TypeMetadata programMetadata,
         ITypeMetadataResolver typeResolver,
         string? defaultRecordName = null,
-        string? defaultFieldName = null)
+        string? defaultFieldName = null,
+        bool inferAutoDeclaredTypes = false)
     {
         var visitor = new TypeInferenceVisitor(program, programMetadata, typeResolver, typeResolver.Cache, defaultRecordName, defaultFieldName);
 
@@ -653,7 +657,11 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
             var variable = FindVariable(identifier.Name);
 
             // If it's an auto-declared variable with type "any", update its type from the right-hand side
-            if (variable != null && variable.IsAutoDeclared && variable.Type.Equals("any", StringComparison.OrdinalIgnoreCase))
+            if (_inferAutoDeclaredTypes && 
+                variable != null && 
+                variable.IsAutoDeclared && 
+                variable.Type.Equals("any", StringComparison.OrdinalIgnoreCase)
+                )
             {
                 // Infer type from the right-hand side expression
                 var rightHandType = GetInferredType(node.Value);
@@ -1179,7 +1187,9 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
             PeopleCodeType.Time or
             PeopleCodeType.DateTime } ||
         type is AnyTypeInfo ||
-        type is UnknownTypeInfo;
+        type is UnknownTypeInfo || 
+        type is FieldTypeInfo fti && CanPerformArithmetic(fti.GetFieldDataType()) ||
+        type is ReferenceTypeInfo rti && rti.ReferenceCategory == PeopleCodeType.Any;
 
     /// <summary>
     /// Check if a type can be used in logical operations
@@ -1195,20 +1205,34 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
     /// </summary>
     private TypeInfo InferDateTimeArithmetic(BinaryOperationNode node, TypeInfo leftType, TypeInfo rightType)
     {
-        var left = (leftType as PrimitiveTypeInfo)?.PeopleCodeType;
-        var right = (rightType as PrimitiveTypeInfo)?.PeopleCodeType;
-
-        // Handle Any and Unknown types - they can participate in date/time arithmetic
-        if (leftType is AnyTypeInfo || rightType is AnyTypeInfo ||
-            leftType is UnknownTypeInfo || rightType is UnknownTypeInfo)
+        // Unwrap FieldTypeInfo to get the actual field data type
+        var actualLeftType = leftType;
+        var actualRightType = rightType;
+        if (leftType is FieldTypeInfo leftFieldType)
         {
-            // If one side is a known date/time type and the other is any/unknown,
-            // we can't infer a specific result type
-            if (left.HasValue || right.HasValue)
-            {
-                return leftType.GetCommonType(rightType);
-            }
+            actualLeftType = leftFieldType.GetFieldDataType();
         }
+        if (rightType is FieldTypeInfo rightFieldType)
+        {
+            actualRightType = rightFieldType.GetFieldDataType();
+        }
+
+        // Early return for Any/Unknown/Ref-Any types - bypass date/time validation
+        // If any operand is Unknown, return Unknown (Unknown takes precedence)
+        if (actualLeftType is UnknownTypeInfo || actualRightType is UnknownTypeInfo)
+        {
+            return UnknownTypeInfo.Instance;
+        }
+        // If any operand is Any or Ref-Any, return Any
+        if (actualLeftType is AnyTypeInfo || actualRightType is AnyTypeInfo ||
+            (actualLeftType is ReferenceTypeInfo leftRefType && leftRefType.ReferenceCategory == PeopleCodeType.Any) ||
+            (actualRightType is ReferenceTypeInfo rightRefType && rightRefType.ReferenceCategory == PeopleCodeType.Any))
+        {
+            return AnyTypeInfo.Instance;
+        }
+
+        var left = (actualLeftType as PrimitiveTypeInfo)?.PeopleCodeType;
+        var right = (actualRightType as PrimitiveTypeInfo)?.PeopleCodeType;
 
         // Both must be primitive types for date/time arithmetic
         if (!left.HasValue || !right.HasValue)
@@ -1270,6 +1294,19 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
         {
             return PrimitiveTypeInfo.Number;
         }
+
+        // datetime - number => datetime
+        if (isSubtract && left == PeopleCodeType.DateTime && right == PeopleCodeType.Number)
+        {
+            return PrimitiveTypeInfo.DateTime;
+        }
+
+        // datetime + number => datetime
+        if (isAdd && left == PeopleCodeType.DateTime && right == PeopleCodeType.Number)
+        {
+            return PrimitiveTypeInfo.DateTime;
+        }
+
 
         // Invalid combinations - generate type errors
 
@@ -1372,29 +1409,11 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
             return UnknownTypeInfo.Instance;
         }
 
-        // datetime + number is not allowed
-        if (isAdd && left == PeopleCodeType.DateTime && right == PeopleCodeType.Number)
-        {
-            var invalid = new InvalidTypeInfo(
-                "Cannot add number to datetime - this operation is not supported");
-            node.SetTypeError(new TypeError(invalid.Reason, node));
-            return UnknownTypeInfo.Instance;
-        }
-
         // number + datetime is not allowed
         if (isAdd && left == PeopleCodeType.Number && right == PeopleCodeType.DateTime)
         {
             var invalid = new InvalidTypeInfo(
                 "Cannot add datetime to number - this operation is not supported");
-            node.SetTypeError(new TypeError(invalid.Reason, node));
-            return UnknownTypeInfo.Instance;
-        }
-
-        // datetime - number is not allowed
-        if (isSubtract && left == PeopleCodeType.DateTime && right == PeopleCodeType.Number)
-        {
-            var invalid = new InvalidTypeInfo(
-                "Cannot subtract number from datetime - this operation is not supported");
             node.SetTypeError(new TypeError(invalid.Reason, node));
             return UnknownTypeInfo.Instance;
         }

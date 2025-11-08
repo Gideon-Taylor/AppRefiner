@@ -154,12 +154,13 @@ public abstract class TypeInfo
 
         // Standard logic - prioritize more general types
         // If one is Any, return Any
-        if (Kind == TypeKind.Any) return this;
-        if (other.Kind == TypeKind.Any) return other;
+        if (Kind == TypeKind.Any) return AnyTypeInfo.Instance;
+        if (other.Kind == TypeKind.Any) return AnyTypeInfo.Instance;
 
         // Check assignability
         if (IsAssignableFrom(other)) return this;
         if (other.IsAssignableFrom(this)) return other;
+
         return AnyTypeInfo.Instance; // Default to Any if no common type
     }
 
@@ -234,6 +235,7 @@ public abstract class TypeInfo
         {
             // Special types
             Types.PeopleCodeType.Any => AnyTypeInfo.Instance,
+            Types.PeopleCodeType.Binary => AnyTypeInfo.Instance,
             Types.PeopleCodeType.Void => VoidTypeInfo.Instance,
             Types.PeopleCodeType.Unknown => UnknownTypeInfo.Instance,
             Types.PeopleCodeType.Reference => ReferenceTypeInfo.Instance,
@@ -292,6 +294,7 @@ public enum PeopleCodeType : byte
     DateTime = 24,
     Time = 25,
     Boolean = 26,
+    Binary = 27,
 
     // Builtin object types (30-255)
     Aesection = 30,
@@ -417,9 +420,9 @@ public enum PeopleCodeType : byte
     Url = 148,
     Portal = 149,
     Market = 150,
-    Exception = 151,
     
-
+    Hash = 152,
+    Exception = 153,
 }
 
 public static class BuiltinTypeExtensions
@@ -432,8 +435,11 @@ public static class BuiltinTypeExtensions
         return cleanType switch
         {
             "any" => PeopleCodeType.Any,
+            "binary" => PeopleCodeType.Binary,
+            "hash" => PeopleCodeType.Hash,
             "void" => PeopleCodeType.Void,
             "appclass" => PeopleCodeType.AppClass,
+            "exception" => PeopleCodeType.Exception,
             "unknown" => PeopleCodeType.Unknown,
             "reference" => PeopleCodeType.Reference,
             "object" => PeopleCodeType.Object,
@@ -444,6 +450,7 @@ public static class BuiltinTypeExtensions
             "$same_as_first" => PeopleCodeType.SameAsFirstParameter,
             "$array_of_first" => PeopleCodeType.ArrayOfFirstParameter,
             "string" => PeopleCodeType.String,
+            "float" => PeopleCodeType.Number,
             "integer" => PeopleCodeType.Integer,
             "number" => PeopleCodeType.Number,
             "date" => PeopleCodeType.Date,
@@ -873,13 +880,9 @@ public class BuiltinObjectTypeInfo : TypeInfo
         }
 
         // Check if other is an AppClass that extends this builtin type
-        if (other is AppClassTypeInfo appClass && appClass.ExtendsBuiltinType && appClass.BuiltinBaseType.HasValue)
+        if (other is AppClassTypeInfo appClass)
         {
-            // Check if the AppClass's builtin base type matches this type
-            if (PeopleCodeType.HasValue && appClass.BuiltinBaseType.Value == PeopleCodeType.Value)
-            {
-                return true;
-            }
+            return appClass.InheritanceChain.Any(c => c.QualifiedName.Equals(Name, StringComparison.InvariantCultureIgnoreCase));
         }
 
         return false;
@@ -1440,6 +1443,14 @@ public class ReferenceTypeInfo : TypeInfo
     // Singleton instance for generic reference type (backward compatibility)
     public static readonly ReferenceTypeInfo Instance = new(Types.PeopleCodeType.Any, "", "");
 
+    public override string ToString()
+    {
+        if (ReferenceCategory == Types.PeopleCodeType.Any)
+            return "Dynamic Reference";
+
+        return Name;
+    }
+
     public ReferenceTypeInfo(Types.PeopleCodeType category, string referencedName, string fullReference)
     {
         ReferenceCategory = category;
@@ -1456,6 +1467,19 @@ public class ReferenceTypeInfo : TypeInfo
         if (other == null) return false;
 
         if (other.Kind == TypeKind.Any) return true;
+
+        /* Support the ability to do @("RECORD.FIELD") = &value */
+        /* if left side is an @Any() we will always accept any primitive value */
+        if (ReferenceCategory == Types.PeopleCodeType.Any && other is PrimitiveTypeInfo)
+        {
+            return true;
+        }
+
+        /* Support the ability to do @() = RECORD.FIELD */
+        if (ReferenceCategory == Types.PeopleCodeType.Any && other is FieldTypeInfo)
+        {
+            return true;
+        }
 
         // References are only assignable from same category references
         if (other is ReferenceTypeInfo otherRef)
@@ -1484,6 +1508,8 @@ public class ReferenceTypeInfo : TypeInfo
 
             return ReferenceCategory == otherRef.ReferenceCategory;
         }
+
+        /* Support the ability to do @("RECORD.FIELD") = &value */
 
 
         return false;
@@ -1664,6 +1690,9 @@ public abstract class PolymorphicTypeInfo : TypeInfo
         // Null safety - should never happen, but protect against edge cases
         if (other == null) return false;
 
+        var resolvedType = Resolve();
+        return resolvedType.IsAssignableFrom(other);
+
         // Polymorphic types can't be assigned to directly - they need to be resolved first
         return false;
     }
@@ -1735,9 +1764,6 @@ public class ElementOfObjectTypeInfo : PolymorphicTypeInfo
             }
         }
 
-        // For non-array types, we need to check if objectType represents an array via other means
-        // This is a placeholder - in practice, we'd need more context about how arrays are represented
-        // For now, return Any as fallback
         return AnyTypeInfo.Instance;
     }
 
@@ -1769,6 +1795,11 @@ public class SameAsFirstParameterTypeInfo : PolymorphicTypeInfo
     {
         if (parameterTypes == null || parameterTypes.Length == 0)
             throw new InvalidOperationException("SameAsFirstParameter polymorphic type requires parameter context");
+
+        if (parameterTypes[0] is FieldTypeInfo fti)
+        {
+            return fti.GetFieldDataType();
+        }
 
         return parameterTypes[0];
     }

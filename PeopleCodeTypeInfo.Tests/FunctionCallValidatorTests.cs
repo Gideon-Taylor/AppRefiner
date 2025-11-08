@@ -673,4 +673,123 @@ public class FunctionCallValidatorTests
         Assert.Equal(1, result.Warnings[1].ArgumentIndex);
         Assert.Equal("TreeNode", result.Warnings[1].ExpectedType);
     }
+
+    /// <summary>
+    /// Tests that $element polymorphic parameter type is resolved correctly
+    /// when the object type is an array of strings.
+    /// Signature: Find(value: $element) -> number
+    /// Test case: Called on array of string with string argument
+    /// Expected: Valid - $element should resolve to string
+    /// </summary>
+    [Fact]
+    public void ValidateArrayFind_WithElementParameter_ShouldResolveToStringType()
+    {
+        // Build the Find signature with $element parameter
+        var functionInfo = new FunctionInfo
+        {
+            Name = "Find",
+            ReturnType = new TypeWithDimensionality(PeopleCodeType.Number),
+            Parameters = new List<Parameter>
+            {
+                new SingleParameter
+                {
+                    Name = "value",
+                    ParameterType = new TypeWithDimensionality(PeopleCodeType.ElementOfObject)
+                }
+            }
+        };
+
+        // Test case: array of string as object type, string argument
+        var arrayOfString = new ArrayTypeInfo(1, PrimitiveTypeInfo.String);
+        var argumentTypes = new TypeInfo[]
+        {
+            PrimitiveTypeInfo.String
+        };
+
+        var validator = new FunctionCallValidator(NullTypeMetadataResolver.Instance);
+        var result = validator.Validate(functionInfo, argumentTypes, arrayOfString);
+
+        // Assert: Should be valid - $element resolves to string when objectType is array of string
+        Assert.True(result.IsValid, $"Validation failed: {result.GetDetailedError()}");
+    }
+
+    /// <summary>
+    /// Tests that $element polymorphic parameter type fails validation
+    /// when passed the wrong element type.
+    /// Signature: Find(value: $element) -> number
+    /// Test case: Called on array of string with number argument
+    /// Expected: Invalid - $element should resolve to string, but number was provided
+    /// </summary>
+    [Fact]
+    public void ValidateArrayFind_WithWrongElementType_ShouldFail()
+    {
+        // Build the Find signature with $element parameter
+        var functionInfo = new FunctionInfo
+        {
+            Name = "Find",
+            ReturnType = new TypeWithDimensionality(PeopleCodeType.Number),
+            Parameters = new List<Parameter>
+            {
+                new SingleParameter
+                {
+                    Name = "value",
+                    ParameterType = new TypeWithDimensionality(PeopleCodeType.ElementOfObject)
+                }
+            }
+        };
+
+        // Test case: array of string as object type, number argument (wrong!)
+        var arrayOfString = new ArrayTypeInfo(1, PrimitiveTypeInfo.String);
+        var argumentTypes = new TypeInfo[]
+        {
+            PrimitiveTypeInfo.Number
+        };
+
+        var validator = new FunctionCallValidator(NullTypeMetadataResolver.Instance);
+        var result = validator.Validate(functionInfo, argumentTypes, arrayOfString);
+
+        // Assert: Should fail - $element resolves to string, but number was provided
+        Assert.False(result.IsValid);
+        Assert.Equal(FunctionCallValidator.FailureKind.TypeMismatch, result.FailureKind);
+        Assert.Equal(0, result.FailedAtArgumentIndex);
+    }
+
+    /// <summary>
+    /// Tests that $element polymorphic parameter type works with multi-dimensional arrays.
+    /// Signature: Find(value: $element) -> number
+    /// Test case: Called on 2D array of number with 1D array of number argument
+    /// Expected: Valid - $element should resolve to array of number (one dimension less)
+    /// </summary>
+    [Fact]
+    public void ValidateArrayFind_WithMultiDimensionalArray_ShouldReduceDimension()
+    {
+        // Build the Find signature with $element parameter
+        var functionInfo = new FunctionInfo
+        {
+            Name = "Find",
+            ReturnType = new TypeWithDimensionality(PeopleCodeType.Number),
+            Parameters = new List<Parameter>
+            {
+                new SingleParameter
+                {
+                    Name = "value",
+                    ParameterType = new TypeWithDimensionality(PeopleCodeType.ElementOfObject)
+                }
+            }
+        };
+
+        // Test case: 2D array of number as object type, 1D array of number argument
+        var arrayOfArrayOfNumber = new ArrayTypeInfo(2, PrimitiveTypeInfo.Number);
+        var arrayOfNumber = new ArrayTypeInfo(1, PrimitiveTypeInfo.Number);
+        var argumentTypes = new TypeInfo[]
+        {
+            arrayOfNumber
+        };
+
+        var validator = new FunctionCallValidator(NullTypeMetadataResolver.Instance);
+        var result = validator.Validate(functionInfo, argumentTypes, arrayOfArrayOfNumber);
+
+        // Assert: Should be valid - $element resolves to array of number (dimensions reduced by 1)
+        Assert.True(result.IsValid, $"Validation failed: {result.GetDetailedError()}");
+    }
 }

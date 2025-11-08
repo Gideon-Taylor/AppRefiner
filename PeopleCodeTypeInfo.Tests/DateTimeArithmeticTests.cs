@@ -395,7 +395,7 @@ end-function;
     /// Test: datetime + number => ERROR (not allowed)
     /// </summary>
     [Fact]
-    public void DateTimeArithmetic_DateTimePlusNumber_GeneratesTypeError()
+    public void DateTimeArithmetic_DateTimePlusNumber_InfersDateTime()
     {
         var source = @"
 function test();
@@ -412,18 +412,14 @@ end-function;
 
         var inferredType = visitor.GetInferredType(binaryOp);
         Assert.NotNull(inferredType);
-        Assert.Equal(TypeKind.Unknown, inferredType.Kind);
-
-        var errors = program.GetAllTypeErrors().ToList();
-        Assert.Single(errors);
-        Assert.Contains("Cannot add number to datetime", errors[0].Message);
+        Assert.Equal(PeopleCodeType.DateTime, inferredType.PeopleCodeType);
     }
 
     /// <summary>
     /// Test: datetime - number => ERROR (not allowed)
     /// </summary>
     [Fact]
-    public void DateTimeArithmetic_DateTimeMinusNumber_GeneratesTypeError()
+    public void DateTimeArithmetic_DateTimeMinusNumber_InfersDateTime()
     {
         var source = @"
 function test();
@@ -440,11 +436,7 @@ end-function;
 
         var inferredType = visitor.GetInferredType(binaryOp);
         Assert.NotNull(inferredType);
-        Assert.Equal(TypeKind.Unknown, inferredType.Kind);
-
-        var errors = program.GetAllTypeErrors().ToList();
-        Assert.Single(errors);
-        Assert.Contains("Cannot subtract number from datetime", errors[0].Message);
+        Assert.Equal(PeopleCodeType.DateTime, inferredType.PeopleCodeType);
     }
 
     /// <summary>
