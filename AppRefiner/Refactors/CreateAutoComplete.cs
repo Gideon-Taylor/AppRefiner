@@ -1,3 +1,4 @@
+using DiffPlex.Model;
 using PeopleCodeParser.SelfHosted.Nodes;
 using PeopleCodeParser.SelfHosted.Visitors.Models;
 
@@ -126,6 +127,12 @@ namespace AppRefiner.Refactors
 
             // Replace the create() call with the expanded version
             EditText(targetCreateCall.SourceSpan, replacementText, RefactorDescription);
+
+            Task.Delay(250).ContinueWith((_) =>
+            {
+                var newPosition = ScintillaManager.GetCursorPosition(Editor);
+                WinApi.SendMessage(AppDesignerProcess.CallbackWindow, MainForm.AR_FUNCTION_CALL_TIP, newPosition, '(');
+            });
         }
 
         /// <summary>
@@ -133,7 +140,13 @@ namespace AppRefiner.Refactors
         /// </summary>
         private string GenerateCreateReplacement(string classType)
         {
-            return $"create {classType}()";
+            if (Editor.AppDesignerProcess.Settings.AutoPair)
+            {
+                return $"create {classType}()";
+            } else
+            {
+                return $"create {classType}(";
+            }
         }
     }
 }

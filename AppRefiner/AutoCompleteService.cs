@@ -452,7 +452,7 @@ namespace AppRefiner
                         {
                             if (method.Visibility <= maximumVisibility)
                             {
-                                suggestions.Add($"{method.Name}() -> {FormatReturnType(method.ReturnType)} (Method)?{(int)AutoCompleteIcons.ClassMethod}");
+                                suggestions.Add($"{method.Name}() -> {FormatReturnType(method)} (Method)?{(int)AutoCompleteIcons.ClassMethod}");
                             }
                         }
 
@@ -687,8 +687,15 @@ namespace AppRefiner
         /// <summary>
         /// Formats a method return type for display.
         /// </summary>
-        private string FormatReturnType(TypeWithDimensionality returnType)
+        private string FormatReturnType(FunctionInfo functionInfo)
         {
+            if (functionInfo.ReturnUnionTypes != null && functionInfo.ReturnUnionTypes.Count > 0)
+            {
+                return string.Join("|", functionInfo.ReturnUnionTypes);
+            }
+
+            var returnType = functionInfo.ReturnType;
+
             var arrayIndicator = returnType.IsArray ? $"[{returnType.ArrayDimensionality}]" : "";
             return $"{returnType}{arrayIndicator}";
         }

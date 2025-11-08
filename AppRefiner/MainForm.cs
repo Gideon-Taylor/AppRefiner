@@ -276,6 +276,7 @@ namespace AppRefiner
             applicationKeyboardService?.RegisterShortcut("NavigateForward", AppRefiner.ModifierKeys.Alt, Keys.Right, navigateForwardHandler); // Alt + Right
             applicationKeyboardService?.RegisterShortcut("PlaceBookmark", AppRefiner.ModifierKeys.Control, Keys.B, placeBookmarkHandler);
             applicationKeyboardService?.RegisterShortcut("GoToPreviousBookmark", AppRefiner.ModifierKeys.Control, Keys.OemMinus, goToPreviousBookmarkHandler);
+            applicationKeyboardService?.RegisterShortcut("GenerateTypeErrorReport", AppRefiner.ModifierKeys.Control | AppRefiner.ModifierKeys.Alt, Keys.E, GenerateTypeErrorReportCommand); // Ctrl + Alt + E
             
             // Register refactor shortcuts using the RefactorManager
             RegisterRefactorShortcuts();
@@ -962,6 +963,9 @@ namespace AppRefiner
                     }
                     activeEditor.DataManager = manager;
                     btnConnectDB.Text = "Disconnect DB";
+
+                    // Force refresh all editors to allow DB-dependent stylers to run
+                    RefreshAllEditorsAfterDatabaseConnection();
                 }
             }
         }
@@ -1602,6 +1606,9 @@ namespace AppRefiner
                                 {
                                     editor.DataManager = manager;
                                 }
+
+                                // Force refresh all editors to allow DB-dependent stylers to run
+                                RefreshAllEditorsAfterDatabaseConnection();
                             }
                         }
                     }
@@ -1821,6 +1828,14 @@ namespace AppRefiner
                         ScintillaManager.FindPrevious(activeEditor);
                 },
                 () => activeEditor != null && activeEditor.SearchState.HasValidSearch // Enable condition
+            ));
+
+            // Type Error Report command
+            AvailableCommands.Add(new Command(
+                "Generate Type Error Report (Ctrl+Alt+E)",
+                "Generate a type error report at cursor for GitHub submission (editable)",
+                GenerateTypeErrorReportCommand,
+                () => activeEditor != null // Enable condition
             ));
 
             // Bookmark commands
@@ -2162,7 +2177,18 @@ namespace AppRefiner
 
                         if (activeEditor.FunctionCallTipActive && activeEditor.FunctionCallNode != null && activeEditor.FunctionCallTipProgram != null)
                         {
-                            TooltipManager.ShowFunctionCallTooltip(activeEditor, activeEditor.FunctionCallTipProgram, activeEditor.FunctionCallNode);
+                            var currentCursorLine = ScintillaManager.GetLineFromPosition(activeEditor, ScintillaManager.GetCursorPosition(activeEditor));
+                            if (currentCursorLine != activeEditor.FunctionCallNode.SourceSpan.Start.Line)
+                            {
+                                activeEditor.FunctionCallTipActive = false;
+                                activeEditor.FunctionCallNode = null;
+                                activeEditor.FunctionCallStartPosition = 0;
+                                activeEditor.FunctionCallTipProgram = null;
+                            }
+                            else
+                            {
+                                TooltipManager.ShowFunctionCallTooltip(activeEditor, activeEditor.FunctionCallTipProgram, activeEditor.FunctionCallNode);
+                            }
                         }
                         break;
                 }
@@ -2220,7 +2246,10 @@ namespace AppRefiner
                     refactorManager?.ExecuteRefactor(refactor, activeEditor);
 
                     /* Move the cursor backwards 1 */
-                    ScintillaManager.SetCursorPosition(activeEditor, ScintillaManager.GetCursorPosition(activeEditor) - 1);
+                    if (activeEditor.AppDesignerProcess.Settings.AutoPair)
+                    {
+                        ScintillaManager.SetCursorPosition(activeEditor, ScintillaManager.GetCursorPosition(activeEditor) - 1);
+                    }
                 }
             }
             else if (m.Msg == AR_MSGBOX_SHORTHAND)
@@ -2353,7 +2382,7 @@ namespace AppRefiner
                     var calltipLine = activeEditor.FunctionCallNode.SourceSpan.Start.Line;
                     var currentLine = ScintillaManager.GetCurrentLineNumber(activeEditor);
 
-                    if (currentLine != calltipLine)
+                    if (currentLine != calltipLine || cursorPosition < activeEditor.FunctionCallStartPosition)
                     {
                         /* Cancel out the call tip, user went elsewhere */
                         activeEditor.FunctionCallTipActive = false;
@@ -2409,13 +2438,29 @@ namespace AppRefiner
                         RunTypeInference(activeEditor, program);
 
                         var targetFunction = program.FindNodes(n => n is FunctionCallNode && n.SourceSpan.ContainsPosition(position)).FirstOrDefault();
-
+                        var targetCreationNode = program.FindNodes(n => n is ObjectCreationNode && n.SourceSpan.ContainsPosition(position)).FirstOrDefault();
                         if (targetFunction != null && targetFunction is FunctionCallNode fcn)
                         {
                             activeEditor.FunctionCallTipProgram = program;
                             activeEditor.FunctionCallNode = fcn;
                             activeEditor.FunctionCallTipActive = true;
+                            activeEditor.FunctionCallStartPosition = ScintillaManager.GetCursorPosition(activeEditor);
                             TooltipManager.ShowFunctionCallTooltip(activeEditor, program, fcn);
+                        } else if (targetCreationNode != null && targetCreationNode is ObjectCreationNode ocn)
+                        {
+                            FunctionCallNode fakeFCN = new FunctionCallNode(ocn, ocn.Arguments) { SourceSpan = ocn.SourceSpan };
+                            foreach (var attr in ocn.Attributes)
+                            {
+                                fakeFCN.Attributes.Add(attr.Key, attr.Value);
+                            }
+                            fakeFCN.FirstToken = ocn.FirstToken;
+                            fakeFCN.LastToken = ocn.LastToken;
+                            activeEditor.FunctionCallTipProgram = program;
+                            activeEditor.FunctionCallNode = fakeFCN;
+                            activeEditor.FunctionCallTipActive = true;
+                            activeEditor.FunctionCallStartPosition = ScintillaManager.GetCursorPosition(activeEditor);
+
+                            TooltipManager.ShowFunctionCallTooltip(activeEditor, program, fakeFCN);
                         }
 
                     }
@@ -2962,6 +3007,60 @@ namespace AppRefiner
             }
         }
 
+        /// <summary>
+        /// Generates a type error report for GitHub submission
+        /// </summary>
+        public void GenerateTypeErrorReportCommand()
+        {
+            if (activeEditor == null) return;
+
+            try
+            {
+                // Create reporter and generate report
+                var reporter = new TypeErrorReporter();
+                var report = reporter.GenerateReport(activeEditor);
+
+                if (report == null)
+                {
+                    // No errors found at cursor position
+                    var mainHandle = activeEditor.AppDesignerProcess.MainWindowHandle;
+                    var handleWrapperNoError = new WindowWrapper(mainHandle);
+
+                    Task.Delay(100).ContinueWith(_ =>
+                    {
+                        new MessageBoxDialog(
+                            "No type errors found at the current cursor position.",
+                            "No Errors Found",
+                            MessageBoxButtons.OK,
+                            mainHandle).ShowDialog(handleWrapperNoError);
+                    });
+                    return;
+                }
+
+                // Show report dialog
+                var ownerHandle = activeEditor.AppDesignerProcess.MainWindowHandle;
+                var handleWrapper = new WindowWrapper(ownerHandle);
+                var dialog = new TypeErrorReportDialog(report, ownerHandle);
+                dialog.ShowDialog(handleWrapper);
+            }
+            catch (Exception ex)
+            {
+                Debug.LogException(ex, "Error generating type error report");
+
+                var mainHandle = activeEditor.AppDesignerProcess.MainWindowHandle;
+                var handleWrapperError = new WindowWrapper(mainHandle);
+
+                Task.Delay(100).ContinueWith(_ =>
+                {
+                    new MessageBoxDialog(
+                        $"Error generating type error report: {ex.Message}",
+                        "Error",
+                        MessageBoxButtons.OK,
+                        mainHandle).ShowDialog(handleWrapperError);
+                });
+            }
+        }
+
         private void ApplyTemplateCommand()
         {
             /* only work if there's an active editor */
@@ -3262,6 +3361,9 @@ namespace AppRefiner
                     {
                         editor.DataManager = manager;
                     }
+
+                    // Force refresh all editors to allow DB-dependent stylers to run
+                    RefreshAllEditorsAfterDatabaseConnection();
                 }
             }
             else
@@ -3418,8 +3520,56 @@ namespace AppRefiner
                 return "Program";
             }
         }
-    
 
+        /// <summary>
+        /// Refreshes all editors after a database connection is established.
+        /// This allows stylers and checkers that provide enhanced information when a DB connection
+        /// is available to run immediately after the connection is established.
+        /// </summary>
+        private void RefreshAllEditorsAfterDatabaseConnection()
+        {
+            if (activeAppDesigner == null)
+            {
+                Debug.Log("RefreshAllEditorsAfterDatabaseConnection: No active AppDesigner process");
+                return;
+            }
+
+            Debug.Log("RefreshAllEditorsAfterDatabaseConnection: Refreshing all editors with new database connection");
+
+            foreach (var editor in activeAppDesigner.Editors.Values)
+            {
+                try
+                {
+                    if (editor == null || !editor.IsValid() || editor.Type != EditorType.PeopleCode)
+                    {
+                        continue; // Only process valid PeopleCode editors
+                    }
+
+                    Debug.Log($"RefreshAllEditorsAfterDatabaseConnection: Processing editor {editor.RelativePath ?? "unknown"}");
+
+                    // Clear annotations and reset styles before processing
+                    ScintillaManager.ClearAnnotations(editor);
+                    ScintillaManager.ResetStyles(editor);
+
+                    // Apply dark mode if enabled
+                    if (chkAutoDark.Checked)
+                    {
+                        ScintillaManager.SetDarkMode(editor);
+                    }
+
+                    // Process stylers with the new database connection
+                    stylerManager?.ProcessStylersForEditor(editor);
+
+                    Debug.Log($"RefreshAllEditorsAfterDatabaseConnection: Completed processing for {editor.RelativePath ?? "unknown"}");
+                }
+                catch (Exception ex)
+                {
+                    Debug.LogException(ex, $"RefreshAllEditorsAfterDatabaseConnection: Error processing editor {editor?.RelativePath ?? "unknown"}");
+                }
+            }
+
+            Debug.Log("RefreshAllEditorsAfterDatabaseConnection: Completed refresh of all editors");
+        }
 
         /// <summary>
         /// Invalidates type metadata caches when an editor is saved.

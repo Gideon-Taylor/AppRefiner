@@ -36,6 +36,7 @@ typedef uintptr_t uptr_t;
 typedef intptr_t sptr_t;
 
 #include "Sci_Position.h"
+#include <wtypes.h>
 
 typedef sptr_t(*SciFnDirect)(sptr_t ptr, unsigned int iMessage, uptr_t wParam, sptr_t lParam);
 

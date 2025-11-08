@@ -159,6 +159,7 @@ namespace AppRefiner
         private const int SCI_AUTOCACTIVE = 2102;
         private const int SCI_AUTOCGETSEPARATOR = 2107;
         private const int SCI_AUTOCSETFILLUPS = 2112;
+        private const int SCI_AUTOCSTOPS = 2105;
         private const int SCI_AUTOCSETSEPARATOR = 2106;
         private const int SCI_AUTOCGETTYPESEPARATOR = 2285;
         private const int SCI_AUTOCSETTYPESEPARATOR = 2286;
@@ -1728,11 +1729,10 @@ namespace AppRefiner
         {
             if (editor.AutoCompleteFillupsBuffer != IntPtr.Zero) return;
 
-            // Create a string with all options separated by spaces
-            string fillups = "([. )]";
+            string fillups = "\t";
 
             // Get the required buffer size - including null terminator
-            int bufferSize = Encoding.UTF8.GetByteCount(fillups) + 1; // +1 for null terminator
+            int bufferSize = Encoding.UTF8.GetByteCount(fillups) + 3; // +1 for null terminator and " " and null terminator
 
             // Allocate memory in the target process for storing the options
             IntPtr remoteBuffer = WinApi.VirtualAllocEx(
@@ -1751,10 +1751,13 @@ namespace AppRefiner
             // Store the pointer for later cleanup
             editor.AutoCompleteFillupsBuffer = remoteBuffer;
 
+
             // Convert the string to a byte array with a null terminator
             byte[] buffer = new byte[bufferSize];
             Encoding.UTF8.GetBytes(fillups, 0, fillups.Length, buffer, 0);
             buffer[bufferSize - 1] = 0; // Ensure null termination
+
+            buffer[fillups.Length + 1] = (byte)' ';
 
             // Write the options to the remote process memory
             int bytesWritten;
@@ -1773,6 +1776,7 @@ namespace AppRefiner
             }
 
             editor.SendMessage(SCI_AUTOCSETFILLUPS, 0, remoteBuffer);
+            editor.SendMessage(SCI_AUTOCSTOPS, 0, remoteBuffer + fillups.Length + 1);
         }
 
         /// <summary>
@@ -1793,7 +1797,13 @@ namespace AppRefiner
             }
             SetAutoCompleteFillups(editor);
             SetAutoCompletionSeparator(editor, '/');
-            
+            //#define SCI_AUTOCSTOPS 2105
+            //#define SCI_AUTOCSETOPTIONS 2638
+            //#define SCI_AUTOCGETOPTIONS 2639
+
+            var autoCOptions = editor.SendMessage(2639, 0, 0);
+            editor.SendMessage(2638, 0, 1);
+
             var sortOrder = editor.SendMessage(SCI_AUTOCGETORDER, 0, 0);
             editor.SendMessage(SCI_AUTOCSETORDER, customOrder ? SC_ORDER_CUSTOM: SC_ORDER_PERFORMSORT, 0);
             editor.SendMessage(SCI_AUTOCSETIGNORECASE, 1, 0);

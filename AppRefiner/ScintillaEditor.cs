@@ -139,6 +139,7 @@ namespace AppRefiner
         public BetterFindDialog? ActiveSearchDialog;
         public ProgramNode? FunctionCallTipProgram;
         public bool FunctionCallTipActive;
+        public int FunctionCallStartPosition;
         public FunctionCallNode? FunctionCallNode;
 
         protected virtual void OnCaptionChanged(CaptionChangedEventArgs e)
