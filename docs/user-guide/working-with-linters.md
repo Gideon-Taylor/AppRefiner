@@ -27,6 +27,7 @@ AppRefiner includes the following linters:
 | NESTED_IF | Detects deeply nested if/else statements | Warning |
 | OBJECT_TYPE | Detects inappropriate use of Object type | Warning |
 | RECURSIVE_FUNC | Identifies potentially problematic recursive functions | Warning |
+| REUSED_FOR_ITER | Detects the re-use of for loop iterators in nested for loops | Warning |
 | SQL_EXEC_VAR | Checks for proper variable usage in SQLExec statements | Warning |
 | SQL_LONG_STRING | Identifies long SQL strings that should be broken up | Warning |
 | SQL_WILDCARD | Flags use of SELECT * in SQL statements | Warning |
@@ -46,9 +47,9 @@ To enable or configure linters:
 
 You can run linters in several ways:
 
-- **Run All Active Linters**: Press `Ctrl+Alt+L` to run all enabled linters on the current editor content.
+- **Run All Active Linters**: Press `Alt+L` to run all enabled linters on the current editor content.
 - **Command Palette**: Open the command palette (`Ctrl+Shift+P`) and type "lint" to find commands such as:
-    - `Lint: Run All Active Linters`: Same as `Ctrl+Alt+L`.
+    - `Lint: Run All Active Linters`: Same as `Alt+L`.
     - Individual Linter Commands (e.g., `Lint: Detects empty catch blocks`, `Lint: Checks for proper documentation headers`): Each enabled linter has its own command generated, allowing you to run just that specific rule against the current editor content.
     - `Lint: Clear Annotations`: Removes any inline linter annotations from the editor.
     - `Lint: Lint Project`: Runs all active linters on the currently open project in Application Designer (requires database connection).
