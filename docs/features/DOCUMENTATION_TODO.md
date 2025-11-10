@@ -523,7 +523,7 @@ All documentation should adhere to these standards:
 - [x] Code styling additions (All 20 stylers documented with quick fix links)
 - [x] Quick Fixes documentation (6 quick fixes documented)
 
-### High Priority Features Documented: 1/13
+### High Priority Features Documented: 3/13
 - [ ] Smart Open Dialog
 - [ ] Better Find/Replace
 - [ ] Go To Definition
@@ -531,8 +531,8 @@ All documentation should adhere to these standards:
 - [ ] Bookmarks System
 - [ ] Stack Trace Navigator
 - [x] Quick Fixes
-- [ ] Auto-Complete and Auto-Suggest
-- [ ] Type Checking System
+- [x] Auto-Complete and Auto-Suggest
+- [x] Type Checking System
 - [ ] Snapshot/Version History
 - [ ] Outline Dialog
 - [ ] Project Linting
@@ -549,8 +549,10 @@ All documentation should adhere to these standards:
 - [ ] Additional Commands
 - [ ] Additional Dialogs/Advanced Features
 
-### New Documentation Files Created: 1/17
+### New Documentation Files Created: 3/17
 - [x] quick-fixes.md
+- [x] auto-suggest.md
+- [x] type-checking.md
 - See Section 5 for complete list
 
 ---
