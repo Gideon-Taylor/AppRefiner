@@ -201,7 +201,7 @@ namespace AppRefiner
             Editors.Add(hWnd, editor);
 
             ScintillaManager.SetAutoCompleteIcons(editor);
-
+            ScintillaManager.FixEditorTabs(editor);
             if (Settings.OnlyPPC && editor.Type != EditorType.PeopleCode)
             {
                 /* Skip the rest of the editor initialization */
