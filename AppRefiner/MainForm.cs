@@ -1867,7 +1867,12 @@ namespace AppRefiner
                 "Open the debug console to view application logs",
                 () =>
                 {
-                    Debug.ShowDebugDialog(Handle);
+                    this.Invoke(() =>
+                    {
+                        Debug.ShowDebugDialog(Handle);
+                    }
+                    );
+                    
                 }
             ));
 
@@ -1876,7 +1881,11 @@ namespace AppRefiner
                 "Open the indicator debug panel to view applied styler indicators",
                 () =>
                 {
-                    Debug.ShowIndicatorPanel(Handle, this);
+                    this.Invoke(() =>
+                    {
+                        Debug.ShowIndicatorPanel(Handle, this);
+                    }
+                    );
                 },
                 () => activeEditor != null // Enable condition
             ));
