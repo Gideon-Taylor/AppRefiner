@@ -293,6 +293,8 @@ public struct SourceSpan : IEquatable<SourceSpan>
     /// </summary>
     public bool IsValid => Start.ByteIndex >= 0 && End.ByteIndex >= Start.ByteIndex;
 
+    public bool ContainsPositionExclusiveEnd(int position) => position >= Start.ByteIndex && position < End.ByteIndex;
+
     /// <summary>
     /// Checks if this span contains the given position
     /// </summary>

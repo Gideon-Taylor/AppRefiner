@@ -6,6 +6,7 @@ using PeopleCodeParser.SelfHosted.Visitors.Models;
 using PeopleCodeTypeInfo.Database;
 using PeopleCodeTypeInfo.Types;
 using System;
+using System.Diagnostics;
 using System.Reflection;
 using System.Text;
 using static SqlParser.Ast.RoleOption;
@@ -405,7 +406,7 @@ namespace AppRefiner.TooltipProviders
             // Argument count info (helpful for overloaded functions)
             if (functionInfo.MinArgumentCount != functionInfo.MaxArgumentCount)
             {
-                sb.AppendLine($"Min args: {functionInfo.MinArgumentCount}, Max args: {functionInfo.MaxArgumentCount}");
+                sb.AppendLine($"Min args: {functionInfo.MinArgumentCount}");
             }
 
             return sb.ToString();

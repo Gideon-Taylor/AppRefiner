@@ -426,7 +426,17 @@ public class ParameterGroup : Parameter
     public override bool IsOptional => Parameters.All(p => p.IsOptional);
 
     public override int MinArgumentCount => Parameters.Sum(p => p.MinArgumentCount);
-    public override int MaxArgumentCount => Parameters.Sum(p => p.MaxArgumentCount);
+    public override int MaxArgumentCount
+    {
+        get
+        {
+            // If any parameter has unlimited arguments, the group has unlimited arguments
+            if (Parameters.Any(p => p.MaxArgumentCount == int.MaxValue))
+                return int.MaxValue;
+
+            return Parameters.Sum(p => p.MaxArgumentCount);
+        }
+    }
 
     public ParameterGroup() { }
 
@@ -484,8 +494,17 @@ public class VariableParameter : Parameter
     public override bool IsOptional => MinCount == 0;
 
     public override int MinArgumentCount => MinCount * (InnerParameter?.MinArgumentCount ?? 0);
-    public override int MaxArgumentCount =>
-        MaxCount == int.MaxValue ? int.MaxValue : MaxCount * (InnerParameter?.MaxArgumentCount ?? 0);
+    public override int MaxArgumentCount
+    {
+        get
+        {
+            // If unlimited repetitions or inner parameter has unlimited arguments, return int.MaxValue
+            if (MaxCount == int.MaxValue || (InnerParameter?.MaxArgumentCount ?? 0) == int.MaxValue)
+                return int.MaxValue;
+
+            return MaxCount * (InnerParameter?.MaxArgumentCount ?? 0);
+        }
+    }
 
     public bool IsUnlimited => MaxCount == int.MaxValue;
 

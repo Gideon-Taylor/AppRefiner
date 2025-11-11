@@ -124,7 +124,20 @@ public class FunctionInfo
             {
                 if (paramList.Any(p => p.MaxArgumentCount == int.MaxValue))
                     return int.MaxValue;
-                return paramList.Sum(p => p.MaxArgumentCount);
+
+                // Use checked arithmetic to detect overflow
+                try
+                {
+                    checked
+                    {
+                        return paramList.Sum(p => p.MaxArgumentCount);
+                    }
+                }
+                catch (OverflowException)
+                {
+                    // If the sum overflows, treat as unlimited arguments
+                    return int.MaxValue;
+                }
             });
         }
     }
