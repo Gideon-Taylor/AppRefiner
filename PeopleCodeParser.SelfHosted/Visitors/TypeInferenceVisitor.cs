@@ -1019,28 +1019,43 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
                 return;
             }
 
-            // Resolve member as property (not method call)
-            var memberType2 = ResolveMemberAccessReturnType(objectType, node.MemberName, isMethodCall: false, parameterTypes: null);
-            memberType2 = memberType2.WithAssignable(true);
+            /* It seems that if we have a literal record: record(RECORD_NAME) then the next member is always a field. 
+             * You cannot do MY_RECORD.Delete() for example. So we can treat it as a field access.
+             * You cannot do DERIVED_BC_ROW.GetField("F");
+             */
+
+            TypeInfo? rightHandType = null;
+
+            if (objectType is RecordTypeInfo recordType &&
+                recordType.RecordName != null)
+            {
+                rightHandType = new FieldTypeInfo(recordType.RecordName, node.MemberName, _typeResolver).WithAssignable(true);
+            }
+            else
+            {
+                // Resolve member as property (not method call)
+                rightHandType = ResolveMemberAccessReturnType(objectType, node.MemberName, isMethodCall: false, parameterTypes: null);
+                rightHandType = rightHandType.WithAssignable(true);
+            }
 
             // If result is Field type and target is Record, create FieldTypeInfo for implicit .Value support
-            if (memberType2.PeopleCodeType == PeopleCodeType.Field &&
+            if (rightHandType.PeopleCodeType == PeopleCodeType.Field &&
                 objectType.PeopleCodeType == PeopleCodeType.Record &&
                 node.Target is IdentifierNode recordIdentifier)
             {
                 // Create FieldTypeInfo with record/field context for data type resolution
                 // This is assignable (can be used for out parameters)
-                memberType2 = new FieldTypeInfo(recordIdentifier.Name, node.MemberName, _typeResolver).WithAssignable(true);
+                rightHandType = new FieldTypeInfo(recordIdentifier.Name, node.MemberName, _typeResolver).WithAssignable(true);
             }
 
             /* This handles the pattern &rowset.GetRow(1).RECORD_NAME) */
-            if (objectType.PeopleCodeType == PeopleCodeType.Row && memberType2.PeopleCodeType == PeopleCodeType.Record)
+            if (objectType.PeopleCodeType == PeopleCodeType.Row && rightHandType.PeopleCodeType == PeopleCodeType.Record)
             {
                 // Record/Row/Field can be used for out parameters
-                memberType2 = new BuiltinObjectTypeInfo("Record", PeopleCodeType.Record).WithAssignable(true);
+                rightHandType = new BuiltinObjectTypeInfo("Record", PeopleCodeType.Record).WithAssignable(true);
             }
 
-            SetInferredType(node, memberType2);
+            SetInferredType(node, rightHandType);
         }
         else
         {
