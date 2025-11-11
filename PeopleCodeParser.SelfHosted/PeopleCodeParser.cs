@@ -441,6 +441,7 @@ public class PeopleCodeParser
        var program = new ProgramNode();
         _workingProgram = program;
         program.SkippedDirectiveSpans = _skippedDirectiveSpans;
+        program.FirstToken = Current;
         try
         {
             EnterRule("program");
@@ -450,7 +451,6 @@ public class PeopleCodeParser
             CollectComments(program);
 
 
-            var firstToken = Current;
             // Parse imports block first
             while (Check(TokenType.Import) && !IsAtEnd)
             {
@@ -481,7 +481,7 @@ public class PeopleCodeParser
 
                 // Consume any trailing semicolons
                 while (Match(TokenType.Semicolon)) { }
-
+                program.LastToken = Previous;
                 return program;
             }
             else if (Check(TokenType.Interface))
@@ -495,7 +495,7 @@ public class PeopleCodeParser
 
                 // Consume any trailing semicolons
                 while (Match(TokenType.Semicolon)) { }
-
+                program.LastToken = Previous;
                 return program;
             }
 
@@ -548,7 +548,6 @@ public class PeopleCodeParser
 
                 // Parse final optional semicolons before EOF
                 while (Match(TokenType.Semicolon)) { }
-                program.FirstToken = firstToken;
                 program.LastToken = Previous;
                 return program;
             }
@@ -556,6 +555,7 @@ public class PeopleCodeParser
             {
                 ReportError($"Unexpected error in program parsing: {ex.Message}");
                 PanicRecover(StatementSyncTokens.Union(BlockSyncTokens).ToHashSet());
+                program.LastToken = Previous;
                 return program;
             }
         }
