@@ -1,6 +1,8 @@
 using AppRefiner.Database;
 using AppRefiner.Database.Models;
+using PeopleCodeParser.SelfHosted;
 using PeopleCodeParser.SelfHosted.Nodes;
+using PeopleCodeTypeInfo.Types;
 using System.Text;
 
 namespace AppRefiner.TooltipProviders
@@ -45,20 +47,42 @@ namespace AppRefiner.TooltipProviders
         /// </summary>
         public override void VisitMemberAccess(MemberAccessNode node)
         {
-            // Check if this is a RECORD.Name pattern
-            if (IsRecordMemberAccess(node))
+            if (!node.SourceSpan.ContainsPosition(CurrentPosition))
             {
-                ProcessRecordMemberAccess(node);
+                base.VisitMemberAccess(node);
+                return;
             }
 
-            base.VisitMemberAccess(node);
+            // Check if this is a RECORD.Name pattern
+            if (IsRecordMemberAccess(node, out var isTargetHover))
+            {
+                ProcessRecordMemberAccess(node, isTargetHover);
+            }
+
+            
         }
 
         /// <summary>
         /// Checks if a member access expression is a RECORD.Name pattern
         /// </summary>
-        private bool IsRecordMemberAccess(MemberAccessNode node)
+        private bool IsRecordMemberAccess(MemberAccessNode node, out bool isTargetHover)
         {
+            isTargetHover = false;
+            /* Default to type of the member access */
+            var typeInfo = node.GetInferredType();
+
+            /* If they are hovering over the left side, get its type instead */
+            if (node.Target is IdentifierNode && node.Target.SourceSpan.ContainsPosition(CurrentPosition))
+            {
+                isTargetHover = true;
+                typeInfo = node.Target.GetInferredType();
+            }
+
+            if (typeInfo is RecordTypeInfo)
+            {
+                return true;
+            }
+
             // Check if the left side is an identifier with text "RECORD"
             return node.Target is IdentifierNode identifier &&
                    (string.Equals(identifier.Name, "RECORD", StringComparison.OrdinalIgnoreCase) || string.Equals(identifier.Name, "Scroll", StringComparison.OrdinalIgnoreCase));
@@ -67,14 +91,14 @@ namespace AppRefiner.TooltipProviders
         /// <summary>
         /// Processes a Record.Name member access expression to show record field information
         /// </summary>
-        private void ProcessRecordMemberAccess(MemberAccessNode node)
+        private void ProcessRecordMemberAccess(MemberAccessNode node, bool isTargetHover)
         {
             // Make sure we have DataManager available
             if (DataManager == null || !DataManager.IsConnected)
                 return;
 
             // Get the record name from the member name
-            string recordName = node.MemberName.ToUpperInvariant();
+            string recordName = (isTargetHover ? node.Target.ToString() : node.MemberName).ToUpperInvariant();
 
             // Fetch record field info from the database
             List<RecordFieldInfo>? fields = DataManager.GetRecordFields(recordName);

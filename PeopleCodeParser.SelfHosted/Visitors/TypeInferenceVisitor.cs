@@ -1052,7 +1052,8 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
             if (objectType.PeopleCodeType == PeopleCodeType.Row && rightHandType.PeopleCodeType == PeopleCodeType.Record)
             {
                 // Record/Row/Field can be used for out parameters
-                rightHandType = new BuiltinObjectTypeInfo("Record", PeopleCodeType.Record).WithAssignable(true);
+                rightHandType = new RecordTypeInfo(node.MemberName, _typeResolver);
+                //rightHandType = new BuiltinObjectTypeInfo("Record", PeopleCodeType.Record).WithAssignable(true);
             }
 
             SetInferredType(node, rightHandType);
