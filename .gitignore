@@ -404,3 +404,4 @@ FodyWeavers.xsd
 AppRefiner*.zip
 **/CLAUDE.local.md
 .claude/settings.local.json
+/.idea/.idea.App Refiner/.idea
