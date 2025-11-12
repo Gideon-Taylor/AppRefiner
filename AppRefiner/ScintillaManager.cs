@@ -290,6 +290,9 @@ namespace AppRefiner
         private const int ANNOT_STYLE_YELLOW = BASE_ANNOT_STYLE + 1;
         private const int ANNOT_STYLE_RED = BASE_ANNOT_STYLE + 2;
 
+        // Synchronization lock for call tip operations to prevent use-after-free bugs
+        private static readonly object _callTipLock = new object();
+
         public static void FixEditorTabs(ScintillaEditor editor, bool funkySQLTabs = false)
         {
             editor.SendMessage(SCI_SETUSETABS, 0, 0);
@@ -1102,95 +1105,105 @@ namespace AppRefiner
         /// <param name="text">The text to display in the call tip</param>
         internal static void ShowCallTipWithText(ScintillaEditor editor, int position, string text, bool isFunctionSig = false)
         {
-            WinApi.SendMessage(editor.hWnd, SCI_CALLTIPUSESTYLE, 20, 20);
-            if (isFunctionSig)
+            lock (_callTipLock)
             {
-                WinApi.SendMessage(editor.hWnd, SCI_CALLTIPSETBACK, (IntPtr)0xFFFFFF, 0);
-                WinApi.SendMessage(editor.hWnd, 2055, STYLE_CALLTIP, 10);
-                WinApi.SendMessage(editor.hWnd, 2053, STYLE_CALLTIP, 1); /* SCI_STYLESETBOLD */
-                WinApi.SendMessage(editor.hWnd, SCI_CALLTIPSETFORE , (IntPtr)0x3E2F23, 0);
-                WinApi.SendMessage(editor.hWnd, SCI_CALLTIPSETFOREHLT, (IntPtr)0xFF661E, 0);
-            }
-            else
-            {
-                var defaultBack = WinApi.SendMessage(editor.hWnd, SCI_STYLEGETBACK, 31, 0);
-                var defaultFore = WinApi.SendMessage(editor.hWnd, SCI_STYLEGETFORE, 31, 0);
-                WinApi.SendMessage(editor.hWnd, 2055, STYLE_CALLTIP, 10);
-                WinApi.SendMessage(editor.hWnd, 2053, STYLE_CALLTIP, 0); /* SCI_STYLESETBOLD */
-                WinApi.SendMessage(editor.hWnd, SCI_CALLTIPSETFORE, defaultFore, 0);
-                WinApi.SendMessage(editor.hWnd, SCI_CALLTIPSETBACK, defaultBack, 0);
-            }
-            try
-            {
-                // Validate editor
-                if (editor == null || !editor.IsValid())
+                WinApi.SendMessage(editor.hWnd, SCI_CALLTIPUSESTYLE, 20, 20);
+                if (isFunctionSig)
                 {
-                    Debug.LogError("Cannot show call tip - editor is null or invalid");
-                    return;
+                    WinApi.SendMessage(editor.hWnd, SCI_CALLTIPSETBACK, (IntPtr)0xFFFFFF, 0);
+                    WinApi.SendMessage(editor.hWnd, 2055, STYLE_CALLTIP, 10);
+                    WinApi.SendMessage(editor.hWnd, 2053, STYLE_CALLTIP, 1); /* SCI_STYLESETBOLD */
+                    WinApi.SendMessage(editor.hWnd, SCI_CALLTIPSETFORE , (IntPtr)0x3E2F23, 0);
+                    WinApi.SendMessage(editor.hWnd, SCI_CALLTIPSETFOREHLT, (IntPtr)0xFF661E, 0);
                 }
-
-                if (string.IsNullOrEmpty(text))
+                else
                 {
-                    return;
+                    var defaultBack = WinApi.SendMessage(editor.hWnd, SCI_STYLEGETBACK, 31, 0);
+                    var defaultFore = WinApi.SendMessage(editor.hWnd, SCI_STYLEGETFORE, 31, 0);
+                    WinApi.SendMessage(editor.hWnd, 2055, STYLE_CALLTIP, 10);
+                    WinApi.SendMessage(editor.hWnd, 2053, STYLE_CALLTIP, 0); /* SCI_STYLESETBOLD */
+                    WinApi.SendMessage(editor.hWnd, SCI_CALLTIPSETFORE, defaultFore, 0);
+                    WinApi.SendMessage(editor.hWnd, SCI_CALLTIPSETBACK, defaultBack, 0);
                 }
-
-                // Clean up existing call tip if any
-                if (editor.CallTipPointer != IntPtr.Zero)
+                try
                 {
-                    WinApi.VirtualFreeEx(editor.AppDesignerProcess.ProcessHandle, editor.CallTipPointer, 0, WinApi.MEM_RELEASE);
-                    editor.CallTipPointer = IntPtr.Zero;
+                    // Validate editor
+                    if (editor == null || !editor.IsValid())
+                    {
+                        Debug.LogError("Cannot show call tip - editor is null or invalid");
+                        return;
+                    }
+
+                    if (string.IsNullOrEmpty(text))
+                    {
+                        return;
+                    }
+
+                    // Clean up existing call tip if any
+                    if (editor.CallTipPointer != IntPtr.Zero)
+                    {
+                        WinApi.VirtualFreeEx(editor.AppDesignerProcess.ProcessHandle, editor.CallTipPointer, 0, WinApi.MEM_RELEASE);
+                        editor.CallTipPointer = IntPtr.Zero;
+                    }
+
+                    // Allocate memory for new call tip text
+                    var textBytes = Encoding.Default.GetBytes(text);
+                    var neededSize = textBytes.Length + 1;
+                    var remoteBuffer = WinApi.VirtualAllocEx(editor.AppDesignerProcess.ProcessHandle, IntPtr.Zero, (uint)neededSize, WinApi.MEM_COMMIT, WinApi.PAGE_READWRITE);
+
+                    if (remoteBuffer == IntPtr.Zero)
+                    {
+                        Debug.LogError($"Failed to allocate memory for call tip: {Marshal.GetLastWin32Error()}");
+                        return;
+                    }
+
+                    if (!WinApi.WriteProcessMemory(editor.AppDesignerProcess.ProcessHandle, remoteBuffer, textBytes, neededSize, out int bytesWritten) || bytesWritten != neededSize)
+                    {
+                        WinApi.VirtualFreeEx(editor.AppDesignerProcess.ProcessHandle, remoteBuffer, 0, WinApi.MEM_RELEASE);
+                        Debug.LogError($"Failed to write call tip text to memory: {Marshal.GetLastWin32Error()}");
+                        return;
+                    }
+
+                    editor.CallTipPointer = remoteBuffer;
+                    editor.SendMessage(SCI_CALLTIPSHOW, new IntPtr(position), remoteBuffer);
                 }
-
-                // Allocate memory for new call tip text
-                var textBytes = Encoding.Default.GetBytes(text);
-                var neededSize = textBytes.Length + 1;
-                var remoteBuffer = WinApi.VirtualAllocEx(editor.AppDesignerProcess.ProcessHandle, IntPtr.Zero, (uint)neededSize, WinApi.MEM_COMMIT, WinApi.PAGE_READWRITE);
-
-                if (remoteBuffer == IntPtr.Zero)
+                catch (Exception ex)
                 {
-                    Debug.LogError($"Failed to allocate memory for call tip: {Marshal.GetLastWin32Error()}");
-                    return;
+                    Debug.LogError($"Error showing call tip with text: {ex.Message}");
                 }
-
-                if (!WinApi.WriteProcessMemory(editor.AppDesignerProcess.ProcessHandle, remoteBuffer, textBytes, neededSize, out int bytesWritten) || bytesWritten != neededSize)
-                {
-                    WinApi.VirtualFreeEx(editor.AppDesignerProcess.ProcessHandle, remoteBuffer, 0, WinApi.MEM_RELEASE);
-                    Debug.LogError($"Failed to write call tip text to memory: {Marshal.GetLastWin32Error()}");
-                    return;
-                }
-
-                editor.CallTipPointer = remoteBuffer;
-                editor.SendMessage(SCI_CALLTIPSHOW, new IntPtr(position), remoteBuffer);
-            }
-            catch (Exception ex)
-            {
-                Debug.LogError($"Error showing call tip with text: {ex.Message}");
             }
         }
 
         internal static void HideCallTip(ScintillaEditor editor)
         {
-            try
+            lock (_callTipLock)
             {
-                // Validate editor
-                if (editor == null || !editor.IsValid())
+                try
                 {
-                    return;
+                    // Validate editor
+                    if (editor == null || !editor.IsValid())
+                    {
+                        return;
+                    }
+
+                    // Cancel the call tip in Scintilla
+                    editor.SendMessage(SCI_CALLTIPCANCEL, IntPtr.Zero, IntPtr.Zero);
+
+                    // Wait for Scintilla to release its references to the memory buffer
+                    // This prevents use-after-free when Scintilla is still reading the pointer
+                    System.Threading.Thread.Sleep(50);
+
+                    // Free memory used by the call tip
+                    if (editor.CallTipPointer != IntPtr.Zero)
+                    {
+                        WinApi.VirtualFreeEx(editor.AppDesignerProcess.ProcessHandle, editor.CallTipPointer, 0, WinApi.MEM_RELEASE);
+                        editor.CallTipPointer = IntPtr.Zero;
+                    }
                 }
-
-                // Cancel the call tip in Scintilla
-                editor.SendMessage(SCI_CALLTIPCANCEL, IntPtr.Zero, IntPtr.Zero);
-
-                // Free memory used by the call tip
-                if (editor.CallTipPointer != IntPtr.Zero)
+                catch (Exception ex)
                 {
-                    WinApi.VirtualFreeEx(editor.AppDesignerProcess.ProcessHandle, editor.CallTipPointer, 0, WinApi.MEM_RELEASE);
-                    editor.CallTipPointer = IntPtr.Zero;
+                    Debug.LogError($"Error hiding call tip: {ex.Message}");
                 }
-            }
-            catch (Exception ex)
-            {
-                Debug.LogError($"Error hiding call tip: {ex.Message}");
             }
         }
 
@@ -1202,28 +1215,31 @@ namespace AppRefiner
         /// <param name="highlightEnd">Zero-based index of the first character after the highlight</param>
         internal static void SetCallTipHighlight(ScintillaEditor editor, int highlightStart, int highlightEnd)
         {
-            try
+            lock (_callTipLock)
             {
-                // Validate editor
-                if (editor == null || !editor.IsValid())
+                try
                 {
-                    Debug.LogError("Cannot set call tip highlight - editor is null or invalid");
-                    return;
-                }
+                    // Validate editor
+                    if (editor == null || !editor.IsValid())
+                    {
+                        Debug.LogError("Cannot set call tip highlight - editor is null or invalid");
+                        return;
+                    }
 
-                // Validate highlight range
-                if (highlightEnd <= highlightStart)
+                    // Validate highlight range
+                    if (highlightEnd <= highlightStart)
+                    {
+                        Debug.LogError($"Invalid call tip highlight range: end ({highlightEnd}) must be greater than start ({highlightStart})");
+                        return;
+                    }
+
+                    // Set the highlight range in the call tip
+                    editor.SendMessage(SCI_CALLTIPSETHLT, highlightStart, highlightEnd);
+                }
+                catch (Exception ex)
                 {
-                    Debug.LogError($"Invalid call tip highlight range: end ({highlightEnd}) must be greater than start ({highlightStart})");
-                    return;
+                    Debug.LogError($"Error setting call tip highlight: {ex.Message}");
                 }
-
-                // Set the highlight range in the call tip
-                editor.SendMessage(SCI_CALLTIPSETHLT, highlightStart, highlightEnd);
-            }
-            catch (Exception ex)
-            {
-                Debug.LogError($"Error setting call tip highlight: {ex.Message}");
             }
         }
 
