@@ -43,7 +43,7 @@ namespace AppRefiner
 
     public class AppDesignerProcess
     {
-        public static IntPtr CallbackWindow; 
+        public static IntPtr CallbackWindow;
         public Dictionary<IntPtr, ScintillaEditor> Editors = [];
         private (IntPtr address, uint size) processBuffer = (0, 0);
         public IntPtr ProcessBuffer { get { return processBuffer.address; } }
@@ -54,6 +54,11 @@ namespace AppRefiner
         public uint MainThreadId { get; private set; }
         public IntPtr MainWindowHandle { get; set; }
         public Dictionary<string, IntPtr> iconBuffers = new();
+
+        /// <summary>
+        /// Memory manager for allocating and managing buffers in the Application Designer process
+        /// </summary>
+        public MemoryManager MemoryManager { get; private set; }
         /// <summary>
         /// Handle to the Results ListView for this Application Designer process, if known.
         /// </summary>
@@ -127,6 +132,9 @@ namespace AppRefiner
             ResultsListView = resultsListView;
             Settings = settings;
             ProcessHandle = WinApi.OpenProcess(WinApi.PROCESS_VM_READ | WinApi.PROCESS_VM_WRITE | WinApi.PROCESS_VM_OPERATION, false, ProcessId);
+
+            // Initialize memory manager for this process
+            MemoryManager = new MemoryManager(this);
 
             // Check if any module in the process has the name "Lexilla.dll"
             Process process = Process.GetProcessById((int)ProcessId);
@@ -258,6 +266,10 @@ namespace AppRefiner
             {
                 editor.Cleanup();
             }
+
+            // Clean up all managed memory buffers
+            MemoryManager?.Cleanup();
+
             WinApi.CloseHandle(ProcessHandle);
         }
 

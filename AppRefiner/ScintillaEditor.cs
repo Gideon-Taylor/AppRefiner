@@ -222,13 +222,9 @@ namespace AppRefiner
 
         public EditorType Type;
 
-        public IntPtr CallTipPointer = IntPtr.Zero;
-        public IntPtr AutoCompletionPointer = IntPtr.Zero;
-        public IntPtr UserListPointer = IntPtr.Zero;
+        // Note: All memory buffer tracking has been removed and is now managed by MemoryManager
+        // at the process level. Shared buffers are automatically cleaned up when the process exits.
 
-        public Dictionary<string, IntPtr> AnnotationPointers = new();
-        public List<IntPtr> PropertyBuffers = new();
-        public IntPtr AutoCompleteFillupsBuffer = IntPtr.Zero;
         // Self-hosted parser cached fields
         private int selfHostedContentHash;
         private ProgramNode? selfHostedParsedProgram;
@@ -788,40 +784,10 @@ namespace AppRefiner
 
         public void Cleanup()
         {
-            var hProc = AppDesignerProcess.ProcessHandle;
+            // Memory cleanup is now handled by MemoryManager at the process level
+            // No need to manually free individual buffers - all shared buffers are managed centrally
 
-            /* Free all annotation strings */
-            foreach (var v in AnnotationPointers.Values)
-            {
-                if (v != IntPtr.Zero)
-                {
-                    WinApi.VirtualFreeEx(hProc, v, 0, WinApi.MEM_RELEASE);
-                }
-            }
-            foreach (var v in PropertyBuffers)
-            {
-                if (v != IntPtr.Zero)
-                {
-                    WinApi.VirtualFreeEx(hProc, v, 0, WinApi.MEM_RELEASE);
-                }
-            }
-
-            // Free autocompletion pointer if exists
-            if (AutoCompletionPointer != IntPtr.Zero)
-            {
-                WinApi.VirtualFreeEx(hProc, AutoCompletionPointer, 0, WinApi.MEM_RELEASE);
-                AutoCompletionPointer = IntPtr.Zero;
-            }
-
-            // Free user list pointer if exists
-            if (UserListPointer != IntPtr.Zero)
-            {
-                WinApi.VirtualFreeEx(hProc, UserListPointer, 0, WinApi.MEM_RELEASE);
-                UserListPointer = IntPtr.Zero;
-            }
-
-            AnnotationPointers.Clear();
-            PropertyBuffers.Clear();
+            // Just clear local cached state
             Caption = null;
             ContentString = null;
         }

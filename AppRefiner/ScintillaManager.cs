@@ -522,46 +522,39 @@ namespace AppRefiner
 
         public static void SetWindowProperty(ScintillaEditor editor, string propName, string propValue)
         {
-            // Calculate combined buffer size: property name + null terminator + property value + null terminator.
-            int combinedSize = propName.Length + 1 + propValue.Length + 1;
-            byte[] combinedBuffer = new byte[combinedSize];
+            // Use shared properties buffer to avoid accumulating allocations
+            var propertiesBuffer = editor.AppDesignerProcess.MemoryManager.GetOrCreateBuffer("properties", 1024);
 
-            // Encode the strings as ASCII.
-            Encoding ascii = Encoding.ASCII;
-            byte[] nameBytes = ascii.GetBytes(propName);
-            byte[] valueBytes = ascii.GetBytes(propValue);
+            // Reset buffer for writing both strings sequentially
+            propertiesBuffer.Reset();
 
-            // Copy the property name and add a null terminator.
-            Array.Copy(nameBytes, 0, combinedBuffer, 0, nameBytes.Length);
-            combinedBuffer[nameBytes.Length] = 0;
+            // Write property name and value as sequential ASCII strings
+            var addresses = propertiesBuffer.WriteStrings(new[] { propName, propValue }, Encoding.ASCII);
 
-            // Copy the property value immediately after (including its null terminator).
-            Array.Copy(valueBytes, 0, combinedBuffer, nameBytes.Length + 1, valueBytes.Length);
-            combinedBuffer[combinedSize - 1] = 0; // Ensure last byte is null.
-
-            // Allocate a single remote memory block for the combined buffer.
-            IntPtr remoteCombined = WinApi.VirtualAllocEx(editor.AppDesignerProcess.ProcessHandle, IntPtr.Zero, (uint)combinedSize, WinApi.MEM_COMMIT, WinApi.PAGE_READWRITE);
-            if (remoteCombined == IntPtr.Zero)
+            if (addresses == null)
             {
-                return;
+                // Buffer too small, resize and retry
+                int requiredSize = Encoding.ASCII.GetByteCount(propName) + 1 + Encoding.ASCII.GetByteCount(propValue) + 1;
+                propertiesBuffer.Resize((uint)requiredSize);
+                propertiesBuffer.Reset();
+                addresses = propertiesBuffer.WriteStrings(new[] { propName, propValue }, Encoding.ASCII);
+
+                if (addresses == null)
+                {
+                    Debug.Log($"Failed to write property '{propName}={propValue}' to shared buffer even after resize");
+                    return;
+                }
             }
 
-            // Write the combined buffer into the remote process.
-            if (!WinApi.WriteProcessMemory(editor.AppDesignerProcess.ProcessHandle, remoteCombined, combinedBuffer, combinedSize, out int bytesWritten) || bytesWritten != combinedSize)
-            {
-                WinApi.VirtualFreeEx(editor.AppDesignerProcess.ProcessHandle, remoteCombined, 0, WinApi.MEM_RELEASE);
-                return;
-            }
+            // addresses[0] = property name, addresses[1] = property value
+            IntPtr remoteName = addresses[0];
+            IntPtr remoteValue = addresses[1];
 
-            // The property name is at the start of the buffer,
-            // and the property value immediately follows the null terminator.
-            IntPtr remoteName = remoteCombined;
-            IntPtr remoteValue = remoteCombined + (propName.Length + 1);
-
-            // Send the SCI_SETPROPERTY message with the remote pointers.
+            // Send the SCI_SETPROPERTY message with the remote pointers
             editor.SendMessage(SCI_SETPROPERTY, remoteName, remoteValue);
 
-            editor.PropertyBuffers.Add(remoteCombined);
+            // Note: No cleanup needed! Buffer is reused for next property.
+            // This fixes the accumulation issue where PropertyBuffers list grew unbounded.
         }
 
         /// <summary>
@@ -1139,33 +1132,31 @@ namespace AppRefiner
                         return;
                     }
 
-                    // Clean up existing call tip if any
-                    if (editor.CallTipPointer != IntPtr.Zero)
+                    // Use shared call tip buffer (process-level, since only one editor has focus at a time)
+                    var callTipBuffer = editor.AppDesignerProcess.MemoryManager.GetOrCreateBuffer("calltip", 4096);
+
+                    // Write call tip text to shared buffer
+                    IntPtr? remoteAddress = callTipBuffer.WriteString(text, Encoding.Default, offset: 0);
+
+                    if (!remoteAddress.HasValue)
                     {
-                        WinApi.VirtualFreeEx(editor.AppDesignerProcess.ProcessHandle, editor.CallTipPointer, 0, WinApi.MEM_RELEASE);
-                        editor.CallTipPointer = IntPtr.Zero;
+                        // Buffer too small, resize and retry
+                        int requiredSize = Encoding.Default.GetByteCount(text) + 1;
+                        callTipBuffer.Resize((uint)requiredSize);
+                        remoteAddress = callTipBuffer.WriteString(text, Encoding.Default, offset: 0);
+
+                        if (!remoteAddress.HasValue)
+                        {
+                            Debug.LogError($"Failed to write call tip text to shared buffer even after resize");
+                            return;
+                        }
                     }
 
-                    // Allocate memory for new call tip text
-                    var textBytes = Encoding.Default.GetBytes(text);
-                    var neededSize = textBytes.Length + 1;
-                    var remoteBuffer = WinApi.VirtualAllocEx(editor.AppDesignerProcess.ProcessHandle, IntPtr.Zero, (uint)neededSize, WinApi.MEM_COMMIT, WinApi.PAGE_READWRITE);
+                    // Show the call tip using the shared buffer address
+                    editor.SendMessage(SCI_CALLTIPSHOW, new IntPtr(position), remoteAddress.Value);
 
-                    if (remoteBuffer == IntPtr.Zero)
-                    {
-                        Debug.LogError($"Failed to allocate memory for call tip: {Marshal.GetLastWin32Error()}");
-                        return;
-                    }
-
-                    if (!WinApi.WriteProcessMemory(editor.AppDesignerProcess.ProcessHandle, remoteBuffer, textBytes, neededSize, out int bytesWritten) || bytesWritten != neededSize)
-                    {
-                        WinApi.VirtualFreeEx(editor.AppDesignerProcess.ProcessHandle, remoteBuffer, 0, WinApi.MEM_RELEASE);
-                        Debug.LogError($"Failed to write call tip text to memory: {Marshal.GetLastWin32Error()}");
-                        return;
-                    }
-
-                    editor.CallTipPointer = remoteBuffer;
-                    editor.SendMessage(SCI_CALLTIPSHOW, new IntPtr(position), remoteBuffer);
+                    // Note: No cleanup needed! Buffer persists and is reused for next call tip.
+                    // This eliminates the alloc/free churn that happened on every call tip display.
                 }
                 catch (Exception ex)
                 {
@@ -1189,16 +1180,8 @@ namespace AppRefiner
                     // Cancel the call tip in Scintilla
                     editor.SendMessage(SCI_CALLTIPCANCEL, IntPtr.Zero, IntPtr.Zero);
 
-                    // Wait for Scintilla to release its references to the memory buffer
-                    // This prevents use-after-free when Scintilla is still reading the pointer
-                    System.Threading.Thread.Sleep(50);
-
-                    // Free memory used by the call tip
-                    if (editor.CallTipPointer != IntPtr.Zero)
-                    {
-                        WinApi.VirtualFreeEx(editor.AppDesignerProcess.ProcessHandle, editor.CallTipPointer, 0, WinApi.MEM_RELEASE);
-                        editor.CallTipPointer = IntPtr.Zero;
-                    }
+                    // Note: No memory cleanup needed - shared buffer persists for reuse.
+                    // The buffer address remains valid and will be overwritten on next call tip.
                 }
                 catch (Exception ex)
                 {
@@ -1248,36 +1231,34 @@ namespace AppRefiner
         {
             try
             {
-                // If pointer for this exact text exists, use it
-                var pointer = editor.AnnotationPointers.ContainsKey(text) ? editor.AnnotationPointers[text] : IntPtr.Zero;
-                if (pointer != IntPtr.Zero)
+                // Use shared annotations buffer (process-level) with sequential writing
+                var annotationsBuffer = editor.AppDesignerProcess.MemoryManager.GetOrCreateBuffer("annotations", 16384);
+
+                // Write annotation text to shared buffer using sequential mode
+                IntPtr? remoteAddress = annotationsBuffer.WriteString(text, Encoding.Default);
+
+                if (!remoteAddress.HasValue)
                 {
-                    editor.SendMessage(SCI_ANNOTATIONSETSTYLE, line, (int)style);
-                    editor.SendMessage(SCI_ANNOTATIONSETTEXT, line, pointer);
-                    return;
+                    // Buffer full, resize and reset, then retry
+                    int requiredSize = Encoding.Default.GetByteCount(text) + 1;
+                    uint newSize = Math.Max((uint)(annotationsBuffer.Size * 2), (uint)(annotationsBuffer.WriteOffset + requiredSize));
+                    annotationsBuffer.Resize(newSize);
+                    // Note: Resize automatically resets WriteOffset to 0
+                    remoteAddress = annotationsBuffer.WriteString(text, Encoding.Default);
+
+                    if (!remoteAddress.HasValue)
+                    {
+                        Debug.LogError($"Failed to write annotation text to shared buffer even after resize");
+                        return;
+                    }
                 }
 
-                // Allocate memory for new annotation text
-                var textBytes = Encoding.Default.GetBytes(text);
-                var neededSize = textBytes.Length + 1;
-                var remoteBuffer = WinApi.VirtualAllocEx(editor.AppDesignerProcess.ProcessHandle, IntPtr.Zero, (uint)neededSize, WinApi.MEM_COMMIT, WinApi.PAGE_READWRITE);
-
-                if (remoteBuffer == IntPtr.Zero)
-                {
-                    Debug.LogError($"Failed to allocate memory for annotation: {Marshal.GetLastWin32Error()}");
-                    return;
-                }
-
-                if (!WinApi.WriteProcessMemory(editor.AppDesignerProcess.ProcessHandle, remoteBuffer, textBytes, neededSize, out int bytesWritten) || bytesWritten != neededSize)
-                {
-                    WinApi.VirtualFreeEx(editor.AppDesignerProcess.ProcessHandle, remoteBuffer, 0, WinApi.MEM_RELEASE);
-                    Debug.LogError($"Failed to write annotation text to memory: {Marshal.GetLastWin32Error()}");
-                    return;
-                }
-
-                editor.AnnotationPointers[text] = remoteBuffer;
+                // Set the annotation using the shared buffer address
                 editor.SendMessage(SCI_ANNOTATIONSETSTYLE, line, (int)style);
-                editor.SendMessage(SCI_ANNOTATIONSETTEXT, line, remoteBuffer);
+                editor.SendMessage(SCI_ANNOTATIONSETTEXT, line, remoteAddress.Value);
+
+                // Note: No cleanup needed! Buffer grows as needed and persists.
+                // When resized, all annotations are invalidated and must be re-set (which happens naturally during linting).
             }
             catch (Exception ex)
             {
@@ -1340,20 +1321,31 @@ namespace AppRefiner
         {
             if (editor == null) return;
 
-            // Clear text
+            // Clear all annotations in Scintilla
             editor.SendMessage(SCI_ANNOTATIONCLEARALL, IntPtr.Zero, IntPtr.Zero);
 
-            // Free all annotation strings
-            foreach (var pointer in editor.AnnotationPointers.Values)
+            // Reset all shared annotation buffers for reuse
+            // This moves the write offset back to the start, ready for the next batch of annotations
+            var annotationsBuffer = editor.AppDesignerProcess.MemoryManager.GetBuffer("annotations");
+            if (annotationsBuffer != null)
             {
-                if (pointer != IntPtr.Zero)
-                {
-                    WinApi.VirtualFreeEx(editor.AppDesignerProcess.ProcessHandle, pointer, 0, WinApi.MEM_RELEASE);
-                }
+                annotationsBuffer.Reset();
             }
 
-            // Clear the annotation pointers dictionary
-            editor.AnnotationPointers.Clear();
+            // Also reset styled annotation buffers (text and styles)
+            var styledTextBuffer = editor.AppDesignerProcess.MemoryManager.GetBuffer("styled_annotations_text");
+            if (styledTextBuffer != null)
+            {
+                styledTextBuffer.Reset();
+            }
+
+            var styledStyleBuffer = editor.AppDesignerProcess.MemoryManager.GetBuffer("styled_annotations_styles");
+            if (styledStyleBuffer != null)
+            {
+                styledStyleBuffer.Reset();
+            }
+
+            // Note: No memory freeing needed - shared buffers persist and are reused.
         }
 
         /// <summary>
@@ -1405,38 +1397,38 @@ namespace AppRefiner
                 // Set last byte as null terminator style
                 styleBytes[neededSize - 1] = styleBytes[Math.Max(0, neededSize - 2)];
 
-                // Allocate and write the annotation text buffer
-                var remoteTextBuffer = WinApi.VirtualAllocEx(editor.AppDesignerProcess.ProcessHandle, IntPtr.Zero, (uint)neededSize, WinApi.MEM_COMMIT, WinApi.PAGE_READWRITE);
+                // Use shared buffers for styled annotations (process-level)
+                var textBuffer = editor.AppDesignerProcess.MemoryManager.GetOrCreateBuffer("styled_annotations_text", 16384);
+                var styleBuffer = editor.AppDesignerProcess.MemoryManager.GetOrCreateBuffer("styled_annotations_styles", 16384);
 
-                if (remoteTextBuffer == IntPtr.Zero)
+                // Write text and style bytes sequentially to their respective buffers
+                IntPtr? remoteTextAddress = textBuffer.Write(textBytes);
+                IntPtr? remoteStyleAddress = styleBuffer.Write(styleBytes);
+
+                // Handle resize if either buffer is full
+                if (!remoteTextAddress.HasValue || !remoteStyleAddress.HasValue)
                 {
-                    throw new Exception($"Failed to allocate text buffer: {Marshal.GetLastWin32Error()}");
+                    // Resize both buffers to match (they need to stay synchronized)
+                    uint newSize = Math.Max(textBuffer.Size * 2, (uint)neededSize * 2);
+                    textBuffer.Resize(newSize);
+                    styleBuffer.Resize(newSize);
+
+                    // Retry writes (buffers have been reset by Resize)
+                    remoteTextAddress = textBuffer.Write(textBytes);
+                    remoteStyleAddress = styleBuffer.Write(styleBytes);
+
+                    if (!remoteTextAddress.HasValue || !remoteStyleAddress.HasValue)
+                    {
+                        throw new Exception("Failed to write styled annotations to shared buffers even after resize");
+                    }
                 }
 
-                // Allocate and write the styles buffer
-                var remoteStyleBuffer = WinApi.VirtualAllocEx(editor.AppDesignerProcess.ProcessHandle, IntPtr.Zero, (uint)neededSize, WinApi.MEM_COMMIT, WinApi.PAGE_READWRITE);
-                if (remoteStyleBuffer == IntPtr.Zero)
-                {
-                    WinApi.VirtualFreeEx(editor.AppDesignerProcess.ProcessHandle, remoteTextBuffer, 0, WinApi.MEM_RELEASE);
-                    throw new Exception($"Failed to allocate style buffer: {Marshal.GetLastWin32Error()}");
-                }
+                // Set the annotation text and styles using shared buffer addresses
+                editor.SendMessage(SCI_ANNOTATIONSETTEXT, line, remoteTextAddress.Value);
+                editor.SendMessage(SCI_ANNOTATIONSETSTYLES, line, remoteStyleAddress.Value);
 
-                // Write the text and styles to remote buffers
-                if (!WinApi.WriteProcessMemory(editor.AppDesignerProcess.ProcessHandle, remoteTextBuffer, textBytes, neededSize, out int bytesWritten) ||
-                    !WinApi.WriteProcessMemory(editor.AppDesignerProcess.ProcessHandle, remoteStyleBuffer, styleBytes, neededSize, out int stylesBytesWritten))
-                {
-                    WinApi.VirtualFreeEx(editor.AppDesignerProcess.ProcessHandle, remoteTextBuffer, 0, WinApi.MEM_RELEASE);
-                    WinApi.VirtualFreeEx(editor.AppDesignerProcess.ProcessHandle, remoteStyleBuffer, 0, WinApi.MEM_RELEASE);
-                    throw new Exception("Failed to write to remote buffers");
-                }
-
-                // Set the annotation text and styles
-                editor.SendMessage(SCI_ANNOTATIONSETTEXT, line, remoteTextBuffer);
-                editor.SendMessage(SCI_ANNOTATIONSETSTYLES, line, remoteStyleBuffer);
-
-                // Store buffers for cleanup
-                editor.AnnotationPointers[combinedText] = remoteTextBuffer;
-                editor.AnnotationPointers[combinedText + "_styles"] = remoteStyleBuffer;
+                // Note: No cleanup needed! Buffers persist and grow as needed.
+                // Both buffers reset together when ClearAnnotations() is called.
             }
             catch (Exception ex)
             {
@@ -1743,56 +1735,27 @@ namespace AppRefiner
         }
         public static void SetAutoCompleteFillups(ScintillaEditor editor)
         {
-            if (editor.AutoCompleteFillupsBuffer != IntPtr.Zero) return;
+            // Use shared autocomplete fillups buffer (process-level)
+            var fillupsBuffer = editor.AppDesignerProcess.MemoryManager.GetOrCreateBuffer("autocomplete_fillups", 256);
 
             string fillups = "\t";
+            string stops = " ";
 
-            // Get the required buffer size - including null terminator
-            int bufferSize = Encoding.UTF8.GetByteCount(fillups) + 3; // +1 for null terminator and " " and null terminator
+            // Write both strings sequentially to the buffer
+            fillupsBuffer.Reset();
+            var addresses = fillupsBuffer.WriteStrings(new[] { fillups, stops }, Encoding.UTF8);
 
-            // Allocate memory in the target process for storing the options
-            IntPtr remoteBuffer = WinApi.VirtualAllocEx(
-                editor.AppDesignerProcess.ProcessHandle,
-                IntPtr.Zero,
-                (uint)bufferSize,
-                WinApi.MEM_COMMIT,
-                WinApi.PAGE_READWRITE);
-
-            if (remoteBuffer == IntPtr.Zero)
+            if (addresses == null)
             {
-                Debug.Log("SetAutoCompleteFillups: Failed to allocate memory in remote process");
+                Debug.Log("SetAutoCompleteFillups: Failed to write fillups to shared buffer");
                 return;
             }
 
-            // Store the pointer for later cleanup
-            editor.AutoCompleteFillupsBuffer = remoteBuffer;
+            // addresses[0] = fillups string, addresses[1] = stops string
+            editor.SendMessage(SCI_AUTOCSETFILLUPS, 0, addresses[0]);
+            editor.SendMessage(SCI_AUTOCSTOPS, 0, addresses[1]);
 
-
-            // Convert the string to a byte array with a null terminator
-            byte[] buffer = new byte[bufferSize];
-            Encoding.UTF8.GetBytes(fillups, 0, fillups.Length, buffer, 0);
-            buffer[bufferSize - 1] = 0; // Ensure null termination
-
-            buffer[fillups.Length + 1] = (byte)' ';
-
-            // Write the options to the remote process memory
-            int bytesWritten;
-            bool result = WinApi.WriteProcessMemory(
-                editor.AppDesignerProcess.ProcessHandle,
-                remoteBuffer,
-                buffer,
-                bufferSize,
-                out bytesWritten);
-
-            if (!result || bytesWritten != bufferSize)
-            {
-                Debug.Log($"SetAutoCompleteFillups: Failed to write to remote process memory. Written {bytesWritten} of {bufferSize} bytes");
-                WinApi.VirtualFreeEx(editor.AppDesignerProcess.ProcessHandle, remoteBuffer, 0, WinApi.MEM_RELEASE);
-                editor.AutoCompleteFillupsBuffer = IntPtr.Zero;
-            }
-
-            editor.SendMessage(SCI_AUTOCSETFILLUPS, 0, remoteBuffer);
-            editor.SendMessage(SCI_AUTOCSTOPS, 0, remoteBuffer + fillups.Length + 1);
+            // Note: No cleanup needed! Buffer persists and is reused.
         }
 
         /// <summary>
@@ -1825,69 +1788,40 @@ namespace AppRefiner
             editor.SendMessage(SCI_AUTOCSETIGNORECASE, 1, 0);
             try
             {
-                // Create a string with all options separated by spaces
+                // Create a string with all options separated by /
                 string optionsString = string.Join("/", options);
 
-                // Get the required buffer size - including null terminator
-                int bufferSize = Encoding.UTF8.GetByteCount(optionsString) + 1; // +1 for null terminator
+                // Use shared user list buffer (process-level, since only one autocomplete at a time)
+                var userListBuffer = editor.AppDesignerProcess.MemoryManager.GetOrCreateBuffer("userlist", 8192);
 
-                // Allocate memory in the target process for storing the options
-                IntPtr remoteBuffer = WinApi.VirtualAllocEx(
-                    editor.AppDesignerProcess.ProcessHandle,
-                    IntPtr.Zero,
-                    (uint)bufferSize,
-                    WinApi.MEM_COMMIT,
-                    WinApi.PAGE_READWRITE);
+                // Write options string to shared buffer
+                IntPtr? remoteAddress = userListBuffer.WriteString(optionsString, Encoding.UTF8, offset: 0);
 
-                if (remoteBuffer == IntPtr.Zero)
+                if (!remoteAddress.HasValue)
                 {
-                    Debug.Log("ShowUserList: Failed to allocate memory in remote process");
-                    return false;
+                    // Buffer too small, resize and retry
+                    int requiredSize = Encoding.UTF8.GetByteCount(optionsString) + 1;
+                    userListBuffer.Resize((uint)requiredSize);
+                    remoteAddress = userListBuffer.WriteString(optionsString, Encoding.UTF8, offset: 0);
+
+                    if (!remoteAddress.HasValue)
+                    {
+                        Debug.Log($"ShowUserList: Failed to write options to shared buffer even after resize");
+                        return false;
+                    }
                 }
 
-                // Store the pointer for later cleanup
-                editor.UserListPointer = remoteBuffer;
-
-                // Convert the string to a byte array with a null terminator
-                byte[] buffer = new byte[bufferSize];
-                Encoding.UTF8.GetBytes(optionsString, 0, optionsString.Length, buffer, 0);
-                buffer[bufferSize - 1] = 0; // Ensure null termination
-
-                // Write the options to the remote process memory
-                int bytesWritten;
-                bool result = WinApi.WriteProcessMemory(
-                    editor.AppDesignerProcess.ProcessHandle,
-                    remoteBuffer,
-                    buffer,
-                    bufferSize,
-                    out bytesWritten);
-
-                if (!result || bytesWritten != bufferSize)
-                {
-                    Debug.Log($"ShowUserList: Failed to write to remote process memory. Written {bytesWritten} of {bufferSize} bytes");
-                    WinApi.VirtualFreeEx(editor.AppDesignerProcess.ProcessHandle, remoteBuffer, 0, WinApi.MEM_RELEASE);
-                    editor.UserListPointer = IntPtr.Zero;
-                    return false;
-                }
-
-
-                // Send the Scintilla message to show the user list
-                IntPtr ret = editor.SendMessage(SCI_USERLISTSHOW, (IntPtr)listType, remoteBuffer);
-                //IntPtr ret = editor.SendMessage(SCI_AUTOCSHOW, 1, remoteBuffer);
+                // Send the Scintilla message to show the user list using shared buffer
+                IntPtr ret = editor.SendMessage(SCI_USERLISTSHOW, (IntPtr)listType, remoteAddress.Value);
+                //IntPtr ret = editor.SendMessage(SCI_AUTOCSHOW, 1, remoteAddress.Value);
                 SetAutoCompletionSeparator(editor, ' '); // Reset separator to default
+
+                // Note: No cleanup needed! Buffer persists and is reused for next user list.
                 return ret != IntPtr.Zero;
             }
             catch (Exception ex)
             {
                 Debug.Log($"ShowUserList: Exception: {ex.Message}");
-
-                // Clean up on exception
-                if (editor.UserListPointer != IntPtr.Zero)
-                {
-                    WinApi.VirtualFreeEx(editor.AppDesignerProcess.ProcessHandle, editor.UserListPointer, 0, WinApi.MEM_RELEASE);
-                    editor.UserListPointer = IntPtr.Zero;
-                }
-
                 return false;
             }
         }
@@ -1908,12 +1842,7 @@ namespace AppRefiner
                 // Cancel the autocompletion, which also cancels user lists
                 editor.SendMessage(SCI_AUTOCCANCEL, IntPtr.Zero, IntPtr.Zero);
 
-                // Free the memory used for user list options
-                if (editor.UserListPointer != IntPtr.Zero)
-                {
-                    WinApi.VirtualFreeEx(editor.AppDesignerProcess.ProcessHandle, editor.UserListPointer, 0, WinApi.MEM_RELEASE);
-                    editor.UserListPointer = IntPtr.Zero;
-                }
+                // Note: No memory cleanup needed - shared buffer persists for reuse.
             }
             catch (Exception ex)
             {
