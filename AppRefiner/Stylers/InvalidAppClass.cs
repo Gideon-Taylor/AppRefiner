@@ -80,36 +80,16 @@ public class InvalidAppClass : BaseStyler
     }
 
     /// <summary>
-    /// Handle base class references in class declarations
+    /// Handle base type references in class and interface declarations
     /// </summary>
     public override void VisitAppClass(AppClassNode node)
     {
-        // Check base class if present
-        if (node.BaseClass is AppClassTypeNode baseClass)
+        // Check base type if present (works for both classes and interfaces, handles extends and implements)
+        if (node.BaseType is AppClassTypeNode baseType)
         {
-            VisitAppClassType(baseClass);
-        }
-
-        // Check implemented interface if present
-        if (node.ImplementedInterface is AppClassTypeNode implementedInterface)
-        {
-            VisitAppClassType(implementedInterface);
+            VisitAppClassType(baseType);
         }
 
         base.VisitAppClass(node);
-    }
-
-    /// <summary>
-    /// Handle interface base references
-    /// </summary>
-    public override void VisitInterface(InterfaceNode node)
-    {
-        // Check base interface if present
-        if (node.BaseInterface is AppClassTypeNode baseInterface)
-        {
-            VisitAppClassType(baseInterface);
-        }
-
-        base.VisitInterface(node);
     }
 }

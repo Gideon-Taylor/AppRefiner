@@ -42,7 +42,7 @@ namespace AppRefiner.Refactors.QuickFixes
             if (targetClass != null)
                 return;
 
-            if (node.BaseClass == null && node.ImplementedInterface == null)
+            if (node.BaseType == null)
             {
                 SetFailure("Class does not extend another class or implement an interface");
                 return;
@@ -52,18 +52,11 @@ namespace AppRefiner.Refactors.QuickFixes
 
             if (Editor.DataManager != null)
             {
-                // Check base class hierarchy first
-                if (node.BaseClass != null)
+                // Analyze base type hierarchy (handles both extends and implements)
+                if (node.BaseType != null)
                 {
-                    baseClassPath = node.BaseClass.TypeName;
+                    baseClassPath = node.BaseType.TypeName;
                     AnalyzeBaseClassForAbstractMembers(baseClassPath);
-                }
-
-                // Also check implemented interface hierarchy
-                if (node.ImplementedInterface != null)
-                {
-                    var interfacePath = node.ImplementedInterface.TypeName;
-                    AnalyzeBaseClassForAbstractMembers(interfacePath);
                 }
 
                 if (abstractMethods.Count == 0 && abstractProperties.Count == 0)
@@ -141,11 +134,12 @@ namespace AppRefiner.Refactors.QuickFixes
             try
             {
                 var program = ParseClassAst(typePath);
-                if (program == null) return;
+                if (program == null || program.AppClass == null) return;
 
-                var isInterface = program.Interface != null;
-                var methods = isInterface ? program.Interface!.Methods : program.AppClass?.Methods;
-                var properties = isInterface ? program.Interface!.Properties : program.AppClass?.Properties;
+                var appClass = program.AppClass;
+                var isInterface = appClass.IsInterface;
+                var methods = appClass.Methods;
+                var properties = appClass.Properties;
 
                 if (methods == null && properties == null) return;
 
@@ -181,7 +175,7 @@ namespace AppRefiner.Refactors.QuickFixes
                 }
 
                 // Recurse to parent
-                string? parentPath = isInterface ? program.Interface?.BaseInterface?.TypeName : program.AppClass?.BaseClass?.TypeName;
+                string? parentPath = appClass.BaseType?.TypeName;
                 if (parentPath != null)
                 {
                     CollectAbstractMembers(parentPath, implementedSignatures, abstractMethods, abstractProperties);

@@ -48,13 +48,9 @@ namespace AppRefiner.Stylers
         {
             base.VisitAppClass(node);
 
-            if (node.BaseClass != null && node.BaseClass is AppClassTypeNode baseType)
+            if (node.BaseType != null && node.BaseType is AppClassTypeNode baseType)
             {
                 MarkAppClassTypeAsUsed(baseType);
-            }
-            if (node.ImplementedInterface != null && node.ImplementedInterface is AppClassTypeNode intfType)
-            {
-                MarkAppClassTypeAsUsed(intfType);
             }
         }
 

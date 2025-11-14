@@ -31,7 +31,6 @@ public class TypeMetadataBuilder : AstVisitorBase
     private string? _baseClassName;
     private bool _isBaseClassBuiltin;
     private PeopleCodeType? _builtinBaseType;
-    private string? _interfaceName;
     /// <summary>
     /// Extracts TypeMetadata from a parsed ProgramNode.
     /// </summary>
@@ -64,7 +63,6 @@ public class TypeMetadataBuilder : AstVisitorBase
             BaseClassName = builder._baseClassName,
             IsBaseClassBuiltin = builder._isBaseClassBuiltin,
             BuiltinBaseType = builder._builtinBaseType,
-            InterfaceName = builder._interfaceName,
             Methods = builder._methods,
             Properties = builder._properties,
             InstanceVariables = builder._instanceVariables,
@@ -95,12 +93,13 @@ public class TypeMetadataBuilder : AstVisitorBase
         // Determine program kind and extract basic info
         if (node.AppClass != null)
         {
-            _kind = ProgramKind.AppClass;
+            _kind = node.AppClass.IsInterface ? ProgramKind.Interface : ProgramKind.AppClass;
             _name = node.AppClass.Name;
             node.AppClass.Accept(this);
 
             /* Check to see if we have an explicit constructor, if not lets add an empty one */
-            if(_constructor == null) 
+            /* Interfaces and classes can both have constructors */
+            if(_constructor == null)
             {
                 var defaultConstructor = new FunctionInfo()
                 {
@@ -110,24 +109,6 @@ public class TypeMetadataBuilder : AstVisitorBase
                 };
                 _constructor = defaultConstructor;
             }
-
-        }
-        else if (node.Interface != null)
-        {
-            _kind = ProgramKind.Interface;
-            _name = node.Interface.Name;
-
-            /* Apparently interfaces can have constructors... you can create MY:Interface() */
-            /* Check to see if we have an explicit constructor, if not lets add an empty one */
-            var defaultConstructor = new FunctionInfo()
-            {
-                Name = _name,
-                ParameterOverloads = [[]],
-                ReturnType = new TypeWithDimensionality(PeopleCodeType.Void, 0),
-            };
-            _constructor = defaultConstructor;
-
-            node.Interface.Accept(this);
         }
         else
         {
@@ -145,24 +126,13 @@ public class TypeMetadataBuilder : AstVisitorBase
 
     public override void VisitAppClass(AppClassNode node)
     {
-        // Extract base class and interface information
-        if (node.BaseClass != null)
+        // Extract base type information (works for both extends and implements)
+        if (node.BaseType != null)
         {
-            _baseClassName = ExtractTypeName(node.BaseClass);
+            _baseClassName = ExtractTypeName(node.BaseType);
 
-            // Check if base class is a builtin type
-            if (node.BaseClass is BuiltInTypeNode builtInNode)
-            {
-                _isBaseClassBuiltin = true;
-                _builtinBaseType = BuiltinTypeExtensions.FromString(builtInNode.TypeName);
-            }
-        }
-
-        if (node.ImplementedInterface != null)
-        {
-            _interfaceName = ExtractTypeName(node.ImplementedInterface);
-            // Check if implemented class is a builtin type
-            if (node.ImplementedInterface is BuiltInTypeNode builtInNode)
+            // Check if base type is a builtin type
+            if (node.BaseType is BuiltInTypeNode builtInNode)
             {
                 _isBaseClassBuiltin = true;
                 _builtinBaseType = BuiltinTypeExtensions.FromString(builtInNode.TypeName);
@@ -170,8 +140,8 @@ public class TypeMetadataBuilder : AstVisitorBase
         }
 
         // Visit all method signatures
-        // For AppClasses, we extract metadata from all methods (both declared and implemented)
-        // since the method signatures in the class declaration are what matter for type checking
+        // Extract metadata from all methods (both declared and implemented)
+        // since the method signatures in the class/interface declaration are what matter for type checking
         foreach (var method in node.Methods)
         {
             var functionInfo = BuildFunctionInfo(method);
@@ -209,6 +179,7 @@ public class TypeMetadataBuilder : AstVisitorBase
             };
         }
 
+        // Visit instance variables (classes only - interfaces won't have any)
         foreach(var instanceVar in node.InstanceVariables)
         {
             var propertyInfo = BuildPropertyInfo(instanceVar);
@@ -224,38 +195,6 @@ public class TypeMetadataBuilder : AstVisitorBase
     {
         var typeWithDim = BuildTypeWithDimensionality(instanceVar.Type);
         return PropertyInfo.FromTypeWithDimensionality(typeWithDim);
-    }
-
-    public override void VisitInterface(InterfaceNode node)
-    {
-        // Extract base interface information
-        if (node.BaseInterface != null)
-        {
-            _baseClassName = ExtractTypeName(node.BaseInterface); // Reuse base class field for interface inheritance
-        }
-
-        // Visit method signatures
-        foreach (var method in node.Methods)
-        {
-            var functionInfo = BuildFunctionInfo(method);
-
-            if (method.IsConstructor)
-            {
-                functionInfo.ReturnType = new TypeWithDimensionality(PeopleCodeType.AppClass, 0, _qualifiedName);
-                _constructor = functionInfo;
-            }
-            else
-            {
-                _methods[method.Name] = functionInfo;
-            }
-        }
-
-        // Visit property signatures
-        foreach (var property in node.Properties)
-        {
-            var propertyInfo = BuildPropertyInfo(property);
-            _properties[property.Name] = propertyInfo;
-        }
     }
 
     public override void VisitFunction(FunctionNode node)

@@ -15,14 +15,9 @@ public class ProgramNode : AstNode
     public List<ImportNode> Imports { get; } = new();
 
     /// <summary>
-    /// Application class definition (if this is a class program)
+    /// Application class or interface definition (if this is a class or interface program)
     /// </summary>
     public AppClassNode? AppClass { get; set; }
-
-    /// <summary>
-    /// Interface definition (if this is an interface program)
-    /// </summary>
-    public InterfaceNode? Interface { get; set; }
 
     /// <summary>
     /// Function declarations
@@ -59,12 +54,12 @@ public class ProgramNode : AstNode
     /// <summary>
     /// True if this program defines an application class
     /// </summary>
-    public bool IsClassProgram => AppClass != null;
+    public bool IsClassProgram => AppClass != null && !AppClass.IsInterface;
 
     /// <summary>
     /// True if this program defines an interface
     /// </summary>
-    public bool IsInterfaceProgram => Interface != null;
+    public bool IsInterfaceProgram => AppClass?.IsInterface ?? false;
 
 
     public List<SourceSpan> SkippedDirectiveSpans { get; set; } = new();
@@ -124,9 +119,6 @@ public class ProgramNode : AstNode
 
     public void SetAppClass(AppClassNode appClass)
     {
-        if (Interface != null)
-            throw new InvalidOperationException("Program cannot have both class and interface definitions");
-
         if (AppClass != null)
             RemoveChild(AppClass);
 
@@ -135,15 +127,12 @@ public class ProgramNode : AstNode
             AddChild(appClass);
     }
 
-    public void SetInterface(InterfaceNode interfaceNode)
+    public void SetInterface(AppClassNode interfaceNode)
     {
         if (AppClass != null)
-            throw new InvalidOperationException("Program cannot have both class and interface definitions");
+            RemoveChild(AppClass);
 
-        if (Interface != null)
-            RemoveChild(Interface);
-
-        Interface = interfaceNode;
+        AppClass = interfaceNode;
         if (interfaceNode != null)
             AddChild(interfaceNode);
     }
@@ -170,10 +159,11 @@ public class ProgramNode : AstNode
 
     public override string ToString()
     {
-        if (IsClassProgram)
-            return $"Program (Class: {AppClass!.Name})";
-        if (IsInterfaceProgram)
-            return $"Program (Interface: {Interface!.Name})";
+        if (AppClass != null)
+        {
+            var typeKind = AppClass.IsInterface ? "Interface" : "Class";
+            return $"Program ({typeKind}: {AppClass.Name})";
+        }
         return "Program";
     }
 
@@ -324,36 +314,39 @@ public class ImportNode : AstNode
 }
 
 /// <summary>
-/// Application class definition node
+/// Application class or interface definition node
 /// </summary>
 public class AppClassNode : AstNode
 {
     /// <summary>
-    /// Class name
+    /// Class or interface name
     /// </summary>
     public string Name { get; }
 
     public Token NameToken { get; }
 
     /// <summary>
-    /// Token for the 'protected' keyword, if present
+    /// True if this node represents an interface, false if it's a class
+    /// </summary>
+    public bool IsInterface { get; }
+
+    /// <summary>
+    /// Token for the 'protected' keyword, if present (classes only)
     /// </summary>
     public Token? ProtectedToken { get; set; }
 
     /// <summary>
-    /// Token for the 'private' keyword, if present
+    /// Token for the 'private' keyword, if present (classes only)
     /// </summary>
     public Token? PrivateToken { get; set; }
 
     /// <summary>
-    /// Base class type (for EXTENDS clause), null if no base class
+    /// Base type - can be from EXTENDS or IMPLEMENTS clause
+    /// For classes: can extend another class or implement an interface
+    /// For interfaces: can extend another interface
+    /// Null if no base type
     /// </summary>
-    public TypeNode? BaseClass { get; set; }
-
-    /// <summary>
-    /// Implemented interface type (for IMPLEMENTS clause), null if no interface
-    /// </summary>
-    public TypeNode? ImplementedInterface { get; set; }
+    public TypeNode? BaseType { get; set; }
 
     /// <summary>
     /// Method declarations in the class header
@@ -394,30 +387,21 @@ public class AppClassNode : AstNode
         { VisibilityModifier.Private, new List<AstNode>() }
     };
 
-    public AppClassNode(string name, Token nameToken)
+    public AppClassNode(string name, Token nameToken, bool isInterface = false)
     {
         Name = name ?? throw new ArgumentNullException(nameof(name));
         NameToken = nameToken;
+        IsInterface = isInterface;
     }
 
-    public void SetBaseClass(TypeNode baseClass)
+    public void SetBaseType(TypeNode baseType)
     {
-        if (BaseClass != null)
-            RemoveChild(BaseClass);
+        if (BaseType != null)
+            RemoveChild(BaseType);
 
-        BaseClass = baseClass;
-        if (baseClass != null)
-            AddChild(baseClass);
-    }
-
-    public void SetImplementedInterface(TypeNode implementedInterface)
-    {
-        if (ImplementedInterface != null)
-            RemoveChild(ImplementedInterface);
-
-        ImplementedInterface = implementedInterface;
-        if (implementedInterface != null)
-            AddChild(implementedInterface);
+        BaseType = baseType;
+        if (baseType != null)
+            AddChild(baseType);
     }
 
     public void AddOrphanedMethodImplementation(MethodImplNode methodImplementation)
@@ -469,77 +453,9 @@ public class AppClassNode : AstNode
 
     public override string ToString()
     {
-        var extends = BaseClass != null ? $" extends {BaseClass}" : "";
-        var implements = ImplementedInterface != null ? $" implements {ImplementedInterface}" : "";
-        return $"Class {Name}{extends}{implements}";
-    }
-}
-
-/// <summary>
-/// Interface definition node
-/// </summary>
-public class InterfaceNode : AstNode
-{
-    /// <summary>
-    /// Interface name
-    /// </summary>
-    public string Name { get; }
-
-    /// <summary>
-    /// Base interface type (for EXTENDS clause), null if no base interface
-    /// </summary>
-    public TypeNode? BaseInterface { get; set; }
-
-    /// <summary>
-    /// Method signatures in the interface
-    /// </summary>
-    public List<MethodNode> Methods { get; } = new();
-
-    /// <summary>
-    /// Gets the collection of property nodes associated with the current object.
-    /// </summary>
-    public List<PropertyNode> Properties { get; } = new();
-
-    public InterfaceNode(string name)
-    {
-        Name = name ?? throw new ArgumentNullException(nameof(name));
-    }
-
-    public void SetBaseInterface(TypeNode baseInterface)
-    {
-        if (BaseInterface != null)
-            RemoveChild(BaseInterface);
-
-        BaseInterface = baseInterface;
-        if (baseInterface != null)
-            AddChild(baseInterface);
-    }
-
-    public void AddMethod(MethodNode method)
-    {
-        Methods.Add(method);
-        AddChild(method);
-    }
-
-    public void AddProperty(PropertyNode property)
-    {
-        Properties.Add(property);
-        AddChild(property);
-    }
-    public override void Accept(IAstVisitor visitor)
-    {
-        visitor.VisitInterface(this);
-    }
-
-    public override TResult Accept<TResult>(IAstVisitor<TResult> visitor)
-    {
-        return visitor.VisitInterface(this);
-    }
-
-    public override string ToString()
-    {
-        var extends = BaseInterface != null ? $" extends {BaseInterface}" : "";
-        return $"Interface {Name}{extends}";
+        var typeKind = IsInterface ? "Interface" : "Class";
+        var extendsOrImplements = BaseType != null ? $" extends {BaseType}" : "";
+        return $"{typeKind} {Name}{extendsOrImplements}";
     }
 }
 

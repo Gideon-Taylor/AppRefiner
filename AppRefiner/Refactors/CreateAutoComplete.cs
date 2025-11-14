@@ -84,9 +84,9 @@ namespace AppRefiner.Refactors
         public override void VisitAppClass(AppClassNode node)
         {
             // Track class extension information
-            if (node.BaseClass != null)
+            if (node.BaseType != null)
             {
-                parentClassName = node.BaseClass.ToString();
+                parentClassName = node.BaseType.ToString();
                 Debug.Log($"Class extends {parentClassName}");
             }
 

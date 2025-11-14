@@ -35,8 +35,8 @@ namespace AppRefiner.Stylers
         /// </summary>
         public override void VisitAppClass(AppClassNode node)
         {
-            // Only proceed if we have a database connection and either a base class or interface
-            if (DataManager == null || (node.BaseClass == null && node.ImplementedInterface == null))
+            // Only proceed if we have a database connection and a base type
+            if (DataManager == null || node.BaseType == null)
             {
                 base.VisitAppClass(node);
                 return;
@@ -54,19 +54,10 @@ namespace AppRefiner.Stylers
                     return;
                 }
 
-                // Determine what to highlight based on what the class extends/implements
-                TypeNode? targetToHighlight = null;
-                if (node.BaseClass != null)
-                {
-                    targetToHighlight = node.BaseClass;
-                }
-                else if (node.ImplementedInterface != null)
-                {
-                    targetToHighlight = node.ImplementedInterface;
-                }
+                // Highlight the base type (either extended class or implemented interface)
+                TypeNode targetToHighlight = node.BaseType;
 
-                // If we have a target to highlight, add the indicator
-                if (targetToHighlight != null)
+                // Add the indicator
                 {
                     // Build the tooltip message
                     var tooltipBuilder = new StringBuilder("Missing implementations:");
@@ -106,16 +97,10 @@ namespace AppRefiner.Stylers
             var abstractProperties = new Dictionary<string, PropertyNode>();
             var implementedSignatures = GetImplementedSignatures(node);
 
-            // Collect from base class hierarchy
-            if (node.BaseClass != null)
+            // Collect from base type hierarchy (handles both extends and implements)
+            if (node.BaseType != null)
             {
-                CollectAbstractMembers(node.BaseClass.TypeName, implementedSignatures, abstractMethods, abstractProperties);
-            }
-
-            // Collect from implemented interface hierarchy  
-            if (node.ImplementedInterface != null)
-            {
-                CollectAbstractMembers(node.ImplementedInterface.TypeName, implementedSignatures, abstractMethods, abstractProperties);
+                CollectAbstractMembers(node.BaseType.TypeName, implementedSignatures, abstractMethods, abstractProperties);
             }
 
             return (abstractMethods.Values.ToList(), abstractProperties.Values.ToList());
@@ -148,11 +133,12 @@ namespace AppRefiner.Stylers
             try
             {
                 var program = ParseClassAst(typePath);
-                if (program == null) return;
+                if (program == null || program.AppClass == null) return;
 
-                var isInterface = program.Interface != null;
-                var methods = isInterface ? program.Interface!.Methods : program.AppClass?.Methods;
-                var properties = isInterface ? program.Interface!.Properties : program.AppClass?.Properties;
+                var appClass = program.AppClass;
+                var isInterface = appClass.IsInterface;
+                var methods = appClass.Methods;
+                var properties = appClass.Properties;
 
                 if (methods == null && properties == null) return;
 
@@ -179,16 +165,16 @@ namespace AppRefiner.Stylers
                 }
 
                 // Add concrete implementations to prevent propagation from parents (classes only)
-                if (!isInterface && program.AppClass != null)
+                if (!isInterface)
                 {
-                    foreach (var method in program.AppClass.Methods.Where(m => !m.IsAbstract && !IsConstructor(m, program.AppClass.Name)))
+                    foreach (var method in appClass.Methods.Where(m => !m.IsAbstract && !IsConstructor(m, appClass.Name)))
                         implementedSignatures.Add($"M:{method.Name}({method.Parameters.Count})");
-                    foreach (var property in program.AppClass.Properties.Where(p => !p.IsAbstract))
+                    foreach (var property in appClass.Properties.Where(p => !p.IsAbstract))
                         implementedSignatures.Add($"P:{property.Name}");
                 }
 
                 // Recurse to parent
-                string? parentPath = isInterface ? program.Interface?.BaseInterface?.TypeName : program.AppClass?.BaseClass?.TypeName;
+                string? parentPath = appClass.BaseType?.TypeName;
                 if (parentPath != null)
                 {
                     CollectAbstractMembers(parentPath, implementedSignatures, abstractMethods, abstractProperties);

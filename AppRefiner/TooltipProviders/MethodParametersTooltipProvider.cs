@@ -232,21 +232,9 @@ namespace AppRefiner.TooltipProviders
                         if (parentMethod != null)
                         {
                             return FormatTooltipForMethod(parentMethod, type);
-                        } else if (typeProgram.AppClass.BaseClass != null)
+                        } else if (typeProgram.AppClass.BaseType != null)
                         {
-                            typeStack.Push(typeProgram.AppClass.BaseClass.TypeName);
-                        }
-                    }
-
-                    if (typeProgram.Interface != null)
-                    {
-                        var parentMethod = typeProgram.Interface.Methods.Where(m => m.Name == methodName).FirstOrDefault();
-                        if (parentMethod != null)
-                        {
-                            return FormatTooltipForMethod(parentMethod, type);
-                        } else if (typeProgram.Interface.BaseInterface != null)
-                        {
-                            typeStack.Push(typeProgram.Interface.BaseInterface.TypeName);
+                            typeStack.Push(typeProgram.AppClass.BaseType.TypeName);
                         }
                     }
                 }

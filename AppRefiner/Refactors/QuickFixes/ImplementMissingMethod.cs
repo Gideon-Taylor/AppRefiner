@@ -52,9 +52,9 @@ namespace AppRefiner.Refactors.QuickFixes
             }
 
             // Check if this method exists in base class/interface for override annotation
-            if (node.BaseClass != null && Editor.DataManager != null)
+            if (node.BaseType != null && Editor.DataManager != null)
             {
-                baseClassPath = node.BaseClass.TypeName;
+                baseClassPath = node.BaseType.TypeName;
                 AnalyzeBaseClassForOverride(baseClassPath, targetMethod.Name);
             }
 
@@ -145,11 +145,6 @@ namespace AppRefiner.Refactors.QuickFixes
             if (baseProgram.AppClass != null)
             {
                 baseMethod = baseProgram.AppClass.Methods.FirstOrDefault(m =>
-                    string.Equals(m.Name, methodName, StringComparison.OrdinalIgnoreCase));
-            }
-            else if (baseProgram.Interface != null)
-            {
-                baseMethod = baseProgram.Interface.Methods.FirstOrDefault(m =>
                     string.Equals(m.Name, methodName, StringComparison.OrdinalIgnoreCase));
             }
 

@@ -196,10 +196,6 @@ namespace AppRefiner.Refactors
                 {
                     insertionPoint = programNode.AppClass.SourceSpan.Start.ByteIndex;
                 }
-                else if (programNode?.Interface?.SourceSpan.IsValid == true)
-                {
-                    insertionPoint = programNode.Interface.SourceSpan.Start.ByteIndex;
-                }
                 else if (programNode?.Functions.Count > 0 && programNode.Functions[0].SourceSpan.IsValid)
                 {
                     insertionPoint = programNode.Functions[0].SourceSpan.Start.ByteIndex;

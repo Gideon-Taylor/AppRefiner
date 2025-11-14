@@ -10,7 +10,6 @@ public interface IAstVisitor
     // Program structure nodes
     void VisitProgram(ProgramNode node);
     void VisitAppClass(AppClassNode node);
-    void VisitInterface(InterfaceNode node);
     void VisitImport(ImportNode node);
 
     // Type nodes
@@ -76,7 +75,6 @@ public interface IAstVisitor<out TResult>
     // Program structure nodes
     TResult VisitProgram(ProgramNode node);
     TResult VisitAppClass(AppClassNode node);
-    TResult VisitInterface(InterfaceNode node);
     TResult VisitImport(ImportNode node);
 
     // Type nodes
@@ -187,10 +185,6 @@ public abstract class AstVisitorBase : IAstVisitor
         {
             node.AppClass.Accept(this);
         }
-        else if (node.Interface != null)
-        {
-            node.Interface.Accept(this);
-        }
 
         // Visit functions
         foreach (var function in node.Functions.Where(f => f.IsImplementation))
@@ -209,17 +203,12 @@ public abstract class AstVisitorBase : IAstVisitor
     {
         // Visit members in a specific order to ensure proper semantic analysis
 
-        if (node.BaseClass != null)
+        if (node.BaseType != null)
         {
-            node.BaseClass.Accept(this);
+            node.BaseType.Accept(this);
         }
 
-        if (node.ImplementedInterface != null)
-        {
-            node.ImplementedInterface.Accept(this);
-        }
-
-        // 1. First visit instance variables
+        // 1. First visit instance variables (classes only)
         foreach (var instanceVar in node.InstanceVariables)
         {
             instanceVar.Accept(this);
@@ -231,7 +220,7 @@ public abstract class AstVisitorBase : IAstVisitor
             property.Accept(this);
         }
 
-        // 3. Then visit constants
+        // 3. Then visit constants (classes only)
         foreach (var constant in node.Constants)
         {
             constant.Accept(this);
@@ -266,26 +255,6 @@ public abstract class AstVisitorBase : IAstVisitor
         }
     }
 
-    public virtual void VisitInterface(InterfaceNode node)
-    {
-        // Visit base interface first if present
-        if (node.BaseInterface != null)
-        {
-            node.BaseInterface.Accept(this);
-        }
-
-        // Visit method signatures
-        foreach (var method in node.Methods)
-        {
-            method.Accept(this);
-        }
-
-        // Visit property signatures
-        foreach (var property in node.Properties)
-        {
-            property.Accept(this);
-        }
-    }
     public virtual void VisitImport(ImportNode node)
     {
         // Visit the imported type node

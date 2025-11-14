@@ -117,15 +117,10 @@ namespace AppRefiner.Refactors
                 // No existing imports - insert at the beginning of the program
                 var insertionPoint = 0;
 
-                // If there's an app class, insert before it
+                // If there's an app class or interface, insert before it
                 if (node.AppClass?.SourceSpan.IsValid == true)
                 {
                     insertionPoint = node.AppClass.SourceSpan.Start.ByteIndex;
-                }
-                // If there's an interface, insert before it
-                else if (node.Interface?.SourceSpan.IsValid == true)
-                {
-                    insertionPoint = node.Interface.SourceSpan.Start.ByteIndex;
                 }
                 // If there are functions, insert before the first one
                 else if (node.Functions.Count > 0 && node.Functions[0].SourceSpan.IsValid)

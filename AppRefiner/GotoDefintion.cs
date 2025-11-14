@@ -355,13 +355,9 @@ namespace AppRefiner
 
         private AppClassTypeNode? GetBaseClassType(AppClassNode classNode)
         {
-            if (classNode.BaseClass is not null and AppClassTypeNode)
+            if (classNode.BaseType is not null and AppClassTypeNode)
             {
-                return (AppClassTypeNode)classNode.BaseClass;
-            }
-            else if (classNode.ImplementedInterface is not null and AppClassTypeNode)
-            {
-                return (AppClassTypeNode)classNode.ImplementedInterface;
+                return (AppClassTypeNode)classNode.BaseType;
             }
             return null;
         }

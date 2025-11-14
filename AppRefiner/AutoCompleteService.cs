@@ -593,22 +593,9 @@ namespace AppRefiner
                 {
                     synthetics.Add(new PropertyInfo(PeopleCodeType.AppClass, 0, DetermineQualifiedName(editor)) { Name = "%This" });
 
-                    if (program.AppClass.BaseClass != null)
+                    if (program.AppClass.BaseType != null)
                     {
-                        synthetics.Add(new PropertyInfo(PeopleCodeType.AppClass, 0, program.AppClass.BaseClass.TypeName) { Name = "%Super" });
-                    } else if (program.AppClass.ImplementedInterface != null)
-                    {
-                        synthetics.Add(new PropertyInfo(PeopleCodeType.AppClass, 0, program.AppClass.ImplementedInterface.TypeName) { Name = "%Super" });
-                    }
-                }
-
-                if (program.Interface != null)
-                {
-                    synthetics.Add(new PropertyInfo(PeopleCodeType.AppClass, 0, DetermineQualifiedName(editor)) { Name = "%This" });
-
-                    if (program.Interface.BaseInterface != null)
-                    {
-                        synthetics.Add(new PropertyInfo(PeopleCodeType.AppClass, 0, program.Interface.BaseInterface.TypeName) { Name = "%Super" });
+                        synthetics.Add(new PropertyInfo(PeopleCodeType.AppClass, 0, program.AppClass.BaseType.TypeName) { Name = "%Super" });
                     }
                 }
 

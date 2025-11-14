@@ -785,7 +785,7 @@ public class PeopleCodeParser
                 return null;
             }
 
-            var classNode = new AppClassNode(className, nameToken);
+            var classNode = new AppClassNode(className, nameToken, isInterface: false);
 
             // Check for EXTENDS or IMPLEMENTS clause
             if (Match(TokenType.Extends))
@@ -793,7 +793,7 @@ public class PeopleCodeParser
                 var superclass = ParseSuperclass();
                 if (superclass != null)
                 {
-                    classNode.SetBaseClass(superclass);
+                    classNode.SetBaseType(superclass);
                 }
                 else
                 {
@@ -802,10 +802,10 @@ public class PeopleCodeParser
             }
             else if (Match(TokenType.Implements))
             {
-                var superclass = ParseSuperclass();
-                if (superclass != null)
+                var implementedInterface = ParseSuperclass();
+                if (implementedInterface != null)
                 {
-                    classNode.SetImplementedInterface(superclass);
+                    classNode.SetBaseType(implementedInterface);
                 }
                 else
                 {
@@ -2538,7 +2538,7 @@ public class PeopleCodeParser
     /// INTERFACE Name (EXTENDS appClassPath)? SEMI* (methodHeader SEMI+)* END-INTERFACE
     /// Only method headers are allowed; no bodies.
     /// </summary>
-    private InterfaceNode? ParseInterface()
+    private AppClassNode? ParseInterface()
     {
         try
         {
@@ -2548,12 +2548,13 @@ public class PeopleCodeParser
                 return null;
 
             var name = ParseGenericId();
+            var nameToken = Previous;
             if (name == null)
             {
                 ReportError("Expected interface name after 'INTERFACE'");
                 return null;
             }
-            var iface = new InterfaceNode(name);
+            var iface = new AppClassNode(name, nameToken, isInterface: true);
 
             // Optional EXTENDS base interface (apparently you can say implements here too...)
             if (Check(TokenType.Extends) || Check(TokenType.Implements))
@@ -2562,7 +2563,7 @@ public class PeopleCodeParser
                 var baseType = ParseAppClassPath() ?? ParseSimpleType();
                 if (baseType != null)
                 {
-                    iface.SetBaseInterface(baseType);
+                    iface.SetBaseType(baseType);
                 }
                 else
                 {
@@ -2592,7 +2593,7 @@ public class PeopleCodeParser
     /// <summary>
     /// Parse interface header according to grammar (similar to classHeader but only allowing method headers)
     /// </summary>
-    private void ParseInterfaceHeader(InterfaceNode interfaceNode)
+    private void ParseInterfaceHeader(AppClassNode interfaceNode)
     {
         try
         {
@@ -2612,7 +2613,7 @@ public class PeopleCodeParser
 
                         methodNode.IsConstructor = methodNode.Name == interfaceNode.Name;
 
-                        interfaceNode.AddMethod(methodNode);
+                        interfaceNode.AddMember(methodNode, !hasEnteredProtected ? VisibilityModifier.Public : VisibilityModifier.Protected);
                     }
 
                     while (Match(TokenType.Semicolon)) { }
@@ -2623,7 +2624,7 @@ public class PeopleCodeParser
                     var propertyDeclaration = ParsePropertyDeclaration(VisibilityModifier.Public);
                     if (propertyDeclaration is PropertyNode propertyNode)
                     {
-                        interfaceNode.AddProperty(propertyNode);
+                        interfaceNode.AddMember(propertyNode, VisibilityModifier.Public);
                     }
                 }
                 else if (Match(TokenType.Semicolon))

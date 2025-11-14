@@ -285,10 +285,10 @@ namespace AppRefiner.Services
         private string DetermineQualifiedName(ProgramNode node, ScintillaEditor editor)
         {
             // Try to extract from AST structure first
-            if (node.AppClass != null || node.Interface != null)
+            if (node.AppClass != null)
             {
-                // For app classes, try to build qualified name from imports or use simple name
-                var className = node.AppClass != null ? node.AppClass.Name : node.Interface!.Name;
+                // For app classes/interfaces, try to build qualified name from imports or use simple name
+                var className = node.AppClass.Name;
 
                 if (editor?.Caption != null && !string.IsNullOrWhiteSpace(editor.Caption))
                 {

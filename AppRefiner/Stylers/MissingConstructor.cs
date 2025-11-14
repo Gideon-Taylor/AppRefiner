@@ -43,7 +43,7 @@ public class MissingConstructor : BaseStyler
             string.Equals(m.Name, node.Name, StringComparison.OrdinalIgnoreCase));
 
         // If no constructor and class extends another class, check if base class requires one
-        if (constructorMethod == null && node.BaseClass != null)
+        if (constructorMethod == null && node.BaseType != null)
         {
             CheckIfBaseClassRequiresConstructor(node);
         }
@@ -93,17 +93,17 @@ public class MissingConstructor : BaseStyler
     /// </summary>
     private void CheckIfBaseClassRequiresConstructor(AppClassNode classNode)
     {
-        if (DataManager == null || classNode.BaseClass == null)
+        if (DataManager == null || classNode.BaseType == null)
             return;
 
         try
         {
             // Parse the base class AST
-            ProgramNode? baseProgram = ParseBaseClassAst(classNode.BaseClass.TypeName);
+            ProgramNode? baseProgram = ParseBaseClassAst(classNode.BaseType.TypeName);
             if (baseProgram == null)
                 return; // Could not parse base class
 
-            // Check both class and interface scenarios like AppRefiner
+            // Check if base type has parameterized constructor
             MethodNode? baseClassConstructor = null;
             string? baseClassName = null;
 
@@ -118,22 +118,11 @@ public class MissingConstructor : BaseStyler
                     baseClassConstructor = constructors.First();
                 }
             }
-            else if (baseProgram.Interface != null)
-            {
-                var baseInterface = baseProgram.Interface;
-                baseClassName = baseInterface.Name;
-                var constructors = baseInterface.Methods.Where(m =>
-                    string.Equals(m.Name, baseInterface.Name, StringComparison.OrdinalIgnoreCase));
-                if (constructors.Any())
-                {
-                    baseClassConstructor = constructors.First();
-                }
-            }
 
             // If base class/interface has parameterized constructor, flag the derived class
             if (baseClassConstructor?.Parameters.Count > 0)
             {
-                string tooltip = $"Class '{classNode.Name}' is missing a constructor required by '{classNode.BaseClass.TypeName}'.";
+                string tooltip = $"Class '{classNode.Name}' is missing a constructor required by '{classNode.BaseType.TypeName}'.";
                 var quickFixes = new List<(Type RefactorClass, string Description)>
                 {
                     (typeof(GenerateBaseConstructor), "Generate missing constructor")

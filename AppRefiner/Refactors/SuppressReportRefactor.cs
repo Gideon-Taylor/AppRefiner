@@ -273,10 +273,6 @@ namespace AppRefiner.Refactors
             {
                 globalNode = node.AppClass;
             }
-            else if (node.Interface != null)
-            {
-                globalNode = node.Interface;
-            }
         }
 
         private void GenerateChange(BlockNode node)

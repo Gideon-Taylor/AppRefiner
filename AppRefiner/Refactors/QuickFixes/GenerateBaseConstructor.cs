@@ -37,7 +37,7 @@ namespace AppRefiner.Refactors.QuickFixes
             if (existingConstructor != null)
                 return;
 
-            if (node.BaseClass == null)
+            if (node.BaseType == null)
             {
                 SetFailure("Class does not extend another class");
                 return;
@@ -48,7 +48,7 @@ namespace AppRefiner.Refactors.QuickFixes
 
             if (Editor.DataManager != null)
             {
-                AnalyzeBaseClass(node.BaseClass.TypeName);
+                AnalyzeBaseClass(node.BaseType.TypeName);
             }
             else
             {
@@ -130,13 +130,6 @@ namespace AppRefiner.Refactors.QuickFixes
                 constructor = baseClass.Methods.FirstOrDefault(m =>
                     string.Equals(m.Name, baseClass.Name, StringComparison.OrdinalIgnoreCase));
             }
-            else if (baseProgram.Interface != null)
-            {
-                var baseInterface = baseProgram.Interface;
-                baseClassName = baseInterface.Name;
-                constructor = baseInterface.Methods.FirstOrDefault(m =>
-                    string.Equals(m.Name, baseInterface.Name, StringComparison.OrdinalIgnoreCase));
-            }
 
             if (constructor?.Parameters.Count > 0)
             {
@@ -186,7 +179,7 @@ namespace AppRefiner.Refactors.QuickFixes
         private void GenerateConstructorImplementation(List<(string Name, string Type)> safeParameters)
         {
             var parameterList = string.Join(", ", safeParameters.Select(p => p.Name));
-            var baseClassPath = targetClass!.BaseClass!.TypeName;
+            var baseClassPath = targetClass!.BaseType!.TypeName;
 
             // Generate parameter annotations
             var annotations = new StringBuilder();
@@ -250,13 +243,9 @@ namespace AppRefiner.Refactors.QuickFixes
         {
             if (targetClass == null) return -1;
 
-            if (targetClass.BaseClass != null)
+            if (targetClass.BaseType != null)
             {
-                var insertLine = targetClass.BaseClass.SourceSpan.Start.Line + 1; /* Line after the extends... */
-                return ScintillaManager.GetLineStartIndex(Editor, insertLine);
-            } else if (targetClass.ImplementedInterface != null)
-            {
-                var insertLine = targetClass.ImplementedInterface.SourceSpan.Start.Line + 1; /* Line after the implements... */
+                var insertLine = targetClass.BaseType.SourceSpan.Start.Line + 1; /* Line after the extends/implements... */
                 return ScintillaManager.GetLineStartIndex(Editor, insertLine);
             }
             return -1;

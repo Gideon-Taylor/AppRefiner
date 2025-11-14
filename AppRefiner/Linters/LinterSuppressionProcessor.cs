@@ -139,16 +139,10 @@ namespace AppRefiner.Linters
             // Find the earliest import or class/interface declaration
             int boundaryLine = int.MaxValue;
 
-            // Check for class declaration
+            // Check for class or interface declaration
             if (programNode.AppClass != null)
             {
                 boundaryLine = Math.Min(boundaryLine, programNode.AppClass.SourceSpan.Start.Line);
-            }
-
-            // Check for interface declaration
-            if (programNode.Interface != null)
-            {
-                boundaryLine = Math.Min(boundaryLine, programNode.Interface.SourceSpan.Start.Line);
             }
 
             // Check for imports (look at the program statements)
