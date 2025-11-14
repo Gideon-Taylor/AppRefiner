@@ -810,7 +810,7 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
                     else
                     {
                         // Create RecordTypeInfo
-                        var recordType = new RecordTypeInfo(node.Name, _typeResolver);
+                        var recordType = new RecordTypeInfo(node.Name, _typeResolver) { DirectRecordAccess = true };
                         SetInferredType(node, recordType);
                     }
                 }

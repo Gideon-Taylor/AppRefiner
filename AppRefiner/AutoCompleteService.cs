@@ -430,17 +430,13 @@ namespace AppRefiner
             try
             {
                 List<string> suggestions = new();
-                if (typeInfo is RecordTypeInfo ri && editor.DataManager != null)
-                {
-                    var fields = editor.DataManager.GetRecordFields(ri.RecordName) ?? [];
 
-                    foreach (var field in fields.OrderBy(f => f.FieldName))
-                    {
-                        suggestions.Insert(0, $"{field.FieldName} -> {field.FieldTypeName}?{(int)AutoCompleteIcons.Field}");
-                    }
-                }
                 // Handle builtin object types
-                else if (typeInfo is BuiltinObjectTypeInfo builtinType && builtinType.PeopleCodeType.HasValue)
+                if (typeInfo is BuiltinObjectTypeInfo builtinType
+                    && builtinType.PeopleCodeType.HasValue
+                    && (builtinType.PeopleCodeType.Value != PeopleCodeType.Record
+                        || typeInfo is not RecordTypeInfo
+                        || (typeInfo is RecordTypeInfo rti && !rti.DirectRecordAccess)))
                 {
                     string typeName = builtinType.PeopleCodeType.Value.GetTypeName();
                     var objectInfo = PeopleCodeTypeDatabase.GetObject(typeName);
@@ -495,7 +491,7 @@ namespace AppRefiner
                             }
                         }
 
-                        foreach(var item in appClass.InheritanceChain)
+                        foreach (var item in appClass.InheritanceChain)
                         {
                             if (item.QualifiedName == appClass.QualifiedName) continue;
 
@@ -534,6 +530,16 @@ namespace AppRefiner
                 /* we are going to do the sorting and not let Scintilla do it
                  * this is so we can keep Value at the top */
                 suggestions.Sort();
+
+                if (typeInfo is RecordTypeInfo ri && editor.DataManager != null)
+                {
+                    var fields = editor.DataManager.GetRecordFields(ri.RecordName) ?? [];
+
+                    foreach (var field in fields.OrderBy(f => f.FieldName))
+                    {
+                        suggestions.Insert(0, $"{field.FieldName} -> {field.FieldTypeName}?{(int)AutoCompleteIcons.Field}");
+                    }
+                }
 
                 if (typeInfo is FieldTypeInfo fi)
                 {

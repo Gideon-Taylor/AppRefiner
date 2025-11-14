@@ -3,6 +3,8 @@ using PeopleCodeTypeEnum = PeopleCodeTypeInfo.Types.PeopleCodeType;
 
 namespace PeopleCodeTypeInfo.Types;
 
+
+
 /// <summary>
 /// Represents a Field builtin type with knowledge of which record/field it refers to,
 /// enabling resolution of the underlying field data type for type compatibility checking.
@@ -14,6 +16,7 @@ public class RecordTypeInfo : BuiltinObjectTypeInfo
     /// The record name this field belongs to (e.g., "AAP_YEAR")
     /// </summary>
     public string RecordName { get; }
+    public bool DirectRecordAccess { get; set; } = false;
 
     private readonly ITypeMetadataResolver? _resolver;
     private TypeInfo? _cachedFieldDataType;
