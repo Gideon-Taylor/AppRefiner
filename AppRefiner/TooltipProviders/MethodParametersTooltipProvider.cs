@@ -74,12 +74,18 @@ namespace AppRefiner.TooltipProviders
             if (node.Function is IdentifierNode identifier)
             {
                 // Global function like Split(), Left(), Right()
-                HandleGlobalFunction(identifier.Name, node.SourceSpan);
+                if (identifier.SourceSpan.ContainsPositionExclusiveEnd(CurrentPosition))
+                {
+                    HandleGlobalFunction(identifier.Name, node.SourceSpan);
+                }
             }
             else if (node.Function is MemberAccessNode memberAccess)
             {
                 // Method call - enhanced with type inference
-                ProcessMethodCall(memberAccess, node);
+                if (memberAccess.MemberNameSpan.ContainsPosition(CurrentPosition))
+                {
+                    ProcessMethodCall(memberAccess, node);
+                }
             }
 
             base.VisitFunctionCall(node);
