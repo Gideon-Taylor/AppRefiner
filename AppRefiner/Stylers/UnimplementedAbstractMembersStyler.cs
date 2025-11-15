@@ -114,7 +114,7 @@ namespace AppRefiner.Stylers
             var signatures = new HashSet<string>();
 
             // Add concrete methods (excluding constructors)
-            foreach (var method in node.Methods.Where(m => !m.IsAbstract && !IsConstructor(m, node.Name)))
+            foreach (var method in node.Methods.Where(m => !IsConstructor(m, node.Name)))
                 signatures.Add($"M:{method.Name}({method.Parameters.Count})");
 
             // Add concrete properties
