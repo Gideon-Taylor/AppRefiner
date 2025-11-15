@@ -250,8 +250,9 @@ namespace AppRefiner
         /// </summary>
         /// <param name="appDesignerProcess">The AppDesignerProcess providing database context</param>
         /// <param name="searchTerm">The search term to match against function names (case-insensitive)</param>
+        /// <param name="maxResults">Maximum number of results to return (default: 100, use int.MaxValue for unlimited)</param>
         /// <returns>List of FunctionSearchResult objects matching the search criteria</returns>
-        public List<FunctionSearchResult> SearchFunctionCache(AppDesignerProcess appDesignerProcess, string searchTerm)
+        public List<FunctionSearchResult> SearchFunctionCache(AppDesignerProcess appDesignerProcess, string searchTerm, int maxResults = 100)
         {
             var results = new List<FunctionSearchResult>();
 
@@ -272,18 +273,19 @@ namespace AppRefiner
                     return results;
                 }
                 
+                // Build SQL query with optional LIMIT clause
+                string limitClause = maxResults < int.MaxValue ? $" LIMIT {maxResults}" : "";
+
                 command.CommandText = @"
                     SELECT FunctionName, FunctionPath, ParameterNames, ParameterTypes, ReturnType
-                    FROM FunctionCache 
-                    WHERE DBName = @DBName 
+                    FROM FunctionCache
+                    WHERE DBName = @DBName
                     AND (FunctionName LIKE @SearchTerm COLLATE NOCASE
                             OR FunctionPath LIKE @ProgramPrefix COLLATE NOCASE
                         )
-                    ORDER BY FunctionName
-                ";
+                    ORDER BY FunctionName" + limitClause;
+
                 command.Parameters.AddWithValue("@DBName", appDesignerProcess.DBName);
-                
-                
                 command.Parameters.AddWithValue("@SearchTerm", $"%{searchTerm}%");
                 command.Parameters.AddWithValue("@ProgramPrefix", $"{searchTerm}%");
                 using var reader = command.ExecuteReader();
@@ -313,6 +315,54 @@ namespace AppRefiner
             }
 
             return results;
+        }
+
+        /// <summary>
+        /// Gets the total count of functions matching the specified search term
+        /// </summary>
+        /// <param name="appDesignerProcess">The AppDesignerProcess providing database context</param>
+        /// <param name="searchTerm">The search term to match against function names (case-insensitive)</param>
+        /// <returns>Total count of matching functions</returns>
+        public int GetSearchResultCount(AppDesignerProcess appDesignerProcess, string searchTerm)
+        {
+            if (string.IsNullOrEmpty(searchTerm))
+            {
+                return 0;
+            }
+
+            try
+            {
+                using var connection = new SqliteConnection(_connectionString);
+                connection.Open();
+
+                using var command = connection.CreateCommand();
+
+                if (appDesignerProcess == null && string.IsNullOrEmpty(appDesignerProcess.DBName))
+                {
+                    return 0;
+                }
+
+                command.CommandText = @"
+                    SELECT COUNT(*)
+                    FROM FunctionCache
+                    WHERE DBName = @DBName
+                    AND (FunctionName LIKE @SearchTerm COLLATE NOCASE
+                            OR FunctionPath LIKE @ProgramPrefix COLLATE NOCASE
+                        )
+                ";
+
+                command.Parameters.AddWithValue("@DBName", appDesignerProcess.DBName);
+                command.Parameters.AddWithValue("@SearchTerm", $"%{searchTerm}%");
+                command.Parameters.AddWithValue("@ProgramPrefix", $"{searchTerm}%");
+
+                var count = command.ExecuteScalar();
+                return Convert.ToInt32(count);
+            }
+            catch (Exception ex)
+            {
+                Debug.Log($"Error getting search result count: {ex.Message}");
+                return 0;
+            }
         }
 
         /// <summary>

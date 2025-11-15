@@ -1,6 +1,7 @@
 using PeopleCodeParser.SelfHosted.Nodes;
 using System;
 using System.Linq;
+using System.Xml.Linq;
 
 namespace AppRefiner.Refactors
 {
@@ -46,13 +47,15 @@ namespace AppRefiner.Refactors
             {
                 bool alreadyDeclared = _programNode.Functions.Any(f => f.IsDeclaration && 
                     string.Equals(f.Name, _functionToDeclare.FunctionName, StringComparison.OrdinalIgnoreCase));
+                var insertIndex = 0;
+                var declarationString = "";
                 if (!alreadyDeclared)
                 {
                     var lastDeclaration = node.Functions.OrderBy(f => f.SourceSpan.Start.Line).LastOrDefault<FunctionNode>(f => f.IsDeclaration);
                     var firstFuncImpl = node.Functions.Where(f => f.IsImplementation).OrderBy(f => f.SourceSpan.Start.Line).FirstOrDefault();
 
                     var padding = "";
-                    var insertLine = 0;
+                    var insertLine = -1;
                     if (lastDeclaration != null)
                     {
                         /* get the padding of this declarations line */
@@ -80,14 +83,28 @@ namespace AppRefiner.Refactors
 
                     if (insertLine < 0) insertLine = 0;
 
-                    var insertIndex = ScintillaManager.GetLineStartIndex(Editor, insertLine);
+                    insertIndex = ScintillaManager.GetLineStartIndex(Editor, insertLine);
 
 
-                    var declaration = $"{padding}{_functionToDeclare.ToDeclaration()}{Environment.NewLine}";
-                    InsertText(insertIndex, declaration, "Insert function declaration");
+                    declarationString = $"{padding}{_functionToDeclare.ToDeclaration()}{Environment.NewLine}";
                 }
 
-                InsertText(CurrentPosition, _functionToDeclare.GetExampleCall(), "Insert example call of function");
+                if (insertIndex >= 0)
+                {
+                    var funcCallIndex = CurrentPosition;
+                    var exampleCall = _functionToDeclare.GetExampleCall();
+                    if (CurrentPosition == insertIndex)
+                    {
+                        InsertText(funcCallIndex, exampleCall, "Insert example call of function");
+                        InsertText(insertIndex, declarationString, "Insert function declaration");
+
+                    }
+                    else
+                    {
+                        InsertText(insertIndex, declarationString, "Insert function declaration");
+                        InsertText(funcCallIndex, exampleCall, "Insert example call of function");
+                    }
+                }
             }
         }
 

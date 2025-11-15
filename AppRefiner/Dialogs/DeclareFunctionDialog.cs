@@ -28,6 +28,7 @@ namespace AppRefiner.Dialogs
         private readonly Label headerLabel;
         private readonly TextBox searchBox;
         private readonly ListView resultsListView;
+        private readonly LinkLabel loadAllLink;
         private readonly ProgressBar progressBar;
         private readonly Label statusLabel;
         
@@ -42,6 +43,11 @@ namespace AppRefiner.Dialogs
         
         private bool isCacheLoaded = false;
         private FunctionSearchResult? selectedFunction;
+
+        private const int MaxResultsDefault = 100;
+        private bool isResultsLimited = false;
+        private int totalResultCount = 0;
+        private string currentSearchTerm = string.Empty;
 
         #endregion
 
@@ -75,12 +81,13 @@ namespace AppRefiner.Dialogs
             this.headerLabel = new Label();
             this.searchBox = new TextBox();
             this.resultsListView = new ListView();
+            this.loadAllLink = new LinkLabel();
             this.progressBar = new ProgressBar();
             this.statusLabel = new Label();
 
             // Initialize search timer
             this.searchTimer = new System.Windows.Forms.Timer();
-            this.searchTimer.Interval = 300; // 300ms delay like SmartOpen
+            this.searchTimer.Interval = 500; // 500ms delay to allow typing longer function names
             this.searchTimer.Tick += SearchTimer_Tick;
 
             InitializeComponent();
@@ -154,9 +161,23 @@ namespace AppRefiner.Dialogs
             this.resultsListView.Columns.Add("Function", 250);
             this.resultsListView.Columns.Add("Path", 250);
 
+            // loadAllLink - positioned below results
+            this.loadAllLink.Dock = DockStyle.Bottom;
+            this.loadAllLink.Font = new Font("Segoe UI", 9F, FontStyle.Regular, GraphicsUnit.Point);
+            this.loadAllLink.TextAlign = ContentAlignment.MiddleCenter;
+            this.loadAllLink.Height = 25;
+            this.loadAllLink.Padding = new Padding(5);
+            this.loadAllLink.LinkColor = Color.FromArgb(0, 120, 215);
+            this.loadAllLink.ActiveLinkColor = Color.FromArgb(0, 90, 180);
+            this.loadAllLink.VisitedLinkColor = Color.FromArgb(0, 120, 215);
+            this.loadAllLink.LinkBehavior = LinkBehavior.HoverUnderline;
+            this.loadAllLink.Visible = false;
+            this.loadAllLink.LinkClicked += LoadAllLink_LinkClicked;
+
             // DeclareFunctionDialog - following CommandPaletteDialog styling
             this.ClientSize = new Size(520, 400);
             this.Controls.Add(this.resultsListView);
+            this.Controls.Add(this.loadAllLink);
             this.Controls.Add(this.statusLabel);
             this.Controls.Add(this.progressBar);
             this.Controls.Add(this.searchBox);
@@ -253,7 +274,7 @@ namespace AppRefiner.Dialogs
 
         private void SearchBox_TextChanged(object sender, EventArgs e)
         {
-            // Reset the timer - this implements the 300ms typing delay
+            // Reset the timer - this implements the 500ms typing delay
             searchTimer.Stop();
             searchTimer.Start();
         }
@@ -329,6 +350,11 @@ namespace AppRefiner.Dialogs
             resultsListView.TileSize = new Size(resultsListView.Width - 25, 50);
         }
 
+        private void LoadAllLink_LinkClicked(object sender, LinkLabelLinkClickedEventArgs e)
+        {
+            LoadAllResults();
+        }
+
         protected override void OnPaint(PaintEventArgs e)
         {
             base.OnPaint(e);
@@ -378,28 +404,72 @@ namespace AppRefiner.Dialogs
             {
                 resultsListView.Items.Clear();
                 UpdateStatus("Ready");
+                isResultsLimited = false;
+                totalResultCount = 0;
+                currentSearchTerm = string.Empty;
                 return;
             }
             /* Replace spaces with % */
             searchTerm = searchTerm.Replace(' ', '%');
+            currentSearchTerm = searchTerm;
+
             try
             {
-                var results = functionCacheManager.SearchFunctionCache(appDesignerProcess, searchTerm);
-                
-                if (results.Count == 0)
+                // Get total count first
+                totalResultCount = functionCacheManager.GetSearchResultCount(appDesignerProcess, searchTerm);
+
+                if (totalResultCount == 0)
                 {
                     ShowRefreshCacheOption();
+                    isResultsLimited = false;
                 }
                 else
                 {
+                    // Get limited results
+                    var results = functionCacheManager.SearchFunctionCache(appDesignerProcess, searchTerm, MaxResultsDefault);
+                    isResultsLimited = totalResultCount > MaxResultsDefault;
+
                     DisplayResults(results);
-                    UpdateStatus($"Found {results.Count} function(s)");
+
+                    // Update status based on whether results are limited
+                    if (isResultsLimited)
+                    {
+                        UpdateStatus($"Showing first {results.Count} of {totalResultCount} functions");
+                    }
+                    else
+                    {
+                        UpdateStatus($"Found {results.Count} function(s)");
+                    }
                 }
             }
             catch (Exception ex)
             {
                 UpdateStatus($"Search error: {ex.Message}");
                 resultsListView.Items.Clear();
+                isResultsLimited = false;
+                totalResultCount = 0;
+            }
+        }
+
+        private void LoadAllResults()
+        {
+            if (string.IsNullOrEmpty(currentSearchTerm))
+            {
+                return;
+            }
+
+            try
+            {
+                // Get all results without limit
+                var results = functionCacheManager.SearchFunctionCache(appDesignerProcess, currentSearchTerm, int.MaxValue);
+                isResultsLimited = false;
+
+                DisplayResults(results);
+                UpdateStatus($"Found {results.Count} function(s)");
+            }
+            catch (Exception ex)
+            {
+                UpdateStatus($"Search error: {ex.Message}");
             }
         }
 
@@ -425,17 +495,17 @@ namespace AppRefiner.Dialogs
         private void DisplayResults(List<FunctionSearchResult> results)
         {
             resultsListView.Items.Clear();
-            
+
             foreach (var result in results)
             {
                 string displayName = FormatFunctionDisplayName(result);
                 var item = new ListViewItem(displayName);
                 item.SubItems.Add(result.FunctionPath);
                 item.Tag = result;
-                
+
                 // Add tooltip with function path like CommandPaletteDialog
                 item.ToolTipText = result.FunctionPath;
-                
+
                 resultsListView.Items.Add(item);
             }
 
@@ -443,6 +513,17 @@ namespace AppRefiner.Dialogs
             if (resultsListView.Items.Count > 0)
             {
                 resultsListView.Items[0].Selected = true;
+            }
+
+            // Update "Load All" link visibility and text
+            if (isResultsLimited)
+            {
+                loadAllLink.Text = $"Showing first {results.Count} of {totalResultCount} results. Click to load all";
+                loadAllLink.Visible = true;
+            }
+            else
+            {
+                loadAllLink.Visible = false;
             }
         }
 
