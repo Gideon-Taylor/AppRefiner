@@ -2,6 +2,22 @@
 
 AppRefiner provides an intelligent code completion system that enhances PeopleCode development with context-aware suggestions and real-time information. This feature set includes variable suggestions, object member completion, system variable assistance, app package navigation, and function call tooltips.
 
+## Table of Contents
+
+- [Overview](#overview)
+- [Configuration](#configuration)
+- [Variable Suggestions](#variable-suggestions)
+- [Object Member Suggestions](#object-member-suggestions)
+- [System Variables](#system-variables)
+- [App Package Suggestions](#app-package-suggestions)
+- [Function Call Tooltips](#function-call-tooltips)
+- [Keyboard Navigation](#keyboard-navigation)
+- [Integration with Type Checking](#integration-with-type-checking)
+- [Performance Considerations](#performance-considerations)
+- [Troubleshooting](#troubleshooting)
+- [Related Features](#related-features)
+- [Next Steps](#next-steps)
+
 ## Overview
 
 The auto-suggest system leverages AppRefiner's type inference engine to provide smart, context-aware code completions. As you type, AppRefiner automatically detects trigger characters and displays relevant suggestions based on your current context, accessible variables, object types, and expected parameter types.
@@ -29,6 +45,8 @@ All features are enabled by default. You can toggle them based on your preferenc
 ### When It Appears
 
 Variable suggestions appear automatically when you type the ampersand (`&`) character followed by a space, symbol, or at the end of the document. This prevents false triggers when prefixing existing identifiers.
+
+![Variable AutoSuggest opened](../images/variable_suggest.png)
 
 ### What Variables Are Shown
 
@@ -60,20 +78,6 @@ When typing inside a function call argument, AppRefiner intelligently sorts vari
 
 This helps you quickly find the right variable for the context.
 
-### Visual Indicators
-
-Each variable is displayed with an icon indicating its kind:
-
-| Icon | Variable Kind |
-|------|---------------|
-| Local Variable icon | Local variables |
-| Parameter icon | Method/function parameters |
-| Instance Variable icon | Instance variables (properties) |
-| Global Variable icon | Global variables |
-| Component Variable icon | Component variables |
-| Constant icon | Constants |
-| Property icon | Properties |
-
 ### Format
 
 Variables are displayed in this format:
@@ -85,13 +89,6 @@ variableName -> TypeName (Kind)
 - `recordCount -> number (Local)`
 - `customerName -> string (Parameter)`
 - `isActive -> boolean (Instance)`
-
-### Using Variable Suggestions
-
-1. Type `&` followed by a space or symbol
-2. Browse the list using arrow keys
-3. Press Enter or Tab to select a variable
-4. AppRefiner replaces from `&` to the cursor with the full variable name
 
 **Notes:**
 - Properties are automatically prefixed with `%This.`
@@ -122,32 +119,33 @@ AppRefiner uses type inference to determine the object type preceding the dot, t
 #### Record Objects
 When accessing a Record object, AppRefiner shows all fields from the database:
 
-```peoplecode
-Local Record &myRecord;
-&myRecord = GetRecord();
-&myRecord. /* Shows all fields: EMPLID, NAME, etc. */
-```
+*Direct record access*
+
+![Record fields Autosuggest opened](../images/record_fields_suggest.png)
+
+*Record instance access*
+
+![Rowset Record fields Autosuggest opened](../images/rowset_record_fields_suggest.png)
 
 **Database Required**: Yes - Field information is retrieved from your connected database
 
 #### Builtin Objects
 For PeopleCode builtin types (String, Number, Array, etc.), AppRefiner shows all available methods and properties from its type database:
 
-```peoplecode
-Local string &text = "Hello";
-&text. /* Shows: Length, Substring(), Upper(), Lower(), etc. */
-```
+![Builtin Object Members AutoSuggest opened](../images/builtin_object_member_suggest.png)
 
 **Database Required**: No - Builtin type information is included with AppRefiner
 
 #### Application Classes
 For Application Class instances, AppRefiner shows methods and properties defined in the class, including inherited members:
 
-```peoplecode
-Local MY_PACKAGE:MY_CLASS &obj;
-&obj = create MY_PACKAGE:MY_CLASS();
-&obj. /* Shows: public/protected methods and properties */
-```
+*%This and %Super reference*
+
+![Application Class Members AutoSuggest opened](../images/class_member_suggest.png)
+
+*External App Class reference*
+
+![External Class Members AutoSuggest opened](../images/external_class_member_suggest.png)
 
 **Database Required**: Yes - For full inheritance chain resolution
 
@@ -293,28 +291,19 @@ This ensures Application Classes are properly imported without manual interventi
 
 ### Using App Package Suggestions
 
-1. Start typing an app package path (e.g., `PT_`)
+1. Start typing an app package path (e.g., `ADS_PARSEREVALUATOR`)
 2. Type `:` to trigger suggestions
+
+![AppPackageSuggestion](../images/package_suggest_1.png)
+
 3. Browse packages and classes with arrow keys
 4. Press Enter or Tab to select an item
 5. For packages, suggestions automatically appear for the next level
+
+![AppPackageSuggestion](../images/package_suggest_2.png)
+
 6. For classes, the class is inserted and import is added
 
-**Example Workflow:**
-```peoplecode
-/* Start typing */
-Local PT_:
-
-/* After selecting PT_AB package */
-Local PT_AB:
-
-/* After selecting PT_BC package */
-Local PT_AB:PT_BC:
-
-/* After selecting MY_CLASS */
-Local PT_AB:PT_BC:MY_CLASS &obj;
-/* Import automatically added: import PT_AB:PT_BC:MY_CLASS; */
-```
 
 ### Database Requirements
 
@@ -340,14 +329,17 @@ Function tooltips show:
 3. **Next allowed types** - Expected types for the current parameter position
 
 **Format:**
-```
-FunctionName(param1: Type1, param2: Type2) -> ReturnType
 
-Next allowed type(s):
-paramName: TypeName
-```
+![Function Call Tip Opened](../images/function_calltip.png)
 
 The signature uses AppRefiner's standardized notation with special symbols to indicate optional parameters (`?`), variable arguments (`*`, `+`), union types (`|`), reference types (`@`), and more. See **[Type Checking - Understanding Function Signature Format](type-checking.md#understanding-function-signature-format)** for a complete guide to reading these signatures.
+
+As a concrete example, the signature in the above screenshot reads:
+* Between 0 and 2 Scroll references
+* 1 or more groups of field/order pairs
+* field parameter must be a field type
+* order must be a string
+* no return value
 
 ### Type Validation
 
@@ -357,12 +349,15 @@ For functions with multiple overloads or union types, all valid types are shown.
 
 ### Parameter Navigation
 
-As you type parameters and commas, the tooltip updates to highlight the next expected parameter:
+As you type parameters and commas, the tooltip updates to show you the next allowed type(s):
 
-```peoplecode
-MyFunction(  /* Tooltip shows: param1 expected */
-MyFunction(&value1,  /* Tooltip updates: param2 expected */
-```
+![Function Call Tip Opened](../images/function_calltip.png)
+
+In this screenshot we see that for where we are in the function call we can either pass a Scroll or a field
+
+If we pass a field, then the allowed types updates to show only string is allowed next, since we are in a (field,string) group:
+
+![Function Call Tip Opened](../images/function_allowed_types.png)
 
 ### Supported Function Types
 
@@ -576,7 +571,6 @@ Features requiring database connections (Record fields, App Package suggestions)
 1. Verify type inference is working correctly (check variable declarations)
 2. For App Classes, ensure database connection is active
 3. Check that the object variable has a specific type (not `any` or `object`)
-4. Verify imports are present for Application Classes
 
 ### App Package Suggestions Empty
 
