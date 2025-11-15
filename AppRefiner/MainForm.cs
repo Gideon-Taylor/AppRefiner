@@ -2133,6 +2133,10 @@ namespace AppRefiner
                 {
                     case SCN_DWELLSTART:
                         Debug.Log($"SCN_DWELLSTART: {m.WParam} -- {m.LParam}");
+
+                        /* In case a tooltip got stuck? */
+                        TooltipProviders.TooltipManager.HideTooltip(activeEditor);
+
                         TooltipProviders.TooltipManager.ShowTooltip(activeEditor, m.WParam.ToInt32(), m.LParam.ToInt32());
                         break;
                     case SCN_DWELLEND:
