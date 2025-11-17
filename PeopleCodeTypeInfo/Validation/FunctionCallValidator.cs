@@ -147,6 +147,30 @@ public class FunctionCallValidator
         // Check for too many arguments: matching succeeded but we have leftover arguments
         if (ok && consumedIndex < arguments.Length)
         {
+            // BEFORE declaring "too many arguments", check if this is actually a type mismatch
+            // or missing argument in a variable parameter that could continue accepting arguments.
+            //
+            // We check for two cases:
+            // 1. Type mismatch at consumedIndex (wrong type for next argument)
+            // 2. Missing argument after consumedIndex (incomplete parameter group)
+            if (ctx.BestFailureArgIndex >= consumedIndex && ctx.FailureKind != FailureKind.None)
+            {
+                // We have failure info from backtracking - use it instead of "too many arguments"
+                var failureIndex = ctx.BestFailureArgIndex;
+                var expectedTypes = ctx.GetExpectedTypesAtFailure();
+                var errorMessages = ctx.Errors.Count > 0 ? ctx.Errors :
+                    new List<string> { ctx.FailureKind == FailureKind.MissingArgument ? "Missing argument" : "Type mismatch" };
+                var foundAtFailure = failureIndex < arguments.Length ? FormatTypeInfoForDisplay(arguments[failureIndex]) : "";
+                return ValidationResult.Failure(
+                    failureIndex,
+                    expectedTypes,
+                    errorMessages,
+                    foundAtFailure,
+                    ctx.FailureKind,
+                    ctx.FunctionName);
+            }
+
+            // True "too many arguments" case - no parameter could accept more
             var foundType = FormatTypeInfoForDisplay(arguments[consumedIndex]);
             return ValidationResult.Failure(
                 consumedIndex,
@@ -788,6 +812,9 @@ public class FunctionCallValidator
                 return false;
             }
 
+            int lastSuccessfulCount = -1;
+            int lastSuccessfulIndex = argIndex;
+
             for (int count = maxPossible; count >= minCount; count--)
             {
                 int innerIndex = argIndex;
@@ -804,14 +831,45 @@ public class FunctionCallValidator
 
                 if (!innerOk)
                 {
+                    // Failed to match this repetition count. If we still have more arguments and could accept them
+                    // (count < maxCount), record the expectation so we can report type mismatch instead of "too many arguments"
+                    if (count >= minCount && count < variable.MaxCount && innerIndex < ctx.Arguments.Length)
+                    {
+                        // Record what we expected at the position where matching failed
+                        RecordInnerExpectationForShortfall(ctx, variable.InnerParameter, innerIndex);
+                        if (ctx.FailureKind == FailureKind.None)
+                        {
+                            ctx.RecordTypeMismatch(innerIndex, variable.InnerParameter);
+                        }
+                    }
                     continue; // try fewer repetitions
                 }
 
                 // After committing 'count' repetitions, continue with the rest of the sequence
                 if (MatchSequence(ctx, parameters, paramIdx + 1, innerIndex, out nextArgIndex))
                 {
+                    // Success! But before returning, check if we could have accepted more repetitions
+                    // and there are leftover arguments. If so, speculatively try matching one more
+                    // repetition to record what type would be expected (for better error reporting).
+                    if (count < variable.MaxCount && innerIndex < ctx.Arguments.Length)
+                    {
+                        // Speculatively try one more repetition just to record expected types
+                        if (!MatchParameter(ctx, variable.InnerParameter, innerIndex, out int _))
+                        {
+                            // Record the failure so "too many arguments" can be upgraded to type mismatch
+                            RecordInnerExpectationForShortfall(ctx, variable.InnerParameter, innerIndex);
+                            if (ctx.FailureKind == FailureKind.None)
+                            {
+                                ctx.RecordTypeMismatch(innerIndex, variable.InnerParameter);
+                            }
+                        }
+                    }
                     return true;
                 }
+
+                // Track the last successful count in case we need it
+                lastSuccessfulCount = count;
+                lastSuccessfulIndex = innerIndex;
 
                 // ENHANCEMENT: Record expectations for both continuation paths when we've met minimum requirements
                 if (count >= minCount)
@@ -1661,6 +1719,12 @@ public class ValidationResult
                 var expectedStr = expectedTypes.Count > 1
                     ? string.Join(" or ", expectedTypes)
                     : expectedTypes.FirstOrDefault() ?? "unknown";
+
+                // Handle missing argument differently - don't say "found unknown"
+                if (FailureKind == FunctionCallValidator.FailureKind.MissingArgument)
+                {
+                    return $"{functionPrefix}Argument {FailedAtArgumentIndex + 1} should be {expectedStr} (missing)";
+                }
 
                 var foundStr = string.IsNullOrEmpty(FoundTypeAtFailure) ? "unknown" : FoundTypeAtFailure;
 
