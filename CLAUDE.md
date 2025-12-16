@@ -65,6 +65,7 @@ The core extensibility model is based on abstract base classes with the visitor 
 - `BaseStyler`: For visual indicators and highlighting
 - `ScopedRefactor`: For code transformations (unified base class)
 - `BaseTooltipProvider`: For contextual information display
+- `BaseCommand`: For custom commands in the command palette with keyboard shortcuts (built-in or plugin)
 
 **Scoped Variants:**
 - `ScopedLintRule<T>`: Adds variable/scope tracking
@@ -173,6 +174,198 @@ AppRefiner uses a self-hosted recursive descent parser written entirely in C# wi
 4. Handle user input through dialogs if needed via `ShowRefactorDialog()`
 5. Override visitor methods to identify refactoring opportunities
 6. Access source locations via `node.SourceSpan` for precise text editing
+
+### Adding New Commands
+Commands can be built-in (located in `Commands/BuiltIn/`) or provided by plugins. All commands register in the command palette with optional keyboard shortcuts.
+
+#### Base Class: `BaseCommand`
+Located in `AppRefiner.Commands` namespace. All commands (built-in and plugin) must inherit from this abstract class.
+
+**Required Properties:**
+- `CommandName`: The display name shown in the command palette
+- `CommandDescription`: Description of what the command does
+
+**Optional Properties:**
+- `RequiresActiveEditor`: Whether command needs an active editor (default: true)
+- `DynamicEnabledCheck`: Func<bool> to control when command is enabled
+
+**Key Methods:**
+- `InitializeShortcuts(IShortcutRegistrar registrar, string commandId)`: Override to register keyboard shortcuts
+- `Execute(CommandContext context)`: Main execution method - called from palette or shortcut
+- `GetDisplayName()`: Returns name with shortcut text if registered
+- `SetRegisteredShortcut(string shortcutText)`: Helper to store shortcut display text
+
+#### CommandContext Structure
+Passed to `Execute()` method, providing access to AppRefiner services:
+- `ActiveEditor`: The currently active ScintillaEditor (may be null)
+- `LinterManager`: Access to linting functionality
+- `StylerManager`: Access to styling functionality
+- `RefactorManager`: Access to refactoring functionality
+- `SettingsService`: Access to application settings
+- `AutoCompleteService`: Access to autocomplete functionality
+- `FunctionCacheManager`: Access to cached function metadata
+- `AutoSuggestSettings`: Current auto-suggest configuration
+
+#### Keyboard Shortcut Registration
+The `InitializeShortcuts()` method provides full control over shortcut registration:
+
+**IShortcutRegistrar Interface:**
+- `IsShortcutAvailable(ModifierKeys, Keys)`: Check if a shortcut is available
+- `TryRegisterShortcut(commandId, ModifierKeys, Keys, Action)`: Attempt to register
+- `GetShortcutDisplayText(ModifierKeys, Keys)`: Get formatted display text
+
+**Best Practices:**
+- Always check availability before attempting registration
+- Provide fallback shortcut options if preferred combination is taken
+- Use `TryRegisterShortcut()` return value to determine success
+- Call `SetRegisteredShortcut()` on success to update display name
+
+#### Simple Example
+```csharp
+using AppRefiner.Commands;
+using AppRefiner.Services;
+
+public class SimpleCommand : BaseCommand
+{
+    public override string CommandName => "My Command";
+    public override string CommandDescription => "Does something useful";
+    public override bool RequiresActiveEditor => false;
+
+    public override void InitializeShortcuts(IShortcutRegistrar registrar, string commandId)
+    {
+        // Try to register Ctrl+Alt+M
+        if (registrar.TryRegisterShortcut(commandId,
+            ModifierKeys.Control | ModifierKeys.Alt,
+            Keys.M,
+            () => Execute(new CommandContext())))
+        {
+            SetRegisteredShortcut(registrar.GetShortcutDisplayText(
+                ModifierKeys.Control | ModifierKeys.Alt, Keys.M));
+        }
+    }
+
+    public override void Execute(CommandContext context)
+    {
+        MessageBox.Show("Command executed!");
+    }
+}
+```
+
+#### Advanced Example with Fallback Shortcuts
+```csharp
+public class AdvancedCommand : BaseCommand
+{
+    public override string CommandName => "Advanced Command";
+    public override string CommandDescription => "Command with fallback shortcuts";
+    public override bool RequiresActiveEditor => true;
+
+    // Only enable when database is connected
+    public override Func<bool>? DynamicEnabledCheck => () =>
+    {
+        // Add runtime logic here
+        return true;
+    };
+
+    public override void InitializeShortcuts(IShortcutRegistrar registrar, string commandId)
+    {
+        // Try multiple shortcuts with fallback
+        var shortcuts = new[]
+        {
+            (ModifierKeys.Control | ModifierKeys.Alt, Keys.D),
+            (ModifierKeys.Control | ModifierKeys.Shift, Keys.D),
+            (ModifierKeys.Alt | ModifierKeys.Shift, Keys.D)
+        };
+
+        foreach (var (modifiers, key) in shortcuts)
+        {
+            if (registrar.IsShortcutAvailable(modifiers, key))
+            {
+                if (registrar.TryRegisterShortcut(commandId, modifiers, key,
+                    () => Execute(new CommandContext())))
+                {
+                    SetRegisteredShortcut(registrar.GetShortcutDisplayText(modifiers, key));
+                    Debug.Log($"{CommandName}: Registered {RegisteredShortcutText}");
+                    return; // Success
+                }
+            }
+        }
+
+        Debug.Log($"{CommandName}: Could not register any shortcuts");
+    }
+
+    public override void Execute(CommandContext context)
+    {
+        if (context.ActiveEditor == null)
+        {
+            MessageBox.Show("No active editor");
+            return;
+        }
+
+        // Access AppRefiner services through context
+        context.LinterManager?.ProcessLintersForActiveEditor(
+            context.ActiveEditor,
+            context.ActiveEditor.DataManager);
+    }
+}
+```
+
+#### Accessing Services and Data
+```csharp
+public override void Execute(CommandContext context)
+{
+    // Check for active editor
+    if (context.ActiveEditor == null)
+        return;
+
+    // Access database through editor
+    var dataManager = context.ActiveEditor.DataManager;
+    if (dataManager != null)
+    {
+        // Perform database operations
+    }
+
+    // Use linter manager
+    if (context.LinterManager != null)
+    {
+        context.LinterManager.ProcessLintersForActiveEditor(
+            context.ActiveEditor, dataManager);
+    }
+
+    // Access settings
+    if (context.SettingsService != null)
+    {
+        var settings = context.SettingsService.LoadGeneralSettings();
+        // Use settings
+    }
+
+    // Execute refactors
+    if (context.RefactorManager != null)
+    {
+        // Create and execute refactor instances
+    }
+}
+```
+
+#### Discovery and Registration
+Commands are automatically discovered at startup:
+1. `CommandManager.DiscoverAndCacheCommands()` finds all `BaseCommand` subclasses from both the main assembly and loaded plugins
+2. Each command's `InitializeShortcuts()` is called with `IShortcutRegistrar`
+3. Commands are registered in the command palette with their display names
+4. Shortcuts are globally active when registered
+
+#### Testing Commands
+**For Plugin Commands:**
+1. Build your plugin project (targeting .NET 8)
+2. Copy the compiled DLL to AppRefiner's Plugins directory
+3. Restart AppRefiner
+4. Open command palette (Ctrl+Shift+P) to see your commands
+5. Check Debug Console for registration messages
+
+**For Built-in Commands:**
+1. Create command class in `Commands/BuiltIn/` folder
+2. Inherit from `BaseCommand` and implement required members
+3. Build and run AppRefiner
+4. Command is auto-discovered and appears in command palette
 
 ### Plugin Development
 1. Create new .NET 8 class library project
@@ -310,6 +503,12 @@ The Better Find functionality is integrated into the command palette system:
 
 - **MainForm.cs**: Central coordination and UI management
 - **Services/**: Core service implementations
+- **Commands/**: Command system (built-in and plugin)
+  - **IShortcutRegistrar.cs**: Interface for keyboard shortcut registration
+  - **CommandContext.cs**: Context passed to commands
+  - **BaseCommand.cs**: Base class for all commands (built-in and plugin)
+  - **CommandManager.cs**: Discovery and execution of commands
+  - **BuiltIn/**: Built-in command implementations
 - **Linters/**, **Stylers/**, **Refactors/**: Extension implementations
 - **Database/**: Data access layer
 - **PeopleCodeParser.SelfHosted/**: Self-hosted parser implementation
