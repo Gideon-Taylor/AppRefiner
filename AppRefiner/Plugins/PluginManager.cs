@@ -1,3 +1,4 @@
+using AppRefiner.Commands;
 using AppRefiner.Linters;
 using AppRefiner.Stylers;
 using AppRefiner.TooltipProviders;
@@ -162,6 +163,34 @@ namespace AppRefiner.Plugins
         }
 
         /// <summary>
+        /// Discovers all command types from loaded plugin assemblies
+        /// </summary>
+        /// <returns>Collection of command types from plugins</returns>
+        public static IEnumerable<Type> DiscoverCommandTypes()
+        {
+            var commandTypes = new List<Type>();
+
+            foreach (var assembly in LoadedPluginAssemblies)
+            {
+                try
+                {
+                    // Find all non-abstract types that inherit from BaseCommand
+                    var types = assembly.GetTypes()
+                        .Where(t => typeof(BaseCommand).IsAssignableFrom(t) && !t.IsAbstract);
+
+                    commandTypes.AddRange(types);
+                }
+                catch (Exception ex)
+                {
+                    // Log the error but continue with other assemblies
+                    Debug.Log($"Error discovering command types in assembly {assembly.FullName}: {ex.Message}");
+                }
+            }
+
+            return commandTypes;
+        }
+
+        /// <summary>
         /// Gets metadata about all loaded plugin assemblies
         /// </summary>
         /// <returns>List of plugin metadata</returns>
@@ -186,6 +215,9 @@ namespace AppRefiner.Plugins
                     var tooltipProviderCount = assembly.GetTypes()
                         .Count(t => typeof(BaseTooltipProvider).IsAssignableFrom(t) && !t.IsAbstract && !t.IsInterface);
 
+                    var commandCount = assembly.GetTypes()
+                        .Count(t => typeof(BaseCommand).IsAssignableFrom(t) && !t.IsAbstract);
+
                     var plugin = new PluginMetadata
                     {
                         AssemblyName = assembly.GetName().Name ?? "Unknown",
@@ -194,7 +226,8 @@ namespace AppRefiner.Plugins
                         LinterCount = linterCount,
                         StylerCount = stylerCount,
                         RefactorCount = refactorCount,
-                        TooltipProviderCount = tooltipProviderCount
+                        TooltipProviderCount = tooltipProviderCount,
+                        CommandCount = commandCount
                     };
 
                     metadata.Add(plugin);
@@ -222,10 +255,11 @@ namespace AppRefiner.Plugins
         public int StylerCount { get; set; }
         public int RefactorCount { get; set; }
         public int TooltipProviderCount { get; set; }
+        public int CommandCount { get; set; }
 
         public override string ToString()
         {
-            return $"{AssemblyName} v{Version} ({LinterCount} linters, {StylerCount} stylers, {RefactorCount} refactors, {TooltipProviderCount} tooltip providers)";
+            return $"{AssemblyName} v{Version} ({LinterCount} linters, {StylerCount} stylers, {RefactorCount} refactors, {TooltipProviderCount} tooltip providers, {CommandCount} commands)";
         }
     }
 }
