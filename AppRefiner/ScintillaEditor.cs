@@ -288,7 +288,7 @@ namespace AppRefiner
         public List<List<int>> CollapsedFoldPaths { get; set; } = [];
 
         public IReadOnlyList<ParseError> ParserErrors { get; set; } = [];
-        internal AppDesignerProcess AppDesignerProcess { get; set; }
+        public AppDesignerProcess AppDesignerProcess { get; set; }
 
 
         /// <summary>
