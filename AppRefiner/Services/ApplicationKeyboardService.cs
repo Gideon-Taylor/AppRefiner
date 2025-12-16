@@ -1,6 +1,8 @@
+using AppRefiner.Commands;
+
 namespace AppRefiner.Services
 {
-    public class ApplicationKeyboardService : IDisposable
+    public class ApplicationKeyboardService : IShortcutRegistrar, IDisposable
     {
         private readonly Dictionary<string, ShortcutRegistration> _registeredShortcuts;
         private bool _disposed = false;
@@ -39,6 +41,60 @@ namespace AppRefiner.Services
                 return;
 
             _registeredShortcuts.Remove(name);
+        }
+
+        /// <summary>
+        /// Check if a keyboard shortcut combination is available for registration.
+        /// Part of IShortcutRegistrar interface for plugin command support.
+        /// </summary>
+        public bool IsShortcutAvailable(ModifierKeys modifiers, Keys key)
+        {
+            var combination = new KeyCombination(modifiers, key);
+
+            foreach (var existing in _registeredShortcuts.Values)
+            {
+                if (existing.Combination.Equals(combination))
+                {
+                    return false; // Already registered
+                }
+            }
+
+            return true; // Available
+        }
+
+        /// <summary>
+        /// Try to register a keyboard shortcut for a command.
+        /// Part of IShortcutRegistrar interface for plugin command support.
+        /// </summary>
+        public bool TryRegisterShortcut(string commandId, ModifierKeys modifiers, Keys key, Action action)
+        {
+            if (!IsShortcutAvailable(modifiers, key))
+            {
+                Debug.Log($"Shortcut {GetShortcutDisplayText(modifiers, key)} already registered, cannot register for {commandId}");
+                return false;
+            }
+
+            return RegisterShortcut(commandId, modifiers, key, action);
+        }
+
+        /// <summary>
+        /// Get a formatted string representation of a shortcut for display purposes.
+        /// Part of IShortcutRegistrar interface for plugin command support.
+        /// </summary>
+        public string GetShortcutDisplayText(ModifierKeys modifiers, Keys key)
+        {
+            var parts = new List<string>();
+
+            if (modifiers.HasFlag(ModifierKeys.Control))
+                parts.Add("Ctrl");
+            if (modifiers.HasFlag(ModifierKeys.Alt))
+                parts.Add("Alt");
+            if (modifiers.HasFlag(ModifierKeys.Shift))
+                parts.Add("Shift");
+
+            parts.Add(key.ToString());
+
+            return string.Join("+", parts);
         }
 
         public bool ProcessKeyMessage(int combinedParam)

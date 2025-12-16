@@ -1,3 +1,4 @@
+using AppRefiner.Commands;
 using AppRefiner.Database;
 using AppRefiner.Database.Models;
 using AppRefiner.Dialogs;
@@ -56,6 +57,7 @@ namespace AppRefiner
         private RefactorManager? refactorManager; // Added RefactorManager
         private SettingsService? settingsService; // Added SettingsService
         private FunctionCacheManager? functionCacheManager;
+        private CommandManager? commandManager; // Added CommandManager for plugin commands
         private AutoSuggestSettings autoSuggestSettings = AutoSuggestSettings.GetDefault(); // Auto suggest configuration 
         private ScintillaEditor? activeEditor = null;
         private AppDesignerProcess? activeAppDesigner = null;
@@ -235,6 +237,10 @@ namespace AppRefiner
             refactorManager = new RefactorManager(this, gridRefactors);
             refactorManager.InitializeRefactorOptions(); // Initialize refactors via the manager
 
+            // Instantiate CommandManager and discover plugin commands
+            commandManager = new CommandManager();
+            commandManager.DiscoverAndCacheCommands();
+
             // Load templates using the manager and populate ComboBox
             templateManager.LoadTemplates();
             cmbTemplates.Items.Clear();
@@ -247,7 +253,13 @@ namespace AppRefiner
             }
             cmbTemplates.SelectedIndexChanged += CmbTemplates_SelectedIndexChanged;
 
-            RegisterCommands();
+            RegisterCommands(commandManager);
+
+            // Initialize shortcuts for plugin commands (after RegisterCommands)
+            if (applicationKeyboardService != null)
+            {
+                commandManager?.InitializeCommandShortcuts(applicationKeyboardService);
+            }
             // Initialize the tooltip providers
             TooltipManager.Initialize();
             InitTooltipOptions(); // Needs to run before LoadTooltipStates
@@ -255,31 +267,17 @@ namespace AppRefiner
             // Load Tooltip states using the service
             settingsService.LoadTooltipStates(tooltipProviders, dataGridViewTooltips);
 
-            // Register keyboard shortcuts using the application-scoped service (using fully qualified Enum access)
-            applicationKeyboardService?.RegisterShortcut("CollapseLevel", AppRefiner.ModifierKeys.Control | AppRefiner.ModifierKeys.Shift, Keys.OemOpenBrackets, collapseLevelHandler);
-            applicationKeyboardService?.RegisterShortcut("ExpandLevel", AppRefiner.ModifierKeys.Control | AppRefiner.ModifierKeys.Shift, Keys.OemCloseBrackets, expandLevelHandler);
-            applicationKeyboardService?.RegisterShortcut("CollapseAll", AppRefiner.ModifierKeys.Control | AppRefiner.ModifierKeys.Shift | AppRefiner.ModifierKeys.Alt, Keys.OemOpenBrackets, collapseAllHandler);
-            applicationKeyboardService?.RegisterShortcut("ExpandAll", AppRefiner.ModifierKeys.Control | AppRefiner.ModifierKeys.Shift | AppRefiner.ModifierKeys.Alt, Keys.OemCloseBrackets, expandAllHandler);
-            applicationKeyboardService?.RegisterShortcut("LintCode", AppRefiner.ModifierKeys.Alt, Keys.L, lintCodeHandler);
-            applicationKeyboardService?.RegisterShortcut("CommandPalette", AppRefiner.ModifierKeys.Control | AppRefiner.ModifierKeys.Shift, Keys.P, ShowCommandPalette); // Use the parameterless overload
-            applicationKeyboardService?.RegisterShortcut("ApplyTemplate", AppRefiner.ModifierKeys.Control | AppRefiner.ModifierKeys.Alt, Keys.T, ApplyTemplateCommand);
-            applicationKeyboardService?.RegisterShortcut("Outline", AppRefiner.ModifierKeys.Control | AppRefiner.ModifierKeys.Shift, Keys.O, ShowOutlineCommand); // Use the parameterless overload
-            applicationKeyboardService?.RegisterShortcut("ApplyQuickFix", AppRefiner.ModifierKeys.Control, Keys.OemPeriod, ApplyQuickFixCommand); // Ctrl + .
-            applicationKeyboardService?.RegisterShortcut("SmartOpen", AppRefiner.ModifierKeys.Control, Keys.O, ShowSmartOpenDialog); // Ctrl + O
+            // Register keyboard shortcuts for Command Palette (keep this one as it's core functionality)
+            applicationKeyboardService?.RegisterShortcut("CommandPalette", AppRefiner.ModifierKeys.Control | AppRefiner.ModifierKeys.Shift, Keys.P, ShowCommandPalette);
+
+            // Note: Better Find still uses special handlers for Ctrl+F and Ctrl+H as they have custom behavior
             applicationKeyboardService?.RegisterShortcut("BetterFind", AppRefiner.ModifierKeys.Control, Keys.F, showBetterFindHandler); // Ctrl + F
             applicationKeyboardService?.RegisterShortcut("BetterFindReplace", AppRefiner.ModifierKeys.Control, Keys.H, showBetterFindReplaceHandler); // Ctrl + H
-            applicationKeyboardService?.RegisterShortcut("StackTraceNavigator", AppRefiner.ModifierKeys.Control | AppRefiner.ModifierKeys.Alt, Keys.S, showStackTraceNavigatorHandler); // Ctrl + Alt + S
-            applicationKeyboardService?.RegisterShortcut("FindNext", AppRefiner.ModifierKeys.None, Keys.F3, findNextHandler); // F3
-            applicationKeyboardService?.RegisterShortcut("FindPrevious", AppRefiner.ModifierKeys.Shift, Keys.F3, findPreviousHandler); // Shift + F3
-            applicationKeyboardService?.RegisterShortcut("GoToDefinition", AppRefiner.ModifierKeys.None, Keys.F12, goToDefinitionHandler); // F12
-            applicationKeyboardService?.RegisterShortcut("NavigateBackward", AppRefiner.ModifierKeys.Alt, Keys.Left, navigateBackwardHandler); // Alt + Left
-            applicationKeyboardService?.RegisterShortcut("NavigateForward", AppRefiner.ModifierKeys.Alt, Keys.Right, navigateForwardHandler); // Alt + Right
-            applicationKeyboardService?.RegisterShortcut("PlaceBookmark", AppRefiner.ModifierKeys.Control, Keys.B, placeBookmarkHandler);
-            applicationKeyboardService?.RegisterShortcut("GoToPreviousBookmark", AppRefiner.ModifierKeys.Control, Keys.OemMinus, goToPreviousBookmarkHandler);
-            applicationKeyboardService?.RegisterShortcut("GenerateTypeErrorReport", AppRefiner.ModifierKeys.Control | AppRefiner.ModifierKeys.Alt, Keys.E, GenerateTypeErrorReportCommand); // Ctrl + Alt + E
-            
-            // Register refactor shortcuts using the RefactorManager
+
+            // Register refactor shortcuts (refactors use dynamic command generation, not BaseCommand classes)
             RegisterRefactorShortcuts();
+
+            // All other shortcuts are now registered through built-in BaseCommand classes via CommandManager
 
 
             // Initialize snapshot manager
@@ -633,7 +631,7 @@ namespace AppRefiner
             ScintillaManager.ShowBetterFindDialog(activeEditor, enableReplaceMode: true);
         }
 
-        private void showStackTraceNavigatorHandler()
+        internal void showStackTraceNavigatorHandler()
         {
             if (activeAppDesigner == null) return;
 
@@ -1207,7 +1205,7 @@ namespace AppRefiner
             templateManager.ApplyActiveTemplateToEditor(activeEditor);
         }
 
-        private void ShowDeclareFunctionDialog()
+        internal void ShowDeclareFunctionDialog()
         {
             if (activeAppDesigner?.DataManager == null)
             {
@@ -1271,7 +1269,7 @@ namespace AppRefiner
             }
         }
 
-        private void ShowSmartOpenDialog()
+        internal void ShowSmartOpenDialog()
         {
             if (activeAppDesigner?.DataManager == null)
             {
@@ -1399,107 +1397,36 @@ namespace AppRefiner
             return sb.ToString();
         }
 
-        private void RegisterCommands()
+        private void RegisterCommands(CommandManager? commandManager)
         {
             // Clear any existing commands
             AvailableCommands.Clear();
 
-            /* Main "open" command for future development now that we  can open arbitrary definitions! */
-            AvailableCommands.Add(new Command(
-                "Declare Function",
-                "Declare an external function",
-                ShowDeclareFunctionDialog
-            )
-            { RequiresActiveEditor = false });
-
-            // Smart Open command
-            AvailableCommands.Add(new Command(
-                "Open: Smart Open (Ctrl+O)",
-                "Smart search and open PeopleSoft objects across all types",
-                ShowSmartOpenDialog,
-                () => activeEditor?.DataManager != null // Requires database connection
-            )
-            { RequiresActiveEditor = false });
-
-            // Add editor commands with "Editor:" prefix
-            AvailableCommands.Add(new Command(
-                "Editor: Lint Current Code (Ctrl+Alt+L)",
-                "Run linting rules against the current editor",
-                () =>
+            // Add built-in commands from CommandManager (includes both built-in and plugin commands)
+            if (commandManager != null)
+            {
+                foreach (var (commandId, commandInstance) in commandManager.GetCommands())
                 {
-                    if (activeEditor == null) return;
-                    // Delegate to button click handler which uses the manager
-                    linterManager?.ProcessLintersForActiveEditor(activeEditor, activeEditor.DataManager);
-                }
-            ));
+                    // Capture the instance for the lambda
+                    var currentCommand = commandInstance;
 
-            AvailableCommands.Add(new Command(
-                "Editor: Dark Mode",
-                "Apply dark mode to the current editor",
-                () =>
-                {
-                    if (activeEditor != null)
+                    AvailableCommands.Add(new Command(
+                        currentCommand.GetDisplayName(),
+                        currentCommand.CommandDescription,
+                        () =>
+                        {
+                            var context = CreateCommandContext();
+                            commandManager.ExecuteCommand(currentCommand, context);
+                        },
+                        currentCommand.DynamicEnabledCheck
+                    )
                     {
-                        ScintillaManager.SetDarkMode(activeEditor);
-                    }
+                        RequiresActiveEditor = currentCommand.RequiresActiveEditor
+                    });
                 }
-            ));
+            }
 
-            AvailableCommands.Add(new Command(
-                "Editor: Collapse Level (Ctrl+Shift+[)",
-                "Collapse the current fold level",
-                () =>
-                {
-                    if (activeEditor != null)
-                        ScintillaManager.SetCurrentLineFoldStatus(activeEditor, true);
-                }
-            ));
-
-            AvailableCommands.Add(new Command(
-                "Editor: Expand Level (Ctrl+Shift+])",
-                "Expand the current fold level",
-                () =>
-                {
-                    if (activeEditor != null)
-                        ScintillaManager.SetCurrentLineFoldStatus(activeEditor, false);
-                }
-            ));
-
-            AvailableCommands.Add(new Command(
-                "Editor: Collapse All (Ctrl+Shift+Alt+[)",
-                "Collapse all foldable sections",
-                () =>
-                {
-                    if (activeEditor != null)
-                        ScintillaManager.CollapseTopLevel(activeEditor);
-                }
-            ));
-
-            AvailableCommands.Add(new Command(
-                "Editor: Expand All (Ctrl+Shift+Alt+])",
-                "Expand all foldable sections",
-                () =>
-                {
-                    if (activeEditor != null)
-                        ScintillaManager.ExpandTopLevel(activeEditor);
-                }
-            ));
-
-            AvailableCommands.Add(new Command(
-                "Navigate Backward (Alt+Left)",
-                "Navigate to the previous location in navigation history",
-                NavigateBackwardCommand
-            )
-            { RequiresActiveEditor = false });
-
-            AvailableCommands.Add(new Command(
-                "Navigate Forward (Alt+Right)",
-                "Navigate to the next location in navigation history",
-                NavigateForwardCommand
-            )
-            { RequiresActiveEditor = false });
-
-            // Add refactoring commands using RefactorManager
+            // Add dynamic refactoring commands using RefactorManager
             if (refactorManager != null)
             {
                 foreach (var refactorInfo in refactorManager.AvailableRefactors)
@@ -1543,23 +1470,7 @@ namespace AppRefiner
                 }
             }
 
-            // Add the suppress lint errors command (special case)
-            AvailableCommands.Add(new Command(
-                "Linter: Suppress lint errors",
-                "Suppress lint errors with configurable scope",
-                () =>
-                {
-                    if (activeEditor != null)
-                    {
-                        // Instantiate the specific refactor
-                        /* var suppressRefactor = new SuppressReportRefactor(activeEditor);
-                        // Execute via the manager
-                        refactorManager?.ExecuteRefactor(suppressRefactor, activeEditor);*/
-                    }
-                }
-            ));
-
-            // Add individual linter commands with "Lint: " prefix
+            // Add dynamic linter commands with "Lint: " prefix
             // Need to get linters from the manager
             if (linterManager != null)
             {
@@ -1582,313 +1493,28 @@ namespace AppRefiner
                         ));
                 }
             }
+        }
 
-            // Add database commands with dynamic enabled states
-            AvailableCommands.Add(new Command(
-                "Database: Connect to DB",
-                "Connect to database for advanced functionality",
-                () =>
-                {
-                    if (activeAppDesigner != null)
-                    {
-                        var mainHandle = activeAppDesigner.MainWindowHandle;
-                        var handleWrapper = new WindowWrapper(mainHandle);
-                        DBConnectDialog dialog = new(mainHandle, activeAppDesigner != null ? activeAppDesigner.DBName : "");
-                        dialog.StartPosition = FormStartPosition.CenterParent;
-
-                        if (dialog.ShowDialog(handleWrapper) == DialogResult.OK)
-                        {
-                            IDataManager? manager = dialog.DataManager;
-                            if (manager != null)
-                            {
-                                activeAppDesigner.DataManager = manager;
-                                foreach (var editor in activeAppDesigner.Editors.Values)
-                                {
-                                    editor.DataManager = manager;
-                                }
-
-                                // Force refresh all editors to allow DB-dependent stylers to run
-                                RefreshAllEditorsAfterDatabaseConnection();
-                            }
-                        }
-                    }
-                },
-                () => activeAppDesigner != null && activeAppDesigner.DataManager == null
-            ));
-
-            AvailableCommands.Add(new Command(
-                "Database: Disconnect DB",
-                "Disconnect from current database",
-                () =>
-                {
-                    if (activeEditor != null && activeEditor.AppDesignerProcess.DataManager != null)
-                    {
-                        activeEditor.AppDesignerProcess.DataManager.Disconnect();
-                        activeEditor.AppDesignerProcess.DataManager = null;
-                        foreach (var editor in activeEditor.AppDesignerProcess.Editors.Values)
-                        {
-                            editor.DataManager = null;
-                        }
-                    }
-                },
-                () => activeEditor != null && activeEditor.DataManager != null
-            ));
-
-            // Add clear annotations command
-            AvailableCommands.Add(new Command(
-                "Editor: Clear Annotations",
-                "Clear all annotations from the current editor",
-                () =>
-                {
-                    if (activeEditor != null)
-                    {
-                        ScintillaManager.ClearAnnotations(activeEditor);
-                    }
-                }
-            ));
-
-            // Add Force Refresh command
-            AvailableCommands.Add(new Command(
-                "Editor: Force Refresh",
-                "Force the editor to refresh styles",
-                () =>
-                {
-                    if (activeEditor != null)
-                    {
-                        // Clear content string to force re-reading
-                        activeEditor.ContentString = ScintillaManager.GetScintillaText(activeEditor);
-                        // Clear annotations
-                        ScintillaManager.ClearAnnotations(activeEditor);
-                        // Reset styles
-                        ScintillaManager.ResetStyles(activeEditor);
-
-                        CheckForContentChanges(activeEditor);
-                    }
-                }
-            ));
-
-            AvailableCommands.Add(new Command(
-                "Project: Lint Project",
-                "Run all linters on the entire project and generate a report",
-                () =>
-                {
-                    if (activeEditor != null && linterManager != null)
-                    {
-                        var mainHandle = activeEditor.AppDesignerProcess.MainWindowHandle;
-
-                        this.Invoke(() =>
-                        {
-                            using var lintDialog = new Dialogs.LintProjectProgressDialog(linterManager, activeEditor, mainHandle);
-                            lintDialog.ShowDialog(new WindowWrapper(mainHandle));
-                        });
-                    }
-                },
-                () => activeEditor != null && activeEditor.DataManager != null
-            ));
-
-            AvailableCommands.Add(new Command(
-                "Template: Apply Template (Ctrl+Alt+T)",
-                "Apply a template to the current editor",
-                () =>
-                {
-                    ApplyTemplateCommand();
-                },
-                () => activeEditor != null
-            ));
-
-            AvailableCommands.Add(new Command(
-                "Navigation: Outline",
-                "\"Navigate to methods, properties, functions, getters, and setters within the current file\"",
-                () =>
-                {
-                    // No action needed
-                    ShowOutlineCommand();
-                },
-                () => activeEditor != null
-            ));
-
-            AvailableCommands.Add(new Command(
-                "SQL: Format SQL",
-                "\"Format SQL code in the current editor\"",
-                () =>
-                {
-                    if (activeEditor != null)
-                    {
-                        // No action needed
-                        ScintillaManager.ForceSQLFormat(activeEditor);
-                    }
-                },
-                () => activeEditor != null && activeEditor.Type == EditorType.SQL
-                ));
-
-            AvailableCommands.Add(new Command(
-                "Editor: Apply Quick Fix (Ctrl+.)",
-                "Applies the suggested quick fix for the annotation under the cursor",
-                ApplyQuickFixCommand,
-                IsQuickFixAvailableAtCursor // Enable condition
-            ));
-
-            // Add Revert to Previous Version command
-            AvailableCommands.Add(new Command(
-                "Snapshot: Revert to Previous Version",
-                "View file history and revert to a previous snapshot",
-                () =>
-                {
-                    try
-                    {
-                        if (activeEditor == null)
-                        {
-                            MessageBox.Show("No active editor found.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                            return;
-                        }
-
-                        if (string.IsNullOrEmpty(activeEditor.RelativePath))
-                        {
-                            MessageBox.Show("This editor is not associated with a file in the Snapshot database.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                            return;
-                        }
-
-                        // Get process handle for dialog ownership
-                        var mainHandle = activeEditor.AppDesignerProcess.MainWindowHandle;
-
-                        // Run on UI thread to show dialog
-                        this.Invoke(() =>
-                        {
-                            using var historyDialog = new Dialogs.SnapshotHistoryDialog(snapshotManager, activeEditor, mainHandle);
-                            historyDialog.ShowDialog(new WindowWrapper(mainHandle));
-                        });
-                    }
-                    catch (Exception ex)
-                    {
-                        Debug.Log($"Error while reverting: {ex.Message}");
-                        MessageBox.Show($"Error: {ex.Message}", "Revert Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                    }
-                },
-                () => activeEditor != null && !string.IsNullOrEmpty(activeEditor.RelativePath) &&
-                      snapshotManager != null
-            ));
-
-            // Better Find commands
-            AvailableCommands.Add(new Command(
-                "Editor: Better Find (Ctrl+J)",
-                "Open the Better Find dialog for advanced search and replace",
-                () =>
-                {
-                    if (activeEditor != null)
-                        ScintillaManager.ShowBetterFindDialog(activeEditor);
-                },
-                () => activeEditor != null // Enable condition
-            ));
-
-            AvailableCommands.Add(new Command(
-                "Editor: Better Find Replace (Ctrl+K)",
-                "Open the Better Find dialog in replace mode",
-                () =>
-                {
-                    if (activeEditor != null)
-                        ScintillaManager.ShowBetterFindDialog(activeEditor, enableReplaceMode: true);
-                },
-                () => activeEditor != null // Enable condition
-            ));
-
-            AvailableCommands.Add(new Command(
-                "Stack Trace Navigator (Ctrl+Alt+S)",
-                "Open the Stack Trace Navigator to parse and navigate PeopleCode stack traces",
-                () =>
-                {
-                    // Delay showing the dialog to allow Command Palette to close first
-                    Task.Delay(100).ContinueWith(_ =>
-                    {
-                        this.BeginInvoke(new Action(() =>
-                        {
-                            showStackTraceNavigatorHandler();
-                        }));
-                    });
-                },
-                () => activeAppDesigner != null // Always enabled
-            ));
-
-            AvailableCommands.Add(new Command(
-                "Editor: Find Next (F3)",
-                "Find the next occurrence of the search term",
-                () =>
-                {
-                    if (activeEditor != null)
-                        ScintillaManager.FindNext(activeEditor);
-                },
-                () => activeEditor != null && activeEditor.SearchState.HasValidSearch // Enable condition
-            ));
-
-            AvailableCommands.Add(new Command(
-                "Editor: Find Previous (Shift+F3)",
-                "Find the previous occurrence of the search term",
-                () =>
-                {
-                    if (activeEditor != null)
-                        ScintillaManager.FindPrevious(activeEditor);
-                },
-                () => activeEditor != null && activeEditor.SearchState.HasValidSearch // Enable condition
-            ));
-
-            // Type Error Report command
-            AvailableCommands.Add(new Command(
-                "Generate Type Error Report (Ctrl+Alt+E)",
-                "Generate a type error report at cursor for GitHub submission (editable)",
-                GenerateTypeErrorReportCommand,
-                () => activeEditor != null // Enable condition
-            ));
-
-            // Bookmark commands
-            AvailableCommands.Add(new Command(
-                "Editor: Place Bookmark (Ctrl+B)",
-                "Place a bookmark at the current cursor position",
-                () =>
-                {
-                    if (activeEditor != null)
-                        ScintillaManager.PlaceBookmark(activeEditor);
-                },
-                () => activeEditor != null // Enable condition
-            ));
-
-            AvailableCommands.Add(new Command(
-                "Editor: Go to Previous Bookmark (Ctrl+-)",
-                "Navigate to the previous bookmark and remove it from the stack",
-                () =>
-                {
-                    if (activeEditor != null)
-                        ScintillaManager.GoToPreviousBookmark(activeEditor);
-                },
-                () => activeEditor != null && activeEditor.BookmarkStack.Count > 0 // Enable condition
-            ));
-
-            // Debug commands
-            AvailableCommands.Add(new Command(
-                "Debug: Open Debug Console",
-                "Open the debug console to view application logs",
-                () =>
-                {
-                    this.Invoke(() =>
-                    {
-                        Debug.ShowDebugDialog(Handle);
-                    }
-                    );
-                    
-                }
-            ));
-
-            AvailableCommands.Add(new Command(
-                "Debug: Open Indicator Panel",
-                "Open the indicator debug panel to view applied styler indicators",
-                () =>
-                {
-                    this.Invoke(() =>
-                    {
-                        Debug.ShowIndicatorPanel(Handle, this);
-                    }
-                    );
-                },
-                () => activeEditor != null // Enable condition
-            ));
+        /// <summary>
+        /// Creates a CommandContext with current application state for command execution
+        /// </summary>
+        private CommandContext CreateCommandContext()
+        {
+            return new CommandContext
+            {
+                ActiveEditor = activeEditor,
+                LinterManager = linterManager,
+                StylerManager = stylerManager,
+                AutoCompleteService = autoCompleteService,
+                RefactorManager = refactorManager,
+                SettingsService = settingsService,
+                FunctionCacheManager = functionCacheManager,
+                AutoSuggestSettings = autoSuggestSettings,
+                MainForm = this,
+                MainWindowHandle = activeAppDesigner?.MainWindowHandle ?? IntPtr.Zero,
+                ActiveAppDesigner = activeAppDesigner,
+                SnapshotManager = snapshotManager
+            };
         }
 
         private void btnPlugins_Click(object sender, EventArgs e)
@@ -3074,7 +2700,7 @@ namespace AppRefiner
             }
         }
 
-        private void ApplyTemplateCommand()
+        internal void ApplyTemplateCommand()
         {
             /* only work if there's an active editor */
             if (activeEditor == null) return;
@@ -3539,7 +3165,7 @@ namespace AppRefiner
         /// This allows stylers and checkers that provide enhanced information when a DB connection
         /// is available to run immediately after the connection is established.
         /// </summary>
-        private void RefreshAllEditorsAfterDatabaseConnection()
+        internal void RefreshAllEditorsAfterDatabaseConnection()
         {
             if (activeAppDesigner == null)
             {
@@ -4280,7 +3906,7 @@ namespace AppRefiner
         /// <summary>
         /// Applies the first available quick fix found at the current cursor position.
         /// </summary>
-        private void ApplyQuickFixCommand()
+        internal void ApplyQuickFixCommand()
         {
             if (activeEditor == null || !activeEditor.IsValid() || refactorManager == null)
             {
