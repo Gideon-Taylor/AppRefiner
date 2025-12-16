@@ -574,5 +574,50 @@ namespace AppRefiner
 
             return stats;
         }
+
+        /// <summary>
+        /// Removes all cached functions for a specific program path.
+        /// Used when updating the cache for a single program without requiring database access.
+        /// </summary>
+        /// <param name="dbName">The database name</param>
+        /// <param name="functionPath">The function path (program identifier)</param>
+        /// <returns>The number of functions removed, or -1 if an error occurred</returns>
+        public int RemoveFunctionsByPath(string dbName, string functionPath)
+        {
+            try
+            {
+                using var connection = new SqliteConnection(_connectionString);
+                connection.Open();
+
+                using var command = connection.CreateCommand();
+                command.CommandText = @"
+                    DELETE FROM FunctionCache
+                    WHERE DBName = @DBName AND FunctionPath = @FunctionPath
+                ";
+                command.Parameters.AddWithValue("@DBName", dbName);
+                command.Parameters.AddWithValue("@FunctionPath", functionPath);
+
+                int deletedCount = command.ExecuteNonQuery();
+                Debug.Log($"Removed {deletedCount} cached function(s) for path: {functionPath}");
+
+                return deletedCount;
+            }
+            catch (Exception ex)
+            {
+                Debug.Log($"Error removing functions by path: {ex.Message}");
+                return -1;
+            }
+        }
+
+        /// <summary>
+        /// Adds a single function to the cache.
+        /// Public wrapper for the private AddFunctionToCache method.
+        /// </summary>
+        /// <param name="function">The function to add to the cache</param>
+        /// <returns>True if the function was added successfully, false otherwise</returns>
+        public bool AddFunction(FunctionCacheItem function)
+        {
+            return AddFunctionToCache(function);
+        }
     }
 }
