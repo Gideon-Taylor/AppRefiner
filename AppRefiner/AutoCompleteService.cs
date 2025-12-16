@@ -12,6 +12,7 @@ using PeopleCodeTypeInfo.Inference;
 using PeopleCodeTypeInfo.Types;     // For TypeInfo and subclasses
 using PeopleCodeTypeInfo.Validation;
 using System.Runtime.InteropServices;
+using System.Text;
 using static AppRefiner.AppDesignerProcess;
 using static SqlParser.Ast.Statement;
 
@@ -448,7 +449,29 @@ namespace AppRefiner
                         {
                             if (method.Visibility <= maximumVisibility)
                             {
-                                suggestions.Add($"{method.Name}() -> {FormatReturnType(method)} (Method)?{(int)AutoCompleteIcons.ClassMethod}");
+                                suggestions.Add($"{method.Name}() -> {FormatReturnType(typeInfo, method)} (Method)?{(int)AutoCompleteIcons.ClassMethod}");
+                            }
+                        }
+
+                        // Add all properties
+                        foreach (var prop in objectInfo.GetAllProperties().OrderBy(p => p.Name))
+                        {
+                            suggestions.Add($"{prop.Name} -> {FormatPropertyType(prop)} (Property)?{(int)AutoCompleteIcons.Property}");
+                        }
+                    }
+                }
+                else if (typeInfo is ArrayTypeInfo arrayType)
+                {
+                    var objectInfo = PeopleCodeTypeDatabase.GetObject("array");
+
+                    if (objectInfo != null)
+                    {
+                        // Add all methods
+                        foreach (var method in objectInfo.GetAllMethods().OrderBy(m => m.Name))
+                        {
+                            if (method.Visibility <= maximumVisibility)
+                            {
+                                suggestions.Add($"{method.Name}() -> {FormatReturnType(typeInfo, method)} (Method)?{(int)AutoCompleteIcons.ClassMethod}");
                             }
                         }
 
@@ -680,7 +703,7 @@ namespace AppRefiner
         /// <summary>
         /// Formats a method return type for display.
         /// </summary>
-        private string FormatReturnType(FunctionInfo functionInfo)
+        private string FormatReturnType(TypeInfo type, FunctionInfo functionInfo)
         {
             if (functionInfo.ReturnUnionTypes != null && functionInfo.ReturnUnionTypes.Count > 0)
             {
@@ -689,8 +712,42 @@ namespace AppRefiner
 
             var returnType = functionInfo.ReturnType;
 
-            var arrayIndicator = returnType.IsArray ? $"[{returnType.ArrayDimensionality}]" : "";
-            return $"{returnType}{arrayIndicator}";
+            if (returnType.Type == PeopleCodeType.SameAsObject)
+            {
+                byte dimensions = 0;
+                
+                if (type is ArrayTypeInfo arrayType)
+                {
+                    dimensions = (byte)arrayType.Dimensions;
+                    string elementType = (arrayType.ElementType?.ToString() ?? "Any");
+                    return $"array{(dimensions > 1 ? dimensions : "")} of {elementType}";
+                }
+            }
+            else if (returnType.Type == PeopleCodeType.ElementOfObject)
+            {
+                byte dimensions = 0;
+
+                if (type is ArrayTypeInfo arrayType)
+                {
+                    dimensions = (byte)(arrayType.Dimensions - 1);
+                    string elementType = (arrayType.ElementType?.ToString() ?? "Any");
+                    if (dimensions > 0)
+                    {
+                        return $"array{(dimensions > 1 ? dimensions : "")} of {elementType}";
+                    }
+                    else 
+                    {
+                        return $"{elementType}";
+                    }
+                }
+            }
+
+            string arrayPrefix = "";
+            if (returnType.IsArray)
+            {
+                arrayPrefix = $"array{(returnType.ArrayDimensionality > 1 ? returnType.ArrayDimensionality : "")} of ";
+            }
+            return $"{arrayPrefix}{returnType}";
         }
 
         /// <summary>
