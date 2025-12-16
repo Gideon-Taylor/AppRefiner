@@ -14,6 +14,14 @@ namespace AppRefiner
             Application.SetCompatibleTextRenderingDefault(false);
             Application.SetHighDpiMode(HighDpiMode.PerMonitorV2);
             ApplicationConfiguration.Initialize();
+
+            if (!Properties.Settings.Default.SettingsUpgraded)
+            {
+                Properties.Settings.Default.Upgrade();
+                Properties.Settings.Default.SettingsUpgraded = true;
+                Properties.Settings.Default.Save();
+            }
+
             Application.Run(new MainForm());
         }
     }
