@@ -66,7 +66,7 @@ namespace AppRefiner.TooltipProviders
 
                 var allowedTypes = validator.GetAllowedNextTypes(funcInfo, arguments.ToArray());
 
-                (var text, var start, var end) = FormatFunctionCallTip(funcInfo, allowedTypes);
+                (var text, var start, var end) = FormatFunctionCallTip(funcInfo, arguments, allowedTypes);
 
                 ScintillaManager.ShowCallTipWithText(editor, editor.FunctionCallNode.FirstToken.SourceSpan.Start.ByteIndex + 1, text, true);
                 ScintillaManager.SetCallTipHighlight(editor, start, end);
@@ -74,7 +74,7 @@ namespace AppRefiner.TooltipProviders
 
         }
 
-        private static (string, int, int) FormatFunctionCallTip(FunctionInfo funcInfo, List<FunctionCallValidator.ParameterTypeInfo> allowedTypes)
+        private static (string, int, int) FormatFunctionCallTip(FunctionInfo funcInfo, List<PeopleCodeTypeInfo.Types.TypeInfo> arguments, List<FunctionCallValidator.ParameterTypeInfo> allowedTypes)
         {
             StringBuilder sb = new StringBuilder();
             int paramStart = 0;
@@ -83,7 +83,17 @@ namespace AppRefiner.TooltipProviders
             sb.Append($"{funcInfo.Name}(");
             for (var x = 0; x < funcInfo.Parameters.Count; x++)
             {
-                sb.Append(funcInfo.Parameters[x].ToString());
+                var typeName = funcInfo.Parameters[x].ToString();
+                if (typeName.Contains("sameasfirstparameter"))
+                {
+                    if (arguments.Count > 0)
+                    {
+                        typeName = typeName.Replace("sameasfirstparameter", arguments[0].ToString());
+                    }
+                }
+                
+
+                sb.Append(typeName);
 
                 if (x < funcInfo.Parameters.Count - 1)
                 {
@@ -99,12 +109,26 @@ namespace AppRefiner.TooltipProviders
             paramEnd = sb.Length;
             foreach(var type in allowedTypes)
             {
+                var typeName = type.TypeName;
+                if (typeName == "sameasfirstparameter")
+                {
+                    if (arguments.Count > 0)
+                    {
+                        typeName = arguments[0].ToString();
+                    }
+                    else
+                    {
+                        typeName = "any";
+                    }
+                }
+                
+
                 if (!string.IsNullOrEmpty(type.ParameterName))
                 {
-                    sb.Append($"{type.ParameterName}: {type.TypeName}\n");
+                    sb.Append($"{type.ParameterName}: {typeName}\n");
                 } else
                 {
-                    sb.Append($"{type.TypeName}\n");
+                    sb.Append($"{typeName}\n");
                 }
             }
             return (sb.ToString(), paramStart, paramEnd);
