@@ -77,7 +77,7 @@ namespace AppRefiner
         private readonly string _connectionString;
         public delegate void CacheProgressHandler(int processed, int total);
         public event CacheProgressHandler? OnCacheProgressUpdate;
-
+        private SqliteConnection connection;
         /* create delegate here for "report progress" which gets passed in current function count, and total function count */
         
         /// <summary>
@@ -96,7 +96,10 @@ namespace AppRefiner
                 Directory.CreateDirectory(directory);
             }
 
+
             _connectionString = $"Data Source={databasePath}";
+             connection = new SqliteConnection(_connectionString);
+            connection.Open();
 
             // Initialize the database
             InitializeDatabase();
@@ -139,9 +142,6 @@ namespace AppRefiner
         {
             try
             {
-                using var connection = new SqliteConnection(_connectionString);
-                connection.Open();
-
                 // Create function cache table if it doesn't exist
                 using var command = connection.CreateCommand();
                 command.CommandText = @"
@@ -211,7 +211,7 @@ namespace AppRefiner
                     deleteCommand.ExecuteNonQuery();
                 }
                 catch { }
-
+                using var transaction = connection.BeginTransaction();
                 foreach (var program in programs)
                 {
                     try
@@ -234,7 +234,7 @@ namespace AppRefiner
                     }
                     OnCacheProgressUpdate?.Invoke(processedCount, programs.Count);
                 }
-
+                transaction.Commit();
                 Debug.Log($"Function cache update completed for {appDesignerProcess.DBName}. Processed {processedCount} programs, found {functionCount} functions");
                 return true;
             }
@@ -332,9 +332,6 @@ namespace AppRefiner
 
             try
             {
-                using var connection = new SqliteConnection(_connectionString);
-                connection.Open();
-
                 using var command = connection.CreateCommand();
 
                 if (appDesignerProcess == null && string.IsNullOrEmpty(appDesignerProcess.DBName))
@@ -540,8 +537,6 @@ namespace AppRefiner
 
             try
             {
-                using var connection = new SqliteConnection(_connectionString);
-                connection.Open();
 
                 // Total function count
                 using var totalCommand = connection.CreateCommand();
@@ -586,8 +581,6 @@ namespace AppRefiner
         {
             try
             {
-                using var connection = new SqliteConnection(_connectionString);
-                connection.Open();
 
                 using var command = connection.CreateCommand();
                 command.CommandText = @"
