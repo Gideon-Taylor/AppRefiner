@@ -109,11 +109,23 @@ void HandleScintillaNotification(HWND hwnd, SCNotification* scn, HWND callbackWi
         }
 
         // Handle typing events for EditorManager
-        if (scn->nmhdr.code == SCN_CHARADDED || 
-            (scn->nmhdr.code == SCN_MODIFIED && 
-             ((scn->modificationType & SC_MOD_INSERTTEXT) || 
+        if (scn->nmhdr.code == SCN_CHARADDED ||
+            (scn->nmhdr.code == SCN_MODIFIED &&
+             ((scn->modificationType & SC_MOD_INSERTTEXT) ||
               (scn->modificationType & SC_MOD_DELETETEXT)))) {
-            // Notify EditorManager about text change event (typing, deletion, cut)
+
+            // Check if this is a backspace-specific deletion
+            bool isBackspace = (scn->nmhdr.code == SCN_MODIFIED) &&
+                              (scn->modificationType & SC_MOD_DELETETEXT) &&
+                              (scn->modificationType & SC_PERFORMED_USER) &&
+                              (scn->length == 1);  // Single character deletion
+
+            if (isBackspace) {
+                // Handle backspace-specific logic with shorter debounce
+                EditorManager::HandleBackspaceDeletion(hwnd, callbackWindow);
+            }
+
+            // Always notify about general text change event (typing pause)
             EditorManager::HandleTextChangeEvent(hwnd, callbackWindow);
         }
         

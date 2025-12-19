@@ -55,6 +55,7 @@ void EditorManager::Cleanup() {
     for (auto& pair : s_editorMap) {
         KillTimer(pair.first, TYPING_TIMER_ID);
         KillTimer(pair.first, CURSOR_POSITION_TIMER_ID);
+        KillTimer(pair.first, BACKSPACE_TIMER_ID);
     }
 
     // Clear the map
@@ -86,6 +87,28 @@ void EditorManager::HandleTextChangeEvent(HWND hwndEditor, HWND callbackWindow) 
     }
 }
 
+// Handle a backspace deletion event from a Scintilla editor
+void EditorManager::HandleBackspaceDeletion(HWND hwndEditor, HWND callbackWindow) {
+    // Check for valid editor window
+    if (!hwndEditor || !IsWindow(hwndEditor)) {
+        OutputDebugStringA("Invalid editor window in HandleBackspaceDeletion");
+        return;
+    }
+
+    // Get or create editor info
+    EditorInfo& info = s_editorMap[hwndEditor];
+    info.hwndEditor = hwndEditor;
+    info.backspaceActive = true;
+    info.callbackWindow = callbackWindow;
+
+    // Set or reset the timer
+    if (!SetTimer(hwndEditor, BACKSPACE_TIMER_ID, BACKSPACE_DEBOUNCE_MS, BackspaceTimerProc)) {
+        char errorMsg[256];
+        sprintf_s(errorMsg, "Failed to create backspace timer for editor: 0x%p", hwndEditor);
+        OutputDebugStringA(errorMsg);
+    }
+}
+
 // Remove tracking for an editor window
 void EditorManager::RemoveEditor(HWND hwndEditor) {
     auto it = s_editorMap.find(hwndEditor);
@@ -93,6 +116,7 @@ void EditorManager::RemoveEditor(HWND hwndEditor) {
         // Kill all timers for this editor
         KillTimer(hwndEditor, TYPING_TIMER_ID);
         KillTimer(hwndEditor, CURSOR_POSITION_TIMER_ID);
+        KillTimer(hwndEditor, BACKSPACE_TIMER_ID);
 
         // Remove the editor from the map
         s_editorMap.erase(it);
@@ -174,4 +198,70 @@ void EditorManager::HandleCursorPositionChangeEvent(HWND hwndEditor, HWND callba
         sprintf_s(errorMsg, "Failed to create cursor position timer for editor: 0x%p", hwndEditor);
         OutputDebugStringA(errorMsg);
     }
-} 
+}
+
+// Timer callback function for backspace detection
+VOID CALLBACK EditorManager::BackspaceTimerProc(HWND hwnd, UINT uMsg, UINT_PTR idEvent, DWORD dwTime) {
+    // Verify timer ID
+    if (idEvent != BACKSPACE_TIMER_ID) {
+        return;
+    }
+
+    // Find editor info
+    auto it = s_editorMap.find(hwnd);
+    if (it != s_editorMap.end()) {
+        auto& info = it->second;
+
+        // Process backspace if active
+        if (info.backspaceActive) {
+            info.backspaceActive = false;
+
+            // Validate callback window
+            if (IsWindow(info.callbackWindow)) {
+                // Get current cursor position
+                int currentPos = SendMessage(hwnd, SCI_GETCURRENTPOS, 0, 0);
+
+                // Edge case: at start of document
+                if (currentPos <= 0) {
+                    return;
+                }
+
+                // Get character immediately before cursor (position - 1)
+                int charBeforeCursor = SendMessage(hwnd, SCI_GETCHARAT, currentPos - 1, 0);
+                char triggerChar = (char)charBeforeCursor;
+
+                // Determine which autocomplete message to send
+                UINT autocompleteMessage = 0;
+                switch (triggerChar) {
+                    case ':':
+                        autocompleteMessage = WM_AR_APP_PACKAGE_SUGGEST;
+                        break;
+                    case '&':
+                        autocompleteMessage = WM_AR_VARIABLE_SUGGEST;
+                        break;
+                    case '.':
+                        autocompleteMessage = WM_AR_OBJECT_MEMBERS;
+                        break;
+                    case '%':
+                        autocompleteMessage = WM_AR_SYSTEM_VARIABLE_SUGGEST;
+                        break;
+                    case '(':
+                    case ',':
+                        autocompleteMessage = WM_AR_FUNCTION_CALL_TIP;
+                        break;
+                    default:
+                        // Not a trigger character - do nothing
+                        return;
+                }
+
+                // Send autocomplete message with current position
+                SendMessage(info.callbackWindow, autocompleteMessage, (WPARAM)currentPos, (LPARAM)triggerChar);
+
+                char debugMsg[256];
+                sprintf_s(debugMsg, "Backspace revealed trigger char '%c' at position %d - triggering autocomplete (msg: %u)\n",
+                         triggerChar, currentPos, autocompleteMessage);
+                OutputDebugStringA(debugMsg);
+            }
+        }
+    }
+}
