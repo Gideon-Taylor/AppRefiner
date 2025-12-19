@@ -572,16 +572,22 @@ LRESULT CALLBACK ScintillaSubclassProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPAR
         // Get the callback window from dwRefData
         HWND callbackWindow = (HWND)dwRefData;
 
-        // Handle escape key on WM_KEYUP to dismiss UserList
+        // Handle escape key on WM_KEYUP to dismiss UserList and CallTips
         if (uMsg == WM_KEYUP && wParam == VK_ESCAPE) {
-            // Check if a user list is currently active
-            LRESULT userListActive = SendMessage(hWnd, SCI_AUTOCACTIVE, 0, 0);
-            
-            if (userListActive) {
-                // Cancel the user list/autocompletion
-                SendMessage(hWnd, SCI_AUTOCCANCEL, 0, 0);
-                
-                // Return 0 to indicate we handled the message and prevent further processing
+            // Check if autocomplete or call tip is active
+            LRESULT autoActive = SendMessage(hWnd, SCI_AUTOCACTIVE, 0, 0);
+            LRESULT callTipActive = SendMessage(hWnd, SCI_CALLTIPACTIVE, 0, 0);
+
+            if (autoActive || callTipActive) {
+                // Cancel both if active (handles edge case of both being active)
+                if (autoActive) {
+                    SendMessage(hWnd, SCI_AUTOCCANCEL, 0, 0);
+                }
+                if (callTipActive) {
+                    SendMessage(hWnd, SCI_CALLTIPCANCEL, 0, 0);
+                }
+
+                // Return 0 to prevent Esc from propagating
                 return 0;
             }
         }
