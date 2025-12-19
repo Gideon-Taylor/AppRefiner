@@ -268,6 +268,30 @@ namespace AppRefiner
         public SearchState SearchState { get; set; } = new SearchState();
 
         /// <summary>
+        /// Autocomplete context types for routing SCN_AUTOCSELECTION notifications
+        /// </summary>
+        public enum AutoCompleteContext
+        {
+            None = 0,
+            AppPackage = 1,
+            Variable = 2,
+            ObjectMembers = 3,
+            SystemVariables = 4,
+            FunctionCallTip = 5
+        }
+
+        /// <summary>
+        /// Tracks the current autocomplete context for SCN_AUTOCSELECTION routing
+        /// </summary>
+        public AutoCompleteContext ActiveAutoCompleteContext { get; set; } = AutoCompleteContext.None;
+
+        /// <summary>
+        /// Tracks the number of characters already typed when autocomplete was shown
+        /// Used to delete the typed portion before inserting the selected completion
+        /// </summary>
+        public int AutoCompleteLengthEntered { get; set; } = 0;
+
+        /// <summary>
         /// Stores the search-related indicators created by the "Mark All" feature
         /// </summary>
         public List<Indicator> SearchIndicators { get; set; } = new List<Indicator>();

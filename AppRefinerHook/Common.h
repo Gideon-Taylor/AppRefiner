@@ -51,6 +51,8 @@
 #define WM_AR_OBJECT_MEMBERS 2512 // Object member suggestions when '.' is typed
 #define WM_AR_SYSTEM_VARIABLE_SUGGEST 2513 // System variable suggestions when '%' is typed
 #define WM_SCN_USERLIST_SELECTION WM_SCN(SCN_USERLISTSELECTION) // User list selection notification
+#define WM_SCN_AUTOCSELECTION WM_SCN(SCN_AUTOCSELECTION) // Autocompletion selection notification
+#define WM_SCN_AUTOCCOMPLETED WM_SCN(SCN_AUTOCCOMPLETED) // Autocompletion completed notification
 
 // Global variables (defined in HookManager.cpp)
 extern HHOOK g_getMsgHook;

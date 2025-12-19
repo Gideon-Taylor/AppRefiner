@@ -13,6 +13,7 @@ using System.Runtime.InteropServices;
 using System.Text;
 using static AppRefiner.AppDesignerProcess;
 using static AppRefiner.AutoCompleteService;
+using static AppRefiner.ScintillaEditor;
 using static SqlParser.Ast.AlterRoleOperation;
 
 namespace AppRefiner
@@ -169,6 +170,8 @@ namespace AppRefiner
         private const int SCI_RGBAIMAGESETWIDTH = 2624;
         private const int SCI_RGBAIMAGESETHEIGHT = 2625;
         private const int SCI_REGISTERRGBAIMAGE = 2627;
+        private const int SCI_AUTOCSETCASEINSENSITIVEBEHAVIOUR = 2634;
+        private const int SC_CASEINSENSITIVEBEHAVIOUR_IGNORECASE = 1;
         private const int SC_ORDER_PERFORMSORT = 1;
         private const int SC_ORDER_CUSTOM = 2;
         /* ignore case */
@@ -518,6 +521,19 @@ namespace AppRefiner
             }
 
             return true;
+        }
+
+        /// <summary>
+        /// Deletes a range of text from the editor
+        /// </summary>
+        /// <param name="editor">The editor instance</param>
+        /// <param name="startPos">Start position of text to delete</param>
+        /// <param name="length">Number of characters to delete</param>
+        /// <returns>True if successful, false otherwise</returns>
+        public static bool DeleteRange(ScintillaEditor editor, int startPos, int length)
+        {
+            if (editor == null || length <= 0) return false;
+            return ReplaceTextRange(editor, startPos, startPos + length, string.Empty);
         }
 
         public static void SetWindowProperty(ScintillaEditor editor, string propName, string propValue)
@@ -1786,6 +1802,8 @@ namespace AppRefiner
             var sortOrder = editor.SendMessage(SCI_AUTOCGETORDER, 0, 0);
             editor.SendMessage(SCI_AUTOCSETORDER, customOrder ? SC_ORDER_CUSTOM: SC_ORDER_PERFORMSORT, 0);
             editor.SendMessage(SCI_AUTOCSETIGNORECASE, 1, 0);
+            editor.SendMessage(SCI_AUTOCSETCASEINSENSITIVEBEHAVIOUR, 1, 0);
+
             try
             {
                 // Create a string with all options separated by /
@@ -1824,6 +1842,195 @@ namespace AppRefiner
                 Debug.Log($"ShowUserList: Exception: {ex.Message}");
                 return false;
             }
+        }
+
+        /// <summary>
+        /// Shows an autocompletion list with the provided options using SCI_AUTOCSHOW
+        /// </summary>
+        /// <param name="editor">The editor to show autocompletion in</param>
+        /// <param name="context">The autocomplete context type</param>
+        /// <param name="position">The position where autocompletion was triggered</param>
+        /// <param name="options">List of strings to show as autocomplete options</param>
+        /// <param name="customOrder">Whether to preserve custom sort order</param>
+        /// <returns>True if autocompletion was shown successfully</returns>
+        public static bool ShowAutoComplete(ScintillaEditor editor, AutoCompleteContext context, int position, List<string> options, bool customOrder = false)
+        {
+            if (editor == null || editor.AppDesignerProcess.ProcessHandle == IntPtr.Zero || options == null || options.Count == 0)
+            {
+                Debug.Log("ShowAutoComplete: Invalid parameters");
+                return false;
+            }
+
+            // Set context-specific fillup and stop characters
+            SetAutoCompleteContextCharacters(editor, context);
+
+            // Set separator to '/'
+            SetAutoCompletionSeparator(editor, '/');
+
+            // Configure autocomplete options
+            var autoCOptions = editor.SendMessage(2639, 0, 0); // SCI_AUTOCGETOPTIONS
+            editor.SendMessage(2638, 0, 1); // SCI_AUTOCSETOPTIONS with SC_AUTOCOMPLETE_NORMAL
+
+            // Set sort order
+            var sortOrder = editor.SendMessage(SCI_AUTOCGETORDER, 0, 0);
+            editor.SendMessage(SCI_AUTOCSETORDER, customOrder ? SC_ORDER_CUSTOM : SC_ORDER_PERFORMSORT, 0);
+            editor.SendMessage(SCI_AUTOCSETIGNORECASE, 1, 0);
+            editor.SendMessage(SCI_AUTOCSETCASEINSENSITIVEBEHAVIOUR, 1, 0);
+
+            try
+            {
+                // Calculate lengthEntered by parsing backward from position to trigger character
+                int lengthEntered = CalculateLengthEntered(editor, context, position);
+
+                // Create options string
+                string optionsString = string.Join("/", options);
+
+                // Use shared autocomplete buffer (process-level, separate from userlist)
+                var autocompleteBuffer = editor.AppDesignerProcess.MemoryManager.GetOrCreateBuffer("autocomplete", 8192);
+
+                // Write options string to shared buffer
+                IntPtr? remoteAddress = autocompleteBuffer.WriteString(optionsString, Encoding.UTF8, offset: 0);
+
+                if (!remoteAddress.HasValue)
+                {
+                    // Buffer too small, resize and retry
+                    int requiredSize = Encoding.UTF8.GetByteCount(optionsString) + 1;
+                    autocompleteBuffer.Resize((uint)requiredSize);
+                    remoteAddress = autocompleteBuffer.WriteString(optionsString, Encoding.UTF8, offset: 0);
+
+                    if (!remoteAddress.HasValue)
+                    {
+                        Debug.Log($"ShowAutoComplete: Failed to write options to shared buffer even after resize");
+                        return false;
+                    }
+                }
+
+                // Store the context and lengthEntered in the editor BEFORE showing autocomplete
+                editor.ActiveAutoCompleteContext = context;
+                editor.AutoCompleteLengthEntered = lengthEntered;
+
+                // Send SCI_AUTOCSHOW message with lengthEntered in wParam
+                IntPtr ret = editor.SendMessage(SCI_AUTOCSHOW, lengthEntered, remoteAddress.Value);
+
+                // Reset separator to default
+                SetAutoCompletionSeparator(editor, ' ');
+
+                Debug.Log($"ShowAutoComplete: Shown {options.Count} options for context {context} with lengthEntered={lengthEntered}");
+
+                return ret != IntPtr.Zero;
+            }
+            catch (Exception ex)
+            {
+                Debug.Log($"ShowAutoComplete: Exception: {ex.Message}");
+                // Clear context and lengthEntered on failure
+                editor.ActiveAutoCompleteContext = AutoCompleteContext.None;
+                editor.AutoCompleteLengthEntered = 0;
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Calculates lengthEntered by parsing backward from cursor to trigger character
+        /// </summary>
+        /// <param name="editor">The editor</param>
+        /// <param name="context">The autocomplete context</param>
+        /// <param name="position">Current cursor position</param>
+        /// <returns>Number of characters entered after trigger</returns>
+        public static int CalculateLengthEntered(ScintillaEditor editor, AutoCompleteContext context, int position)
+        {
+            // Get document content
+            string? content = GetScintillaText(editor);
+
+            if (string.IsNullOrEmpty(content) || position <= 0 || position > content.Length)
+            {
+                return 0;
+            }
+
+            // Determine trigger character based on context
+            char triggerChar = context switch
+            {
+                AutoCompleteContext.AppPackage => ':',
+                AutoCompleteContext.Variable => '&',
+                AutoCompleteContext.ObjectMembers => '.',
+                AutoCompleteContext.SystemVariables => '%',
+                _ => '\0'
+            };
+
+            if (triggerChar == '\0')
+            {
+                return 0;
+            }
+
+            // Parse backward from position to find trigger character
+            int lengthEntered = 0;
+            for (int i = position - 1; i >= 0; i--)
+            {
+                char ch = content[i];
+
+                if (ch == triggerChar)
+                {
+                    // Found trigger, return count
+                    // For SystemVariables, add 1 to include the % itself
+                    int result = (context == AutoCompleteContext.SystemVariables) ? lengthEntered + 1 : lengthEntered;
+                    Debug.Log($"CalculateLengthEntered: Found '{triggerChar}' at position {i}, lengthEntered={result}");
+                    return result;
+                }
+
+                // Check if character is valid identifier character
+                if (char.IsLetterOrDigit(ch) || ch == '_')
+                {
+                    lengthEntered++;
+                }
+                else
+                {
+                    // Hit non-identifier character before trigger, return 0
+                    Debug.Log($"CalculateLengthEntered: Hit non-identifier '{ch}' at position {i}, returning 0");
+                    return 0;
+                }
+            }
+
+            // Didn't find trigger character
+            Debug.Log($"CalculateLengthEntered: Trigger '{triggerChar}' not found, returning 0");
+            return 0;
+        }
+
+        /// <summary>
+        /// Sets context-specific fillup and stop characters for autocompletion
+        /// </summary>
+        /// <param name="editor">The editor</param>
+        /// <param name="context">The autocomplete context</param>
+        private static void SetAutoCompleteContextCharacters(ScintillaEditor editor, AutoCompleteContext context)
+        {
+            // Use shared autocomplete fillups buffer (process-level)
+            var fillupsBuffer = editor.AppDesignerProcess.MemoryManager.GetOrCreateBuffer("autocomplete_fillups", 256);
+
+            // Define context-specific fillup characters
+            string fillups = context switch
+            {
+                AutoCompleteContext.Variable => ".\t",        // '.' chains to object members
+                AutoCompleteContext.ObjectMembers => "(\t",   // '(' chains to parameters
+                AutoCompleteContext.AppPackage => ":\t",      // ':' drills down into packages
+                AutoCompleteContext.SystemVariables => "\t",  // No chaining for system variables
+                _ => "\t"
+            };
+
+            string stops = " ";  // Space always stops autocomplete
+
+            // Write both strings sequentially to the buffer
+            fillupsBuffer.Reset();
+            var addresses = fillupsBuffer.WriteStrings(new[] { fillups, stops }, Encoding.UTF8);
+
+            if (addresses == null)
+            {
+                Debug.Log("SetAutoCompleteContextCharacters: Failed to write fillups to shared buffer");
+                return;
+            }
+
+            // Set fillup and stop characters
+            editor.SendMessage(SCI_AUTOCSETFILLUPS, 0, addresses[0]);
+            editor.SendMessage(SCI_AUTOCSTOPS, 0, addresses[1]);
+
+            Debug.Log($"SetAutoCompleteContextCharacters: Set fillups='{fillups}' for context {context}");
         }
 
         /// <summary>

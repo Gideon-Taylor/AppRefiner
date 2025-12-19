@@ -14,6 +14,7 @@ using PeopleCodeTypeInfo.Validation;
 using System.Runtime.InteropServices;
 using System.Text;
 using static AppRefiner.AppDesignerProcess;
+using static AppRefiner.ScintillaEditor;
 using static SqlParser.Ast.Statement;
 
 namespace AppRefiner
@@ -251,10 +252,9 @@ namespace AppRefiner
 
                 if (suggestions.Count > 0)
                 {
-                    // Show the user list popup with app package suggestions
-                    // ListType 1 indicates App Package suggestions
+                    // Show the autocompletion list with app package suggestions
                     Debug.Log($"Showing {suggestions.Count} app package suggestions for '{packagePath}'");
-                    bool result = ScintillaManager.ShowUserList(editor, UserListType.AppPackage, position, suggestions);
+                    bool result = ScintillaManager.ShowAutoComplete(editor, AutoCompleteContext.AppPackage, position, suggestions);
 
                     if (!result)
                     {
@@ -399,7 +399,7 @@ namespace AppRefiner
                 if (suggestions.Count > 0)
                 {
                     Debug.Log($"Showing {suggestions.Count} variable suggestions at position {position}");
-                    bool result = ScintillaManager.ShowUserList(editor, UserListType.Variable, position, suggestions, true);
+                    bool result = ScintillaManager.ShowAutoComplete(editor, AutoCompleteContext.Variable, position, suggestions, customOrder: true);
 
                     if (!result)
                     {
@@ -572,7 +572,7 @@ namespace AppRefiner
                 if (suggestions.Count > 0)
                 {
                     Debug.Log($"Showing {suggestions.Count} object member suggestions at position {position}");
-                    bool result = ScintillaManager.ShowUserList(editor, UserListType.ObjectMembers, position, suggestions, customOrder: true);
+                    bool result = ScintillaManager.ShowAutoComplete(editor, AutoCompleteContext.ObjectMembers, position, suggestions, customOrder: true);
 
                     if (!result)
                     {
@@ -644,7 +644,7 @@ namespace AppRefiner
                         : prop.Type.GetTypeName();
 
                     string arrayIndicator = prop.IsArray ? $"[{prop.ArrayDimensionality}]" : "";
-                    suggestions.Add($"{prop.Name.Substring(1)} -> {typeName}{arrayIndicator}?{(int)AutoCompleteIcons.SystemVariable}");
+                    suggestions.Add($"{prop.Name} -> {typeName}{arrayIndicator}?{(int)AutoCompleteIcons.SystemVariable}");
                 }
 
                 // Format suggestions
@@ -655,13 +655,13 @@ namespace AppRefiner
                         : prop.Type.GetTypeName();
 
                     string arrayIndicator = prop.IsArray ? $"[{prop.ArrayDimensionality}]" : "";
-                    suggestions.Add($"{prop.Name.Substring(1)} -> {typeName}{arrayIndicator}?{(int)AutoCompleteIcons.SystemVariable}");
+                    suggestions.Add($"{prop.Name} -> {typeName}{arrayIndicator}?{(int)AutoCompleteIcons.SystemVariable}");
                 }
 
                 if (suggestions.Count > 0)
                 {
                     Debug.Log($"Showing {suggestions.Count} system variable suggestions at position {position}");
-                    bool result = ScintillaManager.ShowUserList(editor, UserListType.SystemVariables, position, suggestions, customOrder: true);
+                    bool result = ScintillaManager.ShowAutoComplete(editor, AutoCompleteContext.SystemVariables, position, suggestions, customOrder: true);
 
                     if (!result)
                     {

@@ -26,6 +26,7 @@ using System.Text;
 using System.Text.Json;
 using System.Threading;
 using static AppRefiner.AutoCompleteService;
+using static AppRefiner.ScintillaEditor;
 
 namespace AppRefiner
 {
@@ -106,6 +107,8 @@ namespace AppRefiner
         private const int AR_SET_OPEN_TARGET = 1008; // Message to set open target for Results list interception
         private const int SCN_USERLISTSELECTION = 2014; // User list selection notification
         private const int SCN_CALLTIPCLICK = 2021;
+        private const int SCN_AUTOCSELECTION = 2022; // Autocompletion selection notification
+        private const int SCN_AUTOCCOMPLETED = 2030; // Autocompletion completed notification
         private const int SCI_REPLACESEL = 0x2170; // Constant for SCI_REPLACESEL
 
         private bool isLoadingSettings = false;
@@ -1741,6 +1744,11 @@ namespace AppRefiner
 
         }
 
+        public void ProcessMessage(Message m)
+        {
+            WndProc(ref m);
+        }
+
         /* TODO: override WndProc */
         protected override void WndProc(ref Message m)
         {
@@ -1831,6 +1839,98 @@ namespace AppRefiner
                             {
                                 TooltipManager.ShowFunctionCallTooltip(activeEditor, activeEditor.FunctionCallTipProgram, activeEditor.FunctionCallNode);
                             }
+                        }
+                        break;
+                    case SCN_AUTOCSELECTION:
+                        Debug.Log("Autocomplete selection received");
+                        // Active editor check already done above
+
+                        // Read the selected text from lParam (pointer to UTF8 string)
+                        if (m.LParam != IntPtr.Zero)
+                        {
+                            string? selectedText = ScintillaManager.ReadUtf8FromMemory(activeEditor, m.LParam, 256);
+
+                            if (!string.IsNullOrEmpty(selectedText))
+                            {
+                                // Cancel autocomplete to prevent Scintilla from auto-inserting the full display text
+                                // We'll let our existing handlers insert only the correct portion
+                                ScintillaManager.CancelUserList(activeEditor);
+
+                                // Get context from editor
+                                var context = activeEditor.ActiveAutoCompleteContext;
+
+                                // Recalculate lengthEntered based on current cursor position
+                                // This accounts for additional characters typed while autocomplete was open (for filtering)
+                                int currentPos = ScintillaManager.GetCursorPosition(activeEditor);
+                                int lengthEntered = ScintillaManager.CalculateLengthEntered(activeEditor, context, currentPos);
+                                Debug.Log($"Autocomplete selected: {selectedText} (context: {context}, lengthEntered: {lengthEntered})");
+
+                                // Delete the characters the user already typed (lengthEntered)
+                                // This prevents duplication like %%filepath when user typed %file and selected %filepath
+                                if (lengthEntered > 0)
+                                {
+                                    int deleteStart = currentPos - lengthEntered;
+                                    if (deleteStart >= 0)
+                                    {
+                                        ScintillaManager.DeleteRange(activeEditor, deleteStart, lengthEntered);
+                                        Debug.Log($"Deleted {lengthEntered} characters from position {deleteStart}");
+                                    }
+                                }
+
+                                // Convert context to UserListType for routing to existing handlers
+                                UserListType convertedListType = context switch
+                                {
+                                    AutoCompleteContext.AppPackage => UserListType.AppPackage,
+                                    AutoCompleteContext.Variable => UserListType.Variable,
+                                    AutoCompleteContext.ObjectMembers => UserListType.ObjectMembers,
+                                    AutoCompleteContext.SystemVariables => UserListType.SystemVariables,
+                                    _ => UserListType.QuickFix  // Fallback (should never happen)
+                                };
+
+                                // Route to existing handler (which will insert the correct text)
+                                var refactor = autoCompleteService?.HandleUserListSelection(activeEditor, selectedText, convertedListType);
+                                if (refactor != null)
+                                {
+                                    Task.Delay(100).ContinueWith(_ =>
+                                    {
+                                        // Execute via RefactorManager
+                                        refactorManager?.ExecuteRefactor(refactor, activeEditor);
+                                    }, TaskScheduler.Default);
+                                }
+
+                                // Handle function call tips (same as UserListSelection)
+                                if (activeEditor.FunctionCallTipActive && activeEditor.FunctionCallNode != null)
+                                {
+                                    var currentCursorLine = ScintillaManager.GetLineFromPosition(activeEditor,
+                                        ScintillaManager.GetCursorPosition(activeEditor));
+                                    if (currentCursorLine != activeEditor.FunctionCallNode.SourceSpan.Start.Line)
+                                    {
+                                        activeEditor.FunctionCallTipActive = false;
+                                        activeEditor.FunctionCallNode = null;
+                                        activeEditor.FunctionCallStartPosition = 0;
+                                        activeEditor.FunctionCallTipProgram = null;
+                                    }
+                                    else
+                                    {
+                                        TooltipManager.ShowFunctionCallTooltip(activeEditor,
+                                            activeEditor.FunctionCallTipProgram, activeEditor.FunctionCallNode);
+                                    }
+                                }
+                            }
+
+                            // Clear context and lengthEntered after handling
+                            activeEditor.ActiveAutoCompleteContext = AutoCompleteContext.None;
+                            activeEditor.AutoCompleteLengthEntered = 0;
+                        }
+                        break;
+
+                    case SCN_AUTOCCOMPLETED:
+                        Debug.Log("Autocomplete completed");
+                        // Clear context and lengthEntered when autocomplete finishes
+                        if (activeEditor != null)
+                        {
+                            activeEditor.ActiveAutoCompleteContext = AutoCompleteContext.None;
+                            activeEditor.AutoCompleteLengthEntered = 0;
                         }
                         break;
                 }
