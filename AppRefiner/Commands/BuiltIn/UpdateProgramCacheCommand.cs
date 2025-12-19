@@ -51,7 +51,7 @@ namespace AppRefiner.Commands.BuiltIn
                 if (registrar.IsShortcutAvailable(modifiers, key))
                 {
                     if (registrar.TryRegisterShortcut(commandId, modifiers, key,
-                        () => Execute(new CommandContext())))
+                        this))
                     {
                         SetRegisteredShortcut(registrar.GetShortcutDisplayText(modifiers, key));
                         Debug.Log($"{CommandName}: Registered shortcut {RegisteredShortcutText}");

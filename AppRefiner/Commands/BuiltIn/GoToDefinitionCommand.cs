@@ -16,7 +16,7 @@ namespace AppRefiner.Commands.BuiltIn
             if (registrar.TryRegisterShortcut(commandId,
                 ModifierKeys.None,
                 Keys.F12,
-                () => Execute(new CommandContext())))
+                this))
             {
                 SetRegisteredShortcut(registrar.GetShortcutDisplayText(
                     ModifierKeys.None, Keys.F12));

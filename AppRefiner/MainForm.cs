@@ -255,7 +255,10 @@ namespace AppRefiner
 
             RegisterCommands(commandManager);
 
-            // Initialize shortcuts for plugin commands (after RegisterCommands)
+            // Wire up keyboard service with context factory so shortcuts get proper context
+            applicationKeyboardService?.SetCommandContextFactory(CreateCommandContext);
+
+            // Initialize shortcuts for plugin commands (after RegisterCommands and context factory setup)
             if (applicationKeyboardService != null)
             {
                 commandManager?.InitializeCommandShortcuts(applicationKeyboardService);

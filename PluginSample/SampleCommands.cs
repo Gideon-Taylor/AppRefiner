@@ -95,7 +95,7 @@ namespace PluginSample
                 if (registrar.IsShortcutAvailable(modifiers, key))
                 {
                     if (registrar.TryRegisterShortcut(commandId, modifiers, key,
-                        () => Execute(new CommandContext())))
+                        this))
                     {
                         SetRegisteredShortcut(registrar.GetShortcutDisplayText(modifiers, key));
                         Debug.Log($"{CommandName}: Registered shortcut {RegisteredShortcutText}");
@@ -171,7 +171,7 @@ namespace PluginSample
             if (registrar.TryRegisterShortcut(commandId,
                 ModifierKeys.Control | ModifierKeys.Shift,
                 Keys.L,
-                () => Execute(new CommandContext())))
+                this))
             {
                 SetRegisteredShortcut(registrar.GetShortcutDisplayText(
                     ModifierKeys.Control | ModifierKeys.Shift, Keys.L));

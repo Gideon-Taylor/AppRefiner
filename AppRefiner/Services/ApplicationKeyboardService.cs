@@ -5,11 +5,21 @@ namespace AppRefiner.Services
     public class ApplicationKeyboardService : IShortcutRegistrar, IDisposable
     {
         private readonly Dictionary<string, ShortcutRegistration> _registeredShortcuts;
+        private Func<CommandContext>? _contextFactory;
         private bool _disposed = false;
 
         public ApplicationKeyboardService()
         {
             _registeredShortcuts = new Dictionary<string, ShortcutRegistration>();
+        }
+
+        /// <summary>
+        /// Sets the context factory that provides a fresh CommandContext for command execution.
+        /// This allows commands to access current application state when shortcuts are pressed.
+        /// </summary>
+        public void SetCommandContextFactory(Func<CommandContext> contextFactory)
+        {
+            _contextFactory = contextFactory;
         }
 
         public bool RegisterShortcut(string name, ModifierKeys modifiers, Keys key, Action action)
@@ -31,6 +41,32 @@ namespace AppRefiner.Services
             // Register the shortcut
             var registration = new ShortcutRegistration(name, combination, action);
             _registeredShortcuts[name] = registration;
+
+            return true;
+        }
+
+        /// <summary>
+        /// Register a command-based shortcut that will be executed with a fresh CommandContext
+        /// </summary>
+        public bool RegisterShortcut(string commandId, ModifierKeys modifiers, Keys key, BaseCommand command)
+        {
+            if (string.IsNullOrEmpty(commandId) || command == null)
+                return false;
+
+            // Check for collision
+            var combination = new KeyCombination(modifiers, key);
+            foreach (var existing in _registeredShortcuts.Values)
+            {
+                if (existing.Combination.Equals(combination))
+                {
+                    // Collision detected
+                    return false;
+                }
+            }
+
+            // Register the command-based shortcut
+            var registration = new ShortcutRegistration(commandId, combination, command);
+            _registeredShortcuts[commandId] = registration;
 
             return true;
         }
@@ -66,7 +102,7 @@ namespace AppRefiner.Services
         /// Try to register a keyboard shortcut for a command.
         /// Part of IShortcutRegistrar interface for plugin command support.
         /// </summary>
-        public bool TryRegisterShortcut(string commandId, ModifierKeys modifiers, Keys key, Action action)
+        public bool TryRegisterShortcut(string commandId, ModifierKeys modifiers, Keys key, BaseCommand command)
         {
             if (!IsShortcutAvailable(modifiers, key))
             {
@@ -74,7 +110,7 @@ namespace AppRefiner.Services
                 return false;
             }
 
-            return RegisterShortcut(commandId, modifiers, key, action);
+            return RegisterShortcut(commandId, modifiers, key, command);
         }
 
         /// <summary>
@@ -121,7 +157,25 @@ namespace AppRefiner.Services
                     {
                         Task.Delay(100).ContinueWith(_ =>
                         {
-                            registration.Action.Invoke();
+                            // Check if this is a command-based shortcut or action-based
+                            if (registration.Command != null)
+                            {
+                                // Command-based: Execute with fresh context
+                                if (_contextFactory != null)
+                                {
+                                    var context = _contextFactory();
+                                    registration.Command.Execute(context);
+                                }
+                                else
+                                {
+                                    Debug.Log($"Cannot execute command shortcut {registration.Name}: ContextFactory not set");
+                                }
+                            }
+                            else if (registration.Action != null)
+                            {
+                                // Legacy action-based: Call action directly
+                                registration.Action.Invoke();
+                            }
                         });
                         return true; // Handled
                     }
@@ -148,13 +202,25 @@ namespace AppRefiner.Services
         {
             public string Name { get; }
             public KeyCombination Combination { get; }
-            public Action Action { get; }
+            public Action? Action { get; }
+            public BaseCommand? Command { get; }
 
+            // Constructor for action-based shortcuts (legacy)
             public ShortcutRegistration(string name, KeyCombination combination, Action action)
             {
                 Name = name;
                 Combination = combination;
                 Action = action;
+                Command = null;
+            }
+
+            // Constructor for command-based shortcuts (new pattern)
+            public ShortcutRegistration(string name, KeyCombination combination, BaseCommand command)
+            {
+                Name = name;
+                Combination = combination;
+                Action = null;
+                Command = command;
             }
         }
 

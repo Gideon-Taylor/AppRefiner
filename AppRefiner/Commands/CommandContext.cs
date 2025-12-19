@@ -55,7 +55,7 @@ namespace AppRefiner.Commands
         /// <summary>
         /// The main form instance. Useful for Invoke() calls to run code on the UI thread.
         /// </summary>
-        public Form? MainForm { get; init; }
+        public MainForm? MainForm { get; init; }
 
         /// <summary>
         /// The main window handle of the active Application Designer process.

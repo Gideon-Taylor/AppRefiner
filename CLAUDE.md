@@ -211,14 +211,21 @@ The `InitializeShortcuts()` method provides full control over shortcut registrat
 
 **IShortcutRegistrar Interface:**
 - `IsShortcutAvailable(ModifierKeys, Keys)`: Check if a shortcut is available
-- `TryRegisterShortcut(commandId, ModifierKeys, Keys, Action)`: Attempt to register
+- `TryRegisterShortcut(commandId, ModifierKeys, Keys, BaseCommand)`: Register the command for this shortcut
 - `GetShortcutDisplayText(ModifierKeys, Keys)`: Get formatted display text
+
+**How It Works:**
+- Commands register themselves by passing `this` to `TryRegisterShortcut`
+- When the shortcut is pressed, ApplicationKeyboardService creates a fresh `CommandContext` with current application state
+- The command's `Execute(context)` method is called with the populated context
+- This ensures commands always have access to the active editor and all services
 
 **Best Practices:**
 - Always check availability before attempting registration
 - Provide fallback shortcut options if preferred combination is taken
 - Use `TryRegisterShortcut()` return value to determine success
 - Call `SetRegisteredShortcut()` on success to update display name
+- Pass `this` as the command parameter (not a lambda or action)
 
 #### Simple Example
 ```csharp
@@ -233,11 +240,11 @@ public class SimpleCommand : BaseCommand
 
     public override void InitializeShortcuts(IShortcutRegistrar registrar, string commandId)
     {
-        // Try to register Ctrl+Alt+M
+        // Try to register Ctrl+Alt+M - pass 'this' so keyboard service can execute with proper context
         if (registrar.TryRegisterShortcut(commandId,
             ModifierKeys.Control | ModifierKeys.Alt,
             Keys.M,
-            () => Execute(new CommandContext())))
+            this))
         {
             SetRegisteredShortcut(registrar.GetShortcutDisplayText(
                 ModifierKeys.Control | ModifierKeys.Alt, Keys.M));
@@ -280,8 +287,7 @@ public class AdvancedCommand : BaseCommand
         {
             if (registrar.IsShortcutAvailable(modifiers, key))
             {
-                if (registrar.TryRegisterShortcut(commandId, modifiers, key,
-                    () => Execute(new CommandContext())))
+                if (registrar.TryRegisterShortcut(commandId, modifiers, key, this))
                 {
                     SetRegisteredShortcut(registrar.GetShortcutDisplayText(modifiers, key));
                     Debug.Log($"{CommandName}: Registered {RegisteredShortcutText}");
