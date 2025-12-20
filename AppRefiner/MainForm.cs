@@ -3217,6 +3217,25 @@ namespace AppRefiner
                             ProcessEventMapping();
                         }
 
+                        // Update function cache asynchronously for PeopleCode editors
+                        if (editorToSave.Type == EditorType.PeopleCode &&
+                            functionCacheManager != null &&
+                            editorToSave.IsParseSuccessful)
+                        {
+                            // Run cache update on background thread to avoid blocking save
+                            Task.Run(() =>
+                            {
+                                try
+                                {
+                                    functionCacheManager.UpdateCacheForEditor(editorToSave);
+                                }
+                                catch (Exception ex)
+                                {
+                                    Debug.Log($"Error updating function cache on save: {ex.Message}");
+                                }
+                            });
+                        }
+
                         if (chkBetterSQL.Checked && editorToSave.Type == EditorType.SQL)
                         {
                             ScintillaManager.ApplyBetterSQL(editorToSave);

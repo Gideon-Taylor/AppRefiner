@@ -612,5 +612,137 @@ namespace AppRefiner
         {
             return AddFunctionToCache(function);
         }
+
+        /// <summary>
+        /// Extracts the function path from an editor's caption.
+        /// Currently only supports Record Field PeopleCode.
+        /// </summary>
+        /// <param name="editor">The ScintillaEditor</param>
+        /// <returns>The function path, or null if it cannot be determined</returns>
+        private string? ExtractFunctionPathFromEditor(ScintillaEditor editor)
+        {
+            if (editor.Caption == null)
+            {
+                return null;
+            }
+
+            // Record Field PeopleCode: "RECORD.FIELD.EVENT (Record PeopleCode)"
+            if (editor.Caption.Contains("(Record PeopleCode)"))
+            {
+                var parts = editor.Caption.Replace(" (Record PeopleCode)", "").Split('.');
+                if (parts.Length >= 3)
+                {
+                    // Keep dot-separated format (matches database format)
+                    return $"{parts[0]}.{parts[1]}.{parts[2]}";
+                }
+            }
+
+            // Future: Add support for other program types here
+            // Application Package: editor.ClassPath (already colon-separated)
+            // Component: editor.EventMapInfo (need to build path)
+
+            return null;
+        }
+
+        /// <summary>
+        /// Extracts function definitions from a parsed ProgramNode.
+        /// Only includes function implementations (not declarations).
+        /// </summary>
+        /// <param name="program">The parsed ProgramNode from the AST</param>
+        /// <param name="dbName">The database name</param>
+        /// <param name="functionPath">The function path identifier</param>
+        /// <returns>List of FunctionCacheItem objects</returns>
+        private List<FunctionCacheItem> ExtractFunctionsFromParsedProgram(
+            ProgramNode program,
+            string dbName,
+            string functionPath)
+        {
+            var functions = new List<FunctionCacheItem>();
+
+            // Extract functions (only implementations, not declarations)
+            foreach (var function in program.Functions.Where(f => f.IsImplementation))
+            {
+                var newFunc = new FunctionCacheItem
+                {
+                    DBName = dbName,
+                    FunctionName = function.Name,
+                    FunctionPath = functionPath,
+                    ReturnType = function.ReturnType?.TypeName ?? "",
+                    ParameterNames = [.. function.Parameters.Select(p => p.Name)],
+                    ParameterTypes = [.. function.Parameters.Select(p => p.Type.TypeName)],
+                    CreatedAt = DateTime.Now,
+                    UpdatedAt = DateTime.Now
+                };
+                functions.Add(newFunc);
+            }
+
+            return functions;
+        }
+
+        /// <summary>
+        /// Updates the function cache for a specific editor after a save.
+        /// Only processes Record Field PeopleCode programs where functions can be called from other programs.
+        /// This method fails silently (logs only) if the program path cannot be determined or other issues occur.
+        /// </summary>
+        /// <param name="editor">The ScintillaEditor that was saved</param>
+        public void UpdateCacheForEditor(ScintillaEditor editor)
+        {
+            // Check editor type
+            if (editor.Type != EditorType.PeopleCode)
+            {
+                Debug.Log("UpdateCacheForEditor: Skipping non-PeopleCode editor");
+                return;
+            }
+
+            // Check for database name
+            var dbName = editor.AppDesignerProcess?.DBName;
+            if (string.IsNullOrEmpty(dbName))
+            {
+                Debug.Log("UpdateCacheForEditor: Cannot determine database name, skipping cache update");
+                return;
+            }
+
+            // Extract function path
+            var functionPath = ExtractFunctionPathFromEditor(editor);
+            if (string.IsNullOrEmpty(functionPath))
+            {
+                Debug.Log($"UpdateCacheForEditor: Cannot determine function path for {editor.Caption}, skipping cache update");
+                return;
+            }
+
+            // Get parsed program
+            var program = editor.GetParsedProgram(forceReparse: false);
+            if (program == null)
+            {
+                Debug.Log($"UpdateCacheForEditor: Cannot parse program for {editor.Caption}, skipping cache update");
+                return;
+            }
+
+            // Extract functions from AST
+            var functions = ExtractFunctionsFromParsedProgram(program, dbName, functionPath);
+            Debug.Log($"UpdateCacheForEditor: Found {functions.Count} function(s) in {functionPath}");
+
+            try
+            {
+                // Remove old entries
+                int removedCount = RemoveFunctionsByPath(dbName, functionPath);
+
+                // Add new entries
+                int addedCount = 0;
+                foreach (var function in functions)
+                {
+                    if (AddFunction(function))
+                    {
+                        addedCount++;
+                    }
+                }
+
+                Debug.Log($"UpdateCacheForEditor: Updated cache for {functionPath} - Removed {removedCount}, Added {addedCount}");
+            }
+            catch (Exception ex)
+            {
+                Debug.Log($"UpdateCacheForEditor: Error updating cache: {ex.Message}");
+            }
+        }
     }
 }
