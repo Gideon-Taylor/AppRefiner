@@ -71,13 +71,14 @@ namespace AppRefiner
     /// <summary>
     /// Manages a local cache of available function definitions from PeopleSoft databases
     /// </summary>
-    public class FunctionCacheManager
+    public class FunctionCacheManager : IDisposable
     {
         private readonly string _databasePath;
         private readonly string _connectionString;
         public delegate void CacheProgressHandler(int processed, int total);
         public event CacheProgressHandler? OnCacheProgressUpdate;
         private SqliteConnection connection;
+        private bool _disposed = false;
         /* create delegate here for "report progress" which gets passed in current function count, and total function count */
         
         /// <summary>
@@ -186,7 +187,7 @@ namespace AppRefiner
             try
             {
                 Debug.Log($"Starting function cache update for database: {appDesignerProcess.DBName}");
-                
+
                 // Get list of programs that may contain function definitions
                 var programs = appDesignerProcess.DataManager.GetFunctionDefiningPrograms();
                 OnCacheProgressUpdate?.Invoke(0, programs.Count);
@@ -195,48 +196,57 @@ namespace AppRefiner
                 int processedCount = 0;
                 int functionCount = 0;
 
-                // Delete definitions for this DB
+                // Start transaction for atomic update
+                using var transaction = connection.BeginTransaction();
                 try
                 {
-                    using var connection = new SqliteConnection(_connectionString);
-                    connection.Open();
+                    // Delete definitions for this DB (within transaction)
                     using var deleteCommand = connection.CreateCommand();
+                    deleteCommand.Transaction = transaction;
                     deleteCommand.CommandText = @"
-                        DELETE FROM FunctionCache 
+                        DELETE FROM FunctionCache
                         WHERE DBName = @DBName
                     ";
-
                     deleteCommand.Parameters.AddWithValue("@DBName", appDesignerProcess.DBName);
-                    
-                    deleteCommand.ExecuteNonQuery();
-                }
-                catch { }
-                using var transaction = connection.BeginTransaction();
-                foreach (var program in programs)
-                {
-                    try
-                    {
-                        var functions = ExtractFunctionsFromProgram(program, appDesignerProcess);
-                        
-                        foreach (var function in functions)
-                        {
-                            if (AddFunctionToCache(function))
-                            {
-                                functionCount++;
-                            }
-                        }
+                    int deletedCount = deleteCommand.ExecuteNonQuery();
+                    Debug.Log($"Deleted {deletedCount} existing functions for {appDesignerProcess.DBName}");
 
-                        processedCount++;
-                    }
-                    catch (Exception ex)
+                    // Process programs and insert functions (within transaction)
+                    foreach (var program in programs)
                     {
-                        Debug.Log($"Error processing program {program.Name}: {ex.Message}");
+                        try
+                        {
+                            var functions = ExtractFunctionsFromProgram(program, appDesignerProcess);
+
+                            foreach (var function in functions)
+                            {
+                                if (AddFunctionToCache(function, transaction))
+                                {
+                                    functionCount++;
+                                }
+                            }
+
+                            processedCount++;
+                        }
+                        catch (Exception ex)
+                        {
+                            Debug.Log($"Error processing program {program.Name}: {ex.Message}");
+                        }
+                        OnCacheProgressUpdate?.Invoke(processedCount, programs.Count);
                     }
-                    OnCacheProgressUpdate?.Invoke(processedCount, programs.Count);
+
+                    // Commit all operations together
+                    transaction.Commit();
+                    Debug.Log($"Function cache update completed for {appDesignerProcess.DBName}. Processed {processedCount} programs, found {functionCount} functions");
+                    return true;
                 }
-                transaction.Commit();
-                Debug.Log($"Function cache update completed for {appDesignerProcess.DBName}. Processed {processedCount} programs, found {functionCount} functions");
-                return true;
+                catch (Exception ex)
+                {
+                    // Rollback transaction on error
+                    transaction.Rollback();
+                    Debug.Log($"Error during function cache update, transaction rolled back: {ex.Message}");
+                    throw;
+                }
             }
             catch (Exception ex)
             {
@@ -424,16 +434,22 @@ namespace AppRefiner
         /// Adds a function to the cache database
         /// </summary>
         /// <param name="function">The function to add to the cache</param>
+        /// <param name="transaction">Optional transaction to use for the operation. If null, uses the class-level connection.</param>
         /// <returns>True if the function was added successfully, false otherwise</returns>
-        private bool AddFunctionToCache(FunctionCacheItem function)
+        private bool AddFunctionToCache(FunctionCacheItem function, SqliteTransaction? transaction = null)
         {
             try
             {
-                using var connection = new SqliteConnection(_connectionString);
-                connection.Open();
-                
+                // Use transaction's connection if provided, otherwise use class-level connection
+                var conn = transaction?.Connection ?? connection;
+
                 // Insert new function
-                using var insertCommand = connection.CreateCommand();
+                using var insertCommand = conn.CreateCommand();
+                if (transaction != null)
+                {
+                    insertCommand.Transaction = transaction;
+                }
+
                 insertCommand.CommandText = @"
                     INSERT INTO FunctionCache (DBName, FunctionName, FunctionPath, ParameterNames, ParameterTypes, ReturnType, CreatedAt, UpdatedAt)
                     VALUES (@DBName, @FunctionName, @FunctionPath, @ParameterNames, @ParameterTypes, @ReturnType, @CreatedAt, @UpdatedAt)
@@ -449,7 +465,7 @@ namespace AppRefiner
                 insertCommand.Parameters.AddWithValue("@UpdatedAt", DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"));
 
                 return insertCommand.ExecuteNonQuery() > 0;
-                
+
             }
             catch (Exception ex)
             {
@@ -724,24 +740,57 @@ namespace AppRefiner
 
             try
             {
-                // Remove old entries
-                int removedCount = RemoveFunctionsByPath(dbName, functionPath);
-
-                // Add new entries
-                int addedCount = 0;
-                foreach (var function in functions)
+                // Start transaction for atomic update
+                using var transaction = connection.BeginTransaction();
+                try
                 {
-                    if (AddFunction(function))
-                    {
-                        addedCount++;
-                    }
-                }
+                    // Remove old entries (within transaction)
+                    using var deleteCommand = connection.CreateCommand();
+                    deleteCommand.Transaction = transaction;
+                    deleteCommand.CommandText = @"
+                        DELETE FROM FunctionCache
+                        WHERE DBName = @DBName AND FunctionPath = @FunctionPath
+                    ";
+                    deleteCommand.Parameters.AddWithValue("@DBName", dbName);
+                    deleteCommand.Parameters.AddWithValue("@FunctionPath", functionPath);
+                    int removedCount = deleteCommand.ExecuteNonQuery();
 
-                Debug.Log($"UpdateCacheForEditor: Updated cache for {functionPath} - Removed {removedCount}, Added {addedCount}");
+                    // Add new entries (within transaction)
+                    int addedCount = 0;
+                    foreach (var function in functions)
+                    {
+                        if (AddFunctionToCache(function, transaction))
+                        {
+                            addedCount++;
+                        }
+                    }
+
+                    // Commit all operations together
+                    transaction.Commit();
+                    Debug.Log($"UpdateCacheForEditor: Updated cache for {functionPath} - Removed {removedCount}, Added {addedCount}");
+                }
+                catch (Exception ex)
+                {
+                    // Rollback transaction on error
+                    transaction.Rollback();
+                    Debug.Log($"UpdateCacheForEditor: Error updating cache (transaction rolled back): {ex.Message}");
+                }
             }
             catch (Exception ex)
             {
                 Debug.Log($"UpdateCacheForEditor: Error updating cache: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Disposes the FunctionCacheManager and releases database resources
+        /// </summary>
+        public void Dispose()
+        {
+            if (!_disposed)
+            {
+                connection?.Dispose();
+                _disposed = true;
             }
         }
     }
