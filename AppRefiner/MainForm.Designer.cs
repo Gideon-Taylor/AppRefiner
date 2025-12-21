@@ -97,6 +97,8 @@ namespace AppRefiner
             dataGridViewTextBoxColumn2 = new DataGridViewTextBoxColumn();
             Column1 = new DataGridViewTextBoxColumn();
             dataGridViewButtonColumn1 = new DataGridViewButtonColumn();
+            tabPage6 = new TabPage();
+            gridExtensions = new DataGridView();
             tabPage5 = new TabPage();
             splitContainer3 = new SplitContainer();
             pnlTemplateParams = new Panel();
@@ -104,6 +106,10 @@ namespace AppRefiner
             cmbTemplates = new ComboBox();
             progressBar1 = new ProgressBar();
             lblStatus = new Label();
+            colExtActive = new DataGridViewCheckBoxColumn();
+            colExtTarget = new DataGridViewTextBoxColumn();
+            colExtType = new DataGridViewComboBoxColumn();
+            colExtName = new DataGridViewTextBoxColumn();
             ((System.ComponentModel.ISupportInitialize)splitContainer1).BeginInit();
             splitContainer1.Panel1.SuspendLayout();
             splitContainer1.Panel2.SuspendLayout();
@@ -127,6 +133,8 @@ namespace AppRefiner
             ((System.ComponentModel.ISupportInitialize)dataGridViewTooltips).BeginInit();
             tabPage2.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)gridRefactors).BeginInit();
+            tabPage6.SuspendLayout();
+            ((System.ComponentModel.ISupportInitialize)gridExtensions).BeginInit();
             tabPage5.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)splitContainer3).BeginInit();
             splitContainer3.Panel1.SuspendLayout();
@@ -160,6 +168,7 @@ namespace AppRefiner
             tabControl1.Controls.Add(tabPage3);
             tabControl1.Controls.Add(tabPageTooltips);
             tabControl1.Controls.Add(tabPage2);
+            tabControl1.Controls.Add(tabPage6);
             tabControl1.Controls.Add(tabPage5);
             tabControl1.Dock = DockStyle.Fill;
             tabControl1.Location = new Point(0, 0);
@@ -802,6 +811,31 @@ namespace AppRefiner
             dataGridViewButtonColumn1.UseColumnTextForButtonValue = true;
             dataGridViewButtonColumn1.Width = 80;
             // 
+            // tabPage6
+            // 
+            tabPage6.Controls.Add(gridExtensions);
+            tabPage6.Location = new Point(4, 24);
+            tabPage6.Name = "tabPage6";
+            tabPage6.Padding = new Padding(3);
+            tabPage6.Size = new Size(562, 532);
+            tabPage6.TabIndex = 9;
+            tabPage6.Text = "Extensions";
+            tabPage6.UseVisualStyleBackColor = true;
+            // 
+            // gridExtensions
+            // 
+            gridExtensions.AllowUserToAddRows = false;
+            gridExtensions.AllowUserToDeleteRows = false;
+            gridExtensions.AllowUserToResizeColumns = false;
+            gridExtensions.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.AutoSize;
+            gridExtensions.Columns.AddRange(new DataGridViewColumn[] { colExtActive, colExtTarget, colExtType, colExtName });
+            gridExtensions.Dock = DockStyle.Fill;
+            gridExtensions.Location = new Point(3, 3);
+            gridExtensions.Name = "gridExtensions";
+            gridExtensions.RowHeadersVisible = false;
+            gridExtensions.Size = new Size(556, 526);
+            gridExtensions.TabIndex = 8;
+            // 
             // tabPage5
             // 
             tabPage5.Controls.Add(splitContainer3);
@@ -879,6 +913,33 @@ namespace AppRefiner
             lblStatus.Text = "Stopped";
             lblStatus.TextAlign = ContentAlignment.MiddleCenter;
             // 
+            // colExtActive
+            // 
+            colExtActive.HeaderText = "Active";
+            colExtActive.Name = "colExtActive";
+            colExtActive.Width = 50;
+            // 
+            // colExtTarget
+            // 
+            colExtTarget.FillWeight = 110.569466F;
+            colExtTarget.HeaderText = "Target";
+            colExtTarget.Name = "colExtTarget";
+            colExtTarget.ReadOnly = true;
+            // 
+            // colExtType
+            // 
+            colExtType.HeaderText = "Type";
+            colExtType.Items.AddRange(new object[] { "Property", "Method" });
+            colExtType.Name = "colExtType";
+            colExtType.ReadOnly = true;
+            // 
+            // colExtName
+            // 
+            colExtName.HeaderText = "Method/Property";
+            colExtName.Name = "colExtName";
+            colExtName.ReadOnly = true;
+            colExtName.Width = 300;
+            // 
             // MainForm
             // 
             AutoScaleDimensions = new SizeF(7F, 15F);
@@ -916,6 +977,8 @@ namespace AppRefiner
             ((System.ComponentModel.ISupportInitialize)dataGridViewTooltips).EndInit();
             tabPage2.ResumeLayout(false);
             ((System.ComponentModel.ISupportInitialize)gridRefactors).EndInit();
+            tabPage6.ResumeLayout(false);
+            ((System.ComponentModel.ISupportInitialize)gridExtensions).EndInit();
             tabPage5.ResumeLayout(false);
             splitContainer3.Panel1.ResumeLayout(false);
             splitContainer3.Panel2.ResumeLayout(false);
@@ -998,5 +1061,11 @@ namespace AppRefiner
         private ComboBox cmbTheme;
         private Label label1;
         private CheckBox chkFilled;
+        private TabPage tabPage6;
+        private DataGridView gridExtensions;
+        private DataGridViewCheckBoxColumn colExtActive;
+        private DataGridViewTextBoxColumn colExtTarget;
+        private DataGridViewComboBoxColumn colExtType;
+        private DataGridViewTextBoxColumn colExtName;
     }
 }

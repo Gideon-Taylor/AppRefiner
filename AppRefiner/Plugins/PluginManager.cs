@@ -1,4 +1,5 @@
 using AppRefiner.Commands;
+using AppRefiner.LanguageExtensions;
 using AppRefiner.Linters;
 using AppRefiner.Stylers;
 using AppRefiner.TooltipProviders;
@@ -191,6 +192,34 @@ namespace AppRefiner.Plugins
         }
 
         /// <summary>
+        /// Discovers all language extension types from loaded plugin assemblies
+        /// </summary>
+        /// <returns>Collection of language extension types from plugins</returns>
+        public static IEnumerable<Type> DiscoverLanguageExtensionTypes()
+        {
+            var extensionTypes = new List<Type>();
+
+            foreach (var assembly in LoadedPluginAssemblies)
+            {
+                try
+                {
+                    // Find all non-abstract types that inherit from BaseLanguageExtension
+                    var types = assembly.GetTypes()
+                        .Where(t => typeof(BaseLanguageExtension).IsAssignableFrom(t) && !t.IsAbstract);
+
+                    extensionTypes.AddRange(types);
+                }
+                catch (Exception ex)
+                {
+                    // Log the error but continue with other assemblies
+                    Debug.Log($"Error discovering language extension types in assembly {assembly.FullName}: {ex.Message}");
+                }
+            }
+
+            return extensionTypes;
+        }
+
+        /// <summary>
         /// Gets metadata about all loaded plugin assemblies
         /// </summary>
         /// <returns>List of plugin metadata</returns>
@@ -218,6 +247,9 @@ namespace AppRefiner.Plugins
                     var commandCount = assembly.GetTypes()
                         .Count(t => typeof(BaseCommand).IsAssignableFrom(t) && !t.IsAbstract);
 
+                    var languageExtensionCount = assembly.GetTypes()
+                        .Count(t => typeof(BaseLanguageExtension).IsAssignableFrom(t) && !t.IsAbstract);
+
                     var plugin = new PluginMetadata
                     {
                         AssemblyName = assembly.GetName().Name ?? "Unknown",
@@ -227,7 +259,8 @@ namespace AppRefiner.Plugins
                         StylerCount = stylerCount,
                         RefactorCount = refactorCount,
                         TooltipProviderCount = tooltipProviderCount,
-                        CommandCount = commandCount
+                        CommandCount = commandCount,
+                        LanguageExtensionCount = languageExtensionCount
                     };
 
                     metadata.Add(plugin);
@@ -256,10 +289,11 @@ namespace AppRefiner.Plugins
         public int RefactorCount { get; set; }
         public int TooltipProviderCount { get; set; }
         public int CommandCount { get; set; }
+        public int LanguageExtensionCount { get; set; }
 
         public override string ToString()
         {
-            return $"{AssemblyName} v{Version} ({LinterCount} linters, {StylerCount} stylers, {RefactorCount} refactors, {TooltipProviderCount} tooltip providers, {CommandCount} commands)";
+            return $"{AssemblyName} v{Version} ({LinterCount} linters, {StylerCount} stylers, {RefactorCount} refactors, {TooltipProviderCount} tooltip providers, {CommandCount} commands, {LanguageExtensionCount} language extensions)";
         }
     }
 }

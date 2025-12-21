@@ -1,3 +1,4 @@
+using AppRefiner.LanguageExtensions;
 using AppRefiner.Linters;
 using AppRefiner.Stylers;
 using AppRefiner.TooltipProviders;
@@ -287,6 +288,144 @@ namespace AppRefiner
             {
                 Debug.LogException(ex, "Error saving tooltip states");
             }
+        }
+
+        // --- Language Extension States ---
+
+        public void LoadLanguageExtensionStates(IEnumerable<BaseLanguageExtension> extensions, DataGridView? dataGridView)
+        {
+            try
+            {
+                var states = JsonSerializer.Deserialize<List<RuleState>>(
+                    Properties.Settings.Default.LanguageExtensionStates);
+
+                if (states == null) return;
+
+                var extensionMap = extensions.ToDictionary(e => e.GetType().FullName ?? "");
+
+                foreach (var state in states)
+                {
+                    if (extensionMap.TryGetValue(state.TypeName, out var extension))
+                    {
+                        extension.Active = state.Active;
+                        // Update corresponding grid row if provided
+                        if (dataGridView != null)
+                        {
+                            var row = dataGridView.Rows.Cast<DataGridViewRow>()
+                                .FirstOrDefault(r => r.Tag is BaseLanguageExtension e && e == extension);
+                            if (row != null)
+                            {
+                                row.Cells[0].Value = state.Active;
+                            }
+                        }
+                    }
+                }
+            }
+            catch (JsonException ex)
+            {
+                Debug.LogException(ex, "Error deserializing LanguageExtensionStates - using defaults.");
+            }
+            catch (Exception ex)
+            {
+                Debug.LogException(ex, "Error loading language extension states");
+            }
+        }
+
+        public void SaveLanguageExtensionStates(IEnumerable<BaseLanguageExtension> extensions)
+        {
+            try
+            {
+                var states = extensions.Select(e => new RuleState
+                {
+                    TypeName = e.GetType().FullName ?? "",
+                    Active = e.Active
+                }).ToList();
+
+                Properties.Settings.Default.LanguageExtensionStates =
+                    JsonSerializer.Serialize(states);
+            }
+            catch (Exception ex)
+            {
+                Debug.LogException(ex, "Error saving language extension states");
+            }
+        }
+
+        // --- Language Extension Configurations ---
+
+        /// <summary>
+        /// Loads language extension configurations from settings
+        /// </summary>
+        /// <param name="extensions">The extensions to load configurations for</param>
+        public void LoadLanguageExtensionConfigs(IEnumerable<BaseLanguageExtension> extensions)
+        {
+            try
+            {
+                var configJson = Properties.Settings.Default.LanguageExtensionConfigs;
+
+                if (string.IsNullOrEmpty(configJson))
+                {
+                    return;
+                }
+
+                var configs = JsonSerializer.Deserialize<Dictionary<string, string>>(configJson);
+                if (configs == null) return;
+
+                var extensionMap = extensions.ToDictionary(e => e.GetType().FullName ?? "");
+
+                foreach (var kvp in configs)
+                {
+                    if (extensionMap.TryGetValue(kvp.Key, out var extension))
+                    {
+                        extension.SetExtensionConfig(kvp.Value);
+                    }
+                }
+            }
+            catch (JsonException ex)
+            {
+                Debug.LogException(ex, "Error deserializing LanguageExtensionConfigs - using defaults.");
+            }
+            catch (Exception ex)
+            {
+                Debug.LogException(ex, "Error loading language extension configurations");
+            }
+        }
+
+        /// <summary>
+        /// Saves language extension configurations to settings
+        /// </summary>
+        /// <param name="extensions">The extensions to save configurations for</param>
+        public void SaveLanguageExtensionConfigs(IEnumerable<BaseLanguageExtension> extensions)
+        {
+            try
+            {
+                var configs = new Dictionary<string, string>();
+
+                foreach (var extension in extensions)
+                {
+                    string typeName = extension.GetType().FullName ?? string.Empty;
+                    if (!string.IsNullOrEmpty(typeName))
+                    {
+                        configs[typeName] = extension.GetExtensionConfig();
+                    }
+                }
+
+                Properties.Settings.Default.LanguageExtensionConfigs =
+                    JsonSerializer.Serialize(configs);
+            }
+            catch (Exception ex)
+            {
+                Debug.LogException(ex, "Error saving language extension configurations");
+            }
+        }
+
+        /// <summary>
+        /// Updates the configuration for a specific language extension
+        /// </summary>
+        /// <param name="extension">The extension to update</param>
+        /// <param name="extensions">All extensions (to save complete config)</param>
+        public void UpdateLanguageExtensionConfig(BaseLanguageExtension extension, IEnumerable<BaseLanguageExtension> extensions)
+        {
+            SaveLanguageExtensionConfigs(extensions);
         }
 
         // --- Smart Open Configuration --- 

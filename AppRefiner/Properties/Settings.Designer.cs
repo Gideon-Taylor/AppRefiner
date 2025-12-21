@@ -166,7 +166,31 @@ namespace AppRefiner.Properties {
                 this["TooltipStates"] = value;
             }
         }
-        
+
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("[]")]
+        public string LanguageExtensionStates {
+            get {
+                return ((string)(this["LanguageExtensionStates"]));
+            }
+            set {
+                this["LanguageExtensionStates"] = value;
+            }
+        }
+
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("{}")]
+        public string LanguageExtensionConfigs {
+            get {
+                return ((string)(this["LanguageExtensionConfigs"]));
+            }
+            set {
+                this["LanguageExtensionConfigs"] = value;
+            }
+        }
+
         [global::System.Configuration.UserScopedSettingAttribute()]
         [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
         [global::System.Configuration.DefaultSettingValueAttribute("False")]

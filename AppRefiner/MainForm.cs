@@ -3,6 +3,7 @@ using AppRefiner.Database;
 using AppRefiner.Database.Models;
 using AppRefiner.Dialogs;
 using AppRefiner.Events;
+using AppRefiner.LanguageExtensions;
 using AppRefiner.Linters;
 using AppRefiner.Plugins;
 using AppRefiner.Refactors;
@@ -59,6 +60,7 @@ namespace AppRefiner
         private SettingsService? settingsService; // Added SettingsService
         private FunctionCacheManager? functionCacheManager;
         private CommandManager? commandManager; // Added CommandManager for plugin commands
+        private LanguageExtensionManager? languageExtensionManager; // Added LanguageExtensionManager
         private AutoSuggestSettings autoSuggestSettings = AutoSuggestSettings.GetDefault(); // Auto suggest configuration 
         private ScintillaEditor? activeEditor = null;
         private AppDesignerProcess? activeAppDesigner = null;
@@ -76,6 +78,10 @@ namespace AppRefiner
         /// Gets the currently active AppDesigner process
         /// </summary>
         public AppDesignerProcess? ActiveAppDesigner => activeAppDesigner;
+        /// <summary>
+        /// Gets the language extension manager
+        /// </summary>
+        public LanguageExtensionManager? LanguageExtensionManager => languageExtensionManager;
 
         private List<BaseTooltipProvider> tooltipProviders = new();
 
@@ -243,6 +249,10 @@ namespace AppRefiner
             // Instantiate CommandManager and discover plugin commands
             commandManager = new CommandManager();
             commandManager.DiscoverAndCacheCommands();
+
+            // Instantiate LanguageExtensionManager
+            languageExtensionManager = new LanguageExtensionManager(this, null, settingsService);
+            languageExtensionManager.InitializeLanguageExtensions();
 
             // Load templates using the manager and populate ComboBox
             templateManager.LoadTemplates();
@@ -540,10 +550,15 @@ namespace AppRefiner
 
             settingsService.SaveGeneralSettings(generalSettingsToSave);
 
-            // 2. Save Linter, Styler, and Tooltip states to memory
+            // 2. Save Linter, Styler, Tooltip, and Language Extension states to memory
             if (linterManager != null) settingsService.SaveLinterStates(linterManager.LinterRules);
             if (stylerManager != null) settingsService.SaveStylerStates(stylerManager.StylerRules);
             settingsService.SaveTooltipStates(tooltipProviders);
+            if (languageExtensionManager != null)
+            {
+                settingsService.SaveLanguageExtensionStates(languageExtensionManager.Extensions);
+                settingsService.SaveLanguageExtensionConfigs(languageExtensionManager.Extensions);
+            }
 
             // 3. Persist ALL changes to disk
             settingsService.SaveChanges();
