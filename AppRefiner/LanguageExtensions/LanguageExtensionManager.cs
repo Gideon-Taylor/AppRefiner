@@ -73,7 +73,7 @@ namespace AppRefiner.LanguageExtensions
                     if (Activator.CreateInstance(type) is BaseLanguageExtension extension)
                     {
                         extensions.Add(extension);
-
+                        extension.Active = true;
                         if (extensionGrid != null)
                         {
                             // Grid columns: Active (checkbox), Target (TypeWithDimensionality), Type (Property/Method), Method/Property (Name)
@@ -138,8 +138,7 @@ namespace AppRefiner.LanguageExtensions
             {
                 foreach (var extTargetType in extension.TargetTypes)
                 {
-                    var extTypeInfo = ConvertToTypeInfo(extTargetType);
-                    if (extTypeInfo.IsAssignableFrom(targetType))
+                    if (extTargetType.IsAssignableFrom(targetType))
                     {
                         if (!results.Contains(extension))
                         {
@@ -254,78 +253,56 @@ namespace AppRefiner.LanguageExtensions
         }
 
         /// <summary>
-        /// Gets the type name from a TypeWithDimensionality for indexing
+        /// Gets the type name from a TypeInfo for indexing
         /// </summary>
-        private string GetTypeName(TypeWithDimensionality type)
+        private string GetTypeName(TypeInfo typeInfo)
         {
-            if (type.IsAppClass && !string.IsNullOrEmpty(type.AppClassPath))
+            if (typeInfo is ArrayTypeInfo arrayType)
             {
-                return type.AppClassPath.ToLowerInvariant();
-            }
-            return type.Type.GetTypeName().ToLowerInvariant();
-        }
-
-        /// <summary>
-        /// Converts TypeWithDimensionality to TypeInfo for assignability checking
-        /// </summary>
-        private TypeInfo ConvertToTypeInfo(TypeWithDimensionality typeWithDim)
-        {
-            TypeInfo baseType;
-
-            if (typeWithDim.IsAppClass && !string.IsNullOrEmpty(typeWithDim.AppClassPath))
-            {
-                baseType = new AppClassTypeInfo(typeWithDim.AppClassPath);
-            }
-            else
-            {
-                baseType = TypeInfo.FromPeopleCodeType(typeWithDim.Type);
+                string arrayPrefix = string.Join("", Enumerable.Repeat("array of ", arrayType.Dimensions));
+                string elementTypeName = GetTypeName(arrayType.ElementType ?? AnyTypeInfo.Instance);
+                return (arrayPrefix + elementTypeName).ToLowerInvariant();
             }
 
-            if (typeWithDim.IsArray)
+            if (typeInfo is AppClassTypeInfo appClassType)
             {
-                return new ArrayTypeInfo(typeWithDim.ArrayDimensionality, baseType);
+                return appClassType.Name.ToLowerInvariant();
             }
 
-            return baseType;
+            return typeInfo.Name.ToLowerInvariant();
         }
 
         /// <summary>
         /// Formats a list of target types for display in the grid
         /// </summary>
-        private string FormatTargetTypes(List<TypeWithDimensionality> types)
+        private string FormatTargetTypes(List<TypeInfo> types)
         {
             if (types.Count == 1)
             {
-                return FormatTypeWithDimensionality(types[0]);
+                return FormatTypeInfo(types[0]);
             }
 
-            return string.Join(", ", types.Select(FormatTypeWithDimensionality));
+            return string.Join(", ", types.Select(FormatTypeInfo));
         }
 
         /// <summary>
-        /// Formats a TypeWithDimensionality for display in the grid
+        /// Formats a TypeInfo for display in the grid
         /// </summary>
-        private string FormatTypeWithDimensionality(TypeWithDimensionality type)
+        private string FormatTypeInfo(TypeInfo typeInfo)
         {
-            string baseTypeName;
-
-            if (type.IsAppClass && !string.IsNullOrEmpty(type.AppClassPath))
+            if (typeInfo is ArrayTypeInfo arrayType)
             {
-                baseTypeName = type.AppClassPath;
-            }
-            else
-            {
-                baseTypeName = type.Type.GetTypeName();
+                string arrayPrefix = string.Join("", Enumerable.Repeat("array of ", arrayType.Dimensions));
+                string elementTypeName = FormatTypeInfo(arrayType.ElementType ?? AnyTypeInfo.Instance);
+                return arrayPrefix + elementTypeName;
             }
 
-            // Add array notation
-            if (type.ArrayDimensionality > 0)
+            if (typeInfo is AppClassTypeInfo appClassType)
             {
-                string arrayPrefix = string.Join("", Enumerable.Repeat("array of ", type.ArrayDimensionality));
-                return arrayPrefix + baseTypeName;
+                return appClassType.Name;
             }
 
-            return baseTypeName;
+            return typeInfo.Name;
         }
 
         #endregion

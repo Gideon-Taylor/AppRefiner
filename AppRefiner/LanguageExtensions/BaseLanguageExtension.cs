@@ -5,6 +5,7 @@ using PeopleCodeTypeInfo.Types;
 using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using TypeInfo = PeopleCodeTypeInfo.Types.TypeInfo;
 
 namespace AppRefiner.LanguageExtensions
 {
@@ -45,7 +46,7 @@ namespace AppRefiner.LanguageExtensions
         /// For single-type extensions, return a list with one element.
         /// For multi-type extensions (e.g., Length for both String and Rowset), return multiple types.
         /// </summary>
-        public abstract List<TypeWithDimensionality> TargetTypes { get; }
+        public abstract List<TypeInfo> TargetTypes { get; }
 
         #endregion
 
@@ -59,7 +60,7 @@ namespace AppRefiner.LanguageExtensions
         /// <summary>
         /// Return type of the extension. Can be null if return type is not specified.
         /// </summary>
-        public virtual TypeWithDimensionality? ReturnType => null;
+        public virtual TypeInfo? ReturnType => null;
 
         #endregion
 
@@ -97,7 +98,7 @@ namespace AppRefiner.LanguageExtensions
         /// <param name="editor">The Scintilla editor containing the code</param>
         /// <param name="node">The AST node where the extension is used</param>
         /// <param name="matchedType">The actual type that was matched (important for multi-type extensions)</param>
-        public abstract void Transform(ScintillaEditor editor, AstNode node, TypeWithDimensionality matchedType);
+        public abstract void Transform(ScintillaEditor editor, AstNode node, TypeInfo matchedType);
 
         #endregion
 

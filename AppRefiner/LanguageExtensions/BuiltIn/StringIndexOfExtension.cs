@@ -1,6 +1,7 @@
 using PeopleCodeParser.SelfHosted;
 using PeopleCodeTypeInfo.Functions;
 using PeopleCodeTypeInfo.Types;
+using TypeInfo = PeopleCodeTypeInfo.Types.TypeInfo;
 
 namespace AppRefiner.LanguageExtensions.BuiltIn
 {
@@ -17,33 +18,14 @@ namespace AppRefiner.LanguageExtensions.BuiltIn
 
         public override LanguageExtensionType ExtensionType => LanguageExtensionType.Method;
 
-        public override List<TypeWithDimensionality> TargetTypes => new()
+        public override List<TypeInfo> TargetTypes => new()
         {
-            new TypeWithDimensionality(PeopleCodeType.String)
+            PrimitiveTypeInfo.String
         };
 
-        public override List<Parameter>? Parameters => new()
-        {
-            new SingleParameter
-            {
-                Name = "searchString",
-                ParameterType = new TypeWithDimensionality(PeopleCodeType.String)
-            },
-            new VariableParameter
-            {
-                Name = "startPos",
-                InnerParameter = new SingleParameter
-                {
-                    ParameterType = new TypeWithDimensionality(PeopleCodeType.Integer)
-                },
-                MinCount = 0,
-                MaxCount = 1
-            }
-        };
+        public override TypeInfo? ReturnType => PrimitiveTypeInfo.Integer;
 
-        public override TypeWithDimensionality? ReturnType => new(PeopleCodeType.Integer);
-
-        public override void Transform(ScintillaEditor editor, AstNode node, TypeWithDimensionality matchedType)
+        public override void Transform(ScintillaEditor editor, AstNode node, TypeInfo matchedType)
         {
             // TODO: Implementation deferred (transform &string.IndexOf(x) → Find(x, &string))
             // The trigger mechanism and actual transformation logic will be implemented later
