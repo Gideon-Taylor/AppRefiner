@@ -240,7 +240,7 @@ namespace AppRefiner
             stylerManager.InitializeStylerOptions(); // Initialize stylers via the manager
 
             // Instantiate AutoCompleteService
-            autoCompleteService = new AutoCompleteService();
+            autoCompleteService = new AutoCompleteService(this);
 
             // Instantiate RefactorManager
             refactorManager = new RefactorManager(this, gridRefactors);
@@ -251,7 +251,7 @@ namespace AppRefiner
             commandManager.DiscoverAndCacheCommands();
 
             // Instantiate LanguageExtensionManager
-            languageExtensionManager = new LanguageExtensionManager(this, null, settingsService);
+            languageExtensionManager = new LanguageExtensionManager(this, gridExtensions, settingsService);
             languageExtensionManager.InitializeLanguageExtensions();
 
             // Load templates using the manager and populate ComboBox
@@ -2288,6 +2288,11 @@ namespace AppRefiner
                         if (typeInfo != null)
                         {
                             Debug.Log($"Found type {typeInfo.Name} before dot at position {targetPosition}");
+
+                            // Cache the AST node and TypeInfo for language extension Transform calls
+                            activeEditor.CachedAutoCompleteNode = nodeBeforeDot;
+                            activeEditor.CachedAutoCompleteTypeInfo = typeInfo;
+
                             autoCompleteService.ShowObjectMembers(activeEditor, position, typeInfo, maxVisibility);
                         }
                         else

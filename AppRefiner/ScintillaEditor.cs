@@ -6,6 +6,7 @@ using PeopleCodeParser.SelfHosted;
 using PeopleCodeParser.SelfHosted.Lexing;
 using PeopleCodeParser.SelfHosted.Nodes;
 using PeopleCodeTypeInfo.Functions;
+using PeopleCodeTypeInfo.Types;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -290,6 +291,18 @@ namespace AppRefiner
         /// Used to delete the typed portion before inserting the selected completion
         /// </summary>
         public int AutoCompleteLengthEntered { get; set; } = 0;
+
+        /// <summary>
+        /// Cached AST node used for language extension Transform calls.
+        /// Set when showing object member autocomplete, cleared after selection.
+        /// </summary>
+        public AstNode? CachedAutoCompleteNode { get; set; }
+
+        /// <summary>
+        /// Cached TypeInfo for the object whose members are being shown.
+        /// Set when showing object member autocomplete, cleared after selection.
+        /// </summary>
+        public TypeInfo? CachedAutoCompleteTypeInfo { get; set; }
 
         /// <summary>
         /// Stores the search-related indicators created by the "Mark All" feature

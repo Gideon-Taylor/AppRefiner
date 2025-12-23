@@ -1,4 +1,5 @@
 using AppRefiner.Database;
+using AppRefiner.LanguageExtensions;
 using AppRefiner.Refactors; // For ScopedRefactor, AddImport, CreateAutoComplete
 using AppRefiner.TooltipProviders; // For DllImport
 using PeopleCodeParser.SelfHosted;
@@ -176,6 +177,13 @@ namespace AppRefiner
 
         [DllImport("user32.dll", CharSet = CharSet.Auto)]
         static extern IntPtr SendMessage(IntPtr hWnd, int Msg, IntPtr wParam, IntPtr lParam);
+
+        private readonly MainForm mainForm;
+
+        public AutoCompleteService(MainForm mainForm)
+        {
+            this.mainForm = mainForm;
+        }
 
         public void ShowQuickFixSuggestions(ScintillaEditor? editor, int position)
         {
@@ -569,6 +577,42 @@ namespace AppRefiner
                     suggestions.Insert(0, $"Value -> {fi.GetFieldDataType()}?{(int)AutoCompleteIcons.Property}");
                 }
 
+                // Add language extension suggestions
+                if (typeInfo != null && mainForm.LanguageExtensionManager != null)
+                {
+                    var extensions = mainForm.LanguageExtensionManager.GetExtensionsForType(typeInfo);
+
+                    foreach (var extension in extensions)
+                    {
+                        // Format: "{Name} [Ext] -> {ReturnType} ({Type})?{Icon}"
+                        string displayText = extension.Name;
+                        string memberKind = extension.ExtensionType == LanguageExtensionType.Property ? "Property" : "Method";
+
+                        // Add [Ext] marker to distinguish extensions
+                        displayText += " [Ext]";
+
+                        // Add type information
+                        if (extension.ReturnType != null)
+                        {
+                            displayText += $" -> {FormatReturnType(typeInfo, extension.ReturnType)}";
+                        }
+
+                        displayText += $" ({memberKind})";
+
+                        // Add icon (use same icons as regular members)
+                        int icon = extension.ExtensionType == LanguageExtensionType.Property
+                            ? (int)AutoCompleteIcons.Property
+                            : (int)AutoCompleteIcons.ClassMethod;
+
+                        displayText += $"?{icon}";
+
+                        suggestions.Add(displayText);
+                    }
+                }
+
+                // Sort all suggestions (regular + extensions) alphabetically
+                suggestions.Sort();
+
                 if (suggestions.Count > 0)
                 {
                     Debug.Log($"Showing {suggestions.Count} object member suggestions at position {position}");
@@ -748,6 +792,26 @@ namespace AppRefiner
                 arrayPrefix = $"array{(returnType.ArrayDimensionality > 1 ? returnType.ArrayDimensionality : "")} of ";
             }
             return $"{arrayPrefix}{returnType}";
+        }
+
+        /// <summary>
+        /// Formats a return type for language extensions.
+        /// </summary>
+        private string FormatReturnType(TypeInfo contextType, TypeInfo returnType)
+        {
+            if (returnType is ArrayTypeInfo arrayType)
+            {
+                string arrayPrefix = string.Join("", Enumerable.Repeat("array of ", arrayType.Dimensions));
+                string elementTypeName = FormatReturnType(contextType, arrayType.ElementType ?? AnyTypeInfo.Instance);
+                return arrayPrefix + elementTypeName;
+            }
+
+            if (returnType is AppClassTypeInfo appClassType)
+            {
+                return appClassType.Name;
+            }
+
+            return returnType.Name;
         }
 
         /// <summary>
@@ -1102,12 +1166,18 @@ namespace AppRefiner
             // Format is: "variableName (Type Kind)" or "variableName (Kind)"
             string memberName = selection;
             bool isMethod = false;
+            bool isExtension = selection.Contains(" [Ext]");
 
-            var memberEndIndex = selection.IndexOf(" -> ");
+            // Extract member name (before " [Ext]" or " -> ")
+            var memberEndIndex = selection.IndexOf(" [Ext]");
+            if (memberEndIndex < 0)
+            {
+                memberEndIndex = selection.IndexOf(" -> ");
+            }
+
             if (memberEndIndex > 0)
             {
                 memberName = selection.Substring(0, memberEndIndex);
-
                 isMethod = memberName.EndsWith("()");
                 if (isMethod)
                 {
@@ -1115,6 +1185,64 @@ namespace AppRefiner
                 }
             }
             Debug.Log($"Variable selected: {memberName} from formatted text: {selection}");
+
+            // If this is an extension, try to execute its Transform
+            if (isExtension)
+            {
+                try
+                {
+                    var cachedNode = editor.CachedAutoCompleteNode;
+                    var cachedTypeInfo = editor.CachedAutoCompleteTypeInfo;
+
+                    if (cachedNode != null && cachedTypeInfo != null && mainForm.LanguageExtensionManager != null)
+                    {
+                        // Find the matching extension
+                        var extensionType = isMethod ? LanguageExtensionType.Method : LanguageExtensionType.Property;
+                        var matchingExtensions = mainForm.LanguageExtensionManager.GetExtensionsForTypeAndName(
+                            cachedTypeInfo,
+                            memberName,
+                            extensionType
+                        );
+
+                        if (matchingExtensions.Count > 0)
+                        {
+                            var extension = matchingExtensions[0];
+
+                            // Determine which type was actually matched (important for multi-type extensions)
+                            TypeInfo matchedType = extension.TargetTypes[0];
+                            foreach (var targetType in extension.TargetTypes)
+                            {
+                                if (targetType.IsAssignableFrom(cachedTypeInfo))
+                                {
+                                    matchedType = targetType;
+                                    break;
+                                }
+                            }
+
+                            // Invoke the Transform method
+                            extension.Transform(editor, cachedNode, matchedType);
+
+                            // Clear cache after successful transform
+                            editor.CachedAutoCompleteNode = null;
+                            editor.CachedAutoCompleteTypeInfo = null;
+
+                            // Extension handled the transformation, return early
+                            return null;
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Debug.LogException(ex, $"Error executing language extension Transform for '{memberName}'");
+                    // Fall through to normal insertion on error
+                }
+                finally
+                {
+                    // Always clear cache
+                    editor.CachedAutoCompleteNode = null;
+                    editor.CachedAutoCompleteTypeInfo = null;
+                }
+            }
 
             // Replace the partial variable reference with the complete variable name
             try
@@ -1165,6 +1293,13 @@ namespace AppRefiner
                 Debug.LogException(ex, "Error handling variable selection");
                 // Fallback to simple insertion
                 ScintillaManager.InsertTextAtCursor(editor, memberName);
+            }
+
+            // Clear cache for non-extension selections
+            if (!isExtension)
+            {
+                editor.CachedAutoCompleteNode = null;
+                editor.CachedAutoCompleteTypeInfo = null;
             }
 
             return null; // No refactoring needed for variable insertion
