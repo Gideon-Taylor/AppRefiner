@@ -2169,6 +2169,30 @@ namespace AppRefiner
                 Debug.Log($"Function call tip: character='{character}' at position={position}");
                 if (character == ')')
                 {
+                    // Check for method extension pattern at current position
+                    if (LanguageExtensionManager != null)
+                    {
+                        try
+                        {
+                            // Use unified helper method
+                            bool transformed = TryFindAndTransformExtension(
+                                activeEditor,
+                                position,
+                                LanguageExtensionType.Method
+                            );
+
+                            if (transformed)
+                            {
+                                Debug.Log("Successfully executed method extension transform");
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            Debug.LogException(ex, "Error checking for method extension on ')'");
+                        }
+                    }
+
+                    // Always clear function call tip state (existing behavior)
                     activeEditor.FunctionCallTipActive = false;
                     activeEditor.FunctionCallNode = null;
                     activeEditor.FunctionCallTipProgram = null;
@@ -2289,10 +2313,6 @@ namespace AppRefiner
                         {
                             Debug.Log($"Found type {typeInfo.Name} before dot at position {targetPosition}");
 
-                            // Cache the AST node and TypeInfo for language extension Transform calls
-                            activeEditor.CachedAutoCompleteNode = nodeBeforeDot;
-                            activeEditor.CachedAutoCompleteTypeInfo = typeInfo;
-
                             autoCompleteService.ShowObjectMembers(activeEditor, position, typeInfo, maxVisibility);
                         }
                         else
@@ -2383,6 +2403,129 @@ namespace AppRefiner
             catch (Exception ex)
             {
                 Debug.LogError($"Error running type inference for tooltips: {ex.Message}");
+            }
+        }
+
+        public bool TryFindAndTransformExtension(
+            ScintillaEditor editor,
+            int position,
+            LanguageExtensionType extensionType)
+        {
+            try
+            {
+                // Get current document text
+                string content = ScintillaManager.GetScintillaText(editor) ?? "";
+                if (string.IsNullOrEmpty(content))
+                {
+                    Debug.Log("No content available for extension transform");
+                    return false;
+                }
+
+                // Parse and run type inference
+                var lexer = new PeopleCodeLexer(content);
+                var tokens = lexer.TokenizeAll();
+                var parser = new PeopleCodeParser.SelfHosted.PeopleCodeParser(tokens);
+                var program = parser.ParseProgram();
+
+                if (program == null)
+                {
+                    Debug.Log("Failed to parse for extension transform");
+                    return false;
+                }
+
+                RunTypeInference(editor, program);
+
+                // Find the appropriate node at cursor position
+                if (extensionType == LanguageExtensionType.Property)
+                {
+                    // Find MemberAccessNode containing the position
+                    var memberAccessNode = program.FindNodes(n =>
+                        n is MemberAccessNode &&
+                        n.SourceSpan.ContainsPosition(position)
+                    ).OfType<MemberAccessNode>().FirstOrDefault();
+
+                    if (memberAccessNode != null)
+                    {
+                        var targetNode = memberAccessNode.Target;
+                        var memberName = memberAccessNode.MemberName;
+                        var targetType = targetNode.GetInferredType();
+
+                        if (targetType != null && LanguageExtensionManager != null)
+                        {
+                            var extensions = LanguageExtensionManager.GetExtensionsForTypeAndName(
+                                targetType, memberName, LanguageExtensionType.Property);
+
+                            if (extensions.Count > 0)
+                            {
+                                var extension = extensions[0];
+
+                                // Determine which type was actually matched
+                                TypeInfo matchedType = extension.TargetTypes[0];
+                                foreach (var targetType2 in extension.TargetTypes)
+                                {
+                                    if (targetType2.IsAssignableFrom(targetType))
+                                    {
+                                        matchedType = targetType2;
+                                        break;
+                                    }
+                                }
+
+                                Debug.Log($"Executing property extension transform: {extension.Name}");
+                                extension.Transform(editor, memberAccessNode, matchedType);
+                                return true;
+                            }
+                        }
+                    }
+                }
+                else // Method extension
+                {
+                    // Find FunctionCallNode with MemberAccess function
+                    var functionCallNode = program.FindNodes(n =>
+                        n is FunctionCallNode &&
+                        n.SourceSpan.ContainsPosition(position)
+                    ).OfType<FunctionCallNode>()
+                     .FirstOrDefault(fc => fc.Function is MemberAccessNode);
+
+                    if (functionCallNode?.Function is MemberAccessNode memberAccess)
+                    {
+                        var targetNode = memberAccess.Target;
+                        var methodName = memberAccess.MemberName;
+                        var targetType = targetNode.GetInferredType();
+
+                        if (targetType != null && LanguageExtensionManager != null)
+                        {
+                            var extensions = LanguageExtensionManager.GetExtensionsForTypeAndName(
+                                targetType, methodName, LanguageExtensionType.Method);
+
+                            if (extensions.Count > 0)
+                            {
+                                var extension = extensions[0];
+
+                                // Determine which type was actually matched
+                                TypeInfo matchedType = extension.TargetTypes[0];
+                                foreach (var targetType2 in extension.TargetTypes)
+                                {
+                                    if (targetType2.IsAssignableFrom(targetType))
+                                    {
+                                        matchedType = targetType2;
+                                        break;
+                                    }
+                                }
+
+                                Debug.Log($"Executing method extension transform: {extension.Name}");
+                                extension.Transform(editor, functionCallNode, matchedType);
+                                return true;
+                            }
+                        }
+                    }
+                }
+
+                return false;
+            }
+            catch (Exception ex)
+            {
+                Debug.LogException(ex, "Error in TryFindAndTransformExtension");
+                return false;
             }
         }
 

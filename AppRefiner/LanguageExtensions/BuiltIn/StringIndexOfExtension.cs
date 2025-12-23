@@ -1,4 +1,5 @@
 using PeopleCodeParser.SelfHosted;
+using PeopleCodeParser.SelfHosted.Nodes;
 using PeopleCodeTypeInfo.Functions;
 using PeopleCodeTypeInfo.Types;
 using TypeInfo = PeopleCodeTypeInfo.Types.TypeInfo;
@@ -27,11 +28,42 @@ namespace AppRefiner.LanguageExtensions.BuiltIn
 
         public override void Transform(ScintillaEditor editor, AstNode node, TypeInfo matchedType)
         {
-            // TODO: Implementation deferred (transform &string.IndexOf(x) → Find(x, &string))
-            // The trigger mechanism and actual transformation logic will be implemented later
-            // when autocomplete integration is complete.
-            // matchedType will be String for this single-type extension
-            throw new NotImplementedException("Transform trigger mechanism deferred");
+            if (node is FunctionCallNode funcCall &&
+                funcCall.Function is MemberAccessNode memberAccess)
+            {
+                string content = ScintillaManager.GetScintillaText(editor) ?? "";
+
+                // Get target text
+                var targetSpan = memberAccess.Target.SourceSpan;
+                string targetText = content.Substring(
+                    targetSpan.Start.ByteIndex,
+                    targetSpan.End.ByteIndex - targetSpan.Start.ByteIndex
+                );
+
+                // Get argument texts
+                var argTexts = funcCall.Arguments.Select(arg =>
+                {
+                    var span = arg.SourceSpan;
+                    return content.Substring(
+                        span.Start.ByteIndex,
+                        span.End.ByteIndex - span.Start.ByteIndex
+                    );
+                }).ToList();
+
+                // Build replacement: &string.IndexOf("foo") → Find("foo", &string)
+                // Or: &string.IndexOf("foo", 3) → Find("foo", &string, 3)
+                string newText = argTexts.Count > 0
+                    ? $"Find({argTexts[0]}, {targetText}{(argTexts.Count > 1 ? ", " + string.Join(", ", argTexts.Skip(1)) : "")})"
+                    : $"Find({targetText})";
+
+                // Replace entire function call
+                ScintillaManager.ReplaceTextRange(
+                    editor,
+                    funcCall.SourceSpan.Start.ByteIndex,
+                    funcCall.SourceSpan.End.ByteIndex,
+                    newText
+                );
+            }
         }
     }
 }

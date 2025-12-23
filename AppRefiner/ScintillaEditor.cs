@@ -293,18 +293,6 @@ namespace AppRefiner
         public int AutoCompleteLengthEntered { get; set; } = 0;
 
         /// <summary>
-        /// Cached AST node used for language extension Transform calls.
-        /// Set when showing object member autocomplete, cleared after selection.
-        /// </summary>
-        public AstNode? CachedAutoCompleteNode { get; set; }
-
-        /// <summary>
-        /// Cached TypeInfo for the object whose members are being shown.
-        /// Set when showing object member autocomplete, cleared after selection.
-        /// </summary>
-        public TypeInfo? CachedAutoCompleteTypeInfo { get; set; }
-
-        /// <summary>
         /// Stores the search-related indicators created by the "Mark All" feature
         /// </summary>
         public List<Indicator> SearchIndicators { get; set; } = new List<Indicator>();

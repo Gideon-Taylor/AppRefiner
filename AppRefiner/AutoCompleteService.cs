@@ -1186,61 +1186,40 @@ namespace AppRefiner
             }
             Debug.Log($"Variable selected: {memberName} from formatted text: {selection}");
 
-            // If this is an extension, try to execute its Transform
+            // If this is an extension, defer transform and let autocomplete insert normally
             if (isExtension)
             {
                 try
                 {
-                    var cachedNode = editor.CachedAutoCompleteNode;
-                    var cachedTypeInfo = editor.CachedAutoCompleteTypeInfo;
-
-                    if (cachedNode != null && cachedTypeInfo != null && mainForm.LanguageExtensionManager != null)
+                    // For property extensions: schedule transform after insertion completes
+                    if (!isMethod && mainForm.LanguageExtensionManager != null)
                     {
-                        // Find the matching extension
-                        var extensionType = isMethod ? LanguageExtensionType.Method : LanguageExtensionType.Property;
-                        var matchingExtensions = mainForm.LanguageExtensionManager.GetExtensionsForTypeAndName(
-                            cachedTypeInfo,
-                            memberName,
-                            extensionType
-                        );
-
-                        if (matchingExtensions.Count > 0)
+                        // Schedule transform after insertion completes
+                        Task.Delay(50).ContinueWith(_ =>
                         {
-                            var extension = matchingExtensions[0];
-
-                            // Determine which type was actually matched (important for multi-type extensions)
-                            TypeInfo matchedType = extension.TargetTypes[0];
-                            foreach (var targetType in extension.TargetTypes)
+                            mainForm.Invoke((MethodInvoker)delegate
                             {
-                                if (targetType.IsAssignableFrom(cachedTypeInfo))
-                                {
-                                    matchedType = targetType;
-                                    break;
-                                }
-                            }
-
-                            // Invoke the Transform method
-                            extension.Transform(editor, cachedNode, matchedType);
-
-                            // Clear cache after successful transform
-                            editor.CachedAutoCompleteNode = null;
-                            editor.CachedAutoCompleteTypeInfo = null;
-
-                            // Extension handled the transformation, return early
-                            return null;
-                        }
+                                int currentPos = ScintillaManager.GetCursorPosition(editor);
+                                mainForm.TryFindAndTransformExtension(
+                                    editor,
+                                    currentPos,
+                                    LanguageExtensionType.Property
+                                );
+                            });
+                        }, TaskScheduler.Default);
                     }
+
+                    // Log and fall through to normal insertion
+                    Debug.Log($"{(isMethod ? "Method" : "Property")} extension '{memberName}' - deferring transform");
                 }
                 catch (Exception ex)
                 {
-                    Debug.LogException(ex, $"Error executing language extension Transform for '{memberName}'");
+                    Debug.LogException(ex, $"Error handling language extension for '{memberName}'");
                     // Fall through to normal insertion on error
                 }
                 finally
                 {
-                    // Always clear cache
-                    editor.CachedAutoCompleteNode = null;
-                    editor.CachedAutoCompleteTypeInfo = null;
+                    // No cache to clear - using AST-based pattern matching
                 }
             }
 
@@ -1296,12 +1275,6 @@ namespace AppRefiner
             }
 
             // Clear cache for non-extension selections
-            if (!isExtension)
-            {
-                editor.CachedAutoCompleteNode = null;
-                editor.CachedAutoCompleteTypeInfo = null;
-            }
-
             return null; // No refactoring needed for variable insertion
         }
 

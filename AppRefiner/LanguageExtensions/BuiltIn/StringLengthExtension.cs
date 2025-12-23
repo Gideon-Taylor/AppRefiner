@@ -1,4 +1,5 @@
 using PeopleCodeParser.SelfHosted;
+using PeopleCodeParser.SelfHosted.Nodes;
 using PeopleCodeTypeInfo.Functions;
 using PeopleCodeTypeInfo.Types;
 using TypeInfo = PeopleCodeTypeInfo.Types.TypeInfo;
@@ -26,11 +27,27 @@ namespace AppRefiner.LanguageExtensions.BuiltIn
 
         public override void Transform(ScintillaEditor editor, AstNode node, TypeInfo matchedType)
         {
-            // TODO: Implementation deferred (transform &string.Length → Len(&string))
-            // The trigger mechanism and actual transformation logic will be implemented later
-            // when autocomplete integration is complete.
-            // matchedType will be String for this single-type extension
-            throw new NotImplementedException("Transform trigger mechanism deferred");
+            if (node is MemberAccessNode memberAccess)
+            {
+                // Get the target object text from source
+                string content = ScintillaManager.GetScintillaText(editor) ?? "";
+                var targetSpan = memberAccess.Target.SourceSpan;
+                string targetText = content.Substring(
+                    targetSpan.Start.ByteIndex,
+                    targetSpan.End.ByteIndex - targetSpan.Start.ByteIndex
+                );
+
+                // Create replacement: &string.Length → Len(&string)
+                string newText = $"Len({targetText})";
+
+                // Replace entire member access expression
+                ScintillaManager.ReplaceTextRange(
+                    editor,
+                    memberAccess.SourceSpan.Start.ByteIndex,
+                    memberAccess.SourceSpan.End.ByteIndex,
+                    newText
+                );
+            }
         }
     }
 }
