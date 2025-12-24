@@ -1,5 +1,6 @@
 using PeopleCodeParser.SelfHosted;
 using PeopleCodeParser.SelfHosted.Nodes;
+using PeopleCodeParser.SelfHosted.Visitors.Models;
 using PeopleCodeTypeInfo.Functions;
 using PeopleCodeTypeInfo.Types;
 using TypeInfo = PeopleCodeTypeInfo.Types.TypeInfo;
@@ -23,7 +24,7 @@ namespace AppRefiner.LanguageExtensions.BuiltIn
             PrimitiveTypeInfo.String
         };
 
-        public override void Transform(ScintillaEditor editor, AstNode node, TypeInfo matchedType)
+        public override void Transform(ScintillaEditor editor, AstNode node, TypeInfo matchedType, VariableRegistry? variableRegistry = null)
         {
             if (node is MemberAccessNode memberAccess)
             {

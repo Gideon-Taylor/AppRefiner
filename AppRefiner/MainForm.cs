@@ -17,6 +17,7 @@ using PeopleCodeParser.SelfHosted;
 using PeopleCodeParser.SelfHosted.Lexing;
 using PeopleCodeParser.SelfHosted.Nodes;
 using PeopleCodeParser.SelfHosted.Visitors;
+using PeopleCodeParser.SelfHosted.Visitors.Models;
 using PeopleCodeTypeInfo.Functions;
 using PeopleCodeTypeInfo.Inference;
 using PeopleCodeTypeInfo.Types;
@@ -2439,6 +2440,11 @@ namespace AppRefiner
 
                 RunTypeInference(editor, program);
 
+                // Run scope annotation visitor to build variable registry
+                // We'll annotate the target node after we find it
+                VariableRegistry? variableRegistry = null;
+                AstNode? targetNode = null;
+
                 // Find the appropriate node at cursor position
                 if (extensionType == LanguageExtensionType.Property)
                 {
@@ -2450,9 +2456,9 @@ namespace AppRefiner
 
                     if (memberAccessNode != null)
                     {
-                        var targetNode = memberAccessNode.Target;
+                        var targetExprNode = memberAccessNode.Target;
                         var memberName = memberAccessNode.MemberName;
-                        var targetType = targetNode.GetInferredType();
+                        var targetType = targetExprNode.GetInferredType();
 
                         if (targetType != null && LanguageExtensionManager != null)
                         {
@@ -2474,8 +2480,14 @@ namespace AppRefiner
                                     }
                                 }
 
+                                // Run scope annotation visitor for this specific node
+                                targetNode = memberAccessNode;
+                                var scopeVisitor = new ScopeAnnotationVisitor(targetNode);
+                                program.Accept(scopeVisitor);
+                                variableRegistry = scopeVisitor.VariableRegistry;
+
                                 Debug.Log($"Executing property extension transform: {extension.Name}");
-                                extension.Transform(editor, memberAccessNode, matchedType);
+                                extension.Transform(editor, memberAccessNode, matchedType, variableRegistry);
                                 return true;
                             }
                         }
@@ -2492,9 +2504,9 @@ namespace AppRefiner
 
                     if (functionCallNode?.Function is MemberAccessNode memberAccess)
                     {
-                        var targetNode = memberAccess.Target;
+                        var targetExprNode = memberAccess.Target;
                         var methodName = memberAccess.MemberName;
-                        var targetType = targetNode.GetInferredType();
+                        var targetType = targetExprNode.GetInferredType();
 
                         if (targetType != null && LanguageExtensionManager != null)
                         {
@@ -2516,8 +2528,14 @@ namespace AppRefiner
                                     }
                                 }
 
+                                // Run scope annotation visitor for this specific node
+                                targetNode = functionCallNode;
+                                var scopeVisitor = new ScopeAnnotationVisitor(targetNode);
+                                program.Accept(scopeVisitor);
+                                variableRegistry = scopeVisitor.VariableRegistry;
+
                                 Debug.Log($"Executing method extension transform: {extension.Name}");
-                                extension.Transform(editor, functionCallNode, matchedType);
+                                extension.Transform(editor, functionCallNode, matchedType, variableRegistry);
                                 return true;
                             }
                         }
