@@ -1,5 +1,6 @@
 using AppRefiner.Database;
 using PeopleCodeParser.SelfHosted;
+using PeopleCodeParser.SelfHosted.Visitors.Models;
 using PeopleCodeTypeInfo.Functions;
 using PeopleCodeTypeInfo.Types;
 using System.Reflection;
@@ -86,7 +87,8 @@ namespace AppRefiner.LanguageExtensions
         /// <param name="editor">The Scintilla editor containing the code</param>
         /// <param name="node">The AST node where the extension is used</param>
         /// <param name="matchedType">The actual type that was matched (important for multi-type extensions)</param>
-        public abstract void Transform(ScintillaEditor editor, AstNode node, TypeInfo matchedType);
+        /// <param name="variableRegistry">Registry containing all variables and scopes in the program (may be null for backward compatibility)</param>
+        public abstract void Transform(ScintillaEditor editor, AstNode node, TypeInfo matchedType, VariableRegistry? variableRegistry = null);
 
         #endregion
 
