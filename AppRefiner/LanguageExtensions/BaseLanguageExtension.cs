@@ -41,26 +41,14 @@ namespace AppRefiner.LanguageExtensions
         /// </summary>
         public abstract LanguageExtensionType ExtensionType { get; }
 
+        public virtual FunctionInfo? FunctionInfo => null;
+        public virtual TypeWithDimensionality ReturnType => new TypeWithDimensionality(PeopleCodeType.Unknown);
         /// <summary>
         /// All target types this extension applies to.
         /// For single-type extensions, return a list with one element.
         /// For multi-type extensions (e.g., Length for both String and Rowset), return multiple types.
         /// </summary>
         public abstract List<TypeInfo> TargetTypes { get; }
-
-        #endregion
-
-        #region Method-Specific Properties
-
-        /// <summary>
-        /// Parameters for method extensions. Returns null for property extensions.
-        /// </summary>
-        public virtual List<Parameter>? Parameters => null;
-
-        /// <summary>
-        /// Return type of the extension. Can be null if return type is not specified.
-        /// </summary>
-        public virtual TypeInfo? ReturnType => null;
 
         #endregion
 
@@ -118,8 +106,6 @@ namespace AppRefiner.LanguageExtensions
                           p.Name != nameof(Description) &&
                           p.Name != nameof(ExtensionType) &&
                           p.Name != nameof(TargetTypes) &&
-                          p.Name != nameof(Parameters) &&
-                          p.Name != nameof(ReturnType) &&
                           p.Name != nameof(Active) &&
                           p.Name != nameof(DatabaseRequirement) &&
                           p.Name != nameof(DataManager))

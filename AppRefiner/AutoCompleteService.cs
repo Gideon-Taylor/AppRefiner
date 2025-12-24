@@ -159,6 +159,12 @@ namespace AppRefiner
     /// </summary>
     public class AutoCompleteService
     {
+        /// <summary>
+        /// Extension manager for checking extension methods.
+        /// Set by MainForm during initialization.
+        /// </summary>
+        public static LanguageExtensionManager? ExtensionManager { get; set; }
+
         public enum UserListType
         {
             AppPackage = 1,
@@ -578,9 +584,9 @@ namespace AppRefiner
                 }
 
                 // Add language extension suggestions
-                if (typeInfo != null && mainForm.LanguageExtensionManager != null)
+                if (typeInfo != null && ExtensionManager != null)
                 {
-                    var extensions = mainForm.LanguageExtensionManager.GetExtensionsForType(typeInfo);
+                    var extensions = ExtensionManager.GetExtensionsForType(typeInfo);
 
                     foreach (var extension in extensions)
                     {
@@ -588,14 +594,19 @@ namespace AppRefiner
                         string displayText = extension.Name;
                         string memberKind = extension.ExtensionType == LanguageExtensionType.Property ? "Property" : "Method";
 
-                        // Add [Ext] marker to distinguish extensions
-                        displayText += " [Ext]";
-
-                        // Add type information
-                        if (extension.ReturnType != null)
+                        if (extension.ReturnType.Type != PeopleCodeType.Void)
                         {
-                            displayText += $" -> {FormatReturnType(typeInfo, extension.ReturnType)}";
+                            string returnTypeStr = FormatReturnType(typeInfo, extension.ReturnType);
+                            displayText += $" -> {returnTypeStr}";
                         }
+
+
+
+                        // Add [Ext] marker to distinguish extensions
+                        displayText += $" [Ext]";
+
+                        // Note: Return type information removed from base class
+                        // Extensions can provide this via GetFunctionInfo() if needed for tooltips
 
                         displayText += $" ({memberKind})";
 
@@ -797,21 +808,29 @@ namespace AppRefiner
         /// <summary>
         /// Formats a return type for language extensions.
         /// </summary>
-        private string FormatReturnType(TypeInfo contextType, TypeInfo returnType)
+        private string FormatReturnType(TypeInfo contextType, TypeWithDimensionality returnType)
         {
-            if (returnType is ArrayTypeInfo arrayType)
+            if (returnType.ArrayDimensionality > 0)
             {
-                string arrayPrefix = string.Join("", Enumerable.Repeat("array of ", arrayType.Dimensions));
-                string elementTypeName = FormatReturnType(contextType, arrayType.ElementType ?? AnyTypeInfo.Instance);
-                return arrayPrefix + elementTypeName;
+                string arrayPrefix = string.Join("", Enumerable.Repeat("array of ", returnType.ArrayDimensionality));
+
+                if (returnType.IsAppClass)
+                {
+                    return arrayPrefix + returnType.AppClassPath;
+                }
+                else
+                {
+                    string elementTypeName = returnType.Type.GetTypeName();
+                    return arrayPrefix + elementTypeName;
+                }
             }
 
-            if (returnType is AppClassTypeInfo appClassType)
+            if (returnType.IsAppClass)
             {
-                return appClassType.Name;
+                return returnType.AppClassPath ?? "AppClass";
             }
 
-            return returnType.Name;
+            return returnType.Type.GetTypeName();
         }
 
         /// <summary>
@@ -1169,10 +1188,10 @@ namespace AppRefiner
             bool isExtension = selection.Contains(" [Ext]");
 
             // Extract member name (before " [Ext]" or " -> ")
-            var memberEndIndex = selection.IndexOf(" [Ext]");
+            var memberEndIndex = selection.IndexOf(" -> ");
             if (memberEndIndex < 0)
             {
-                memberEndIndex = selection.IndexOf(" -> ");
+                memberEndIndex = selection.IndexOf(" [Ext]");
             }
 
             if (memberEndIndex > 0)
@@ -1192,7 +1211,7 @@ namespace AppRefiner
                 try
                 {
                     // For property extensions: schedule transform after insertion completes
-                    if (!isMethod && mainForm.LanguageExtensionManager != null)
+                    if (!isMethod && ExtensionManager != null)
                     {
                         // Schedule transform after insertion completes
                         Task.Delay(50).ContinueWith(_ =>

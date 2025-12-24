@@ -24,8 +24,6 @@ namespace AppRefiner.LanguageExtensions.BuiltIn
             PrimitiveTypeInfo.String
         };
 
-        public override TypeInfo? ReturnType => PrimitiveTypeInfo.Integer;
-
         public override void Transform(ScintillaEditor editor, AstNode node, TypeInfo matchedType)
         {
             if (node is FunctionCallNode funcCall &&
@@ -65,5 +63,17 @@ namespace AppRefiner.LanguageExtensions.BuiltIn
                 );
             }
         }
+
+        public override FunctionInfo? FunctionInfo => new FunctionInfo()
+        {
+            Parameters = new()
+                {
+                    new SingleParameter(new TypeWithDimensionality(PeopleCodeType.String), "search_string"),
+                    new VariableParameter(new SingleParameter(new TypeWithDimensionality(PeopleCodeType.Number)), 0, 1, "start_index")
+            },
+            ReturnType = new TypeWithDimensionality(PeopleCodeType.Number)
+        };
+
+        public override TypeWithDimensionality ReturnType => new TypeWithDimensionality(PeopleCodeType.Number);
     }
 }

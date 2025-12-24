@@ -12,7 +12,7 @@ namespace AppRefiner.LanguageExtensions.BuiltIn
     /// </summary>
     public class StringLengthExtension : BaseLanguageExtension
     {
-        public override string Name => "Length";
+        public override string Name => "Len";
 
         public override string Description => "Get the length of a string (transforms to Len())";
 
@@ -22,8 +22,6 @@ namespace AppRefiner.LanguageExtensions.BuiltIn
         {
             PrimitiveTypeInfo.String
         };
-
-        public override TypeInfo? ReturnType => PrimitiveTypeInfo.Integer;
 
         public override void Transform(ScintillaEditor editor, AstNode node, TypeInfo matchedType)
         {
@@ -49,5 +47,7 @@ namespace AppRefiner.LanguageExtensions.BuiltIn
                 );
             }
         }
+
+        public override TypeWithDimensionality ReturnType => new TypeWithDimensionality(PeopleCodeType.Number);
     }
 }

@@ -1,4 +1,5 @@
 using AppRefiner.Database;
+using AppRefiner.LanguageExtensions;
 using DiffPlex.Model;
 using PeopleCodeParser.SelfHosted;
 using PeopleCodeParser.SelfHosted.Nodes;
@@ -20,6 +21,12 @@ namespace AppRefiner.TooltipProviders
     {
         private static readonly List<BaseTooltipProvider> providers = new();
         private static bool initialized = false;
+
+        /// <summary>
+        /// Extension manager for checking extension method signatures.
+        /// Set by MainForm during initialization.
+        /// </summary>
+        public static LanguageExtensionManager? ExtensionManager { get; set; }
 
         /// <summary>
         /// Initializes the tooltip manager with discovered providers.
@@ -46,10 +53,34 @@ namespace AppRefiner.TooltipProviders
         public static void ShowFunctionCallTooltip(ScintillaEditor editor, ProgramNode program, FunctionCallNode node)
         {
             FunctionInfo? funcInfo = node.GetFunctionInfo();
+
+            // If no FunctionInfo attached, check if this is an extension method
+            if (funcInfo == null &&
+                node.Function is MemberAccessNode memberAccess &&
+                ExtensionManager != null)
+            {
+                // Get the target type from type inference
+                var targetType = memberAccess.Target.GetInferredType();
+                if (targetType != null)
+                {
+                    // Check if there's an active extension for this type and method name
+                    var extensionMatches = ExtensionManager.GetExtensionsForTypeAndName(
+                        targetType,
+                        memberAccess.MemberName,
+                        LanguageExtensionType.Method);
+
+                    // Use first active extension match
+                    var extension = extensionMatches.FirstOrDefault(e => e.Active);
+                    if (extension != null)
+                    {
+                        funcInfo = extension.FunctionInfo;
+                    }
+                }
+            }
+
             string toolTipText;
             int highlightStart;
             int highlightEnd;
-
 
             if (funcInfo != null && node.FirstToken != null)
             {

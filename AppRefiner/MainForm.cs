@@ -254,6 +254,10 @@ namespace AppRefiner
             languageExtensionManager = new LanguageExtensionManager(this, gridExtensions, settingsService);
             languageExtensionManager.InitializeLanguageExtensions();
 
+            // Set extension manager references
+            TooltipManager.ExtensionManager = languageExtensionManager;
+            AutoCompleteService.ExtensionManager = languageExtensionManager;
+
             // Load templates using the manager and populate ComboBox
             templateManager.LoadTemplates();
             cmbTemplates.Items.Clear();
