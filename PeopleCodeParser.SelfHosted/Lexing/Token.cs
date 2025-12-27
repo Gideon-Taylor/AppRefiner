@@ -268,6 +268,14 @@ public enum TokenType
     StringLiteral,
     BooleanLiteral,
 
+    // Interpolated string tokens
+    InterpStringStart,        // $"Hello,
+    InterpStringMid,          // ! You have
+    InterpStringEnd,          //  messages."
+    InterpStringUnterminated, // Recovery token for EOL
+    LeftBrace,                // { (for interpolations)
+    RightBrace,               // } (for interpolations)
+
     // Identifiers
     GenericId,
     GenericIdLimited,
@@ -329,7 +337,8 @@ public static class TokenTypeExtensions
     public static bool IsLiteral(this TokenType type)
     {
         return type == TokenType.Null ||
-               (type >= TokenType.IntegerLiteral && type <= TokenType.BooleanLiteral);
+               (type >= TokenType.IntegerLiteral && type <= TokenType.BooleanLiteral) ||
+               (type >= TokenType.InterpStringStart && type <= TokenType.InterpStringUnterminated);
     }
 
     /// <summary>
@@ -522,6 +531,8 @@ public static class TokenTypeExtensions
             TokenType.Colon => ":",
             TokenType.SlashPlus => "/+",
             TokenType.PlusSlash => "+/",
+            TokenType.LeftBrace => "{",
+            TokenType.RightBrace => "}",
 
             // Directive operators
             TokenType.DirectiveAnd => "&&",

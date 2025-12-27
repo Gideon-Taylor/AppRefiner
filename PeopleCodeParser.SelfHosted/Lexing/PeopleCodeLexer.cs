@@ -15,6 +15,10 @@ public class PeopleCodeLexer
     private int _column = 1;
     private readonly List<LexError> _errors = new();
 
+    // Interpolated string state
+    private LexerMode _mode = LexerMode.Normal;
+    private int _braceDepth = 0; // Track brace depth in interpolation expressions
+
     // Keyword mapping for fast lookup
     private static readonly Dictionary<string, TokenType> Keywords = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -325,6 +329,16 @@ public class PeopleCodeLexer
     /// </summary>
     public Token? NextToken()
     {
+        // Handle interpolated string modes first (mode-aware lexing)
+        if (_mode == LexerMode.InterpolatedString)
+        {
+            return NextTokenInInterpolatedStringMode();
+        }
+        else if (_mode == LexerMode.InterpolationExpression)
+        {
+            return NextTokenInInterpolationExpressionMode();
+        }
+
         // Collect leading trivia (whitespace and comments)
         var leadingTrivia = new List<Token>();
 
@@ -428,7 +442,10 @@ public class PeopleCodeLexer
             '#' when IsDirectiveStart() => ScanDirective(),
             '^' => ScanSingleCharOperator(TokenType.Caret),
 
-            // Letters and identifiers  
+            // Interpolated strings - check for $" before treating $ as identifier
+            '$' when PeekChar() == '"' => ScanInterpolatedStringStart(),
+
+            // Letters and identifiers
             _ when char.IsLetter(ch) || ch == '_' || ch == '$' || ch == '#' => ScanIdentifierOrKeyword(),
 
             _ => ScanInvalidCharacter()
@@ -670,6 +687,407 @@ public class PeopleCodeLexer
         rawText.Append(Advance()); // Closing quote
 
         return Token.CreateLiteral(TokenType.StringLiteral, rawText.ToString(), CreateSpan(start), value.ToString());
+    }
+
+    /// <summary>
+    /// Scan the start of an interpolated string: $"text
+    /// Called when we encounter $"
+    /// </summary>
+    private Token ScanInterpolatedStringStart()
+    {
+        var start = CurrentPosition;
+        var rawText = new StringBuilder();
+        var value = new StringBuilder();
+
+        // Consume $"
+        rawText.Append(Advance()); // $
+        rawText.Append(Advance()); // "
+
+        // Enter interpolated string mode
+        _mode = LexerMode.InterpolatedString;
+
+        // Scan string content until { or " or EOL
+        while (!IsAtEnd)
+        {
+            var ch = CurrentChar;
+
+            // Check for EOL - recovery point
+            if (ch == '\n' || ch == '\r')
+            {
+                AddError("Unterminated interpolated string");
+                _mode = LexerMode.Normal;
+                return Token.CreateLiteral(TokenType.InterpStringUnterminated, rawText.ToString(), CreateSpan(start), value.ToString());
+            }
+
+            // Check for closing quote
+            if (ch == '"')
+            {
+                // Check for escaped quote ""
+                if (PeekChar() == '"')
+                {
+                    rawText.Append(Advance()); // First "
+                    rawText.Append(Advance()); // Second "
+                    value.Append('"');
+                }
+                else
+                {
+                    // End of interpolated string (no interpolations)
+                    _mode = LexerMode.Normal;
+                    return Token.CreateLiteral(TokenType.InterpStringStart, rawText.ToString(), CreateSpan(start), value.ToString());
+                }
+            }
+            // Check for start of interpolation
+            else if (ch == '{')
+            {
+                // Check for escaped brace {{
+                if (PeekChar() == '{')
+                {
+                    rawText.Append(Advance()); // First {
+                    rawText.Append(Advance()); // Second {
+                    value.Append('{');
+                }
+                else
+                {
+                    // Start of interpolation expression
+                    // Return the string fragment before the {
+                    return Token.CreateLiteral(TokenType.InterpStringStart, rawText.ToString(), CreateSpan(start), value.ToString());
+                }
+            }
+            // Check for escaped brace }}
+            else if (ch == '}')
+            {
+                if (PeekChar() == '}')
+                {
+                    rawText.Append(Advance()); // First }
+                    rawText.Append(Advance()); // Second }
+                    value.Append('}');
+                }
+                else
+                {
+                    // Unexpected }, just consume it
+                    rawText.Append(Advance());
+                    value.Append(ch);
+                }
+            }
+            else
+            {
+                rawText.Append(Advance());
+                value.Append(ch);
+            }
+        }
+
+        // Hit EOF
+        AddError("Unterminated interpolated string");
+        _mode = LexerMode.Normal;
+        return Token.CreateLiteral(TokenType.InterpStringUnterminated, rawText.ToString(), CreateSpan(start), value.ToString());
+    }
+
+    /// <summary>
+    /// Get next token when in interpolated string mode
+    /// </summary>
+    private Token? NextTokenInInterpolatedStringMode()
+    {
+        var start = CurrentPosition;
+        var ch = CurrentChar;
+
+        // Check for { (start of interpolation)
+        if (ch == '{')
+        {
+            Advance();
+            _mode = LexerMode.InterpolationExpression;
+            _braceDepth = 0;
+            return new Token(TokenType.LeftBrace, "{", CreateSpan(start));
+        }
+
+        // Otherwise, scan string content until { or " or EOL
+        return ScanInterpolatedStringContent();
+    }
+
+    /// <summary>
+    /// Scan string content in interpolated string mode (middle or end)
+    /// </summary>
+    private Token ScanInterpolatedStringContent()
+    {
+        var start = CurrentPosition;
+        var rawText = new StringBuilder();
+        var value = new StringBuilder();
+
+        while (!IsAtEnd)
+        {
+            var ch = CurrentChar;
+
+            // Check for EOL - recovery point
+            if (ch == '\n' || ch == '\r')
+            {
+                AddError("Unterminated interpolated string");
+                _mode = LexerMode.Normal;
+                return Token.CreateLiteral(TokenType.InterpStringUnterminated, rawText.ToString(), CreateSpan(start), value.ToString());
+            }
+
+            // Check for closing quote
+            if (ch == '"')
+            {
+                // Check for escaped quote ""
+                if (PeekChar() == '"')
+                {
+                    rawText.Append(Advance()); // First "
+                    rawText.Append(Advance()); // Second "
+                    value.Append('"');
+                }
+                else
+                {
+                    // End of interpolated string
+                    rawText.Append(Advance()); // Consume closing "
+                    _mode = LexerMode.Normal;
+                    return Token.CreateLiteral(TokenType.InterpStringEnd, rawText.ToString(), CreateSpan(start), value.ToString());
+                }
+            }
+            // Check for start of next interpolation
+            else if (ch == '{')
+            {
+                // Check for escaped brace {{
+                if (PeekChar() == '{')
+                {
+                    rawText.Append(Advance()); // First {
+                    rawText.Append(Advance()); // Second {
+                    value.Append('{');
+                }
+                else
+                {
+                    // Start of next interpolation
+                    // Return the string fragment before the {
+                    return Token.CreateLiteral(TokenType.InterpStringMid, rawText.ToString(), CreateSpan(start), value.ToString());
+                }
+            }
+            // Check for escaped brace }}
+            else if (ch == '}')
+            {
+                if (PeekChar() == '}')
+                {
+                    rawText.Append(Advance()); // First }
+                    rawText.Append(Advance()); // Second }
+                    value.Append('}');
+                }
+                else
+                {
+                    // Unexpected }, just consume it
+                    rawText.Append(Advance());
+                    value.Append(ch);
+                }
+            }
+            else
+            {
+                rawText.Append(Advance());
+                value.Append(ch);
+            }
+        }
+
+        // Hit EOF
+        AddError("Unterminated interpolated string");
+        _mode = LexerMode.Normal;
+        return Token.CreateLiteral(TokenType.InterpStringUnterminated, rawText.ToString(), CreateSpan(start), value.ToString());
+    }
+
+    /// <summary>
+    /// Get next token when in interpolation expression mode
+    /// </summary>
+    private Token? NextTokenInInterpolationExpressionMode()
+    {
+        // Check for EOL - recovery point
+        if (CurrentChar == '\n' || CurrentChar == '\r')
+        {
+            AddError("Unterminated interpolation expression");
+            _mode = LexerMode.Normal;
+            return Token.CreateLiteral(TokenType.InterpStringUnterminated, "", CreateSpan(CurrentPosition), "");
+        }
+
+        var start = CurrentPosition;
+        var ch = CurrentChar;
+
+        // Handle braces specially to track depth
+        if (ch == '{')
+        {
+            _braceDepth++;
+            Advance();
+            return new Token(TokenType.LeftBrace, "{", CreateSpan(start));
+        }
+
+        if (ch == '}')
+        {
+            if (_braceDepth > 0)
+            {
+                // Nested brace, decrement depth
+                _braceDepth--;
+                Advance();
+                return new Token(TokenType.RightBrace, "}", CreateSpan(start));
+            }
+            else
+            {
+                // Closing brace at depth 0 - end of interpolation
+                Advance();
+                _mode = LexerMode.InterpolatedString;
+                return new Token(TokenType.RightBrace, "}", CreateSpan(start));
+            }
+        }
+
+        // For all other tokens, use normal lexing logic
+        // Collect leading trivia first
+        var leadingTrivia = new List<Token>();
+
+        while (!IsAtEnd)
+        {
+            if (char.IsWhiteSpace(CurrentChar))
+            {
+                leadingTrivia.Add(ScanWhitespace());
+            }
+            else if (CurrentChar == '/' && PeekChar() == '*')
+            {
+                leadingTrivia.Add(ScanBlockComment());
+            }
+            else if (CurrentChar == '<' && PeekChar() == '*')
+            {
+                leadingTrivia.Add(ScanNestedComment());
+            }
+            else if (IsRemComment())
+            {
+                leadingTrivia.Add(ScanRemComment());
+            }
+            else
+            {
+                break; // Found non-trivia token
+            }
+        }
+
+        // Check for EOL after trivia
+        if (CurrentChar == '\n' || CurrentChar == '\r')
+        {
+            AddError("Unterminated interpolation expression");
+            _mode = LexerMode.Normal;
+            return Token.CreateLiteral(TokenType.InterpStringUnterminated, "", CreateSpan(CurrentPosition), "");
+        }
+
+        if (IsAtEnd)
+        {
+            AddError("Unterminated interpolation expression");
+            _mode = LexerMode.Normal;
+            return null;
+        }
+
+        // Re-check character after consuming trivia
+        start = CurrentPosition;
+        ch = CurrentChar;
+
+        // Handle braces again (in case we consumed trivia)
+        if (ch == '{')
+        {
+            _braceDepth++;
+            Advance();
+            var token = new Token(TokenType.LeftBrace, "{", CreateSpan(start));
+            foreach (var trivia in leadingTrivia)
+            {
+                token.AddLeadingTrivia(trivia);
+            }
+            return token;
+        }
+
+        if (ch == '}')
+        {
+            Token token;
+            if (_braceDepth > 0)
+            {
+                _braceDepth--;
+                Advance();
+                token = new Token(TokenType.RightBrace, "}", CreateSpan(start));
+            }
+            else
+            {
+                Advance();
+                _mode = LexerMode.InterpolatedString;
+                token = new Token(TokenType.RightBrace, "}", CreateSpan(start));
+            }
+            foreach (var trivia in leadingTrivia)
+            {
+                token.AddLeadingTrivia(trivia);
+            }
+            return token;
+        }
+
+        // Use normal token scanning logic
+        Token? normalToken = ch switch
+        {
+            // Special operators
+            '/' when PeekChar() == '+' => ScanSlashPlus(),
+
+            // Operators and punctuation
+            '+' when PeekChar() == '/' => ScanPlusSlash(),
+            '+' when PeekChar() == '=' => ScanTwoCharOperator(TokenType.PlusEqual),
+            '+' => ScanSingleCharOperator(TokenType.Plus),
+
+            '-' when PeekChar() == '=' => ScanTwoCharOperator(TokenType.MinusEqual),
+            '-' when char.IsDigit(PeekChar()) => ScanNumber(),
+            '-' => ScanSingleCharOperator(TokenType.Minus),
+
+            '*' when PeekChar() == '*' => ScanTwoCharOperator(TokenType.Power),
+            '*' => ScanSingleCharOperator(TokenType.Star),
+
+            '/' => ScanSingleCharOperator(TokenType.Div),
+
+            '=' => ScanSingleCharOperator(TokenType.Equal),
+
+            '<' when PeekChar() == '>' => ScanTwoCharOperator(TokenType.NotEqual),
+            '<' when PeekChar() == '=' => ScanTwoCharOperator(TokenType.LessThanOrEqual),
+            '<' => ScanSingleCharOperator(TokenType.LessThan),
+
+            '>' when PeekChar() == '=' => ScanTwoCharOperator(TokenType.GreaterThanOrEqual),
+            '>' => ScanSingleCharOperator(TokenType.GreaterThan),
+
+            '!' when PeekChar() == '=' => ScanTwoCharOperator(TokenType.NotEqual),
+
+            '|' when PeekChar() == '|' => ScanTwoCharOperator(TokenType.DirectiveOr),
+            '|' when PeekChar() == '=' => ScanTwoCharOperator(TokenType.PipeEqual),
+            '|' => ScanSingleCharOperator(TokenType.Pipe),
+
+            '(' => ScanSingleCharOperator(TokenType.LeftParen),
+            ')' => ScanSingleCharOperator(TokenType.RightParen),
+            '[' => ScanSingleCharOperator(TokenType.LeftBracket),
+            ']' => ScanSingleCharOperator(TokenType.RightBracket),
+            ';' => ScanSingleCharOperator(TokenType.Semicolon),
+            ',' => ScanSingleCharOperator(TokenType.Comma),
+            '.' => ScanSingleCharOperator(TokenType.Dot),
+            ':' => ScanSingleCharOperator(TokenType.Colon),
+            '@' => ScanSingleCharOperator(TokenType.At),
+
+            // String literals (nested strings in interpolation)
+            '"' => ScanStringLiteral('"'),
+            '\'' => ScanStringLiteral('\''),
+
+            // Numbers
+            _ when char.IsDigit(ch) => ScanNumber(),
+
+            // Identifiers, keywords, and variables
+            '&' when PeekChar() == '&' => ScanTwoCharOperator(TokenType.DirectiveAnd),
+            '&' => ScanUserVariable(),
+            '%' => ScanSystemIdentifier(),
+            '#' when IsDirectiveStart() => ScanDirective(),
+            '^' => ScanSingleCharOperator(TokenType.Caret),
+
+            // Note: No interpolated string handling here - we're inside an interpolation
+            // Letters and identifiers
+            _ when char.IsLetter(ch) || ch == '_' || ch == '$' || ch == '#' => ScanIdentifierOrKeyword(),
+
+            _ => ScanInvalidCharacter()
+        };
+
+        // Attach leading trivia
+        if (normalToken != null)
+        {
+            foreach (var trivia in leadingTrivia)
+            {
+                normalToken.AddLeadingTrivia(trivia);
+            }
+        }
+
+        return normalToken;
     }
 
     private Token ScanNumber()
@@ -1022,4 +1440,25 @@ public class LexError
     {
         return $"{Position}: {Message}";
     }
+}
+
+/// <summary>
+/// Lexer modes for handling interpolated strings
+/// </summary>
+internal enum LexerMode
+{
+    /// <summary>
+    /// Normal lexing mode
+    /// </summary>
+    Normal,
+
+    /// <summary>
+    /// Inside interpolated string, scanning string content
+    /// </summary>
+    InterpolatedString,
+
+    /// <summary>
+    /// Inside interpolation expression (between { and })
+    /// </summary>
+    InterpolationExpression
 }
