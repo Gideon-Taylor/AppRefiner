@@ -9,7 +9,7 @@ namespace AppRefiner.LanguageExtensions.BuiltIn
     /// <summary>
     /// Provides extensions for array types
     /// </summary>
-    public class ArrayExtensions : BaseLanguageExtension
+    public class ArrayExtensions : BaseTypeExtension
     {
         // Use dimensions=0 as wildcard to match any array dimensionality (1D, 2D, 3D, etc.)
         public override TypeInfo TargetType => new ArrayTypeInfo(dimensions: 0);

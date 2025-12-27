@@ -163,7 +163,7 @@ namespace AppRefiner
         /// Extension manager for checking extension methods.
         /// Set by MainForm during initialization.
         /// </summary>
-        public static LanguageExtensionManager? ExtensionManager { get; set; }
+        public static TypeExtensionManager? ExtensionManager { get; set; }
 
         public enum UserListType
         {

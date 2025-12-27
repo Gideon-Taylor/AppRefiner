@@ -8,7 +8,7 @@ namespace AppRefiner.LanguageExtensions.BuiltIn
     /// Provides multiple string manipulation extensions for the String type.
     /// Uses simple pattern-based transforms for common operations.
     /// </summary>
-    public class StringExtensions : BaseLanguageExtension
+    public class StringExtensions : BaseTypeExtension
     {
         public override TypeInfo TargetType => PrimitiveTypeInfo.String;
 

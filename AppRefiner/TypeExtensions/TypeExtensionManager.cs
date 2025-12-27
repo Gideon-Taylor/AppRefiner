@@ -10,9 +10,9 @@ namespace AppRefiner.LanguageExtensions
     /// <summary>
     /// Manages discovery, registration, and querying of language extensions
     /// </summary>
-    public class LanguageExtensionManager
+    public class TypeExtensionManager
     {
-        private readonly List<BaseLanguageExtension> extensions = new();
+        private readonly List<BaseTypeExtension> extensions = new();
         private readonly List<ExtensionTransform> allTransforms = new();
         private readonly MainForm mainForm;
         private readonly DataGridView? extensionGrid;
@@ -28,7 +28,7 @@ namespace AppRefiner.LanguageExtensions
         /// <param name="form">The main form for UI operations</param>
         /// <param name="extensionOptionsGrid">The data grid view for displaying extensions (optional)</param>
         /// <param name="settings">The settings service for persistence</param>
-        public LanguageExtensionManager(MainForm form, DataGridView? extensionOptionsGrid, SettingsService settings)
+        public TypeExtensionManager(MainForm form, DataGridView? extensionOptionsGrid, SettingsService settings)
         {
             mainForm = form;
             extensionGrid = extensionOptionsGrid;
@@ -38,7 +38,7 @@ namespace AppRefiner.LanguageExtensions
         /// <summary>
         /// Gets all registered language extensions
         /// </summary>
-        public IEnumerable<BaseLanguageExtension> Extensions => extensions;
+        public IEnumerable<BaseTypeExtension> Extensions => extensions;
 
         #region Discovery and Initialization
 
@@ -59,7 +59,7 @@ namespace AppRefiner.LanguageExtensions
 
             // Discover from main assembly
             var coreTypes = Assembly.GetExecutingAssembly().GetTypes()
-                .Where(p => typeof(BaseLanguageExtension).IsAssignableFrom(p) &&
+                .Where(p => typeof(BaseTypeExtension).IsAssignableFrom(p) &&
                            !p.IsAbstract && !p.IsInterface);
 
             // Discover from plugins
@@ -72,7 +72,7 @@ namespace AppRefiner.LanguageExtensions
             {
                 try
                 {
-                    if (Activator.CreateInstance(type) is BaseLanguageExtension extension)
+                    if (Activator.CreateInstance(type) is BaseTypeExtension extension)
                     {
                         extensions.Add(extension);
                         extension.Active = true;

@@ -23,7 +23,7 @@ namespace AppRefiner.LanguageExtensions
     /// Base class for all language extensions. Language extensions allow extending PeopleCode types
     /// with new properties and methods (similar to C# extension methods) via code transformations.
     /// </summary>
-    public abstract class BaseLanguageExtension
+    public abstract class BaseTypeExtension
     {
         #region Metadata Properties
 

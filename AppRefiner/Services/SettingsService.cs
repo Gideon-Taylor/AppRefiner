@@ -292,7 +292,7 @@ namespace AppRefiner
 
         // --- Language Extension States ---
 
-        public void LoadLanguageExtensionStates(IEnumerable<BaseLanguageExtension> extensions, DataGridView? dataGridView)
+        public void LoadLanguageExtensionStates(IEnumerable<BaseTypeExtension> extensions, DataGridView? dataGridView)
         {
             try
             {
@@ -312,7 +312,7 @@ namespace AppRefiner
                         if (dataGridView != null)
                         {
                             var row = dataGridView.Rows.Cast<DataGridViewRow>()
-                                .FirstOrDefault(r => r.Tag is BaseLanguageExtension e && e == extension);
+                                .FirstOrDefault(r => r.Tag is BaseTypeExtension e && e == extension);
                             if (row != null)
                             {
                                 row.Cells[0].Value = state.Active;
@@ -331,7 +331,7 @@ namespace AppRefiner
             }
         }
 
-        public void SaveLanguageExtensionStates(IEnumerable<BaseLanguageExtension> extensions)
+        public void SaveLanguageExtensionStates(IEnumerable<BaseTypeExtension> extensions)
         {
             try
             {
@@ -356,7 +356,7 @@ namespace AppRefiner
         /// Loads language extension configurations from settings
         /// </summary>
         /// <param name="extensions">The extensions to load configurations for</param>
-        public void LoadLanguageExtensionConfigs(IEnumerable<BaseLanguageExtension> extensions)
+        public void LoadLanguageExtensionConfigs(IEnumerable<BaseTypeExtension> extensions)
         {
             try
             {
@@ -394,7 +394,7 @@ namespace AppRefiner
         /// Saves language extension configurations to settings
         /// </summary>
         /// <param name="extensions">The extensions to save configurations for</param>
-        public void SaveLanguageExtensionConfigs(IEnumerable<BaseLanguageExtension> extensions)
+        public void SaveLanguageExtensionConfigs(IEnumerable<BaseTypeExtension> extensions)
         {
             try
             {
@@ -423,7 +423,7 @@ namespace AppRefiner
         /// </summary>
         /// <param name="extension">The extension to update</param>
         /// <param name="extensions">All extensions (to save complete config)</param>
-        public void UpdateLanguageExtensionConfig(BaseLanguageExtension extension, IEnumerable<BaseLanguageExtension> extensions)
+        public void UpdateLanguageExtensionConfig(BaseTypeExtension extension, IEnumerable<BaseTypeExtension> extensions)
         {
             SaveLanguageExtensionConfigs(extensions);
         }

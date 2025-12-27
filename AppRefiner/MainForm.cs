@@ -61,7 +61,7 @@ namespace AppRefiner
         private SettingsService? settingsService; // Added SettingsService
         private FunctionCacheManager? functionCacheManager;
         private CommandManager? commandManager; // Added CommandManager for plugin commands
-        private LanguageExtensionManager? languageExtensionManager; // Added LanguageExtensionManager
+        private TypeExtensionManager? languageExtensionManager; // Added LanguageExtensionManager
         private AutoSuggestSettings autoSuggestSettings = AutoSuggestSettings.GetDefault(); // Auto suggest configuration 
         private ScintillaEditor? activeEditor = null;
         private AppDesignerProcess? activeAppDesigner = null;
@@ -82,7 +82,7 @@ namespace AppRefiner
         /// <summary>
         /// Gets the language extension manager
         /// </summary>
-        public LanguageExtensionManager? LanguageExtensionManager => languageExtensionManager;
+        public TypeExtensionManager? TypeExtensionManager => languageExtensionManager;
 
         private List<BaseTooltipProvider> tooltipProviders = new();
 
@@ -252,7 +252,7 @@ namespace AppRefiner
             commandManager.DiscoverAndCacheCommands();
 
             // Instantiate LanguageExtensionManager
-            languageExtensionManager = new LanguageExtensionManager(this, gridExtensions, settingsService);
+            languageExtensionManager = new TypeExtensionManager(this, gridExtensions, settingsService);
             languageExtensionManager.InitializeLanguageExtensions();
 
             // Set extension manager references
@@ -2175,7 +2175,7 @@ namespace AppRefiner
                 if (character == ')')
                 {
                     // Check for method extension pattern at current position
-                    if (LanguageExtensionManager != null)
+                    if (TypeExtensionManager != null)
                     {
                         try
                         {
@@ -2420,6 +2420,11 @@ namespace AppRefiner
             {
                 // Get current document text
                 string content = ScintillaManager.GetScintillaText(editor) ?? "";
+                while (content[position - 1] == ';')
+                {
+                    position--;
+                }
+
                 if (string.IsNullOrEmpty(content))
                 {
                     Debug.Log("No content available for extension transform");
@@ -2460,9 +2465,9 @@ namespace AppRefiner
                         var memberName = memberAccessNode.MemberName;
                         var targetType = targetExprNode.GetInferredType();
 
-                        if (targetType != null && LanguageExtensionManager != null)
+                        if (targetType != null && TypeExtensionManager != null)
                         {
-                            var extensions = LanguageExtensionManager.GetExtensionsForTypeAndName(
+                            var extensions = TypeExtensionManager.GetExtensionsForTypeAndName(
                                 targetType, memberName, LanguageExtensionType.Property);
 
                             if (extensions.Count > 0)
@@ -2501,9 +2506,9 @@ namespace AppRefiner
                         var methodName = memberAccess.MemberName;
                         var targetType = targetExprNode.GetInferredType();
 
-                        if (targetType != null && LanguageExtensionManager != null)
+                        if (targetType != null && TypeExtensionManager != null)
                         {
-                            var extensions = LanguageExtensionManager.GetExtensionsForTypeAndName(
+                            var extensions = TypeExtensionManager.GetExtensionsForTypeAndName(
                                 targetType, methodName, LanguageExtensionType.Method);
 
                             if (extensions.Count > 0)

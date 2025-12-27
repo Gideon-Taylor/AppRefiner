@@ -26,7 +26,7 @@ namespace AppRefiner.TooltipProviders
         /// Extension manager for checking extension method signatures.
         /// Set by MainForm during initialization.
         /// </summary>
-        public static LanguageExtensionManager? ExtensionManager { get; set; }
+        public static TypeExtensionManager? ExtensionManager { get; set; }
 
         /// <summary>
         /// Initializes the tooltip manager with discovered providers.

@@ -205,7 +205,7 @@ namespace AppRefiner.Plugins
                 {
                     // Find all non-abstract types that inherit from BaseLanguageExtension
                     var types = assembly.GetTypes()
-                        .Where(t => typeof(BaseLanguageExtension).IsAssignableFrom(t) && !t.IsAbstract);
+                        .Where(t => typeof(BaseTypeExtension).IsAssignableFrom(t) && !t.IsAbstract);
 
                     extensionTypes.AddRange(types);
                 }
@@ -248,7 +248,7 @@ namespace AppRefiner.Plugins
                         .Count(t => typeof(BaseCommand).IsAssignableFrom(t) && !t.IsAbstract);
 
                     var languageExtensionCount = assembly.GetTypes()
-                        .Count(t => typeof(BaseLanguageExtension).IsAssignableFrom(t) && !t.IsAbstract);
+                        .Count(t => typeof(BaseTypeExtension).IsAssignableFrom(t) && !t.IsAbstract);
 
                     var plugin = new PluginMetadata
                     {

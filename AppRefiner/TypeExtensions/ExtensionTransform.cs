@@ -50,7 +50,7 @@ namespace AppRefiner.LanguageExtensions
         /// <summary>
         /// Reference to parent extension (set during discovery)
         /// </summary>
-        internal BaseLanguageExtension? ParentExtension { get; set; }
+        internal BaseTypeExtension? ParentExtension { get; set; }
 
         /// <summary>
         /// Whether this transform is currently active (delegates to parent)
