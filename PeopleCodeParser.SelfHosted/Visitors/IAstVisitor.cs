@@ -65,6 +65,11 @@ public interface IAstVisitor
 
     void VisitPartialShortHandAssignment(PartialShortHandAssignmentNode node);
     void VisitObjectCreateShortHand(ObjectCreateShortHand node);
+
+    // Interpolated string nodes
+    void VisitInterpolatedString(InterpolatedStringNode node);
+    void VisitStringFragment(StringFragment node);
+    void VisitInterpolation(Interpolation node);
 }
 
 /// <summary>
@@ -131,6 +136,11 @@ public interface IAstVisitor<out TResult>
     TResult VisitPartialShortHandAssignment(PartialShortHandAssignmentNode node);
 
     TResult VisitObjectCreateShortHand(ObjectCreateShortHand node);
+
+    // Interpolated string nodes
+    TResult VisitInterpolatedString(InterpolatedStringNode node);
+    TResult VisitStringFragment(StringFragment node);
+    TResult VisitInterpolation(Interpolation node);
 }
 
 /// <summary>
@@ -617,5 +627,25 @@ public abstract class AstVisitorBase : IAstVisitor
     {
         node.ImplementedInterface?.Accept(this);
         node.Body?.Accept(this);
+    }
+
+    public virtual void VisitInterpolatedString(InterpolatedStringNode node)
+    {
+        // Visit all parts (fragments and interpolations)
+        foreach (var part in node.Parts)
+        {
+            part.Accept(this);
+        }
+    }
+
+    public virtual void VisitStringFragment(StringFragment node) => DefaultVisit(node);
+
+    public virtual void VisitInterpolation(Interpolation node)
+    {
+        // Visit the expression if present
+        if (node.Expression != null)
+        {
+            node.Expression.Accept(this);
+        }
     }
 }
