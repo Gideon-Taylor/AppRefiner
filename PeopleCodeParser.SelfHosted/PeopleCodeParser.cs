@@ -684,15 +684,37 @@ public class PeopleCodeParser
             }
             else
             {
-                var firstId = ParseGenericId();
-                if (firstId != null)
+
+                if (Check(TokenType.Caret))
                 {
-                    pathParts.Add(firstId);
+                    var caretCount = 1;
+                    while (Peek(caretCount).Type == TokenType.Caret)
+                    {
+                        caretCount++;
+                    }
+
+                    if (caretCount > 3)
+                    {
+                        var caretSourceSpan = new SourceSpan(Current.SourceSpan.Start, Peek(caretCount-1).SourceSpan.End);
+                        ReportError("Relative path imports cannot have more than 3 carets.", caretSourceSpan);
+                    }
+
+                    pathParts.Add(new string('^', caretCount));
+                    _position += (caretCount);
                 }
                 else
                 {
-                    ReportError("Expected package path after 'IMPORT'");
-                    return null;
+
+                    var firstId = ParseGenericId();
+                    if (firstId != null)
+                    {
+                        pathParts.Add(firstId);
+                    }
+                    else
+                    {
+                        ReportError("Expected package path after 'IMPORT'");
+                        return null;
+                    }
                 }
             }
 
