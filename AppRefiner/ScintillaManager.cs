@@ -2007,10 +2007,10 @@ namespace AppRefiner
             // Define context-specific fillup characters
             string fillups = context switch
             {
-                AutoCompleteContext.Variable => ".\t",        // '.' chains to object members
-                AutoCompleteContext.ObjectMembers => "(\t",   // '(' chains to parameters
+                AutoCompleteContext.Variable => ".\t;",        // '.' chains to object members
+                AutoCompleteContext.ObjectMembers => "(\t;",   // '(' chains to parameters
                 AutoCompleteContext.AppPackage => ":\t",      // ':' drills down into packages
-                AutoCompleteContext.SystemVariables => "\t",  // No chaining for system variables
+                AutoCompleteContext.SystemVariables => "\t;",  // No chaining for system variables
                 _ => "\t"
             };
 
