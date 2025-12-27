@@ -73,7 +73,7 @@ namespace AppRefiner.TooltipProviders
                     var extension = extensionMatches.FirstOrDefault(e => e.Active);
                     if (extension != null)
                     {
-                        funcInfo = extension.FunctionInfo;
+                        funcInfo = extension.GetFunctionInfo();
                     }
                 }
             }

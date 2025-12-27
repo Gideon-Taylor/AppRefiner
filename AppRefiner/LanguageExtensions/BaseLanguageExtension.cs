@@ -28,28 +28,16 @@ namespace AppRefiner.LanguageExtensions
         #region Metadata Properties
 
         /// <summary>
-        /// The name of the extension member (e.g., "Length", "IndexOf")
+        /// The transforms provided by this extension.
+        /// Each transform represents a property or method that can be added to target types.
         /// </summary>
-        public abstract string Name { get; }
+        public abstract List<ExtensionTransform> Transforms { get; }
 
         /// <summary>
-        /// Description of what this extension does
+        /// The target type this extension applies to.
+        /// All transforms defined in this extension will be available on this type.
         /// </summary>
-        public abstract string Description { get; }
-
-        /// <summary>
-        /// Whether this is a property or method extension
-        /// </summary>
-        public abstract LanguageExtensionType ExtensionType { get; }
-
-        public virtual FunctionInfo? FunctionInfo => null;
-        public virtual TypeWithDimensionality ReturnType => new TypeWithDimensionality(PeopleCodeType.Unknown);
-        /// <summary>
-        /// All target types this extension applies to.
-        /// For single-type extensions, return a list with one element.
-        /// For multi-type extensions (e.g., Length for both String and Rowset), return multiple types.
-        /// </summary>
-        public abstract List<TypeInfo> TargetTypes { get; }
+        public abstract TypeInfo TargetType { get; }
 
         #endregion
 
@@ -78,25 +66,11 @@ namespace AppRefiner.LanguageExtensions
 
         #endregion
 
-        #region Transform Method
-
-        /// <summary>
-        /// Performs the code transformation for this extension.
-        /// Implementation deferred - will be called when trigger mechanism is implemented.
-        /// </summary>
-        /// <param name="editor">The Scintilla editor containing the code</param>
-        /// <param name="node">The AST node where the extension is used</param>
-        /// <param name="matchedType">The actual type that was matched (important for multi-type extensions)</param>
-        /// <param name="variableRegistry">Registry containing all variables and scopes in the program (may be null for backward compatibility)</param>
-        public abstract void Transform(ScintillaEditor editor, AstNode node, TypeInfo matchedType, VariableRegistry? variableRegistry = null);
-
-        #endregion
-
         #region Configuration Support
 
         /// <summary>
         /// Gets the list of configurable properties for this extension.
-        /// Excludes core properties like Name, Description, Active, etc.
+        /// Excludes core properties like Transforms, TargetTypes, Active, etc.
         /// </summary>
         /// <returns>List of properties that can be configured by the user</returns>
         public List<System.Reflection.PropertyInfo> GetConfigurableProperties()
@@ -104,10 +78,8 @@ namespace AppRefiner.LanguageExtensions
             var properties = GetType().GetProperties(BindingFlags.Public | BindingFlags.Instance)
                 .Where(p => p.CanRead && p.CanWrite &&
                           p.GetCustomAttribute<JsonIgnoreAttribute>() == null &&
-                          p.Name != nameof(Name) &&
-                          p.Name != nameof(Description) &&
-                          p.Name != nameof(ExtensionType) &&
-                          p.Name != nameof(TargetTypes) &&
+                          p.Name != nameof(Transforms) &&
+                          p.Name != nameof(TargetType) &&
                           p.Name != nameof(Active) &&
                           p.Name != nameof(DatabaseRequirement) &&
                           p.Name != nameof(DataManager))

@@ -2467,18 +2467,11 @@ namespace AppRefiner
 
                             if (extensions.Count > 0)
                             {
-                                var extension = extensions[0];
+                                var transform = extensions[0];
 
-                                // Determine which type was actually matched
-                                TypeInfo matchedType = extension.TargetTypes[0];
-                                foreach (var targetType2 in extension.TargetTypes)
-                                {
-                                    if (targetType2.IsAssignableFrom(targetType))
-                                    {
-                                        matchedType = targetType2;
-                                        break;
-                                    }
-                                }
+                                // Get the matched type from the extension
+                                if (transform.ParentExtension == null) return false;
+                                TypeInfo matchedType = transform.ParentExtension.TargetType;
 
                                 // Run scope annotation visitor for this specific node
                                 targetNode = memberAccessNode;
@@ -2486,8 +2479,8 @@ namespace AppRefiner
                                 program.Accept(scopeVisitor);
                                 variableRegistry = scopeVisitor.VariableRegistry;
 
-                                Debug.Log($"Executing property extension transform: {extension.Name}");
-                                extension.Transform(editor, memberAccessNode, matchedType, variableRegistry);
+                                Debug.Log($"Executing property extension transform: {transform.GetName()}");
+                                transform.TransformAction(editor, memberAccessNode, matchedType, variableRegistry);
                                 return true;
                             }
                         }
@@ -2515,18 +2508,11 @@ namespace AppRefiner
 
                             if (extensions.Count > 0)
                             {
-                                var extension = extensions[0];
+                                var transform = extensions[0];
 
-                                // Determine which type was actually matched
-                                TypeInfo matchedType = extension.TargetTypes[0];
-                                foreach (var targetType2 in extension.TargetTypes)
-                                {
-                                    if (targetType2.IsAssignableFrom(targetType))
-                                    {
-                                        matchedType = targetType2;
-                                        break;
-                                    }
-                                }
+                                // Get the matched type from the extension
+                                if (transform.ParentExtension == null) return false;
+                                TypeInfo matchedType = transform.ParentExtension.TargetType;
 
                                 // Run scope annotation visitor for this specific node
                                 targetNode = functionCallNode;
@@ -2534,8 +2520,8 @@ namespace AppRefiner
                                 program.Accept(scopeVisitor);
                                 variableRegistry = scopeVisitor.VariableRegistry;
 
-                                Debug.Log($"Executing method extension transform: {extension.Name}");
-                                extension.Transform(editor, functionCallNode, matchedType, variableRegistry);
+                                Debug.Log($"Executing method extension transform: {transform.GetName()}");
+                                transform.TransformAction(editor, functionCallNode, matchedType, variableRegistry);
                                 return true;
                             }
                         }

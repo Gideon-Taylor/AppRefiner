@@ -13,13 +13,14 @@ namespace AppRefiner.LanguageExtensions
     public class LanguageExtensionManager
     {
         private readonly List<BaseLanguageExtension> extensions = new();
+        private readonly List<ExtensionTransform> allTransforms = new();
         private readonly MainForm mainForm;
         private readonly DataGridView? extensionGrid;
         private readonly SettingsService settingsService;
 
         // Cached lookups for performance (indexed by lowercase type name)
-        private Dictionary<string, List<BaseLanguageExtension>> propertyExtensionsByType = new();
-        private Dictionary<string, List<BaseLanguageExtension>> methodExtensionsByType = new();
+        private Dictionary<string, List<ExtensionTransform>> propertyExtensionsByType = new();
+        private Dictionary<string, List<ExtensionTransform>> methodExtensionsByType = new();
 
         /// <summary>
         /// Constructor
@@ -47,6 +48,7 @@ namespace AppRefiner.LanguageExtensions
         public void InitializeLanguageExtensions()
         {
             extensions.Clear();
+            allTransforms.Clear();
             propertyExtensionsByType.Clear();
             methodExtensionsByType.Clear();
 
@@ -74,19 +76,31 @@ namespace AppRefiner.LanguageExtensions
                     {
                         extensions.Add(extension);
                         extension.Active = true;
-                        if (extensionGrid != null)
-                        {
-                            // Grid columns: Active (checkbox), Target (TypeWithDimensionality), Type (Property/Method), Method/Property (Name)
-                            string targetTypeStr = FormatTargetTypes(extension.TargetTypes);
-                            string extensionTypeStr = extension.ExtensionType == LanguageExtensionType.Property ? "Property" : "Method";
 
-                            int rowIndex = extensionGrid.Rows.Add(
-                                extension.Active,           // Column 0: Active
-                                targetTypeStr,              // Column 1: Target
-                                extensionTypeStr,           // Column 2: Type
-                                extension.Name              // Column 3: Method/Property
-                            );
-                            extensionGrid.Rows[rowIndex].Tag = extension;
+                        // Extract and register all transforms from this extension
+                        foreach (var transform in extension.Transforms)
+                        {
+                            // Link transform to parent extension
+                            transform.ParentExtension = extension;
+                            allTransforms.Add(transform);
+
+                            // Add to grid (one row per transform)
+                            if (extensionGrid != null)
+                            {
+                                // Grid columns: Active (checkbox), Target (TypeWithDimensionality), Type (Property/Method), Method/Property (Name)
+                                string targetTypeStr = FormatTypeInfo(extension.TargetType);
+                                string extensionTypeStr = transform.ExtensionType == LanguageExtensionType.Property
+                                    ? "Property" : "Method";
+
+                                int rowIndex = extensionGrid.Rows.Add(
+                                    extension.Active,           // Column 0: Active
+                                    targetTypeStr,              // Column 1: Target
+                                    extensionTypeStr,           // Column 2: Type
+                                    transform.GetName()         // Column 3: Method/Property (individual transform name)
+                                );
+                                // Store transform reference (not extension)
+                                extensionGrid.Rows[rowIndex].Tag = transform;
+                            }
                         }
                     }
                 }
@@ -103,7 +117,7 @@ namespace AppRefiner.LanguageExtensions
             // Build lookup caches
             RebuildLookupCaches();
 
-            Debug.Log($"Initialized {extensions.Count} language extensions");
+            Debug.Log($"Initialized {extensions.Count} language extensions with {allTransforms.Count} transforms");
         }
 
         #endregion
@@ -111,40 +125,38 @@ namespace AppRefiner.LanguageExtensions
         #region Query Methods
 
         /// <summary>
-        /// Gets all active extensions that match the given target type.
+        /// Gets all active transforms that match the given target type.
         /// Uses both cached lookups and type assignability checking.
         /// </summary>
         /// <param name="targetType">The type to match against</param>
-        /// <returns>List of matching active extensions</returns>
-        public List<BaseLanguageExtension> GetExtensionsForType(TypeInfo targetType)
+        /// <returns>List of matching active transforms</returns>
+        public List<ExtensionTransform> GetExtensionsForType(TypeInfo targetType)
         {
-            var results = new List<BaseLanguageExtension>();
+            var results = new List<ExtensionTransform>();
 
             // Check cached lookups by type name
             var targetTypeName = targetType.Name.ToLowerInvariant();
 
-            if (propertyExtensionsByType.TryGetValue(targetTypeName, out var propExtensions))
+            if (propertyExtensionsByType.TryGetValue(targetTypeName, out var propTransforms))
             {
-                results.AddRange(propExtensions.Where(e => e.Active));
+                results.AddRange(propTransforms.Where(t => t.Active));
             }
 
-            if (methodExtensionsByType.TryGetValue(targetTypeName, out var methodExtensions))
+            if (methodExtensionsByType.TryGetValue(targetTypeName, out var methodTransforms))
             {
-                results.AddRange(methodExtensions.Where(e => e.Active));
+                results.AddRange(methodTransforms.Where(t => t.Active));
             }
 
-            // Also check for extensions that match via type assignability
-            foreach (var extension in extensions.Where(e => e.Active))
+            // Also check for transforms that match via type assignability
+            foreach (var transform in allTransforms.Where(t => t.Active))
             {
-                foreach (var extTargetType in extension.TargetTypes)
+                if (transform.ParentExtension == null) continue;
+
+                if (transform.ParentExtension.TargetType.IsAssignableFrom(targetType))
                 {
-                    if (extTargetType.IsAssignableFrom(targetType))
+                    if (!results.Contains(transform))
                     {
-                        if (!results.Contains(extension))
-                        {
-                            results.Add(extension);
-                        }
-                        break; // Don't add the same extension multiple times
+                        results.Add(transform);
                     }
                 }
             }
@@ -153,36 +165,36 @@ namespace AppRefiner.LanguageExtensions
         }
 
         /// <summary>
-        /// Gets all active property extensions
+        /// Gets all active property transforms
         /// </summary>
-        /// <returns>List of active property extensions</returns>
-        public List<BaseLanguageExtension> GetPropertyExtensions()
+        /// <returns>List of active property transforms</returns>
+        public List<ExtensionTransform> GetPropertyExtensions()
         {
-            return extensions.Where(e => e.Active && e.ExtensionType == LanguageExtensionType.Property).ToList();
+            return allTransforms.Where(t => t.Active && t.ExtensionType == LanguageExtensionType.Property).ToList();
         }
 
         /// <summary>
-        /// Gets all active method extensions
+        /// Gets all active method transforms
         /// </summary>
-        /// <returns>List of active method extensions</returns>
-        public List<BaseLanguageExtension> GetMethodExtensions()
+        /// <returns>List of active method transforms</returns>
+        public List<ExtensionTransform> GetMethodExtensions()
         {
-            return extensions.Where(e => e.Active && e.ExtensionType == LanguageExtensionType.Method).ToList();
+            return allTransforms.Where(t => t.Active && t.ExtensionType == LanguageExtensionType.Method).ToList();
         }
 
         /// <summary>
-        /// Gets extensions that match both the target type and member name
+        /// Gets transforms that match both the target type and member name
         /// </summary>
         /// <param name="targetType">The type to match against</param>
         /// <param name="memberName">The member name to match</param>
         /// <param name="extensionType">Property or method extension</param>
-        /// <returns>List of matching active extensions</returns>
-        public List<BaseLanguageExtension> GetExtensionsForTypeAndName(TypeInfo targetType, string memberName, LanguageExtensionType extensionType)
+        /// <returns>List of matching active transforms</returns>
+        public List<ExtensionTransform> GetExtensionsForTypeAndName(TypeInfo targetType, string memberName, LanguageExtensionType extensionType)
         {
             var candidates = GetExtensionsForType(targetType);
-            return candidates.Where(e =>
-                e.ExtensionType == extensionType &&
-                e.Name.Equals(memberName, StringComparison.OrdinalIgnoreCase))
+            return candidates.Where(t =>
+                t.ExtensionType == extensionType &&
+                t.GetName().Equals(memberName, StringComparison.OrdinalIgnoreCase))
                 .ToList();
         }
 
@@ -199,11 +211,26 @@ namespace AppRefiner.LanguageExtensions
 
             if (e.RowIndex >= 0 && e.ColumnIndex == 0)
             {
-                if (extensionGrid.Rows[e.RowIndex].Tag is BaseLanguageExtension extension)
+                if (extensionGrid.Rows[e.RowIndex].Tag is ExtensionTransform transform)
                 {
                     if (extensionGrid.Rows[e.RowIndex].Cells[0].Value is bool isActive)
                     {
-                        extension.Active = isActive;
+                        // Update parent extension's active state
+                        if (transform.ParentExtension != null)
+                        {
+                            transform.ParentExtension.Active = isActive;
+
+                            // Update ALL rows for this parent extension
+                            foreach (DataGridViewRow row in extensionGrid.Rows)
+                            {
+                                if (row.Tag is ExtensionTransform t &&
+                                    t.ParentExtension == transform.ParentExtension)
+                                {
+                                    row.Cells[0].Value = isActive;
+                                }
+                            }
+                        }
+
                         // Settings saved centrally on form close
 
                         // Rebuild caches when active state changes
@@ -225,29 +252,28 @@ namespace AppRefiner.LanguageExtensions
             propertyExtensionsByType.Clear();
             methodExtensionsByType.Clear();
 
-            foreach (var extension in extensions)
+            foreach (var transform in allTransforms)
             {
-                // Add extension to cache for each target type it supports
-                foreach (var targetType in extension.TargetTypes)
-                {
-                    var targetTypeName = GetTypeName(targetType);
+                if (transform.ParentExtension == null) continue;
 
-                    if (extension.ExtensionType == LanguageExtensionType.Property)
+                // Add transform to cache for the target type
+                var targetTypeName = GetTypeName(transform.ParentExtension.TargetType);
+
+                if (transform.ExtensionType == LanguageExtensionType.Property)
+                {
+                    if (!propertyExtensionsByType.ContainsKey(targetTypeName))
                     {
-                        if (!propertyExtensionsByType.ContainsKey(targetTypeName))
-                        {
-                            propertyExtensionsByType[targetTypeName] = new List<BaseLanguageExtension>();
-                        }
-                        propertyExtensionsByType[targetTypeName].Add(extension);
+                        propertyExtensionsByType[targetTypeName] = new List<ExtensionTransform>();
                     }
-                    else if (extension.ExtensionType == LanguageExtensionType.Method)
+                    propertyExtensionsByType[targetTypeName].Add(transform);
+                }
+                else if (transform.ExtensionType == LanguageExtensionType.Method)
+                {
+                    if (!methodExtensionsByType.ContainsKey(targetTypeName))
                     {
-                        if (!methodExtensionsByType.ContainsKey(targetTypeName))
-                        {
-                            methodExtensionsByType[targetTypeName] = new List<BaseLanguageExtension>();
-                        }
-                        methodExtensionsByType[targetTypeName].Add(extension);
+                        methodExtensionsByType[targetTypeName] = new List<ExtensionTransform>();
                     }
+                    methodExtensionsByType[targetTypeName].Add(transform);
                 }
             }
         }
@@ -270,19 +296,6 @@ namespace AppRefiner.LanguageExtensions
             }
 
             return typeInfo.Name.ToLowerInvariant();
-        }
-
-        /// <summary>
-        /// Formats a list of target types for display in the grid
-        /// </summary>
-        private string FormatTargetTypes(List<TypeInfo> types)
-        {
-            if (types.Count == 1)
-            {
-                return FormatTypeInfo(types[0]);
-            }
-
-            return string.Join(", ", types.Select(FormatTypeInfo));
         }
 
         /// <summary>

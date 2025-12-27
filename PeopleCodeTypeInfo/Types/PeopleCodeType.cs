@@ -1140,8 +1140,8 @@ public class ArrayTypeInfo : TypeInfo
 
     public ArrayTypeInfo(int dimensions = 1, TypeInfo? elementType = null)
     {
-        if (dimensions < 1 || dimensions > 9)
-            throw new ArgumentOutOfRangeException(nameof(dimensions), "Array dimensions must be between 1 and 9");
+        if (dimensions < 0 || dimensions > 9)
+            throw new ArgumentOutOfRangeException(nameof(dimensions), "Array dimensions must be between 0 and 9 (0 = wildcard for any dimensionality)");
 
         Dimensions = dimensions;
         ElementType = elementType;
@@ -1155,14 +1155,21 @@ public class ArrayTypeInfo : TypeInfo
         // Any can be assigned to any array
         if (other.Kind == TypeKind.Any) return true;
 
-        // Same array type with compatible element types
-        if (other is ArrayTypeInfo array && array.Dimensions == Dimensions)
+        // Special case: dimensions==0 means "match any array dimensionality"
+        if (other is ArrayTypeInfo array)
         {
-            // Untyped arrays are compatible
-            if (ElementType == null || array.ElementType == null) return true;
+            // If this is a wildcard (0 dimensions), match any array
+            if (Dimensions == 0) return true;
 
-            // Check element type compatibility (with null safety)
-            return ElementType?.IsAssignableFrom(array.ElementType) ?? true;
+            // Otherwise require exact dimension match
+            if (array.Dimensions == Dimensions)
+            {
+                // Untyped arrays are compatible
+                if (ElementType == null || array.ElementType == null) return true;
+
+                // Check element type compatibility (with null safety)
+                return ElementType?.IsAssignableFrom(array.ElementType) ?? true;
+            }
         }
 
         if (other is ObjectTypeInfo obj && obj.PeopleCodeType == Types.PeopleCodeType.Object) return true;

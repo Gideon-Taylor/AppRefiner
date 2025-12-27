@@ -66,6 +66,7 @@ The core extensibility model is based on abstract base classes with the visitor 
 - `ScopedRefactor`: For code transformations (unified base class)
 - `BaseTooltipProvider`: For contextual information display
 - `BaseCommand`: For custom commands in the command palette with keyboard shortcuts (built-in or plugin)
+- `BaseLanguageExtension`: For adding properties/methods to PeopleCode types via code transformations
 
 **Scoped Variants:**
 - `ScopedLintRule<T>`: Adds variable/scope tracking
@@ -373,6 +374,151 @@ Commands are automatically discovered at startup:
 3. Build and run AppRefiner
 4. Command is auto-discovered and appears in command palette
 
+### Adding New Language Extensions
+Language extensions allow adding new properties and methods to existing PeopleCode types through code transformations (similar to C# extension methods).
+
+#### Base Class: `BaseLanguageExtension`
+Located in `AppRefiner.LanguageExtensions` namespace. Supports multi-transform architecture where a single extension class can provide multiple methods/properties.
+
+**Required Properties:**
+- `TargetTypes`: List of types this extension applies to (all transforms apply to all target types)
+- `Transforms`: Collection of `ExtensionTransform` instances defining the methods/properties
+
+**Key Concepts:**
+- Single extension class can define multiple transforms
+- All transforms automatically apply to all target types
+- Active state and configuration shared across all transforms in the class
+- Transforms shown individually in extension grid UI
+
+#### Creating Simple Pattern-Based Transforms
+For common string replacement cases, use the `ExtensionTransform.CreateSimple()` factory method:
+
+**Pattern Syntax:**
+- `%1` = target expression (the object before the dot)
+- `%2`, `%3`, `%4`, etc. = function arguments (1st, 2nd, 3rd argument for method extensions)
+- Optional arguments automatically handled (unreplaced placeholders removed)
+
+**Examples:**
+
+```csharp
+using PeopleCodeTypeInfo.Functions;
+using PeopleCodeTypeInfo.Types;
+using TypeInfo = PeopleCodeTypeInfo.Types.TypeInfo;
+
+namespace AppRefiner.LanguageExtensions.BuiltIn
+{
+    public class StringExtensions : BaseLanguageExtension
+    {
+        public override List<TypeInfo> TargetTypes => new()
+        {
+            PrimitiveTypeInfo.String  // All transforms apply to String type
+        };
+
+        public override List<ExtensionTransform> Transforms => new()
+        {
+            // Property: &string.Len → Len(&string)
+            ExtensionTransform.CreateSimple(
+                name: "Len",
+                description: "Get the length of a string (transforms to Len())",
+                extensionType: LanguageExtensionType.Property,
+                transformPattern: "Len(%1)",
+                returnType: new TypeWithDimensionality(PeopleCodeType.Number)
+            ),
+
+            // Method: &string.IndexOf("foo") → Find("foo", &string)
+            // Method: &string.IndexOf("foo", 3) → Find("foo", &string, 3)
+            ExtensionTransform.CreateSimple(
+                name: "IndexOf",
+                description: "Find index of substring (transforms to Find())",
+                extensionType: LanguageExtensionType.Method,
+                transformPattern: "Find(%2, %1, %3)",  // %3 auto-removed if not provided
+                returnType: new TypeWithDimensionality(PeopleCodeType.Number),
+                functionInfo: new FunctionInfo()
+                {
+                    Parameters = new()
+                    {
+                        new SingleParameter(new TypeWithDimensionality(PeopleCodeType.String), "search_string"),
+                        new VariableParameter(new SingleParameter(new TypeWithDimensionality(PeopleCodeType.Number)), 0, 1, "start_index")
+                    },
+                    ReturnType = new TypeWithDimensionality(PeopleCodeType.Number)
+                }
+            ),
+
+            // Property: &string.ToUpper → Upper(&string)
+            ExtensionTransform.CreateSimple(
+                name: "ToUpper",
+                description: "Convert string to uppercase (transforms to Upper())",
+                extensionType: LanguageExtensionType.Property,
+                transformPattern: "Upper(%1)",
+                returnType: new TypeWithDimensionality(PeopleCodeType.String)
+            )
+        };
+    }
+}
+```
+
+#### Creating Custom Transform Logic
+For complex transformations that require custom logic (like `ArrayExtensions.ForEach`), use the full `ExtensionTransform` constructor with a `TransformAction` delegate:
+
+```csharp
+new ExtensionTransform
+{
+    Name = "ForEach",
+    Description = "Expands to a For loop that iterates the array",
+    ExtensionType = LanguageExtensionType.Method,
+    ReturnType = new TypeWithDimensionality(PeopleCodeType.Void),
+    FunctionInfo = new FunctionInfo() { /* ... */ },
+    TransformAction = (editor, node, matchedType, variableRegistry) =>
+    {
+        // Custom transformation logic
+        // Access AST node, editor, variable registry
+        // Use ScintillaManager.ReplaceTextRange() to modify code
+    }
+}
+```
+
+**Transform Execution Context:**
+- `editor`: ScintillaEditor instance containing the code
+- `node`: AST node where extension is used (MemberAccessNode for properties, FunctionCallNode for methods)
+- `matchedType`: The actual TypeInfo that was matched (important for multi-type extensions)
+- `variableRegistry`: Variable and scope information (may be null)
+
+#### Multi-Type Extensions
+A single extension class can target multiple types:
+
+```csharp
+public override List<TypeInfo> TargetTypes => new()
+{
+    PrimitiveTypeInfo.String,
+    PrimitiveTypeInfo.Number,
+    new ArrayTypeInfo()
+};
+```
+
+All transforms in the `Transforms` collection will be available on all target types.
+
+#### Discovery and Registration
+Language extensions are:
+- Automatically discovered from main assembly and plugins via reflection
+- Flattened into individual transforms during initialization
+- Cached by type name for O(1) lookup performance
+- Displayed in extension grid UI (one row per transform)
+- Active state managed at extension class level (affects all transforms)
+
+**For Built-in Extensions:**
+1. Create extension class in `LanguageExtensions/BuiltIn/` folder
+2. Inherit from `BaseLanguageExtension`
+3. Define `TargetTypes` and `Transforms` collections
+4. Build and run AppRefiner
+5. Extension auto-discovered and transforms appear in autocomplete
+
+**For Plugin Extensions:**
+1. Create .NET 8 class library
+2. Reference AppRefiner project
+3. Implement `BaseLanguageExtension` subclass
+4. Copy compiled DLL to AppRefiner's Plugins directory
+5. Restart AppRefiner
+
 ### Plugin Development
 1. Create new .NET 8 class library project
 2. Reference AppRefiner project
@@ -516,6 +662,11 @@ The Better Find functionality is integrated into the command palette system:
   - **CommandManager.cs**: Discovery and execution of commands
   - **BuiltIn/**: Built-in command implementations
 - **Linters/**, **Stylers/**, **Refactors/**: Extension implementations
+- **LanguageExtensions/**: Language extension system for type augmentation
+  - **BaseLanguageExtension.cs**: Base class for language extensions
+  - **ExtensionTransform.cs**: Transform descriptor with CreateSimple factory
+  - **LanguageExtensionManager.cs**: Discovery, caching, and execution
+  - **BuiltIn/**: Built-in language extensions (StringExtensions, ArrayExtensions)
 - **Database/**: Data access layer
 - **PeopleCodeParser.SelfHosted/**: Self-hosted parser implementation
   - **PeopleCodeLexer.cs**: Lexer/tokenizer

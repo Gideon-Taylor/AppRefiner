@@ -588,15 +588,15 @@ namespace AppRefiner
                 {
                     var extensions = ExtensionManager.GetExtensionsForType(typeInfo);
 
-                    foreach (var extension in extensions)
+                    foreach (var transform in extensions)
                     {
                         // Format: "{Name} [Ext] -> {ReturnType} ({Type})?{Icon}"
-                        string displayText = extension.Name;
-                        string memberKind = extension.ExtensionType == LanguageExtensionType.Property ? "Property" : "Method";
+                        string displayText = transform.GetName();
+                        string memberKind = transform.ExtensionType == LanguageExtensionType.Property ? "Property" : "Method";
 
-                        if (extension.ReturnType.Type != PeopleCodeType.Void)
+                        if (transform.GetReturnType().Type != PeopleCodeType.Void)
                         {
-                            string returnTypeStr = FormatReturnType(typeInfo, extension.ReturnType);
+                            string returnTypeStr = FormatReturnType(typeInfo, transform.GetReturnType());
                             displayText += $" -> {returnTypeStr}";
                         }
 
@@ -611,7 +611,7 @@ namespace AppRefiner
                         displayText += $" ({memberKind})";
 
                         // Add icon (use same icons as regular members)
-                        int icon = extension.ExtensionType == LanguageExtensionType.Property
+                        int icon = transform.ExtensionType == LanguageExtensionType.Property
                             ? (int)AutoCompleteIcons.Property
                             : (int)AutoCompleteIcons.ClassMethod;
 
