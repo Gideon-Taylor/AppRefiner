@@ -212,6 +212,24 @@ namespace AppRefiner
             }
         }
 
+        private string ReplaceCaretPackage(ScintillaEditor? editor, string packagePath)
+        {
+            if (packagePath.StartsWith('^') && !string.IsNullOrEmpty(editor.ClassPath))
+            {
+                /* root package */
+                var packageParts = packagePath.Split(':');
+
+                var currentClassPackage = editor.ClassPath.Split(':');
+                if (packageParts.Length > 0 && packageParts[0].Length < currentClassPackage.Length)
+                {
+                    var expandedPackage = string.Join(':', currentClassPackage.Take(currentClassPackage.Length - packageParts[0].Length));
+                    packageParts[0] = expandedPackage;
+                    return string.Join(":", packageParts);
+                }
+            }
+
+            return packagePath;
+        }
 
         /// <summary>
         /// Shows app package suggestions based on the text preceding the cursor.
@@ -251,6 +269,9 @@ namespace AppRefiner
                     Debug.Log("No valid package path found for suggestion.");
                     return;
                 }
+
+                // substitute any ^,^^,^^^ packages found at the start of the path 
+                packagePath = ReplaceCaretPackage(editor, packagePath);
 
                 Debug.Log($"Extracted package path for suggestion: {packagePath}");
 
@@ -1034,28 +1055,29 @@ namespace AppRefiner
             if (isClassSelection)
             {
                 // Insert the class name
-                ScintillaManager.InsertTextAtCursor(editor, itemText);
-
-                // Get the current cursor position after insertion
-                int currentPos = ScintillaManager.GetCursorPosition(editor);
-                int currentLine = ScintillaManager.GetLineFromPosition(editor, currentPos);
-                int lineStartPos = ScintillaManager.GetLineStartIndex(editor, currentLine);
-
-                // Get the full line text and trim it to cursor position
-                var fullLineText = ScintillaManager.GetCurrentLineText(editor);
-                int cursorPosInLine = currentPos - lineStartPos;
-
-                if (cursorPosInLine > 0 && cursorPosInLine <= fullLineText.Length)
+                var currentLine = ScintillaManager.GetCurrentLineText(editor);
+                if (currentLine.EndsWith(";"))
                 {
-                    string lineTextToCursor = fullLineText.Substring(0, cursorPosInLine);
-                    string classPath = lineTextToCursor.Split(' ').Last();
-                    return new AddImport(editor, classPath);
-                }
-                else
+                    ScintillaManager.InsertTextAtCursor(editor, itemText);
+                } else
                 {
-                    Debug.Log("Could not determine cursor position in line for import extraction");
-                    return null;
+                    ScintillaManager.InsertTextAtCursor(editor, $"{itemText};");
                 }
+
+                currentLine = ScintillaManager.GetCurrentLineText(editor);
+
+                var lineParts = currentLine.Split(' ');
+                if (lineParts.Length > 1 && lineParts[1].StartsWith('^'))
+                {
+                    ;
+                    var lineStart = ScintillaManager.GetLineStartIndex(editor, ScintillaManager.GetCurrentLineNumber(editor));
+                    var lineLength = ScintillaManager.GetLineLength(editor, ScintillaManager.GetCurrentLineNumber(editor));
+
+                    var replacedPackage = ReplaceCaretPackage(editor, lineParts[1]);
+                    ScintillaManager.ReplaceTextRange(editor, lineStart, lineStart + lineLength - 1, $"import {replacedPackage}");
+                }
+
+                return null;
             }
             else // It's a package selection or from another list type
             {
