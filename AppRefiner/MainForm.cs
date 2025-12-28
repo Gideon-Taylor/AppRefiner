@@ -2223,9 +2223,12 @@ namespace AppRefiner
 
                         RunTypeInference(activeEditor, program);
 
-                        var targetFunction = program.FindNodes(n => n is FunctionCallNode && n.SourceSpan.ContainsPosition(position)).FirstOrDefault();
-                        var targetCreationNode = program.FindNodes(n => n is ObjectCreationNode && n.SourceSpan.ContainsPosition(position)).FirstOrDefault();
-                        if (targetFunction != null && targetFunction is FunctionCallNode fcn)
+                        var targetFunction = program.FindNodes(n => n is FunctionCallNode && n.SourceSpan.ContainsPosition(position)).OrderBy(n => n.SourceSpan.Length).FirstOrDefault();
+                        var targetCreationNode = program.FindNodes(n => n is ObjectCreationNode && n.SourceSpan.ContainsPosition(position)).OrderBy(n => n.SourceSpan.Length).FirstOrDefault();
+
+                        bool isCreateMoreSpecific = (targetFunction != null && targetCreationNode != null && targetCreationNode.SourceSpan.Length < targetFunction.SourceSpan.Length);
+
+                        if (targetFunction != null && targetFunction is FunctionCallNode fcn && !isCreateMoreSpecific)
                         {
                             activeEditor.FunctionCallTipProgram = program;
                             activeEditor.FunctionCallNode = fcn;
