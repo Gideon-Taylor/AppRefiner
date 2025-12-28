@@ -605,7 +605,7 @@ namespace AppRefiner
                 }
 
                 // Add language extension suggestions
-                if (typeInfo != null && ExtensionManager != null)
+                if ( typeInfo != null && typeInfo.PeopleCodeType != PeopleCodeType.Any && ExtensionManager != null)
                 {
                     var extensions = ExtensionManager.GetExtensionsForType(typeInfo);
 
