@@ -709,6 +709,12 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
         SetInferredType(node, inferredType);
     }
 
+    public override void VisitInterpolatedString(InterpolatedStringNode node)
+    {
+        base.VisitInterpolatedString(node);
+        SetInferredType(node, PrimitiveTypeInfo.String);
+    }
+
     /// <summary>
     /// Visit identifier and resolve type from variable tracking
     /// </summary>

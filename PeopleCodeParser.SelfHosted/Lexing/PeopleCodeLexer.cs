@@ -18,6 +18,8 @@ public class PeopleCodeLexer
     // Interpolated string state
     private LexerMode _mode = LexerMode.Normal;
     private int _braceDepth = 0; // Track brace depth in interpolation expressions
+    private int _parenDepth = 0; // Track paren depth in interpolation expressions
+    private int _bracketDepth = 0; // Track bracket depth in interpolation expressions
 
     // Keyword mapping for fast lookup
     private static readonly Dictionary<string, TokenType> Keywords = new(StringComparer.OrdinalIgnoreCase)
@@ -796,6 +798,8 @@ public class PeopleCodeLexer
             Advance();
             _mode = LexerMode.InterpolationExpression;
             _braceDepth = 0;
+            _parenDepth = 0;
+            _bracketDepth = 0;
             return new Token(TokenType.LeftBrace, "{", CreateSpan(start));
         }
 
@@ -928,6 +932,18 @@ public class PeopleCodeLexer
                 _mode = LexerMode.InterpolatedString;
                 return new Token(TokenType.RightBrace, "}", CreateSpan(start));
             }
+        }
+
+        // Special handling for quotes when no delimiters are open
+        // If we see " and there are no open ( [ or {, it's likely the user forgot the closing }
+        // If there ARE open delimiters, it's probably a nested string like Func("arg") or arr["key"]
+        if (ch == '"' && _braceDepth == 0 && _parenDepth == 0 && _bracketDepth == 0)
+        {
+            // User likely forgot the closing } before the closing quote of the interpolated string
+            AddError("Unexpected quote in interpolation expression - missing '}' before closing quote");
+            Advance(); // Consume the quote
+            _mode = LexerMode.Normal;
+            return Token.CreateLiteral(TokenType.InterpStringUnterminated, "\"", CreateSpan(start), "");
         }
 
         // For all other tokens, use normal lexing logic
@@ -1084,6 +1100,23 @@ public class PeopleCodeLexer
             foreach (var trivia in leadingTrivia)
             {
                 normalToken.AddLeadingTrivia(trivia);
+            }
+
+            // Track depth for parentheses and brackets to detect nested strings
+            switch (normalToken.Type)
+            {
+                case TokenType.LeftParen:
+                    _parenDepth++;
+                    break;
+                case TokenType.RightParen:
+                    if (_parenDepth > 0) _parenDepth--;
+                    break;
+                case TokenType.LeftBracket:
+                    _bracketDepth++;
+                    break;
+                case TokenType.RightBracket:
+                    if (_bracketDepth > 0) _bracketDepth--;
+                    break;
             }
         }
 

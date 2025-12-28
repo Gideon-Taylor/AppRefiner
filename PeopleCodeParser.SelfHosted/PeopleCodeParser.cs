@@ -4785,6 +4785,12 @@ public class PeopleCodeParser
     /// </summary>
     private ExpressionNode? ParsePrimaryExpression(bool allowAssignmentEqual = false)
     {
+        // Interpolated strings (handle before general literals)
+        if (Current.Type == TokenType.InterpStringStart)
+        {
+            return ParseInterpolatedString();
+        }
+
         // Literals
         if (Current.Type.IsLiteral())
         {
@@ -5024,6 +5030,212 @@ public class PeopleCodeParser
                     LastToken = token
                 },
                 _ => throw new InvalidOperationException($"Unexpected literal type: {token.Type}")
+            };
+        }
+        finally
+        {
+            ExitRule();
+        }
+    }
+
+    /// <summary>
+    /// Parse interpolated string expressions: $"Hello, {&name}!"
+    /// </summary>
+    private InterpolatedStringNode? ParseInterpolatedString()
+    {
+        try
+        {
+            EnterRule("interpolated_string");
+
+            var parts = new List<InterpolatedStringPart>();
+            var hasErrors = false;
+            var firstToken = Current;
+            Token? lastToken = firstToken;
+
+            // Consume INTERP_STRING_START
+            var startToken = Current;
+            _position++;
+
+            // Add the leading string fragment (may be empty)
+            if (!string.IsNullOrEmpty(startToken.Value?.ToString()))
+            {
+                var fragment = new StringFragment(startToken.Value!.ToString()!)
+                {
+                    FirstToken = startToken,
+                    LastToken = startToken
+                };
+                parts.Add(fragment);
+            }
+
+            // Parse interpolations and remaining content
+            // InterpStringStart is returned when:
+            // 1. We hit a { (content before it is in the token value) - common case
+            // 2. We hit a closing " with no interpolations (entire string in token value) - edge case
+
+            if (Check(TokenType.LeftBrace))
+            {
+                // We have interpolations to parse
+                while (Check(TokenType.LeftBrace))
+                {
+                        // Consume {
+                        Consume(TokenType.LeftBrace, "Expected '{'");
+
+                        // Parse the expression (may be empty or incomplete)
+                        ExpressionNode? expr = null;
+                        bool interpHasError = false;
+
+                        if (Check(TokenType.RightBrace))
+                        {
+                            // Empty interpolation {}
+                            interpHasError = true;
+                            ReportError("Empty interpolation expression");
+                        }
+                        else if (Check(TokenType.InterpStringUnterminated))
+                        {
+                            // Hit EOL/EOF without closing brace
+                            interpHasError = true;
+                            hasErrors = true;
+                            // Don't consume - let the loop exit
+                        }
+                        else
+                        {
+                            // Parse expression
+                            expr = ParseExpression();
+                            if (expr == null)
+                            {
+                                interpHasError = true;
+                            }
+                        }
+
+                        // Create interpolation node
+                        var interpolation = new Interpolation(expr, interpHasError);
+                        if (expr != null)
+                        {
+                            interpolation.FirstToken = expr.FirstToken;
+                            interpolation.LastToken = expr.LastToken ?? expr.FirstToken;
+                        }
+                        parts.Add(interpolation);
+
+                        // Check for closing brace or error recovery
+                        if (Check(TokenType.InterpStringUnterminated))
+                        {
+                            // EOL hit - recovery point
+                            lastToken = Current;
+                            _position++;
+                            hasErrors = true;
+                            break;
+                        }
+
+                        if (Check(TokenType.RightBrace))
+                        {
+                            var closeBrace = Current;
+                            _position++;
+                            lastToken = closeBrace;
+
+                            if (interpolation.FirstToken == null)
+                            {
+                                interpolation.FirstToken = closeBrace;
+                            }
+                            if (interpolation.LastToken == null || interpHasError)
+                            {
+                                interpolation.LastToken = closeBrace;
+                            }
+
+                            // After }, we should get either InterpStringMid or InterpStringEnd
+                            if (Check(TokenType.InterpStringMid))
+                            {
+                                // Middle fragment
+                                var midToken = Current;
+                                _position++;
+                                lastToken = midToken;
+
+                                if (!string.IsNullOrEmpty(midToken.Value?.ToString()))
+                                {
+                                    var fragment = new StringFragment(midToken.Value!.ToString()!)
+                                    {
+                                        FirstToken = midToken,
+                                        LastToken = midToken
+                                    };
+                                    parts.Add(fragment);
+                                }
+
+                                // Continue to next interpolation
+                                continue;
+                            }
+                            else if (Check(TokenType.InterpStringEnd))
+                            {
+                                // End fragment
+                                var endToken = Current;
+                                _position++;
+                                lastToken = endToken;
+
+                                if (!string.IsNullOrEmpty(endToken.Value?.ToString()))
+                                {
+                                    var fragment = new StringFragment(endToken.Value!.ToString()!)
+                                    {
+                                        FirstToken = endToken,
+                                        LastToken = endToken
+                                    };
+                                    parts.Add(fragment);
+                                }
+
+                                // Done with interpolated string
+                                break;
+                            }
+                            else if (Check(TokenType.InterpStringUnterminated))
+                            {
+                                // Error recovery
+                                lastToken = Current;
+                                _position++;
+                                hasErrors = true;
+                                break;
+                            }
+                            else if (Check(TokenType.LeftBrace))
+                            {
+                                // Adjacent interpolation (e.g., {&a}{&b}) - no text between them
+                                // Continue to next iteration to parse the next interpolation
+                                continue;
+                            }
+                            else
+                            {
+                                // Unexpected token
+                                ReportError($"Expected string content or '}}' after interpolation, got {Current.Type}");
+                                hasErrors = true;
+                                break;
+                            }
+                        }
+                        else
+                        {
+                            // Missing closing brace
+                            ReportError("Expected '}' after interpolation expression");
+                            hasErrors = true;
+                            break;
+                        }
+                    }
+            }
+            // No interpolations - check if string already ended or has error
+            else if (Check(TokenType.InterpStringEnd))
+            {
+                // String ended immediately (e.g., $"" or $"text")
+                // The content is already in the START token, nothing more to do
+                // This happens when lexer returns InterpStringStart then immediately InterpStringEnd
+                // (though based on lexer logic, this may not actually occur)
+                lastToken = Current;
+                _position++;
+            }
+            else if (Check(TokenType.InterpStringUnterminated))
+            {
+                // Error recovery - string was unterminated
+                lastToken = Current;
+                _position++;
+                hasErrors = true;
+            }
+            // else: no more tokens means InterpStringStart contained everything (no interpolations, string ended)
+
+            return new InterpolatedStringNode(parts, hasErrors)
+            {
+                FirstToken = firstToken,
+                LastToken = lastToken
             };
         }
         finally
