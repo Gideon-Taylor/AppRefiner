@@ -347,6 +347,8 @@ void HandleScintillaNotification(HWND hwnd, SCNotification* scn, HWND callbackWi
                     nextCharValue == '=' ||   // Equals
                     nextCharValue == '&' ||   // Ampersand
                     nextCharValue == '.' ||   // Dot (chained member access)
+					nextCharValue == '}' ||   // closing interpolation brace
+					nextCharValue == '"' ||   // Double quote (could be the end of an interpolated string)
                     nextCharValue == '%';     // Percent
 
                 if (shouldTriggerAutocomplete) {
