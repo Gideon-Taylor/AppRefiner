@@ -2157,6 +2157,32 @@ namespace AppRefiner
                 // Update last known positions
                 var lastKnownKey = $"{activeEditor.AppDesignerProcess.ProcessId}:{activeEditor.Caption}";
                 lastKnownPositions[lastKnownKey] = (firstVisibleLine, cursorPosition);
+
+                // Check if cursor is inside an interpolated string
+
+                var currentLineText = ScintillaManager.GetCurrentLineText(activeEditor);
+                var relativeLinePosition = cursorPosition - ScintillaManager.GetLineStartIndex(activeEditor, ScintillaManager.GetCurrentLineNumber(activeEditor));
+
+                PeopleCodeLexer lexer = new PeopleCodeLexer(currentLineText);
+                PeopleCodeParser.SelfHosted.PeopleCodeParser parser = new PeopleCodeParser.SelfHosted.PeopleCodeParser(lexer.TokenizeAll());
+                var program = parser.ParseProgram();
+                bool isInsideInterpolatedString = program.FindDescendants<InterpolatedStringNode>().Any(n => n.SourceSpan.ContainsPosition(relativeLinePosition));
+                
+                /* If we used to be in one, but aren't anymore... */
+                if ( !isInsideInterpolatedString)
+                {
+                    /* Check if the text has $" anywhere */
+                    var fullText = ScintillaManager.GetScintillaText(activeEditor);
+                    if (fullText != null && fullText.Contains("$\""))
+                    {
+                        if (refactorManager != null)
+                        {
+                            refactorManager.ExecuteRefactor(new ExpandInterpolatedStrings(activeEditor), activeEditor);
+                        }
+                    }
+                    /* Execute the ExpandInterpolatedString  refactor */
+                }
+
             }
             else if (m.Msg == AR_FUNCTION_CALL_TIP)
             {

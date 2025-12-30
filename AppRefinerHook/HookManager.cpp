@@ -187,6 +187,7 @@ void HandleScintillaNotification(HWND hwnd, SCNotification* scn, HWND callbackWi
                                                 nextCharValue == '<' ||
                                                 nextCharValue == '>' ||
                                                 nextCharValue == '|' ||
+                                                nextCharValue == '"' ||
                                                 nextCharValue == '&';
 
                 if (shouldTriggerAutocomplete) {
