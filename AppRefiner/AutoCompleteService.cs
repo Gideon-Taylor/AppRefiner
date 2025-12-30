@@ -948,8 +948,13 @@ namespace AppRefiner
                 _ => "Variable"
             };
 
-            // Remove the & prefix from variable name for display since it's already in the document
-            string displayName = variable.Name.StartsWith("&") ? variable.Name.Substring(1) : variable.Name;
+            // Keep the & prefix in variable name (like system variables keep %)
+            // For properties, ensure they have & prefix (they'll be replaced with %This. on selection)
+            string displayName = variable.Name;
+            if (variable.Kind == VariableKind.Property && !displayName.StartsWith("&") && !displayName.StartsWith("%"))
+            {
+                displayName = "&" + displayName;
+            }
 
             // Include type information if available
             if (!string.IsNullOrEmpty(variable.Type) && variable.Type != "any")
@@ -1321,8 +1326,8 @@ namespace AppRefiner
 
         private BaseRefactor? HandleVariableListSelection(ScintillaEditor editor, string selection)
         {
-            // Extract the variable name and kind from the formatted selection
-            // Format is: "variableName (Type Kind)" or "variableName (Kind)"
+            // Extract the variable name from the formatted selection
+            // Format is: "&variableName -> Type (Kind)" or "&propertyName -> Type (Property)"
             string variableName = selection;
             bool isProperty = false;
 
@@ -1330,15 +1335,10 @@ namespace AppRefiner
             if (variableEndIndex > 0)
             {
                 variableName = selection.Substring(0, variableEndIndex);
-
-                isProperty = selection.Contains("(Property)");                
+                isProperty = selection.Contains("(Property)");
             }
 
-            // Determine the appropriate prefix based on variable kind
-            string prefix = isProperty ? "%This." : "&";
-            string fullVariableName = prefix + variableName;
-
-            Debug.Log($"Variable selected: {variableName} from formatted text: {selection}, isProperty: {isProperty}, using prefix: {prefix}");
+            Debug.Log($"Variable selected: {variableName} from formatted text: {selection}, isProperty: {isProperty}");
 
             // Replace the partial variable reference with the complete variable name
             try
@@ -1366,23 +1366,56 @@ namespace AppRefiner
 
                 if (ampersandPos >= 0)
                 {
-                    // Replace from & position to current position with the full variable name
-                    editor.SendMessage(SCI_SETSEL, ampersandPos, currentPos);
-                    ScintillaManager.InsertTextAtCursor(editor, fullVariableName);
-                    Debug.Log($"Replaced text from position {ampersandPos} to {currentPos} with {fullVariableName}");
+                    // For properties, replace with %This.propertyName
+                    // For regular variables, preserve the & and replace after it
+                    if (isProperty)
+                    {
+                        // Strip the & prefix and prepend %This.
+                        string propertyName = variableName.StartsWith("&") ? variableName.Substring(1) : variableName;
+                        string insertName = $"%This.{propertyName}";
+                        editor.SendMessage(SCI_SETSEL, ampersandPos, currentPos);
+                        ScintillaManager.InsertTextAtCursor(editor, insertName);
+                        Debug.Log($"Replaced text from position {ampersandPos} to {currentPos} with {insertName}");
+                    }
+                    else
+                    {
+                        // Replace from AFTER & to cursor, preserving the & (like system variables preserve %)
+                        // Strip the & prefix from variableName since we're preserving the original &
+                        string insertName = variableName.StartsWith("&") ? variableName.Substring(1) : variableName;
+                        editor.SendMessage(SCI_SETSEL, ampersandPos + 1, currentPos);
+                        ScintillaManager.InsertTextAtCursor(editor, insertName);
+                        Debug.Log($"Replaced text from position {ampersandPos + 1} to {currentPos} with {insertName}");
+                    }
                 }
                 else
                 {
-                    // Fallback: just insert the full variable name
-                    ScintillaManager.InsertTextAtCursor(editor, fullVariableName);
-                    Debug.Log($"Could not find & start position, inserted {fullVariableName} at cursor");
+                    // Fallback: just insert the appropriate form
+                    if (isProperty)
+                    {
+                        string propertyName = variableName.StartsWith("&") ? variableName.Substring(1) : variableName;
+                        ScintillaManager.InsertTextAtCursor(editor, $"%This.{propertyName}");
+                        Debug.Log($"Could not find & start position, inserted %This.{propertyName} at cursor");
+                    }
+                    else
+                    {
+                        ScintillaManager.InsertTextAtCursor(editor, variableName);
+                        Debug.Log($"Could not find & start position, inserted {variableName} at cursor");
+                    }
                 }
             }
             catch (Exception ex)
             {
                 Debug.LogException(ex, "Error handling variable selection");
                 // Fallback to simple insertion
-                ScintillaManager.InsertTextAtCursor(editor, fullVariableName);
+                if (isProperty)
+                {
+                    string propertyName = variableName.StartsWith("&") ? variableName.Substring(1) : variableName;
+                    ScintillaManager.InsertTextAtCursor(editor, $"%This.{propertyName}");
+                }
+                else
+                {
+                    ScintillaManager.InsertTextAtCursor(editor, variableName);
+                }
             }
 
             return null; // No refactoring needed for variable insertion

@@ -1970,8 +1970,10 @@ namespace AppRefiner
                 if (ch == triggerChar)
                 {
                     // Found trigger, return count
-                    // For SystemVariables, add 1 to include the % itself
-                    int result = (context == AutoCompleteContext.SystemVariables) ? lengthEntered + 1 : lengthEntered;
+                    // For SystemVariables and Variable, add 1 to include the % or & itself
+                    int result = (context == AutoCompleteContext.SystemVariables || context == AutoCompleteContext.Variable)
+                        ? lengthEntered + 1
+                        : lengthEntered;
                     Debug.Log($"CalculateLengthEntered: Found '{triggerChar}' at position {i}, lengthEntered={result}");
                     return result;
                 }
