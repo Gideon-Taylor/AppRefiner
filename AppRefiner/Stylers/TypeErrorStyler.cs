@@ -54,27 +54,10 @@ public class TypeErrorStyler : BaseStyler
             return;
         }
 
-        // Determine the qualified name for the current program
-        string qualifiedName = DetermineQualifiedName(node);
-
         try
         {
-            // Extract metadata from the program
-            var programMetadata = TypeMetadataBuilder.ExtractMetadata(node, qualifiedName);
-
-            string? defaultRecord = null;
-            string? defaultField = null;
-            if (Editor.Caption.EndsWith("(Record PeopleCode)"))
-            {
-                var parts = qualifiedName.Split('.');
-                defaultRecord = parts[0];
-                defaultField = parts[1];
-            }
-
-            // Run type inference
-            TypeInferenceVisitor.Run(node, programMetadata, typeResolver, defaultRecord, defaultField);
-
-            // Run type checking
+            // Type inference is now run by StylerManager BEFORE stylers execute
+            // We only need to run type checking here
             TypeCheckerVisitor.Run(node, typeResolver, typeResolver.Cache);
 
             // Collect all type errors from the AST
@@ -91,7 +74,7 @@ public class TypeErrorStyler : BaseStyler
             }
 
             var typeWarnings = node.GetAllTypeWarnings();
-            foreach ( var warning in typeWarnings)
+            foreach (var warning in typeWarnings)
             {
                 AddIndicator(
                     warning.Node.SourceSpan,
@@ -103,66 +86,12 @@ public class TypeErrorStyler : BaseStyler
 
             if (typeErrors.Any())
             {
-                Debug.Log($"TypeErrorStyler: Found {typeErrors.Count()} type errors and {typeWarnings.Count()} warnings in '{qualifiedName}'");
+                Debug.Log($"TypeErrorStyler: Found {typeErrors.Count()} type errors and {typeWarnings.Count()} warnings");
             }
         }
         catch (Exception ex)
         {
             Debug.LogException(ex, "TypeErrorStyler: Error during type checking");
-        }
-    }
-
-    /// <summary>
-    /// Determines the qualified name for the current program.
-    /// For app classes, extracts from editor caption or AST.
-    /// For function libraries and other programs, uses a generic name.
-    /// </summary>
-    private string DetermineQualifiedName(ProgramNode node)
-    {
-        // Try to extract from AST structure first
-        if (node.AppClass != null)
-        {
-            // For app classes/interfaces, try to build qualified name from imports or use simple name
-            var className = node.AppClass.Name;
-
-            if (Editor?.Caption != null && !string.IsNullOrWhiteSpace(Editor.Caption))
-            {
-                // Parse caption to get program identifier
-                var openTarget = OpenTargetBuilder.CreateFromCaption(Editor.Caption);
-                if (openTarget != null)
-                {
-                    var methodIndex = Array.IndexOf(openTarget.ObjectIDs, PSCLASSID.METHOD);
-                    openTarget.ObjectIDs[methodIndex] = PSCLASSID.NONE;
-                    openTarget.ObjectValues[methodIndex] = null;
-                    return openTarget.Path;
-                }
-                else
-                {
-                    /* probably never what you want but we have to return something? */
-                    return className;
-                }
-            } else
-            {
-                /* probably never what you want but we have to return something? */
-                return className;
-            }
-        }
-        else
-        {
-            // For function libraries or other programs, use a generic name
-            // Try to extract from editor caption if available
-            if (Editor?.Caption != null && !string.IsNullOrWhiteSpace(Editor.Caption))
-            {
-                // Parse caption to get program identifier
-                var openTarget = OpenTargetBuilder.CreateFromCaption(Editor.Caption);
-                if (openTarget != null)
-                {
-                    return string.Join(".", openTarget.ObjectValues);
-                }
-            }
-
-            // Fallback to generic name
-            return "Program";
         }
     }
 }

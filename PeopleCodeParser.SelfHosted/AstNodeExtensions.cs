@@ -37,6 +37,38 @@ public static class AstNodeExtensions
         node.Attributes[AstNode.TypeInfoAttributeKey] = typeInfo;
     }
 
+    /// <summary>
+    /// Checks if this AST node has type information attached
+    /// </summary>
+    public static bool HasInferredType(this AstNode node)
+    {
+        return node?.Attributes.ContainsKey(AstNode.TypeInfoAttributeKey) ?? false;
+    }
+
+    /// <summary>
+    /// Clears any type information from this AST node
+    /// </summary>
+    public static void ClearInferredType(this AstNode node)
+    {
+        if (node == null) return;
+
+        node.Attributes.Remove(AstNode.TypeInfoAttributeKey);
+    }
+
+    public static bool HasResolvedType(this AstNode node)
+    {
+        return node?.Attributes.ContainsKey(AstNode.ResolvedTypeInfoAttributeKey) ?? false;
+    }
+
+    public static TypeInfo? GetResolvedType(this AstNode node)
+    {
+        if (node.Attributes.TryGetValue(AstNode.ResolvedTypeInfoAttributeKey, out var typeInfo))
+        {
+            return typeInfo as TypeInfo;
+        }
+        return null;
+    }
+
     #endregion
 
     #region FunctionInfo Extensions

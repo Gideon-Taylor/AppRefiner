@@ -1,4 +1,5 @@
 using AppRefiner.Database;
+using PeopleCodeParser.SelfHosted;
 using PeopleCodeParser.SelfHosted.Nodes;
 
 namespace AppRefiner.Stylers;
@@ -52,7 +53,29 @@ public class InvalidAppClass : BaseStyler
             return;
         }
 
+        AstNode nodeForTypeInfo = node;
+        if (node.Parent is ObjectCreationNode)
+        {
+            nodeForTypeInfo = node.Parent;
+        }
+
         string appClassPath = node.QualifiedName;
+
+        if (nodeForTypeInfo.HasInferredType())
+        {
+            appClassPath = nodeForTypeInfo.GetInferredType()!.Name;
+        }
+        else if (nodeForTypeInfo.HasResolvedType())
+        {
+            appClassPath = nodeForTypeInfo.GetResolvedType()!.Name;
+        }
+        else
+        {
+            // Type inference should have been run by StylerManager before this styler executes
+            // Log a message if type info is unexpectedly unavailable
+            Debug.Log($"InvalidAppClass: No type information available for {node.QualifiedName} - using qualified name from AST");
+        }
+
         bool isValid;
 
         // Check if this app class path is already in our cache
