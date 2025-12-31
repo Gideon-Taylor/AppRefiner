@@ -97,7 +97,10 @@ namespace AppRefiner.TooltipProviders
 
                 var allowedTypes = validator.GetAllowedNextTypes(funcInfo, arguments.ToArray());
 
-                (var text, var start, var end) = FormatFunctionCallTip(funcInfo, arguments, allowedTypes);
+                // Extract object type for polymorphic type resolution
+                PeopleCodeTypeInfo.Types.TypeInfo? objectType = GetObjectTypeFromFunctionCall(node);
+
+                (var text, var start, var end) = FormatFunctionCallTip(funcInfo, arguments, allowedTypes, objectType);
 
                 ScintillaManager.ShowCallTipWithText(editor, editor.FunctionCallNode.FirstToken.SourceSpan.Start.ByteIndex + 1, text, true);
                 ScintillaManager.SetCallTipHighlight(editor, start, end);
@@ -105,7 +108,7 @@ namespace AppRefiner.TooltipProviders
 
         }
 
-        private static (string, int, int) FormatFunctionCallTip(FunctionInfo funcInfo, List<PeopleCodeTypeInfo.Types.TypeInfo> arguments, List<FunctionCallValidator.ParameterTypeInfo> allowedTypes)
+        private static (string, int, int) FormatFunctionCallTip(FunctionInfo funcInfo, List<PeopleCodeTypeInfo.Types.TypeInfo> arguments, List<FunctionCallValidator.ParameterTypeInfo> allowedTypes, PeopleCodeTypeInfo.Types.TypeInfo? objectType)
         {
             StringBuilder sb = new StringBuilder();
             int paramStart = 0;
@@ -115,14 +118,16 @@ namespace AppRefiner.TooltipProviders
             for (var x = 0; x < funcInfo.Parameters.Count; x++)
             {
                 var typeName = funcInfo.Parameters[x].ToString();
-                if (typeName.Contains("sameasfirstparameter"))
+                // Resolve polymorphic type keywords in parameter type
+                try
                 {
-                    if (arguments.Count > 0)
-                    {
-                        typeName = typeName.Replace("sameasfirstparameter", arguments[0].ToString());
-                    }
+                    typeName = ResolvePolymorphicTypeString(typeName, objectType, arguments);
                 }
-                
+                catch (Exception ex)
+                {
+                    Debug.LogError($"Error resolving parameter type: {ex.Message}");
+                    // Keep original typeName if resolution fails
+                }
 
                 sb.Append(typeName);
 
@@ -132,7 +137,18 @@ namespace AppRefiner.TooltipProviders
                 }
             }
 
-            var returnTypeStr = funcInfo.GetReturnTypeString();
+            // Resolve polymorphic return type
+            string returnTypeStr;
+            try
+            {
+                var resolvedReturnTypes = funcInfo.ResolveReturnTypes(objectType, arguments.ToArray());
+                returnTypeStr = string.Join(" | ", resolvedReturnTypes.Select(t => t.ToString()));
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError($"Error resolving return type for {funcInfo.Name}: {ex.Message}");
+                returnTypeStr = funcInfo.GetReturnTypeString(); // Fallback to original method
+            }
             sb.Append($") -> {returnTypeStr}");
             sb.Append("\n\n");
             paramStart = sb.Length;
@@ -141,18 +157,16 @@ namespace AppRefiner.TooltipProviders
             foreach(var type in allowedTypes)
             {
                 var typeName = type.TypeName;
-                if (typeName == "sameasfirstparameter")
+                // Resolve polymorphic type keywords in allowed types
+                try
                 {
-                    if (arguments.Count > 0)
-                    {
-                        typeName = arguments[0].ToString();
-                    }
-                    else
-                    {
-                        typeName = "any";
-                    }
+                    typeName = ResolvePolymorphicTypeString(typeName, objectType, arguments);
                 }
-                
+                catch (Exception ex)
+                {
+                    Debug.LogError($"Error resolving allowed type: {ex.Message}");
+                    // Keep original typeName if resolution fails
+                }
 
                 if (!string.IsNullOrEmpty(type.ParameterName))
                 {
@@ -163,6 +177,112 @@ namespace AppRefiner.TooltipProviders
                 }
             }
             return (sb.ToString(), paramStart, paramEnd);
+        }
+
+        /// <summary>
+        /// Extracts the object type from a function call node if it's a member access.
+        /// </summary>
+        /// <param name="node">The function call node.</param>
+        /// <returns>The inferred type of the target object, or null for non-member-access calls.</returns>
+        private static PeopleCodeTypeInfo.Types.TypeInfo? GetObjectTypeFromFunctionCall(FunctionCallNode node)
+        {
+            if (node.Function is MemberAccessNode memberAccess)
+            {
+                return memberAccess.Target.GetInferredType();
+            }
+            return null;
+        }
+
+        /// <summary>
+        /// Gets the element type from an object type (reduces array dimensionality by 1).
+        /// Used for resolving "elementofobject" polymorphic type.
+        /// </summary>
+        /// <param name="objectType">The object type.</param>
+        /// <returns>The element type, or null if not an array.</returns>
+        private static PeopleCodeTypeInfo.Types.TypeInfo? GetElementTypeFromObject(PeopleCodeTypeInfo.Types.TypeInfo? objectType)
+        {
+            if (objectType == null) return null;
+
+            if (objectType is ArrayTypeInfo arrayType)
+            {
+                if (arrayType.Dimensions == 1)
+                {
+                    // 1D array -> return element type
+                    return arrayType.ElementType;
+                }
+                else
+                {
+                    // Multi-dimensional array -> reduce dimensionality by 1
+                    return new ArrayTypeInfo(arrayType.Dimensions - 1, arrayType.ElementType);
+                }
+            }
+
+            return null;
+        }
+
+        /// <summary>
+        /// Gets an array type from a parameter type (increases array dimensionality by 1).
+        /// Used for resolving "arrayoffirstparameter" polymorphic type.
+        /// </summary>
+        /// <param name="paramType">The parameter type.</param>
+        /// <returns>An array type with dimensionality increased by 1, or null if param is null.</returns>
+        private static PeopleCodeTypeInfo.Types.TypeInfo? GetArrayTypeFromParameter(PeopleCodeTypeInfo.Types.TypeInfo? paramType)
+        {
+            if (paramType == null) return null;
+
+            if (paramType is ArrayTypeInfo arrayType)
+            {
+                // Increase array dimensionality by 1
+                return new ArrayTypeInfo(arrayType.Dimensions + 1, arrayType.ElementType);
+            }
+            else
+            {
+                // Wrap scalar type in 1D array
+                return new ArrayTypeInfo(1, paramType);
+            }
+        }
+
+        /// <summary>
+        /// Resolves polymorphic type keywords in a type name string.
+        /// </summary>
+        /// <param name="typeName">The type name string that may contain polymorphic keywords.</param>
+        /// <param name="objectType">The object type for resolving sameasobject/elementofobject.</param>
+        /// <param name="arguments">The argument types for resolving sameasfirstparameter/arrayoffirstparameter.</param>
+        /// <returns>The type name with polymorphic keywords replaced by actual types.</returns>
+        private static string ResolvePolymorphicTypeString(string typeName, PeopleCodeTypeInfo.Types.TypeInfo? objectType, List<PeopleCodeTypeInfo.Types.TypeInfo> arguments)
+        {
+            // Replace sameasfirstparameter
+            if (typeName.Contains("sameasfirstparameter"))
+            {
+                var replacement = arguments.Count > 0 ? (arguments[0]?.ToString() ?? "any") : "any";
+                typeName = typeName.Replace("sameasfirstparameter", replacement);
+            }
+
+            // Replace sameasobject
+            if (typeName.Contains("sameasobject"))
+            {
+                var replacement = objectType?.ToString() ?? "any";
+                typeName = typeName.Replace("sameasobject", replacement);
+            }
+
+            // Replace elementofobject
+            if (typeName.Contains("elementofobject"))
+            {
+                var elementType = GetElementTypeFromObject(objectType);
+                var replacement = elementType?.ToString() ?? "any";
+                typeName = typeName.Replace("elementofobject", replacement);
+            }
+
+            // Replace arrayoffirstparameter
+            if (typeName.Contains("arrayoffirstparameter"))
+            {
+                var firstArg = arguments.Count > 0 ? arguments[0] : null;
+                var arrayType = GetArrayTypeFromParameter(firstArg);
+                var replacement = arrayType?.ToString() ?? "any";
+                typeName = typeName.Replace("arrayoffirstparameter", replacement);
+            }
+
+            return typeName;
         }
 
         /// <summary>
