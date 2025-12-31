@@ -60,6 +60,7 @@ namespace AppRefiner.TooltipProviders
             RegisterTooltip();
         }
 
+
         /// <summary>
         /// Override to check if identifier is at current position and store for deferred processing
         /// </summary>
@@ -140,7 +141,8 @@ namespace AppRefiner.TooltipProviders
             if (node.VariableNameInfo.SourceSpan.ContainsPosition(CurrentPosition))
             {
                 _hoveredVariableName = node.VariableNameInfo.Name;
-                _hoveredVariableSpan = node.VariableNameInfo.SourceSpan;;
+                _hoveredVariableSpan = node.VariableNameInfo.SourceSpan;
+                _scopeContext = GetCurrentScope();
             }
 
             base.VisitLocalVariableDeclarationWithAssignment(node);
