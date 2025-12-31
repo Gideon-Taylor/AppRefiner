@@ -39,6 +39,11 @@ namespace AppRefiner
         {
             return Task.FromResult<TypeInfo>(AnyTypeInfo.Instance);
         }
+
+        protected override List<string> GetClassesInPackageCore(string packagePath)
+        {
+            return new List<string>();
+        }
     }
 
     public class AppDesignerProcess

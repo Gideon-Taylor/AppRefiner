@@ -1081,7 +1081,6 @@ public class PeopleCodeParser
                 return arrayType;
             }
 
-            ReportError("Expected type name");
             return null;
         }
         finally
@@ -1515,14 +1514,25 @@ public class PeopleCodeParser
                 return ParseArrayType();
             }
 
-            // Try to parse as app class path or simple type
-            var result = ParseAppClassPath();
+            /* try for simple/builtin type first */
+
+            var result = ParseSimpleType();
             if (result != null)
             {
                 return result;
             }
 
-            return ParseSimpleType();
+            // Try to parse as app class path, accept just a generic ID with no colon for classes
+            // that are imported already. Tools allows you to just do Local ClassName &c = ... and it 
+            // expands it on save.
+            result = ParseAppClassPath();
+            if (result != null)
+            {
+                return result;
+            }
+
+            ReportError($"Expected type reference.");
+            return null;
         }
         catch (Exception ex)
         {
@@ -1687,7 +1697,7 @@ public class PeopleCodeParser
                 pathParts.Add(Current.Text);
                 _position++;
             }
-            else if (Check(TokenType.GenericId) && Peek().Type == TokenType.Colon)
+            else if (Check(TokenType.GenericId))
             {
                 var identifier = ParseGenericId();
                 if (identifier != null)
@@ -1717,13 +1727,6 @@ public class PeopleCodeParser
                 {
                     break;
                 }
-            }
-
-            // Need at least package:class format
-            if (pathParts.Count < 2)
-            {
-                ReportError("Error parsing app class path: must be at least 'package:class'", new SourceSpan(startToken.SourceSpan.Start, startToken.SourceSpan.End));
-                return null;
             }
 
             // Last component is the class name, everything else is package path
@@ -5189,12 +5192,6 @@ public class PeopleCodeParser
                                 _position++;
                                 hasErrors = true;
                                 break;
-                            }
-                            else if (Check(TokenType.LeftBrace))
-                            {
-                                // Adjacent interpolation (e.g., {&a}{&b}) - no text between them
-                                // Continue to next iteration to parse the next interpolation
-                                continue;
                             }
                             else
                             {

@@ -1895,5 +1895,40 @@ WHERE (OBJECTID1 = 60 OR OBJECTID1 = 87)
 
             return PeopleCodeType.Unknown;
         }
+
+        public List<string> GetAllClassesForPackage(string packagePath)
+        {
+            string sql = @"SELECT APPCLASSID FROM PSAPPCLASSDEFN WHERE PACKAGEROOT = :packageRoot AND QUALIFYPATH = :qualifyPath";
+            var parts = packagePath.Split(':');
+            if (parts.Length == 0)
+            {
+                return new();
+            }
+
+            var packageRoot = parts[0];
+
+            var qualifyPath = parts.Length > 1 ? string.Join(":", parts.Skip(1)) : ":";
+
+            try
+            {
+                var parameters = new Dictionary<string, object>
+                {
+                    ["packageRoot"] = packageRoot,
+                    ["qualifyPath"] = qualifyPath
+                };
+                DataTable result = _connection.ExecuteQuery(sql, parameters);
+                var classNames = new List<string>();
+                foreach (DataRow row in result.Rows)
+                {
+                    classNames.Add(row["APPCLASSID"].ToString()!);
+                }
+                return classNames;
+            }
+            catch (Exception ex)
+            {
+                Debug.Log($"Error querying PSAPPCLASSDEFN for classes: {ex.Message}");
+                return new();
+            }
+        }
     }
 }

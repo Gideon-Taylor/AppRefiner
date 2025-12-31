@@ -135,6 +135,32 @@ namespace AppRefiner.Database
         }
 
         /// <summary>
+        /// Gets all classes in the specified application package.
+        /// Used for resolving wildcard imports (e.g., import Package:*).
+        /// </summary>
+        /// <param name="packagePath">The package path (e.g., "PKG" or "PKG:SUBPKG")</param>
+        /// <returns>List of class names in the package (not including subpackages)</returns>
+        protected override List<string> GetClassesInPackageCore(string packagePath)
+        {
+            // Check if database is connected
+            if (!_dataManager.IsConnected)
+            {
+                return new List<string>();
+            }
+
+            try
+            {
+                // Query database for all classes in this package
+                return _dataManager.GetAllClassesForPackage(packagePath);
+            }
+            catch (Exception ex)
+            {
+                Debug.Log($"DatabaseTypeMetadataResolver: Error getting classes for package '{packagePath}': {ex.Message}");
+                return new List<string>();
+            }
+        }
+
+        /// <summary>
         /// Attempts to resolve the qualified name as an application class
         /// </summary>
         private TypeMetadata? TryResolveAsAppClass(string qualifiedName)

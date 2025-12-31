@@ -7,6 +7,16 @@ public static class AstTypeExtractor
 {
     public static string GetTypeFromNode(TypeNode? typeNode)
     {
+        // Check if TypeInferenceVisitor already resolved this type
+        if (typeNode != null && typeNode.Attributes.TryGetValue(AstNode.ResolvedTypeInfoAttributeKey, out var resolvedTypeInfo))
+        {
+            if (resolvedTypeInfo is TypeInfo typeInfo)
+            {
+                return typeInfo.Name; // Return the qualified name
+            }
+        }
+
+        // Fall back to existing logic
         return typeNode switch
         {
             null => "any",

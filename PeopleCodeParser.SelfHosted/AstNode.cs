@@ -102,6 +102,12 @@ public abstract class AstNode
     public const string TypeWarningAttributeKey = "TypeWarning";
 
     /// <summary>
+    /// Attribute key for resolved type information on TypeNode objects (qualified names)
+    /// Used by TypeInferenceVisitor to communicate resolved types to ScopedAstVisitor
+    /// </summary>
+    public const string ResolvedTypeInfoAttributeKey = "ResolvedTypeInfo";
+
+    /// <summary>
     /// Accept method for visitor pattern
     /// </summary>
     public abstract void Accept(IAstVisitor visitor);

@@ -262,6 +262,16 @@ namespace PeopleCodeParser.SelfHosted.Visitors
             if (typeNode == null)
                 return UnknownTypeInfo.Instance;
 
+            // Check if TypeInferenceVisitor already resolved this type
+            if (typeNode.Attributes.TryGetValue(AstNode.ResolvedTypeInfoAttributeKey, out var resolvedTypeInfo))
+            {
+                if (resolvedTypeInfo is TypeInfo typeInfo)
+                {
+                    return typeInfo; // Return the already-resolved type
+                }
+            }
+
+            // Fall back to direct conversion if no resolved type is available
             return typeNode switch
             {
                 BuiltInTypeNode builtin => TypeInfo.FromPeopleCodeType(builtin.Type),

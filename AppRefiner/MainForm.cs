@@ -2430,7 +2430,7 @@ namespace AppRefiner
                     defaultRecord = parts[0];
                     defaultField = parts[1];
                 }
-
+                
                 // Run type inference (works even with null resolver)
                 TypeInferenceVisitor.Run(program, metadata, typeResolver, defaultRecord, defaultField);
             }

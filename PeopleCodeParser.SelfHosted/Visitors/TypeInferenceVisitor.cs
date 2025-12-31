@@ -29,6 +29,7 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
     private readonly string? _defaultRecordName;
     private readonly string? _defaultFieldName;
     private readonly bool _inferAutoDeclaredTypes;
+    private readonly Dictionary<string, string> _importMap = new(StringComparer.OrdinalIgnoreCase);
     private TypeInferenceVisitor(
         ProgramNode program,
         TypeMetadata programMetadata,
@@ -56,12 +57,18 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
         ITypeMetadataResolver typeResolver,
         string? defaultRecordName = null,
         string? defaultFieldName = null,
-        bool inferAutoDeclaredTypes = false)
+        bool inferAutoDeclaredTypes = false
+        )
     {
+        
+        
         var visitor = new TypeInferenceVisitor(program, programMetadata, typeResolver, typeResolver.Cache, defaultRecordName, defaultFieldName);
 
         // Pre-resolve all declared functions for efficient lookup
         visitor.ProcessDeclaredFunctions();
+
+        // Build import resolution map for unqualified class names
+        visitor.BuildImportMap();
 
         program.Accept(visitor);
         return visitor;
@@ -102,6 +109,41 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
                 // If we can't resolve a declared function, continue processing others
                 // The function will be unknown at call sites but won't break the entire inference
                 continue;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Builds an import resolution map from the program's import statements.
+    /// This map is used to resolve unqualified class names to fully qualified names.
+    /// For wildcard imports, queries the database to get all classes in the package.
+    /// </summary>
+    private void BuildImportMap()
+    {
+        foreach (var import in _program.Imports)
+        {
+            if (import.IsWildcard)
+            {
+                // Query database for all classes in this package
+                var packagePath = string.Join(":", import.PackagePath);
+                var classes = _typeResolver.GetClassesInPackage(packagePath);
+
+                foreach (var className in classes)
+                {
+                    // Only add if not already present (first import wins, handles ambiguity)
+                    if (!_importMap.ContainsKey(className))
+                    {
+                        _importMap[className] = string.Join(":", import.PackagePath.Append(className));
+                    }
+                }
+            }
+            else
+            {
+                // Specific class import
+                if (!_importMap.ContainsKey(import.ClassName!))
+                {
+                    _importMap[import.ClassName!] = import.FullPath;
+                }
             }
         }
     }
@@ -148,8 +190,7 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
                 array.ElementType != null
                     ? ConvertTypeNodeToTypeInfo(array.ElementType)
                     : TypeInfo.FromPeopleCodeType(PeopleCodeType.Any)),
-            AppClassTypeNode appClass => AppClassTypeInfo.CreateWithInheritanceChain(
-                string.Join(":", appClass.PackagePath.Append(appClass.ClassName)), _typeResolver, _typeCache),
+            AppClassTypeNode appClass => ResolveAppClassType(appClass),
             _ => UnknownTypeInfo.Instance
         };
     }
@@ -259,6 +300,30 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
 
         // Unknown type
         return new UnknownTypeInfo(typeName);
+    }
+
+    /// <summary>
+    /// Resolves an AppClassTypeNode to a TypeInfo, handling import resolution for unqualified names.
+    /// </summary>
+    /// <param name="appClass">The AppClassTypeNode to resolve</param>
+    /// <returns>AppClassTypeInfo with the properly resolved qualified name</returns>
+    private TypeInfo ResolveAppClassType(AppClassTypeNode appClass)
+    {
+        string qualifiedName;
+
+        // Check if this is an unqualified name (empty package path)
+        if (appClass.PackagePath.Count == 0 && _importMap.TryGetValue(appClass.ClassName, out var resolvedName))
+        {
+            // Resolve using import map
+            qualifiedName = resolvedName;
+        }
+        else
+        {
+            // Use as-is (either fully qualified or unresolved unqualified)
+            qualifiedName = string.Join(":", appClass.PackagePath.Append(appClass.ClassName));
+        }
+
+        return AppClassTypeInfo.CreateWithInheritanceChain(qualifiedName, _typeResolver, _typeCache);
     }
 
     #endregion
@@ -639,6 +704,99 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
 
         return null;
     }
+
+    #region Declaration Visitors
+
+    /// <summary>
+    /// Visits local variable declaration, resolves types, then lets base class register variables
+    /// </summary>
+    public override void VisitLocalVariableDeclaration(LocalVariableDeclarationNode node)
+    {
+        // FIRST: Resolve and set type attribute on the TypeNode
+        if (node.Type != null)
+        {
+            var resolvedType = ConvertTypeNodeToTypeInfo(node.Type);
+            node.Type.Attributes[AstNode.ResolvedTypeInfoAttributeKey] = resolvedType;
+        }
+
+        // NOW: Let base class register variables (will read from attribute)
+        base.VisitLocalVariableDeclaration(node);
+    }
+
+    /// <summary>
+    /// Visits local variable declaration with assignment, resolves types, then lets base class register
+    /// </summary>
+    public override void VisitLocalVariableDeclarationWithAssignment(LocalVariableDeclarationWithAssignmentNode node)
+    {
+        // FIRST: Resolve and set type attribute
+        if (node.Type != null)
+        {
+            var resolvedType = ConvertTypeNodeToTypeInfo(node.Type);
+            node.Type.Attributes[AstNode.ResolvedTypeInfoAttributeKey] = resolvedType;
+        }
+
+        // NOW: Let base class register the variable
+        base.VisitLocalVariableDeclarationWithAssignment(node);
+    }
+
+    /// <summary>
+    /// Visits program variable (instance/global/component), resolves types first
+    /// </summary>
+    public override void VisitProgramVariable(ProgramVariableNode node)
+    {
+        // FIRST: Resolve and set type attribute
+        if (node.Type != null)
+        {
+            var resolvedType = ConvertTypeNodeToTypeInfo(node.Type);
+            node.Type.Attributes[AstNode.ResolvedTypeInfoAttributeKey] = resolvedType;
+        }
+
+        // NOW: Let base class register variables
+        base.VisitProgramVariable(node);
+    }
+
+    /// <summary>
+    /// Visits method, resolves parameter types first
+    /// </summary>
+    public override void VisitMethod(MethodNode node)
+    {
+        // FIRST: Resolve parameter types
+        foreach (var parameter in node.Parameters)
+        {
+            if (parameter.Type != null)
+            {
+                var resolvedType = ConvertTypeNodeToTypeInfo(parameter.Type);
+                parameter.Type.Attributes[AstNode.ResolvedTypeInfoAttributeKey] = resolvedType;
+            }
+        }
+
+        // NOW: Let base class create scope and register parameters
+        base.VisitMethod(node);
+    }
+
+    /// <summary>
+    /// Visits function, resolves parameter types first (implementations only)
+    /// </summary>
+    public override void VisitFunction(FunctionNode node)
+    {
+        // For function implementations, resolve parameter types
+        if (node.IsImplementation)
+        {
+            foreach (var parameter in node.Parameters)
+            {
+                if (parameter.Type != null)
+                {
+                    var resolvedType = ConvertTypeNodeToTypeInfo(parameter.Type);
+                    parameter.Type.Attributes[AstNode.ResolvedTypeInfoAttributeKey] = resolvedType;
+                }
+            }
+        }
+
+        // NOW: Let base class handle scope creation and parameter registration
+        base.VisitFunction(node);
+    }
+
+    #endregion
 
     #region Statement Visitors
 
@@ -1127,7 +1285,7 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
         //var qualifiedName = node.Type
         if (node.Type is AppClassTypeNode act)
         {
-            var qualifiedName = act.QualifiedName;
+            var qualifiedName = inferredType.Name;
 
             // Try cache first, then resolver
             TypeMetadata? sourceMetadata = _typeCache.Get(qualifiedName);

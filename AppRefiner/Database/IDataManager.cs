@@ -278,6 +278,8 @@ namespace AppRefiner.Database
         /// <returns>List of OpenTarget objects representing programs that may contain function definitions</returns>
         List<OpenTarget> GetFunctionDefiningPrograms();
 
+        List<string> GetAllClassesForPackage(string packagePath);
+
         string GetToolsVersion();
 
         /// <summary>

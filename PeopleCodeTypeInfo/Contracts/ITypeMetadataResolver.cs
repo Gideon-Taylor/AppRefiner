@@ -146,6 +146,23 @@ public abstract class ITypeMetadataResolver
     public int Count => _cache.Count;
 
     /// <summary>
+    /// Gets all classes in the specified application package.
+    /// Used for resolving wildcard imports (e.g., import Package:*).
+    /// </summary>
+    /// <param name="packagePath">The package path (e.g., "PKG" or "PKG:SUBPKG")</param>
+    /// <returns>List of class names in the package (not including subpackages)</returns>
+    public List<string> GetClassesInPackage(string packagePath)
+    {
+        if (string.IsNullOrWhiteSpace(packagePath))
+        {
+            return new List<string>();
+        }
+
+        // Call subclass implementation
+        return GetClassesInPackageCore(packagePath);
+    }
+
+    /// <summary>
     /// Subclasses implement this method to perform the actual type metadata resolution.
     /// The base class handles caching automatically.
     /// </summary>
@@ -176,6 +193,14 @@ public abstract class ITypeMetadataResolver
     /// <param name="fieldName">The field name</param>
     /// <returns>Task that resolves to TypeInfo representing the field's data type</returns>
     protected abstract Task<Types.TypeInfo> GetFieldTypeCoreAsync(string fieldName);
+
+    /// <summary>
+    /// Subclasses implement this method to query all classes in an application package.
+    /// Used for resolving wildcard imports.
+    /// </summary>
+    /// <param name="packagePath">The package path (e.g., "PKG" or "PKG:SUBPKG")</param>
+    /// <returns>List of class names in the package</returns>
+    protected abstract List<string> GetClassesInPackageCore(string packagePath);
 
     public TypeCache Cache
     {
@@ -229,5 +254,13 @@ public class NullTypeMetadataResolver : ITypeMetadataResolver
     {
         // Empty record name means runtime-inferred context - return any
         return Task.FromResult<Types.TypeInfo>(Types.AnyTypeInfo.Instance);
+    }
+
+    /// <summary>
+    /// Always returns empty list indicating no classes are available.
+    /// </summary>
+    protected override List<string> GetClassesInPackageCore(string packagePath)
+    {
+        return new List<string>();
     }
 }

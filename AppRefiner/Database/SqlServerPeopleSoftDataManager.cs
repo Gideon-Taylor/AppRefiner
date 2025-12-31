@@ -1203,7 +1203,7 @@ namespace AppRefiner.Database
             {
                 // Build the unified UNION ALL query based on enabled types
                 string unifiedQuery = BuildUnifiedQuery(options.EnabledTypes);
-                
+
                 if (string.IsNullOrEmpty(unifiedQuery))
                 {
                     return results; // No enabled types
@@ -1212,7 +1212,7 @@ namespace AppRefiner.Database
                 // Escape wildcards in search terms for LIKE queries
                 string escapedIdTerm = options.IDSearchTerm.Replace("_", "\\_").Replace("%", "\\%");
                 string escapedDescriptionTerm = options.DescriptionSearchTerm.Replace("_", "\\_").Replace("%", "\\%");
-                
+
                 var parameters = new Dictionary<string, object>
                 {
                     ["id_search"] = escapedIdTerm,
@@ -1234,7 +1234,7 @@ namespace AppRefiner.Database
                     {
                         // Map to appropriate PSCLASSID and create object pairs
                         var objectPairs = IDataManager.CreateObjectPairs(targetType, id, description);
-                        
+
                         results.Add(new OpenTarget(
                             targetType,
                             id,
@@ -1544,7 +1544,7 @@ ORDER BY DEFN_TYPE ASC, ID ASC, CASE WHEN @sort_by_date = 'Y' THEN LASTUPDDTTM E
                         {
                             var objectId = (PSCLASSID)reader.GetInt32(objIdIndex);
                             var objectValue = reader.GetString(objValueIndex);
-                            
+
                             if (objectId != PSCLASSID.NONE && !string.IsNullOrEmpty(objectValue))
                             {
                                 objectPairs.Add((objectId, objectValue));
@@ -1785,8 +1785,8 @@ WHERE (OBJECTID1 = 60 OR OBJECTID1 = 87)
             string[] paddedValues = new string[7];
             for (int i = 0; i < 7; i++)
             {
-                paddedValues[i] = i < objectValues.Length && !string.IsNullOrEmpty(objectValues[i]) 
-                    ? objectValues[i] 
+                paddedValues[i] = i < objectValues.Length && !string.IsNullOrEmpty(objectValues[i])
+                    ? objectValues[i]
                     : " ";
             }
 
@@ -1884,6 +1884,41 @@ WHERE (OBJECTID1 = 60 OR OBJECTID1 = 87)
             }
 
             return PeopleCodeType.Unknown;
+        }
+
+        public List<string> GetAllClassesForPackage(string packagePath)
+        {
+            string sql = @"SELECT APPCLASSID FROM PSAPPCLASSDEFN WHERE PACKAGEROOT = @packageRoot AND QUALIFYPATH = @qualifyPath";
+            var parts = packagePath.Split(':');
+            if (parts.Length == 0)
+            {
+                return new();
+            }
+
+            var packageRoot = parts[0];
+
+            var qualifyPath = parts.Length > 1 ? string.Join(":", parts.Skip(1)) : ":";
+
+            try
+            {
+                var parameters = new Dictionary<string, object>
+                {
+                    ["packageRoot"] = packageRoot,
+                    ["qualifyPath"] = qualifyPath
+                };
+                DataTable result = _connection.ExecuteQuery(sql, parameters);
+                var classNames = new List<string>();
+                foreach (DataRow row in result.Rows)
+                {
+                    classNames.Add(row["APPCLASSID"].ToString()!);
+                }
+                return classNames;
+            }
+            catch (Exception ex)
+            {
+                Debug.Log($"Error querying PSAPPCLASSDEFN for classes: {ex.Message}");
+                return new();
+            }
         }
     }
 }
