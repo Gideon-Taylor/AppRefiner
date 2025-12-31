@@ -263,9 +263,9 @@ namespace PeopleCodeParser.SelfHosted.Visitors
                 return UnknownTypeInfo.Instance;
 
             // Check if TypeInferenceVisitor already resolved this type
-            if (typeNode.Attributes.TryGetValue(AstNode.ResolvedTypeInfoAttributeKey, out var resolvedTypeInfo))
+            if (typeNode.Attributes.TryGetValue(AstNode.TypeInfoAttributeKey, out var inferredTypeInfo))
             {
-                if (resolvedTypeInfo is TypeInfo typeInfo)
+                if (inferredTypeInfo is TypeInfo typeInfo)
                 {
                     return typeInfo; // Return the already-resolved type
                 }

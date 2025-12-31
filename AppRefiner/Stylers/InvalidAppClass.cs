@@ -65,10 +65,6 @@ public class InvalidAppClass : BaseStyler
         {
             appClassPath = nodeForTypeInfo.GetInferredType()!.Name;
         }
-        else if (nodeForTypeInfo.HasResolvedType())
-        {
-            appClassPath = nodeForTypeInfo.GetResolvedType()!.Name;
-        }
         else
         {
             // Type inference should have been run by StylerManager before this styler executes

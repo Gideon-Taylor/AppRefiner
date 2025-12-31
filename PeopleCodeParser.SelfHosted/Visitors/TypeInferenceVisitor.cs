@@ -716,7 +716,7 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
         if (node.Type != null)
         {
             var resolvedType = ConvertTypeNodeToTypeInfo(node.Type);
-            node.Type.Attributes[AstNode.ResolvedTypeInfoAttributeKey] = resolvedType;
+            node.Type.SetInferredType(resolvedType);
         }
 
         // NOW: Let base class register variables (will read from attribute)
@@ -732,7 +732,7 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
         if (node.Type != null)
         {
             var resolvedType = ConvertTypeNodeToTypeInfo(node.Type);
-            node.Type.Attributes[AstNode.ResolvedTypeInfoAttributeKey] = resolvedType;
+            node.Type.SetInferredType(resolvedType);
         }
 
         // NOW: Let base class register the variable
@@ -748,7 +748,7 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
         if (node.Type != null)
         {
             var resolvedType = ConvertTypeNodeToTypeInfo(node.Type);
-            node.Type.Attributes[AstNode.ResolvedTypeInfoAttributeKey] = resolvedType;
+            node.Type.SetInferredType(resolvedType);
         }
 
         // NOW: Let base class register variables
@@ -766,7 +766,7 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
             if (parameter.Type != null)
             {
                 var resolvedType = ConvertTypeNodeToTypeInfo(parameter.Type);
-                parameter.Type.Attributes[AstNode.ResolvedTypeInfoAttributeKey] = resolvedType;
+                parameter.Type.SetInferredType(resolvedType);
             }
         }
 
@@ -787,7 +787,7 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
                 if (parameter.Type != null)
                 {
                     var resolvedType = ConvertTypeNodeToTypeInfo(parameter.Type);
-                    parameter.Type.Attributes[AstNode.ResolvedTypeInfoAttributeKey] = resolvedType;
+                    parameter.Type.SetInferredType(resolvedType);
                 }
             }
         }

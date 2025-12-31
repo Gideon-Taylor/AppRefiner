@@ -55,20 +55,6 @@ public static class AstNodeExtensions
         node.Attributes.Remove(AstNode.TypeInfoAttributeKey);
     }
 
-    public static bool HasResolvedType(this AstNode node)
-    {
-        return node?.Attributes.ContainsKey(AstNode.ResolvedTypeInfoAttributeKey) ?? false;
-    }
-
-    public static TypeInfo? GetResolvedType(this AstNode node)
-    {
-        if (node.Attributes.TryGetValue(AstNode.ResolvedTypeInfoAttributeKey, out var typeInfo))
-        {
-            return typeInfo as TypeInfo;
-        }
-        return null;
-    }
-
     #endregion
 
     #region FunctionInfo Extensions
