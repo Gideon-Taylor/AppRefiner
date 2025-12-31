@@ -1886,6 +1886,83 @@ WHERE (OBJECTID1 = 60 OR OBJECTID1 = 87)
             return PeopleCodeType.Unknown;
         }
 
+        /// <summary>
+        /// Gets all package paths for a given application class name using SQL Server
+        /// </summary>
+        public List<string> GetPackagesForClass(string className)
+        {
+            var results = new List<string>();
+
+            if (!IsConnected)
+            {
+                Debug.Log("Cannot query packages - database not connected");
+                return results;
+            }
+
+            try
+            {
+                // Query returns PACKAGEROOT and QUALIFYPATH
+                // Need to construct full path as PACKAGEROOT:QUALIFYPATH:CLASSNAME
+                // Special case: when QUALIFYPATH = ':', path is just PACKAGEROOT:CLASSNAME
+
+                string sql = @"
+                    SELECT
+                        A.PACKAGEROOT,
+                        A.QUALIFYPATH
+                    FROM
+                        PSAPPCLASSDEFN A
+                        LEFT OUTER JOIN PSPACKAGEDEFN B ON B.PACKAGEROOT = A.PACKAGEROOT
+                                                           AND B.QUALIFYPATH = CASE
+                                                                               WHEN A.QUALIFYPATH = ':' THEN '.'
+                                                                               ELSE A.QUALIFYPATH
+                                                                               END
+                    WHERE
+                        A.APPCLASSID = @className
+                    ORDER BY
+                        CASE WHEN B.LASTUPDDTTM IS NULL THEN 1 ELSE 0 END,
+                        CAST(B.LASTUPDDTTM AS DATE) DESC,
+                        A.PACKAGEROOT ASC
+                ";
+
+                var parameters = new Dictionary<string, object>
+                {
+                    ["className"] = className
+                };
+
+                DataTable result = _connection.ExecuteQuery(sql, parameters);
+
+                foreach (DataRow row in result.Rows)
+                {
+                    string packageRoot = row[0].ToString() ?? string.Empty;
+                    string qualifyPath = row[1].ToString() ?? string.Empty;
+
+                    if (string.IsNullOrEmpty(packageRoot))
+                        continue;
+
+                    // Build full package path
+                    string fullPath;
+                    if (qualifyPath == ":")
+                    {
+                        // No subpackage - just PACKAGEROOT:CLASSNAME
+                        fullPath = $"{packageRoot}:{className}";
+                    }
+                    else
+                    {
+                        // Has subpackage - PACKAGEROOT:QUALIFYPATH:CLASSNAME
+                        fullPath = $"{packageRoot}:{qualifyPath}:{className}";
+                    }
+
+                    results.Add(fullPath);
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError($"Error querying packages for class {className}: {ex.Message}");
+            }
+
+            return results;
+        }
+
         public List<string> GetAllClassesForPackage(string packagePath)
         {
             string sql = @"SELECT APPCLASSID FROM PSAPPCLASSDEFN WHERE PACKAGEROOT = @packageRoot AND QUALIFYPATH = @qualifyPath";

@@ -291,6 +291,13 @@ namespace AppRefiner.Database
 
         PeopleCodeType GetFieldType(string fieldName);
 
+        /// <summary>
+        /// Gets all package paths for a given application class name
+        /// </summary>
+        /// <param name="className">The application class name (e.g., "CriteriaUI")</param>
+        /// <returns>List of full package paths sorted by priority (e.g., ["APP_PACKAGE:CriteriaUI", "UTIL:UI:CriteriaUI"])</returns>
+        List<string> GetPackagesForClass(string className);
+
 
         public static bool TryMapStringToTargetType(string typeName, out OpenTargetType targetType)
         {

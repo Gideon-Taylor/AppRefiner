@@ -269,6 +269,12 @@ namespace AppRefiner
         public SearchState SearchState { get; set; } = new SearchState();
 
         /// <summary>
+        /// Stores context data for the currently executing QuickFix.
+        /// Set before refactor instantiation, read by refactor constructor.
+        /// </summary>
+        public object? QuickFixContext { get; set; }
+
+        /// <summary>
         /// Autocomplete context types for routing SCN_AUTOCSELECTION notifications
         /// </summary>
         public enum AutoCompleteContext

@@ -21,6 +21,18 @@ namespace AppRefiner.Stylers
         public IndicatorType Type { get; set; }
         public List<(Type RefactorClass, string Description)> QuickFixes = new();
 
+        /// <summary>
+        /// Deferred QuickFix resolver with context.
+        /// Invoked only when the user presses Ctrl+. on this indicator.
+        /// Signature: (editor, position, context) => List<(Type, Description)>
+        /// </summary>
+        public Func<ScintillaEditor, int, object?, List<(Type RefactorClass, string Description)>>? DeferredQuickFixResolver { get; set; }
+
+        /// <summary>
+        /// Context data to pass to the deferred resolver (e.g., unimported class name).
+        /// </summary>
+        public object? DeferredQuickFixContext { get; set; }
+
         public Indicator()
         {
         }
@@ -102,6 +114,39 @@ namespace AppRefiner.Stylers
                     Color = color,
                     Tooltip = tooltip,
                     QuickFixes = quickFixes ?? []
+                });
+            }
+        }
+
+        /// <summary>
+        /// Adds an indicator with a deferred QuickFix resolver.
+        /// The resolver will be invoked only when the user presses Ctrl+. on this indicator.
+        /// </summary>
+        /// <param name="span">Source span to highlight</param>
+        /// <param name="type">Indicator type</param>
+        /// <param name="color">Highlight color</param>
+        /// <param name="tooltip">Optional tooltip text</param>
+        /// <param name="deferredResolver">Resolver function to generate QuickFixes on demand</param>
+        /// <param name="context">Optional context data to pass to the resolver</param>
+        protected void AddIndicatorWithDeferredQuickFix(
+            SourceSpan span,
+            IndicatorType type,
+            uint color,
+            string? tooltip,
+            Func<ScintillaEditor, int, object?, List<(Type RefactorClass, string Description)>> deferredResolver,
+            object? context = null)
+        {
+            if (span.Start.ByteIndex >= 0 && span.End.ByteIndex >= span.Start.ByteIndex)
+            {
+                Indicators.Add(new Indicator
+                {
+                    Start = span.Start.ByteIndex,
+                    Length = span.End.ByteIndex - span.Start.ByteIndex,
+                    Type = type,
+                    Color = color,
+                    Tooltip = tooltip,
+                    DeferredQuickFixResolver = deferredResolver,
+                    DeferredQuickFixContext = context
                 });
             }
         }

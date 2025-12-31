@@ -197,18 +197,51 @@ namespace AppRefiner
 
             List<string> quickFixList = new();
 
-            editor.ActiveIndicators.Where(i => i.Start <= position && i.Start + i.Length >= position && i.QuickFixes != null)
-                .ToList()
-                .ForEach(indicator =>
+            // Find all indicators at cursor position
+            for (int i = 0; i < editor.ActiveIndicators.Count; i++)
+            {
+                var indicator = editor.ActiveIndicators[i];
+
+                // Check if cursor is within this indicator
+                if (indicator.Start <= position && indicator.Start + indicator.Length >= position)
                 {
+                    // Handle immediate QuickFixes (existing behavior)
+                    if (indicator.QuickFixes != null && indicator.QuickFixes.Count > 0)
+                    {
+                        quickFixList.AddRange(indicator.QuickFixes.Select(q => q.Description));
+                    }
+                    // Handle deferred QuickFix resolvers (only if QuickFixes haven't been resolved yet)
+                    else if (indicator.DeferredQuickFixResolver != null)
+                    {
+                        try
+                        {
+                            // Invoke resolver with editor, position, and context
+                            var deferredQuickFixes = indicator.DeferredQuickFixResolver(
+                                editor,
+                                position,
+                                indicator.DeferredQuickFixContext);
 
-                    quickFixList.AddRange(indicator.QuickFixes.Select(q => q.Description));
+                            if (deferredQuickFixes != null && deferredQuickFixes.Count > 0)
+                            {
+                                // Store the resolved QuickFixes back in the indicator
+                                // Since Indicator is a struct, we need to update via index
+                                indicator.QuickFixes = deferredQuickFixes;
+                                editor.ActiveIndicators[i] = indicator;
 
-                });
+                                quickFixList.AddRange(deferredQuickFixes.Select(q => q.Description));
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            Debug.Log($"Error invoking deferred QuickFix resolver: {ex.Message}");
+                        }
+                    }
+                }
+            }
 
             if (quickFixList.Count > 0)
             {
-                ScintillaManager.ShowUserList(editor, UserListType.QuickFix, position, quickFixList);
+                ScintillaManager.ShowUserList(editor, UserListType.QuickFix, position, quickFixList, true);
             }
         }
 
@@ -1133,7 +1166,17 @@ namespace AppRefiner
                         Debug.Log($"No refactor type found for selection '{selection}'");
                         return null;
                     }
+
+                    // Store the selected description in editor state for QuickFixes that need it
+                    // Extract package path from description (format: "Import APP_PACKAGE:ClassName")
+                    string packagePath = ExtractPackagePath(selection);
+                    editor.QuickFixContext = packagePath;
+
                     var instance = Activator.CreateInstance(refactorType, [editor]);
+
+                    // Clear context after instantiation
+                    editor.QuickFixContext = null;
+
                     if (instance == null)
                     {
                         Debug.Log($"Failed to create instance of refactor type '{refactorType}'");
@@ -1144,6 +1187,20 @@ namespace AppRefiner
             }
 
             return null;
+        }
+
+        /// <summary>
+        /// Extracts the package path from a QuickFix description.
+        /// Expected format: "Import APP_PACKAGE:SUBPKG:ClassName"
+        /// </summary>
+        private string ExtractPackagePath(string quickFixDescription)
+        {
+            const string prefix = "Import ";
+            if (quickFixDescription.StartsWith(prefix))
+            {
+                return quickFixDescription.Substring(prefix.Length).Trim();
+            }
+            return string.Empty;
         }
 
         private BaseRefactor? HandleSystemVariableListSelection(ScintillaEditor editor, string selection)

@@ -63,6 +63,7 @@ namespace AppRefiner.TooltipProviders
 
             /* If any active indicators have quick fixes... */
             var hasQuickFixes = activeIndicators.SelectMany(t => t.QuickFixes ?? []).Any();
+            hasQuickFixes = hasQuickFixes || (activeIndicators.Where(t => t.DeferredQuickFixResolver is not null).Any());
             if (hasQuickFixes)
             {
                 tooltips.Append("Quick fixes... (Ctrl+.)\n");
