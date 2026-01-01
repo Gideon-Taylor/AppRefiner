@@ -8,6 +8,7 @@ namespace AppRefiner.Stylers
     /// <summary>
     /// Highlights class names that are not imported and provides QuickFix options to add imports.
     /// Uses deferred QuickFix resolution to query the database only when the user presses Ctrl+.
+    /// Handles both explicit imports and wildcard imports by querying the database for classes in wildcard packages.
     /// </summary>
     public class UnimportedClassStyler : BaseStyler
     {
@@ -16,8 +17,8 @@ namespace AppRefiner.Stylers
 
         private const uint HIGHLIGHT_COLOR = 0x0000FF; // Red squiggle
         private ProgramNode? _programNode;
-        private HashSet<string> _importedClasses = new();
-        private HashSet<string> _importedPackages = new(); // For wildcard imports
+        private HashSet<string> _importedClasses = new(StringComparer.OrdinalIgnoreCase);
+        private HashSet<string> _importedPackages = new(StringComparer.OrdinalIgnoreCase); // For wildcard imports
 
         public override void VisitProgram(ProgramNode node)
         {
@@ -44,6 +45,27 @@ namespace AppRefiner.Stylers
                     if (parts.Length > 0)
                     {
                         _importedClasses.Add(parts[^1]); // Last segment is class name
+                    }
+                }
+            }
+
+            // Query database for wildcard imports if available
+            if (DataManager != null && DataManager.IsConnected && _importedPackages.Count > 0)
+            {
+                foreach (var packagePath in _importedPackages)
+                {
+                    try
+                    {
+                        var classesInPackage = DataManager.GetAllClassesForPackage(packagePath);
+                        foreach (var className in classesInPackage)
+                        {
+                            _importedClasses.Add(className);
+                        }
+                        Debug.Log($"UnimportedClassStyler: Loaded {classesInPackage.Count} classes from wildcard import '{packagePath}:*'");
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.Log($"UnimportedClassStyler: Error loading classes for package '{packagePath}': {ex.Message}");
                     }
                 }
             }
@@ -81,14 +103,10 @@ namespace AppRefiner.Stylers
 
         private void CheckClassImport(string className, SourceSpan span)
         {
-            // Skip if already imported as explicit class
+            // Skip if already imported (either as explicit import or via wildcard)
+            // The _importedClasses set includes classes from both explicit imports and wildcard imports
             if (_importedClasses.Contains(className))
                 return;
-
-            // Skip if covered by wildcard (simplified check - assumes single-level wildcard)
-            // TODO: More sophisticated wildcard matching if needed
-            // For now, just check if ANY wildcard import exists
-            // In a real implementation, we'd need to query which package the class belongs to
 
             // Class is not imported - register deferred QuickFix
             AddIndicatorWithDeferredQuickFix(
