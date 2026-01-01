@@ -1168,9 +1168,9 @@ namespace AppRefiner
                     }
 
                     // Store the selected description in editor state for QuickFixes that need it
-                    // Extract package path from description (format: "Import APP_PACKAGE:ClassName")
-                    string packagePath = ExtractPackagePath(selection);
-                    editor.QuickFixContext = packagePath;
+                    // Extract context from description (format: "Import APP_PACKAGE:ClassName" or "Use APP_PACKAGE:ClassName")
+                    string context = ExtractQuickFixContext(selection);
+                    editor.QuickFixContext = context;
 
                     var instance = Activator.CreateInstance(refactorType, [editor]);
 
@@ -1190,17 +1190,29 @@ namespace AppRefiner
         }
 
         /// <summary>
-        /// Extracts the package path from a QuickFix description.
-        /// Expected format: "Import APP_PACKAGE:SUBPKG:ClassName"
+        /// Extracts the context value from a QuickFix description.
+        /// Handles multiple prefixes:
+        /// - "Import APP_PACKAGE:SUBPKG:ClassName" (AddImportQuickFix)
+        /// - "Use APP_PACKAGE:SUBPKG:ClassName" (ReplaceWithQualifiedClassNameQuickFix)
         /// </summary>
-        private string ExtractPackagePath(string quickFixDescription)
+        private string ExtractQuickFixContext(string quickFixDescription)
         {
-            const string prefix = "Import ";
-            if (quickFixDescription.StartsWith(prefix))
+            // Handle "Import " prefix (AddImportQuickFix)
+            const string importPrefix = "Import ";
+            if (quickFixDescription.StartsWith(importPrefix))
             {
-                return quickFixDescription.Substring(prefix.Length).Trim();
+                return quickFixDescription.Substring(importPrefix.Length).Trim();
             }
-            return string.Empty;
+
+            // Handle "Use " prefix (ReplaceWithQualifiedClassNameQuickFix)
+            const string usePrefix = "Use ";
+            if (quickFixDescription.StartsWith(usePrefix))
+            {
+                return quickFixDescription.Substring(usePrefix.Length).Trim();
+            }
+
+            // Fallback: return entire description trimmed
+            return quickFixDescription.Trim();
         }
 
         private BaseRefactor? HandleSystemVariableListSelection(ScintillaEditor editor, string selection)
