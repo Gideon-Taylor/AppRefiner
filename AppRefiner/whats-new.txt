@@ -1,0 +1,79 @@
+NEW FEATURES
+============
+
+Autocomplete & Type Inference
+------------------------------
+• Smart Autosuggest - Auto-triggers when backspacing to & or . symbols, helping recover from typos
+• Unexpanded Class Names - Autocomplete, calltips, and type inference work with unexpanded class names
+  (expansion occurs automatically at save time)
+• Polymorphic Type Display - Function call tips display known types for polymorphic constructs like
+  `elementofarray` and `sameasobject`
+• Keyboard Shortcuts - Ctrl+Space triggers autosuggest; Esc cancels function call tips
+
+Language Extensions & Modern Syntax
+------------------------------------
+• Language Extensions Framework - Transform code patterns in real-time using specialized refactors
+• F-String Support - Proper language and parser support for modern string formatting
+• Import Syntax Enhancement - Use ^ symbol to replace "current package" for smoother sibling class imports
+  (multiple ^ indicates relative movement up directory levels)
+
+Code Quality & Styling
+-----------------------
+• Class Import Styling - Visual indicators and quick-fixes for unimported and ambiguous class names
+
+IMPROVEMENTS
+============
+
+• Function Cache Updates - Program save now parses function implementations and updates cache entries automatically
+• Autocomplete Lists - Converted from user lists to autocomplete for improved user experience
+
+
+NEW KEYBOARD SHORTCUTS
+======================
+
+• Ctrl+Space - Trigger autosuggest
+• Esc - Cancel function call tips
+
+
+EXAMPLES
+========
+
+Unexpanded Class Names
+----------------------
+Type "MyClass" instead of "MYAPP_PACKAGE:MyClass" - autocomplete and type checking work
+immediately, and the full path is added when you save.
+
+Language Extensions
+-------------------
+String Extensions:
+  &myString.Len           → transforms to Len(&myString)
+  &myString.ToUpper       → transforms to Upper(&myString)
+  &myString.IndexOf("x")  → transforms to Find("x", &myString)
+
+Array Extensions:
+  &myArray.ForEach(&item) → expands to a For loop iterating the array
+
+F-String Syntax
+---------------
+f"Hello {&name}, you have {&count} items"
+
+Combines variable interpolation directly in string literals.
+
+Import Syntax Enhancement
+-------------------------
+import ^:SiblingClass;        (same package)
+import ^^:ParentPackage;      (parent package)
+import ^^^:GrandparentPkg;    (grandparent package)
+
+
+RESOURCES
+=========
+
+For documentation, issues, and updates, visit:
+https://github.com/Gideon-Taylor/AppRefiner
+
+Join the discussion and share feedback:
+https://github.com/Gideon-Taylor/AppRefiner/discussions
+
+Thank you for using AppRefiner!
+We hope it makes your PeopleSoft development more productive and enjoyable.
