@@ -23,13 +23,11 @@ namespace AppRefiner
         // Public property to expose LintReportPath
         public string? LintReportPath => lintReportPath;
 
-        public LinterManager(MainForm form, DataGridView linterOptionsGrid, Label statusLabel, ProgressBar progBar,
+        public LinterManager(MainForm form, DataGridView linterOptionsGrid,
                              string? initialLintReportPath, SettingsService settings)
         {
             mainForm = form;
             linterGrid = linterOptionsGrid;
-            lblStatus = statusLabel;
-            progressBar = progBar;
             lintReportPath = initialLintReportPath;
             settingsService = settings; // Store SettingsService
         }

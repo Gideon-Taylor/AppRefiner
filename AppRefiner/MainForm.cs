@@ -236,7 +236,7 @@ namespace AppRefiner
             chkObjectMembers.Checked = autoSuggestSettings.ObjectMembers;
             chkSystemVariables.Checked = autoSuggestSettings.SystemVariables;
 
-            linterManager = new LinterManager(this, dataGridView1, lblStatus, progressBar1, lintReportPath, settingsService);
+            linterManager = new LinterManager(this, dataGridView1, lintReportPath, settingsService);
             linterManager.InitializeLinterOptions(); // Initialize linters via the manager
             dataGridView1.CellPainting += dataGridView1_CellPainting; // Wire up CellPainting
 
@@ -329,6 +329,12 @@ namespace AppRefiner
                 //AppDesignerProcess adp = new AppDesignerProcess((uint)proc.Id, resultsList, GetGeneralSettingsObject());
                 //AppDesignerProcesses.Add((uint)proc.Id, adp);
             }
+
+            /* Check for new version */
+            bool newVersionAvailable = true;
+
+            splitContainer1.Panel2Collapsed = !newVersionAvailable;
+
         }
 
         protected override void OnShown(EventArgs e)
@@ -1003,7 +1009,6 @@ namespace AppRefiner
         {
             this.Invoke(() =>
             {
-                btnLintCode.Enabled = true;
                 btnClearLint.Enabled = true;
                 btnApplyTemplate.Text = "Apply Template";
 
@@ -1078,38 +1083,6 @@ namespace AppRefiner
                     RefreshAllEditorsAfterDatabaseConnection();
                 }
             }
-        }
-
-        private async void btnLintCode_Click(object sender, EventArgs e)
-        {
-            // Set the status label and progress bar before starting the background task
-            this.Invoke(() =>
-            {
-                lblStatus.Text = "Linting...";
-                progressBar1.Style = ProgressBarStyle.Marquee;
-                progressBar1.MarqueeAnimationSpeed = 30;
-            });
-            Application.DoEvents();
-
-            // Run the linting operation in a background thread via the manager
-            await Task.Run(() =>
-            {
-                // Need to pass current DataManager associated with the active editor
-                IDataManager? currentDataManager = null;
-                if (activeEditor != null)
-                {
-                    currentDataManager ??= activeEditor.DataManager;
-                }
-                linterManager?.ProcessLintersForActiveEditor(activeEditor, currentDataManager);
-            });
-
-            // Update the UI after the background task completes
-            this.Invoke(() =>
-            {
-                lblStatus.Text = "Monitoring...";
-                progressBar1.Style = ProgressBarStyle.Blocks;
-            });
-            Application.DoEvents();
         }
 
         private void CmbTemplates_SelectedIndexChanged(object? sender, EventArgs e)
@@ -4438,6 +4411,17 @@ namespace AppRefiner
         private void lnkWhatsNew_LinkClicked(object sender, LinkLabelLinkClickedEventArgs e)
         {
             ShowWhatsNewDialog();
+        }
+
+        private void lnkNewVersion_LinkClicked(object sender, LinkLabelLinkClickedEventArgs e)
+        {
+            /* Navigate to URL */
+            var si = new ProcessStartInfo("https://github.com/Gideon-Taylor/AppRefiner/releases/latest")
+            {
+                UseShellExecute = true
+            };
+            Process.Start(si);
+            lnkNewVersion.LinkVisited = true;
         }
     }
 }
