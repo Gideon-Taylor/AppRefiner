@@ -159,10 +159,14 @@ namespace AppRefiner
         // Dictionary to keep track of generated UI controls for template parameters
         private Dictionary<string, Control> currentTemplateInputControls = new();
 
-        public MainForm()
+        // Flag to indicate if What's New dialog should be shown
+        private readonly bool shouldShowWhatsNew;
+
+        public MainForm(bool shouldShowWhatsNew = false)
         {
+            this.shouldShowWhatsNew = shouldShowWhatsNew;
             InitializeComponent();
-            
+
         }
 
         protected override void OnLoad(EventArgs e)
@@ -315,12 +319,93 @@ namespace AppRefiner
 
             isLoadingSettings = false; // Allow immediate saves now
 
+            // Show/hide What's New link based on file existence and assembly version
+            UpdateWhatsNewLinkVisibility();
+
             /* Scan for existing App Designer processes */
             foreach (var proc in Process.GetProcessesByName("pside"))
             {
                 ValidateAndCreateAppDesignerProcess((uint)proc.Id, proc.MainWindowHandle);
                 //AppDesignerProcess adp = new AppDesignerProcess((uint)proc.Id, resultsList, GetGeneralSettingsObject());
                 //AppDesignerProcesses.Add((uint)proc.Id, adp);
+            }
+        }
+
+        protected override void OnShown(EventArgs e)
+        {
+            base.OnShown(e);
+
+            if (shouldShowWhatsNew)
+            {
+                ShowWhatsNewDialog();
+            }
+        }
+
+        private void UpdateWhatsNewLinkVisibility()
+        {
+            try
+            {
+                var assembly = System.Reflection.Assembly.GetExecutingAssembly();
+                var version = assembly.GetName().Version?.ToString();
+
+                // Check if whats-new.txt exists
+                var whatsNewPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "whats-new.txt");
+
+                // Hide link if version is null or file doesn't exist
+                if (version == null || !File.Exists(whatsNewPath))
+                {
+                    lnkWhatsNew.Visible = false;
+                    Debug.Log($"What's New link hidden: version={version ?? "null"}, file exists={File.Exists(whatsNewPath)}");
+                }
+                else
+                {
+                    lnkWhatsNew.Visible = true;
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.Log($"Error updating What's New link visibility: {ex.Message}");
+                lnkWhatsNew.Visible = false; // Hide on error
+            }
+        }
+
+        private void ShowWhatsNewDialog()
+        {
+            try
+            {
+                var assembly = System.Reflection.Assembly.GetExecutingAssembly();
+                var version = assembly.GetName().Version?.ToString();
+
+                // Don't show dialog if version is null
+                if (version == null)
+                {
+                    Debug.Log("Cannot show What's New dialog: Assembly version is null");
+                    return;
+                }
+
+                // Check if whats-new.txt exists before creating dialog
+                var whatsNewPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "whats-new.txt");
+                if (!File.Exists(whatsNewPath))
+                {
+                    Debug.Log($"Cannot show What's New dialog: whats-new.txt not found at {whatsNewPath}");
+                    return;
+                }
+
+                var whatsNewDialog = new WhatsNewDialog(version, this.Handle);
+                var result = whatsNewDialog.ShowDialog(new WindowWrapper(this.Handle));
+
+                // If user checked "Don't show again", save the preference
+                if (whatsNewDialog.DontShowAgain)
+                {
+                    Properties.Settings.Default.ShowWhatsNewDialog = false;
+                    Properties.Settings.Default.Save();
+                    Debug.Log("User disabled What's New dialog");
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.Log($"Error showing What's New dialog: {ex.Message}");
+                // Silently fail - don't show dialog if any error occurs
             }
         }
 
@@ -675,12 +760,13 @@ namespace AppRefiner
                 // Create new dialog
                 var mainHandle = activeAppDesigner?.MainWindowHandle ?? IntPtr.Zero;
                 stackTraceNavigatorDialog = new StackTraceNavigatorDialog(activeAppDesigner, mainHandle);
-                
+
                 // Handle dialog closed event to clean up reference
-                stackTraceNavigatorDialog.FormClosed += (s, e) => {
+                stackTraceNavigatorDialog.FormClosed += (s, e) =>
+                {
                     stackTraceNavigatorDialog = null;
                 };
-                
+
                 // Show dialog
                 stackTraceNavigatorDialog.Show();
             }
@@ -1282,7 +1368,7 @@ namespace AppRefiner
                         var refactorClass = new DeclareFunction(activeEditor, selectedFunction);
                         refactorManager.ExecuteRefactor(refactorClass, activeEditor, false);
                     }
-                 
+
                 }
             }
             catch (Exception ex)
@@ -1403,7 +1489,7 @@ namespace AppRefiner
         {
             // Build the target string based on the type
             StringBuilder sb = new();
-            for(var x = 0; x < target.ObjectIDs.Length; x++)
+            for (var x = 0; x < target.ObjectIDs.Length; x++)
             {
                 if (target.ObjectIDs[x] == PSCLASSID.NONE) break;
                 if (x > 0)
@@ -2137,7 +2223,7 @@ namespace AppRefiner
                 // Extract first visible line from wParam, cursor position from lParam
                 int firstVisibleLine = m.WParam.ToInt32();
                 int cursorPosition = m.LParam.ToInt32();
-                
+
                 Debug.Log($"Cursor position changed: first visible line {firstVisibleLine}, position {cursorPosition}");
                 if (activeEditor.FunctionCallTipActive)
                 {
@@ -2167,9 +2253,9 @@ namespace AppRefiner
                 PeopleCodeParser.SelfHosted.PeopleCodeParser parser = new PeopleCodeParser.SelfHosted.PeopleCodeParser(lexer.TokenizeAll());
                 var program = parser.ParseProgram();
                 bool isInsideInterpolatedString = program.FindDescendants<InterpolatedStringNode>().Any(n => n.SourceSpan.ContainsPosition(relativeLinePosition));
-                
+
                 /* If we used to be in one, but aren't anymore... */
-                if ( !isInsideInterpolatedString)
+                if (!isInsideInterpolatedString)
                 {
                     /* Check if the text has $" anywhere */
                     var fullText = ScintillaManager.GetScintillaText(activeEditor);
@@ -2261,7 +2347,8 @@ namespace AppRefiner
                             activeEditor.FunctionCallTipActive = true;
                             activeEditor.FunctionCallStartPosition = ScintillaManager.GetCursorPosition(activeEditor);
                             TooltipManager.ShowFunctionCallTooltip(activeEditor, program, fcn);
-                        } else if (targetCreationNode != null && targetCreationNode is ObjectCreationNode ocn)
+                        }
+                        else if (targetCreationNode != null && targetCreationNode is ObjectCreationNode ocn)
                         {
                             FunctionCallNode fakeFCN = new FunctionCallNode(ocn, ocn.Arguments) { SourceSpan = ocn.SourceSpan };
                             foreach (var attr in ocn.Attributes)
@@ -2430,7 +2517,7 @@ namespace AppRefiner
                     defaultRecord = parts[0];
                     defaultField = parts[1];
                 }
-                
+
                 // Run type inference (works even with null resolver)
                 TypeInferenceVisitor.Run(program, metadata, typeResolver, defaultRecord, defaultField);
             }
@@ -2701,14 +2788,14 @@ namespace AppRefiner
 
                 // Use new scope-aware resolver with optional database support
                 var goToVisitor = new GoToDefinitionVisitor(program, cursorPosition, activeEditor.DataManager);
-                
+
                 goToVisitor.VisitProgram(program);
 
                 var result = goToVisitor.Result;
 
-                if (result == null )
+                if (result == null)
                 {
-                    string errorMsg =  "Unable to determine symbol at cursor position";
+                    string errorMsg = "Unable to determine symbol at cursor position";
                     Debug.Log($"Definition resolution failed");
 
                     // Show error message
@@ -2780,7 +2867,7 @@ namespace AppRefiner
                     {
                         activeEditor.AppDesignerProcess.SetOpenTarget(BuildOpenTargetString(result.TargetProgram, result.SourceSpan));
                     }
-                        return;
+                    return;
                 }
 
                 // Handle in-file navigation
@@ -3744,7 +3831,7 @@ namespace AppRefiner
                                     activeEditor.AppDesignerProcess.PendingSelection = null;
                                     WindowHelper.FocusWindow(activeEditor.hWnd);
                                     ScintillaManager.SetSelection(activeEditor, selection.Start.ByteIndex, selection.End.ByteIndex);
-                                    
+
                                     // Reposition stack trace dialog if visible to avoid covering selection
                                     if (stackTraceNavigatorDialog != null && !stackTraceNavigatorDialog.IsDisposed && stackTraceNavigatorDialog.Visible)
                                     {
@@ -3762,7 +3849,7 @@ namespace AppRefiner
                                     activeEditor.AppDesignerProcess.PendingSelection = null;
                                     WindowHelper.FocusWindow(activeEditor.hWnd);
                                     ScintillaManager.SetSelection(activeEditor, selection.Start.ByteIndex, selection.End.ByteIndex);
-                                    
+
                                     // Reposition stack trace dialog if visible to avoid covering selection
                                     if (stackTraceNavigatorDialog != null && !stackTraceNavigatorDialog.IsDisposed && stackTraceNavigatorDialog.Visible)
                                     {
@@ -4336,16 +4423,21 @@ namespace AppRefiner
             catch (Exception ex)
             {
                 Debug.LogException(ex, "Error showing Smart Open configuration dialog");
-                
+
                 // Show error message to user
                 Task.Delay(100).ContinueWith(_ =>
                 {
                     var mainHandle = this.Handle;
                     var handleWrapper = new WindowWrapper(mainHandle);
-                    new MessageBoxDialog($"Error opening Smart Open configuration: {ex.Message}", 
+                    new MessageBoxDialog($"Error opening Smart Open configuration: {ex.Message}",
                         "Configuration Error", MessageBoxButtons.OK, mainHandle).ShowDialog(handleWrapper);
                 });
             }
+        }
+
+        private void lnkWhatsNew_LinkClicked(object sender, LinkLabelLinkClickedEventArgs e)
+        {
+            ShowWhatsNewDialog();
         }
     }
 }

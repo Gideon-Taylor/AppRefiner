@@ -99,6 +99,10 @@ namespace AppRefiner
             dataGridViewButtonColumn1 = new DataGridViewButtonColumn();
             tabPage6 = new TabPage();
             gridExtensions = new DataGridView();
+            colExtActive = new DataGridViewCheckBoxColumn();
+            colExtTarget = new DataGridViewTextBoxColumn();
+            colExtType = new DataGridViewComboBoxColumn();
+            colExtName = new DataGridViewTextBoxColumn();
             tabPage5 = new TabPage();
             splitContainer3 = new SplitContainer();
             pnlTemplateParams = new Panel();
@@ -106,10 +110,7 @@ namespace AppRefiner
             cmbTemplates = new ComboBox();
             progressBar1 = new ProgressBar();
             lblStatus = new Label();
-            colExtActive = new DataGridViewCheckBoxColumn();
-            colExtTarget = new DataGridViewTextBoxColumn();
-            colExtType = new DataGridViewComboBoxColumn();
-            colExtName = new DataGridViewTextBoxColumn();
+            lnkWhatsNew = new LinkLabel();
             ((System.ComponentModel.ISupportInitialize)splitContainer1).BeginInit();
             splitContainer1.Panel1.SuspendLayout();
             splitContainer1.Panel2.SuspendLayout();
@@ -179,6 +180,7 @@ namespace AppRefiner
             // 
             // tabPage1
             // 
+            tabPage1.Controls.Add(lnkWhatsNew);
             tabPage1.Controls.Add(groupBox3);
             tabPage1.Controls.Add(linkDocs);
             tabPage1.Controls.Add(groupBox2);
@@ -281,7 +283,7 @@ namespace AppRefiner
             // linkDocs
             // 
             linkDocs.AutoSize = true;
-            linkDocs.Location = new Point(6, 498);
+            linkDocs.Location = new Point(336, 494);
             linkDocs.Name = "linkDocs";
             linkDocs.Size = new Size(127, 15);
             linkDocs.TabIndex = 33;
@@ -836,6 +838,33 @@ namespace AppRefiner
             gridExtensions.Size = new Size(556, 526);
             gridExtensions.TabIndex = 8;
             // 
+            // colExtActive
+            // 
+            colExtActive.HeaderText = "Active";
+            colExtActive.Name = "colExtActive";
+            colExtActive.Width = 50;
+            // 
+            // colExtTarget
+            // 
+            colExtTarget.FillWeight = 110.569466F;
+            colExtTarget.HeaderText = "Target";
+            colExtTarget.Name = "colExtTarget";
+            colExtTarget.ReadOnly = true;
+            // 
+            // colExtType
+            // 
+            colExtType.HeaderText = "Type";
+            colExtType.Items.AddRange(new object[] { "Property", "Method" });
+            colExtType.Name = "colExtType";
+            colExtType.ReadOnly = true;
+            // 
+            // colExtName
+            // 
+            colExtName.HeaderText = "Method/Property";
+            colExtName.Name = "colExtName";
+            colExtName.ReadOnly = true;
+            colExtName.Width = 300;
+            // 
             // tabPage5
             // 
             tabPage5.Controls.Add(splitContainer3);
@@ -913,32 +942,16 @@ namespace AppRefiner
             lblStatus.Text = "Stopped";
             lblStatus.TextAlign = ContentAlignment.MiddleCenter;
             // 
-            // colExtActive
+            // lnkWhatsNew
             // 
-            colExtActive.HeaderText = "Active";
-            colExtActive.Name = "colExtActive";
-            colExtActive.Width = 50;
-            // 
-            // colExtTarget
-            // 
-            colExtTarget.FillWeight = 110.569466F;
-            colExtTarget.HeaderText = "Target";
-            colExtTarget.Name = "colExtTarget";
-            colExtTarget.ReadOnly = true;
-            // 
-            // colExtType
-            // 
-            colExtType.HeaderText = "Type";
-            colExtType.Items.AddRange(new object[] { "Property", "Method" });
-            colExtType.Name = "colExtType";
-            colExtType.ReadOnly = true;
-            // 
-            // colExtName
-            // 
-            colExtName.HeaderText = "Method/Property";
-            colExtName.Name = "colExtName";
-            colExtName.ReadOnly = true;
-            colExtName.Width = 300;
+            lnkWhatsNew.AutoSize = true;
+            lnkWhatsNew.Location = new Point(16, 494);
+            lnkWhatsNew.Name = "lnkWhatsNew";
+            lnkWhatsNew.Size = new Size(79, 15);
+            lnkWhatsNew.TabIndex = 35;
+            lnkWhatsNew.TabStop = true;
+            lnkWhatsNew.Text = "What's New...";
+            lnkWhatsNew.LinkClicked += lnkWhatsNew_LinkClicked;
             // 
             // MainForm
             // 
@@ -1067,5 +1080,6 @@ namespace AppRefiner
         private DataGridViewTextBoxColumn colExtTarget;
         private DataGridViewComboBoxColumn colExtType;
         private DataGridViewTextBoxColumn colExtName;
+        private LinkLabel lnkWhatsNew;
     }
 }

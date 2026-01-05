@@ -22,7 +22,25 @@ namespace AppRefiner
                 Properties.Settings.Default.Save();
             }
 
-            Application.Run(new MainForm());
+            // Check if this is first run of new version AND user wants to see What's New
+            bool shouldShowWhatsNew = false;
+            var assembly = System.Reflection.Assembly.GetExecutingAssembly();
+            var currentVersion = assembly.GetName().Version?.ToString();
+
+            // Only proceed if we have a valid version and user hasn't disabled the dialog
+             if (currentVersion != null && Properties.Settings.Default.ShowWhatsNewDialog)
+            {
+                var lastSeenVersion = Properties.Settings.Default.LastSeenVersion;
+
+                if (string.IsNullOrEmpty(lastSeenVersion) || lastSeenVersion != currentVersion)
+                {
+                    shouldShowWhatsNew = true;
+                    Properties.Settings.Default.LastSeenVersion = currentVersion;
+                    Properties.Settings.Default.Save();
+                }
+            }
+
+            Application.Run(new MainForm(shouldShowWhatsNew));
         }
     }
 }

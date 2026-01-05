@@ -166,7 +166,7 @@ namespace AppRefiner.Properties {
                 this["TooltipStates"] = value;
             }
         }
-
+        
         [global::System.Configuration.UserScopedSettingAttribute()]
         [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
         [global::System.Configuration.DefaultSettingValueAttribute("[]")]
@@ -178,7 +178,7 @@ namespace AppRefiner.Properties {
                 this["LanguageExtensionStates"] = value;
             }
         }
-
+        
         [global::System.Configuration.UserScopedSettingAttribute()]
         [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
         [global::System.Configuration.DefaultSettingValueAttribute("{}")]
@@ -190,7 +190,7 @@ namespace AppRefiner.Properties {
                 this["LanguageExtensionConfigs"] = value;
             }
         }
-
+        
         [global::System.Configuration.UserScopedSettingAttribute()]
         [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
         [global::System.Configuration.DefaultSettingValueAttribute("False")]
@@ -440,6 +440,30 @@ namespace AppRefiner.Properties {
             }
             set {
                 this["SettingsUpgraded"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("True")]
+        public bool ShowWhatsNewDialog {
+            get {
+                return ((bool)(this["ShowWhatsNewDialog"]));
+            }
+            set {
+                this["ShowWhatsNewDialog"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("")]
+        public string LastSeenVersion {
+            get {
+                return ((string)(this["LastSeenVersion"]));
+            }
+            set {
+                this["LastSeenVersion"] = value;
             }
         }
     }
