@@ -1,6 +1,67 @@
 param(
-    [switch]$SelfContained = $false
+    [switch]$SelfContained = $false,
+    [string]$Version = ""  # Allow manual version override
 )
+
+# Get the next semantic version
+function Get-NextVersion {
+    # Fetch tags from remote to ensure we have the latest
+    Write-Host "Fetching tags from remote..."
+    git fetch --tags --quiet 2>$null
+
+    # Get all tags matching x.x.x.x pattern
+    $tags = git tag -l | Where-Object { $_ -match '^\d+\.\d+\.\d+\.\d+$' }
+
+    if (-not $tags) {
+        # No previous semantic version tags, use default
+        Write-Host "No previous semantic version tags found, using default: 1.1.0.0"
+        return "1.1.0.0"
+    }
+
+    # Parse and sort versions
+    $versions = $tags | ForEach-Object {
+        $parts = $_.Split('.')
+        [PSCustomObject]@{
+            Original = $_
+            Major = [int]$parts[0]
+            Minor = [int]$parts[1]
+            Build = [int]$parts[2]
+            Revision = [int]$parts[3]
+        }
+    } | Sort-Object Major, Minor, Build, Revision -Descending
+
+    # Get the latest version
+    $latest = $versions[0]
+    Write-Host "Latest version: $($latest.Original)"
+
+    # Increment version
+    $newRevision = $latest.Revision + 1
+    $newBuild = $latest.Build
+    $newMinor = $latest.Minor
+    $newMajor = $latest.Major
+
+    # Handle overflow: 1.0.0.9 → 1.0.1.0
+    if ($newRevision -gt 9) {
+        $newRevision = 0
+        $newBuild++
+
+        # Handle build overflow: 1.0.9.0 → 1.1.0.0
+        if ($newBuild -gt 9) {
+            $newBuild = 0
+            $newMinor++
+
+            # Handle minor overflow: 1.9.0.0 → 2.0.0.0
+            if ($newMinor -gt 9) {
+                $newMinor = 0
+                $newMajor++
+            }
+        }
+    }
+
+    $newVersion = "$newMajor.$newMinor.$newBuild.$newRevision"
+    Write-Host "Next version: $newVersion"
+    return $newVersion
+}
 
 # Build configuration
 $Configuration = "Release"
@@ -90,16 +151,25 @@ function Build-HookDll {
 # Build AppRefiner
 function Build-AppRefiner {
     param(
-        [bool]$IsSelfContained
+        [bool]$IsSelfContained,
+        [string]$Version
     )
-    
+
     $targetDir = if ($IsSelfContained) { $SelfContainedOutputDir } else { $FrameworkOutputDir }
     $selfContainedValue = if ($IsSelfContained) { "true" } else { "false" }
-    
+
     Write-Host "Building AppRefiner (.NET) for win-$Platform in $Configuration mode..."
     Write-Host "Publishing to: $targetDir (Self-contained: $IsSelfContained)"
-    
-    dotnet publish "AppRefiner/AppRefiner.csproj" /p:SelfContained=$selfContainedValue -r "win-$Platform" -c $Configuration -o $targetDir
+    Write-Host "Version: $Version"
+
+    dotnet publish "AppRefiner/AppRefiner.csproj" `
+        /p:SelfContained=$selfContainedValue `
+        /p:AssemblyVersion=$Version `
+        /p:FileVersion=$Version `
+        /p:InformationalVersion=$Version `
+        -r "win-$Platform" `
+        -c $Configuration `
+        -o $targetDir
     if ($LASTEXITCODE -ne 0) {
         Write-Error "Error building AppRefiner."
         exit $LASTEXITCODE
@@ -129,21 +199,21 @@ function Copy-HookDll {
 function Create-ReleaseZip {
     param(
         [string]$SourceDir,
-        [bool]$IsSelfContained
+        [bool]$IsSelfContained,
+        [string]$Version
     )
-    
-    $date = Get-Date -Format "yyyy-MM-dd"
+
     $suffix = if ($IsSelfContained) { "self-contained" } else { "framework-dependent" }
-    $zipFileName = "AppRefiner-$date-$suffix.zip"
-    
+    $zipFileName = "AppRefiner-$Version-$suffix.zip"
+
     Write-Host "Creating release ZIP: $zipFileName..."
-    
+
     if (Test-Path $zipFileName) {
         Remove-Item $zipFileName -Force
     }
-    
+
     Compress-Archive -Path "$SourceDir\*" -DestinationPath $zipFileName
-    
+
     Write-Host "Release ZIP created at: $zipFileName"
     return $zipFileName
 }
@@ -163,15 +233,21 @@ if (-not (Test-Path $targetDir)) {
     New-Item -ItemType Directory -Path $targetDir | Out-Null
 }
 
+# Get version
+if ([string]::IsNullOrWhiteSpace($Version)) {
+    $Version = Get-NextVersion
+}
+
 # Execute build steps
 Restore-Dependencies
 Build-HookDll
-Build-AppRefiner -IsSelfContained $SelfContained
+Build-AppRefiner -IsSelfContained $SelfContained -Version $Version
 Copy-HookDll -DestinationDir $targetDir
-$zipFile = Create-ReleaseZip -SourceDir $targetDir -IsSelfContained $SelfContained
+$zipFile = Create-ReleaseZip -SourceDir $targetDir -IsSelfContained $SelfContained -Version $Version
 
 Write-Host ""
 Write-Host "Build completed successfully!"
+Write-Host "Version: $Version"
 Write-Host "Release package: $zipFile"
 Write-Host ""
 Write-Host "To run AppRefiner, extract the ZIP and run AppRefiner.exe" 
