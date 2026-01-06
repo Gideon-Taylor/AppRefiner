@@ -17,7 +17,7 @@ namespace AppRefiner.LanguageExtensions.BuiltIn
         {
             new ExtensionTransform
             {
-                Signature = "ForEach(iterator: number, item_variable?: $element) -> void",
+                Signature = "ForEach(iterator?: number, item_variable?: $element) -> void",
                 Description = "Expands to a For loop that iterates the array.",
                 TransformAction = TransformForEach
             }
@@ -29,13 +29,12 @@ namespace AppRefiner.LanguageExtensions.BuiltIn
         private static void TransformForEach(ScintillaEditor editor, AstNode node, TypeInfo matchedType, VariableRegistry? variableRegistry)
         {
             if (node is not FunctionCallNode fcn) return;
-            if (fcn.Arguments.Count < 1) return;
+            
 
-            string iteratorVarName = ExtractVariableName(fcn.Arguments[0]);
-
-            if (string.IsNullOrEmpty(iteratorVarName))
+            string iteratorVarName = "&iterator";
+            if (fcn.Arguments.Count > 0)
             {
-                return;
+                iteratorVarName = ExtractVariableName(fcn.Arguments[0]);
             }
 
             string itemHolderVarName = "";
