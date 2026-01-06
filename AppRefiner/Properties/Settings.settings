@@ -15,10 +15,10 @@
       <Value Profile="(Default)">False</Value>
     </Setting>
     <Setting Name="StylerStates" Type="System.String" Scope="User">
-      <Value Profile="(Default)">[]</Value>
+      <Value Profile="(Default)">[{"TypeName":"AppRefiner.Stylers.AmbiguousClassReferenceStyler","Active":true},{"TypeName":"AppRefiner.Stylers.ClassNameMismatch","Active":true},{"TypeName":"AppRefiner.Stylers.DeadCodeStyler","Active":true},{"TypeName":"AppRefiner.Stylers.FindFunctionParameterStyler","Active":true},{"TypeName":"AppRefiner.Stylers.InvalidAppClass","Active":true},{"TypeName":"AppRefiner.Stylers.LinterSuppressionStyler","Active":false},{"TypeName":"AppRefiner.Stylers.MeaninglessVariableNameStyler","Active":false},{"TypeName":"AppRefiner.Stylers.MissingConstructor","Active":false},{"TypeName":"AppRefiner.Stylers.MissingMethodImplementation","Active":true},{"TypeName":"AppRefiner.Stylers.MissingSemicolon","Active":false},{"TypeName":"AppRefiner.Stylers.PropertyAsVariable","Active":false},{"TypeName":"AppRefiner.Stylers.RedeclaredVariables","Active":true},{"TypeName":"AppRefiner.Stylers.ReusedForIterator","Active":true},{"TypeName":"AppRefiner.Stylers.SQLVariableCountStyler","Active":true},{"TypeName":"AppRefiner.Stylers.SyntaxErrors","Active":true},{"TypeName":"AppRefiner.Stylers.TodoFixmeStyler","Active":false},{"TypeName":"AppRefiner.Stylers.TypeErrorStyler","Active":true},{"TypeName":"AppRefiner.Stylers.UndefinedVariables","Active":false},{"TypeName":"AppRefiner.Stylers.UnimplementedAbstractMembersStyler","Active":false},{"TypeName":"AppRefiner.Stylers.UnimportedClassStyler","Active":true},{"TypeName":"AppRefiner.Stylers.UnusedImports","Active":true},{"TypeName":"AppRefiner.Stylers.UnusedVariables","Active":true},{"TypeName":"AppRefiner.Stylers.WrongExceptionVariableStyler","Active":false}]</Value>
     </Setting>
     <Setting Name="LinterStates" Type="System.String" Scope="User">
-      <Value Profile="(Default)">[]</Value>
+      <Value Profile="(Default)">[{"TypeName":"AppRefiner.Linters.CreateSQLVariableCount","Active":true},{"TypeName":"AppRefiner.Linters.EmptyCatchBlockLinter","Active":false},{"TypeName":"AppRefiner.Linters.FlowerBoxHeader","Active":false},{"TypeName":"AppRefiner.Linters.FunctionParameterCountLinter","Active":false},{"TypeName":"AppRefiner.Linters.GetHTMLTextVariableCount","Active":true},{"TypeName":"AppRefiner.Linters.LinterSuppressionProcessor","Active":true},{"TypeName":"AppRefiner.Linters.LongExpressionLinter","Active":false},{"TypeName":"AppRefiner.Linters.MultiLineRemCommentLinter","Active":true},{"TypeName":"AppRefiner.Linters.NestedIfElseCheck","Active":false},{"TypeName":"AppRefiner.Linters.RecursiveFunctionLinter","Active":false},{"TypeName":"AppRefiner.Linters.ReusedForIterator","Active":true},{"TypeName":"AppRefiner.Linters.SQLExecVariableCount","Active":true},{"TypeName":"AppRefiner.Linters.SQLLongString","Active":false},{"TypeName":"AppRefiner.Linters.SQLWildCard","Active":true},{"TypeName":"AppRefiner.Linters.TodoFixmeLinter","Active":false},{"TypeName":"AppRefiner.Linters.UseOfObjectType","Active":true}]</Value>
     </Setting>
     <Setting Name="LintReportPath" Type="System.String" Scope="User">
       <Value Profile="(Default)">LintingReports</Value>
@@ -36,10 +36,10 @@
       <Value Profile="(Default)" />
     </Setting>
     <Setting Name="TooltipStates" Type="System.String" Scope="User">
-      <Value Profile="(Default)">[]</Value>
+      <Value Profile="(Default)">[{"TypeName":"AppRefiner.TooltipProviders.ActiveIndicatorsTooltipProvider","Active":true},{"TypeName":"AppRefiner.TooltipProviders.ScopeTooltipProvider","Active":true},{"TypeName":"AppRefiner.TooltipProviders.PeopleSoftObjectTooltipProvider","Active":true},{"TypeName":"AppRefiner.TooltipProviders.MethodParametersTooltipProvider","Active":true},{"TypeName":"AppRefiner.TooltipProviders.VariableInfoTooltipProvider","Active":false},{"TypeName":"AppRefiner.TooltipProviders.InferredTypeTooltipProvider","Active":true},{"TypeName":"AppRefiner.TooltipProviders.AppClassTooltipProvider","Active":true}]</Value>
     </Setting>
     <Setting Name="LanguageExtensionStates" Type="System.String" Scope="User">
-      <Value Profile="(Default)">[]</Value>
+      <Value Profile="(Default)">[{"TypeName":"AppRefiner.LanguageExtensions.BuiltIn.ArrayExtensions","Active":true},{"TypeName":"AppRefiner.LanguageExtensions.BuiltIn.StringExtensions","Active":true}]</Value>
     </Setting>
     <Setting Name="LanguageExtensionConfigs" Type="System.String" Scope="User">
       <Value Profile="(Default)">{}</Value>
@@ -72,7 +72,7 @@
       <Value Profile="(Default)">True</Value>
     </Setting>
     <Setting Name="rememberFolds" Type="System.Boolean" Scope="User">
-      <Value Profile="(Default)">False</Value>
+      <Value Profile="(Default)">True</Value>
     </Setting>
     <Setting Name="overrideFindReplace" Type="System.Boolean" Scope="User">
       <Value Profile="(Default)">False</Value>
@@ -87,22 +87,22 @@
       <Value Profile="(Default)" />
     </Setting>
     <Setting Name="AutoCenterDialogs" Type="System.Boolean" Scope="User">
-      <Value Profile="(Default)">False</Value>
+      <Value Profile="(Default)">True</Value>
     </Setting>
     <Setting Name="multiSelection" Type="System.Boolean" Scope="User">
       <Value Profile="(Default)">False</Value>
     </Setting>
     <Setting Name="lineSelectionFix" Type="System.Boolean" Scope="User">
-      <Value Profile="(Default)">False</Value>
+      <Value Profile="(Default)">True</Value>
     </Setting>
     <Setting Name="autoSuggestSettings" Type="System.String" Scope="User">
-      <Value Profile="(Default)">{}</Value>
+      <Value Profile="(Default)">{"variableSuggestions":true,"functionSignatures":true,"objectMembers":true,"systemVariables":true}</Value>
     </Setting>
     <Setting Name="theme" Type="System.String" Scope="User">
-      <Value Profile="(Default)">Default</Value>
+      <Value Profile="(Default)">Alphabet</Value>
     </Setting>
     <Setting Name="theme_filled" Type="System.Boolean" Scope="User">
-      <Value Profile="(Default)">False</Value>
+      <Value Profile="(Default)">True</Value>
     </Setting>
     <Setting Name="SettingsUpgraded" Type="System.Boolean" Scope="User">
       <Value Profile="(Default)">False</Value>

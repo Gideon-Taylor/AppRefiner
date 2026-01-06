@@ -73,7 +73,26 @@ namespace AppRefiner.Properties {
         
         [global::System.Configuration.UserScopedSettingAttribute()]
         [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
-        [global::System.Configuration.DefaultSettingValueAttribute("[]")]
+        [global::System.Configuration.DefaultSettingValueAttribute("[{\"TypeName\":\"AppRefiner.Stylers.AmbiguousClassReferenceStyler\",\"Active\":true},{\"" +
+            "TypeName\":\"AppRefiner.Stylers.ClassNameMismatch\",\"Active\":true},{\"TypeName\":\"App" +
+            "Refiner.Stylers.DeadCodeStyler\",\"Active\":true},{\"TypeName\":\"AppRefiner.Stylers.F" +
+            "indFunctionParameterStyler\",\"Active\":true},{\"TypeName\":\"AppRefiner.Stylers.Inval" +
+            "idAppClass\",\"Active\":true},{\"TypeName\":\"AppRefiner.Stylers.LinterSuppressionStyl" +
+            "er\",\"Active\":false},{\"TypeName\":\"AppRefiner.Stylers.MeaninglessVariableNameStyle" +
+            "r\",\"Active\":false},{\"TypeName\":\"AppRefiner.Stylers.MissingConstructor\",\"Active\":" +
+            "false},{\"TypeName\":\"AppRefiner.Stylers.MissingMethodImplementation\",\"Active\":tru" +
+            "e},{\"TypeName\":\"AppRefiner.Stylers.MissingSemicolon\",\"Active\":false},{\"TypeName\"" +
+            ":\"AppRefiner.Stylers.PropertyAsVariable\",\"Active\":false},{\"TypeName\":\"AppRefiner" +
+            ".Stylers.RedeclaredVariables\",\"Active\":true},{\"TypeName\":\"AppRefiner.Stylers.Reu" +
+            "sedForIterator\",\"Active\":true},{\"TypeName\":\"AppRefiner.Stylers.SQLVariableCountS" +
+            "tyler\",\"Active\":true},{\"TypeName\":\"AppRefiner.Stylers.SyntaxErrors\",\"Active\":tru" +
+            "e},{\"TypeName\":\"AppRefiner.Stylers.TodoFixmeStyler\",\"Active\":false},{\"TypeName\":" +
+            "\"AppRefiner.Stylers.TypeErrorStyler\",\"Active\":true},{\"TypeName\":\"AppRefiner.Styl" +
+            "ers.UndefinedVariables\",\"Active\":false},{\"TypeName\":\"AppRefiner.Stylers.Unimplem" +
+            "entedAbstractMembersStyler\",\"Active\":false},{\"TypeName\":\"AppRefiner.Stylers.Unim" +
+            "portedClassStyler\",\"Active\":true},{\"TypeName\":\"AppRefiner.Stylers.UnusedImports\"" +
+            ",\"Active\":true},{\"TypeName\":\"AppRefiner.Stylers.UnusedVariables\",\"Active\":true}," +
+            "{\"TypeName\":\"AppRefiner.Stylers.WrongExceptionVariableStyler\",\"Active\":false}]")]
         public string StylerStates {
             get {
                 return ((string)(this["StylerStates"]));
@@ -85,7 +104,7 @@ namespace AppRefiner.Properties {
         
         [global::System.Configuration.UserScopedSettingAttribute()]
         [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
-        [global::System.Configuration.DefaultSettingValueAttribute("[]")]
+        [global::System.Configuration.DefaultSettingValueAttribute(@"[{""TypeName"":""AppRefiner.Linters.CreateSQLVariableCount"",""Active"":true},{""TypeName"":""AppRefiner.Linters.EmptyCatchBlockLinter"",""Active"":false},{""TypeName"":""AppRefiner.Linters.FlowerBoxHeader"",""Active"":false},{""TypeName"":""AppRefiner.Linters.FunctionParameterCountLinter"",""Active"":false},{""TypeName"":""AppRefiner.Linters.GetHTMLTextVariableCount"",""Active"":true},{""TypeName"":""AppRefiner.Linters.LinterSuppressionProcessor"",""Active"":true},{""TypeName"":""AppRefiner.Linters.LongExpressionLinter"",""Active"":false},{""TypeName"":""AppRefiner.Linters.MultiLineRemCommentLinter"",""Active"":true},{""TypeName"":""AppRefiner.Linters.NestedIfElseCheck"",""Active"":false},{""TypeName"":""AppRefiner.Linters.RecursiveFunctionLinter"",""Active"":false},{""TypeName"":""AppRefiner.Linters.ReusedForIterator"",""Active"":true},{""TypeName"":""AppRefiner.Linters.SQLExecVariableCount"",""Active"":true},{""TypeName"":""AppRefiner.Linters.SQLLongString"",""Active"":false},{""TypeName"":""AppRefiner.Linters.SQLWildCard"",""Active"":true},{""TypeName"":""AppRefiner.Linters.TodoFixmeLinter"",""Active"":false},{""TypeName"":""AppRefiner.Linters.UseOfObjectType"",""Active"":true}]")]
         public string LinterStates {
             get {
                 return ((string)(this["LinterStates"]));
@@ -157,7 +176,7 @@ namespace AppRefiner.Properties {
         
         [global::System.Configuration.UserScopedSettingAttribute()]
         [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
-        [global::System.Configuration.DefaultSettingValueAttribute("[]")]
+        [global::System.Configuration.DefaultSettingValueAttribute(@"[{""TypeName"":""AppRefiner.TooltipProviders.ActiveIndicatorsTooltipProvider"",""Active"":true},{""TypeName"":""AppRefiner.TooltipProviders.ScopeTooltipProvider"",""Active"":true},{""TypeName"":""AppRefiner.TooltipProviders.PeopleSoftObjectTooltipProvider"",""Active"":true},{""TypeName"":""AppRefiner.TooltipProviders.MethodParametersTooltipProvider"",""Active"":true},{""TypeName"":""AppRefiner.TooltipProviders.VariableInfoTooltipProvider"",""Active"":false},{""TypeName"":""AppRefiner.TooltipProviders.InferredTypeTooltipProvider"",""Active"":true},{""TypeName"":""AppRefiner.TooltipProviders.AppClassTooltipProvider"",""Active"":true}]")]
         public string TooltipStates {
             get {
                 return ((string)(this["TooltipStates"]));
@@ -169,7 +188,9 @@ namespace AppRefiner.Properties {
         
         [global::System.Configuration.UserScopedSettingAttribute()]
         [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
-        [global::System.Configuration.DefaultSettingValueAttribute("[]")]
+        [global::System.Configuration.DefaultSettingValueAttribute("[{\"TypeName\":\"AppRefiner.LanguageExtensions.BuiltIn.ArrayExtensions\",\"Active\":tru" +
+            "e},{\"TypeName\":\"AppRefiner.LanguageExtensions.BuiltIn.StringExtensions\",\"Active\"" +
+            ":true}]")]
         public string LanguageExtensionStates {
             get {
                 return ((string)(this["LanguageExtensionStates"]));
@@ -301,7 +322,7 @@ namespace AppRefiner.Properties {
         
         [global::System.Configuration.UserScopedSettingAttribute()]
         [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
-        [global::System.Configuration.DefaultSettingValueAttribute("False")]
+        [global::System.Configuration.DefaultSettingValueAttribute("True")]
         public bool rememberFolds {
             get {
                 return ((bool)(this["rememberFolds"]));
@@ -361,7 +382,7 @@ namespace AppRefiner.Properties {
         
         [global::System.Configuration.UserScopedSettingAttribute()]
         [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
-        [global::System.Configuration.DefaultSettingValueAttribute("False")]
+        [global::System.Configuration.DefaultSettingValueAttribute("True")]
         public bool AutoCenterDialogs {
             get {
                 return ((bool)(this["AutoCenterDialogs"]));
@@ -385,7 +406,7 @@ namespace AppRefiner.Properties {
         
         [global::System.Configuration.UserScopedSettingAttribute()]
         [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
-        [global::System.Configuration.DefaultSettingValueAttribute("False")]
+        [global::System.Configuration.DefaultSettingValueAttribute("True")]
         public bool lineSelectionFix {
             get {
                 return ((bool)(this["lineSelectionFix"]));
@@ -397,7 +418,8 @@ namespace AppRefiner.Properties {
         
         [global::System.Configuration.UserScopedSettingAttribute()]
         [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
-        [global::System.Configuration.DefaultSettingValueAttribute("{}")]
+        [global::System.Configuration.DefaultSettingValueAttribute("{\"variableSuggestions\":true,\"functionSignatures\":true,\"objectMembers\":true,\"syste" +
+            "mVariables\":true}")]
         public string autoSuggestSettings {
             get {
                 return ((string)(this["autoSuggestSettings"]));
@@ -409,7 +431,7 @@ namespace AppRefiner.Properties {
         
         [global::System.Configuration.UserScopedSettingAttribute()]
         [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
-        [global::System.Configuration.DefaultSettingValueAttribute("Default")]
+        [global::System.Configuration.DefaultSettingValueAttribute("Alphabet")]
         public string theme {
             get {
                 return ((string)(this["theme"]));
@@ -421,7 +443,7 @@ namespace AppRefiner.Properties {
         
         [global::System.Configuration.UserScopedSettingAttribute()]
         [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
-        [global::System.Configuration.DefaultSettingValueAttribute("False")]
+        [global::System.Configuration.DefaultSettingValueAttribute("True")]
         public bool theme_filled {
             get {
                 return ((bool)(this["theme_filled"]));

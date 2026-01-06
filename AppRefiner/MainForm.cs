@@ -346,6 +346,10 @@ namespace AppRefiner
             {
                 ShowWhatsNewDialog();
             }
+
+            var assembly = System.Reflection.Assembly.GetExecutingAssembly();
+            var currentVersion = assembly.GetName().Version;
+            Text += currentVersion != null ? $" - v{currentVersion.Major}.{currentVersion.Minor}.{currentVersion.Build}" : string.Empty;
         }
 
         private void UpdateWhatsNewLinkVisibility()
@@ -381,8 +385,9 @@ namespace AppRefiner
             try
             {
                 var assembly = System.Reflection.Assembly.GetExecutingAssembly();
-                var version = assembly.GetName().Version?.ToString();
 
+                var currentVersion = assembly.GetName().Version;
+                var version = currentVersion != null ? $" - v{currentVersion.Major}.{currentVersion.Minor}.{currentVersion.Build}" : string.Empty;
                 // Don't show dialog if version is null
                 if (version == null)
                 {

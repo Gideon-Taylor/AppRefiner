@@ -1,6 +1,7 @@
 param(
     [switch]$SelfContained = $false,
-    [string]$Version = ""  # Allow manual version override
+    [string]$Version = "",  # Allow manual version override
+    [string]$SigningKeyPath = ""  # Path to strong name key file (.snk)
 )
 
 # Get the next semantic version
@@ -144,7 +145,8 @@ function Build-HookDll {
 function Build-AppRefiner {
     param(
         [bool]$IsSelfContained,
-        [string]$Version
+        [string]$Version,
+        [string]$SigningKeyPath
     )
 
     $targetDir = if ($IsSelfContained) { $SelfContainedOutputDir } else { $FrameworkOutputDir }
@@ -154,14 +156,31 @@ function Build-AppRefiner {
     Write-Host "Publishing to: $targetDir (Self-contained: $IsSelfContained)"
     Write-Host "Version: $Version"
 
-    dotnet publish "AppRefiner/AppRefiner.csproj" `
-        /p:SelfContained=$selfContainedValue `
-        /p:AssemblyVersion=$Version `
-        /p:FileVersion=$Version `
-        /p:InformationalVersion=$Version `
-        -r "win-$Platform" `
-        -c $Configuration `
-        -o $targetDir
+    # Build base arguments
+    $buildArgs = @(
+        "publish",
+        "AppRefiner/AppRefiner.csproj",
+        "/p:SelfContained=$selfContainedValue",
+        "/p:AssemblyVersion=$Version",
+        "/p:FileVersion=$Version",
+        "/p:InformationalVersion=$Version",
+        "-r", "win-$Platform",
+        "-c", $Configuration,
+        "-o", $targetDir
+    )
+
+    # Add signing parameters if key path is provided
+    if (-not [string]::IsNullOrWhiteSpace($SigningKeyPath)) {
+        if (Test-Path $SigningKeyPath) {
+            Write-Host "Strong name signing enabled with key: $SigningKeyPath"
+            $buildArgs += "/p:SignAssembly=true"
+            $buildArgs += "/p:AssemblyOriginatorKeyFile=$SigningKeyPath"
+        } else {
+            Write-Warning "Signing key file not found at: $SigningKeyPath - building without signing"
+        }
+    }
+
+    & dotnet $buildArgs
     if ($LASTEXITCODE -ne 0) {
         Write-Error "Error building AppRefiner."
         exit $LASTEXITCODE
@@ -233,7 +252,7 @@ if ([string]::IsNullOrWhiteSpace($Version)) {
 # Execute build steps
 Restore-Dependencies
 Build-HookDll
-Build-AppRefiner -IsSelfContained $SelfContained -Version $Version
+Build-AppRefiner -IsSelfContained $SelfContained -Version $Version -SigningKeyPath $SigningKeyPath
 Copy-HookDll -DestinationDir $targetDir
 $zipFile = Create-ReleaseZip -SourceDir $targetDir -IsSelfContained $SelfContained -Version $Version
 

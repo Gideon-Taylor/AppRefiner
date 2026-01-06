@@ -10,6 +10,8 @@
     <ApplicationIcon>AppRefiner.ico</ApplicationIcon>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <AnalysisLevel>latest</AnalysisLevel>
+    <SignAssembly>True</SignAssembly>
+    <AssemblyOriginatorKeyFile>D:\Work\AppRefinerStrongKey\AppRefiner.snk</AssemblyOriginatorKeyFile>
   </PropertyGroup>
 
   <ItemGroup>

@@ -29,6 +29,13 @@ jobs:
       - name: Setup MSBuild
         uses: microsoft/setup-msbuild@v1.1
 
+      - name: Decode strong name key
+        run: |
+          $keyBytes = [System.Convert]::FromBase64String("${{ secrets.STRONG_NAME_KEY }}")
+          [System.IO.File]::WriteAllBytes("${{ github.workspace }}\AppRefiner.snk", $keyBytes)
+          Write-Host "Strong name key file created successfully"
+        shell: pwsh
+
       - name: Calculate next version
         id: version
         run: |
@@ -76,7 +83,16 @@ jobs:
 
       - name: Build using PowerShell script
         run: |
-          .\build.ps1 -Version "${{ steps.version.outputs.version }}"
+          .\build.ps1 -Version "${{ steps.version.outputs.version }}" -SigningKeyPath "${{ github.workspace }}\AppRefiner.snk"
+        shell: pwsh
+
+      - name: Cleanup strong name key
+        if: always()
+        run: |
+          if (Test-Path "${{ github.workspace }}\AppRefiner.snk") {
+            Remove-Item "${{ github.workspace }}\AppRefiner.snk" -Force
+            Write-Host "Strong name key file removed"
+          }
         shell: pwsh
 
 #      - name: Generate build attestation
