@@ -14,7 +14,7 @@ namespace AppRefiner.Stylers
         private const uint WARNING_COLOR = 0x0000FFA0; // Red squiggle color
         private CatchStatementNode? currentCatch;
 
-        public override string Description => "Wrong exception variable in catch";
+        public override string Description => "Used wrong exception variable";
 
         public override void VisitProgram(ProgramNode node)
         {

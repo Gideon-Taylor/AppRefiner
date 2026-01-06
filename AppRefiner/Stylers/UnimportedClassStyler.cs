@@ -12,7 +12,7 @@ namespace AppRefiner.Stylers
     /// </summary>
     public class UnimportedClassStyler : BaseStyler
     {
-        public override string Description => "Highlights class names that are not imported";
+        public override string Description => "Unimported classes";
         public override DataManagerRequirement DatabaseRequirement => DataManagerRequirement.Optional;
 
         private const uint HIGHLIGHT_COLOR = 0x0000FF; // Red squiggle

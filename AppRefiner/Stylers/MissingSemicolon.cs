@@ -4,7 +4,7 @@ namespace AppRefiner.Stylers
 {
     internal class MissingSemicolon : BaseStyler
     {
-        public override string Description => "Marks statements that require a semicolon but are missing it.";
+        public override string Description => "Missing semicolons";
 
         public override void VisitBlock(BlockNode node)
         {

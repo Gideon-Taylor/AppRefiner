@@ -34,7 +34,7 @@ namespace AppRefiner.Stylers
     /// </remarks>
     public class AmbiguousClassReferenceStyler : BaseStyler
     {
-        public override string Description => "Highlights ambiguous class references where multiple imports provide the same class name";
+        public override string Description => "Ambiguous class references";
         public override DataManagerRequirement DatabaseRequirement => DataManagerRequirement.Optional;
 
         private const uint HIGHLIGHT_COLOR = 0x00FF00; // Green squiggle (distinct from red for unimported)

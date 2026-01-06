@@ -11,7 +11,7 @@ public class ReusedForIterator : BaseStyler
     private const uint ERROR_COLOR = 0x0000FF85; // Red color for errors
     private readonly Stack<string> forIterators = new();
 
-    public override string Description => "Reused for iterators";
+    public override string Description => "Reused For iterators";
 
     #region AST Visitor Overrides
 

@@ -4,7 +4,7 @@ namespace AppRefiner.Stylers
 {
     internal class SyntaxErrors : BaseStyler
     {
-        public override string Description => "Marks syntax errors in the code.";
+        public override string Description => "Syntax errors";
         public override void VisitProgram(ProgramNode node)
         {
             base.VisitProgram(node);
