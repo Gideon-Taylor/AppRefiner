@@ -85,16 +85,27 @@ namespace AppRefiner.Stylers
             base.VisitObjectCreation(node);
         }
 
+        public override void VisitLocalVariableDeclaration(LocalVariableDeclarationNode node)
+        {
+            CheckVariableTypeImport(node.Type);
+            base.VisitLocalVariableDeclaration(node);
+        }
+
+        public override void VisitLocalVariableDeclarationWithAssignment(LocalVariableDeclarationWithAssignmentNode node)
+        {
+            CheckVariableTypeImport(node.Type);
+            base.VisitLocalVariableDeclarationWithAssignment(node);
+        }
         public override void VisitProgramVariable(ProgramVariableNode node)
         {
             // Check local/instance variable declarations
-            CheckVariableTypeImport(node);
+            CheckVariableTypeImport(node.Type);
             base.VisitProgramVariable(node);
         }
 
-        private void CheckVariableTypeImport(ProgramVariableNode node)
+        private void CheckVariableTypeImport(TypeNode type)
         {
-            if (node.Type is AppClassTypeNode appClassType)
+            if (type is AppClassTypeNode appClassType)
             {
                 string className = appClassType.ClassName;
                 CheckClassImport(className, appClassType.SourceSpan);

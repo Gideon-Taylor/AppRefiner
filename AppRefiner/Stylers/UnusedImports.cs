@@ -1,4 +1,6 @@
-﻿using PeopleCodeParser.SelfHosted.Nodes;
+﻿using PeopleCodeParser.SelfHosted;
+using PeopleCodeParser.SelfHosted.Nodes;
+using PeopleCodeTypeInfo.Types;
 
 namespace AppRefiner.Stylers
 {
@@ -30,6 +32,19 @@ namespace AppRefiner.Stylers
             }
         }
 
+        private void MarkAppClassTypeAsUsed(string qualifiedName)
+        {
+            if (importUseMap.TryGetValue(qualifiedName, out ImportInfo fullImport))
+            {
+                fullImport.Used = true;
+            }
+
+            var packagePath = string.Join(":", qualifiedName.Split(':')[..^1]);
+            if (importUseMap.TryGetValue(packagePath, out ImportInfo wildcardImport))
+            {
+                wildcardImport.Used = true;
+            }
+        }
 
         public override void VisitProgram(ProgramNode node)
         {
@@ -74,6 +89,13 @@ namespace AppRefiner.Stylers
             {
                 MarkAppClassTypeAsUsed(appClassType);
             }
+
+            var inferredType = node.GetInferredType();
+            if ( inferredType != null && inferredType is AppClassTypeInfo acti) 
+            {
+                MarkAppClassTypeAsUsed(acti.QualifiedName);
+            }
+
             base.VisitObjectCreation(node);
         }
 
@@ -82,10 +104,20 @@ namespace AppRefiner.Stylers
             if (node.Type is AppClassTypeNode appClassType)
             {
                 MarkAppClassTypeAsUsed(appClassType);
+                var inferredType = appClassType.GetInferredType();
+                if (inferredType != null && inferredType is AppClassTypeInfo acti)
+                {
+                    MarkAppClassTypeAsUsed(acti.QualifiedName);
+                }
             }
             else if (node.Type is ArrayTypeNode arrayTypeNode && arrayTypeNode.ElementType is AppClassTypeNode arrayClassType)
             {
                 MarkAppClassTypeAsUsed(arrayClassType);
+                var inferredType = arrayTypeNode.GetInferredType();
+                if (inferredType != null && inferredType is ArrayTypeInfo arrTypeInfo && arrTypeInfo.ElementType is AppClassTypeInfo acti)
+                {
+                    MarkAppClassTypeAsUsed(acti.QualifiedName);
+                }
             }
             base.VisitLocalVariableDeclaration(node);
         }
@@ -95,10 +127,20 @@ namespace AppRefiner.Stylers
             if (node.Type is AppClassTypeNode appClassType)
             {
                 MarkAppClassTypeAsUsed(appClassType);
+                var inferredType = appClassType.GetInferredType();
+                if (inferredType != null && inferredType is AppClassTypeInfo acti)
+                {
+                    MarkAppClassTypeAsUsed(acti.QualifiedName);
+                }
             }
             else if (node.Type is ArrayTypeNode arrayTypeNode && arrayTypeNode.ElementType is AppClassTypeNode arrayClassType)
             {
                 MarkAppClassTypeAsUsed(arrayClassType);
+                var inferredType = arrayTypeNode.GetInferredType();
+                if (inferredType != null && inferredType is ArrayTypeInfo arrTypeInfo && arrTypeInfo.ElementType is AppClassTypeInfo acti)
+                {
+                    MarkAppClassTypeAsUsed(acti.QualifiedName);
+                }
             }
             base.VisitLocalVariableDeclarationWithAssignment(node);
         }

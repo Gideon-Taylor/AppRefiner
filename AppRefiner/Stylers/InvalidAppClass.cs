@@ -74,6 +74,12 @@ public class InvalidAppClass : BaseStyler
 
         bool isValid;
 
+        /* Not a fully qualfied app class path - skip validation */
+        if (!appClassPath.Contains(':'))
+        {
+            base.VisitAppClassType(node);
+            return;
+        }
         // Check if this app class path is already in our cache
         if (AppClassValidity.TryGetValue(appClassPath, out isValid))
         {
