@@ -38,7 +38,7 @@ namespace AppRefiner.Stylers
             var executingAssembly = Assembly.GetExecutingAssembly();
             var coreStylerTypes = executingAssembly.GetTypes()
                 .Where(p => typeof(BaseStyler).IsAssignableFrom(p) && !p.IsAbstract && !p.IsInterface
-                    && p.Name != "ScopedStyler");
+                    && p.Name != "ScopedStyler" && p.Name != "BaseStyler");
 
             // Discover stylers from plugins
             var pluginStylers = PluginManager.DiscoverStylerTypes();
