@@ -2343,6 +2343,12 @@ namespace AppRefiner
             }
             else if (m.Msg == AR_FUNCTION_CALL_TIP)
             {
+                if (TooltipManager.IgnoreNextCallTip)
+                {
+                    TooltipManager.IgnoreNextCallTip = false;
+                    return;
+                }
+
                 // Only process if we have an active editor
                 if (activeEditor == null || !activeEditor.IsValid()) return;
 
@@ -2673,6 +2679,12 @@ namespace AppRefiner
 
                                 Debug.Log($"Executing property extension transform: {transform.GetName()}");
                                 transform.TransformAction(editor, memberAccessNode, matchedType, variableRegistry);
+                                TooltipManager.IgnoreNextCallTip = true;
+
+                                Task.Delay(500).ContinueWith(_ => TooltipManager.IgnoreNextCallTip = false);
+
+                                TooltipManager.HideTooltip(editor);
+                                
                                 return true;
                             }
                         }

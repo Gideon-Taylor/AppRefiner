@@ -21,6 +21,7 @@ namespace AppRefiner.TooltipProviders
     {
         private static readonly List<BaseTooltipProvider> providers = new();
         private static bool initialized = false;
+        public static bool IgnoreNextCallTip;
 
         /// <summary>
         /// Extension manager for checking extension method signatures.
