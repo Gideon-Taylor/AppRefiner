@@ -1122,6 +1122,17 @@ namespace AppRefiner
             refactorManager?.HandleRefactorGridCellContentClick(sender, e);
         }
 
+        private void gridExtensions_CellContentClick(object sender, DataGridViewCellEventArgs e)
+        {
+            languageExtensionManager?.HandleExtensionGridCellContentClick(sender, e);
+        }
+
+        private void gridExtensions_CellValueChanged(object sender, DataGridViewCellEventArgs e)
+        {
+            languageExtensionManager?.HandleExtensionGridCellValueChanged(sender, e);
+            SaveSettings(); // Call the consolidated SaveSettings method
+        }
+
         private void btnClearLint_Click(object sender, EventArgs e)
         {
             linterManager?.ClearLintResults(activeEditor);

@@ -83,24 +83,25 @@ namespace AppRefiner.LanguageExtensions
                             // Link transform to parent extension
                             transform.ParentExtension = extension;
                             allTransforms.Add(transform);
+                        }
 
-                            // Add to grid (one row per transform)
-                            if (extensionGrid != null)
-                            {
-                                // Grid columns: Active (checkbox), Target (TypeWithDimensionality), Type (Property/Method), Method/Property (Name)
-                                string targetTypeStr = FormatTypeInfo(extension.TargetType);
-                                string extensionTypeStr = transform.ExtensionType == LanguageExtensionType.Property
-                                    ? "Property" : "Method";
+                        // Add to grid (one row per extension)
+                        if (extensionGrid != null)
+                        {
+                            // Grid columns: Active (checkbox), Target (type), Transforms (count summary), Extension Name (class name)
+                            string targetTypeStr = FormatTypeInfo(extension.TargetType);
+                            string transformsSummary = GetTransformCountSummary(extension);
+                            //string extensionName = extension.GetType().Name;
 
-                                int rowIndex = extensionGrid.Rows.Add(
-                                    extension.Active,           // Column 0: Active
-                                    targetTypeStr,              // Column 1: Target
-                                    extensionTypeStr,           // Column 2: Type
-                                    transform.GetName()         // Column 3: Method/Property (individual transform name)
-                                );
-                                // Store transform reference (not extension)
-                                extensionGrid.Rows[rowIndex].Tag = transform;
-                            }
+                            int rowIndex = extensionGrid.Rows.Add(
+                                extension.Active,           // Column 0: Active
+                                targetTypeStr,              // Column 1: Target
+                                transformsSummary,          // Column 2: Transforms (count summary)
+                                "Inspect"
+                                //extensionName               // Column 3: Extension Name (class name)
+                            );
+                            // Store extension reference (not individual transform)
+                            extensionGrid.Rows[rowIndex].Tag = extension;
                         }
                     }
                 }
@@ -194,7 +195,7 @@ namespace AppRefiner.LanguageExtensions
             var candidates = GetExtensionsForType(targetType);
             return candidates.Where(t =>
                 t.ExtensionType == extensionType &&
-                t.GetName().Equals(memberName, StringComparison.OrdinalIgnoreCase))
+                t.Name.Equals(memberName, StringComparison.OrdinalIgnoreCase))
                 .ToList();
         }
 
@@ -211,31 +212,40 @@ namespace AppRefiner.LanguageExtensions
 
             if (e.RowIndex >= 0 && e.ColumnIndex == 0)
             {
-                if (extensionGrid.Rows[e.RowIndex].Tag is ExtensionTransform transform)
+                if (extensionGrid.Rows[e.RowIndex].Tag is BaseTypeExtension extension)
                 {
                     if (extensionGrid.Rows[e.RowIndex].Cells[0].Value is bool isActive)
                     {
-                        // Update parent extension's active state
-                        if (transform.ParentExtension != null)
-                        {
-                            transform.ParentExtension.Active = isActive;
-
-                            // Update ALL rows for this parent extension
-                            foreach (DataGridViewRow row in extensionGrid.Rows)
-                            {
-                                if (row.Tag is ExtensionTransform t &&
-                                    t.ParentExtension == transform.ParentExtension)
-                                {
-                                    row.Cells[0].Value = isActive;
-                                }
-                            }
-                        }
+                        // Update extension's active state
+                        extension.Active = isActive;
 
                         // Settings saved centrally on form close
 
                         // Rebuild caches when active state changes
                         RebuildLookupCaches();
                     }
+                }
+            }
+        }
+
+        /// <summary>
+        /// Handles cell content click events (Inspect button in column 3)
+        /// </summary>
+        public void HandleExtensionGridCellContentClick(object sender, DataGridViewCellEventArgs e)
+        {
+            if (extensionGrid == null) return;
+
+            // Commit any pending edits, especially for checkboxes
+            extensionGrid.CommitEdit(DataGridViewDataErrorContexts.Commit);
+
+            // Column 3 is the Inspect button
+            if (e.RowIndex >= 0 && e.ColumnIndex == 3)
+            {
+                if (extensionGrid.Rows[e.RowIndex].Tag is BaseTypeExtension extension)
+                {
+                    // Show the inspect dialog
+                    var dialog = new Dialogs.TypeExtensionInspectDialog(extension);
+                    dialog.ShowDialog(mainForm);
                 }
             }
         }
@@ -307,6 +317,16 @@ namespace AppRefiner.LanguageExtensions
             {
                 string arrayPrefix = string.Join("", Enumerable.Repeat("array of ", arrayType.Dimensions));
                 string elementTypeName = FormatTypeInfo(arrayType.ElementType ?? AnyTypeInfo.Instance);
+                if (arrayType.Dimensions == 0)
+                {
+                    if (elementTypeName == "any")
+                    {
+                        return "Arrays";
+                    } else
+                    {
+                        return $"{elementTypeName} Arrays";
+                    }
+                }
                 return arrayPrefix + elementTypeName;
             }
 
@@ -316,6 +336,29 @@ namespace AppRefiner.LanguageExtensions
             }
 
             return typeInfo.Name;
+        }
+
+        /// <summary>
+        /// Gets a summary of transform counts for an extension (e.g., "3 properties, 2 methods")
+        /// </summary>
+        private string GetTransformCountSummary(BaseTypeExtension extension)
+        {
+            var propertyCount = extension.Transforms.Count(t => t.ExtensionType == LanguageExtensionType.Property);
+            var methodCount = extension.Transforms.Count(t => t.ExtensionType == LanguageExtensionType.Method);
+
+            var parts = new List<string>();
+
+            if (propertyCount > 0)
+            {
+                parts.Add(propertyCount == 1 ? "1 property" : $"{propertyCount} properties");
+            }
+
+            if (methodCount > 0)
+            {
+                parts.Add(methodCount == 1 ? "1 method" : $"{methodCount} methods");
+            }
+
+            return parts.Count > 0 ? string.Join(", ", parts) : "No transforms";
         }
 
         #endregion

@@ -99,16 +99,16 @@ namespace AppRefiner
             dataGridViewButtonColumn1 = new DataGridViewButtonColumn();
             tabPage6 = new TabPage();
             gridExtensions = new DataGridView();
-            colExtActive = new DataGridViewCheckBoxColumn();
-            colExtTarget = new DataGridViewTextBoxColumn();
-            colExtType = new DataGridViewComboBoxColumn();
-            colExtName = new DataGridViewTextBoxColumn();
             tabPage5 = new TabPage();
             splitContainer3 = new SplitContainer();
             pnlTemplateParams = new Panel();
             btnApplyTemplate = new Button();
             cmbTemplates = new ComboBox();
             lnkNewVersion = new LinkLabel();
+            colExtActive = new DataGridViewCheckBoxColumn();
+            colExtTarget = new DataGridViewTextBoxColumn();
+            colExtContents = new DataGridViewTextBoxColumn();
+            colExtConfigure = new DataGridViewButtonColumn();
             ((System.ComponentModel.ISupportInitialize)splitContainer1).BeginInit();
             splitContainer1.Panel1.SuspendLayout();
             splitContainer1.Panel2.SuspendLayout();
@@ -826,40 +826,15 @@ namespace AppRefiner
             gridExtensions.AllowUserToDeleteRows = false;
             gridExtensions.AllowUserToResizeColumns = false;
             gridExtensions.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.AutoSize;
-            gridExtensions.Columns.AddRange(new DataGridViewColumn[] { colExtActive, colExtTarget, colExtType, colExtName });
+            gridExtensions.Columns.AddRange(new DataGridViewColumn[] { colExtActive, colExtTarget, colExtContents, colExtConfigure });
             gridExtensions.Dock = DockStyle.Fill;
             gridExtensions.Location = new Point(3, 3);
             gridExtensions.Name = "gridExtensions";
             gridExtensions.RowHeadersVisible = false;
             gridExtensions.Size = new Size(556, 484);
             gridExtensions.TabIndex = 8;
-            // 
-            // colExtActive
-            // 
-            colExtActive.HeaderText = "Active";
-            colExtActive.Name = "colExtActive";
-            colExtActive.Width = 50;
-            // 
-            // colExtTarget
-            // 
-            colExtTarget.FillWeight = 110.569466F;
-            colExtTarget.HeaderText = "Target";
-            colExtTarget.Name = "colExtTarget";
-            colExtTarget.ReadOnly = true;
-            // 
-            // colExtType
-            // 
-            colExtType.HeaderText = "Type";
-            colExtType.Items.AddRange(new object[] { "Property", "Method" });
-            colExtType.Name = "colExtType";
-            colExtType.ReadOnly = true;
-            // 
-            // colExtName
-            // 
-            colExtName.HeaderText = "Method/Property";
-            colExtName.Name = "colExtName";
-            colExtName.ReadOnly = true;
-            colExtName.Width = 300;
+            gridExtensions.CellContentClick += new DataGridViewCellEventHandler(this.gridExtensions_CellContentClick);
+            gridExtensions.CellValueChanged += new DataGridViewCellEventHandler(this.gridExtensions_CellValueChanged);
             // 
             // tabPage5
             // 
@@ -931,6 +906,31 @@ namespace AppRefiner
             lnkNewVersion.Text = "A newer version is available";
             lnkNewVersion.TextAlign = ContentAlignment.MiddleCenter;
             lnkNewVersion.LinkClicked += lnkNewVersion_LinkClicked;
+            // 
+            // colExtActive
+            // 
+            colExtActive.HeaderText = "Active";
+            colExtActive.Name = "colExtActive";
+            colExtActive.Width = 50;
+            // 
+            // colExtTarget
+            // 
+            colExtTarget.FillWeight = 110.569466F;
+            colExtTarget.HeaderText = "Target";
+            colExtTarget.Name = "colExtTarget";
+            colExtTarget.ReadOnly = true;
+            // 
+            // colExtContents
+            // 
+            colExtContents.HeaderText = "Contents";
+            colExtContents.Name = "colExtContents";
+            colExtContents.ReadOnly = true;
+            colExtContents.Width = 300;
+            // 
+            // colExtConfigure
+            //
+            colExtConfigure.HeaderText = "Inspect";
+            colExtConfigure.Name = "colExtConfigure";
             // 
             // MainForm
             // 
@@ -1052,11 +1052,12 @@ namespace AppRefiner
         private CheckBox chkFilled;
         private TabPage tabPage6;
         private DataGridView gridExtensions;
-        private DataGridViewCheckBoxColumn colExtActive;
-        private DataGridViewTextBoxColumn colExtTarget;
-        private DataGridViewComboBoxColumn colExtType;
-        private DataGridViewTextBoxColumn colExtName;
+        private DataGridViewTextBoxColumn colExtType;
         private LinkLabel lnkWhatsNew;
         private LinkLabel lnkNewVersion;
+        private DataGridViewCheckBoxColumn colExtActive;
+        private DataGridViewTextBoxColumn colExtTarget;
+        private DataGridViewTextBoxColumn colExtContents;
+        private DataGridViewButtonColumn colExtConfigure;
     }
 }

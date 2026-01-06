@@ -18,7 +18,16 @@ namespace AppRefiner.LanguageExtensions
         private FunctionInfo? _functionInfo;
         private PropertyInfo? _propertyInfo;
         private string _signature = string.Empty;
-
+        public string Name { get
+            {
+                if (_functionInfo != null)
+                    return _functionInfo.Name;
+                else if (_propertyInfo != null)
+                    return _propertyInfo.Name;
+                else
+                    return string.Empty;
+            } 
+        }
         /// <summary>
         /// The signature string defining this extension (e.g., "Len -> number" or "IndexOf(search_string: string) -> number")
         /// </summary>
