@@ -1366,7 +1366,7 @@ namespace AppRefiner
                 {
                     // Replace from & position to current position with the full variable name
                     editor.SendMessage(SCI_SETSEL, dotPos + 1, currentPos);
-                    ScintillaManager.InsertTextAtCursor(editor, memberName + (isMethod ? "(" : ""));
+                    ScintillaManager.InsertTextAtCursor(editor, memberName);
                     var newPosition = ScintillaManager.GetCursorPosition(editor);
                     Task.Delay(100).ContinueWith((a) =>
                     {
