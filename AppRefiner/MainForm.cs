@@ -23,6 +23,7 @@ using PeopleCodeTypeInfo.Inference;
 using PeopleCodeTypeInfo.Types;
 using System.Data;
 using System.Diagnostics;
+using System.Net.Http;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Json;
@@ -331,8 +332,8 @@ namespace AppRefiner
             }
 
             /* Check for new version */
-            bool newVersionAvailable = true;
-
+            bool newVersionAvailable = IsNewVersionAvailable();
+            this.Height -= splitContainer1.Panel2.Height;
             splitContainer1.Panel2Collapsed = !newVersionAvailable;
 
         }
@@ -412,6 +413,87 @@ namespace AppRefiner
             {
                 Debug.Log($"Error showing What's New dialog: {ex.Message}");
                 // Silently fail - don't show dialog if any error occurs
+            }
+        }
+
+        private bool IsNewVersionAvailable()
+        {
+            try
+            {
+                // Get current assembly version
+                var currentVersion = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version;
+                if (currentVersion == null)
+                {
+                    Debug.Log("IsNewVersionAvailable: Current assembly version is null");
+                    return false;
+                }
+
+                // Fetch latest release from GitHub API
+                using var client = new HttpClient();
+                client.DefaultRequestHeaders.Add("User-Agent", "AppRefiner");
+                client.Timeout = TimeSpan.FromSeconds(5); // 5 second timeout to avoid hanging
+
+                var response = Task.Run(async () =>
+                    await client.GetAsync("https://api.github.com/repos/Gideon-Taylor/AppRefiner/releases?per_page=1&page=1")
+                ).Result;
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    Debug.Log($"IsNewVersionAvailable: GitHub API request failed with status {response.StatusCode}");
+                    return false;
+                }
+
+                var json = Task.Run(async () => await response.Content.ReadAsStringAsync()).Result;
+
+                // Parse JSON array
+                using var document = JsonDocument.Parse(json);
+                var root = document.RootElement;
+
+                if (root.ValueKind != JsonValueKind.Array || root.GetArrayLength() == 0)
+                {
+                    Debug.Log("IsNewVersionAvailable: No releases found");
+                    return false;
+                }
+
+                // Get first release (most recent)
+                var latestRelease = root[0];
+
+                if (!latestRelease.TryGetProperty("tag_name", out var tagNameElement))
+                {
+                    Debug.Log("IsNewVersionAvailable: tag_name property not found");
+                    return false;
+                }
+
+                var tagName = tagNameElement.GetString();
+                if (string.IsNullOrEmpty(tagName))
+                {
+                    Debug.Log("IsNewVersionAvailable: tag_name is null or empty");
+                    return false;
+                }
+
+                // Remove 'v' prefix if present (e.g., "v1.2.3.4" -> "1.2.3.4")
+                if (tagName.StartsWith("v", StringComparison.OrdinalIgnoreCase))
+                {
+                    tagName = tagName.Substring(1);
+                }
+
+                // Parse as Version
+                if (!Version.TryParse(tagName, out var latestVersion))
+                {
+                    Debug.Log($"IsNewVersionAvailable: Could not parse tag_name '{tagName}' as Version");
+                    return false;
+                }
+
+                // Compare versions
+                var isNewer = latestVersion > currentVersion;
+                Debug.Log($"IsNewVersionAvailable: Current version {currentVersion}, Latest version {latestVersion}, Newer: {isNewer}");
+
+                return isNewer;
+            }
+            catch (Exception ex)
+            {
+                Debug.Log($"IsNewVersionAvailable: Exception occurred: {ex.Message}");
+                return false;
             }
         }
 
