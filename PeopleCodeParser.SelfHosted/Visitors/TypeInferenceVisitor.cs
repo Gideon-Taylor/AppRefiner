@@ -986,6 +986,19 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
         }
     }
 
+    public override void VisitArrayType(ArrayTypeNode node)
+    {
+        base.VisitArrayType(node);
+
+        var resolvedType = ConvertTypeNodeToTypeInfo(node);
+        node.SetInferredType(resolvedType);
+        if (node.ElementType != null)
+        {
+            var elementInfo = ConvertTypeNodeToTypeInfo(node.ElementType);
+            node.ElementType.SetInferredType(elementInfo);
+        }
+    }
+
     /// <summary>
     /// Visit array access and reduce dimensionality
     /// </summary>
