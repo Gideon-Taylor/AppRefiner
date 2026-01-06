@@ -32,11 +32,11 @@ jobs:
       - name: Calculate next version
         id: version
         run: |
-          # Get all tags matching x.x.x.x pattern
-          $tags = git tag -l | Where-Object { $_ -match '^\d+\.\d+\.\d+\.\d+$' }
+          # Get all tags matching x.x.x pattern
+          $tags = git tag -l | Where-Object { $_ -match '^\d+\.\d+\.\d+$' }
 
           if (-not $tags) {
-            $version = "1.1.0.0"
+            $version = "1.1.0"
             Write-Host "No previous semantic version tags found, using default: $version"
           } else {
             # Parse and sort versions
@@ -47,33 +47,27 @@ jobs:
                 Major = [int]$parts[0]
                 Minor = [int]$parts[1]
                 Build = [int]$parts[2]
-                Revision = [int]$parts[3]
               }
-            } | Sort-Object Major, Minor, Build, Revision -Descending
+            } | Sort-Object Major, Minor, Build -Descending
 
             # Get latest and increment
             $latest = $versions[0]
             Write-Host "Latest version: $($latest.Original)"
 
-            $newRevision = $latest.Revision + 1
-            $newBuild = $latest.Build
+            $newBuild = $latest.Build + 1
             $newMinor = $latest.Minor
             $newMajor = $latest.Major
 
-            if ($newRevision -gt 9) {
-              $newRevision = 0
-              $newBuild++
-              if ($newBuild -gt 9) {
-                $newBuild = 0
-                $newMinor++
-                if ($newMinor -gt 9) {
-                  $newMinor = 0
-                  $newMajor++
-                }
+            if ($newBuild -gt 9) {
+              $newBuild = 0
+              $newMinor++
+              if ($newMinor -gt 9) {
+                $newMinor = 0
+                $newMajor++
               }
             }
 
-            $version = "$newMajor.$newMinor.$newBuild.$newRevision"
+            $version = "$newMajor.$newMinor.$newBuild"
             Write-Host "Next version: $version"
           }
 
