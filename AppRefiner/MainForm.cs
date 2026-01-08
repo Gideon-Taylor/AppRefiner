@@ -2412,8 +2412,8 @@ namespace AppRefiner
 
                         RunTypeInference(activeEditor, program, languageExtensionManager);
 
-                        var targetFunction = program.FindNodes(n => n is FunctionCallNode && n.SourceSpan.ContainsPosition(position)).OrderBy(n => n.SourceSpan.Length).FirstOrDefault();
-                        var targetCreationNode = program.FindNodes(n => n is ObjectCreationNode && n.SourceSpan.ContainsPosition(position)).OrderBy(n => n.SourceSpan.Length).FirstOrDefault();
+                        var targetFunction = program.FindNodes(n => n is FunctionCallNode && n.SourceSpan.ContainsPosition(position) && n.SourceSpan.Start.ByteIndex < position).OrderBy(n => n.SourceSpan.Length).FirstOrDefault();
+                        var targetCreationNode = program.FindNodes(n => n is ObjectCreationNode && n.SourceSpan.ContainsPosition(position) && n.SourceSpan.Start.ByteIndex < position).OrderBy(n => n.SourceSpan.Length).FirstOrDefault();
 
                         bool isCreateMoreSpecific = (targetFunction != null && targetCreationNode != null && targetCreationNode.SourceSpan.Length < targetFunction.SourceSpan.Length);
 
