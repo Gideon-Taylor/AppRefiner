@@ -955,7 +955,14 @@ namespace AppRefiner
                 }
 
                 // Run type inference (works even with null resolver)
-                TypeInferenceVisitor.Run(program, metadata, typeResolver, defaultRecord, defaultField);
+                TypeInferenceVisitor.Run(
+                    program,
+                    metadata,
+                    typeResolver,
+                    defaultRecord,
+                    defaultField,
+                    inferAutoDeclaredTypes: false,
+                    onUndefinedVariable: ExtensionManager != null ? ExtensionManager.HandleUndefinedVariable : null);
             }
             catch (Exception ex)
             {

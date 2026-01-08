@@ -20,6 +20,44 @@ namespace AppRefiner.LanguageExtensions.BuiltIn
                 Signature = "ForEach(iterator?: number, item_variable?: $element) -> void",
                 Description = "Expands to a For loop that iterates the array.",
                 TransformAction = TransformForEach
+            },
+
+            new ExtensionTransform
+            {
+                Signature = "Map(expression: any) -> array of any",
+                Description = "Transforms each element using an expression. Use &item to reference the current element.",
+                TransformAction = TransformMap,
+                ImplicitParameters = new()
+                {
+                    new ImplicitParameter("&item", targetType =>
+                    {
+                        // For array of T, return T
+                        if (targetType is ArrayTypeInfo arrayType)
+                        {
+                            return arrayType.ElementType ?? AnyTypeInfo.Instance;
+                        }
+                        return AnyTypeInfo.Instance;
+                    })
+                }
+            },
+
+            new ExtensionTransform
+            {
+                Signature = "Filter(predicate: any) -> $same",
+                Description = "Filters elements using a predicate expression. Use &item to reference the current element.",
+                TransformAction = TransformFilter,
+                ImplicitParameters = new()
+                {
+                    new ImplicitParameter("&item", targetType =>
+                    {
+                        // For array of T, return T
+                        if (targetType is ArrayTypeInfo arrayType)
+                        {
+                            return arrayType.ElementType ?? AnyTypeInfo.Instance;
+                        }
+                        return AnyTypeInfo.Instance;
+                    })
+                }
             }
         };
 
@@ -131,6 +169,38 @@ namespace AppRefiner.LanguageExtensions.BuiltIn
 
                 ScintillaManager.SetCursorPosition(editor, newCursorPosition);
             }
+        }
+
+        /// <summary>
+        /// Transforms .Map() method call to a For loop that builds a new array
+        /// Example: &result = &students.Map(&item.GPA)
+        /// Becomes:
+        ///   Local array of any &result = CreateArray();
+        ///   For &i = 1 To &students.Len
+        ///     &result.Push(&students[&i].GPA);
+        ///   End-For;
+        /// </summary>
+        private static void TransformMap(ScintillaEditor editor, AstNode node, TypeInfo matchedType, VariableRegistry? variableRegistry)
+        {
+            // TODO: Implement Map transformation
+            // For now, just a placeholder
+        }
+
+        /// <summary>
+        /// Transforms .Filter() method call to a For loop that builds a filtered array
+        /// Example: &result = &students.Filter(&item.GPA > 3.5)
+        /// Becomes:
+        ///   Local array of Student &result = CreateArray();
+        ///   For &i = 1 To &students.Len
+        ///     If &students[&i].GPA > 3.5 Then
+        ///       &result.Push(&students[&i]);
+        ///     End-If;
+        ///   End-For;
+        /// </summary>
+        private static void TransformFilter(ScintillaEditor editor, AstNode node, TypeInfo matchedType, VariableRegistry? variableRegistry)
+        {
+            // TODO: Implement Filter transformation
+            // For now, just a placeholder
         }
 
         /// <summary>

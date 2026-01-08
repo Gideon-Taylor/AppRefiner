@@ -2410,7 +2410,7 @@ namespace AppRefiner
                         var parser = new PeopleCodeParser.SelfHosted.PeopleCodeParser(tokens);
                         var program = parser.ParseProgram();
 
-                        RunTypeInference(activeEditor, program);
+                        RunTypeInference(activeEditor, program, languageExtensionManager);
 
                         var targetFunction = program.FindNodes(n => n is FunctionCallNode && n.SourceSpan.ContainsPosition(position)).OrderBy(n => n.SourceSpan.Length).FirstOrDefault();
                         var targetCreationNode = program.FindNodes(n => n is ObjectCreationNode && n.SourceSpan.ContainsPosition(position)).OrderBy(n => n.SourceSpan.Length).FirstOrDefault();
@@ -2476,7 +2476,7 @@ namespace AppRefiner
                     var parser = new PeopleCodeParser.SelfHosted.PeopleCodeParser(tokens);
                     var program = parser.ParseProgram();
 
-                    RunTypeInference(activeEditor, program);
+                    RunTypeInference(activeEditor, program, languageExtensionManager);
 
                     // Find the node just before the '.' character (position - 1)
                     // The position is after the '.', so we need to look at what comes before it
@@ -2558,7 +2558,7 @@ namespace AppRefiner
                     var parser = new PeopleCodeParser.SelfHosted.PeopleCodeParser(tokens);
                     var program = parser.ParseProgram();
 
-                    RunTypeInference(activeEditor, program);
+                    RunTypeInference(activeEditor, program, languageExtensionManager);
 
                     // Try to determine expected type from context
                     // For now, use AnyTypeInfo to show all system variables
@@ -2575,7 +2575,7 @@ namespace AppRefiner
             }
         }
 
-        private static void RunTypeInference(ScintillaEditor editor, ProgramNode program)
+        private static void RunTypeInference(ScintillaEditor editor, ProgramNode program, LanguageExtensions.TypeExtensionManager? extensionManager = null)
         {
             try
             {
@@ -2596,7 +2596,14 @@ namespace AppRefiner
                 }
 
                 // Run type inference (works even with null resolver)
-                TypeInferenceVisitor.Run(program, metadata, typeResolver, defaultRecord, defaultField);
+                TypeInferenceVisitor.Run(
+                    program,
+                    metadata,
+                    typeResolver,
+                    defaultRecord,
+                    defaultField,
+                    inferAutoDeclaredTypes: false,
+                    onUndefinedVariable: extensionManager != null ? extensionManager.HandleUndefinedVariable : null);
             }
             catch (Exception ex)
             {
@@ -2636,7 +2643,7 @@ namespace AppRefiner
                     return false;
                 }
 
-                RunTypeInference(editor, program);
+                RunTypeInference(editor, program, languageExtensionManager);
 
                 // Run scope annotation visitor to build variable registry
                 // We'll annotate the target node after we find it
@@ -3135,7 +3142,7 @@ namespace AppRefiner
             {
                 // Create reporter and generate report
                 var reporter = new TypeErrorReporter();
-                var report = reporter.GenerateReport(activeEditor);
+                var report = reporter.GenerateReport(activeEditor, languageExtensionManager);
 
                 if (report == null)
                 {

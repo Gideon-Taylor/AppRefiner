@@ -517,7 +517,14 @@ namespace AppRefiner.TooltipProviders
                 var typeResolver = editor.AppDesignerProcess?.TypeResolver;
 
                 // Run type inference (works even with null resolver)
-                TypeInferenceVisitor.Run(program, metadata, typeResolver);
+                TypeInferenceVisitor.Run(
+                    program,
+                    metadata,
+                    typeResolver,
+                    defaultRecordName: null,
+                    defaultFieldName: null,
+                    inferAutoDeclaredTypes: false,
+                    onUndefinedVariable: ExtensionManager != null ? ExtensionManager.HandleUndefinedVariable : null);
             }
             catch (Exception ex)
             {

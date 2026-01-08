@@ -57,6 +57,13 @@ namespace AppRefiner.LanguageExtensions
         public required Action<ScintillaEditor, AstNode, TypeInfo, VariableRegistry?> TransformAction { get; init; }
 
         /// <summary>
+        /// Implicit parameters introduced by this extension (e.g., &item in .Map(&item.Prop)).
+        /// These parameters are phantom identifiers that exist only for type inference and are
+        /// eliminated during transformation. NOT registered in variable registry.
+        /// </summary>
+        public List<ImplicitParameter>? ImplicitParameters { get; init; }
+
+        /// <summary>
         /// Reference to parent extension (set during discovery)
         /// </summary>
         internal BaseTypeExtension? ParentExtension { get; set; }

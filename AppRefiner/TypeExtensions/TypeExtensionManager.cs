@@ -1,5 +1,6 @@
 using AppRefiner.Plugins;
 using AppRefiner.Services;
+using PeopleCodeParser.SelfHosted;
 using PeopleCodeTypeInfo.Functions;
 using PeopleCodeTypeInfo.Types;
 using System.Reflection;
@@ -197,6 +198,58 @@ namespace AppRefiner.LanguageExtensions
                 t.ExtensionType == extensionType &&
                 t.Name.Equals(memberName, StringComparison.OrdinalIgnoreCase))
                 .ToList();
+        }
+
+        /// <summary>
+        /// Handler for undefined variable resolution during type inference.
+        /// Called when TypeInferenceVisitor encounters an undefined identifier.
+        /// Checks if the identifier is an implicit parameter introduced by a language extension.
+        /// </summary>
+        /// <param name="node">The identifier node for the undefined variable</param>
+        /// <param name="scope">The current scope context</param>
+        /// <param name="registry">The variable registry</param>
+        /// <returns>TypeInfo for the implicit parameter, or null if not an extension parameter</returns>
+        public TypeInfo? HandleUndefinedVariable(
+            PeopleCodeParser.SelfHosted.Nodes.IdentifierNode node,
+            PeopleCodeParser.SelfHosted.Visitors.Models.ScopeContext? scope,
+            PeopleCodeParser.SelfHosted.Visitors.Models.VariableRegistry? registry)
+        {
+            // Walk up AST to find containing function call
+            var functionCall = node.FindAncestor<PeopleCodeParser.SelfHosted.Nodes.FunctionCallNode>();
+            if (functionCall == null) return null;
+
+            // Check if the function call is a member access (e.g., &students.Map(...))
+            if (functionCall.Function is not PeopleCodeParser.SelfHosted.Nodes.MemberAccessNode memberAccess)
+                return null;
+
+            // Get the already-inferred type of the target (&students)
+            var targetType = memberAccess.Target.GetInferredType();
+            if (targetType == null) return null;
+
+            // Check if this method is an active language extension
+            var matchingTransforms = GetExtensionsForTypeAndName(
+                targetType,
+                memberAccess.MemberName,
+                LanguageExtensionType.Method);
+
+            if (!matchingTransforms.Any()) return null;
+
+            // For each matching transform, check if it has implicit parameters matching this identifier
+            foreach (var transform in matchingTransforms)
+            {
+                if (transform.ImplicitParameters == null) continue;
+
+                var implicitParam = transform.ImplicitParameters
+                    .FirstOrDefault(p => p.ParameterName.Equals(node.Name, StringComparison.OrdinalIgnoreCase));
+
+                if (implicitParam != null)
+                {
+                    // Resolve the type using the transform's type resolver
+                    return implicitParam.TypeResolver(targetType);
+                }
+            }
+
+            return null;
         }
 
         #endregion

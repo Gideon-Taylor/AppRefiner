@@ -22,8 +22,9 @@ namespace AppRefiner.Services
         /// Generates a type error report for the current cursor position in the editor.
         /// </summary>
         /// <param name="editor">The Scintilla editor</param>
+        /// <param name="extensionManager">The type extension manager for language extensions (optional)</param>
         /// <returns>A formatted markdown report, or null if no errors found</returns>
-        public string? GenerateReport(ScintillaEditor editor)
+        public string? GenerateReport(ScintillaEditor editor, AppRefiner.LanguageExtensions.TypeExtensionManager? extensionManager = null)
         {
             if (editor == null || !editor.IsValid())
             {
@@ -74,7 +75,14 @@ namespace AppRefiner.Services
                 }
 
                 // Run type inference
-                TypeInferenceVisitor.Run(program, programMetadata, typeResolver, defaultRecord, defaultField);
+                TypeInferenceVisitor.Run(
+                    program,
+                    programMetadata,
+                    typeResolver,
+                    defaultRecord,
+                    defaultField,
+                    inferAutoDeclaredTypes: false,
+                    onUndefinedVariable: extensionManager != null ? extensionManager.HandleUndefinedVariable : null);
 
                 // Run type checking
                 TypeCheckerVisitor.Run(program, typeResolver, typeResolver.Cache);

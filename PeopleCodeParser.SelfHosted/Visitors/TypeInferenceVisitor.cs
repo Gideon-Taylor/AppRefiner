@@ -1,4 +1,5 @@
 using PeopleCodeParser.SelfHosted.Nodes;
+using PeopleCodeParser.SelfHosted.Visitors.Models;
 using PeopleCodeTypeInfo.Contracts;
 using PeopleCodeTypeInfo.Database;
 using PeopleCodeTypeInfo.Functions;
@@ -30,6 +31,20 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
     private readonly string? _defaultFieldName;
     private readonly bool _inferAutoDeclaredTypes;
     private readonly Dictionary<string, string> _importMap = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Delegate called when an undefined variable identifier is encountered during type inference.
+    /// Allows external systems (like AppRefiner) to provide types for implicit/phantom variables
+    /// introduced by language extensions (e.g., &item in &array.Map(&item.Prop)).
+    /// </summary>
+    /// <param name="node">The identifier node for the undefined variable</param>
+    /// <param name="scope">The current scope context where the identifier appears</param>
+    /// <param name="registry">The variable registry containing all declared variables</param>
+    /// <returns>TypeInfo if the identifier should be typed, null to fall back to default behavior</returns>
+    public delegate TypeInfo? UndefinedVariableHandler(IdentifierNode node, ScopeContext? scope, VariableRegistry? registry);
+
+    private readonly UndefinedVariableHandler? _onUndefinedVariable;
+
     private TypeInferenceVisitor(
         ProgramNode program,
         TypeMetadata programMetadata,
@@ -37,7 +52,8 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
         TypeCache typeCache,
         string? defaultRecordName = null,
         string? defaultFieldName = null,
-        bool inferAutoDeclaredTypes = false)
+        bool inferAutoDeclaredTypes = false,
+        UndefinedVariableHandler? onUndefinedVariable = null)
     {
         _program = program;
         _programMetadata = programMetadata;
@@ -46,6 +62,7 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
         _defaultRecordName = defaultRecordName;
         _defaultFieldName = defaultFieldName;
         _inferAutoDeclaredTypes = inferAutoDeclaredTypes;
+        _onUndefinedVariable = onUndefinedVariable;
     }
 
     /// <summary>
@@ -57,12 +74,21 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
         ITypeMetadataResolver typeResolver,
         string? defaultRecordName = null,
         string? defaultFieldName = null,
-        bool inferAutoDeclaredTypes = false
+        bool inferAutoDeclaredTypes = false,
+        UndefinedVariableHandler? onUndefinedVariable = null
         )
     {
-        
-        
-        var visitor = new TypeInferenceVisitor(program, programMetadata, typeResolver, typeResolver.Cache, defaultRecordName, defaultFieldName);
+
+
+        var visitor = new TypeInferenceVisitor(
+            program,
+            programMetadata,
+            typeResolver,
+            typeResolver.Cache,
+            defaultRecordName,
+            defaultFieldName,
+            inferAutoDeclaredTypes,
+            onUndefinedVariable);
 
         // Pre-resolve all declared functions for efficient lookup
         visitor.ProcessDeclaredFunctions();
@@ -936,23 +962,50 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
         {
             var variable = FindVariable(node.Name);
 
-            if (variable != null)
+            // Try undefined/auto-declared variable handler (e.g., for language extension implicit parameters)
+            // Auto-declared variables are treated as "undefined" to allow extensions to provide better types
+            if ((variable == null || variable.IsAutoDeclared) && _onUndefinedVariable != null)
+            {
+                var delegateType = _onUndefinedVariable(node, GetCurrentScope(), VariableRegistry);
+                if (delegateType != null)
+                {
+                    // Language extension provided a type - use it
+                    SetInferredType(node, delegateType);
+                    return;
+                }
+            }
+
+            // If we have a real (non-auto-declared) variable, use its type
+            if (variable != null && !variable.IsAutoDeclared)
             {
                 // Convert type name string to TypeInfo
                 var inferredType = variable.InferredType ?? ConvertTypeNameToTypeInfo(variable.Type);
-                var isAutoDeclared = variable.IsAutoDeclared;
 
                 // Variables (identifiers starting with &) are assignable
                 if (node.Name.StartsWith("&"))
                 {
-                    inferredType = inferredType.WithAssignable(true).WithAutoDeclared(isAutoDeclared);
+                    inferredType = inferredType.WithAssignable(true);
                 }
 
                 SetInferredType(node, inferredType);
             }
+            // Handle auto-declared variables (delegate didn't provide a type)
+            else if (variable != null && variable.IsAutoDeclared)
+            {
+                // Convert type name string to TypeInfo
+                var inferredType = variable.InferredType ?? ConvertTypeNameToTypeInfo(variable.Type);
+
+                // Variables (identifiers starting with &) are assignable
+                if (node.Name.StartsWith("&"))
+                {
+                    inferredType = inferredType.WithAssignable(true).WithAutoDeclared(true);
+                }
+
+                SetInferredType(node, inferredType);
+            }
+            // Variable is null - try system variables and field types
             else
             {
-
                 // Not a declared variable, check if it's a system variable.
                 // System variables (like %UserId) are not prefixed with '&'.
                 var systemVar = PeopleCodeTypeDatabase.GetSystemVariable(node.Name);

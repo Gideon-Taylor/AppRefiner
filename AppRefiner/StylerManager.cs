@@ -291,7 +291,14 @@ namespace AppRefiner.Stylers
                 }
 
                 // Run type inference - this populates node.Attributes["TypeInfo"] throughout the AST
-                TypeInferenceVisitor.Run(program, programMetadata, typeResolver, defaultRecord, defaultField);
+                TypeInferenceVisitor.Run(
+                    program,
+                    programMetadata,
+                    typeResolver,
+                    defaultRecord,
+                    defaultField,
+                    inferAutoDeclaredTypes: false,
+                    onUndefinedVariable: mainForm.TypeExtensionManager != null ? mainForm.TypeExtensionManager.HandleUndefinedVariable : null);
 
                 Debug.Log($"StylerManager: Type inference completed for '{qualifiedName}'");
             }
