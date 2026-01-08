@@ -64,7 +64,7 @@ namespace AppRefiner.LanguageExtensions.BuiltIn
         /// <summary>
         /// Transforms .ForEach() method call to a For loop
         /// </summary>
-        private static void TransformForEach(ScintillaEditor editor, AstNode node, TypeInfo matchedType, VariableRegistry? variableRegistry)
+        private void TransformForEach(ScintillaEditor editor, AstNode node, TypeInfo matchedType, VariableRegistry? variableRegistry)
         {
             if (node is not FunctionCallNode fcn) return;
             
@@ -180,8 +180,13 @@ namespace AppRefiner.LanguageExtensions.BuiltIn
         ///     &result.Push(&students[&i].GPA);
         ///   End-For;
         /// </summary>
-        private static void TransformMap(ScintillaEditor editor, AstNode node, TypeInfo matchedType, VariableRegistry? variableRegistry)
+        private void TransformMap(ScintillaEditor editor, AstNode node, TypeInfo matchedType, VariableRegistry? variableRegistry)
         {
+            var usageInfo = ExtensionTransform.GetUsageInfo(node, variableRegistry);
+
+            var implicitVars  = GetTransformByName("Map")?.GetImplicitVariables(node);
+            if (implicitVars == null) return;
+
             // TODO: Implement Map transformation
             // For now, just a placeholder
         }

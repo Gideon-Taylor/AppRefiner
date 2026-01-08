@@ -264,5 +264,225 @@ namespace AppRefiner.LanguageExtensions
         }
 
         #endregion
+
+        #region Usage Context Analysis
+
+        /// <summary>
+        /// Analyzes how this extension is being used in code by walking the AST parent chain.
+        /// Detects whether the extension is used as a statement, in an assignment, in a declaration,
+        /// as a function parameter, or in some other context.
+        /// </summary>
+        /// <param name="node">The AST node where the extension is used (MemberAccessNode for properties, FunctionCallNode for methods)</param>
+        /// <param name="variableRegistry">Optional variable registry for type resolution</param>
+        /// <returns>ExtensionUsageInfo containing the usage type and relevant contextual information</returns>
+        public static ExtensionUsageInfo GetUsageInfo(AstNode node, VariableRegistry? variableRegistry = null)
+        {
+            var info = new ExtensionUsageInfo();
+            AstNode? current = node;
+
+            // Walk up the parent chain to detect usage context
+            while (current != null)
+            {
+                // Priority 1: Variable Declaration
+                if (current.Parent is LocalVariableDeclarationWithAssignmentNode declNode)
+                {
+                    // Verify the extension is part of the initial value
+                    if (IsDescendantOf(node, declNode.InitialValue))
+                    {
+                        info.UsageType = ExtensionUsageType.VariableDeclaration;
+                        info.DeclaredVariableName = declNode.VariableName;
+                        info.DeclarationNode = declNode;
+                        info.DeclaredVariableType = ConvertTypeNodeToTypeInfo(declNode.Type);
+                        return info;
+                    }
+                }
+
+                // Priority 2: Variable Assignment
+                if (current.Parent is AssignmentNode assignNode)
+                {
+                    // Verify the extension is part of the value (right-hand side)
+                    if (IsDescendantOf(node, assignNode.Value))
+                    {
+                        info.UsageType = ExtensionUsageType.VariableAssignment;
+                        info.AssignmentNode = assignNode;
+                        info.VariableName = ExtractVariableName(assignNode.Target);
+
+                        // Note: Type resolution requires scope context which we don't have in a static method
+                        // Users can resolve the type themselves if needed using the AssignmentNode
+                        info.VariableType = null;
+
+                        return info;
+                    }
+                }
+
+                // Priority 3: Function Parameter
+                if (current.Parent is FunctionCallNode funcCall)
+                {
+                    // Check if the node is in the arguments list
+                    var paramIndex = GetParameterIndex(funcCall, node);
+                    if (paramIndex >= 0)
+                    {
+                        info.UsageType = ExtensionUsageType.FunctionParameter;
+                        info.ParameterIndex = paramIndex;
+                        info.FunctionCallNode = funcCall;
+                        info.FunctionName = ExtractFunctionName(funcCall);
+                        return info;
+                    }
+                }
+
+                // Priority 4: Statement Usage
+                if (current.Parent is ExpressionStatementNode)
+                {
+                    info.UsageType = ExtensionUsageType.Statement;
+                    return info;
+                }
+
+                current = current.Parent;
+            }
+
+            // Default: Other
+            info.UsageType = ExtensionUsageType.Other;
+            return info;
+        }
+
+        /// <summary>
+        /// Check if a node is a descendant of a potential ancestor node
+        /// </summary>
+        private static bool IsDescendantOf(AstNode node, AstNode? potentialAncestor)
+        {
+            if (potentialAncestor == null) return false;
+
+            var current = node;
+            while (current != null)
+            {
+                if (current == potentialAncestor)
+                    return true;
+                current = current.Parent;
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// Extract variable name from assignment target
+        /// </summary>
+        private static string? ExtractVariableName(ExpressionNode target)
+        {
+            return target switch
+            {
+                IdentifierNode id => id.Name,
+                MemberAccessNode ma => ExtractMemberAccessPath(ma),
+                _ => null
+            };
+        }
+
+        /// <summary>
+        /// Extract full path from member access (e.g., "record.field")
+        /// </summary>
+        private static string? ExtractMemberAccessPath(MemberAccessNode ma)
+        {
+            if (ma.Target is IdentifierNode id)
+                return $"{id.Name}.{ma.MemberName}";
+
+            if (ma.Target is MemberAccessNode nested)
+                return $"{ExtractMemberAccessPath(nested)}.{ma.MemberName}";
+
+            return ma.MemberName;
+        }
+
+        /// <summary>
+        /// Find the parameter index of the node within a function call's arguments
+        /// </summary>
+        private static int GetParameterIndex(FunctionCallNode funcCall, AstNode node)
+        {
+            for (int i = 0; i < funcCall.Arguments.Count; i++)
+            {
+                if (IsDescendantOf(node, funcCall.Arguments[i]))
+                    return i;
+            }
+            return -1;
+        }
+
+        /// <summary>
+        /// Extract function name from function call node
+        /// </summary>
+        private static string? ExtractFunctionName(FunctionCallNode funcCall)
+        {
+            return funcCall.Function switch
+            {
+                IdentifierNode id => id.Name,
+                MemberAccessNode ma => ma.MemberName,
+                _ => null
+            };
+        }
+
+        /// <summary>
+        /// Convert TypeNode to TypeInfo for type resolution
+        /// </summary>
+        private static TypeInfo? ConvertTypeNodeToTypeInfo(TypeNode? typeNode)
+        {
+            if (typeNode == null) return null;
+
+            try
+            {
+                return typeNode switch
+                {
+                    BuiltInTypeNode builtin => TypeInfo.FromPeopleCodeType(builtin.Type),
+                    ArrayTypeNode array => new PeopleCodeTypeInfo.Types.ArrayTypeInfo(
+                        array.Dimensions,
+                        ConvertTypeNodeToTypeInfo(array.ElementType)),
+                    AppClassTypeNode appClass => new PeopleCodeTypeInfo.Types.AppClassTypeInfo(
+                        string.Join(":", appClass.PackagePath.Concat(new[] { appClass.ClassName }))),
+                    _ => null
+                };
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        #endregion
+
+        #region Implicit Variable Discovery
+
+        /// <summary>
+        /// Finds all implicit variables (from language extensions) within an AST subtree.
+        /// Returns a distinct dictionary mapping variable names to their resolved types.
+        /// </summary>
+        /// <param name="node">The AST node to search within</param>
+        /// <param name="implicitParameters">List of implicit parameters defined by the extension</param>
+        /// <param name="targetType">The type of the object the extension is called on (used for type resolution)</param>
+        /// <returns>Dictionary mapping implicit variable names to their types</returns>
+        public Dictionary<string, TypeInfo> GetImplicitVariables(
+            AstNode node)
+        {
+            var result = new Dictionary<string, TypeInfo>(StringComparer.OrdinalIgnoreCase);
+
+            // Early exit if no implicit parameters defined
+            if (ImplicitParameters == null || ImplicitParameters .Count == 0)
+                return result;
+
+            // Find all identifier nodes in the subtree
+            var identifiers = node.FindDescendants<IdentifierNode>();
+
+            foreach (var identifier in identifiers)
+            {
+                // Check if this identifier matches an implicit parameter
+                if (ImplicitParameters.Any(i => i.ParameterName == identifier.Name))
+                {
+                    // Only add if not already present (distinct)
+                    if (!result.ContainsKey(identifier.Name))
+                    {
+                        // Resolve the type using the target type
+                        var resolvedType = identifier.GetInferredType() ?? AnyTypeInfo.Instance;
+                        result[identifier.Name] = resolvedType;
+                    }
+                }
+            }
+
+            return result;
+        }
+
+        #endregion
     }
 }

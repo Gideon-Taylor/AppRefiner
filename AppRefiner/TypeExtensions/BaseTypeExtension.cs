@@ -108,6 +108,11 @@ namespace AppRefiner.LanguageExtensions
             });
         }
 
+        public ExtensionTransform? GetTransformByName(string name)
+        {
+            return Transforms.Where(t => t.Name == name).FirstOrDefault();
+        }
+
         /// <summary>
         /// Sets the configuration for this extension from a JSON string
         /// </summary>

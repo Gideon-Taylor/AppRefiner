@@ -92,6 +92,10 @@ namespace AppRefiner.TooltipProviders
                 foreach (var a in node.Arguments)
                 {
                     var inferredType = a.GetInferredType();
+                    if (inferredType == null)
+                    {
+                        inferredType = UnknownTypeInfo.Instance;
+                    }
                     // Note: IsAssignable flag should already be set during type inference
                     arguments.Add(inferredType);
                 }
