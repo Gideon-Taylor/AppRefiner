@@ -603,6 +603,13 @@ LRESULT CALLBACK ScintillaSubclassProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPAR
             // Fall through to default for clicks outside minimap
         }
 
+        // Track hover to show/hide minimap viewport
+        if (uMsg == WM_MOUSEMOVE) {
+            MinimapOverlay::HandleMouseMove(hWnd, wParam, lParam);
+        } else if (uMsg == WM_MOUSELEAVE) {
+            MinimapOverlay::HandleMouseLeave(hWnd, wParam, lParam);
+        }
+
         // Get the callback window from dwRefData
         HWND callbackWindow = (HWND)dwRefData;
 
