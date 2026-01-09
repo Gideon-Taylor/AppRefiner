@@ -11,8 +11,10 @@ static const int MINIMAP_MAX_VIEWPORTS = 12;
 // Scale factors for minimap content rendering.
 static const int MINIMAP_MAX_CHARS_FOR_FULL = 200;
 static const int MINIMAP_INDENT_TAB_WIDTH = 4;
-// Style IDs for the VB/PB lexer.
-static const int SCE_B_COMMENT = 1;
+static const int MINIMAP_NATURAL_LINE_SPACING = 3;
+static const int MINIMAP_NATURAL_LINE_HEIGHT = 2;
+// Style IDs for the PeopleCode lexer.
+static const int SCE_B_COMMENT = 23;
 static const int SCE_B_KEYWORD = 3;
 static const int SCE_B_STRING = 4;
 static const BYTE MINIMAP_INDICATOR_ALPHA = 64;
@@ -23,8 +25,6 @@ static bool g_hasMinimapWindowStart = false;
 static int g_cachedMinimapWindowStart = 0;
 static bool g_hasForcedColorise = false;
 static HWND g_lastColoriseHwnd = NULL;
-static HWND g_lastMarginHwnd = NULL;
-static bool g_hasSetMarginRight = false;
 static HWND g_cacheHwnd = NULL;
 static int g_cacheGeneration = 1;
 
@@ -175,18 +175,18 @@ static const std::vector<char>& GetStyledTextCached(HWND hWnd, int lineIndex, in
     return entry.styledText;
 }
 
-static HBRUSH GetMinimapBrushForStyle(int style, HBRUSH codeBrush, HBRUSH commentBrush, HBRUSH stringBrush, HBRUSH keywordBrush)
+static COLORREF GetMinimapColorForStyle(int style, COLORREF codeColor, COLORREF commentColor, COLORREF stringColor, COLORREF keywordColor)
 {
     if (style == SCE_B_COMMENT) {
-        return commentBrush;
+        return commentColor;
     }
     if (style == SCE_B_STRING) {
-        return stringBrush;
+        return stringColor;
     }
     if (style == SCE_B_KEYWORD) {
-        return keywordBrush;
+        return keywordColor;
     }
-    return codeBrush;
+    return codeColor;
 }
 
 static bool TryGetLineIndicator(HWND hWnd, int lineStartPos, int lineLength, COLORREF& indicatorColor)
@@ -223,87 +223,51 @@ void MinimapOverlay::InvalidateCache()
     g_cacheGeneration++;
 }
 
-LRESULT MinimapOverlay::HandleEraseBkgnd(HWND hWnd, WPARAM wParam, LPARAM lParam)
+LRESULT MinimapOverlay::HandlePaint(HWND minimapHwnd, HWND scintillaHwnd, WPARAM wParam, LPARAM lParam)
 {
-    // Get window dimensions to calculate minimap area
-    RECT clientRect;
-    GetClientRect(hWnd, &clientRect);
-    int windowWidth = clientRect.right;
-    int minimapX = windowWidth - MINIMAP_WIDTH;
-
-    // Get the region being erased
-    HDC hdc = (HDC)wParam;
-    RECT eraseRect;
-    GetClipBox(hdc, &eraseRect);
-
-    // Check if erase region overlaps with minimap area
-    if (eraseRect.right > minimapX) {
-        // Erase only the non-minimap area (left side)
-        if (eraseRect.left < minimapX) {
-            RECT leftRect = eraseRect;
-            leftRect.right = minimapX;
-            HBRUSH bgBrush = (HBRUSH)GetClassLongPtr(hWnd, GCLP_HBRBACKGROUND);
-            if (bgBrush) {
-                FillRect(hdc, &leftRect, bgBrush);
-            }
-        }
-        // Don't erase the minimap area - return 1 to indicate we handled it
-        return 1;
+    if (!minimapHwnd || !scintillaHwnd || !IsWindow(minimapHwnd) || !IsWindow(scintillaHwnd)) {
+        return 0;
     }
 
-    // Fall through to default for non-minimap areas
-    return 0;
-}
-
-LRESULT MinimapOverlay::HandlePaint(HWND hWnd, WPARAM wParam, LPARAM lParam)
-{
     // Get window dimensions
     RECT clientRect;
-    GetClientRect(hWnd, &clientRect);
+    GetClientRect(minimapHwnd, &clientRect);
     int windowWidth = clientRect.right;
     int windowHeight = clientRect.bottom;
 
-    // Minimap dimensions: full height, on right side
-    int minimapX = windowWidth - MINIMAP_WIDTH;
+    // Minimap dimensions: full height, full width
+    int minimapX = 0;
     int minimapY = 0;
 
     // Get Scintilla document metrics for viewport indicator
-    LRESULT totalLines = SendMessage(hWnd, SCI_GETLINECOUNT, 0, 0);
-    LRESULT firstVisibleLine = SendMessage(hWnd, SCI_GETFIRSTVISIBLELINE, 0, 0);
-    LRESULT visibleLines = SendMessage(hWnd, SCI_LINESONSCREEN, 0, 0);
-    int lineHeight = GetLineHeight(hWnd);
+    LRESULT totalLines = SendMessage(scintillaHwnd, SCI_GETLINECOUNT, 0, 0);
+    LRESULT firstVisibleLine = SendMessage(scintillaHwnd, SCI_GETFIRSTVISIBLELINE, 0, 0);
+    LRESULT visibleLines = SendMessage(scintillaHwnd, SCI_LINESONSCREEN, 0, 0);
+    int lineHeight = GetLineHeight(scintillaHwnd);
 
-    if (g_lastColoriseHwnd != hWnd) {
-        g_lastColoriseHwnd = hWnd;
+    if (g_lastColoriseHwnd != scintillaHwnd) {
+        g_lastColoriseHwnd = scintillaHwnd;
         g_hasForcedColorise = false;
     }
 
     if (!g_hasForcedColorise) {
-        SendMessage(hWnd, SCI_COLOURISE, 0, -1);
+        SendMessage(scintillaHwnd, SCI_COLOURISE, 0, -1);
         g_hasForcedColorise = true;
     }
 
-    if (g_lastMarginHwnd != hWnd) {
-        g_lastMarginHwnd = hWnd;
-        g_hasSetMarginRight = false;
-    }
-    if (!g_hasSetMarginRight) {
-        SendMessage(hWnd, SCI_SETMARGINRIGHT, 0, MINIMAP_WIDTH);
-        g_hasSetMarginRight = true;
-    }
-
-    HDC hdc = GetDC(hWnd);
+    PAINTSTRUCT ps;
+    HDC hdc = BeginPaint(minimapHwnd, &ps);
     if (hdc) {
         // Double buffering: create memory DC for the entire minimap
         HDC memDC = CreateCompatibleDC(hdc);
         if (memDC) {
-            HBITMAP memBitmap = CreateCompatibleBitmap(hdc, MINIMAP_WIDTH, windowHeight);
+            HBITMAP memBitmap = CreateCompatibleBitmap(hdc, windowWidth, windowHeight);
             if (memBitmap) {
                 HBITMAP oldBitmap = (HBITMAP)SelectObject(memDC, memBitmap);
 
                 // Draw opaque white background to memory DC
                 HBRUSH whiteBrush = CreateSolidBrush(RGB(255, 255, 255));
-                RECT minimapRect = { 0, 0, MINIMAP_WIDTH, windowHeight };
+                RECT minimapRect = { 0, 0, windowWidth, windowHeight };
                 FillRect(memDC, &minimapRect, whiteBrush);
                 DeleteObject(whiteBrush);
 
@@ -313,14 +277,65 @@ LRESULT MinimapOverlay::HandlePaint(HWND hWnd, WPARAM wParam, LPARAM lParam)
 
                 // Draw content bars for the minimap.
                 if (totalLines > 0) {
-                    float minimapLineHeight = GetMinimapLineHeight(lineHeight);
-                    int rowHeight = (int)minimapLineHeight;
-                    if (rowHeight < 2) rowHeight = 2;
+                    // Determine rendering mode based on document length
+                    // Mode 1: All lines fit - render all lines with spacing >= 3px, text at 2px minimum
+                    // Mode 2: Compressed - sliding window for very long documents (spacing < 3px)
 
-                    HBRUSH codeBrush = CreateSolidBrush(RGB(140, 140, 140));
-                    HBRUSH commentBrush = CreateSolidBrush(RGB(0, 128, 0));
-                    HBRUSH stringBrush = CreateSolidBrush(RGB(250, 128, 114));
-                    HBRUSH keywordBrush = CreateSolidBrush(RGB(58, 58, 255));
+                    float optimalSpacing = (float)windowHeight / (float)totalLines;
+                    bool useAllLinesMode = (optimalSpacing >= 3.0f);
+
+                    float minimapLineHeight;
+                    int rowHeight;
+                    int lineDrawHeight;
+
+                    if (useAllLinesMode) {
+                        // All lines fit mode: render all lines with natural spacing
+                        // Scale text height based on available space, but don't stretch gaps
+                        lineDrawHeight = (int)((float)optimalSpacing * 0.4f);
+                        if (lineDrawHeight < MINIMAP_NATURAL_LINE_HEIGHT) {
+                            lineDrawHeight = MINIMAP_NATURAL_LINE_HEIGHT;
+                        }
+                        if (lineDrawHeight > 8) {
+                            lineDrawHeight = 8;
+                        }
+                        // Use fixed gap instead of stretching to fill height
+                        int fixedGap = 2;
+                        rowHeight = lineDrawHeight + fixedGap;
+                        minimapLineHeight = (float)rowHeight;
+                    } else {
+                        // Compressed mode: use sliding window
+                        minimapLineHeight = GetMinimapLineHeight(lineHeight);
+                        rowHeight = (int)minimapLineHeight;
+                        if (rowHeight < 2) rowHeight = 2;
+                        lineDrawHeight = (rowHeight >= 2) ? 2 : 1;
+                    }
+
+                    // Create tiny font for text rendering
+                    HFONT minimapFont = CreateFont(
+                        lineDrawHeight,           // Height in pixels
+                        0,                        // Width (auto)
+                        0,                        // Escapement
+                        0,                        // Orientation
+                        FW_NORMAL,                // Weight
+                        FALSE,                    // Italic
+                        FALSE,                    // Underline
+                        FALSE,                    // Strikeout
+                        DEFAULT_CHARSET,          // Charset
+                        OUT_DEFAULT_PRECIS,       // Output precision
+                        CLIP_DEFAULT_PRECIS,      // Clipping precision
+                        NONANTIALIASED_QUALITY,   // Quality (no antialiasing for tiny text)
+                        FIXED_PITCH | FF_MODERN,  // Fixed-width font
+                        TEXT("Consolas")          // Font name
+                    );
+                    HFONT oldFont = (HFONT)SelectObject(memDC, minimapFont);
+                    SetBkMode(memDC, TRANSPARENT);
+
+                    // Color definitions for syntax highlighting
+                    COLORREF codeColor = RGB(140, 140, 140);
+                    COLORREF commentColor = RGB(0, 128, 0);
+                    COLORREF stringColor = RGB(250, 128, 114);
+                    COLORREF keywordColor = RGB(58, 58, 255);
+
                     HDC overlayDC = CreateCompatibleDC(hdc);
                     HBITMAP overlayBitmap = CreateCompatibleBitmap(hdc, 1, 1);
                     HBITMAP oldOverlayBitmap = overlayBitmap ? (HBITMAP)SelectObject(overlayDC, overlayBitmap) : NULL;
@@ -330,15 +345,25 @@ LRESULT MinimapOverlay::HandlePaint(HWND hWnd, WPARAM wParam, LPARAM lParam)
                     overlayBlend.SourceConstantAlpha = MINIMAP_INDICATOR_ALPHA;
                     overlayBlend.AlphaFormat = 0;
 
-                    for (int y = 0; y < windowHeight; y += rowHeight) {
-                        float rowRatio = (float)(y + (rowHeight / 2)) / (float)windowHeight;
-                        int lineOffset = (int)(rowRatio * (float)effectiveTotalLines);
-                        int lineIndex = windowStart + lineOffset;
-                        if (lineIndex < 0) lineIndex = 0;
-                        if (lineIndex >= totalLines) break;
+                    int maxY = useAllLinesMode ? (totalLines * rowHeight) : windowHeight;
 
-                        int lineStartPos = (int)SendMessage(hWnd, SCI_POSITIONFROMLINE, lineIndex, 0);
-                        int lineLength = (int)SendMessage(hWnd, SCI_LINELENGTH, lineIndex, 0);
+                    for (int y = 0; y < maxY; y += rowHeight) {
+                        int lineIndex;
+                        if (useAllLinesMode) {
+                            // All lines mode: sequential line rendering
+                            lineIndex = y / rowHeight;
+                            if (lineIndex >= totalLines) break;
+                        } else {
+                            // Compressed: calculate from window position
+                            float rowRatio = (float)(y + (rowHeight / 2)) / (float)windowHeight;
+                            int lineOffset = (int)(rowRatio * (float)effectiveTotalLines);
+                            lineIndex = windowStart + lineOffset;
+                            if (lineIndex < 0) lineIndex = 0;
+                            if (lineIndex >= totalLines) break;
+                        }
+
+                        int lineStartPos = (int)SendMessage(scintillaHwnd, SCI_POSITIONFROMLINE, lineIndex, 0);
+                        int lineLength = (int)SendMessage(scintillaHwnd, SCI_LINELENGTH, lineIndex, 0);
                         if (lineStartPos < 0 || lineLength <= 0) {
                             continue;
                         }
@@ -346,7 +371,7 @@ LRESULT MinimapOverlay::HandlePaint(HWND hWnd, WPARAM wParam, LPARAM lParam)
                         int indentColumns = 0;
                         int maxIndentScan = lineLength < 40 ? lineLength : 40;
                         for (int i = 0; i < maxIndentScan; i++) {
-                            int ch = (int)SendMessage(hWnd, SCI_GETCHARAT, lineStartPos + i, 0);
+                            int ch = (int)SendMessage(scintillaHwnd, SCI_GETCHARAT, lineStartPos + i, 0);
                             if (ch == ' ') {
                                 indentColumns += 1;
                             } else if (ch == '\t') {
@@ -357,31 +382,34 @@ LRESULT MinimapOverlay::HandlePaint(HWND hWnd, WPARAM wParam, LPARAM lParam)
                         }
 
                         int indentPixels = indentColumns / 2;
-                        if (indentPixels > MINIMAP_WIDTH / 2) indentPixels = MINIMAP_WIDTH / 2;
+                        if (indentPixels > windowWidth / 2) indentPixels = windowWidth / 2;
 
                         COLORREF indicatorColor = 0;
-                        bool hasIndicator = TryGetLineIndicator(hWnd, lineStartPos, lineLength, indicatorColor);
+                        bool hasIndicator = TryGetLineIndicator(scintillaHwnd, lineStartPos, lineLength, indicatorColor);
                         if (hasIndicator && overlayDC && overlayBitmap) {
+                            // Draw transparent background
                             SetPixel(overlayDC, 0, 0, indicatorColor);
-                            AlphaBlend(memDC, 0, y, MINIMAP_WIDTH, rowHeight, overlayDC, 0, 0, 1, 1, overlayBlend);
+                            AlphaBlend(memDC, 0, y, windowWidth, rowHeight, overlayDC, 0, 0, 1, 1, overlayBlend);
+
+                            // Draw fully opaque 1px border
+                            HPEN borderPen = CreatePen(PS_SOLID, 1, indicatorColor);
+                            HPEN oldBorderPen = (HPEN)SelectObject(memDC, borderPen);
+                            HBRUSH oldBorderBrush = (HBRUSH)SelectObject(memDC, GetStockObject(NULL_BRUSH));
+                            Rectangle(memDC, 0, y, windowWidth, y + rowHeight);
+                            SelectObject(memDC, oldBorderPen);
+                            SelectObject(memDC, oldBorderBrush);
+                            DeleteObject(borderPen);
                         }
 
                         int maxChars = lineLength > MINIMAP_MAX_CHARS_FOR_FULL ? MINIMAP_MAX_CHARS_FOR_FULL : lineLength;
-                        int barMaxWidth = MINIMAP_WIDTH - 6;
-                        if (barMaxWidth < 1) barMaxWidth = 1;
-                        int barWidth = 2 + (barMaxWidth * maxChars / MINIMAP_MAX_CHARS_FOR_FULL);
-                        if (barWidth < 2) barWidth = 2;
-                        if (barWidth > barMaxWidth) barWidth = barMaxWidth;
-
                         int startX = 2 + indentPixels;
-                        if (startX > MINIMAP_WIDTH - 2) startX = MINIMAP_WIDTH - 2;
-                        int availableWidth = MINIMAP_WIDTH - 2 - startX;
+                        if (startX > windowWidth - 2) startX = windowWidth - 2;
+                        int availableWidth = windowWidth - 2 - startX;
                         if (availableWidth < 1) {
                             continue;
                         }
-                        if (barWidth > availableWidth) barWidth = availableWidth;
 
-                        const std::vector<char>& styledText = GetStyledTextCached(hWnd, lineIndex, lineStartPos, lineLength, maxChars);
+                        const std::vector<char>& styledText = GetStyledTextCached(scintillaHwnd, lineIndex, lineStartPos, lineLength, maxChars);
 
                         bool hasNonWhitespace = false;
                         for (int i = 0; i < maxChars; i++) {
@@ -398,12 +426,9 @@ LRESULT MinimapOverlay::HandlePaint(HWND hWnd, WPARAM wParam, LPARAM lParam)
                             continue;
                         }
 
-                        int runStyle = -1;
-                        int runLength = 0;
-                        float xCursor = (float)startX;
-                        float widthPerChar = (maxChars > 0) ? ((float)barWidth / (float)maxChars) : 0.0f;
-                        int endX = startX + barWidth;
-                        bool isFirstRun = true;
+                        // Render text character by character with syntax highlighting
+                        int xCursor = startX;
+                        int currentStyle = -1;
 
                         for (int i = 0; i < maxChars; i++) {
                             int ch = (unsigned char)styledText[i * 2];
@@ -412,54 +437,41 @@ LRESULT MinimapOverlay::HandlePaint(HWND hWnd, WPARAM wParam, LPARAM lParam)
                                 break;
                             }
 
-                            if (runStyle == -1) {
-                                runStyle = style;
-                                runLength = 1;
-                            } else if (style == runStyle) {
-                                runLength++;
+                            // Skip rendering whitespace characters
+                            if (ch == ' ' || ch == '\t' || ch == '\r' || ch == '\n') {
+                                continue;
+                            }
+
+                            // Check if we've run out of horizontal space
+                            if (xCursor >= windowWidth - 2) {
+                                break;
+                            }
+
+                            // Set text color based on style (only if changed)
+                            if (style != currentStyle) {
+                                COLORREF textColor = GetMinimapColorForStyle(style, codeColor, commentColor, stringColor, keywordColor);
+                                SetTextColor(memDC, textColor);
+                                currentStyle = style;
+                            }
+
+                            // Draw the character
+                            char charBuffer[2] = { (char)ch, '\0' };
+                            TextOutA(memDC, xCursor, y, charBuffer, 1);
+
+                            // Get character width and advance cursor
+                            SIZE charSize;
+                            if (GetTextExtentPoint32A(memDC, charBuffer, 1, &charSize)) {
+                                xCursor += charSize.cx;
                             } else {
-                                int segmentWidth = (int)((float)runLength * widthPerChar + 0.5f);
-                                if (segmentWidth < 1) segmentWidth = 1;
-                                if (!isFirstRun && xCursor < endX) {
-                                    xCursor += 1.0f;
-                                }
-                                int drawWidth = (int)segmentWidth;
-                                if ((int)xCursor + drawWidth > endX) {
-                                    drawWidth = endX - (int)xCursor;
-                                }
-                                if (drawWidth > 0) {
-                                    RECT lineRect = { (int)xCursor, y, (int)xCursor + drawWidth, y + 1 };
-                                    FillRect(memDC, &lineRect, GetMinimapBrushForStyle(runStyle, codeBrush, commentBrush, stringBrush, keywordBrush));
-                                    xCursor += (float)drawWidth;
-                                }
-
-                                runStyle = style;
-                                runLength = 1;
-                                isFirstRun = false;
-                            }
-                        }
-
-                        if (runStyle != -1 && runLength > 0) {
-                            int segmentWidth = (int)((float)runLength * widthPerChar + 0.5f);
-                            if (segmentWidth < 1) segmentWidth = 1;
-                            if (!isFirstRun && xCursor < endX) {
-                                xCursor += 1.0f;
-                            }
-                            int drawWidth = (int)segmentWidth;
-                            if ((int)xCursor + drawWidth > endX) {
-                                drawWidth = endX - (int)xCursor;
-                            }
-                            if (drawWidth > 0) {
-                                RECT lineRect = { (int)xCursor, y, (int)xCursor + drawWidth, y + 1 };
-                                FillRect(memDC, &lineRect, GetMinimapBrushForStyle(runStyle, codeBrush, commentBrush, stringBrush, keywordBrush));
+                                xCursor += 1; // Fallback if measurement fails
                             }
                         }
                     }
 
-                    DeleteObject(codeBrush);
-                    DeleteObject(commentBrush);
-                    DeleteObject(stringBrush);
-                    DeleteObject(keywordBrush);
+                    // Cleanup font
+                    SelectObject(memDC, oldFont);
+                    DeleteObject(minimapFont);
+
                     if (overlayDC) {
                         if (oldOverlayBitmap) {
                             SelectObject(overlayDC, oldOverlayBitmap);
@@ -473,19 +485,44 @@ LRESULT MinimapOverlay::HandlePaint(HWND hWnd, WPARAM wParam, LPARAM lParam)
 
                 // Draw viewport indicator
                 if (totalLines > 0) {
-                    // Position remains relative to full document; height respects minimum zoom.
-                    int windowOffset = (int)firstVisibleLine - windowStart;
-                    if (windowOffset < 0) windowOffset = 0;
-                    if (windowOffset > effectiveTotalLines) windowOffset = effectiveTotalLines;
+                    // Determine rendering mode (need to recalculate for viewport indicator)
+                    float optimalSpacing = (float)windowHeight / (float)totalLines;
+                    bool useAllLinesMode = (optimalSpacing >= 3.0f);
 
-                    float startRatio = (float)windowOffset / (float)effectiveTotalLines;
-                    float heightRatio = (float)visibleLines / (float)effectiveTotalLines;
+                    int viewportY;
+                    int viewportHeight;
+                    int actualRowHeight;
 
-                    // Clamp height ratio to max 1.0 (can't be larger than document)
-                    if (heightRatio > 1.0f) heightRatio = 1.0f;
+                    if (useAllLinesMode) {
+                        // Recalculate actual row height (must match rendering logic)
+                        int calcLineDrawHeight = (int)((float)optimalSpacing * 0.4f);
+                        if (calcLineDrawHeight < MINIMAP_NATURAL_LINE_HEIGHT) {
+                            calcLineDrawHeight = MINIMAP_NATURAL_LINE_HEIGHT;
+                        }
+                        if (calcLineDrawHeight > 8) {
+                            calcLineDrawHeight = 8;
+                        }
+                        int fixedGap = 2;
+                        actualRowHeight = calcLineDrawHeight + fixedGap;
 
-                    int viewportY = (int)(startRatio * windowHeight);
-                    int viewportHeight = (int)(heightRatio * windowHeight);
+                        // All lines mode: use actual row height from rendering
+                        viewportY = (int)firstVisibleLine * actualRowHeight;
+                        viewportHeight = (int)visibleLines * actualRowHeight;
+                    } else {
+                        // Compressed mode: position relative to window
+                        int windowOffset = (int)firstVisibleLine - windowStart;
+                        if (windowOffset < 0) windowOffset = 0;
+                        if (windowOffset > effectiveTotalLines) windowOffset = effectiveTotalLines;
+
+                        float startRatio = (float)windowOffset / (float)effectiveTotalLines;
+                        float heightRatio = (float)visibleLines / (float)effectiveTotalLines;
+
+                        // Clamp height ratio to max 1.0 (can't be larger than document)
+                        if (heightRatio > 1.0f) heightRatio = 1.0f;
+
+                        viewportY = (int)(startRatio * windowHeight);
+                        viewportHeight = (int)(heightRatio * windowHeight);
+                    }
 
                     // Ensure minimum height for visibility
                     if (viewportHeight < MINIMAP_MIN_VIEWPORT_HEIGHT) viewportHeight = MINIMAP_MIN_VIEWPORT_HEIGHT;
@@ -498,13 +535,13 @@ LRESULT MinimapOverlay::HandlePaint(HWND hWnd, WPARAM wParam, LPARAM lParam)
                     // Create another memory DC for transparent viewport box
                     HDC amberDC = CreateCompatibleDC(hdc);
                     if (amberDC) {
-                        HBITMAP amberBitmap = CreateCompatibleBitmap(hdc, MINIMAP_WIDTH, viewportHeight);
+                        HBITMAP amberBitmap = CreateCompatibleBitmap(hdc, windowWidth, viewportHeight);
                         if (amberBitmap) {
                             HBITMAP oldAmberBitmap = (HBITMAP)SelectObject(amberDC, amberBitmap);
 
                             // Fill viewport DC with gray color
                             HBRUSH amberBrush = CreateSolidBrush(RGB(201, 201, 201));
-                            RECT amberRect = { 0, 0, MINIMAP_WIDTH, viewportHeight };
+                            RECT amberRect = { 0, 0, windowWidth, viewportHeight };
                             FillRect(amberDC, &amberRect, amberBrush);
                             DeleteObject(amberBrush);
 
@@ -515,8 +552,8 @@ LRESULT MinimapOverlay::HandlePaint(HWND hWnd, WPARAM wParam, LPARAM lParam)
                             blend.SourceConstantAlpha = 128; // 50% opacity
                             blend.AlphaFormat = 0;
 
-                            AlphaBlend(memDC, 0, viewportY, MINIMAP_WIDTH, viewportHeight,
-                                       amberDC, 0, 0, MINIMAP_WIDTH, viewportHeight, blend);
+                            AlphaBlend(memDC, 0, viewportY, windowWidth, viewportHeight,
+                                       amberDC, 0, 0, windowWidth, viewportHeight, blend);
 
                             // Cleanup viewport DC
                             SelectObject(amberDC, oldAmberBitmap);
@@ -531,14 +568,14 @@ LRESULT MinimapOverlay::HandlePaint(HWND hWnd, WPARAM wParam, LPARAM lParam)
                 HPEN oldPen = (HPEN)SelectObject(memDC, blackPen);
                 HBRUSH oldBrush = (HBRUSH)SelectObject(memDC, GetStockObject(NULL_BRUSH));
 
-                Rectangle(memDC, 0, 0, MINIMAP_WIDTH, windowHeight);
+                Rectangle(memDC, 0, 0, windowWidth, windowHeight);
 
                 SelectObject(memDC, oldPen);
                 SelectObject(memDC, oldBrush);
                 DeleteObject(blackPen);
 
                 // BitBlt the entire minimap to screen in one operation (eliminates flicker)
-                BitBlt(hdc, minimapX, minimapY, MINIMAP_WIDTH, windowHeight,
+                BitBlt(hdc, minimapX, minimapY, windowWidth, windowHeight,
                        memDC, 0, 0, SRCCOPY);
 
                 // Cleanup
@@ -548,37 +585,54 @@ LRESULT MinimapOverlay::HandlePaint(HWND hWnd, WPARAM wParam, LPARAM lParam)
             DeleteDC(memDC);
         }
 
-        ReleaseDC(hWnd, hdc);
+        EndPaint(minimapHwnd, &ps);
     }
 
     return 0;
 }
 
-LRESULT MinimapOverlay::HandleLeftButtonDown(HWND hWnd, WPARAM wParam, LPARAM lParam)
+LRESULT MinimapOverlay::HandlePaint(HWND hWnd, WPARAM wParam, LPARAM lParam)
 {
+    return HandlePaint(hWnd, hWnd, wParam, lParam);
+}
+
+LRESULT MinimapOverlay::HandleLeftButtonDown(HWND minimapHwnd, HWND scintillaHwnd, WPARAM wParam, LPARAM lParam)
+{
+    if (!minimapHwnd || !scintillaHwnd || !IsWindow(minimapHwnd) || !IsWindow(scintillaHwnd)) {
+        return -1;
+    }
+
     // Extract mouse coordinates from lParam
     int xPos = LOWORD(lParam);
     int yPos = HIWORD(lParam);
 
     // Get window dimensions to calculate minimap bounds
     RECT clientRect;
-    GetClientRect(hWnd, &clientRect);
-    int windowWidth = clientRect.right;
+    GetClientRect(minimapHwnd, &clientRect);
     int windowHeight = clientRect.bottom;
-    int minimapX = windowWidth - MINIMAP_WIDTH;
 
-    // Check if click is inside the minimap overlay
-    if (xPos >= minimapX && xPos <= windowWidth) {
-        // Get Scintilla document metrics
-        LRESULT totalLines = SendMessage(hWnd, SCI_GETLINECOUNT, 0, 0);
-        LRESULT visibleLines = SendMessage(hWnd, SCI_LINESONSCREEN, 0, 0);
-        LRESULT firstVisibleLine = SendMessage(hWnd, SCI_GETFIRSTVISIBLELINE, 0, 0);
-        int lineHeight = GetLineHeight(hWnd);
+    // Get Scintilla document metrics
+    LRESULT totalLines = SendMessage(scintillaHwnd, SCI_GETLINECOUNT, 0, 0);
+    LRESULT visibleLines = SendMessage(scintillaHwnd, SCI_LINESONSCREEN, 0, 0);
+    LRESULT firstVisibleLine = SendMessage(scintillaHwnd, SCI_GETFIRSTVISIBLELINE, 0, 0);
+    int lineHeight = GetLineHeight(scintillaHwnd);
 
-        if (totalLines <= 0) {
-            return 0;
-        }
+    if (totalLines <= 0) {
+        return 0;
+    }
 
+    // Determine rendering mode
+    float optimalSpacing = (float)windowHeight / (float)totalLines;
+    bool useAllLinesMode = (optimalSpacing >= 3.0f);
+
+    int middleLine;
+    if (useAllLinesMode) {
+        // All lines mode: direct pixel-to-line mapping with calculated spacing
+        middleLine = (int)((float)yPos / optimalSpacing);
+        if (middleLine < 0) middleLine = 0;
+        if (middleLine >= totalLines) middleLine = (int)totalLines - 1;
+    } else {
+        // Compressed mode: use window offset calculation
         int effectiveTotalLines = GetEffectiveTotalLines((int)totalLines, windowHeight, lineHeight, (int)visibleLines);
         if (effectiveTotalLines < 1) effectiveTotalLines = 1;
 
@@ -590,26 +644,29 @@ LRESULT MinimapOverlay::HandleLeftButtonDown(HWND hWnd, WPARAM wParam, LPARAM lP
         if (clickRatio > 1.0f) clickRatio = 1.0f;
 
         // Convert to middle line number (where user wants to center viewport)
-        int middleLine = windowStart + (int)(clickRatio * (float)effectiveTotalLines);
-
-        // Calculate target first visible line (center viewport on clicked position)
-        int targetFirstVisible = middleLine - (visibleLines / 2);
-
-        // Clamp to valid range [0, totalLines - visibleLines]
-        if (targetFirstVisible < 0) targetFirstVisible = 0;
-        int maxFirstVisible = (int)(totalLines - visibleLines);
-        if (maxFirstVisible < 0) maxFirstVisible = 0;
-        if (targetFirstVisible > maxFirstVisible) targetFirstVisible = maxFirstVisible;
-
-        // Scroll to the calculated line
-        SendMessage(hWnd, SCI_SETFIRSTVISIBLELINE, targetFirstVisible, 0);
-
-        // Consume the click event (don't pass to Scintilla)
-        return 0;
+        middleLine = windowStart + (int)(clickRatio * (float)effectiveTotalLines);
     }
 
-    // Click outside minimap - let Scintilla handle it
-    return -1; // Signal to continue with default processing
+    // Calculate target first visible line (center viewport on clicked position)
+    int targetFirstVisible = middleLine - (visibleLines / 2);
+
+    // Clamp to valid range [0, totalLines - visibleLines]
+    if (targetFirstVisible < 0) targetFirstVisible = 0;
+    int maxFirstVisible = (int)(totalLines - visibleLines);
+    if (maxFirstVisible < 0) maxFirstVisible = 0;
+    if (targetFirstVisible > maxFirstVisible) targetFirstVisible = maxFirstVisible;
+
+    // Scroll to the calculated line
+    SendMessage(scintillaHwnd, SCI_SETFIRSTVISIBLELINE, targetFirstVisible, 0);
+    InvalidateRect(minimapHwnd, NULL, FALSE);
+
+    // Consume the click event
+    return 0;
+}
+
+LRESULT MinimapOverlay::HandleLeftButtonDown(HWND hWnd, WPARAM wParam, LPARAM lParam)
+{
+    return HandleLeftButtonDown(hWnd, hWnd, wParam, lParam);
 }
 
 LRESULT MinimapOverlay::HandleMouseMove(HWND hWnd, WPARAM wParam, LPARAM lParam)
