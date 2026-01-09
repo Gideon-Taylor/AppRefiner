@@ -15,11 +15,27 @@ static const int MINIMAP_INDENT_TAB_WIDTH = 4;
 static const int SCE_B_COMMENT = 1;
 static const int SCE_B_KEYWORD = 3;
 static const int SCE_B_STRING = 4;
+static const BYTE MINIMAP_INDICATOR_ALPHA = 64;
 
 static bool g_isMinimapHover = false;
 static bool g_isTrackingMouseLeave = false;
 static bool g_hasMinimapWindowStart = false;
 static int g_cachedMinimapWindowStart = 0;
+static bool g_hasForcedColorise = false;
+static HWND g_lastColoriseHwnd = NULL;
+static HWND g_lastMarginHwnd = NULL;
+static bool g_hasSetMarginRight = false;
+static HWND g_cacheHwnd = NULL;
+static int g_cacheGeneration = 1;
+
+struct LineStyleCache {
+    int generation = 0;
+    int lineLength = 0;
+    int maxChars = 0;
+    std::vector<char> styledText;
+};
+
+static std::vector<LineStyleCache> g_lineStyleCache;
 
 static RECT GetMinimapRect(HWND hWnd)
 {
@@ -124,6 +140,41 @@ static int GetStableMinimapWindowStart(int totalLines, int visibleLines, int eff
     return g_cachedMinimapWindowStart;
 }
 
+static void EnsureCacheForHwnd(HWND hWnd, int lineCount)
+{
+    if (g_cacheHwnd != hWnd) {
+        g_cacheHwnd = hWnd;
+        g_lineStyleCache.clear();
+        g_cacheGeneration++;
+    }
+
+    if (lineCount > 0 && (int)g_lineStyleCache.size() < lineCount) {
+        g_lineStyleCache.resize(lineCount);
+    }
+}
+
+static const std::vector<char>& GetStyledTextCached(HWND hWnd, int lineIndex, int lineStartPos, int lineLength, int maxChars)
+{
+    EnsureCacheForHwnd(hWnd, lineIndex + 1);
+    LineStyleCache& entry = g_lineStyleCache[lineIndex];
+    if (entry.generation == g_cacheGeneration && entry.lineLength == lineLength && entry.maxChars == maxChars) {
+        return entry.styledText;
+    }
+
+    entry.generation = g_cacheGeneration;
+    entry.lineLength = lineLength;
+    entry.maxChars = maxChars;
+    entry.styledText.assign((maxChars * 2) + 2, 0);
+
+    Sci_TextRange tr;
+    tr.chrg.cpMin = lineStartPos;
+    tr.chrg.cpMax = lineStartPos + maxChars;
+    tr.lpstrText = entry.styledText.data();
+    SendMessage(hWnd, SCI_GETSTYLEDTEXT, 0, (LPARAM)&tr);
+
+    return entry.styledText;
+}
+
 static HBRUSH GetMinimapBrushForStyle(int style, HBRUSH codeBrush, HBRUSH commentBrush, HBRUSH stringBrush, HBRUSH keywordBrush)
 {
     if (style == SCE_B_COMMENT) {
@@ -138,9 +189,38 @@ static HBRUSH GetMinimapBrushForStyle(int style, HBRUSH codeBrush, HBRUSH commen
     return codeBrush;
 }
 
+static bool TryGetLineIndicator(HWND hWnd, int lineStartPos, int lineLength, COLORREF& indicatorColor)
+{
+    for (int i = 0; i < lineLength; i++) {
+        int pos = lineStartPos + i;
+        int mask = (int)SendMessage(hWnd, SCI_INDICATORALLONFOR, pos, 0);
+        if (mask == 0) {
+            continue;
+        }
+
+        int indicatorIndex = 0;
+        while ((mask & 1) == 0 && indicatorIndex < INDIC_MAX) {
+            mask >>= 1;
+            indicatorIndex++;
+        }
+
+        if (indicatorIndex <= INDIC_MAX) {
+            indicatorColor = (COLORREF)SendMessage(hWnd, SCI_INDICGETFORE, indicatorIndex, 0);
+            return true;
+        }
+    }
+
+    return false;
+}
+
 int MinimapOverlay::GetWidth()
 {
     return MINIMAP_WIDTH;
+}
+
+void MinimapOverlay::InvalidateCache()
+{
+    g_cacheGeneration++;
 }
 
 LRESULT MinimapOverlay::HandleEraseBkgnd(HWND hWnd, WPARAM wParam, LPARAM lParam)
@@ -193,6 +273,25 @@ LRESULT MinimapOverlay::HandlePaint(HWND hWnd, WPARAM wParam, LPARAM lParam)
     LRESULT visibleLines = SendMessage(hWnd, SCI_LINESONSCREEN, 0, 0);
     int lineHeight = GetLineHeight(hWnd);
 
+    if (g_lastColoriseHwnd != hWnd) {
+        g_lastColoriseHwnd = hWnd;
+        g_hasForcedColorise = false;
+    }
+
+    if (!g_hasForcedColorise) {
+        SendMessage(hWnd, SCI_COLOURISE, 0, -1);
+        g_hasForcedColorise = true;
+    }
+
+    if (g_lastMarginHwnd != hWnd) {
+        g_lastMarginHwnd = hWnd;
+        g_hasSetMarginRight = false;
+    }
+    if (!g_hasSetMarginRight) {
+        SendMessage(hWnd, SCI_SETMARGINRIGHT, 0, MINIMAP_WIDTH);
+        g_hasSetMarginRight = true;
+    }
+
     HDC hdc = GetDC(hWnd);
     if (hdc) {
         // Double buffering: create memory DC for the entire minimap
@@ -220,8 +319,16 @@ LRESULT MinimapOverlay::HandlePaint(HWND hWnd, WPARAM wParam, LPARAM lParam)
 
                     HBRUSH codeBrush = CreateSolidBrush(RGB(140, 140, 140));
                     HBRUSH commentBrush = CreateSolidBrush(RGB(0, 128, 0));
-                    HBRUSH stringBrush = CreateSolidBrush(RGB(200, 0, 0));
-                    HBRUSH keywordBrush = CreateSolidBrush(RGB(0, 0, 200));
+                    HBRUSH stringBrush = CreateSolidBrush(RGB(250, 128, 114));
+                    HBRUSH keywordBrush = CreateSolidBrush(RGB(58, 58, 255));
+                    HDC overlayDC = CreateCompatibleDC(hdc);
+                    HBITMAP overlayBitmap = CreateCompatibleBitmap(hdc, 1, 1);
+                    HBITMAP oldOverlayBitmap = overlayBitmap ? (HBITMAP)SelectObject(overlayDC, overlayBitmap) : NULL;
+                    BLENDFUNCTION overlayBlend = { 0 };
+                    overlayBlend.BlendOp = AC_SRC_OVER;
+                    overlayBlend.BlendFlags = 0;
+                    overlayBlend.SourceConstantAlpha = MINIMAP_INDICATOR_ALPHA;
+                    overlayBlend.AlphaFormat = 0;
 
                     for (int y = 0; y < windowHeight; y += rowHeight) {
                         float rowRatio = (float)(y + (rowHeight / 2)) / (float)windowHeight;
@@ -252,6 +359,13 @@ LRESULT MinimapOverlay::HandlePaint(HWND hWnd, WPARAM wParam, LPARAM lParam)
                         int indentPixels = indentColumns / 2;
                         if (indentPixels > MINIMAP_WIDTH / 2) indentPixels = MINIMAP_WIDTH / 2;
 
+                        COLORREF indicatorColor = 0;
+                        bool hasIndicator = TryGetLineIndicator(hWnd, lineStartPos, lineLength, indicatorColor);
+                        if (hasIndicator && overlayDC && overlayBitmap) {
+                            SetPixel(overlayDC, 0, 0, indicatorColor);
+                            AlphaBlend(memDC, 0, y, MINIMAP_WIDTH, rowHeight, overlayDC, 0, 0, 1, 1, overlayBlend);
+                        }
+
                         int maxChars = lineLength > MINIMAP_MAX_CHARS_FOR_FULL ? MINIMAP_MAX_CHARS_FOR_FULL : lineLength;
                         int barMaxWidth = MINIMAP_WIDTH - 6;
                         if (barMaxWidth < 1) barMaxWidth = 1;
@@ -267,15 +381,7 @@ LRESULT MinimapOverlay::HandlePaint(HWND hWnd, WPARAM wParam, LPARAM lParam)
                         }
                         if (barWidth > availableWidth) barWidth = availableWidth;
 
-                        int rangeStart = lineStartPos;
-                        int rangeEnd = lineStartPos + maxChars;
-                        Sci_TextRange tr;
-                        tr.chrg.cpMin = rangeStart;
-                        tr.chrg.cpMax = rangeEnd;
-                        int bufferSize = (maxChars * 2) + 2;
-                        std::vector<char> styledText(bufferSize, 0);
-                        tr.lpstrText = styledText.data();
-                        SendMessage(hWnd, SCI_GETSTYLEDTEXT, 0, (LPARAM)&tr);
+                        const std::vector<char>& styledText = GetStyledTextCached(hWnd, lineIndex, lineStartPos, lineLength, maxChars);
 
                         bool hasNonWhitespace = false;
                         for (int i = 0; i < maxChars; i++) {
@@ -288,7 +394,7 @@ LRESULT MinimapOverlay::HandlePaint(HWND hWnd, WPARAM wParam, LPARAM lParam)
                                 break;
                             }
                         }
-                        if (!hasNonWhitespace) {
+                        if (!hasNonWhitespace && !hasIndicator) {
                             continue;
                         }
 
@@ -354,10 +460,19 @@ LRESULT MinimapOverlay::HandlePaint(HWND hWnd, WPARAM wParam, LPARAM lParam)
                     DeleteObject(commentBrush);
                     DeleteObject(stringBrush);
                     DeleteObject(keywordBrush);
+                    if (overlayDC) {
+                        if (oldOverlayBitmap) {
+                            SelectObject(overlayDC, oldOverlayBitmap);
+                        }
+                        if (overlayBitmap) {
+                            DeleteObject(overlayBitmap);
+                        }
+                        DeleteDC(overlayDC);
+                    }
                 }
 
-                // Draw viewport indicator only when hovering over the minimap
-                if (totalLines > 0 && g_isMinimapHover) {
+                // Draw viewport indicator
+                if (totalLines > 0) {
                     // Position remains relative to full document; height respects minimum zoom.
                     int windowOffset = (int)firstVisibleLine - windowStart;
                     if (windowOffset < 0) windowOffset = 0;

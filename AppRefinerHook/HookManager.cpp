@@ -57,6 +57,7 @@ void HandleScintillaNotification(HWND hwnd, SCNotification* scn, HWND callbackWi
         
         /* Check if we are deleting the entire document */
         if (scn->nmhdr.code == SCN_MODIFIED) {
+            MinimapOverlay::InvalidateCache();
 
             if (scn->modificationType == (SC_MOD_BEFOREDELETE | SC_PERFORMED_USER)) {
 				sprintf_s(debugMsg, "SCN_MODIFIED: SC_MOD_BEFOREDELETE detected\n");

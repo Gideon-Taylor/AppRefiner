@@ -22,4 +22,7 @@ public:
 
     // Handle WM_MOUSELEAVE message to hide viewport when leaving minimap
     static LRESULT HandleMouseLeave(HWND hWnd, WPARAM wParam, LPARAM lParam);
+
+    // Clear cached minimap style data
+    static void InvalidateCache();
 };
