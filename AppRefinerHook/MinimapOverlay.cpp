@@ -12,10 +12,13 @@ static const int MINIMAP_MAX_CHARS_FOR_FULL = 200;
 static const int MINIMAP_INDENT_TAB_WIDTH = 4;
 // Style IDs for the VB/PB lexer.
 static const int SCE_B_COMMENT = 1;
+static const int SCE_B_KEYWORD = 3;
 static const int SCE_B_STRING = 4;
 
 static bool g_isMinimapHover = false;
 static bool g_isTrackingMouseLeave = false;
+static bool g_hasMinimapWindowStart = false;
+static int g_cachedMinimapWindowStart = 0;
 
 static RECT GetMinimapRect(HWND hWnd)
 {
@@ -83,16 +86,60 @@ static int GetMinimapWindowStart(int totalLines, int visibleLines, int effective
     return windowStart;
 }
 
+static int GetStableMinimapWindowStart(int totalLines, int visibleLines, int effectiveTotalLines, int firstVisibleLine)
+{
+    int desiredWindowStart = GetMinimapWindowStart(totalLines, visibleLines, effectiveTotalLines, firstVisibleLine);
+    if (!g_hasMinimapWindowStart) {
+        g_cachedMinimapWindowStart = desiredWindowStart;
+        g_hasMinimapWindowStart = true;
+        return g_cachedMinimapWindowStart;
+    }
+
+    int maxWindowStart = totalLines - effectiveTotalLines;
+    if (maxWindowStart < 0) maxWindowStart = 0;
+
+    if (g_cachedMinimapWindowStart > maxWindowStart) {
+        g_cachedMinimapWindowStart = maxWindowStart;
+    }
+
+    int centerLine = firstVisibleLine + (visibleLines / 2);
+    int margin = effectiveTotalLines / 4;
+    if (margin < visibleLines) margin = visibleLines;
+    if (margin < 1) margin = 1;
+
+    int windowTop = g_cachedMinimapWindowStart + margin;
+    int windowBottom = g_cachedMinimapWindowStart + effectiveTotalLines - margin;
+    if (windowBottom < windowTop) windowBottom = windowTop;
+
+    if (centerLine < windowTop) {
+        g_cachedMinimapWindowStart = centerLine - margin;
+    } else if (centerLine > windowBottom) {
+        g_cachedMinimapWindowStart = centerLine - (effectiveTotalLines - margin);
+    }
+
+    if (g_cachedMinimapWindowStart < 0) g_cachedMinimapWindowStart = 0;
+    if (g_cachedMinimapWindowStart > maxWindowStart) g_cachedMinimapWindowStart = maxWindowStart;
+
+    return g_cachedMinimapWindowStart;
+}
+
 static COLORREF GetMinimapLineColor(HWND hWnd, int lineStartPos, int lineLength)
 {
     int maxScan = lineLength < 80 ? lineLength : 80;
+    bool keywordSeen = false;
+    bool inWord = false;
+
     for (int i = 0; i < maxScan; i++) {
         int pos = lineStartPos + i;
         int ch = (int)SendMessage(hWnd, SCI_GETCHARAT, pos, 0);
         if (ch == ' ' || ch == '\t' || ch == '\r' || ch == '\n') {
+            if (inWord) {
+                break;
+            }
             continue;
         }
 
+        inWord = true;
         int style = (int)SendMessage(hWnd, SCI_GETSTYLEAT, pos, 0);
         if (style == SCE_B_COMMENT) {
             return RGB(0, 128, 0);
@@ -100,7 +147,13 @@ static COLORREF GetMinimapLineColor(HWND hWnd, int lineStartPos, int lineLength)
         if (style == SCE_B_STRING) {
             return RGB(200, 0, 0);
         }
-        break;
+        if (style == SCE_B_KEYWORD) {
+            keywordSeen = true;
+        }
+    }
+
+    if (keywordSeen) {
+        return RGB(0, 0, 200);
     }
 
     return RGB(140, 140, 140);
@@ -178,7 +231,7 @@ LRESULT MinimapOverlay::HandlePaint(HWND hWnd, WPARAM wParam, LPARAM lParam)
 
                 int effectiveTotalLines = GetEffectiveTotalLines((int)totalLines, windowHeight, lineHeight, (int)visibleLines);
                 if (effectiveTotalLines < 1) effectiveTotalLines = 1;
-                int windowStart = GetMinimapWindowStart((int)totalLines, (int)visibleLines, effectiveTotalLines, (int)firstVisibleLine);
+                int windowStart = GetStableMinimapWindowStart((int)totalLines, (int)visibleLines, effectiveTotalLines, (int)firstVisibleLine);
 
                 // Draw content bars for the minimap.
                 if (totalLines > 0) {
@@ -189,9 +242,10 @@ LRESULT MinimapOverlay::HandlePaint(HWND hWnd, WPARAM wParam, LPARAM lParam)
                     HBRUSH codeBrush = CreateSolidBrush(RGB(140, 140, 140));
                     HBRUSH commentBrush = CreateSolidBrush(RGB(0, 128, 0));
                     HBRUSH stringBrush = CreateSolidBrush(RGB(200, 0, 0));
+                    HBRUSH keywordBrush = CreateSolidBrush(RGB(0, 0, 200));
 
                     for (int y = 0; y < windowHeight; y += rowHeight) {
-                        float rowRatio = (float)y / (float)windowHeight;
+                        float rowRatio = (float)(y + (rowHeight / 2)) / (float)windowHeight;
                         int lineOffset = (int)(rowRatio * (float)effectiveTotalLines);
                         int lineIndex = windowStart + lineOffset;
                         if (lineIndex < 0) lineIndex = 0;
@@ -235,6 +289,8 @@ LRESULT MinimapOverlay::HandlePaint(HWND hWnd, WPARAM wParam, LPARAM lParam)
                             lineBrush = commentBrush;
                         } else if (lineColor == RGB(200, 0, 0)) {
                             lineBrush = stringBrush;
+                        } else if (lineColor == RGB(0, 0, 200)) {
+                            lineBrush = keywordBrush;
                         }
 
                         RECT lineRect = { startX, y, startX + barWidth, y + 1 };
@@ -244,6 +300,7 @@ LRESULT MinimapOverlay::HandlePaint(HWND hWnd, WPARAM wParam, LPARAM lParam)
                     DeleteObject(codeBrush);
                     DeleteObject(commentBrush);
                     DeleteObject(stringBrush);
+                    DeleteObject(keywordBrush);
                 }
 
                 // Draw viewport indicator only when hovering over the minimap
@@ -357,7 +414,7 @@ LRESULT MinimapOverlay::HandleLeftButtonDown(HWND hWnd, WPARAM wParam, LPARAM lP
         int effectiveTotalLines = GetEffectiveTotalLines((int)totalLines, windowHeight, lineHeight, (int)visibleLines);
         if (effectiveTotalLines < 1) effectiveTotalLines = 1;
 
-        int windowStart = GetMinimapWindowStart((int)totalLines, (int)visibleLines, effectiveTotalLines, (int)firstVisibleLine);
+        int windowStart = GetStableMinimapWindowStart((int)totalLines, (int)visibleLines, effectiveTotalLines, (int)firstVisibleLine);
 
         // Calculate click position as percentage of minimap height
         float clickRatio = (float)yPos / (float)windowHeight;
