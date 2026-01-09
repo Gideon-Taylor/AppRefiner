@@ -150,6 +150,7 @@
     <ClInclude Include="Common.h" />
     <ClInclude Include="EditorManager.h" />
     <ClInclude Include="HookManager.h" />
+    <ClInclude Include="MinimapOverlay.h" />
     <ClInclude Include="Scintilla.h" />
     <ClInclude Include="Sci_position.h" />
     <ClInclude Include="ScintillaUtils.h" />
@@ -160,6 +161,7 @@
     <ClCompile Include="EditorManager.cpp" />
     <ClCompile Include="dllmain.cpp" />
     <ClCompile Include="HookManager.cpp" />
+    <ClCompile Include="MinimapOverlay.cpp" />
     <ClCompile Include="ScintillaUtils.cpp" />
   </ItemGroup>
   <ItemGroup>
