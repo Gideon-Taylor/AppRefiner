@@ -572,6 +572,171 @@ LRESULT CALLBACK ScintillaSubclassProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPAR
             return DefSubclassProc(hWnd, uMsg, wParam, lParam);
         }
 
+        // Handle WM_ERASEBKGND to prevent flicker in minimap area
+        if (uMsg == WM_ERASEBKGND) {
+            // Get window dimensions to calculate minimap area
+            RECT clientRect;
+            GetClientRect(hWnd, &clientRect);
+            int windowWidth = clientRect.right;
+            int minimapWidth = 80;
+            int minimapX = windowWidth - minimapWidth;
+
+            // Get the region being erased
+            HDC hdc = (HDC)wParam;
+            RECT eraseRect;
+            GetClipBox(hdc, &eraseRect);
+
+            // Check if erase region overlaps with minimap area
+            if (eraseRect.right > minimapX) {
+                // Erase only the non-minimap area (left side)
+                if (eraseRect.left < minimapX) {
+                    RECT leftRect = eraseRect;
+                    leftRect.right = minimapX;
+                    HBRUSH bgBrush = (HBRUSH)GetClassLongPtr(hWnd, GCLP_HBRBACKGROUND);
+                    if (bgBrush) {
+                        FillRect(hdc, &leftRect, bgBrush);
+                    }
+                }
+                // Don't erase the minimap area - return 1 to indicate we handled it
+                return 1;
+            }
+            // Fall through to default for non-minimap areas
+        }
+
+        // Handle WM_PAINT to draw minimap-style overlay on right side
+        if (uMsg == WM_PAINT) {
+            // Let Scintilla paint first
+            LRESULT result = DefSubclassProc(hWnd, uMsg, wParam, lParam);
+
+            // Get window dimensions
+            RECT clientRect;
+            GetClientRect(hWnd, &clientRect);
+            int windowWidth = clientRect.right;
+            int windowHeight = clientRect.bottom;
+
+            // Minimap dimensions: 80px wide, full height, on right side
+            int minimapWidth = 80;
+            int minimapX = windowWidth - minimapWidth;
+            int minimapY = 0;
+
+            // Get Scintilla document metrics for viewport indicator
+            LRESULT totalLines = SendMessage(hWnd, SCI_GETLINECOUNT, 0, 0);
+            LRESULT firstVisibleLine = SendMessage(hWnd, SCI_GETFIRSTVISIBLELINE, 0, 0);
+            LRESULT visibleLines = SendMessage(hWnd, SCI_LINESONSCREEN, 0, 0);
+
+            HDC hdc = GetDC(hWnd);
+            if (hdc) {
+                // Double buffering: create memory DC for the entire minimap
+                HDC memDC = CreateCompatibleDC(hdc);
+                if (memDC) {
+                    HBITMAP memBitmap = CreateCompatibleBitmap(hdc, minimapWidth, windowHeight);
+                    if (memBitmap) {
+                        HBITMAP oldBitmap = (HBITMAP)SelectObject(memDC, memBitmap);
+
+                        // Draw opaque white background to memory DC
+                        HBRUSH whiteBrush = CreateSolidBrush(RGB(255, 255, 255));
+                        RECT minimapRect = { 0, 0, minimapWidth, windowHeight };
+                        FillRect(memDC, &minimapRect, whiteBrush);
+                        DeleteObject(whiteBrush);
+
+                        // Draw viewport indicator (amber/yellow box) with transparency
+                        if (totalLines > 0) {
+                            // Calculate viewport position and height as ratio of total document
+                            float startRatio = (float)firstVisibleLine / (float)totalLines;
+                            float heightRatio = (float)visibleLines / (float)totalLines;
+
+                            // Clamp height ratio to max 1.0 (can't be larger than document)
+                            if (heightRatio > 1.0f) heightRatio = 1.0f;
+
+                            int viewportY = (int)(startRatio * windowHeight);
+                            int viewportHeight = (int)(heightRatio * windowHeight);
+
+                            // Ensure minimum height of 10px for visibility
+                            if (viewportHeight < 10) viewportHeight = 10;
+
+                            // Create another memory DC for transparent amber box
+                            HDC amberDC = CreateCompatibleDC(hdc);
+                            if (amberDC) {
+                                HBITMAP amberBitmap = CreateCompatibleBitmap(hdc, minimapWidth, viewportHeight);
+                                if (amberBitmap) {
+                                    HBITMAP oldAmberBitmap = (HBITMAP)SelectObject(amberDC, amberBitmap);
+
+                                    // Fill amber DC with amber color
+                                    HBRUSH amberBrush = CreateSolidBrush(RGB(255, 191, 0));
+                                    RECT amberRect = { 0, 0, minimapWidth, viewportHeight };
+                                    FillRect(amberDC, &amberRect, amberBrush);
+                                    DeleteObject(amberBrush);
+
+                                    // Blend amber box onto memory DC with 50% opacity
+                                    BLENDFUNCTION blend = { 0 };
+                                    blend.BlendOp = AC_SRC_OVER;
+                                    blend.BlendFlags = 0;
+                                    blend.SourceConstantAlpha = 128; // 50% opacity
+                                    blend.AlphaFormat = 0;
+
+                                    AlphaBlend(memDC, 0, viewportY, minimapWidth, viewportHeight,
+                                               amberDC, 0, 0, minimapWidth, viewportHeight, blend);
+
+                                    // Cleanup amber DC
+                                    SelectObject(amberDC, oldAmberBitmap);
+                                    DeleteObject(amberBitmap);
+                                }
+                                DeleteDC(amberDC);
+                            }
+                        }
+
+                        // Draw thin black border on memory DC
+                        HPEN blackPen = CreatePen(PS_SOLID, 1, RGB(0, 0, 0));
+                        HPEN oldPen = (HPEN)SelectObject(memDC, blackPen);
+                        HBRUSH oldBrush = (HBRUSH)SelectObject(memDC, GetStockObject(NULL_BRUSH));
+
+                        Rectangle(memDC, 0, 0, minimapWidth, windowHeight);
+
+                        SelectObject(memDC, oldPen);
+                        SelectObject(memDC, oldBrush);
+                        DeleteObject(blackPen);
+
+                        // BitBlt the entire minimap to screen in one operation (eliminates flicker)
+                        BitBlt(hdc, minimapX, minimapY, minimapWidth, windowHeight,
+                               memDC, 0, 0, SRCCOPY);
+
+                        // Cleanup
+                        SelectObject(memDC, oldBitmap);
+                        DeleteObject(memBitmap);
+                    }
+                    DeleteDC(memDC);
+                }
+
+                ReleaseDC(hWnd, hdc);
+            }
+
+            // Return Scintilla's paint result
+            return result;
+        }
+
+        // Handle WM_LBUTTONDOWN to detect clicks in minimap overlay
+        if (uMsg == WM_LBUTTONDOWN) {
+            // Extract mouse coordinates from lParam
+            int xPos = LOWORD(lParam);
+            int yPos = HIWORD(lParam);
+
+            // Get window dimensions to calculate minimap bounds
+            RECT clientRect;
+            GetClientRect(hWnd, &clientRect);
+            int windowWidth = clientRect.right;
+            int minimapWidth = 80;
+            int minimapX = windowWidth - minimapWidth;
+
+            // Check if click is inside the minimap overlay (right 80px of window)
+            if (xPos >= minimapX && xPos <= windowWidth) {
+                // Show MessageBox indicating click detected
+                MessageBox(hWnd, L"Click detected in minimap overlay!", L"Minimap Click", MB_OK | MB_ICONINFORMATION);
+
+                // Consume the click event (don't pass to Scintilla)
+                return 0;
+            }
+        }
+
         // Get the callback window from dwRefData
         HWND callbackWindow = (HWND)dwRefData;
 
