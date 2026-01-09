@@ -1,4 +1,5 @@
 #include "HookManager.h"
+#include "MinimapOverlay.h"
 
 // Global variables
 HHOOK g_getMsgHook = NULL;
@@ -19,6 +20,7 @@ bool g_hasUnprocessedCopy = false;      // Track if there's an unprocessed copy 
 const int OPEN_TARGET_BUFFER_SIZE = 0x100;  // 256 characters max
 thread_local wchar_t g_openTargetBuffer[OPEN_TARGET_BUFFER_SIZE] = { 0 };
 
+static void InvalidateMinimapForScintilla(HWND scintillaHwnd);
 
 // Function to check for unprocessed copy operation
 bool HasUnprocessedCopyOperation() {
@@ -56,6 +58,7 @@ void HandleScintillaNotification(HWND hwnd, SCNotification* scn, HWND callbackWi
         
         /* Check if we are deleting the entire document */
         if (scn->nmhdr.code == SCN_MODIFIED) {
+            MinimapOverlay::InvalidateCache();
 
             if (scn->modificationType == (SC_MOD_BEFOREDELETE | SC_PERFORMED_USER)) {
 				sprintf_s(debugMsg, "SCN_MODIFIED: SC_MOD_BEFOREDELETE detected\n");
@@ -499,6 +502,7 @@ void HandleScintillaNotification(HWND hwnd, SCNotification* scn, HWND callbackWi
                 // Notify EditorManager about cursor position change event
                 EditorManager::HandleCursorPositionChangeEvent(hwnd, callbackWindow);
             }
+            InvalidateMinimapForScintilla(hwnd);
         }
     }
     catch (const std::exception& e) {
@@ -508,6 +512,120 @@ void HandleScintillaNotification(HWND hwnd, SCNotification* scn, HWND callbackWi
     }
     catch (...) {
         OutputDebugStringA("Unknown exception in HandleScintillaNotification");
+    }
+}
+
+static const wchar_t* MINIMAP_WINDOW_CLASS = L"AppRefinerMinimap";
+static const wchar_t* MINIMAP_PROP_NAME = L"AR_MinimapHwnd";
+static HWND g_minimapDragHwnd = NULL;
+static bool g_isMinimapDragging = false;
+
+static void InvalidateMinimapForScintilla(HWND scintillaHwnd) {
+    if (!scintillaHwnd) {
+        return;
+    }
+
+    HWND minimapHwnd = (HWND)GetPropW(scintillaHwnd, MINIMAP_PROP_NAME);
+    if (minimapHwnd && IsWindow(minimapHwnd)) {
+        InvalidateRect(minimapHwnd, NULL, FALSE);
+    }
+}
+
+static LRESULT CALLBACK MinimapWindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
+    if (uMsg == WM_NCDESTROY) {
+        HWND scintillaHwnd = (HWND)GetWindowLongPtr(hWnd, GWLP_USERDATA);
+        if (scintillaHwnd) {
+            RemovePropW(scintillaHwnd, MINIMAP_PROP_NAME);
+        }
+        return DefWindowProc(hWnd, uMsg, wParam, lParam);
+    }
+
+    HWND scintillaHwnd = (HWND)GetWindowLongPtr(hWnd, GWLP_USERDATA);
+    if (uMsg == WM_ERASEBKGND) {
+        return 1;
+    }
+    if (uMsg == WM_PAINT) {
+        MinimapOverlay::HandlePaint(hWnd, scintillaHwnd, wParam, lParam);
+        return 0;
+    }
+    if (uMsg == WM_MOUSEWHEEL) {
+        if (scintillaHwnd && IsWindow(scintillaHwnd)) {
+            POINT pt;
+            GetCursorPos(&pt);
+            LPARAM wheelPos = MAKELPARAM(pt.x, pt.y);
+            return SendMessage(scintillaHwnd, WM_MOUSEWHEEL, wParam, wheelPos);
+        }
+        return 0;
+    }
+    if (uMsg == WM_LBUTTONDOWN) {
+        SetCapture(hWnd);
+        g_minimapDragHwnd = hWnd;
+        g_isMinimapDragging = true;
+        return MinimapOverlay::HandleLeftButtonDown(hWnd, scintillaHwnd, wParam, lParam);
+    }
+    if (uMsg == WM_LBUTTONUP) {
+        if (g_isMinimapDragging && g_minimapDragHwnd == hWnd) {
+            g_isMinimapDragging = false;
+            g_minimapDragHwnd = NULL;
+            ReleaseCapture();
+        }
+        return 0;
+    }
+    if (uMsg == WM_MOUSEMOVE) {
+        if (g_isMinimapDragging && g_minimapDragHwnd == hWnd) {
+            MinimapOverlay::HandleLeftButtonDown(hWnd, scintillaHwnd, wParam, lParam);
+        }
+        MinimapOverlay::HandleMouseMove(hWnd, wParam, lParam);
+    } else if (uMsg == WM_MOUSELEAVE) {
+        MinimapOverlay::HandleMouseLeave(hWnd, wParam, lParam);
+    }
+
+    return DefWindowProc(hWnd, uMsg, wParam, lParam);
+}
+
+static void EnsureMinimapWindow(HWND parentHwnd, HWND scintillaHwnd) {
+    if (!parentHwnd || !scintillaHwnd) {
+        return;
+    }
+
+    HWND minimapHwnd = (HWND)GetPropW(scintillaHwnd, MINIMAP_PROP_NAME);
+    if (!minimapHwnd) {
+        WNDCLASSW wc = { 0 };
+        wc.lpfnWndProc = MinimapWindowProc;
+        wc.hInstance = g_hModule;
+        wc.lpszClassName = MINIMAP_WINDOW_CLASS;
+        RegisterClassW(&wc);
+
+        minimapHwnd = CreateWindowExW(0, MINIMAP_WINDOW_CLASS, L"", WS_CHILD | WS_VISIBLE,
+                                      0, 0, MinimapOverlay::GetWidth(), 0, parentHwnd, NULL, g_hModule, NULL);
+        if (minimapHwnd) {
+            SetWindowLongPtr(minimapHwnd, GWLP_USERDATA, (LONG_PTR)scintillaHwnd);
+            SetPropW(scintillaHwnd, MINIMAP_PROP_NAME, minimapHwnd);
+        }
+    }
+
+    RECT parentRect;
+    GetClientRect(parentHwnd, &parentRect);
+    int parentWidth = parentRect.right;
+    int parentHeight = parentRect.bottom;
+    int minimapWidth = MinimapOverlay::GetWidth();
+    int editorWidth = parentWidth - minimapWidth;
+    if (editorWidth < 1) editorWidth = 1;
+
+    SetWindowPos(scintillaHwnd, NULL, 0, 0, editorWidth, parentHeight, SWP_NOZORDER | SWP_NOACTIVATE);
+    if (minimapHwnd) {
+        SetWindowPos(minimapHwnd, NULL, editorWidth, 0, minimapWidth, parentHeight, SWP_NOZORDER | SWP_NOACTIVATE);
+    }
+}
+
+static void LayoutMinimapForParent(HWND parentHwnd) {
+    if (!parentHwnd) {
+        return;
+    }
+
+    HWND scintillaHwnd = FindWindowExA(parentHwnd, NULL, "Scintilla", NULL);
+    if (scintillaHwnd && IsWindow(scintillaHwnd)) {
+        EnsureMinimapWindow(parentHwnd, scintillaHwnd);
     }
 }
 
@@ -524,6 +642,10 @@ LRESULT CALLBACK SubclassProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam
         // Get the callback window from dwRefData
         HWND callbackWindow = (HWND)dwRefData;
         
+        if (uMsg == WM_SIZE) {
+            LayoutMinimapForParent(hWnd);
+        }
+
         // Check for WM_NOTIFY messages
         if (uMsg == WM_NOTIFY) {
             // Get the NMHDR structure
@@ -570,6 +692,33 @@ LRESULT CALLBACK ScintillaSubclassProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPAR
         if (uMsg == WM_NCDESTROY) {
             RemoveWindowSubclass(hWnd, ScintillaSubclassProc, SCINTILLA_SUBCLASS_ID);
             return DefSubclassProc(hWnd, uMsg, wParam, lParam);
+        }
+
+        // Handle WM_ERASEBKGND to prevent flicker in minimap area
+        if (uMsg == WM_ERASEBKGND) {
+            // Fall through to default processing
+        }
+
+        // Handle WM_PAINT to draw minimap-style overlay on right side
+        if (uMsg == WM_PAINT) {
+            // Let Scintilla paint first
+            return DefSubclassProc(hWnd, uMsg, wParam, lParam);
+        }
+
+        if (uMsg == WM_VSCROLL || uMsg == WM_MOUSEWHEEL || uMsg == WM_HSCROLL) {
+            LRESULT result = DefSubclassProc(hWnd, uMsg, wParam, lParam);
+            InvalidateMinimapForScintilla(hWnd);
+            return result;
+        }
+
+        // Handle WM_LBUTTONDOWN to detect clicks in minimap overlay
+        if (uMsg == WM_LBUTTONDOWN) {
+            // Fall through to default processing
+        }
+
+        if (uMsg == WM_SIZE) {
+            HWND parentHwnd = GetParent(hWnd);
+            LayoutMinimapForParent(parentHwnd);
         }
 
         // Get the callback window from dwRefData
@@ -1061,6 +1210,8 @@ LRESULT CALLBACK GetMsgHook(int nCode, WPARAM wParam, LPARAM lParam) {
                         SetWindowSubclass(findData.scintillaHwnd, ScintillaSubclassProc, SCINTILLA_SUBCLASS_ID, (DWORD_PTR)callbackWindow);
                     }
                 }
+
+                LayoutMinimapForParent(hWndToSubclass);
             } else {
                 OutputDebugStringA("Invalid window handle for subclassing");
             }
