@@ -578,7 +578,7 @@ LRESULT CALLBACK ScintillaSubclassProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPAR
             RECT clientRect;
             GetClientRect(hWnd, &clientRect);
             int windowWidth = clientRect.right;
-            int minimapWidth = 80;
+            int minimapWidth = 120;
             int minimapX = windowWidth - minimapWidth;
 
             // Get the region being erased
@@ -615,7 +615,7 @@ LRESULT CALLBACK ScintillaSubclassProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPAR
             int windowHeight = clientRect.bottom;
 
             // Minimap dimensions: 80px wide, full height, on right side
-            int minimapWidth = 80;
+            int minimapWidth = 120;
             int minimapX = windowWidth - minimapWidth;
             int minimapY = 0;
 
@@ -724,13 +724,34 @@ LRESULT CALLBACK ScintillaSubclassProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPAR
             RECT clientRect;
             GetClientRect(hWnd, &clientRect);
             int windowWidth = clientRect.right;
-            int minimapWidth = 80;
+            int minimapWidth = 120;
             int minimapX = windowWidth - minimapWidth;
 
             // Check if click is inside the minimap overlay (right 80px of window)
             if (xPos >= minimapX && xPos <= windowWidth) {
-                // Show MessageBox indicating click detected
-                MessageBox(hWnd, L"Click detected in minimap overlay!", L"Minimap Click", MB_OK | MB_ICONINFORMATION);
+                int windowHeight = clientRect.bottom;
+
+                // Get Scintilla document metrics
+                LRESULT totalLines = SendMessage(hWnd, SCI_GETLINECOUNT, 0, 0);
+                LRESULT visibleLines = SendMessage(hWnd, SCI_LINESONSCREEN, 0, 0);
+
+                // Calculate click position as percentage of minimap height
+                float clickRatio = (float)yPos / (float)windowHeight;
+
+                // Convert to middle line number (where user wants to center viewport)
+                int middleLine = (int)(clickRatio * totalLines);
+
+                // Calculate target first visible line (center viewport on clicked position)
+                int targetFirstVisible = middleLine - (visibleLines / 2);
+
+                // Clamp to valid range [0, totalLines - visibleLines]
+                if (targetFirstVisible < 0) targetFirstVisible = 0;
+                int maxFirstVisible = (int)(totalLines - visibleLines);
+                if (maxFirstVisible < 0) maxFirstVisible = 0;
+                if (targetFirstVisible > maxFirstVisible) targetFirstVisible = maxFirstVisible;
+
+                // Scroll to the calculated line
+                SendMessage(hWnd, SCI_SETFIRSTVISIBLELINE, targetFirstVisible, 0);
 
                 // Consume the click event (don't pass to Scintilla)
                 return 0;
