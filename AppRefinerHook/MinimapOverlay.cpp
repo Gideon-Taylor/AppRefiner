@@ -1,5 +1,6 @@
 #include "MinimapOverlay.h"
 #include "Scintilla.h"
+#include <vector>
 
 // Minimap width in pixels
 static const int MINIMAP_WIDTH = 120;
@@ -123,40 +124,18 @@ static int GetStableMinimapWindowStart(int totalLines, int visibleLines, int eff
     return g_cachedMinimapWindowStart;
 }
 
-static COLORREF GetMinimapLineColor(HWND hWnd, int lineStartPos, int lineLength)
+static HBRUSH GetMinimapBrushForStyle(int style, HBRUSH codeBrush, HBRUSH commentBrush, HBRUSH stringBrush, HBRUSH keywordBrush)
 {
-    int maxScan = lineLength < 80 ? lineLength : 80;
-    bool keywordSeen = false;
-    bool inWord = false;
-
-    for (int i = 0; i < maxScan; i++) {
-        int pos = lineStartPos + i;
-        int ch = (int)SendMessage(hWnd, SCI_GETCHARAT, pos, 0);
-        if (ch == ' ' || ch == '\t' || ch == '\r' || ch == '\n') {
-            if (inWord) {
-                break;
-            }
-            continue;
-        }
-
-        inWord = true;
-        int style = (int)SendMessage(hWnd, SCI_GETSTYLEAT, pos, 0);
-        if (style == SCE_B_COMMENT) {
-            return RGB(0, 128, 0);
-        }
-        if (style == SCE_B_STRING) {
-            return RGB(200, 0, 0);
-        }
-        if (style == SCE_B_KEYWORD) {
-            keywordSeen = true;
-        }
+    if (style == SCE_B_COMMENT) {
+        return commentBrush;
     }
-
-    if (keywordSeen) {
-        return RGB(0, 0, 200);
+    if (style == SCE_B_STRING) {
+        return stringBrush;
     }
-
-    return RGB(140, 140, 140);
+    if (style == SCE_B_KEYWORD) {
+        return keywordBrush;
+    }
+    return codeBrush;
 }
 
 int MinimapOverlay::GetWidth()
@@ -282,19 +261,93 @@ LRESULT MinimapOverlay::HandlePaint(HWND hWnd, WPARAM wParam, LPARAM lParam)
 
                         int startX = 2 + indentPixels;
                         if (startX > MINIMAP_WIDTH - 2) startX = MINIMAP_WIDTH - 2;
+                        int availableWidth = MINIMAP_WIDTH - 2 - startX;
+                        if (availableWidth < 1) {
+                            continue;
+                        }
+                        if (barWidth > availableWidth) barWidth = availableWidth;
 
-                        COLORREF lineColor = GetMinimapLineColor(hWnd, lineStartPos, lineLength);
-                        HBRUSH lineBrush = codeBrush;
-                        if (lineColor == RGB(0, 128, 0)) {
-                            lineBrush = commentBrush;
-                        } else if (lineColor == RGB(200, 0, 0)) {
-                            lineBrush = stringBrush;
-                        } else if (lineColor == RGB(0, 0, 200)) {
-                            lineBrush = keywordBrush;
+                        int rangeStart = lineStartPos;
+                        int rangeEnd = lineStartPos + maxChars;
+                        Sci_TextRange tr;
+                        tr.chrg.cpMin = rangeStart;
+                        tr.chrg.cpMax = rangeEnd;
+                        int bufferSize = (maxChars * 2) + 2;
+                        std::vector<char> styledText(bufferSize, 0);
+                        tr.lpstrText = styledText.data();
+                        SendMessage(hWnd, SCI_GETSTYLEDTEXT, 0, (LPARAM)&tr);
+
+                        bool hasNonWhitespace = false;
+                        for (int i = 0; i < maxChars; i++) {
+                            int ch = (unsigned char)styledText[i * 2];
+                            if (ch == 0) {
+                                break;
+                            }
+                            if (ch != ' ' && ch != '\t' && ch != '\r' && ch != '\n') {
+                                hasNonWhitespace = true;
+                                break;
+                            }
+                        }
+                        if (!hasNonWhitespace) {
+                            continue;
                         }
 
-                        RECT lineRect = { startX, y, startX + barWidth, y + 1 };
-                        FillRect(memDC, &lineRect, lineBrush);
+                        int runStyle = -1;
+                        int runLength = 0;
+                        float xCursor = (float)startX;
+                        float widthPerChar = (maxChars > 0) ? ((float)barWidth / (float)maxChars) : 0.0f;
+                        int endX = startX + barWidth;
+                        bool isFirstRun = true;
+
+                        for (int i = 0; i < maxChars; i++) {
+                            int ch = (unsigned char)styledText[i * 2];
+                            int style = (unsigned char)styledText[(i * 2) + 1];
+                            if (ch == 0) {
+                                break;
+                            }
+
+                            if (runStyle == -1) {
+                                runStyle = style;
+                                runLength = 1;
+                            } else if (style == runStyle) {
+                                runLength++;
+                            } else {
+                                int segmentWidth = (int)((float)runLength * widthPerChar + 0.5f);
+                                if (segmentWidth < 1) segmentWidth = 1;
+                                if (!isFirstRun && xCursor < endX) {
+                                    xCursor += 1.0f;
+                                }
+                                int drawWidth = (int)segmentWidth;
+                                if ((int)xCursor + drawWidth > endX) {
+                                    drawWidth = endX - (int)xCursor;
+                                }
+                                if (drawWidth > 0) {
+                                    RECT lineRect = { (int)xCursor, y, (int)xCursor + drawWidth, y + 1 };
+                                    FillRect(memDC, &lineRect, GetMinimapBrushForStyle(runStyle, codeBrush, commentBrush, stringBrush, keywordBrush));
+                                    xCursor += (float)drawWidth;
+                                }
+
+                                runStyle = style;
+                                runLength = 1;
+                                isFirstRun = false;
+                            }
+                        }
+
+                        if (runStyle != -1 && runLength > 0) {
+                            int segmentWidth = (int)((float)runLength * widthPerChar + 0.5f);
+                            if (segmentWidth < 1) segmentWidth = 1;
+                            if (!isFirstRun && xCursor < endX) {
+                                xCursor += 1.0f;
+                            }
+                            int drawWidth = (int)segmentWidth;
+                            if ((int)xCursor + drawWidth > endX) {
+                                drawWidth = endX - (int)xCursor;
+                            }
+                            if (drawWidth > 0) {
+                                RECT lineRect = { (int)xCursor, y, (int)xCursor + drawWidth, y + 1 };
+                                FillRect(memDC, &lineRect, GetMinimapBrushForStyle(runStyle, codeBrush, commentBrush, stringBrush, keywordBrush));
+                            }
+                        }
                     }
 
                     DeleteObject(codeBrush);
