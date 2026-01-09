@@ -7,6 +7,12 @@ static const int MINIMAP_WIDTH = 120;
 static const int MINIMAP_MIN_VIEWPORT_HEIGHT = 20;
 // Keep minimap from representing too many lines at once vs the viewport.
 static const int MINIMAP_MAX_VIEWPORTS = 12;
+// Scale factors for minimap content rendering.
+static const int MINIMAP_MAX_CHARS_FOR_FULL = 200;
+static const int MINIMAP_INDENT_TAB_WIDTH = 4;
+// Style IDs for the VB/PB lexer.
+static const int SCE_B_COMMENT = 1;
+static const int SCE_B_STRING = 4;
 
 static bool g_isMinimapHover = false;
 static bool g_isTrackingMouseLeave = false;
@@ -38,7 +44,7 @@ static int GetLineHeight(HWND hWnd)
 static float GetMinimapLineHeight(int lineHeight)
 {
     float minimapLineHeight = (float)lineHeight / 10.0f;
-    if (minimapLineHeight < 1.0f) minimapLineHeight = 1.0f;
+    if (minimapLineHeight < 2.0f) minimapLineHeight = 2.0f;
     return minimapLineHeight;
 }
 
@@ -75,6 +81,29 @@ static int GetMinimapWindowStart(int totalLines, int visibleLines, int effective
     if (windowStart > maxWindowStart) windowStart = maxWindowStart;
 
     return windowStart;
+}
+
+static COLORREF GetMinimapLineColor(HWND hWnd, int lineStartPos, int lineLength)
+{
+    int maxScan = lineLength < 80 ? lineLength : 80;
+    for (int i = 0; i < maxScan; i++) {
+        int pos = lineStartPos + i;
+        int ch = (int)SendMessage(hWnd, SCI_GETCHARAT, pos, 0);
+        if (ch == ' ' || ch == '\t' || ch == '\r' || ch == '\n') {
+            continue;
+        }
+
+        int style = (int)SendMessage(hWnd, SCI_GETSTYLEAT, pos, 0);
+        if (style == SCE_B_COMMENT) {
+            return RGB(0, 128, 0);
+        }
+        if (style == SCE_B_STRING) {
+            return RGB(200, 0, 0);
+        }
+        break;
+    }
+
+    return RGB(140, 140, 140);
 }
 
 int MinimapOverlay::GetWidth()
@@ -147,13 +176,79 @@ LRESULT MinimapOverlay::HandlePaint(HWND hWnd, WPARAM wParam, LPARAM lParam)
                 FillRect(memDC, &minimapRect, whiteBrush);
                 DeleteObject(whiteBrush);
 
+                int effectiveTotalLines = GetEffectiveTotalLines((int)totalLines, windowHeight, lineHeight, (int)visibleLines);
+                if (effectiveTotalLines < 1) effectiveTotalLines = 1;
+                int windowStart = GetMinimapWindowStart((int)totalLines, (int)visibleLines, effectiveTotalLines, (int)firstVisibleLine);
+
+                // Draw content bars for the minimap.
+                if (totalLines > 0) {
+                    float minimapLineHeight = GetMinimapLineHeight(lineHeight);
+                    int rowHeight = (int)minimapLineHeight;
+                    if (rowHeight < 2) rowHeight = 2;
+
+                    HBRUSH codeBrush = CreateSolidBrush(RGB(140, 140, 140));
+                    HBRUSH commentBrush = CreateSolidBrush(RGB(0, 128, 0));
+                    HBRUSH stringBrush = CreateSolidBrush(RGB(200, 0, 0));
+
+                    for (int y = 0; y < windowHeight; y += rowHeight) {
+                        float rowRatio = (float)y / (float)windowHeight;
+                        int lineOffset = (int)(rowRatio * (float)effectiveTotalLines);
+                        int lineIndex = windowStart + lineOffset;
+                        if (lineIndex < 0) lineIndex = 0;
+                        if (lineIndex >= totalLines) break;
+
+                        int lineStartPos = (int)SendMessage(hWnd, SCI_POSITIONFROMLINE, lineIndex, 0);
+                        int lineLength = (int)SendMessage(hWnd, SCI_LINELENGTH, lineIndex, 0);
+                        if (lineStartPos < 0 || lineLength <= 0) {
+                            continue;
+                        }
+
+                        int indentColumns = 0;
+                        int maxIndentScan = lineLength < 40 ? lineLength : 40;
+                        for (int i = 0; i < maxIndentScan; i++) {
+                            int ch = (int)SendMessage(hWnd, SCI_GETCHARAT, lineStartPos + i, 0);
+                            if (ch == ' ') {
+                                indentColumns += 1;
+                            } else if (ch == '\t') {
+                                indentColumns += MINIMAP_INDENT_TAB_WIDTH;
+                            } else {
+                                break;
+                            }
+                        }
+
+                        int indentPixels = indentColumns / 2;
+                        if (indentPixels > MINIMAP_WIDTH / 2) indentPixels = MINIMAP_WIDTH / 2;
+
+                        int maxChars = lineLength > MINIMAP_MAX_CHARS_FOR_FULL ? MINIMAP_MAX_CHARS_FOR_FULL : lineLength;
+                        int barMaxWidth = MINIMAP_WIDTH - 6;
+                        if (barMaxWidth < 1) barMaxWidth = 1;
+                        int barWidth = 2 + (barMaxWidth * maxChars / MINIMAP_MAX_CHARS_FOR_FULL);
+                        if (barWidth < 2) barWidth = 2;
+                        if (barWidth > barMaxWidth) barWidth = barMaxWidth;
+
+                        int startX = 2 + indentPixels;
+                        if (startX > MINIMAP_WIDTH - 2) startX = MINIMAP_WIDTH - 2;
+
+                        COLORREF lineColor = GetMinimapLineColor(hWnd, lineStartPos, lineLength);
+                        HBRUSH lineBrush = codeBrush;
+                        if (lineColor == RGB(0, 128, 0)) {
+                            lineBrush = commentBrush;
+                        } else if (lineColor == RGB(200, 0, 0)) {
+                            lineBrush = stringBrush;
+                        }
+
+                        RECT lineRect = { startX, y, startX + barWidth, y + 1 };
+                        FillRect(memDC, &lineRect, lineBrush);
+                    }
+
+                    DeleteObject(codeBrush);
+                    DeleteObject(commentBrush);
+                    DeleteObject(stringBrush);
+                }
+
                 // Draw viewport indicator only when hovering over the minimap
                 if (totalLines > 0 && g_isMinimapHover) {
                     // Position remains relative to full document; height respects minimum zoom.
-                    int effectiveTotalLines = GetEffectiveTotalLines((int)totalLines, windowHeight, lineHeight, (int)visibleLines);
-                    if (effectiveTotalLines < 1) effectiveTotalLines = 1;
-
-                    int windowStart = GetMinimapWindowStart((int)totalLines, (int)visibleLines, effectiveTotalLines, (int)firstVisibleLine);
                     int windowOffset = (int)firstVisibleLine - windowStart;
                     if (windowOffset < 0) windowOffset = 0;
                     if (windowOffset > effectiveTotalLines) windowOffset = effectiveTotalLines;
