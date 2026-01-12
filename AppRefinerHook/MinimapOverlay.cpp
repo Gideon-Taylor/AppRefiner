@@ -191,6 +191,11 @@ static COLORREF GetMinimapColorForStyle(int style, COLORREF codeColor, COLORREF 
 
 static bool TryGetLineIndicator(HWND hWnd, int lineStartPos, int lineLength, COLORREF& indicatorColor)
 {
+    // Indicator styles we want to show in minimap
+    // Squiggles: INDIC_SQUIGGLE (1), INDIC_SQUIGGLELOW (11), INDIC_SQUIGGLEPIXMAP (13)
+    // Highlights: INDIC_BOX (6), INDIC_ROUNDBOX (7), INDIC_STRAIGHTBOX (8), INDIC_DOTBOX (12), INDIC_FULLBOX (16), INDIC_GRADIENT (20), INDIC_GRADIENTCENTRE (21)
+    // Exclude: INDIC_TEXTFORE (17) which only changes text color
+
     for (int i = 0; i < lineLength; i++) {
         int pos = lineStartPos + i;
         int mask = (int)SendMessage(hWnd, SCI_INDICATORALLONFOR, pos, 0);
@@ -205,8 +210,17 @@ static bool TryGetLineIndicator(HWND hWnd, int lineStartPos, int lineLength, COL
         }
 
         if (indicatorIndex <= INDIC_MAX) {
-            indicatorColor = (COLORREF)SendMessage(hWnd, SCI_INDICGETFORE, indicatorIndex, 0);
-            return true;
+            // Check indicator style
+            int style = (int)SendMessage(hWnd, SCI_INDICGETSTYLE, indicatorIndex, 0);
+
+            // Only show squiggle or highlight indicators, not text color changes
+            bool isSquiggle = (style == 1 || style == 11 || style == 13);  // INDIC_SQUIGGLE, INDIC_SQUIGGLELOW, INDIC_SQUIGGLEPIXMAP
+            bool isHighlight = (style == 6 || style == 7 || style == 8 || style == 12 || style == 16 || style == 20 || style == 21);  // Box/highlight styles
+
+            if (isSquiggle || isHighlight) {
+                indicatorColor = (COLORREF)SendMessage(hWnd, SCI_INDICGETFORE, indicatorIndex, 0);
+                return true;
+            }
         }
     }
 
