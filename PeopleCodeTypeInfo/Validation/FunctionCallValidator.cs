@@ -57,6 +57,22 @@ public class FunctionCallValidator
         }
     }
 
+    /// <summary>
+    /// Represents the mapping between an argument and the parameter that matched it.
+    /// Used to display parameter names in inlay hints and tooltips.
+    /// </summary>
+    public class ParameterMapping
+    {
+        /// <summary>0-based index of the argument in the argument list</summary>
+        public int ArgumentIndex { get; set; }
+
+        /// <summary>Name of the parameter that matched (may be empty for unnamed parameters)</summary>
+        public string ParameterName { get; set; } = string.Empty;
+
+        /// <summary>Reference to the actual Parameter object for type information</summary>
+        public Parameter MatchedParameter { get; set; } = null!;
+    }
+
     public FunctionCallValidator(ITypeMetadataResolver typeResolver)
     {
         _typeResolver = typeResolver ?? throw new ArgumentNullException(nameof(typeResolver));
@@ -141,7 +157,7 @@ public class FunctionCallValidator
         var ok = MatchSequence(ctx, parameters, 0, 0, out int consumedIndex);
         if (ok && consumedIndex == arguments.Length)
         {
-            return ValidationResult.Success(consumedIndex, ctx.Warnings.Count > 0 ? ctx.Warnings : null);
+            return ValidationResult.Success(consumedIndex, ctx.Warnings.Count > 0 ? ctx.Warnings : null, ctx.ArgumentMappings);
         }
 
         // Check for too many arguments: matching succeeded but we have leftover arguments
@@ -1045,6 +1061,7 @@ public class FunctionCallValidator
         {
             if (IsAppClassCompatible(expectedAppClass, argAppClass))
             {
+                ctx.RecordMapping(argIndex, single);
                 consumed = 1;
                 return true;
             }
@@ -1065,12 +1082,14 @@ public class FunctionCallValidator
                 FunctionName = ctx.FunctionName
             };
             ctx.RecordWarning(warning);
+            ctx.RecordMapping(argIndex, single);
             consumed = 1;
             return true;
         }
 
         if (expectedTypeInfo.IsAssignableFrom(arg))
         {
+            ctx.RecordMapping(argIndex, single);
             consumed = 1;
             return true;
         }
@@ -1078,6 +1097,7 @@ public class FunctionCallValidator
         /* We don't know what type it is. it'll be figured out at runtime */
         if (arg.PeopleCodeType == PeopleCodeType.Unknown)
         {
+            ctx.RecordMapping(argIndex, single);
             consumed = 1;
             return true;
         }
@@ -1103,6 +1123,7 @@ public class FunctionCallValidator
         /* We don't know what type it is. it'll be figured out at runtime */
         if (arg.PeopleCodeType == PeopleCodeType.Unknown)
         {
+            ctx.RecordMapping(argIndex, union);
             consumed = 1;
             return true;
         }
@@ -1183,6 +1204,7 @@ public class FunctionCallValidator
             }
 
             // If this union consumes 1 and the remainder of the outer sequence matches, accept this branch.
+            ctx.RecordMapping(argIndex, union);
             consumed = 1;
             return true;
         }
@@ -1241,6 +1263,13 @@ public class FunctionCallValidator
             {
                 break;
             }
+
+            // Override last mapping to use variable's name if set
+            if (!string.IsNullOrEmpty(variable.Name))
+            {
+                ctx.OverrideLastMappingName(variable.Name);
+            }
+
             index += used;
             count++;
         }
@@ -1275,6 +1304,7 @@ public class FunctionCallValidator
         /* We don't know what type it is. it'll be figured out at runtime */
         if (arg.PeopleCodeType == PeopleCodeType.Unknown)
         {
+            ctx.RecordMapping(argIndex, reference);
             consumed = 1;
             return true;
         }
@@ -1291,6 +1321,7 @@ public class FunctionCallValidator
         var expectedRefType = new ReferenceTypeInfo(reference.ReferenceCategory, "", "");
         if (expectedRefType.IsAssignableFrom(refType))
         {
+            ctx.RecordMapping(argIndex, reference);
             consumed = 1;
             return true;
         }
@@ -1527,6 +1558,7 @@ public class FunctionCallValidator
         public List<string> Errors { get; } = new();
         public List<TypeWarning> Warnings { get; } = new();
         public FailureKind FailureKind { get; private set; } = FailureKind.None;
+        public List<ParameterMapping> ArgumentMappings { get; } = new();
 
         public MatchContext(string functionName, List<Parameter> parameters, TypeInfo[] arguments, TypeInfo? objectType = null)
         {
@@ -1602,6 +1634,31 @@ public class FunctionCallValidator
         {
             FailureKind = FailureKind.MissingArgument;
             if (argIndex > BestFailureArgIndex) BestFailureArgIndex = argIndex;
+        }
+
+        /// <summary>
+        /// Records a successful parameter-to-argument match for display in inlay hints.
+        /// </summary>
+        public void RecordMapping(int argIndex, Parameter parameter)
+        {
+            ArgumentMappings.Add(new ParameterMapping
+            {
+                ArgumentIndex = argIndex,
+                ParameterName = parameter.Name ?? string.Empty,
+                MatchedParameter = parameter
+            });
+        }
+
+        /// <summary>
+        /// Overrides the parameter name of the most recently recorded mapping.
+        /// Used when a variable parameter has its own name that should take precedence over inner parameter names.
+        /// </summary>
+        public void OverrideLastMappingName(string newName)
+        {
+            if (ArgumentMappings.Count > 0)
+            {
+                ArgumentMappings[^1].ParameterName = newName;
+            }
         }
 
         public List<ParameterTypeInfo> GetExpectedTypesAtFailure()
@@ -1692,6 +1749,13 @@ public class ValidationResult
     public List<TypeWarning> Warnings { get; set; } = new();
 
     /// <summary>
+    /// Maps each argument index to the parameter that matched it.
+    /// Only populated for successful validations.
+    /// Null for failed validations or when tracking is not needed.
+    /// </summary>
+    public List<FunctionCallValidator.ParameterMapping>? ArgumentMappings { get; set; }
+
+    /// <summary>
     /// Builds a human-friendly error message that includes position, expected types, and found type (if any).
     /// Format: "FunctionName(): Argument N should be <expected>, found <actual>"
     /// </summary>
@@ -1736,12 +1800,13 @@ public class ValidationResult
         return string.Join(". ", ErrorMessages);
     }
 
-    public static ValidationResult Success(int consumed, List<TypeWarning>? warnings = null)
+    public static ValidationResult Success(int consumed, List<TypeWarning>? warnings = null, List<FunctionCallValidator.ParameterMapping>? mappings = null)
     {
         return new ValidationResult
         {
             IsValid = true,
-            Warnings = warnings ?? new List<TypeWarning>()
+            Warnings = warnings ?? new List<TypeWarning>(),
+            ArgumentMappings = mappings
         };
     }
 

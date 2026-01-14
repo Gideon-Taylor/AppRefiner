@@ -41,6 +41,12 @@ public abstract class ScopedAstVisitor<T> : AstVisitorBase
     private bool isInAssignmentContext = false;
 
     /// <summary>
+    /// Flag to skip child traversal in base visitor methods when children have already been traversed
+    /// by VisitExpressionAsRead/Write for variable reference tracking
+    /// </summary>
+    private bool skipChildTraversal = false;
+
+    /// <summary>
     /// Reference to the program node being analyzed
     /// Used to determine if auto-declaration is allowed (non-class programs)
     /// </summary>
@@ -552,6 +558,12 @@ public abstract class ScopedAstVisitor<T> : AstVisitorBase
     /// </summary>
     public override void VisitIdentifier(IdentifierNode node)
     {
+        // Skip child traversal if already done by VisitExpressionAsRead/Write
+        if (skipChildTraversal)
+        {
+            return;
+        }
+
         // Only add reference if this identifier is not part of an assignment expression
         // Assignment expressions are handled by VisitAssignment which provides proper context
         if (!isInAssignmentContext)
@@ -590,6 +602,12 @@ public abstract class ScopedAstVisitor<T> : AstVisitorBase
     /// </summary>
     public override void VisitFunctionCall(FunctionCallNode node)
     {
+        // Skip child traversal if already done by VisitExpressionAsRead/Write
+        if (skipChildTraversal)
+        {
+            return;
+        }
+
         if (node.Function is MemberAccessNode member && member.Target is IdentifierNode ident)
         {
             if (ident.Name.StartsWith('&'))
@@ -605,6 +623,12 @@ public abstract class ScopedAstVisitor<T> : AstVisitorBase
     /// </summary>
     public override void VisitMemberAccess(MemberAccessNode node)
     {
+        // Skip child traversal if already done by VisitExpressionAsRead/Write
+        if (skipChildTraversal)
+        {
+            return;
+        }
+
         if (node.Target is IdentifierNode identNode && identNode.Name.Equals("%THIS", StringComparison.OrdinalIgnoreCase))
         {
             var memberName = node.MemberName;
@@ -615,6 +639,90 @@ public abstract class ScopedAstVisitor<T> : AstVisitorBase
         }
 
         base.VisitMemberAccess(node);
+    }
+
+    /// <summary>
+    /// Visits binary operations - skip check prevents re-traversal when called via Accept()
+    /// </summary>
+    public override void VisitBinaryOperation(BinaryOperationNode node)
+    {
+        if (skipChildTraversal)
+        {
+            return;
+        }
+        base.VisitBinaryOperation(node);
+    }
+
+    /// <summary>
+    /// Visits unary operations - skip check prevents re-traversal when called via Accept()
+    /// </summary>
+    public override void VisitUnaryOperation(UnaryOperationNode node)
+    {
+        if (skipChildTraversal)
+        {
+            return;
+        }
+        base.VisitUnaryOperation(node);
+    }
+
+    /// <summary>
+    /// Visits array access - skip check prevents re-traversal when called via Accept()
+    /// </summary>
+    public override void VisitArrayAccess(ArrayAccessNode node)
+    {
+        if (skipChildTraversal)
+        {
+            return;
+        }
+        base.VisitArrayAccess(node);
+    }
+
+    /// <summary>
+    /// Visits property access - skip check prevents re-traversal when called via Accept()
+    /// </summary>
+    public override void VisitPropertyAccess(PropertyAccessNode node)
+    {
+        if (skipChildTraversal)
+        {
+            return;
+        }
+        base.VisitPropertyAccess(node);
+    }
+
+    /// <summary>
+    /// Visits parenthesized expressions - skip check prevents re-traversal when called via Accept()
+    /// </summary>
+    public override void VisitParenthesized(ParenthesizedExpressionNode node)
+    {
+        if (skipChildTraversal)
+        {
+            return;
+        }
+        base.VisitParenthesized(node);
+    }
+
+    /// <summary>
+    /// Visits type casts - skip check prevents re-traversal when called via Accept()
+    /// </summary>
+    public override void VisitTypeCast(TypeCastNode node)
+    {
+        if (skipChildTraversal)
+        {
+            return;
+        }
+        base.VisitTypeCast(node);
+    }
+
+    /// <summary>
+    /// Visits literals - skip check prevents re-traversal when called via Accept()
+    /// </summary>
+    public override void VisitLiteral(LiteralNode node)
+    {
+        if (skipChildTraversal)
+        {
+            return;
+        }
+        base.VisitLiteral(node);
     }
 
     /// <summary>
@@ -793,36 +901,55 @@ public abstract class ScopedAstVisitor<T> : AstVisitorBase
     /// </summary>
     private void VisitExpressionAsWrite(ExpressionNode expression)
     {
+        bool previousSkip; // Declare once for all cases in this switch
         switch (expression)
         {
             case IdentifierNode identifier:
                 AddVariableReference(identifier.Name, identifier.SourceSpan, ReferenceType.Write, "assignment target");
-                
+
                 // Handle property access with & prefix
                 if (identifier.Name.StartsWith("&"))
                 {
                     var propertyName = identifier.Name.Substring(1);
                     AddVariableReference(propertyName, identifier.SourceSpan, ReferenceType.Write, "property assignment");
                 }
-                // Also allow other visitors to process the member access
-                expression.Accept(this);
+                // Allow other visitors to process (e.g., type inference) but skip re-traversal
+                previousSkip = skipChildTraversal;
+                skipChildTraversal = true;
+                try
+                {
+                    expression.Accept(this);
+                }
+                finally
+                {
+                    skipChildTraversal = previousSkip;
+                }
                 break;
 
             case MemberAccessNode memberAccess:
                 // For member access like %This.PropertyName, the target is read, member is written
                 VisitExpressionAsRead(memberAccess.Target);
-                
-                if (memberAccess.Target is IdentifierNode targetIdent && 
+
+                if (memberAccess.Target is IdentifierNode targetIdent &&
                     targetIdent.Name.Equals("%THIS", StringComparison.OrdinalIgnoreCase))
                 {
                     // Mark the property as being written to
                     AddVariableReference(memberAccess.MemberName, memberAccess.SourceSpan, ReferenceType.Write, "%THIS property write");
-                    
+
                     var varNameWithPrefix = $"&{memberAccess.MemberName}";
                     AddVariableReference(varNameWithPrefix, memberAccess.SourceSpan, ReferenceType.Write, "%THIS property write");
                 }
-                // Also allow other visitors to process the member access
-                expression.Accept(this);
+                // Allow other visitors to process (e.g., type inference) but skip re-traversal
+                previousSkip = skipChildTraversal;
+                skipChildTraversal = true;
+                try
+                {
+                    expression.Accept(this);
+                }
+                finally
+                {
+                    skipChildTraversal = previousSkip;
+                }
                 break;
 
             case ArrayAccessNode arrayAccess:
@@ -832,22 +959,49 @@ public abstract class ScopedAstVisitor<T> : AstVisitorBase
                 {
                     VisitExpressionAsRead(index);
                 }
-                // Also allow other visitors to process the array access
-                expression.Accept(this);
+                // Allow other visitors to process (e.g., type inference) but skip re-traversal
+                previousSkip = skipChildTraversal;
+                skipChildTraversal = true;
+                try
+                {
+                    expression.Accept(this);
+                }
+                finally
+                {
+                    skipChildTraversal = previousSkip;
+                }
                 break;
 
             case PropertyAccessNode propertyAccess:
                 // For property access, target is read, property is written
                 VisitExpressionAsRead(propertyAccess.Target);
-                // Also allow other visitors to process the property access
-                expression.Accept(this);
+                // Allow other visitors to process (e.g., type inference) but skip re-traversal
+                previousSkip = skipChildTraversal;
+                skipChildTraversal = true;
+                try
+                {
+                    expression.Accept(this);
+                }
+                finally
+                {
+                    skipChildTraversal = previousSkip;
+                }
                 break;
 
             default:
                 // For other expressions, visit normally (as read context)
                 VisitExpressionAsRead(expression);
-                // Also allow other visitors to process the member access
-                expression.Accept(this);
+                // Allow other visitors to process (e.g., type inference) but skip re-traversal
+                previousSkip = skipChildTraversal;
+                skipChildTraversal = true;
+                try
+                {
+                    expression.Accept(this);
+                }
+                finally
+                {
+                    skipChildTraversal = previousSkip;
+                }
                 break;
         }
     }
@@ -858,59 +1012,105 @@ public abstract class ScopedAstVisitor<T> : AstVisitorBase
     /// </summary>
     private void VisitExpressionAsRead(ExpressionNode expression)
     {
+        bool previousSkip; // Declare once for all cases in this switch
         switch (expression)
         {
             case IdentifierNode identifier:
                 AddVariableReference(identifier.Name, identifier.SourceSpan, ReferenceType.Read, "identifier reference");
-                
+
                 // Handle property access with & prefix
                 if (identifier.Name.StartsWith("&"))
                 {
                     var propertyName = identifier.Name.Substring(1);
                     AddVariableReference(propertyName, identifier.SourceSpan, ReferenceType.Read, "property reference");
                 }
-                // Also allow other visitors to process the member access
-                expression.Accept(this);
+                // Allow other visitors to process (e.g., type inference) but skip re-traversal
+                previousSkip = skipChildTraversal;
+                skipChildTraversal = true;
+                try
+                {
+                    expression.Accept(this);
+                }
+                finally
+                {
+                    skipChildTraversal = previousSkip;
+                }
                 break;
 
             case MemberAccessNode memberAccess:
                 // Visit the target
                 VisitExpressionAsRead(memberAccess.Target);
-                
-                if (memberAccess.Target is IdentifierNode targetIdent && 
+
+                if (memberAccess.Target is IdentifierNode targetIdent &&
                     targetIdent.Name.Equals("%THIS", StringComparison.OrdinalIgnoreCase))
                 {
                     // Mark the property as being read
                     AddVariableReference(memberAccess.MemberName, memberAccess.SourceSpan, ReferenceType.Read, "%THIS property read");
-                    
+
                     var varNameWithPrefix = $"&{memberAccess.MemberName}";
                     AddVariableReference(varNameWithPrefix, memberAccess.SourceSpan, ReferenceType.Read, "%THIS property read");
                 }
-                // Also allow other visitors to process the member access
-                expression.Accept(this);
+                // Allow other visitors to process (e.g., type inference) but skip re-traversal
+                previousSkip = skipChildTraversal;
+                skipChildTraversal = true;
+                try
+                {
+                    expression.Accept(this);
+                }
+                finally
+                {
+                    skipChildTraversal = previousSkip;
+                }
                 break;
 
             case AssignmentNode assignment:
                 // Nested assignment - recursively handle
                 VisitExpressionAsWrite(assignment.Target);
                 VisitExpressionAsRead(assignment.Value);
-                // Also allow other visitors to process the assignment
-                expression.Accept(this);
+                // Allow other visitors to process (e.g., type inference) but skip re-traversal
+                previousSkip = skipChildTraversal;
+                skipChildTraversal = true;
+                try
+                {
+                    expression.Accept(this);
+                }
+                finally
+                {
+                    skipChildTraversal = previousSkip;
+                }
                 break;
 
             case BinaryOperationNode binaryOp:
                 // Both operands are read
                 VisitExpressionAsRead(binaryOp.Left);
                 VisitExpressionAsRead(binaryOp.Right);
-                // Also allow other visitors to process the binary operation
-                expression.Accept(this);
+                // Allow other visitors to process (e.g., type inference) but skip re-traversal
+                previousSkip = skipChildTraversal;
+                skipChildTraversal = true;
+                try
+                {
+                    expression.Accept(this);
+                }
+                finally
+                {
+                    skipChildTraversal = previousSkip;
+                }
                 break;
 
             case UnaryOperationNode unaryOp:
                 // Operand is read
                 VisitExpressionAsRead(unaryOp.Operand);
-                // Also allow other visitors to process the unary operation
-                expression.Accept(this);
+                // Allow other visitors to process (e.g., type inference) but skip re-traversal
+                previousSkip = skipChildTraversal;
+                skipChildTraversal = true;
+                try
+                {
+                    expression.Accept(this);
+                }
+                finally
+                {
+                    skipChildTraversal = previousSkip;
+                }
                 break;
 
             case FunctionCallNode functionCall:
@@ -920,8 +1120,17 @@ public abstract class ScopedAstVisitor<T> : AstVisitorBase
                 {
                     VisitExpressionAsRead(arg);
                 }
-                // Also allow other visitors to process the function call
-                expression.Accept(this);
+                // Allow other visitors to process (e.g., type inference) but skip re-traversal
+                previousSkip = skipChildTraversal;
+                skipChildTraversal = true;
+                try
+                {
+                    expression.Accept(this);
+                }
+                finally
+                {
+                    skipChildTraversal = previousSkip;
+                }
                 break;
 
             case ArrayAccessNode arrayAccess:
@@ -931,40 +1140,94 @@ public abstract class ScopedAstVisitor<T> : AstVisitorBase
                 {
                     VisitExpressionAsRead(index);
                 }
-                // Also allow other visitors to process the array access
-                expression.Accept(this);
+                // Allow other visitors to process (e.g., type inference) but skip re-traversal
+                previousSkip = skipChildTraversal;
+                skipChildTraversal = true;
+                try
+                {
+                    expression.Accept(this);
+                }
+                finally
+                {
+                    skipChildTraversal = previousSkip;
+                }
                 break;
 
             case PropertyAccessNode propertyAccess:
                 // Target is read
                 VisitExpressionAsRead(propertyAccess.Target);
-                // Also allow other visitors to process the property access
-                expression.Accept(this);
+                // Allow other visitors to process (e.g., type inference) but skip re-traversal
+                previousSkip = skipChildTraversal;
+                skipChildTraversal = true;
+                try
+                {
+                    expression.Accept(this);
+                }
+                finally
+                {
+                    skipChildTraversal = previousSkip;
+                }
                 break;
 
             case ParenthesizedExpressionNode parenthesized:
                 // Visit the inner expression
                 VisitExpressionAsRead(parenthesized.Expression);
-                // Also allow other visitors to process the parenthesized expression
-                expression.Accept(this);
+                // Allow other visitors to process (e.g., type inference) but skip re-traversal
+                previousSkip = skipChildTraversal;
+                skipChildTraversal = true;
+                try
+                {
+                    expression.Accept(this);
+                }
+                finally
+                {
+                    skipChildTraversal = previousSkip;
+                }
                 break;
 
             case TypeCastNode typeCast:
                 // Visit the expression being cast
                 VisitExpressionAsRead(typeCast.Expression);
-                // Also allow other visitors to process the type cast
-                expression.Accept(this);
+                // Allow other visitors to process (e.g., type inference) but skip re-traversal
+                previousSkip = skipChildTraversal;
+                skipChildTraversal = true;
+                try
+                {
+                    expression.Accept(this);
+                }
+                finally
+                {
+                    skipChildTraversal = previousSkip;
+                }
                 break;
 
             case LiteralNode:
                 // Literals don't reference variables - no action needed
                 // But we still need to allow other visitors (like TypeInferenceVisitor) to process them
-                expression.Accept(this);
+                previousSkip = skipChildTraversal;
+                skipChildTraversal = true;
+                try
+                {
+                    expression.Accept(this);
+                }
+                finally
+                {
+                    skipChildTraversal = previousSkip;
+                }
                 break;
 
             default:
                 // For unknown expression types, use the base visitor
-                expression.Accept(this);
+                previousSkip = skipChildTraversal;
+                skipChildTraversal = true;
+                try
+                {
+                    expression.Accept(this);
+                }
+                finally
+                {
+                    skipChildTraversal = previousSkip;
+                }
                 break;
         }
     }

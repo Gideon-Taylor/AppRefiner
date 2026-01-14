@@ -1,6 +1,8 @@
-﻿using PeopleCodeParser.SelfHosted;
+﻿using DiffPlex.Model;
+using PeopleCodeParser.SelfHosted;
 using PeopleCodeParser.SelfHosted.Nodes;
 using PeopleCodeTypeInfo.Types;
+using System.Text;
 
 namespace AppRefiner.Stylers
 {

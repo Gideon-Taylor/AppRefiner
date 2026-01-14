@@ -568,6 +568,11 @@ public class PeopleCodeParser
             }
             ExitRule();
 
+            if (_errors.Count > 0)
+            {
+                Debugger.Break();
+            }
+
             foreach (var error in _errors)
             {
 
