@@ -393,6 +393,89 @@ namespace AppRefiner
         }
 
         /// <summary>
+        /// Loads the Scintilla.dll into the Application Designer process.
+        /// </summary>
+        /// <param name="dllPath">Full path to the Scintilla.dll file</param>
+        /// <returns>True if the message was sent successfully</returns>
+        public bool LoadScintillaDll(string dllPath)
+        {
+            [DllImport("user32.dll", CharSet = CharSet.Auto)]
+            static extern bool PostThreadMessage(uint threadId, uint msg, IntPtr wParam, IntPtr lParam);
+
+            const uint WM_USER = 0x400;
+            const uint WM_LOAD_SCINTILLA_DLL = WM_USER + 1009;
+
+            // Validate parameters
+            if (!Events.EventHookInstaller.HasActiveHook(MainThreadId))
+            {
+                Debug.Log("LoadScintillaDll: No active hook for this thread");
+                return false;
+            }
+
+            if (string.IsNullOrEmpty(dllPath))
+            {
+                Debug.Log("LoadScintillaDll: DLL path is null or empty");
+                return false;
+            }
+
+            if (!System.IO.File.Exists(dllPath))
+            {
+                Debug.Log($"LoadScintillaDll: DLL file does not exist at path: {dllPath}");
+                return false;
+            }
+
+            if (dllPath.Length > 512)
+            {
+                Debug.Log($"LoadScintillaDll: DLL path too long ({dllPath.Length} chars, max 512)");
+                return false;
+            }
+
+            try
+            {
+                int charCount = dllPath.Length;
+                uint bufferSize = (uint)(charCount + 1) * 2; // Wide chars
+
+                IntPtr remoteBuffer = GetStandaloneProcessBuffer(bufferSize);
+                Debug.Log($"LoadScintillaDll: Allocated remote buffer at 0x{remoteBuffer:X}");
+
+                if (remoteBuffer == IntPtr.Zero)
+                {
+                    Debug.Log("LoadScintillaDll: Failed to allocate remote buffer");
+                    return false;
+                }
+
+                bool writeSuccess = WriteWideStringToProcess(remoteBuffer, dllPath);
+                Debug.Log($"LoadScintillaDll: Write to buffer: {writeSuccess}");
+
+                if (!writeSuccess)
+                {
+                    FreeStandaloneProcessBuffer(remoteBuffer);
+                    return false;
+                }
+
+                Debug.Log($"LoadScintillaDll: Sending message to thread {MainThreadId}");
+                bool postSuccess = PostThreadMessage(MainThreadId, WM_LOAD_SCINTILLA_DLL,
+                                                    remoteBuffer, (IntPtr)charCount);
+
+                if (!postSuccess)
+                {
+                    Debug.Log($"LoadScintillaDll: PostThreadMessage failed");
+                    FreeStandaloneProcessBuffer(remoteBuffer);
+                    return false;
+                }
+
+                Debug.Log("LoadScintillaDll: Message sent successfully");
+                // Note: Buffer intentionally not freed - async message processing
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Debug.Log($"LoadScintillaDll: Exception: {ex.Message}");
+                return false;
+            }
+        }
+
+        /// <summary>
         /// Writes a wide string (UTF-16) to the remote process memory
         /// </summary>
         /// <param name="remoteBuffer">Remote buffer address</param>

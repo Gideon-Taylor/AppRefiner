@@ -570,7 +570,7 @@ public class PeopleCodeParser
 
             if (_errors.Count > 0)
             {
-                Debugger.Break();
+                //Debugger.Break();
             }
 
             foreach (var error in _errors)

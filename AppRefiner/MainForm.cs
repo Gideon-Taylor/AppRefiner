@@ -111,6 +111,10 @@ namespace AppRefiner
         public const int AR_FUNCTION_CALL_TIP = 2511; // Function call tip notification for '(', ')', and ',' characters
         private const int AR_OBJECT_MEMBERS = 2512; // Object member suggestions when '.' is typed
         private const int AR_SYSTEM_VARIABLE_SUGGEST = 2513; // System variable suggestions when '%' is typed
+        private const int AR_SCINTILLA_ALREADY_LOADED = 2514; // Scintilla DLL is already loaded
+        private const int AR_SCINTILLA_LOAD_SUCCESS = 2515; // Scintilla DLL loaded successfully
+        private const int AR_SCINTILLA_LOAD_FAILED = 2516; // Scintilla DLL load failed (wParam contains GetLastError)
+        private const int AR_SCINTILLA_IN_USE = 2517; // Scintilla DLL in use (active windows exist, cannot replace)
         private const int AR_SUBCLASS_RESULTS_LIST = 1007; // Message to subclass Results list view
         private const int AR_SET_OPEN_TARGET = 1008; // Message to set open target for Results list interception
         private const int SCN_USERLISTSELECTION = 2014; // User list selection notification
@@ -1797,7 +1801,8 @@ namespace AppRefiner
                     else
                     {
                         var newProcess = new AppDesignerProcess(pid, IntPtr.Zero, GetGeneralSettingsObject(), currentShortcutFlags);
-
+                        string testPath = @"C:\Users\tslat\repos\GitHub\AppRefiner\AppRefiner\bin\Debug\net8.0-windows7.0\scintilla_mods\Scintilla.dll";
+                        newProcess.LoadScintillaDll(testPath);
                         AppDesignerProcesses.Add(pid, newProcess);
                         trackedProcessIds.Add(pid);
                         activeEditor = newProcess.GetOrInitEditor(hwnd);
@@ -2572,6 +2577,59 @@ namespace AppRefiner
                 {
                     Debug.LogException(ex, "Error processing system variable suggestion");
                 }
+            }
+            else if (m.Msg == AR_SCINTILLA_ALREADY_LOADED)
+            {
+                Debug.Log("Callback: Scintilla.dll is already loaded");
+            }
+            else if (m.Msg == AR_SCINTILLA_LOAD_SUCCESS)
+            {
+                IntPtr moduleHandle = m.WParam;
+                Debug.Log($"Callback: Scintilla.dll loaded successfully at 0x{moduleHandle:X}");
+            }
+            else if (m.Msg == AR_SCINTILLA_LOAD_FAILED)
+            {
+                uint errorCode = (uint)m.WParam.ToInt32();
+                Debug.Log($"Callback: Scintilla.dll load failed, error code {errorCode} (0x{errorCode:X})");
+
+                // Display error to user
+                Task.Delay(100).ContinueWith(_ =>
+                {
+                    var mainHandle = System.Diagnostics.Process.GetCurrentProcess().MainWindowHandle;
+                    var handleWrapper = new WindowWrapper(mainHandle);
+
+                    string errorMessage = $"Failed to load Scintilla.dll into Application Designer.\n\n" +
+                                        $"Error code: {errorCode} (0x{errorCode:X})\n\n" +
+                                        $"Common causes:\n" +
+                                        $"- DLL file is missing or corrupted\n" +
+                                        $"- DLL architecture mismatch (32-bit vs 64-bit)\n" +
+                                        $"- Missing dependencies\n" +
+                                        $"- Access permissions";
+
+                    new MessageBoxDialog(errorMessage, "Scintilla Load Failed",
+                                       MessageBoxButtons.OK, mainHandle).ShowDialog(handleWrapper);
+                });
+            }
+            else if (m.Msg == AR_SCINTILLA_IN_USE)
+            {
+                Debug.Log("Callback: Scintilla.dll is in use (active windows exist, cannot replace)");
+
+                // Display informational message to user
+                Task.Delay(100).ContinueWith(_ =>
+                {
+                    var mainHandle = System.Diagnostics.Process.GetCurrentProcess().MainWindowHandle;
+                    var handleWrapper = new WindowWrapper(mainHandle);
+
+                    string message = "Cannot load Scintilla.dll because Application Designer has active " +
+                                   "Scintilla editor windows.\n\n" +
+                                   "To load a custom Scintilla.dll:\n" +
+                                   "1. Close all open PeopleCode editors\n" +
+                                   "2. Try loading the DLL again\n\n" +
+                                   "Note: The DLL cannot be replaced while editor windows are open.";
+
+                    new MessageBoxDialog(message, "Scintilla In Use",
+                                       MessageBoxButtons.OK, mainHandle).ShowDialog(handleWrapper);
+                });
             }
         }
 
@@ -4185,6 +4243,9 @@ namespace AppRefiner
 
                 // All validations passed - create and track the AppDesignerProcess
                 var newProcess = new AppDesignerProcess(processId, resultsListView, GetGeneralSettingsObject(), currentShortcutFlags);
+                string testPath = @"C:\Users\tslat\repos\GitHub\AppRefiner\AppRefiner\bin\Debug\net8.0-windows7.0\scintilla_mods\Scintilla.dll";
+                newProcess.LoadScintillaDll(testPath);
+
                 AppDesignerProcesses.Add(processId, newProcess);
                 trackedProcessIds.Add(processId);
                 activeAppDesigner = newProcess;

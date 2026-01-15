@@ -13,6 +13,7 @@ namespace AppRefiner.Events
         private const uint WM_SET_MAIN_WINDOW_SHORTCUTS = WM_USER + 1006;
         private const uint WM_AR_SUBCLASS_RESULTS_LIST = WM_USER + 1007;
         private const uint WM_AR_SET_OPEN_TARGET = WM_USER + 1008;
+        private const uint WM_LOAD_SCINTILLA_DLL = WM_USER + 1009;
 
         // Bit field for shortcut types
         [Flags]

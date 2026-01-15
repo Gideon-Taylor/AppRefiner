@@ -26,6 +26,8 @@
 #define WM_AR_SUBCLASS_RESULTS_LIST (WM_USER + 1007)
 // Message to set open target for Results list interception
 #define WM_AR_SET_OPEN_TARGET (WM_USER + 1008)
+// Message to load Scintilla DLL into the process
+#define WM_LOAD_SCINTILLA_DLL (WM_USER + 1009)
 
 /* TODO define messages with a mask to indicate "this is a scintilla event message" */
 #define WM_SCN_EVENT_MASK 0x7000
@@ -50,6 +52,10 @@
 #define WM_AR_FUNCTION_CALL_TIP 2511 // Function call tip notification for '(', ')', and ',' characters
 #define WM_AR_OBJECT_MEMBERS 2512 // Object member suggestions when '.' is typed
 #define WM_AR_SYSTEM_VARIABLE_SUGGEST 2513 // System variable suggestions when '%' is typed
+#define WM_AR_SCINTILLA_ALREADY_LOADED 2514 // Scintilla DLL is already loaded
+#define WM_AR_SCINTILLA_LOAD_SUCCESS 2515   // Scintilla DLL loaded successfully
+#define WM_AR_SCINTILLA_LOAD_FAILED 2516    // Scintilla DLL load failed (wParam contains GetLastError)
+#define WM_AR_SCINTILLA_IN_USE 2517         // Scintilla DLL in use (active windows exist, cannot replace)
 #define WM_SCN_USERLIST_SELECTION WM_SCN(SCN_USERLISTSELECTION) // User list selection notification
 #define WM_SCN_AUTOCSELECTION WM_SCN(SCN_AUTOCSELECTION) // Autocompletion selection notification
 #define WM_SCN_AUTOCCOMPLETED WM_SCN(SCN_AUTOCCOMPLETED) // Autocompletion completed notification
