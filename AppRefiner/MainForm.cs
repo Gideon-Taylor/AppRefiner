@@ -28,6 +28,7 @@ using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Json;
 using System.Threading;
+using Microsoft.Win32;
 using static AppRefiner.AutoCompleteService;
 using static AppRefiner.ScintillaEditor;
 
@@ -71,6 +72,9 @@ namespace AppRefiner
 
         // Current shortcut flags state - tracks which shortcuts are enabled
         private EventHookInstaller.ShortcutType currentShortcutFlags = EventHookInstaller.ShortcutType.All;
+
+        // Flag to track if autocomplete conflict warning has been shown this session
+        private bool hasShownAutocompleteConflictWarning = false;
 
         /// <summary>
         /// Gets the currently active editor
@@ -354,6 +358,9 @@ namespace AppRefiner
             var assembly = System.Reflection.Assembly.GetExecutingAssembly();
             var currentVersion = assembly.GetName().Version;
             Text += currentVersion != null ? $" - v{currentVersion.Major}.{currentVersion.Minor}.{currentVersion.Build}" : string.Empty;
+
+            // Check for autocomplete conflicts on startup
+            CheckAutocompleteConflict();
         }
 
         private void UpdateWhatsNewLinkVisibility()
@@ -569,6 +576,131 @@ namespace AppRefiner
             // Save to settings service
             settingsService?.SaveAutoSuggestSettings(autoSuggestSettings);
             settingsService?.SaveChanges();
+
+            // Check for autocomplete conflicts after settings change
+            CheckAutocompleteConflict();
+        }
+
+        /// <summary>
+        /// Checks if any AppRefiner autocomplete features are enabled
+        /// </summary>
+        private bool IsAppRefinerAutocompleteEnabled()
+        {
+            return autoSuggestSettings.VariableSuggestions ||
+                   autoSuggestSettings.FunctionSignatures ||
+                   autoSuggestSettings.ObjectMembers ||
+                   autoSuggestSettings.SystemVariables;
+        }
+
+        /// <summary>
+        /// Checks if Application Designer's delivered AutoSuggest feature is enabled via registry
+        /// </summary>
+        private bool IsApplicationDesignerAutocompleteEnabled()
+        {
+            try
+            {
+                // PeopleSoft Application Designer stores settings in:
+                // HKEY_CURRENT_USER\Software\PeopleSoft\Application Designer\Settings
+                using (RegistryKey? key = Registry.CurrentUser.OpenSubKey(@"Software\PeopleSoft\PeopleTools\Release8.40\PSIDE"))
+                {
+                    if (key != null)
+                    {
+                        // The setting name is "EnableAutoCompletion" - it's a DWORD value
+                        // 1 = enabled, 0 = disabled
+                        object? value = key.GetValue("EnableAutoCompletion");
+                        if (value != null && value is int intValue)
+                        {
+                            return intValue == 1;
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.LogException(ex, "Error checking Application Designer AutoSuggest registry setting");
+            }
+
+            // If we can't read the registry or the key doesn't exist, assume it's not enabled
+            return false;
+        }
+
+        /// <summary>
+        /// Checks for conflicts between AppRefiner and Application Designer autocomplete features
+        /// and displays a warning dialog if both are enabled (only once per session)
+        /// </summary>
+        private void CheckAutocompleteConflict()
+        {
+            // Only check if AppRefiner autocomplete is enabled
+            if (!IsAppRefinerAutocompleteEnabled())
+            {
+                return;
+            }
+
+            // Check if Application Designer's autocomplete is also enabled
+            if (IsApplicationDesignerAutocompleteEnabled())
+            {
+                // Only show the warning once per session
+                if (hasShownAutocompleteConflictWarning)
+                {
+                    return;
+                }
+
+                // Mark that we've shown the warning for this session
+                hasShownAutocompleteConflictWarning = true;
+
+                // Show warning dialog
+                Task.Delay(100).ContinueWith(_ =>
+                {
+                    try
+                    {
+                        string message = "AppRefiner has detected that both AppRefiner's Auto Suggest feature and " +
+                                       "Application Designer's delivered AutoSuggest feature are currently enabled.\n\n" +
+                                       "These two features conflict with each other and can cause unexpected behavior. " +
+                                       "We highly recommend disabling one of them.\n\n" +
+                                       "To disable Application Designer's AutoSuggest:\n" +
+                                       "1. In Application Designer, go to Tools → Options...\n" +
+                                       "2. Click the Editor tab\n" +
+                                       "3. Uncheck 'Enable AutoSuggest'\n" +
+                                       "4. Click OK\n\n" +
+                                       "Alternatively, you can disable AppRefiner's Auto Suggest features in the Settings tab.";
+
+                        var mainHandle = IntPtr.Zero;
+                        if (activeAppDesigner != null)
+                        {
+                            var process = Process.GetProcessById((int)activeAppDesigner.ProcessId);
+                            mainHandle = process.MainWindowHandle;
+                        }
+
+                        if (mainHandle != IntPtr.Zero)
+                        {
+                            var handleWrapper = new WindowWrapper(mainHandle);
+                            new MessageBoxDialog(
+                                message,
+                                "AutoComplete Feature Conflict Detected",
+                                MessageBoxButtons.OK,
+                                mainHandle
+                            ).ShowDialog(handleWrapper);
+                        }
+                        else
+                        {
+                            // Fallback to showing on the MainForm if no active app designer
+                            this.Invoke(() =>
+                            {
+                                new MessageBoxDialog(
+                                    message,
+                                    "AutoComplete Feature Conflict Detected",
+                                    MessageBoxButtons.OK,
+                                    this.Handle
+                                ).ShowDialog(new WindowWrapper(this.Handle));
+                            });
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.LogException(ex, "Error showing autocomplete conflict dialog");
+                    }
+                });
+            }
         }
 
         /// <summary>
