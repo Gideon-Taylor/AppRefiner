@@ -1,3 +1,5 @@
+using System.Security.AccessControl;
+
 namespace PeopleCodeTypeInfo.Contracts;
 
 /// <summary>
@@ -141,4 +143,24 @@ public class LocalDirectorySourceProvider
             return (false, null);
         }
     }
+
+    public List<string> GetClassesForPackage(string packageName)
+    {
+        // Split on colon to get package path parts
+        var packageParts = packageName.Split(':');
+
+        // Build the file path: Application Packages\pkg1\pkg2\...\ClassName.pcode
+        var pathParts = new List<string> { _basePath, "Application Packages" };
+        pathParts.AddRange(packageParts);
+        
+
+        string.Join(Path.PathSeparator, pathParts);
+        List<string> classes = new List<string>();
+        /* get all files that end in .pcode in this directory (do not recurse) */
+        foreach(var fileName in Directory.EnumerateFiles(Path.Combine(pathParts.ToArray()), "*.pcode", SearchOption.TopDirectoryOnly)){
+            classes.Add(Path.GetFileNameWithoutExtension(fileName));
+        }
+        return classes;
+    }
+
 }

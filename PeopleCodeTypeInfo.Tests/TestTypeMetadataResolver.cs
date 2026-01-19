@@ -83,4 +83,12 @@ public class TestTypeMetadataResolver : ITypeMetadataResolver
     {
         return Task.FromResult<Types.TypeInfo?>(Types.AnyTypeInfo.Instance);
     }
+
+    protected override List<string> GetClassesInPackageCore(string packagePath)
+    {
+        // For test purposes, return empty list
+        // In a real implementation, this would query the file system for all classes in the package
+        return _sourceProvider.GetClassesForPackage(packagePath);
+    }
+
 }
