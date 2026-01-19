@@ -792,4 +792,135 @@ public class FunctionCallValidatorTests
         // Assert: Should be valid - $element resolves to array of number (dimensions reduced by 1)
         Assert.True(result.IsValid, $"Validation failed: {result.GetDetailedError()}");
     }
+
+    /// <summary>
+    /// Tests that variable parameters generate numbered parameter names (1-indexed).
+    /// Signature: Function(value: string{0-3}) -> void
+    /// Test case: 3 string arguments
+    /// Expected: Valid - parameter names should be "value1", "value2", "value3"
+    /// </summary>
+    [Fact]
+    public void VariableParameter_GeneratesNumberedParameterNames()
+    {
+        // Arrange
+        var variable = new VariableParameter
+        {
+            Name = "value",
+            MinCount = 0,
+            MaxCount = 3,
+            InnerParameter = new SingleParameter
+            {
+                Name = "",
+                ParameterType = new TypeWithDimensionality(PeopleCodeType.String)
+            }
+        };
+        var parameters = new List<Parameter> { variable };
+        var arguments = new TypeInfo[]
+        {
+            PrimitiveTypeInfo.String,
+            PrimitiveTypeInfo.String,
+            PrimitiveTypeInfo.String
+        };
+
+        var validator = new FunctionCallValidator(NullTypeMetadataResolver.Instance);
+
+        // Act
+        var result = validator.Validate(parameters, arguments);
+
+        // Assert
+        Assert.True(result.IsValid, $"Validation failed: {result.GetDetailedError()}");
+        Assert.NotNull(result.ArgumentMappings);
+        Assert.Equal(3, result.ArgumentMappings.Count);
+        Assert.Equal("value1", result.ArgumentMappings[0].ParameterName);
+        Assert.Equal("value2", result.ArgumentMappings[1].ParameterName);
+        Assert.Equal("value3", result.ArgumentMappings[2].ParameterName);
+    }
+
+    /// <summary>
+    /// Tests that variable parameters with minimum count generate numbered names correctly.
+    /// Signature: Function(item: number{2-5}) -> void
+    /// Test case: 4 number arguments
+    /// Expected: Valid - parameter names should be "item1", "item2", "item3", "item4"
+    /// </summary>
+    [Fact]
+    public void VariableParameter_WithMinimumCount_GeneratesNumberedNames()
+    {
+        // Arrange
+        var variable = new VariableParameter
+        {
+            Name = "item",
+            MinCount = 2,
+            MaxCount = 5,
+            InnerParameter = new SingleParameter
+            {
+                Name = "",
+                ParameterType = new TypeWithDimensionality(PeopleCodeType.Number)
+            }
+        };
+        var parameters = new List<Parameter> { variable };
+        var arguments = new TypeInfo[]
+        {
+            PrimitiveTypeInfo.Number,
+            PrimitiveTypeInfo.Number,
+            PrimitiveTypeInfo.Number,
+            PrimitiveTypeInfo.Number
+        };
+
+        var validator = new FunctionCallValidator(NullTypeMetadataResolver.Instance);
+
+        // Act
+        var result = validator.Validate(parameters, arguments);
+
+        // Assert
+        Assert.True(result.IsValid, $"Validation failed: {result.GetDetailedError()}");
+        Assert.NotNull(result.ArgumentMappings);
+        Assert.Equal(4, result.ArgumentMappings.Count);
+        Assert.Equal("item1", result.ArgumentMappings[0].ParameterName);
+        Assert.Equal("item2", result.ArgumentMappings[1].ParameterName);
+        Assert.Equal("item3", result.ArgumentMappings[2].ParameterName);
+        Assert.Equal("item4", result.ArgumentMappings[3].ParameterName);
+    }
+
+    /// <summary>
+    /// Tests that variable parameters without names don't generate numbered names.
+    /// Signature: Function(string{0-3}) -> void
+    /// Test case: 2 string arguments
+    /// Expected: Valid - parameter names should be empty (falls back to "arg{index}" in display)
+    /// </summary>
+    [Fact]
+    public void VariableParameter_WithoutName_FallsBackToArgIndex()
+    {
+        // Arrange - variable parameter with empty name
+        var variable = new VariableParameter
+        {
+            Name = "",  // No name set
+            MinCount = 0,
+            MaxCount = 3,
+            InnerParameter = new SingleParameter
+            {
+                Name = "",
+                ParameterType = new TypeWithDimensionality(PeopleCodeType.String)
+            }
+        };
+        var parameters = new List<Parameter> { variable };
+        var arguments = new TypeInfo[]
+        {
+            PrimitiveTypeInfo.String,
+            PrimitiveTypeInfo.String
+        };
+
+        var validator = new FunctionCallValidator(NullTypeMetadataResolver.Instance);
+
+        // Act
+        var result = validator.Validate(parameters, arguments);
+
+        // Assert
+        Assert.True(result.IsValid, $"Validation failed: {result.GetDetailedError()}");
+        Assert.NotNull(result.ArgumentMappings);
+        Assert.Equal(2, result.ArgumentMappings.Count);
+        // When no name is set, ParameterName should be empty
+        // FunctionParameterNames styler will fall back to "arg{index}"
+        Assert.Equal("", result.ArgumentMappings[0].ParameterName);
+        Assert.Equal("", result.ArgumentMappings[1].ParameterName);
+    }
 }

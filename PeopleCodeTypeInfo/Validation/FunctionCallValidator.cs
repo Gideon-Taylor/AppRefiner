@@ -842,6 +842,13 @@ public class FunctionCallValidator
                         innerOk = false;
                         break;
                     }
+
+                    // Override mapping name with numbered version for variable parameters
+                    if (!string.IsNullOrEmpty(variable.Name))
+                    {
+                        ctx.OverrideLastMappingName(variable.Name, rep + 1);  // 1-indexed
+                    }
+
                     innerIndex += used;
                 }
 
@@ -1264,10 +1271,10 @@ public class FunctionCallValidator
                 break;
             }
 
-            // Override last mapping to use variable's name if set
+            // Override last mapping to use variable's name with repetition number
             if (!string.IsNullOrEmpty(variable.Name))
             {
-                ctx.OverrideLastMappingName(variable.Name);
+                ctx.OverrideLastMappingName(variable.Name, count + 1);  // 1-indexed
             }
 
             index += used;
@@ -1653,11 +1660,16 @@ public class FunctionCallValidator
         /// Overrides the parameter name of the most recently recorded mapping.
         /// Used when a variable parameter has its own name that should take precedence over inner parameter names.
         /// </summary>
-        public void OverrideLastMappingName(string newName)
+        /// <param name="newName">The base parameter name</param>
+        /// <param name="repetitionNumber">Optional 1-indexed repetition number to append (e.g., "value1", "value2")</param>
+        public void OverrideLastMappingName(string newName, int? repetitionNumber = null)
         {
             if (ArgumentMappings.Count > 0)
             {
-                ArgumentMappings[^1].ParameterName = newName;
+                var finalName = repetitionNumber.HasValue
+                    ? $"{newName}{repetitionNumber.Value}"
+                    : newName;
+                ArgumentMappings[^1].ParameterName = finalName;
             }
         }
 
