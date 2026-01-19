@@ -336,6 +336,34 @@ namespace AppRefiner
         }
 
         /// <summary>
+        /// Writes a struct to the buffer by marshalling it to bytes.
+        /// If offset is null (sequential mode), writes at the current write offset and advances it.
+        /// If offset is provided (absolute mode), writes at that specific location.
+        /// </summary>
+        /// <typeparam name="T">Struct type to write</typeparam>
+        /// <param name="structure">Structure instance to write</param>
+        /// <param name="offset">Offset in bytes from start of buffer. If null, uses sequential write mode.</param>
+        /// <returns>Address where struct was written, or null if write would exceed buffer size</returns>
+        public IntPtr? WriteStruct<T>(T structure, uint? offset = null) where T : struct
+        {
+            int structSize = System.Runtime.InteropServices.Marshal.SizeOf<T>();
+            byte[] buffer = new byte[structSize];
+
+            IntPtr ptr = System.Runtime.InteropServices.Marshal.AllocHGlobal(structSize);
+            try
+            {
+                System.Runtime.InteropServices.Marshal.StructureToPtr(structure, ptr, false);
+                System.Runtime.InteropServices.Marshal.Copy(ptr, buffer, 0, structSize);
+            }
+            finally
+            {
+                System.Runtime.InteropServices.Marshal.FreeHGlobal(ptr);
+            }
+
+            return Write(buffer, offset);
+        }
+
+        /// <summary>
         /// Reads raw bytes from the buffer
         /// </summary>
         /// <param name="size">Number of bytes to read</param>

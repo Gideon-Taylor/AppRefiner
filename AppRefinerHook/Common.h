@@ -56,6 +56,7 @@
 #define WM_AR_SCINTILLA_LOAD_SUCCESS 2515   // Scintilla DLL loaded successfully
 #define WM_AR_SCINTILLA_LOAD_FAILED 2516    // Scintilla DLL load failed (wParam contains GetLastError)
 #define WM_AR_SCINTILLA_IN_USE 2517         // Scintilla DLL in use (active windows exist, cannot replace)
+#define WM_AR_SCINTILLA_NOT_FOUND 2518      // Scintilla DLL file not found at specified path (wParam=(major<<16)|minor, lParam=(build<<16)|revision)
 #define WM_SCN_USERLIST_SELECTION WM_SCN(SCN_USERLISTSELECTION) // User list selection notification
 #define WM_SCN_AUTOCSELECTION WM_SCN(SCN_AUTOCSELECTION) // Autocompletion selection notification
 #define WM_SCN_AUTOCCOMPLETED WM_SCN(SCN_AUTOCCOMPLETED) // Autocompletion completed notification

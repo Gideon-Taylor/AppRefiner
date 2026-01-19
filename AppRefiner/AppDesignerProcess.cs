@@ -418,12 +418,6 @@ namespace AppRefiner
                 return false;
             }
 
-            if (!System.IO.File.Exists(dllPath))
-            {
-                Debug.Log($"LoadScintillaDll: DLL file does not exist at path: {dllPath}");
-                return false;
-            }
-
             if (dllPath.Length > 512)
             {
                 Debug.Log($"LoadScintillaDll: DLL path too long ({dllPath.Length} chars, max 512)");

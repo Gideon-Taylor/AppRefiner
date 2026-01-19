@@ -219,7 +219,7 @@ namespace AppRefiner
         }
         public bool Initialized = false;
         public bool FoldingEnabled = false;
-        public bool HasLexilla = false;
+        public bool HasLexilla => AppDesignerProcess.HasLexilla;
 
         public EditorType Type;
 

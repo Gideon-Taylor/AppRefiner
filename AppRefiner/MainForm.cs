@@ -119,6 +119,7 @@ namespace AppRefiner
         private const int AR_SCINTILLA_LOAD_SUCCESS = 2515; // Scintilla DLL loaded successfully
         private const int AR_SCINTILLA_LOAD_FAILED = 2516; // Scintilla DLL load failed (wParam contains GetLastError)
         private const int AR_SCINTILLA_IN_USE = 2517; // Scintilla DLL in use (active windows exist, cannot replace)
+        private const int AR_SCINTILLA_NOT_FOUND = 2518; // Scintilla DLL file not found at specified path (wParam=(major<<16)|minor, lParam=(build<<16)|revision)
         private const int AR_SUBCLASS_RESULTS_LIST = 1007; // Message to subclass Results list view
         private const int AR_SET_OPEN_TARGET = 1008; // Message to set open target for Results list interception
         private const int SCN_USERLISTSELECTION = 2014; // User list selection notification
@@ -1933,7 +1934,7 @@ namespace AppRefiner
                     else
                     {
                         var newProcess = new AppDesignerProcess(pid, IntPtr.Zero, GetGeneralSettingsObject(), currentShortcutFlags);
-                        string testPath = @"C:\Users\tslat\repos\GitHub\AppRefiner\AppRefiner\bin\Debug\net8.0-windows7.0\scintilla_mods\Scintilla.dll";
+                        string testPath = @"C:\Users\tslat\repos\GitHub\AppRefiner\AppRefiner\bin\Debug\net8.0-windows7.0\scintilla_mods";
                         newProcess.LoadScintillaDll(testPath);
                         AppDesignerProcesses.Add(pid, newProcess);
                         trackedProcessIds.Add(pid);
@@ -2712,7 +2713,8 @@ namespace AppRefiner
             }
             else if (m.Msg == AR_SCINTILLA_ALREADY_LOADED)
             {
-                Debug.Log("Callback: Scintilla.dll is already loaded");
+                IntPtr moduleHandle = m.WParam;
+                Debug.Log($"Callback: Scintilla.dll is already loaded from the requested location (handle: 0x{moduleHandle:X}) - no replacement needed");
             }
             else if (m.Msg == AR_SCINTILLA_LOAD_SUCCESS)
             {
@@ -2724,8 +2726,8 @@ namespace AppRefiner
                 uint errorCode = (uint)m.WParam.ToInt32();
                 Debug.Log($"Callback: Scintilla.dll load failed, error code {errorCode} (0x{errorCode:X})");
 
-                // Display error to user
-                Task.Delay(100).ContinueWith(_ =>
+                // Display error to user - marshal to UI thread
+                BeginInvoke(new Action(() =>
                 {
                     var mainHandle = System.Diagnostics.Process.GetCurrentProcess().MainWindowHandle;
                     var handleWrapper = new WindowWrapper(mainHandle);
@@ -2740,14 +2742,14 @@ namespace AppRefiner
 
                     new MessageBoxDialog(errorMessage, "Scintilla Load Failed",
                                        MessageBoxButtons.OK, mainHandle).ShowDialog(handleWrapper);
-                });
+                }));
             }
             else if (m.Msg == AR_SCINTILLA_IN_USE)
             {
                 Debug.Log("Callback: Scintilla.dll is in use (active windows exist, cannot replace)");
 
-                // Display informational message to user
-                Task.Delay(100).ContinueWith(_ =>
+                // Display informational message to user - marshal to UI thread
+                BeginInvoke(new Action(() =>
                 {
                     var mainHandle = System.Diagnostics.Process.GetCurrentProcess().MainWindowHandle;
                     var handleWrapper = new WindowWrapper(mainHandle);
@@ -2761,7 +2763,33 @@ namespace AppRefiner
 
                     new MessageBoxDialog(message, "Scintilla In Use",
                                        MessageBoxButtons.OK, mainHandle).ShowDialog(handleWrapper);
-                });
+                }));
+            }
+            else if (m.Msg == AR_SCINTILLA_NOT_FOUND)
+            {
+                // Unpack version from wParam/lParam
+                int major = (int)((m.WParam.ToInt64() >> 16) & 0xFFFF);
+                int minor = (int)(m.WParam.ToInt64() & 0xFFFF);
+                int build = (int)((m.LParam.ToInt64() >> 16) & 0xFFFF);
+                int revision = (int)(m.LParam.ToInt64() & 0xFFFF);
+                string version = $"{major}.{minor}.{build}.{revision}";
+
+                Debug.Log($"Callback: Target Scintilla.dll file not found (version {version})");
+
+                // Display error message to user - marshal to UI thread
+                BeginInvoke(new Action(() =>
+                {
+                    var mainHandle = System.Diagnostics.Process.GetCurrentProcess().MainWindowHandle;
+                    var handleWrapper = new WindowWrapper(mainHandle);
+
+                    string message = $"Cannot load Scintilla.dll because the DLL file was not found.\n\n" +
+                                   $"The system attempted to load version {version} based on the currently " +
+                                   $"loaded Scintilla version, but the file does not exist.\n\n" +
+                                   $"Please report this issue on the AppRefiner GitHub and make sure to include the version number above.";
+
+                    new MessageBoxDialog(message, "Scintilla DLL Not Found",
+                                       MessageBoxButtons.OK, mainHandle).ShowDialog(handleWrapper);
+                }));
             }
         }
 
@@ -4375,7 +4403,7 @@ namespace AppRefiner
 
                 // All validations passed - create and track the AppDesignerProcess
                 var newProcess = new AppDesignerProcess(processId, resultsListView, GetGeneralSettingsObject(), currentShortcutFlags);
-                string testPath = @"C:\Users\tslat\repos\GitHub\AppRefiner\AppRefiner\bin\Debug\net8.0-windows7.0\scintilla_mods\Scintilla.dll";
+                string testPath = @"C:\Users\tslat\repos\GitHub\AppRefiner\AppRefiner\bin\Debug\net8.0-windows7.0\scintilla_mods";
                 newProcess.LoadScintillaDll(testPath);
 
                 AppDesignerProcesses.Add(processId, newProcess);

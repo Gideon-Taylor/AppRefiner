@@ -1456,7 +1456,7 @@ namespace AppRefiner
         internal static void ResetStyles(ScintillaEditor activeEditor)
         {
             // Clear document styles
-            activeEditor.SendMessage(SCI_CLEARDOCUMENTSTYLE, 0, 0);
+            //activeEditor.SendMessage(SCI_CLEARDOCUMENTSTYLE, 0, 0);
 
             // Clear all indicators
             ClearAllIndicators(activeEditor);
@@ -1465,8 +1465,8 @@ namespace AppRefiner
             // Caller should clear annotations before calling ResetStyles if needed
 
             // Recolorize the document
-            var docLength = activeEditor.SendMessage(SCI_GETLENGTH, 0, 0);
-            activeEditor.SendMessage(SCI_COLOURISE, 0, docLength);
+            // var docLength = activeEditor.SendMessage(SCI_GETLENGTH, 0, 0);
+            // activeEditor.SendMessage(SCI_COLOURISE, 0, docLength);
         }
 
         internal static int GetCursorPosition(ScintillaEditor? activeEditor)

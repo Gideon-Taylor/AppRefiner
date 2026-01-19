@@ -1,5 +1,8 @@
 #include "HookManager.h"
 #include "MinimapOverlay.h"
+#include <winver.h>  // For version info APIs (GetFileVersionInfo, etc.)
+
+#pragma comment(lib, "version.lib")  // Link version.lib for file version APIs
 
 // Global variables
 HHOOK g_getMsgHook = NULL;
@@ -1283,162 +1286,194 @@ LRESULT CALLBACK GetMsgHook(int nCode, WPARAM wParam, LPARAM lParam) {
                 return CallNextHookEx(g_getMsgHook, nCode, wParam, lParam);
             }
 
+            // dllPath is now a directory path (e.g., "C:\Temp\ScintillaMods\")
+            // We'll append the version and "\Scintilla.dll" to construct the final path
+            wchar_t finalDllPath[MAX_PATH];
+            finalDllPath[0] = L'\0';
+
             // Check if Scintilla.dll is already loaded
             HMODULE hScintilla = GetModuleHandleW(L"Scintilla.dll");
             if (hScintilla != NULL) {
                 sprintf_s(debugMsg, "Scintilla.dll is already loaded at 0x%p\n", hScintilla);
                 OutputDebugStringA(debugMsg);
 
-                // Enumerate all windows in the process to check for Scintilla class windows
-                // Need to check both top-level and child windows since Scintilla is a child control
-                struct ScintillaWindowSearch {
-                    bool foundScintillaWindow;
-                    DWORD processId;
-                    int scintillaWindowCount;
-                } searchData = { false, GetCurrentProcessId(), 0 };
-
-                // Lambda to check if a window is Scintilla class
-                auto CheckScintillaWindow = [](HWND hwnd, ScintillaWindowSearch* search) -> bool {
-                    char className[256];
-                    if (GetClassNameA(hwnd, className, sizeof(className)) > 0) {
-                        if (strncmp(className, "Scintilla", 9) == 0) {
-                            search->scintillaWindowCount++;
-                            char msg[256];
-                            sprintf_s(msg, "Found Scintilla window: HWND=0x%p, class=%s\n", hwnd, className);
-                            OutputDebugStringA(msg);
-                            return true;
-                        }
-                    }
-                    return false;
-                };
-
-                // Lambda to enumerate child windows
-                auto EnumChildProc = [](HWND hwnd, LPARAM lParam) -> BOOL {
-                    ScintillaWindowSearch* search = (ScintillaWindowSearch*)lParam;
-
-                    // Check this window
-                    char className[256];
-                    if (GetClassNameA(hwnd, className, sizeof(className)) > 0) {
-                        if (strncmp(className, "Scintilla", 9) == 0) {
-                            search->scintillaWindowCount++;
-                            search->foundScintillaWindow = true;
-                            char msg[256];
-                            sprintf_s(msg, "Found Scintilla child window: HWND=0x%p\n", hwnd);
-                            OutputDebugStringA(msg);
-                            return FALSE; // Stop enumeration
-                        }
-                    }
-                    return TRUE; // Continue enumeration
-                };
-
-                // Lambda to enumerate top-level windows and their children
-                EnumWindows([](HWND hwnd, LPARAM lParam) -> BOOL {
-                    ScintillaWindowSearch* search = (ScintillaWindowSearch*)lParam;
-                    DWORD windowProcessId;
-                    GetWindowThreadProcessId(hwnd, &windowProcessId);
-
-                    // Only check windows in our process
-                    if (windowProcessId == search->processId) {
-                        // Check if this top-level window is Scintilla (unlikely but check anyway)
-                        char className[256];
-                        if (GetClassNameA(hwnd, className, sizeof(className)) > 0) {
-                            if (strncmp(className, "Scintilla", 9) == 0) {
-                                search->scintillaWindowCount++;
-                                search->foundScintillaWindow = true;
-                                char msg[256];
-                                sprintf_s(msg, "Found Scintilla top-level window: HWND=0x%p\n", hwnd);
-                                OutputDebugStringA(msg);
-                                return FALSE; // Stop enumeration
-                            }
-                        }
-
-                        // Enumerate all child windows recursively
-                        EnumChildWindows(hwnd, [](HWND childHwnd, LPARAM lParam) -> BOOL {
-                            ScintillaWindowSearch* search = (ScintillaWindowSearch*)lParam;
-                            char className[256];
-                            if (GetClassNameA(childHwnd, className, sizeof(className)) > 0) {
-                                if (strncmp(className, "Scintilla", 9) == 0) {
-                                    search->scintillaWindowCount++;
-                                    search->foundScintillaWindow = true;
-                                    char msg[256];
-                                    sprintf_s(msg, "Found Scintilla child window: HWND=0x%p\n", childHwnd);
-                                    OutputDebugStringA(msg);
-                                    return FALSE; // Stop child enumeration
-                                }
-                            }
-                            return TRUE; // Continue child enumeration
-                        }, lParam);
-
-                        // If we found a Scintilla window, stop top-level enumeration
-                        if (search->foundScintillaWindow) {
-                            return FALSE;
-                        }
-                    }
-                    return TRUE; // Continue top-level enumeration
-                }, (LPARAM)&searchData);
-
-                if (searchData.foundScintillaWindow) {
-                    sprintf_s(debugMsg, "Found %d active Scintilla window(s) - cannot replace DLL\n",
-                             searchData.scintillaWindowCount);
-                    OutputDebugStringA(debugMsg);
-                    SendMessage(callbackWindow, WM_AR_SCINTILLA_IN_USE, 0, 0);
-                    // NOTE: Do NOT call FreeLibrary here - GetModuleHandle does NOT increment ref count!
+                // Get the file path of the loaded Scintilla.dll
+                wchar_t loadedDllPath[MAX_PATH];
+                DWORD pathLen = GetModuleFileNameW(hScintilla, loadedDllPath, MAX_PATH);
+                if (pathLen == 0 || pathLen >= MAX_PATH) {
+                    OutputDebugStringA("Failed to get loaded Scintilla.dll path\n");
+                    SendMessage(callbackWindow, WM_AR_SCINTILLA_LOAD_FAILED, (WPARAM)GetLastError(), 0);
                     msg->message = WM_NULL;
                     return CallNextHookEx(g_getMsgHook, nCode, wParam, lParam);
                 }
 
-                // No Scintilla windows exist - safe to attempt unloading
-                OutputDebugStringA("No active Scintilla windows - attempting to unload existing DLL\n");
+                // Debug log the loaded DLL path
+                char loadedPathDebug[MAX_PATH];
+                WideCharToMultiByte(CP_ACP, 0, loadedDllPath, -1, loadedPathDebug, MAX_PATH, NULL, NULL);
+                sprintf_s(debugMsg, "Loaded Scintilla.dll path: %s\n", loadedPathDebug);
+                OutputDebugStringA(debugMsg);
 
-                // Attempt to unload with safety bailout
-                const int MAX_UNLOAD_ATTEMPTS = 10;
+                // Get file version information
+                DWORD versionInfoSize = GetFileVersionInfoSizeW(loadedDllPath, NULL);
+                if (versionInfoSize == 0) {
+                    OutputDebugStringA("Failed to get version info size\n");
+                    SendMessage(callbackWindow, WM_AR_SCINTILLA_LOAD_FAILED, (WPARAM)GetLastError(), 0);
+                    msg->message = WM_NULL;
+                    return CallNextHookEx(g_getMsgHook, nCode, wParam, lParam);
+                }
+
+                // Allocate buffer for version info
+                std::vector<BYTE> versionInfoBuffer(versionInfoSize);
+                if (!GetFileVersionInfoW(loadedDllPath, 0, versionInfoSize, versionInfoBuffer.data())) {
+                    OutputDebugStringA("Failed to get version info\n");
+                    SendMessage(callbackWindow, WM_AR_SCINTILLA_LOAD_FAILED, (WPARAM)GetLastError(), 0);
+                    msg->message = WM_NULL;
+                    return CallNextHookEx(g_getMsgHook, nCode, wParam, lParam);
+                }
+
+                // Query version value
+                VS_FIXEDFILEINFO* fixedInfo = nullptr;
+                UINT fixedInfoLen = 0;
+                if (!VerQueryValueW(versionInfoBuffer.data(), L"\\", (LPVOID*)&fixedInfo, &fixedInfoLen)) {
+                    OutputDebugStringA("Failed to query version value\n");
+                    SendMessage(callbackWindow, WM_AR_SCINTILLA_LOAD_FAILED, (WPARAM)GetLastError(), 0);
+                    msg->message = WM_NULL;
+                    return CallNextHookEx(g_getMsgHook, nCode, wParam, lParam);
+                }
+
+                // Extract version numbers
+                WORD majorVer = HIWORD(fixedInfo->dwFileVersionMS);
+                WORD minorVer = LOWORD(fixedInfo->dwFileVersionMS);
+                WORD buildVer = HIWORD(fixedInfo->dwFileVersionLS);
+                WORD revisionVer = LOWORD(fixedInfo->dwFileVersionLS);
+
+                sprintf_s(debugMsg, "Loaded Scintilla.dll version: %d.%d.%d.%d\n",
+                         majorVer, minorVer, buildVer, revisionVer);
+                OutputDebugStringA(debugMsg);
+
+                // Construct final DLL path: <directory>\<version>\Scintilla.dll
+                // First, copy the directory path and ensure it ends with a backslash
+                wcsncpy_s(finalDllPath, MAX_PATH, dllPath, charCount);
+                finalDllPath[min(charCount, MAX_PATH - 1)] = L'\0';
+
+                // Add trailing backslash if not present
+                size_t len = wcslen(finalDllPath);
+                if (len > 0 && finalDllPath[len - 1] != L'\\') {
+                    wcscat_s(finalDllPath, MAX_PATH, L"\\");
+                }
+
+                // Append version string
+                wchar_t versionStr[50];
+                swprintf_s(versionStr, 50, L"%d.%d.%d.%d", majorVer, minorVer, buildVer, revisionVer);
+                wcscat_s(finalDllPath, MAX_PATH, versionStr);
+                wcscat_s(finalDllPath, MAX_PATH, L"\\Scintilla.dll");
+
+                // Debug log the constructed path
+                char finalPathDebug[MAX_PATH];
+                WideCharToMultiByte(CP_ACP, 0, finalDllPath, -1, finalPathDebug, MAX_PATH, NULL, NULL);
+                sprintf_s(debugMsg, "Constructed version-specific DLL path: %s\n", finalPathDebug);
+                OutputDebugStringA(debugMsg);
+
+                // Check if the loaded DLL is already from the requested directory (already replaced)
+                if (_wcsicmp(loadedDllPath, finalDllPath) == 0) {
+                    sprintf_s(debugMsg, "Scintilla.dll is already loaded from the requested location - no replacement needed\n");
+                    OutputDebugStringA(debugMsg);
+                    SendMessage(callbackWindow, WM_AR_SCINTILLA_ALREADY_LOADED, (WPARAM)hScintilla, 0);
+                    msg->message = WM_NULL;
+                    return CallNextHookEx(g_getMsgHook, nCode, wParam, lParam);
+                }
+
+                // Different DLL - proceed with replacement
+                sprintf_s(debugMsg, "Loaded DLL differs from requested DLL - proceeding with replacement\n");
+                OutputDebugStringA(debugMsg);
+
+                // Check if the target DLL file exists before unloading current DLL
+                DWORD fileAttrib = GetFileAttributesW(finalDllPath);
+                if (fileAttrib == INVALID_FILE_ATTRIBUTES || (fileAttrib & FILE_ATTRIBUTE_DIRECTORY)) {
+                    // File doesn't exist or is a directory
+                    char fileNotFoundDebug[MAX_PATH];
+                    WideCharToMultiByte(CP_ACP, 0, finalDllPath, -1, fileNotFoundDebug, MAX_PATH, NULL, NULL);
+                    sprintf_s(debugMsg, "Target Scintilla.dll not found at: %s (version %d.%d.%d.%d)\n",
+                             fileNotFoundDebug, majorVer, minorVer, buildVer, revisionVer);
+                    OutputDebugStringA(debugMsg);
+
+                    // Pack version into wParam/lParam: wParam = (major << 16) | minor, lParam = (build << 16) | revision
+                    WPARAM versionWParam = ((WPARAM)majorVer << 16) | (WPARAM)minorVer;
+                    LPARAM versionLParam = ((LPARAM)buildVer << 16) | (LPARAM)revisionVer;
+
+                    SendMessage(callbackWindow, WM_AR_SCINTILLA_NOT_FOUND, versionWParam, versionLParam);
+                    msg->message = WM_NULL;
+                    return CallNextHookEx(g_getMsgHook, nCode, wParam, lParam);
+                }
+
+                sprintf_s(debugMsg, "Target DLL file exists - proceeding with unload/load\n");
+                OutputDebugStringA(debugMsg);
+
+                // Try to unregister the Scintilla window class
+                // This will fail if there are any Scintilla windows still in use
+                OutputDebugStringA("Attempting to unregister Scintilla window class\n");
+
+                BOOL unregisterResult = UnregisterClassW(L"Scintilla", (HINSTANCE)hScintilla);
+
+                if (!unregisterResult) {
+                    DWORD error = GetLastError();
+                    sprintf_s(debugMsg, "UnregisterClass failed with error %lu - Scintilla windows are in use\n", error);
+                    OutputDebugStringA(debugMsg);
+                    SendMessage(callbackWindow, WM_AR_SCINTILLA_IN_USE, 0, 0);
+                    msg->message = WM_NULL;
+                    return CallNextHookEx(g_getMsgHook, nCode, wParam, lParam);
+                }
+
+                // Successfully unregistered - safe to unload the old DLL
+                OutputDebugStringA("Successfully unregistered Scintilla class - attempting to unload old DLL\n");
+
+                // Unload the old DLL by calling FreeLibrary until it's actually unloaded
+                // The DLL may have multiple reference counts, so we need to loop
+                const int MAX_UNLOAD_ATTEMPTS = 20;
                 int unloadAttempts = 0;
                 bool unloaded = false;
 
                 while (!unloaded && unloadAttempts < MAX_UNLOAD_ATTEMPTS) {
-                    // Call FreeLibrary once to decrement ref count
-                    // Note: GetModuleHandle does NOT increment ref count, so no need to undo it
                     FreeLibrary(hScintilla);
                     unloadAttempts++;
 
-                    sprintf_s(debugMsg, "FreeLibrary call for iteration %d\n", unloadAttempts);
-                    OutputDebugStringA(debugMsg);
-
                     // Check if unloaded
-                    // Note: GetModuleHandle does NOT increment ref count
                     HMODULE checkHandle = GetModuleHandleW(L"Scintilla.dll");
                     if (checkHandle == NULL) {
                         unloaded = true;
-                        OutputDebugStringA("Successfully unloaded Scintilla.dll\n");
-                    } else {
-                        // Still loaded - checkHandle is valid but we don't need to free it
-                        sprintf_s(debugMsg, "Still loaded after attempt %d (handle: 0x%p)\n", unloadAttempts, checkHandle);
+                        sprintf_s(debugMsg, "Successfully unloaded old Scintilla.dll after %d FreeLibrary call(s)\n", unloadAttempts);
                         OutputDebugStringA(debugMsg);
                     }
                 }
 
                 if (!unloaded) {
-                    sprintf_s(debugMsg, "Failed to unload Scintilla.dll after %d attempts\n", MAX_UNLOAD_ATTEMPTS);
+                    sprintf_s(debugMsg, "Failed to unload old Scintilla.dll after %d attempts - may have high ref count\n", MAX_UNLOAD_ATTEMPTS);
                     OutputDebugStringA(debugMsg);
                     SendMessage(callbackWindow, WM_AR_SCINTILLA_IN_USE, 0, 0);
                     msg->message = WM_NULL;
                     return CallNextHookEx(g_getMsgHook, nCode, wParam, lParam);
                 }
 
-                // Successfully unloaded - proceed to load new DLL
-                OutputDebugStringA("Old Scintilla.dll unloaded, proceeding to load new version\n");
+                OutputDebugStringA("Old DLL unloaded - proceeding to load new DLL\n");
+            }
+            else {
+                // Scintilla not loaded - use directory as-is and assume a default structure
+                // For this case, we'll just log that no version detection occurred
+                OutputDebugStringA("Scintilla.dll not currently loaded - no version detection possible\n");
+
+                // Use the provided path directly (assume it's already complete or has default structure)
+                wcsncpy_s(finalDllPath, MAX_PATH, dllPath, charCount);
+                finalDllPath[min(charCount, MAX_PATH - 1)] = L'\0';
             }
 
-            // Debug log the path
-            char dllPathDebug[300];
-            WideCharToMultiByte(CP_ACP, 0, dllPath, min(charCount, 299),
-                               dllPathDebug, sizeof(dllPathDebug), NULL, NULL);
-            dllPathDebug[min(charCount, 299)] = '\0';
-            sprintf_s(debugMsg, "Attempting to load Scintilla.dll from: %s\n", dllPathDebug);
+            // Debug log the final path
+            char finalPathDebug[MAX_PATH];
+            WideCharToMultiByte(CP_ACP, 0, finalDllPath, -1, finalPathDebug, MAX_PATH, NULL, NULL);
+            sprintf_s(debugMsg, "Attempting to load Scintilla.dll from: %s\n", finalPathDebug);
             OutputDebugStringA(debugMsg);
 
             // Attempt to load with LOAD_WITH_ALTERED_SEARCH_PATH (0x00000008)
-            hScintilla = LoadLibraryExW(dllPath, NULL, 0x00000008);
+            hScintilla = LoadLibraryExW(finalDllPath, NULL, 0x00000008);
 
             if (hScintilla != NULL) {
                 sprintf_s(debugMsg, "Scintilla.dll loaded successfully at 0x%p\n", hScintilla);
