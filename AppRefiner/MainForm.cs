@@ -2433,7 +2433,17 @@ namespace AppRefiner
                 int firstVisibleLine = m.WParam.ToInt32();
                 int cursorPosition = m.LParam.ToInt32();
 
+                // Update last known positions
+                var lastKnownKey = $"{activeEditor.AppDesignerProcess.ProcessId}:{activeEditor.Caption}";
+                lastKnownPositions[lastKnownKey] = (firstVisibleLine, cursorPosition);
+
                 Debug.Log($"Cursor position changed: first visible line {firstVisibleLine}, position {cursorPosition}");
+
+                if (activeEditor.Type != EditorType.PeopleCode)
+                {
+                    return; // Code past here is only for PeopleCode editors
+                }
+
                 if (activeEditor.FunctionCallTipActive)
                 {
                     var calltipLine = activeEditor.FunctionCallNode.SourceSpan.Start.Line;
@@ -2449,12 +2459,8 @@ namespace AppRefiner
                     }
 
                 }
-                // Update last known positions
-                var lastKnownKey = $"{activeEditor.AppDesignerProcess.ProcessId}:{activeEditor.Caption}";
-                lastKnownPositions[lastKnownKey] = (firstVisibleLine, cursorPosition);
 
                 // Check if cursor is inside an interpolated string
-
                 var currentLineText = ScintillaManager.GetCurrentLineText(activeEditor);
                 var relativeLinePosition = cursorPosition - ScintillaManager.GetLineStartIndex(activeEditor, ScintillaManager.GetCurrentLineNumber(activeEditor));
 
