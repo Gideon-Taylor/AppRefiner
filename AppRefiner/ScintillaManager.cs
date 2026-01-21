@@ -2015,6 +2015,10 @@ namespace AppRefiner
                 AutoCompleteContext.SystemVariables => "\t;",  // No chaining for system variables
                 _ => "\t"
             };
+            if (context is AutoCompleteContext.AppPackage && editor.HasLexilla == false)
+            {
+                fillups = "\t"; /* Do not use ':' as fillup AppDesigner is too old (8.60 and before)  */
+            }
 
             string stops = " ";  // Space always stops autocomplete
 
