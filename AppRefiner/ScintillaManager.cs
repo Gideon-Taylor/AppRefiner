@@ -875,6 +875,7 @@ namespace AppRefiner
             // Comments (green-gray)
             editor.SendMessage(SCI_STYLESETFORE, 1, 0x6A9955);
             // Block comments (same as line comments)
+            editor.SendMessage(SCI_STYLESETFORE, 23, 0x6A9955);
             editor.SendMessage(SCI_STYLESETFORE, 24, 0x6A9955);
             // Numbers (purplish blue)
             editor.SendMessage(SCI_STYLESETFORE, 2, 0xB682AA);
