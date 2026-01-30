@@ -105,23 +105,37 @@ namespace AppRefiner.TooltipProviders
                 // Extract object type for polymorphic type resolution
                 PeopleCodeTypeInfo.Types.TypeInfo? objectType = GetObjectTypeFromFunctionCall(node);
 
-                (var text, var start, var end) = FormatFunctionCallTip(funcInfo, arguments, allowedTypes, objectType);
+                List<(int start, int end)> highlightRanges = new List<(int start, int end)>();
+                (var text, highlightRanges) = FormatFunctionCallTip(funcInfo, arguments, allowedTypes, objectType);
 
                 ScintillaManager.ShowCallTipWithText(editor, editor.FunctionCallNode.FirstToken.SourceSpan.Start.ByteIndex + 1, text, true);
-                ScintillaManager.SetCallTipHighlight(editor, start, end);
+                foreach (var highlightRange in highlightRanges)
+                {
+                    ScintillaManager.SetCallTipHighlight(editor, highlightRange.start, highlightRange.end);
+                }
             }
 
         }
 
-        private static (string, int, int) FormatFunctionCallTip(FunctionInfo funcInfo, List<PeopleCodeTypeInfo.Types.TypeInfo> arguments, List<FunctionCallValidator.ParameterTypeInfo> allowedTypes, PeopleCodeTypeInfo.Types.TypeInfo? objectType)
+        private static (string, List<(int start, int end)>) FormatFunctionCallTip(FunctionInfo funcInfo, List<PeopleCodeTypeInfo.Types.TypeInfo> arguments, List<FunctionCallValidator.ParameterTypeInfo> allowedTypes, PeopleCodeTypeInfo.Types.TypeInfo? objectType)
         {
+            List<(int start, int end)> highlightRanges = new List<(int start, int end)>();
             StringBuilder sb = new StringBuilder();
             int paramStart = 0;
             int paramEnd = 0;
-
+            IEnumerable<string> allowedNames = allowedTypes.Select(t => t.ParameterName);
             sb.Append($"{funcInfo.Name}(");
             for (var x = 0; x < funcInfo.Parameters.Count; x++)
             {
+
+                if (allowedNames.Contains(funcInfo.Parameters[x].Name))
+                {
+                    /* Highlight the parameter name */
+                    paramStart = sb.Length;
+                    paramEnd = Encoding.UTF8.GetByteCount(funcInfo.Parameters[x].Name);
+                    highlightRanges.Add((paramStart, paramStart + paramEnd));
+                }
+
                 var typeName = funcInfo.Parameters[x].ToString();
                 // Resolve polymorphic type keywords in parameter type
                 try
@@ -159,7 +173,8 @@ namespace AppRefiner.TooltipProviders
             paramStart = sb.Length;
             sb.Append($"Next allowed type{(allowedTypes.Count > 1 ? "(s)" : "")}:\n");
             paramEnd = sb.Length;
-            foreach(var type in allowedTypes)
+            highlightRanges.Add((paramStart, paramEnd));
+            foreach (var type in allowedTypes)
             {
                 var typeName = type.TypeName;
                 // Resolve polymorphic type keywords in allowed types
@@ -181,7 +196,7 @@ namespace AppRefiner.TooltipProviders
                     sb.Append($"{typeName}\n");
                 }
             }
-            return (sb.ToString(), paramStart, paramEnd);
+            return (sb.ToString(), highlightRanges);
         }
 
         /// <summary>
