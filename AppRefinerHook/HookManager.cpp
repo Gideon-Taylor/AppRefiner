@@ -1,5 +1,7 @@
 #include "HookManager.h"
 #include "MinimapOverlay.h"
+#include "MinimapManager.h"
+#include "ComboBoxButton.h"
 #include <winver.h>  // For version info APIs (GetFileVersionInfo, etc.)
 
 #pragma comment(lib, "version.lib")  // Link version.lib for file version APIs
@@ -518,28 +520,25 @@ void HandleScintillaNotification(HWND hwnd, SCNotification* scn, HWND callbackWi
     }
 }
 
-static const wchar_t* MINIMAP_WINDOW_CLASS = L"AppRefinerMinimap";
-static const wchar_t* MINIMAP_PROP_NAME = L"AR_MinimapHwnd";
-static HWND g_minimapDragHwnd = NULL;
-static bool g_isMinimapDragging = false;
+// Global variables for minimap drag state (needed by MinimapManager)
+HWND g_minimapDragHwnd = NULL;
+bool g_isMinimapDragging = false;
 
 static void InvalidateMinimapForScintilla(HWND scintillaHwnd) {
     if (!scintillaHwnd) {
         return;
     }
 
-    HWND minimapHwnd = (HWND)GetPropW(scintillaHwnd, MINIMAP_PROP_NAME);
+    HWND minimapHwnd = MinimapManager::GetMinimapWindow(scintillaHwnd);
     if (minimapHwnd && IsWindow(minimapHwnd)) {
         InvalidateRect(minimapHwnd, NULL, FALSE);
     }
 }
 
-static LRESULT CALLBACK MinimapWindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
+// Minimap window procedure - used by MinimapManager
+LRESULT CALLBACK MinimapWindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
+    // Note: Cleanup is now handled by MinimapManager::DisableMinimap()
     if (uMsg == WM_NCDESTROY) {
-        HWND scintillaHwnd = (HWND)GetWindowLongPtr(hWnd, GWLP_USERDATA);
-        if (scintillaHwnd) {
-            RemovePropW(scintillaHwnd, MINIMAP_PROP_NAME);
-        }
         return DefWindowProc(hWnd, uMsg, wParam, lParam);
     }
 
@@ -586,49 +585,38 @@ static LRESULT CALLBACK MinimapWindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, L
     return DefWindowProc(hWnd, uMsg, wParam, lParam);
 }
 
-static void EnsureMinimapWindow(HWND parentHwnd, HWND scintillaHwnd) {
-    if (!parentHwnd || !scintillaHwnd) {
-        return;
-    }
-
-    HWND minimapHwnd = (HWND)GetPropW(scintillaHwnd, MINIMAP_PROP_NAME);
-    if (!minimapHwnd) {
-        WNDCLASSW wc = { 0 };
-        wc.lpfnWndProc = MinimapWindowProc;
-        wc.hInstance = g_hModule;
-        wc.lpszClassName = MINIMAP_WINDOW_CLASS;
-        RegisterClassW(&wc);
-
-        minimapHwnd = CreateWindowExW(0, MINIMAP_WINDOW_CLASS, L"", WS_CHILD | WS_VISIBLE,
-                                      0, 0, MinimapOverlay::GetWidth(), 0, parentHwnd, NULL, g_hModule, NULL);
-        if (minimapHwnd) {
-            SetWindowLongPtr(minimapHwnd, GWLP_USERDATA, (LONG_PTR)scintillaHwnd);
-            SetPropW(scintillaHwnd, MINIMAP_PROP_NAME, minimapHwnd);
-        }
-    }
-
-    RECT parentRect;
-    GetClientRect(parentHwnd, &parentRect);
-    int parentWidth = parentRect.right;
-    int parentHeight = parentRect.bottom;
-    int minimapWidth = MinimapOverlay::GetWidth();
-    int editorWidth = parentWidth - minimapWidth;
-    if (editorWidth < 1) editorWidth = 1;
-
-    SetWindowPos(scintillaHwnd, NULL, 0, 0, editorWidth, parentHeight, SWP_NOZORDER | SWP_NOACTIVATE);
-    if (minimapHwnd) {
-        SetWindowPos(minimapHwnd, NULL, editorWidth, 0, minimapWidth, parentHeight, SWP_NOZORDER | SWP_NOACTIVATE);
-    }
-}
-
-static void LayoutMinimapForParent(HWND parentHwnd) {
+// Layout minimap if enabled (called on resize and after toggle)
+// Non-static so MinimapManager can call it
+void LayoutMinimapIfEnabled(HWND parentHwnd) {
     if (!parentHwnd) {
         return;
     }
 
     HWND scintillaHwnd = FindWindowExA(parentHwnd, NULL, "Scintilla", NULL);
-    if (scintillaHwnd && IsWindow(scintillaHwnd)) {
-        EnsureMinimapWindow(parentHwnd, scintillaHwnd);
+    if (!scintillaHwnd || !IsWindow(scintillaHwnd)) {
+        return;
+    }
+
+    // Only layout if minimap is enabled
+    if (MinimapManager::IsMinimapEnabled(scintillaHwnd)) {
+        HWND minimapHwnd = MinimapManager::GetMinimapWindow(scintillaHwnd);
+        if (minimapHwnd && IsWindow(minimapHwnd)) {
+            RECT parentRect;
+            GetClientRect(parentHwnd, &parentRect);
+            int parentWidth = parentRect.right;
+            int parentHeight = parentRect.bottom;
+            int minimapWidth = MinimapOverlay::GetWidth();
+            int editorWidth = parentWidth - minimapWidth;
+            if (editorWidth < 1) editorWidth = 1;
+
+            SetWindowPos(scintillaHwnd, NULL, 0, 0, editorWidth, parentHeight, SWP_NOZORDER | SWP_NOACTIVATE);
+            SetWindowPos(minimapHwnd, NULL, editorWidth, 0, minimapWidth, parentHeight, SWP_NOZORDER | SWP_NOACTIVATE);
+        }
+    } else {
+        // Minimap disabled - ensure editor is full width
+        RECT parentRect;
+        GetClientRect(parentHwnd, &parentRect);
+        SetWindowPos(scintillaHwnd, NULL, 0, 0, parentRect.right, parentRect.bottom, SWP_NOZORDER | SWP_NOACTIVATE);
     }
 }
 
@@ -644,9 +632,9 @@ LRESULT CALLBACK SubclassProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam
         
         // Get the callback window from dwRefData
         HWND callbackWindow = (HWND)dwRefData;
-        
+
         if (uMsg == WM_SIZE) {
-            LayoutMinimapForParent(hWnd);
+            LayoutMinimapIfEnabled(hWnd);
         }
 
         // Check for WM_NOTIFY messages
@@ -721,7 +709,7 @@ LRESULT CALLBACK ScintillaSubclassProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPAR
 
         if (uMsg == WM_SIZE) {
             HWND parentHwnd = GetParent(hWnd);
-            LayoutMinimapForParent(parentHwnd);
+            LayoutMinimapIfEnabled(parentHwnd);
         }
 
         // Get the callback window from dwRefData
@@ -1185,9 +1173,10 @@ LRESULT CALLBACK GetMsgHook(int nCode, WPARAM wParam, LPARAM lParam) {
             if (hWndToSubclass && IsWindow(hWndToSubclass)) {
                 // Subclass the parent window, passing callbackWindow as dwRefData
                 SetWindowSubclass(hWndToSubclass, SubclassProc, SUBCLASS_ID, (DWORD_PTR)callbackWindow);
-                
+
                 // Now find and subclass the child Scintilla editor window
                 HWND scintillaChild = FindWindowExA(hWndToSubclass, NULL, "Scintilla", NULL);
+                ComboBoxButton::Setup(scintillaChild, callbackWindow);
                 if (scintillaChild && IsWindow(scintillaChild)) {
                     SetWindowSubclass(scintillaChild, ScintillaSubclassProc, SCINTILLA_SUBCLASS_ID, (DWORD_PTR)callbackWindow);
                 } else {
@@ -1214,7 +1203,7 @@ LRESULT CALLBACK GetMsgHook(int nCode, WPARAM wParam, LPARAM lParam) {
                     }
                 }
 
-                LayoutMinimapForParent(hWndToSubclass);
+                // Note: Minimap is not automatically enabled - user must click the button to enable it
             } else {
                 OutputDebugStringA("Invalid window handle for subclassing");
             }

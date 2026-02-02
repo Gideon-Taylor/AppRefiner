@@ -37,3 +37,9 @@ extern "C" {
 
 // Function to handle Scintilla notifications
 void HandleScintillaNotification(HWND hwnd, SCNotification* scn, HWND callbackWindow);
+
+// Layout minimap and editor based on current minimap state (used by MinimapManager)
+void LayoutMinimapIfEnabled(HWND parentHwnd);
+
+// Minimap window procedure (used by MinimapManager to create minimap windows)
+LRESULT CALLBACK MinimapWindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam);

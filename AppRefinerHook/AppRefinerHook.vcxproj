@@ -147,10 +147,13 @@
   <ItemGroup>
     <ClInclude Include="AutoIndent.h" />
     <ClInclude Include="AutoPairing.h" />
+    <ClInclude Include="ComboBoxButton.h" />
     <ClInclude Include="Common.h" />
     <ClInclude Include="EditorManager.h" />
     <ClInclude Include="HookManager.h" />
+    <ClInclude Include="MinimapManager.h" />
     <ClInclude Include="MinimapOverlay.h" />
+    <ClInclude Include="Resource.h" />
     <ClInclude Include="Scintilla.h" />
     <ClInclude Include="Sci_position.h" />
     <ClInclude Include="ScintillaUtils.h" />
@@ -158,14 +161,22 @@
   <ItemGroup>
     <ClCompile Include="AutoIndent.cpp" />
     <ClCompile Include="AutoPairing.cpp" />
+    <ClCompile Include="ComboBoxButton.cpp" />
     <ClCompile Include="EditorManager.cpp" />
     <ClCompile Include="dllmain.cpp" />
     <ClCompile Include="HookManager.cpp" />
+    <ClCompile Include="MinimapManager.cpp" />
     <ClCompile Include="MinimapOverlay.cpp" />
     <ClCompile Include="ScintillaUtils.cpp" />
   </ItemGroup>
   <ItemGroup>
     <Text Include="License.txt" />
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="AppRefinerHook.rc" />
+  </ItemGroup>
+  <ItemGroup>
+    <Image Include="minimap.ico" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
