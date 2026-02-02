@@ -1287,21 +1287,32 @@ LRESULT CALLBACK GetMsgHook(int nCode, WPARAM wParam, LPARAM lParam) {
             }
 
             // dllPath is now a directory path (e.g., "C:\Temp\ScintillaMods\")
-            // We'll append the version and "\Scintilla.dll" to construct the final path
+            // We'll append the version and the DLL name to construct the final path
             wchar_t finalDllPath[MAX_PATH];
             finalDllPath[0] = L'\0';
 
-            // Check if Scintilla.dll is already loaded
+            // Check which Scintilla DLL is loaded (newer versions use Scintilla.dll, older use SciLexer.dll)
+            const wchar_t* scintillaDllName = nullptr;
             HMODULE hScintilla = GetModuleHandleW(L"Scintilla.dll");
             if (hScintilla != NULL) {
-                sprintf_s(debugMsg, "Scintilla.dll is already loaded at 0x%p\n", hScintilla);
+                scintillaDllName = L"Scintilla.dll";
+            } else {
+                hScintilla = GetModuleHandleW(L"SciLexer.dll");
+                if (hScintilla != NULL) {
+                    scintillaDllName = L"SciLexer.dll";
+                }
+            }
+
+            if (hScintilla != NULL) {
+                sprintf_s(debugMsg, "%S is already loaded at 0x%p\n", scintillaDllName, hScintilla);
                 OutputDebugStringA(debugMsg);
 
-                // Get the file path of the loaded Scintilla.dll
+                // Get the file path of the loaded DLL
                 wchar_t loadedDllPath[MAX_PATH];
                 DWORD pathLen = GetModuleFileNameW(hScintilla, loadedDllPath, MAX_PATH);
                 if (pathLen == 0 || pathLen >= MAX_PATH) {
-                    OutputDebugStringA("Failed to get loaded Scintilla.dll path\n");
+                    sprintf_s(debugMsg, "Failed to get loaded %S path\n", scintillaDllName);
+                    OutputDebugStringA(debugMsg);
                     SendMessage(callbackWindow, WM_AR_SCINTILLA_LOAD_FAILED, (WPARAM)GetLastError(), 0);
                     msg->message = WM_NULL;
                     return CallNextHookEx(g_getMsgHook, nCode, wParam, lParam);
@@ -1310,7 +1321,7 @@ LRESULT CALLBACK GetMsgHook(int nCode, WPARAM wParam, LPARAM lParam) {
                 // Debug log the loaded DLL path
                 char loadedPathDebug[MAX_PATH];
                 WideCharToMultiByte(CP_ACP, 0, loadedDllPath, -1, loadedPathDebug, MAX_PATH, NULL, NULL);
-                sprintf_s(debugMsg, "Loaded Scintilla.dll path: %s\n", loadedPathDebug);
+                sprintf_s(debugMsg, "Loaded %S path: %s\n", scintillaDllName, loadedPathDebug);
                 OutputDebugStringA(debugMsg);
 
                 // Get file version information
@@ -1347,11 +1358,11 @@ LRESULT CALLBACK GetMsgHook(int nCode, WPARAM wParam, LPARAM lParam) {
                 WORD buildVer = HIWORD(fixedInfo->dwFileVersionLS);
                 WORD revisionVer = LOWORD(fixedInfo->dwFileVersionLS);
 
-                sprintf_s(debugMsg, "Loaded Scintilla.dll version: %d.%d.%d.%d\n",
-                         majorVer, minorVer, buildVer, revisionVer);
+                sprintf_s(debugMsg, "Loaded %S version: %d.%d.%d.%d\n",
+                         scintillaDllName, majorVer, minorVer, buildVer, revisionVer);
                 OutputDebugStringA(debugMsg);
 
-                // Construct final DLL path: <directory>\<version>\Scintilla.dll
+                // Construct final DLL path: <directory>\<version>\<DLL name>
                 // First, copy the directory path and ensure it ends with a backslash
                 wcsncpy_s(finalDllPath, MAX_PATH, dllPath, charCount);
                 finalDllPath[min(charCount, MAX_PATH - 1)] = L'\0';
@@ -1362,11 +1373,12 @@ LRESULT CALLBACK GetMsgHook(int nCode, WPARAM wParam, LPARAM lParam) {
                     wcscat_s(finalDllPath, MAX_PATH, L"\\");
                 }
 
-                // Append version string
+                // Append version string and DLL name
                 wchar_t versionStr[50];
                 swprintf_s(versionStr, 50, L"%d.%d.%d.%d", majorVer, minorVer, buildVer, revisionVer);
                 wcscat_s(finalDllPath, MAX_PATH, versionStr);
-                wcscat_s(finalDllPath, MAX_PATH, L"\\Scintilla.dll");
+                wcscat_s(finalDllPath, MAX_PATH, L"\\");
+                wcscat_s(finalDllPath, MAX_PATH, scintillaDllName);
 
                 // Debug log the constructed path
                 char finalPathDebug[MAX_PATH];
@@ -1376,7 +1388,7 @@ LRESULT CALLBACK GetMsgHook(int nCode, WPARAM wParam, LPARAM lParam) {
 
                 // Check if the loaded DLL is already from the requested directory (already replaced)
                 if (_wcsicmp(loadedDllPath, finalDllPath) == 0) {
-                    sprintf_s(debugMsg, "Scintilla.dll is already loaded from the requested location - no replacement needed\n");
+                    sprintf_s(debugMsg, "%S is already loaded from the requested location - no replacement needed\n", scintillaDllName);
                     OutputDebugStringA(debugMsg);
                     SendMessage(callbackWindow, WM_AR_SCINTILLA_ALREADY_LOADED, (WPARAM)hScintilla, 0);
                     msg->message = WM_NULL;
@@ -1393,8 +1405,8 @@ LRESULT CALLBACK GetMsgHook(int nCode, WPARAM wParam, LPARAM lParam) {
                     // File doesn't exist or is a directory
                     char fileNotFoundDebug[MAX_PATH];
                     WideCharToMultiByte(CP_ACP, 0, finalDllPath, -1, fileNotFoundDebug, MAX_PATH, NULL, NULL);
-                    sprintf_s(debugMsg, "Target Scintilla.dll not found at: %s (version %d.%d.%d.%d)\n",
-                             fileNotFoundDebug, majorVer, minorVer, buildVer, revisionVer);
+                    sprintf_s(debugMsg, "Target %S not found at: %s (version %d.%d.%d.%d)\n",
+                             scintillaDllName, fileNotFoundDebug, majorVer, minorVer, buildVer, revisionVer);
                     OutputDebugStringA(debugMsg);
 
                     // Pack version into wParam/lParam: wParam = (major << 16) | minor, lParam = (build << 16) | revision
@@ -1437,17 +1449,17 @@ LRESULT CALLBACK GetMsgHook(int nCode, WPARAM wParam, LPARAM lParam) {
                     FreeLibrary(hScintilla);
                     unloadAttempts++;
 
-                    // Check if unloaded
-                    HMODULE checkHandle = GetModuleHandleW(L"Scintilla.dll");
+                    // Check if unloaded - use the detected DLL name
+                    HMODULE checkHandle = GetModuleHandleW(scintillaDllName);
                     if (checkHandle == NULL) {
                         unloaded = true;
-                        sprintf_s(debugMsg, "Successfully unloaded old Scintilla.dll after %d FreeLibrary call(s)\n", unloadAttempts);
+                        sprintf_s(debugMsg, "Successfully unloaded old %S after %d FreeLibrary call(s)\n", scintillaDllName, unloadAttempts);
                         OutputDebugStringA(debugMsg);
                     }
                 }
 
                 if (!unloaded) {
-                    sprintf_s(debugMsg, "Failed to unload old Scintilla.dll after %d attempts - may have high ref count\n", MAX_UNLOAD_ATTEMPTS);
+                    sprintf_s(debugMsg, "Failed to unload old %S after %d attempts - may have high ref count\n", scintillaDllName, MAX_UNLOAD_ATTEMPTS);
                     OutputDebugStringA(debugMsg);
                     SendMessage(callbackWindow, WM_AR_SCINTILLA_IN_USE, 0, 0);
                     msg->message = WM_NULL;
@@ -1457,9 +1469,11 @@ LRESULT CALLBACK GetMsgHook(int nCode, WPARAM wParam, LPARAM lParam) {
                 OutputDebugStringA("Old DLL unloaded - proceeding to load new DLL\n");
             }
             else {
-                // Scintilla not loaded - use directory as-is and assume a default structure
-                // For this case, we'll just log that no version detection occurred
-                OutputDebugStringA("Scintilla.dll not currently loaded - no version detection possible\n");
+                // Neither Scintilla.dll nor SciLexer.dll is loaded
+                // Default to Scintilla.dll (the more modern version)
+                OutputDebugStringA("Neither Scintilla.dll nor SciLexer.dll currently loaded - no version detection possible\n");
+                OutputDebugStringA("Defaulting to Scintilla.dll for loading\n");
+                scintillaDllName = L"Scintilla.dll";
 
                 // Use the provided path directly (assume it's already complete or has default structure)
                 wcsncpy_s(finalDllPath, MAX_PATH, dllPath, charCount);
@@ -1469,19 +1483,19 @@ LRESULT CALLBACK GetMsgHook(int nCode, WPARAM wParam, LPARAM lParam) {
             // Debug log the final path
             char finalPathDebug[MAX_PATH];
             WideCharToMultiByte(CP_ACP, 0, finalDllPath, -1, finalPathDebug, MAX_PATH, NULL, NULL);
-            sprintf_s(debugMsg, "Attempting to load Scintilla.dll from: %s\n", finalPathDebug);
+            sprintf_s(debugMsg, "Attempting to load %S from: %s\n", scintillaDllName, finalPathDebug);
             OutputDebugStringA(debugMsg);
 
             // Attempt to load with LOAD_WITH_ALTERED_SEARCH_PATH (0x00000008)
             hScintilla = LoadLibraryExW(finalDllPath, NULL, 0x00000008);
 
             if (hScintilla != NULL) {
-                sprintf_s(debugMsg, "Scintilla.dll loaded successfully at 0x%p\n", hScintilla);
+                sprintf_s(debugMsg, "%S loaded successfully at 0x%p\n", scintillaDllName, hScintilla);
                 OutputDebugStringA(debugMsg);
                 SendMessage(callbackWindow, WM_AR_SCINTILLA_LOAD_SUCCESS, (WPARAM)hScintilla, 0);
             } else {
                 DWORD errorCode = GetLastError();
-                sprintf_s(debugMsg, "Failed to load Scintilla.dll, error code: %lu\n", errorCode);
+                sprintf_s(debugMsg, "Failed to load %S, error code: %lu\n", scintillaDllName, errorCode);
                 OutputDebugStringA(debugMsg);
                 SendMessage(callbackWindow, WM_AR_SCINTILLA_LOAD_FAILED, (WPARAM)errorCode, 0);
             }
