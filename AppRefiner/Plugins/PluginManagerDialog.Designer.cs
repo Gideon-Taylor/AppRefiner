@@ -28,169 +28,165 @@ namespace AppRefiner.Plugins
         /// </summary>
         private void InitializeComponent()
         {
-            this.label1 = new System.Windows.Forms.Label();
-            this.txtPluginDirectory = new System.Windows.Forms.TextBox();
-            this.btnBrowse = new System.Windows.Forms.Button();
-            this.lstPlugins = new System.Windows.Forms.ListView();
-            this.colName = new System.Windows.Forms.ColumnHeader();
-            this.colVersion = new System.Windows.Forms.ColumnHeader();
-            this.colLinters = new System.Windows.Forms.ColumnHeader();
-            this.colStylers = new System.Windows.Forms.ColumnHeader();
-            this.colPath = new System.Windows.Forms.ColumnHeader();
-            this.label2 = new System.Windows.Forms.Label();
-            this.btnRefresh = new System.Windows.Forms.Button();
-            this.btnSave = new System.Windows.Forms.Button();
-            this.btnCancel = new System.Windows.Forms.Button();
-            this.lblStatus = new System.Windows.Forms.Label();
-            this.SuspendLayout();
+            label1 = new Label();
+            txtPluginDirectory = new TextBox();
+            btnBrowse = new Button();
+            lstPlugins = new ListView();
+            colName = new ColumnHeader();
+            colVersion = new ColumnHeader();
+            colLinters = new ColumnHeader();
+            colStylers = new ColumnHeader();
+            colCommands = new ColumnHeader();
+            colRefactors = new ColumnHeader();
+            colExtensions = new ColumnHeader();
+            colPath = new ColumnHeader();
+            label2 = new Label();
+            btnRefresh = new Button();
+            btnSave = new Button();
+            lblStatus = new Label();
+            SuspendLayout();
             // 
             // label1
             // 
-            this.label1.AutoSize = true;
-            this.label1.Location = new System.Drawing.Point(12, 15);
-            this.label1.Name = "label1";
-            this.label1.Size = new System.Drawing.Size(93, 15);
-            this.label1.TabIndex = 0;
-            this.label1.Text = "Plugin Directory:";
+            label1.AutoSize = true;
+            label1.Location = new Point(12, 15);
+            label1.Name = "label1";
+            label1.Size = new Size(95, 15);
+            label1.TabIndex = 0;
+            label1.Text = "Plugin Directory:";
             // 
             // txtPluginDirectory
             // 
-            this.txtPluginDirectory.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Left) 
-            | System.Windows.Forms.AnchorStyles.Right)));
-            this.txtPluginDirectory.Location = new System.Drawing.Point(111, 12);
-            this.txtPluginDirectory.Name = "txtPluginDirectory";
-            this.txtPluginDirectory.Size = new System.Drawing.Size(594, 23);
-            this.txtPluginDirectory.TabIndex = 1;
+            txtPluginDirectory.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
+            txtPluginDirectory.Location = new Point(111, 12);
+            txtPluginDirectory.Name = "txtPluginDirectory";
+            txtPluginDirectory.Size = new Size(594, 23);
+            txtPluginDirectory.TabIndex = 1;
             // 
             // btnBrowse
             // 
-            this.btnBrowse.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Right)));
-            this.btnBrowse.Location = new System.Drawing.Point(711, 11);
-            this.btnBrowse.Name = "btnBrowse";
-            this.btnBrowse.Size = new System.Drawing.Size(75, 23);
-            this.btnBrowse.TabIndex = 2;
-            this.btnBrowse.Text = "Browse...";
-            this.btnBrowse.UseVisualStyleBackColor = true;
-            this.btnBrowse.Click += new System.EventHandler(this.btnBrowse_Click);
+            btnBrowse.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+            btnBrowse.Location = new Point(711, 11);
+            btnBrowse.Name = "btnBrowse";
+            btnBrowse.Size = new Size(75, 23);
+            btnBrowse.TabIndex = 2;
+            btnBrowse.Text = "Browse...";
+            btnBrowse.UseVisualStyleBackColor = true;
+            btnBrowse.Click += btnBrowse_Click;
             // 
             // lstPlugins
             // 
-            this.lstPlugins.Anchor = ((System.Windows.Forms.AnchorStyles)((((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Bottom) 
-            | System.Windows.Forms.AnchorStyles.Left) 
-            | System.Windows.Forms.AnchorStyles.Right)));
-            this.lstPlugins.Columns.AddRange(new System.Windows.Forms.ColumnHeader[] {
-            this.colName,
-            this.colVersion,
-            this.colLinters,
-            this.colStylers,
-            this.colPath});
-            this.lstPlugins.FullRowSelect = true;
-            this.lstPlugins.GridLines = true;
-            this.lstPlugins.Location = new System.Drawing.Point(12, 69);
-            this.lstPlugins.Name = "lstPlugins";
-            this.lstPlugins.Size = new System.Drawing.Size(774, 321);
-            this.lstPlugins.TabIndex = 3;
-            this.lstPlugins.UseCompatibleStateImageBehavior = false;
-            this.lstPlugins.View = System.Windows.Forms.View.Details;
+            lstPlugins.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
+            lstPlugins.Columns.AddRange(new ColumnHeader[] { colName, colVersion, colLinters, colStylers, colCommands, colRefactors, colExtensions, colPath });
+            lstPlugins.FullRowSelect = true;
+            lstPlugins.GridLines = true;
+            lstPlugins.Location = new Point(12, 69);
+            lstPlugins.Name = "lstPlugins";
+            lstPlugins.Size = new Size(774, 321);
+            lstPlugins.TabIndex = 3;
+            lstPlugins.UseCompatibleStateImageBehavior = false;
+            lstPlugins.View = View.Details;
             // 
             // colName
             // 
-            this.colName.Text = "Name";
-            this.colName.Width = 150;
+            colName.Text = "Name";
+            colName.Width = 80;
             // 
             // colVersion
             // 
-            this.colVersion.Text = "Version";
-            this.colVersion.Width = 80;
+            colVersion.Text = "Version";
             // 
             // colLinters
             // 
-            this.colLinters.Text = "Linters";
-            this.colLinters.Width = 60;
+            colLinters.Text = "Linters";
+            colLinters.Width = 50;
             // 
             // colStylers
             // 
-            this.colStylers.Text = "Stylers";
-            this.colStylers.Width = 60;
+            colStylers.Text = "Stylers";
+            colStylers.Width = 50;
+            // 
+            // colCommands
+            // 
+            colCommands.Text = "Commands";
+            colCommands.Width = 75;
+            // 
+            // colRefactors
+            // 
+            colRefactors.Text = "Refactors";
+            colRefactors.Width = 65;
+            // 
+            // colExtensions
+            // 
+            colExtensions.Text = "Extensions";
+            colExtensions.Width = 70;
             // 
             // colPath
             // 
-            this.colPath.Text = "Path";
-            this.colPath.Width = 400;
+            colPath.Text = "Path";
+            colPath.Width = 400;
             // 
             // label2
             // 
-            this.label2.AutoSize = true;
-            this.label2.Location = new System.Drawing.Point(12, 51);
-            this.label2.Name = "label2";
-            this.label2.Size = new System.Drawing.Size(91, 15);
-            this.label2.TabIndex = 4;
-            this.label2.Text = "Loaded Plugins:";
+            label2.AutoSize = true;
+            label2.Location = new Point(12, 51);
+            label2.Name = "label2";
+            label2.Size = new Size(91, 15);
+            label2.TabIndex = 4;
+            label2.Text = "Loaded Plugins:";
             // 
             // btnRefresh
             // 
-            this.btnRefresh.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Right)));
-            this.btnRefresh.Location = new System.Drawing.Point(711, 40);
-            this.btnRefresh.Name = "btnRefresh";
-            this.btnRefresh.Size = new System.Drawing.Size(75, 23);
-            this.btnRefresh.TabIndex = 5;
-            this.btnRefresh.Text = "Refresh";
-            this.btnRefresh.UseVisualStyleBackColor = true;
-            this.btnRefresh.Click += new System.EventHandler(this.btnRefresh_Click);
+            btnRefresh.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+            btnRefresh.Location = new Point(711, 40);
+            btnRefresh.Name = "btnRefresh";
+            btnRefresh.Size = new Size(75, 23);
+            btnRefresh.TabIndex = 5;
+            btnRefresh.Text = "Refresh";
+            btnRefresh.UseVisualStyleBackColor = true;
+            btnRefresh.Click += btnRefresh_Click;
             // 
             // btnSave
             // 
-            this.btnSave.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Right)));
-            this.btnSave.Location = new System.Drawing.Point(630, 415);
-            this.btnSave.Name = "btnSave";
-            this.btnSave.Size = new System.Drawing.Size(75, 23);
-            this.btnSave.TabIndex = 6;
-            this.btnSave.Text = "Save";
-            this.btnSave.UseVisualStyleBackColor = true;
-            this.btnSave.Click += new System.EventHandler(this.btnSave_Click);
-            // 
-            // btnCancel
-            // 
-            this.btnCancel.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Right)));
-            this.btnCancel.Location = new System.Drawing.Point(711, 415);
-            this.btnCancel.Name = "btnCancel";
-            this.btnCancel.Size = new System.Drawing.Size(75, 23);
-            this.btnCancel.TabIndex = 7;
-            this.btnCancel.Text = "Cancel";
-            this.btnCancel.UseVisualStyleBackColor = true;
-            this.btnCancel.Click += new System.EventHandler(this.btnCancel_Click);
+            btnSave.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
+            btnSave.Location = new Point(711, 411);
+            btnSave.Name = "btnSave";
+            btnSave.Size = new Size(75, 23);
+            btnSave.TabIndex = 6;
+            btnSave.Text = "OK";
+            btnSave.UseVisualStyleBackColor = true;
+            btnSave.Click += btnSave_Click;
             // 
             // lblStatus
             // 
-            this.lblStatus.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Left)));
-            this.lblStatus.AutoSize = true;
-            this.lblStatus.Location = new System.Drawing.Point(12, 419);
-            this.lblStatus.Name = "lblStatus";
-            this.lblStatus.Size = new System.Drawing.Size(95, 15);
-            this.lblStatus.TabIndex = 8;
-            this.lblStatus.Text = "No plugins found";
+            lblStatus.Anchor = AnchorStyles.Bottom | AnchorStyles.Left;
+            lblStatus.AutoSize = true;
+            lblStatus.Location = new Point(12, 419);
+            lblStatus.Name = "lblStatus";
+            lblStatus.Size = new Size(100, 15);
+            lblStatus.TabIndex = 8;
+            lblStatus.Text = "No plugins found";
             // 
             // PluginManagerDialog
             // 
-            this.AutoScaleDimensions = new System.Drawing.SizeF(7F, 15F);
-            this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-            this.ClientSize = new System.Drawing.Size(798, 450);
-            this.Controls.Add(this.lblStatus);
-            this.Controls.Add(this.btnCancel);
-            this.Controls.Add(this.btnSave);
-            this.Controls.Add(this.btnRefresh);
-            this.Controls.Add(this.label2);
-            this.Controls.Add(this.lstPlugins);
-            this.Controls.Add(this.btnBrowse);
-            this.Controls.Add(this.txtPluginDirectory);
-            this.Controls.Add(this.label1);
-            this.MinimizeBox = false;
-            this.Name = "PluginManagerDialog";
-            this.StartPosition = System.Windows.Forms.FormStartPosition.CenterParent;
-            this.Text = "Plugin Manager";
-            this.Load += new System.EventHandler(this.PluginManagerDialog_Load);
-            this.ResumeLayout(false);
-            this.PerformLayout();
+            AutoScaleDimensions = new SizeF(7F, 15F);
+            AutoScaleMode = AutoScaleMode.Font;
+            ClientSize = new Size(798, 450);
+            Controls.Add(lblStatus);
+            Controls.Add(btnSave);
+            Controls.Add(btnRefresh);
+            Controls.Add(label2);
+            Controls.Add(lstPlugins);
+            Controls.Add(btnBrowse);
+            Controls.Add(txtPluginDirectory);
+            Controls.Add(label1);
+            MinimizeBox = false;
+            Name = "PluginManagerDialog";
+            StartPosition = FormStartPosition.CenterParent;
+            Text = "Plugin Manager";
+            Load += PluginManagerDialog_Load;
+            ResumeLayout(false);
+            PerformLayout();
 
         }
 
@@ -204,11 +200,13 @@ namespace AppRefiner.Plugins
         private ColumnHeader colVersion;
         private ColumnHeader colLinters;
         private ColumnHeader colStylers;
+        private ColumnHeader colCommands;
+        private ColumnHeader colRefactors;
+        private ColumnHeader colExtensions;
         private ColumnHeader colPath;
         private Label label2;
         private Button btnRefresh;
         private Button btnSave;
-        private Button btnCancel;
         private Label lblStatus;
     }
 }

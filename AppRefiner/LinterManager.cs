@@ -4,6 +4,7 @@ using AppRefiner.Dialogs;
 using AppRefiner.Linters;
 using AppRefiner.Plugins;
 using System.Diagnostics;
+using System.Reflection;
 
 namespace AppRefiner
 {
@@ -65,8 +66,7 @@ namespace AppRefiner
             linterGrid.Rows.Clear();
 
             /* Find all classes in this assembly that extend BaseLintRule*/
-            var linters = AppDomain.CurrentDomain.GetAssemblies()
-                .SelectMany(s => s.GetTypes())
+            var linters = Assembly.GetExecutingAssembly().GetTypes()
                 .Where(p => typeof(BaseLintRule).IsAssignableFrom(p) && !p.IsAbstract);
 
             // Plugin discovery should remain here or be moved to a central PluginService
@@ -81,7 +81,7 @@ namespace AppRefiner
 
             // Add plugin linter types
             var pluginLinters = PluginManager.DiscoverLinterTypes();
-            linters = linters.Concat(pluginLinters);
+            linters = linters.Concat(pluginLinters).Distinct();
 
             foreach (var type in linters)
             {

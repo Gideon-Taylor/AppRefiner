@@ -32,9 +32,9 @@ namespace AppRefiner.TooltipProviders
         /// <summary>
         /// Initializes the tooltip manager with discovered providers.
         /// </summary>
-        public static void Initialize()
+        public static void Initialize(bool force = false)
         {
-            if (initialized)
+            if (initialized && !force)
                 return;
 
             // Clear existing providers

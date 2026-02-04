@@ -1915,12 +1915,32 @@ namespace AppRefiner
                 Properties.Settings.Default.PluginDirectory);
 
             PluginManagerDialog dialog = new(pluginDirectory);
-            if (dialog.ShowDialog(this) == DialogResult.OK)
+            dialog.ShowDialog(this);
+
+            // Update the PluginDirectory setting and save it
+            Properties.Settings.Default.PluginDirectory = dialog.PluginDirectory;
+            Properties.Settings.Default.Save();
+
+            // Reinitialize all managers whenever assemblies were actually loaded,
+            // regardless of whether the dialog closed via Save or Cancel/X.
+            linterManager?.InitializeLinterOptions();
+            stylerManager?.InitializeStylerOptions();
+            refactorManager?.InitializeRefactorOptions();
+
+            applicationKeyboardService?.UnregisterCommandShortcuts();
+            commandManager?.DiscoverAndCacheCommands();
+            RegisterCommands(commandManager);
+            if (applicationKeyboardService != null)
             {
-                // Update the PluginDirectory setting and save it
-                Properties.Settings.Default.PluginDirectory = dialog.PluginDirectory;
-                Properties.Settings.Default.Save();
+                commandManager?.InitializeCommandShortcuts(applicationKeyboardService);
             }
+
+            languageExtensionManager?.InitializeLanguageExtensions();
+
+            TooltipManager.Initialize(force: true);
+            dataGridViewTooltips.Rows.Clear();
+            InitTooltipOptions();
+            settingsService.LoadTooltipStates(tooltipProviders, dataGridViewTooltips);
         }
 
         private void RegisterRefactorShortcuts()

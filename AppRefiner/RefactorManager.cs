@@ -82,9 +82,8 @@ namespace AppRefiner.Refactors
         {
             availableRefactors.Clear();
 
-            // Discover types (similar to MainForm.DiscoverRefactorTypes)
-            var refactorTypes = AppDomain.CurrentDomain.GetAssemblies()
-                .SelectMany(s => s.GetTypes())
+            // Discover types from main assembly only (not AppDomain, which includes plugin assemblies)
+            var refactorTypes = Assembly.GetExecutingAssembly().GetTypes()
                 .Where(p => typeof(BaseRefactor).IsAssignableFrom(p) &&
                               !p.IsAbstract &&
                               !p.IsGenericTypeDefinition);
@@ -93,7 +92,7 @@ namespace AppRefiner.Refactors
             var pluginRefactors = PluginManager.DiscoverRefactorTypes();
             if (pluginRefactors != null)
             {
-                refactorTypes = refactorTypes.Concat(pluginRefactors);
+                refactorTypes = refactorTypes.Concat(pluginRefactors).Distinct();
             }
 
             // Filter and extract metadata

@@ -80,6 +80,22 @@ namespace AppRefiner.Services
         }
 
         /// <summary>
+        /// Unregisters all command-based shortcuts (those registered via InitializeCommandShortcuts).
+        /// Call before re-discovering commands to allow their shortcuts to be re-registered on fresh instances.
+        /// </summary>
+        public void UnregisterCommandShortcuts()
+        {
+            var commandKeys = _registeredShortcuts.Keys
+                .Where(k => k.StartsWith("Command_"))
+                .ToList();
+
+            foreach (var key in commandKeys)
+            {
+                _registeredShortcuts.Remove(key);
+            }
+        }
+
+        /// <summary>
         /// Check if a keyboard shortcut combination is available for registration.
         /// Part of IShortcutRegistrar interface for plugin command support.
         /// </summary>

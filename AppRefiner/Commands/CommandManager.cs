@@ -1,4 +1,5 @@
 using AppRefiner.Plugins;
+using System.Reflection;
 
 namespace AppRefiner.Commands
 {
@@ -18,15 +19,14 @@ namespace AppRefiner.Commands
         {
             _discoveredCommands.Clear();
 
-            // Discover from main assembly
-            var coreTypes = AppDomain.CurrentDomain.GetAssemblies()
-                .SelectMany(s => s.GetTypes())
+            // Discover from main assembly only (not AppDomain, which includes plugin assemblies)
+            var coreTypes = Assembly.GetExecutingAssembly().GetTypes()
                 .Where(p => typeof(BaseCommand).IsAssignableFrom(p) && !p.IsAbstract);
 
             // Discover from plugins
             var pluginTypes = PluginManager.DiscoverCommandTypes();
 
-            var allTypes = coreTypes.Concat(pluginTypes);
+            var allTypes = coreTypes.Concat(pluginTypes).Distinct();
 
             foreach (var type in allTypes)
             {

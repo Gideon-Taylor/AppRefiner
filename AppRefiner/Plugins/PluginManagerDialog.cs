@@ -7,6 +7,12 @@ namespace AppRefiner.Plugins
         // Public property to access the plugin directory
         public string PluginDirectory => txtPluginDirectory.Text;
 
+        /// <summary>
+        /// True if LoadPlugins was called during this dialog session (i.e. Refresh was clicked).
+        /// Used by MainForm to know whether managers need reinitialization regardless of dialog result.
+        /// </summary>
+        public bool PluginsRefreshed { get; private set; }
+
         public PluginManagerDialog(string pluginDirectory)
         {
             InitializeComponent();
@@ -30,7 +36,10 @@ namespace AppRefiner.Plugins
                 item.SubItems.Add(plugin.Version);
                 item.SubItems.Add(plugin.LinterCount.ToString());
                 item.SubItems.Add(plugin.StylerCount.ToString());
-                item.SubItems.Add(plugin.FilePath);
+                item.SubItems.Add(plugin.CommandCount.ToString());
+                item.SubItems.Add(plugin.RefactorCount.ToString());
+                item.SubItems.Add(plugin.LanguageExtensionCount.ToString());
+                item.SubItems.Add(plugin.FilePath.Replace($@"{_pluginDirectory}\",""));
                 item.Tag = plugin;
 
                 lstPlugins.Items.Add(item);
@@ -38,8 +47,11 @@ namespace AppRefiner.Plugins
 
             // Update status
             lblStatus.Text = $"Loaded {plugins.Count} plugins with " +
-                             $"{plugins.Sum(p => p.LinterCount)} linters and " +
-                             $"{plugins.Sum(p => p.StylerCount)} stylers";
+                             $"{plugins.Sum(p => p.LinterCount)} linters, " +
+                             $"{plugins.Sum(p => p.StylerCount)} stylers, " +
+                             $"{plugins.Sum(p => p.CommandCount)} commands, " +
+                             $"{plugins.Sum(p => p.RefactorCount)} refactors, and " +
+                             $"{plugins.Sum(p => p.LanguageExtensionCount)} extensions";
         }
 
         private void btnBrowse_Click(object sender, EventArgs e)
@@ -78,6 +90,7 @@ namespace AppRefiner.Plugins
             {
                 Cursor = Cursors.WaitCursor;
                 int count = PluginManager.LoadPlugins(txtPluginDirectory.Text);
+                PluginsRefreshed = true;
                 RefreshPluginList();
                 MessageBox.Show($"Successfully loaded {count} plugin assemblies.",
                     "Plugins Loaded", MessageBoxButtons.OK, MessageBoxIcon.Information);
