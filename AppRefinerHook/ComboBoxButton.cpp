@@ -3,6 +3,7 @@
 #include "Resource.h"
 #include "MinimapManager.h"
 #include <vector>
+#include <algorithm>
 #include <commctrl.h>
 
 // Constants
@@ -11,9 +12,13 @@ static const wchar_t* COMBO_BUTTON_PROP = L"AR_ComboButtonHwnd";
 static const wchar_t* BUTTON_PRESSED_PROP = L"AR_ButtonPressed";
 static const wchar_t* BUTTON_SCINTILLA_PROP = L"AR_ButtonScintillaHwnd"; // Store Scintilla HWND for minimap toggle
 static const wchar_t* LAYOUT_TIMER_PROP = L"AR_LayoutTimer";
+static const wchar_t* MINIMAP_STATE_PROP = L"AR_MinimapState"; // Track minimap checkbox state
+static const wchar_t* PARAM_NAMES_STATE_PROP = L"AR_ParamNamesState"; // Track param names checkbox state
 static const int COMBO_BUTTON_WIDTH = 24;
 static const UINT_PTR COMBO_DIALOG_SUBCLASS_ID = 4; // Unique subclass ID
 static const UINT_PTR LAYOUT_TIMER_ID = 100; // Timer ID for delayed layout
+
+// Menu item IDs are defined in Common.h
 
 // External reference to module handle (defined in HookManager.cpp)
 extern HMODULE g_hModule;
@@ -55,31 +60,53 @@ LRESULT CALLBACK ComboBoxButton::ButtonWndProc(HWND hWnd, UINT uMsg, WPARAM wPar
             // Redraw button in normal state
             InvalidateRect(hWnd, NULL, FALSE);
 
-            // Only toggle minimap if button was actually pressed
+            // Only show menu if button was actually pressed
             if (wasPressed) {
                 // Check if mouse is still over button
                 POINT pt;
                 GetCursorPos(&pt);
-                ScreenToClient(hWnd, &pt);
+                POINT clientPt = pt;
+                ScreenToClient(hWnd, &clientPt);
 
                 RECT rect;
                 GetClientRect(hWnd, &rect);
 
-                if (PtInRect(&rect, pt)) {
-                    // Get the Scintilla HWND and callback window
-                    HWND scintillaHwnd = (HWND)GetPropW(hWnd, BUTTON_SCINTILLA_PROP);
-                    HWND callbackWindow = (HWND)GetWindowLongPtr(hWnd, GWLP_USERDATA);
+                if (PtInRect(&rect, clientPt)) {
+                    OutputDebugStringA("ComboBox button clicked - showing context menu");
 
-                    if (scintillaHwnd && IsWindow(scintillaHwnd)) {
-                        OutputDebugStringA("ComboBox button clicked - toggling minimap");
-                        bool isEnabled = MinimapManager::ToggleMinimap(scintillaHwnd, callbackWindow);
+                    // Create context menu
+                    HMENU hMenu = CreatePopupMenu();
+                    if (hMenu) {
+                        // Add menu items
+                        AppendMenuA(hMenu, MF_STRING, IDM_COMMAND_PALETTE, "Command Palette...");
 
-                        char debugMsg[256];
-                        sprintf_s(debugMsg, "Minimap %s for Scintilla: 0x%p\n",
-                                 isEnabled ? "enabled" : "disabled", scintillaHwnd);
-                        OutputDebugStringA(debugMsg);
-                    } else {
-                        OutputDebugStringA("ComboBox button clicked - invalid Scintilla HWND");
+                        // Get current checkbox states from window properties
+                        bool minimapChecked = (GetPropW(hWnd, MINIMAP_STATE_PROP) != NULL);
+                        bool paramNamesChecked = (GetPropW(hWnd, PARAM_NAMES_STATE_PROP) != NULL);
+
+                        // Add checkbox menu items
+                        AppendMenuA(hMenu, MF_STRING | (minimapChecked ? MF_CHECKED : MF_UNCHECKED),
+                                   IDM_MINIMAP, "Show Minimap");
+
+                        HWND scintillaHwnd = (HWND)GetPropW(hWnd, BUTTON_SCINTILLA_PROP);
+
+						int hasInlaySupport = SendMessage(scintillaHwnd, SCI_INLAYHINTSSUPPORTED, 0, 0);
+                        if (hasInlaySupport) {
+                            AppendMenuA(hMenu, MF_STRING | (paramNamesChecked ? MF_CHECKED : MF_UNCHECKED),
+                                IDM_PARAM_NAMES, "Show Parameter Names");
+                        }
+
+                        // Show menu at cursor position
+                        int menuResult = TrackPopupMenu(hMenu,
+                                                       TPM_RIGHTALIGN | TPM_TOPALIGN | TPM_RETURNCMD,
+                                                       pt.x, pt.y, 0, hWnd, NULL);
+
+                        // Handle menu selection
+                        if (menuResult > 0) {
+                            SendMessage(hWnd, WM_COMMAND, menuResult, 0);
+                        }
+
+                        DestroyMenu(hMenu);
                     }
                 }
             }
@@ -115,7 +142,7 @@ LRESULT CALLBACK ComboBoxButton::ButtonWndProc(HWND hWnd, UINT uMsg, WPARAM wPar
                 DrawEdge(hdc, &rect, isPressed ? EDGE_SUNKEN : EDGE_RAISED, BF_RECT);
 
                 // Draw icon from resource (16x16 recommended for 24px button)
-                HICON hIcon = LoadIcon(g_hModule, MAKEINTRESOURCE(IDI_COMBO_BUTTON_ICON));
+                HICON hIcon = LoadIcon(g_hModule, MAKEINTRESOURCE(IDI_APPREFINER_ICON));
                 if (hIcon) {
                     // Center the icon in the button
                     int iconSize = 16; // Standard small icon size
@@ -144,6 +171,76 @@ LRESULT CALLBACK ComboBoxButton::ButtonWndProc(HWND hWnd, UINT uMsg, WPARAM wPar
         case WM_ERASEBKGND:
             // Prevent flicker by handling erase in WM_PAINT
             return 1;
+
+        case WM_COMMAND:
+        {
+            int menuId = LOWORD(wParam);
+            HWND callbackWindow = (HWND)GetWindowLongPtr(hWnd, GWLP_USERDATA);
+
+            switch (menuId) {
+                case IDM_COMMAND_PALETTE:
+                {
+                    OutputDebugStringA("Command Palette selected");
+                    // Send message to callback window (not toggleable, LPARAM = 0)
+                    if (callbackWindow && IsWindow(callbackWindow)) {
+                        SendMessage(callbackWindow, WM_AR_CONTEXT_MENU_OPTION, IDM_COMMAND_PALETTE, 0);
+                    }
+                    break;
+                }
+
+                case IDM_MINIMAP:
+                {
+                    // Toggle minimap checkbox state
+                    bool currentState = (GetPropW(hWnd, MINIMAP_STATE_PROP) != NULL);
+                    bool newState = !currentState;
+
+                    if (newState) {
+                        SetPropW(hWnd, MINIMAP_STATE_PROP, (HANDLE)1);
+                    } else {
+                        RemovePropW(hWnd, MINIMAP_STATE_PROP);
+                    }
+
+                    // Get Scintilla HWND and toggle minimap
+                    HWND scintillaHwnd = (HWND)GetPropW(hWnd, BUTTON_SCINTILLA_PROP);
+                    if (scintillaHwnd && IsWindow(scintillaHwnd) && callbackWindow && IsWindow(callbackWindow)) {
+                        bool isEnabled = MinimapManager::ToggleMinimap(scintillaHwnd, callbackWindow);
+
+                        char debugMsg[256];
+                        sprintf_s(debugMsg, "Minimap %s for Scintilla: 0x%p",
+                                 isEnabled ? "enabled" : "disabled", scintillaHwnd);
+                        OutputDebugStringA(debugMsg);
+
+                        // Send message to callback window with toggle state
+                        SendMessage(callbackWindow, WM_AR_CONTEXT_MENU_OPTION, IDM_MINIMAP, (LPARAM)isEnabled);
+                    }
+                    break;
+                }
+
+                case IDM_PARAM_NAMES:
+                {
+                    // Toggle param names checkbox state
+                    bool currentState = (GetPropW(hWnd, PARAM_NAMES_STATE_PROP) != NULL);
+                    bool newState = !currentState;
+
+                    if (newState) {
+                        SetPropW(hWnd, PARAM_NAMES_STATE_PROP, (HANDLE)1);
+                    } else {
+                        RemovePropW(hWnd, PARAM_NAMES_STATE_PROP);
+                    }
+
+                    char debugMsg[256];
+                    sprintf_s(debugMsg, "Param Names %s", newState ? "enabled" : "disabled");
+                    OutputDebugStringA(debugMsg);
+
+                    // Send message to callback window with toggle state
+                    if (callbackWindow && IsWindow(callbackWindow)) {
+                        SendMessage(callbackWindow, WM_AR_CONTEXT_MENU_OPTION, IDM_PARAM_NAMES, (LPARAM)newState);
+                    }
+                    break;
+                }
+            }
+            return 0;
+        }
     }
 
     return DefWindowProc(hWnd, uMsg, wParam, lParam);
@@ -186,8 +283,10 @@ LRESULT CALLBACK ComboBoxButton::DialogSubclassProc(HWND hWnd, UINT uMsg, WPARAM
         // Cleanup: destroy button and remove properties
         HWND buttonHwnd = (HWND)GetPropW(hWnd, COMBO_BUTTON_PROP);
         if (buttonHwnd && IsWindow(buttonHwnd)) {
-            // Clean up button's pressed state property
+            // Clean up button's properties
             RemovePropW(buttonHwnd, BUTTON_PRESSED_PROP);
+            RemovePropW(buttonHwnd, MINIMAP_STATE_PROP);
+            RemovePropW(buttonHwnd, PARAM_NAMES_STATE_PROP);
             DestroyWindow(buttonHwnd);
         }
         RemovePropW(hWnd, COMBO_BUTTON_PROP);
@@ -313,6 +412,15 @@ void ComboBoxButton::LayoutDialog(HWND dialogHwnd, HWND callbackWindow)
         isLayoutInProgress = false; // Clear guard before early return
         return;
     }
+
+    // Sort combo boxes by X position to ensure consistent left-to-right ordering
+    // EnumChildWindows doesn't guarantee order, which can cause swapping during resize
+    std::sort(comboBoxes.begin(), comboBoxes.end(), [](HWND a, HWND b) {
+        RECT rectA, rectB;
+        GetWindowRect(a, &rectA);
+        GetWindowRect(b, &rectB);
+        return rectA.left < rectB.left;
+    });
 
     // Get or create the button
     HWND buttonHwnd = (HWND)GetPropW(dialogHwnd, COMBO_BUTTON_PROP);
@@ -461,6 +569,39 @@ void ComboBoxButton::Setup(HWND scintillaHwnd, HWND callbackWindow)
     }
 }
 
+// Sync a checkbox state on the combo button for the given Scintilla editor.
+// Called when AppRefiner sets minimap/param-names state programmatically so the
+// context menu checkbox reflects the current state.
+void ComboBoxButton::SyncCheckboxState(HWND scintillaHwnd, int menuId, bool state)
+{
+    if (!scintillaHwnd || !IsWindow(scintillaHwnd)) {
+        return;
+    }
+
+    HWND dialogHwnd = FindDialogWindow(scintillaHwnd);
+    if (!dialogHwnd) {
+        return;
+    }
+
+    HWND buttonHwnd = (HWND)GetPropW(dialogHwnd, COMBO_BUTTON_PROP);
+    if (!buttonHwnd || !IsWindow(buttonHwnd)) {
+        return;
+    }
+
+    const wchar_t* prop = nullptr;
+    switch (menuId) {
+        case IDM_MINIMAP:       prop = MINIMAP_STATE_PROP;      break;
+        case IDM_PARAM_NAMES:   prop = PARAM_NAMES_STATE_PROP;  break;
+        default:                return;
+    }
+
+    if (state) {
+        SetPropW(buttonHwnd, prop, (HANDLE)1);
+    } else {
+        RemovePropW(buttonHwnd, prop);
+    }
+}
+
 // Remove the button and cleanup
 void ComboBoxButton::Cleanup(HWND scintillaHwnd)
 {
@@ -479,8 +620,10 @@ void ComboBoxButton::Cleanup(HWND scintillaHwnd)
     // Manual cleanup in case subclass wasn't active
     HWND buttonHwnd = (HWND)GetPropW(dialogHwnd, COMBO_BUTTON_PROP);
     if (buttonHwnd && IsWindow(buttonHwnd)) {
-        // Clean up button's pressed state property
+        // Clean up button's properties
         RemovePropW(buttonHwnd, BUTTON_PRESSED_PROP);
+        RemovePropW(buttonHwnd, MINIMAP_STATE_PROP);
+        RemovePropW(buttonHwnd, PARAM_NAMES_STATE_PROP);
         DestroyWindow(buttonHwnd);
     }
     RemovePropW(dialogHwnd, COMBO_BUTTON_PROP);

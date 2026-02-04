@@ -22,8 +22,8 @@ LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_US
 //
 // Icon
 //
-
-IDI_COMBO_BUTTON_ICON          ICON                    "minimap.ico"
+IDI_APPREFINER_ICON          ICON                    "AppRefiner.ico"
+IDI_MINIMAP_ICON          ICON                    "minimap.ico"
 
 #endif    // English (United States) resources
 /////////////////////////////////////////////////////////////////////////////

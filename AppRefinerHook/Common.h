@@ -28,6 +28,10 @@
 #define WM_AR_SET_OPEN_TARGET (WM_USER + 1008)
 // Message to load Scintilla DLL into the process
 #define WM_LOAD_SCINTILLA_DLL (WM_USER + 1009)
+// Messages to set editor features from AppRefiner
+// wParam = Scintilla editor HWND, lParam = 1 (enable) or 0 (disable)
+#define WM_AR_SET_MINIMAP (WM_USER + 1010)
+#define WM_AR_SET_PARAM_NAMES (WM_USER + 1011)
 
 /* TODO define messages with a mask to indicate "this is a scintilla event message" */
 #define WM_SCN_EVENT_MASK 0x7000
@@ -58,7 +62,13 @@
 #define WM_AR_SCINTILLA_IN_USE 2517         // Scintilla DLL in use (active windows exist, cannot replace)
 #define WM_AR_SCINTILLA_NOT_FOUND 2518      // Scintilla DLL file not found at specified path (wParam=(major<<16)|minor, lParam=(build<<16)|revision)
 #define WM_AR_COMBO_BUTTON_CLICKED 2519     // ComboBox button clicked notification
+#define WM_AR_CONTEXT_MENU_OPTION 2520      // Context menu option selected (wParam=option ID, lParam=toggle state for checkboxes or 0)
 #define WM_SCN_USERLIST_SELECTION WM_SCN(SCN_USERLISTSELECTION) // User list selection notification
+
+// Context menu option IDs (for WM_AR_CONTEXT_MENU_OPTION wParam)
+#define IDM_COMMAND_PALETTE 1001
+#define IDM_MINIMAP 1002
+#define IDM_PARAM_NAMES 1003
 #define WM_SCN_AUTOCSELECTION WM_SCN(SCN_AUTOCSELECTION) // Autocompletion selection notification
 #define WM_SCN_AUTOCCOMPLETED WM_SCN(SCN_AUTOCCOMPLETED) // Autocompletion completed notification
 

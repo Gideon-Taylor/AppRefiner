@@ -2,6 +2,8 @@
 
 #include <Windows.h>
 
+#define SCI_INLAYHINTSSUPPORTED 2906
+
 // ComboBox button functionality
 // Adds a 24px button to the right of ComboBox controls in the dialog window
 class ComboBoxButton
@@ -13,6 +15,10 @@ public:
 
     // Remove the button and cleanup
     static void Cleanup(HWND scintillaHwnd);
+
+    // Sync a checkbox state on the combo button for the given Scintilla editor.
+    // menuId: IDM_MINIMAP or IDM_PARAM_NAMES.  state: true = checked, false = unchecked.
+    static void SyncCheckboxState(HWND scintillaHwnd, int menuId, bool state);
 
 private:
     // Layout the ComboBoxes and button in the dialog

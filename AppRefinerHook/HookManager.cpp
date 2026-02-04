@@ -1491,6 +1491,50 @@ LRESULT CALLBACK GetMsgHook(int nCode, WPARAM wParam, LPARAM lParam) {
 
             msg->message = WM_NULL;
         }
+        // Handle minimap toggle from AppRefiner
+        else if (msg->message == WM_AR_SET_MINIMAP) {
+            HWND scintillaHwnd = (HWND)msg->wParam;
+            bool desiredState = (msg->lParam != 0);
+
+            if (scintillaHwnd && IsWindow(scintillaHwnd)) {
+                bool currentState = MinimapManager::IsMinimapEnabled(scintillaHwnd);
+
+                if (desiredState != currentState) {
+                    if (desiredState) {
+                        MinimapManager::EnableMinimap(scintillaHwnd, g_callbackWindow);
+                    } else {
+                        MinimapManager::DisableMinimap(scintillaHwnd);
+                    }
+                }
+
+                // Sync the checkbox on the combo button so the context menu reflects the state
+                ComboBoxButton::SyncCheckboxState(scintillaHwnd, IDM_MINIMAP, desiredState);
+
+                char debugMsg[256];
+                sprintf_s(debugMsg, "WM_AR_SET_MINIMAP: %s for Scintilla 0x%p",
+                         desiredState ? "enabled" : "disabled", scintillaHwnd);
+                OutputDebugStringA(debugMsg);
+            }
+
+            msg->message = WM_NULL;
+        }
+        // Handle param names toggle from AppRefiner
+        // The actual inlay hint toggle is performed on the C# side; this just syncs the checkbox.
+        else if (msg->message == WM_AR_SET_PARAM_NAMES) {
+            HWND scintillaHwnd = (HWND)msg->wParam;
+            bool desiredState = (msg->lParam != 0);
+
+            if (scintillaHwnd && IsWindow(scintillaHwnd)) {
+                ComboBoxButton::SyncCheckboxState(scintillaHwnd, IDM_PARAM_NAMES, desiredState);
+
+                char debugMsg[256];
+                sprintf_s(debugMsg, "WM_AR_SET_PARAM_NAMES: %s for Scintilla 0x%p",
+                         desiredState ? "enabled" : "disabled", scintillaHwnd);
+                OutputDebugStringA(debugMsg);
+            }
+
+            msg->message = WM_NULL;
+        }
     }
     catch (const std::exception& e) {
         char errorMsg[256];

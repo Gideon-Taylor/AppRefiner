@@ -176,6 +176,7 @@
     <ResourceCompile Include="AppRefinerHook.rc" />
   </ItemGroup>
   <ItemGroup>
+    <Image Include="AppRefiner.ico" />
     <Image Include="minimap.ico" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

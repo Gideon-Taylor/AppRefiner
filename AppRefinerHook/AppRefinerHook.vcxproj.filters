@@ -93,5 +93,8 @@
     <Image Include="minimap.ico">
       <Filter>Resource Files</Filter>
     </Image>
+    <Image Include="AppRefiner.ico">
+      <Filter>Resource Files</Filter>
+    </Image>
   </ItemGroup>
 </Project>
