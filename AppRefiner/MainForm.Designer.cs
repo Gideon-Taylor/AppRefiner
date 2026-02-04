@@ -40,42 +40,51 @@ namespace AppRefiner
             splitContainer1 = new SplitContainer();
             tabControl1 = new TabControl();
             tabPage1 = new TabPage();
-            lnkWhatsNew = new LinkLabel();
+            grpCodeFolding = new GroupBox();
+            chkCodeFolding = new CheckBox();
+            chkInitCollapsed = new CheckBox();
+            chkRememberFolds = new CheckBox();
+            grpEditorFeatures = new GroupBox();
+            chkMultiSelection = new CheckBox();
+            chkAutoPairing = new CheckBox();
+            chkDocMinimap = new CheckBox();
+            chkInlineParameterHints = new CheckBox();
+            chkLineSelectionFix = new CheckBox();
             groupBox3 = new GroupBox();
-            chkFilled = new CheckBox();
-            cmbTheme = new ComboBox();
-            label1 = new Label();
-            chkSystemVariables = new CheckBox();
+            chkVariableSuggestions = new CheckBox();
             chkObjectMembers = new CheckBox();
             chkFunctionSignatures = new CheckBox();
-            chkVariableSuggestions = new CheckBox();
-            linkDocs = new LinkLabel();
+            chkSystemVariables = new CheckBox();
+            label1 = new Label();
+            cmbTheme = new ComboBox();
+            chkFilled = new CheckBox();
+            grpAppearance = new GroupBox();
+            chkAutoDark = new CheckBox();
+            chkAutoCenterDialogs = new CheckBox();
+            grpFeatureOverrides = new GroupBox();
+            chkOverrideFindReplace = new CheckBox();
+            chkOverrideOpen = new CheckBox();
+            btnConfigSmartOpen = new Button();
+            chkBetterSQL = new CheckBox();
             groupBox2 = new GroupBox();
+            chkEventMapping = new CheckBox();
             chkEventMapXrefs = new CheckBox();
             groupBox4 = new GroupBox();
-            optClassText = new RadioButton();
             optClassPath = new RadioButton();
-            chkEventMapping = new CheckBox();
-            groupBox1 = new GroupBox();
-            btnReportDirectory = new Button();
-            btnTNSADMIN = new Button();
-            btnDebugLog = new Button();
-            grpEditorSettings = new GroupBox();
-            chkLineSelectionFix = new CheckBox();
-            chkMultiSelection = new CheckBox();
-            chkAutoCenterDialogs = new CheckBox();
-            btnConfigSmartOpen = new Button();
-            chkOverrideOpen = new CheckBox();
-            chkOverrideFindReplace = new CheckBox();
-            chkRememberFolds = new CheckBox();
-            chkCodeFolding = new CheckBox();
-            chkPromptForDB = new CheckBox();
-            chkAutoPairing = new CheckBox();
-            chkBetterSQL = new CheckBox();
+            optClassText = new RadioButton();
+            grpApplication = new GroupBox();
             chkOnlyPPC = new CheckBox();
+            chkPromptForDB = new CheckBox();
             btnPlugins = new Button();
-            chkInitCollapsed = new CheckBox();
-            chkAutoDark = new CheckBox();
+            lblLintReportDir = new Label();
+            txtLintReportDir = new TextBox();
+            btnBrowseLintReport = new Button();
+            lblTnsAdminDir = new Label();
+            txtTnsAdminDir = new TextBox();
+            btnBrowseTnsAdmin = new Button();
+            lnkWhatsNew = new LinkLabel();
+            linkDocs = new LinkLabel();
+            btnDebugLog = new Button();
             tabPage4 = new TabPage();
             dataGridView3 = new DataGridView();
             dataGridViewCheckBoxColumn1 = new DataGridViewCheckBoxColumn();
@@ -99,27 +108,31 @@ namespace AppRefiner
             dataGridViewButtonColumn1 = new DataGridViewButtonColumn();
             tabPage6 = new TabPage();
             gridExtensions = new DataGridView();
+            colExtActive = new DataGridViewCheckBoxColumn();
+            colExtTarget = new DataGridViewTextBoxColumn();
+            colExtContents = new DataGridViewTextBoxColumn();
+            colExtConfigure = new DataGridViewButtonColumn();
             tabPage5 = new TabPage();
             splitContainer3 = new SplitContainer();
             pnlTemplateParams = new Panel();
             btnApplyTemplate = new Button();
             cmbTemplates = new ComboBox();
             lnkNewVersion = new LinkLabel();
-            colExtActive = new DataGridViewCheckBoxColumn();
-            colExtTarget = new DataGridViewTextBoxColumn();
-            colExtContents = new DataGridViewTextBoxColumn();
-            colExtConfigure = new DataGridViewButtonColumn();
+            chkUseEnhancedEditor = new CheckBox();
             ((System.ComponentModel.ISupportInitialize)splitContainer1).BeginInit();
             splitContainer1.Panel1.SuspendLayout();
             splitContainer1.Panel2.SuspendLayout();
             splitContainer1.SuspendLayout();
             tabControl1.SuspendLayout();
             tabPage1.SuspendLayout();
+            grpCodeFolding.SuspendLayout();
+            grpEditorFeatures.SuspendLayout();
             groupBox3.SuspendLayout();
+            grpAppearance.SuspendLayout();
+            grpFeatureOverrides.SuspendLayout();
             groupBox2.SuspendLayout();
             groupBox4.SuspendLayout();
-            groupBox1.SuspendLayout();
-            grpEditorSettings.SuspendLayout();
+            grpApplication.SuspendLayout();
             tabPage4.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)dataGridView3).BeginInit();
             tabPage3.SuspendLayout();
@@ -156,8 +169,8 @@ namespace AppRefiner
             // 
             splitContainer1.Panel2.BackColor = SystemColors.Info;
             splitContainer1.Panel2.Controls.Add(lnkNewVersion);
-            splitContainer1.Size = new Size(570, 557);
-            splitContainer1.SplitterDistance = 518;
+            splitContainer1.Size = new Size(570, 637);
+            splitContainer1.SplitterDistance = 591;
             splitContainer1.TabIndex = 0;
             // 
             // tabControl1
@@ -173,413 +186,501 @@ namespace AppRefiner
             tabControl1.Location = new Point(0, 0);
             tabControl1.Name = "tabControl1";
             tabControl1.SelectedIndex = 0;
-            tabControl1.Size = new Size(570, 518);
+            tabControl1.Size = new Size(570, 591);
             tabControl1.TabIndex = 3;
             // 
             // tabPage1
             // 
-            tabPage1.Controls.Add(lnkWhatsNew);
+            tabPage1.Controls.Add(grpCodeFolding);
+            tabPage1.Controls.Add(grpEditorFeatures);
             tabPage1.Controls.Add(groupBox3);
-            tabPage1.Controls.Add(linkDocs);
+            tabPage1.Controls.Add(grpAppearance);
+            tabPage1.Controls.Add(grpFeatureOverrides);
             tabPage1.Controls.Add(groupBox2);
-            tabPage1.Controls.Add(groupBox1);
+            tabPage1.Controls.Add(grpApplication);
+            tabPage1.Controls.Add(lnkWhatsNew);
+            tabPage1.Controls.Add(linkDocs);
             tabPage1.Controls.Add(btnDebugLog);
-            tabPage1.Controls.Add(grpEditorSettings);
             tabPage1.Location = new Point(4, 24);
             tabPage1.Name = "tabPage1";
             tabPage1.Padding = new Padding(3);
-            tabPage1.Size = new Size(562, 490);
+            tabPage1.Size = new Size(562, 563);
             tabPage1.TabIndex = 0;
             tabPage1.Text = "Editor Tweaks";
             tabPage1.UseVisualStyleBackColor = true;
             // 
-            // lnkWhatsNew
+            // grpCodeFolding
             // 
-            lnkWhatsNew.AutoSize = true;
-            lnkWhatsNew.Location = new Point(12, 458);
-            lnkWhatsNew.Name = "lnkWhatsNew";
-            lnkWhatsNew.Size = new Size(79, 15);
-            lnkWhatsNew.TabIndex = 35;
-            lnkWhatsNew.TabStop = true;
-            lnkWhatsNew.Text = "What's New...";
-            lnkWhatsNew.LinkClicked += lnkWhatsNew_LinkClicked;
-            // 
-            // groupBox3
-            // 
-            groupBox3.Controls.Add(chkFilled);
-            groupBox3.Controls.Add(cmbTheme);
-            groupBox3.Controls.Add(label1);
-            groupBox3.Controls.Add(chkSystemVariables);
-            groupBox3.Controls.Add(chkObjectMembers);
-            groupBox3.Controls.Add(chkFunctionSignatures);
-            groupBox3.Controls.Add(chkVariableSuggestions);
-            groupBox3.Location = new Point(8, 144);
-            groupBox3.Name = "groupBox3";
-            groupBox3.Size = new Size(258, 137);
-            groupBox3.TabIndex = 34;
-            groupBox3.TabStop = false;
-            groupBox3.Text = "Auto Suggest Settings";
-            // 
-            // chkFilled
-            // 
-            chkFilled.AutoSize = true;
-            chkFilled.Location = new Point(181, 97);
-            chkFilled.Name = "chkFilled";
-            chkFilled.Size = new Size(54, 19);
-            chkFilled.TabIndex = 43;
-            chkFilled.Text = "Filled";
-            chkFilled.UseVisualStyleBackColor = true;
-            chkFilled.CheckedChanged += ThemeSetting_Changed;
-            // 
-            // cmbTheme
-            // 
-            cmbTheme.FormattingEnabled = true;
-            cmbTheme.Location = new Point(60, 94);
-            cmbTheme.Name = "cmbTheme";
-            cmbTheme.Size = new Size(115, 23);
-            cmbTheme.TabIndex = 42;
-            cmbTheme.SelectedIndexChanged += ThemeSetting_Changed;
-            // 
-            // label1
-            // 
-            label1.AutoSize = true;
-            label1.Location = new Point(7, 97);
-            label1.Name = "label1";
-            label1.Size = new Size(47, 15);
-            label1.TabIndex = 41;
-            label1.Text = "Theme:";
-            // 
-            // chkSystemVariables
-            // 
-            chkSystemVariables.AutoSize = true;
-            chkSystemVariables.Location = new Point(128, 56);
-            chkSystemVariables.Name = "chkSystemVariables";
-            chkSystemVariables.Size = new Size(113, 19);
-            chkSystemVariables.TabIndex = 40;
-            chkSystemVariables.Text = "System Variables";
-            chkSystemVariables.UseVisualStyleBackColor = true;
-            // 
-            // chkObjectMembers
-            // 
-            chkObjectMembers.AutoSize = true;
-            chkObjectMembers.Location = new Point(14, 56);
-            chkObjectMembers.Name = "chkObjectMembers";
-            chkObjectMembers.Size = new Size(108, 19);
-            chkObjectMembers.TabIndex = 39;
-            chkObjectMembers.Text = "Methods/Props";
-            chkObjectMembers.UseVisualStyleBackColor = true;
-            // 
-            // chkFunctionSignatures
-            // 
-            chkFunctionSignatures.AutoSize = true;
-            chkFunctionSignatures.Location = new Point(128, 31);
-            chkFunctionSignatures.Name = "chkFunctionSignatures";
-            chkFunctionSignatures.Size = new Size(104, 19);
-            chkFunctionSignatures.TabIndex = 38;
-            chkFunctionSignatures.Text = "Call Signatures";
-            chkFunctionSignatures.UseVisualStyleBackColor = true;
-            // 
-            // chkVariableSuggestions
-            // 
-            chkVariableSuggestions.AutoSize = true;
-            chkVariableSuggestions.Location = new Point(14, 31);
-            chkVariableSuggestions.Name = "chkVariableSuggestions";
-            chkVariableSuggestions.Size = new Size(72, 19);
-            chkVariableSuggestions.TabIndex = 37;
-            chkVariableSuggestions.Text = "Variables";
-            chkVariableSuggestions.UseVisualStyleBackColor = true;
-            // 
-            // linkDocs
-            // 
-            linkDocs.AutoSize = true;
-            linkDocs.Location = new Point(332, 458);
-            linkDocs.Name = "linkDocs";
-            linkDocs.Size = new Size(127, 15);
-            linkDocs.TabIndex = 33;
-            linkDocs.TabStop = true;
-            linkDocs.Text = "View Documentation...";
-            linkDocs.LinkClicked += linkDocs_LinkClicked;
-            // 
-            // groupBox2
-            // 
-            groupBox2.Controls.Add(chkEventMapXrefs);
-            groupBox2.Controls.Add(groupBox4);
-            groupBox2.Controls.Add(chkEventMapping);
-            groupBox2.Location = new Point(8, 287);
-            groupBox2.Name = "groupBox2";
-            groupBox2.Size = new Size(546, 157);
-            groupBox2.TabIndex = 0;
-            groupBox2.TabStop = false;
-            groupBox2.Text = "Event Mapping";
-            // 
-            // chkEventMapXrefs
-            // 
-            chkEventMapXrefs.AutoSize = true;
-            chkEventMapXrefs.Location = new Point(155, 22);
-            chkEventMapXrefs.Name = "chkEventMapXrefs";
-            chkEventMapXrefs.Size = new Size(194, 19);
-            chkEventMapXrefs.TabIndex = 35;
-            chkEventMapXrefs.Text = "Show Event Mapped References";
-            chkEventMapXrefs.UseVisualStyleBackColor = true;
-            // 
-            // groupBox4
-            // 
-            groupBox4.Controls.Add(optClassText);
-            groupBox4.Controls.Add(optClassPath);
-            groupBox4.Location = new Point(8, 47);
-            groupBox4.Name = "groupBox4";
-            groupBox4.Size = new Size(127, 68);
-            groupBox4.TabIndex = 34;
-            groupBox4.TabStop = false;
-            groupBox4.Text = "Show";
-            // 
-            // optClassText
-            // 
-            optClassText.AutoSize = true;
-            optClassText.Location = new Point(6, 43);
-            optClassText.Name = "optClassText";
-            optClassText.Size = new Size(76, 19);
-            optClassText.TabIndex = 4;
-            optClassText.TabStop = true;
-            optClassText.Text = "Class Text";
-            optClassText.UseVisualStyleBackColor = true;
-            // 
-            // optClassPath
-            // 
-            optClassPath.AutoSize = true;
-            optClassPath.Location = new Point(6, 18);
-            optClassPath.Name = "optClassPath";
-            optClassPath.Size = new Size(79, 19);
-            optClassPath.TabIndex = 3;
-            optClassPath.TabStop = true;
-            optClassPath.Text = "Class Path";
-            optClassPath.UseVisualStyleBackColor = true;
-            // 
-            // chkEventMapping
-            // 
-            chkEventMapping.AutoSize = true;
-            chkEventMapping.Location = new Point(6, 22);
-            chkEventMapping.Name = "chkEventMapping";
-            chkEventMapping.Size = new Size(143, 19);
-            chkEventMapping.TabIndex = 0;
-            chkEventMapping.Text = "Detect Event Mapping";
-            chkEventMapping.UseVisualStyleBackColor = true;
-            // 
-            // groupBox1
-            // 
-            groupBox1.Controls.Add(btnReportDirectory);
-            groupBox1.Controls.Add(btnTNSADMIN);
-            groupBox1.Location = new Point(277, 146);
-            groupBox1.Name = "groupBox1";
-            groupBox1.Size = new Size(277, 135);
-            groupBox1.TabIndex = 32;
-            groupBox1.TabStop = false;
-            groupBox1.Text = "Directories";
-            // 
-            // btnReportDirectory
-            // 
-            btnReportDirectory.Location = new Point(6, 22);
-            btnReportDirectory.Name = "btnReportDirectory";
-            btnReportDirectory.Size = new Size(150, 23);
-            btnReportDirectory.TabIndex = 30;
-            btnReportDirectory.Text = "Lint Report Directory...";
-            btnReportDirectory.UseVisualStyleBackColor = true;
-            btnReportDirectory.Click += btnReportDirectory_Click;
-            // 
-            // btnTNSADMIN
-            // 
-            btnTNSADMIN.Location = new Point(6, 51);
-            btnTNSADMIN.Name = "btnTNSADMIN";
-            btnTNSADMIN.Size = new Size(150, 23);
-            btnTNSADMIN.TabIndex = 31;
-            btnTNSADMIN.Text = "TNS_ADMIN Directory...";
-            btnTNSADMIN.UseVisualStyleBackColor = true;
-            btnTNSADMIN.Click += btnTNSADMIN_Click;
-            // 
-            // btnDebugLog
-            // 
-            btnDebugLog.Location = new Point(465, 454);
-            btnDebugLog.Name = "btnDebugLog";
-            btnDebugLog.Size = new Size(85, 23);
-            btnDebugLog.TabIndex = 27;
-            btnDebugLog.Text = "Debug Log...";
-            btnDebugLog.UseVisualStyleBackColor = true;
-            btnDebugLog.Click += btnDebugLog_Click;
-            // 
-            // grpEditorSettings
-            // 
-            grpEditorSettings.Controls.Add(chkLineSelectionFix);
-            grpEditorSettings.Controls.Add(chkMultiSelection);
-            grpEditorSettings.Controls.Add(chkAutoCenterDialogs);
-            grpEditorSettings.Controls.Add(btnConfigSmartOpen);
-            grpEditorSettings.Controls.Add(chkOverrideOpen);
-            grpEditorSettings.Controls.Add(chkOverrideFindReplace);
-            grpEditorSettings.Controls.Add(chkRememberFolds);
-            grpEditorSettings.Controls.Add(chkCodeFolding);
-            grpEditorSettings.Controls.Add(chkPromptForDB);
-            grpEditorSettings.Controls.Add(chkAutoPairing);
-            grpEditorSettings.Controls.Add(chkBetterSQL);
-            grpEditorSettings.Controls.Add(chkOnlyPPC);
-            grpEditorSettings.Controls.Add(btnPlugins);
-            grpEditorSettings.Controls.Add(chkInitCollapsed);
-            grpEditorSettings.Controls.Add(chkAutoDark);
-            grpEditorSettings.Location = new Point(6, 6);
-            grpEditorSettings.Name = "grpEditorSettings";
-            grpEditorSettings.Size = new Size(548, 132);
-            grpEditorSettings.TabIndex = 20;
-            grpEditorSettings.TabStop = false;
-            grpEditorSettings.Text = "Settings";
-            // 
-            // chkLineSelectionFix
-            // 
-            chkLineSelectionFix.AutoSize = true;
-            chkLineSelectionFix.Location = new Point(259, 93);
-            chkLineSelectionFix.Name = "chkLineSelectionFix";
-            chkLineSelectionFix.Size = new Size(116, 19);
-            chkLineSelectionFix.TabIndex = 36;
-            chkLineSelectionFix.Text = "Line Selection Fix";
-            chkLineSelectionFix.UseVisualStyleBackColor = true;
-            // 
-            // chkMultiSelection
-            // 
-            chkMultiSelection.AutoSize = true;
-            chkMultiSelection.Location = new Point(139, 94);
-            chkMultiSelection.Name = "chkMultiSelection";
-            chkMultiSelection.Size = new Size(121, 19);
-            chkMultiSelection.TabIndex = 35;
-            chkMultiSelection.Text = "Multiple Selection";
-            chkMultiSelection.UseVisualStyleBackColor = true;
-            // 
-            // chkAutoCenterDialogs
-            // 
-            chkAutoCenterDialogs.AutoSize = true;
-            chkAutoCenterDialogs.Location = new Point(10, 94);
-            chkAutoCenterDialogs.Name = "chkAutoCenterDialogs";
-            chkAutoCenterDialogs.Size = new Size(103, 19);
-            chkAutoCenterDialogs.TabIndex = 34;
-            chkAutoCenterDialogs.Text = "Center Dialogs";
-            chkAutoCenterDialogs.UseVisualStyleBackColor = true;
-            // 
-            // btnConfigSmartOpen
-            // 
-            btnConfigSmartOpen.Location = new Point(432, 43);
-            btnConfigSmartOpen.Name = "btnConfigSmartOpen";
-            btnConfigSmartOpen.Size = new Size(110, 23);
-            btnConfigSmartOpen.TabIndex = 33;
-            btnConfigSmartOpen.Text = "Config Open...";
-            btnConfigSmartOpen.UseVisualStyleBackColor = true;
-            btnConfigSmartOpen.Click += btnConfigSmartOpen_Click;
-            // 
-            // chkOverrideOpen
-            // 
-            chkOverrideOpen.AutoSize = true;
-            chkOverrideOpen.Location = new Point(432, 72);
-            chkOverrideOpen.Name = "chkOverrideOpen";
-            chkOverrideOpen.Size = new Size(103, 19);
-            chkOverrideOpen.TabIndex = 32;
-            chkOverrideOpen.Text = "Override Open";
-            chkOverrideOpen.UseVisualStyleBackColor = true;
-            // 
-            // chkOverrideFindReplace
-            // 
-            chkOverrideFindReplace.AutoSize = true;
-            chkOverrideFindReplace.Location = new Point(259, 68);
-            chkOverrideFindReplace.Name = "chkOverrideFindReplace";
-            chkOverrideFindReplace.Size = new Size(143, 19);
-            chkOverrideFindReplace.TabIndex = 31;
-            chkOverrideFindReplace.Text = "Override Find/Replace";
-            chkOverrideFindReplace.UseVisualStyleBackColor = true;
-            // 
-            // chkRememberFolds
-            // 
-            chkRememberFolds.AutoSize = true;
-            chkRememberFolds.Location = new Point(10, 69);
-            chkRememberFolds.Name = "chkRememberFolds";
-            chkRememberFolds.Size = new Size(115, 19);
-            chkRememberFolds.TabIndex = 30;
-            chkRememberFolds.Text = "Remember Folds";
-            chkRememberFolds.UseVisualStyleBackColor = true;
+            grpCodeFolding.Controls.Add(chkCodeFolding);
+            grpCodeFolding.Controls.Add(chkInitCollapsed);
+            grpCodeFolding.Controls.Add(chkRememberFolds);
+            grpCodeFolding.Location = new Point(8, 6);
+            grpCodeFolding.Name = "grpCodeFolding";
+            grpCodeFolding.Size = new Size(270, 95);
+            grpCodeFolding.TabIndex = 0;
+            grpCodeFolding.TabStop = false;
+            grpCodeFolding.Text = "Code Folding";
             // 
             // chkCodeFolding
             // 
             chkCodeFolding.AutoSize = true;
             chkCodeFolding.Location = new Point(10, 22);
             chkCodeFolding.Name = "chkCodeFolding";
-            chkCodeFolding.Size = new Size(97, 19);
-            chkCodeFolding.TabIndex = 29;
-            chkCodeFolding.Text = "Code Folding";
+            chkCodeFolding.Size = new Size(135, 19);
+            chkCodeFolding.TabIndex = 0;
+            chkCodeFolding.Text = "Enable Code Folding";
             chkCodeFolding.UseVisualStyleBackColor = true;
-            // 
-            // chkPromptForDB
-            // 
-            chkPromptForDB.AutoSize = true;
-            chkPromptForDB.Location = new Point(259, 46);
-            chkPromptForDB.Name = "chkPromptForDB";
-            chkPromptForDB.Size = new Size(167, 19);
-            chkPromptForDB.TabIndex = 28;
-            chkPromptForDB.Text = "Prompt for DB Connection";
-            chkPromptForDB.UseVisualStyleBackColor = true;
-            // 
-            // chkAutoPairing
-            // 
-            chkAutoPairing.AutoSize = true;
-            chkAutoPairing.ForeColor = SystemColors.ControlText;
-            chkAutoPairing.Location = new Point(259, 21);
-            chkAutoPairing.Name = "chkAutoPairing";
-            chkAutoPairing.Size = new Size(146, 19);
-            chkAutoPairing.TabIndex = 26;
-            chkAutoPairing.Text = "Pair quotes and parens";
-            chkAutoPairing.UseVisualStyleBackColor = true;
-            // 
-            // chkBetterSQL
-            // 
-            chkBetterSQL.AutoSize = true;
-            chkBetterSQL.Location = new Point(139, 47);
-            chkBetterSQL.Name = "chkBetterSQL";
-            chkBetterSQL.Size = new Size(88, 19);
-            chkBetterSQL.TabIndex = 17;
-            chkBetterSQL.Text = "Format SQL";
-            chkBetterSQL.UseVisualStyleBackColor = true;
-            // 
-            // chkOnlyPPC
-            // 
-            chkOnlyPPC.AutoSize = true;
-            chkOnlyPPC.Location = new Point(139, 69);
-            chkOnlyPPC.Name = "chkOnlyPPC";
-            chkOnlyPPC.Size = new Size(76, 19);
-            chkOnlyPPC.TabIndex = 16;
-            chkOnlyPPC.Text = "Only PPC";
-            chkOnlyPPC.UseVisualStyleBackColor = true;
-            // 
-            // btnPlugins
-            // 
-            btnPlugins.Location = new Point(432, 18);
-            btnPlugins.Name = "btnPlugins";
-            btnPlugins.Size = new Size(110, 23);
-            btnPlugins.TabIndex = 24;
-            btnPlugins.Text = "Plugins...";
-            btnPlugins.UseVisualStyleBackColor = true;
-            btnPlugins.Click += btnPlugins_Click;
             // 
             // chkInitCollapsed
             // 
             chkInitCollapsed.AutoSize = true;
             chkInitCollapsed.Location = new Point(10, 47);
             chkInitCollapsed.Name = "chkInitCollapsed";
-            chkInitCollapsed.Size = new Size(100, 19);
-            chkInitCollapsed.TabIndex = 15;
-            chkInitCollapsed.Text = "Auto Collapse";
+            chkInitCollapsed.Size = new Size(149, 19);
+            chkInitCollapsed.TabIndex = 1;
+            chkInitCollapsed.Text = "Auto Collapse on Open";
             chkInitCollapsed.UseVisualStyleBackColor = true;
+            // 
+            // chkRememberFolds
+            // 
+            chkRememberFolds.AutoSize = true;
+            chkRememberFolds.Location = new Point(10, 72);
+            chkRememberFolds.Name = "chkRememberFolds";
+            chkRememberFolds.Size = new Size(144, 19);
+            chkRememberFolds.TabIndex = 2;
+            chkRememberFolds.Text = "Remember Fold States";
+            chkRememberFolds.UseVisualStyleBackColor = true;
+            // 
+            // grpEditorFeatures
+            // 
+            grpEditorFeatures.Controls.Add(chkMultiSelection);
+            grpEditorFeatures.Controls.Add(chkAutoPairing);
+            grpEditorFeatures.Controls.Add(chkDocMinimap);
+            grpEditorFeatures.Controls.Add(chkInlineParameterHints);
+            grpEditorFeatures.Controls.Add(chkLineSelectionFix);
+            grpEditorFeatures.Location = new Point(8, 107);
+            grpEditorFeatures.Name = "grpEditorFeatures";
+            grpEditorFeatures.Size = new Size(270, 145);
+            grpEditorFeatures.TabIndex = 1;
+            grpEditorFeatures.TabStop = false;
+            grpEditorFeatures.Text = "Editor Features";
+            // 
+            // chkMultiSelection
+            // 
+            chkMultiSelection.AutoSize = true;
+            chkMultiSelection.Location = new Point(10, 22);
+            chkMultiSelection.Name = "chkMultiSelection";
+            chkMultiSelection.Size = new Size(121, 19);
+            chkMultiSelection.TabIndex = 0;
+            chkMultiSelection.Text = "Multiple Selection";
+            chkMultiSelection.UseVisualStyleBackColor = true;
+            // 
+            // chkAutoPairing
+            // 
+            chkAutoPairing.AutoSize = true;
+            chkAutoPairing.Location = new Point(10, 47);
+            chkAutoPairing.Name = "chkAutoPairing";
+            chkAutoPairing.Size = new Size(148, 19);
+            chkAutoPairing.TabIndex = 1;
+            chkAutoPairing.Text = "Pair Quotes and Parens";
+            chkAutoPairing.UseVisualStyleBackColor = true;
+            // 
+            // chkDocMinimap
+            // 
+            chkDocMinimap.AutoSize = true;
+            chkDocMinimap.Location = new Point(10, 72);
+            chkDocMinimap.Name = "chkDocMinimap";
+            chkDocMinimap.Size = new Size(133, 19);
+            chkDocMinimap.TabIndex = 2;
+            chkDocMinimap.Text = "Document Minimap";
+            chkDocMinimap.UseVisualStyleBackColor = true;
+            // 
+            // chkInlineParameterHints
+            // 
+            chkInlineParameterHints.AutoSize = true;
+            chkInlineParameterHints.Location = new Point(10, 97);
+            chkInlineParameterHints.Name = "chkInlineParameterHints";
+            chkInlineParameterHints.Size = new Size(143, 19);
+            chkInlineParameterHints.TabIndex = 3;
+            chkInlineParameterHints.Text = "Inline Parameter Hints";
+            chkInlineParameterHints.UseVisualStyleBackColor = true;
+            // 
+            // chkLineSelectionFix
+            // 
+            chkLineSelectionFix.AutoSize = true;
+            chkLineSelectionFix.Location = new Point(10, 122);
+            chkLineSelectionFix.Name = "chkLineSelectionFix";
+            chkLineSelectionFix.Size = new Size(116, 19);
+            chkLineSelectionFix.TabIndex = 4;
+            chkLineSelectionFix.Text = "Line Selection Fix";
+            chkLineSelectionFix.UseVisualStyleBackColor = true;
+            // 
+            // groupBox3
+            // 
+            groupBox3.Controls.Add(chkVariableSuggestions);
+            groupBox3.Controls.Add(chkObjectMembers);
+            groupBox3.Controls.Add(chkFunctionSignatures);
+            groupBox3.Controls.Add(chkSystemVariables);
+            groupBox3.Controls.Add(label1);
+            groupBox3.Controls.Add(cmbTheme);
+            groupBox3.Controls.Add(chkFilled);
+            groupBox3.Location = new Point(8, 258);
+            groupBox3.Name = "groupBox3";
+            groupBox3.Size = new Size(270, 147);
+            groupBox3.TabIndex = 2;
+            groupBox3.TabStop = false;
+            groupBox3.Text = "Auto Suggest";
+            // 
+            // chkVariableSuggestions
+            // 
+            chkVariableSuggestions.AutoSize = true;
+            chkVariableSuggestions.Location = new Point(10, 22);
+            chkVariableSuggestions.Name = "chkVariableSuggestions";
+            chkVariableSuggestions.Size = new Size(72, 19);
+            chkVariableSuggestions.TabIndex = 0;
+            chkVariableSuggestions.Text = "Variables";
+            chkVariableSuggestions.UseVisualStyleBackColor = true;
+            // 
+            // chkObjectMembers
+            // 
+            chkObjectMembers.AutoSize = true;
+            chkObjectMembers.Location = new Point(10, 47);
+            chkObjectMembers.Name = "chkObjectMembers";
+            chkObjectMembers.Size = new Size(131, 19);
+            chkObjectMembers.TabIndex = 1;
+            chkObjectMembers.Text = "Methods/Properties";
+            chkObjectMembers.UseVisualStyleBackColor = true;
+            // 
+            // chkFunctionSignatures
+            // 
+            chkFunctionSignatures.AutoSize = true;
+            chkFunctionSignatures.Location = new Point(10, 72);
+            chkFunctionSignatures.Name = "chkFunctionSignatures";
+            chkFunctionSignatures.Size = new Size(104, 19);
+            chkFunctionSignatures.TabIndex = 2;
+            chkFunctionSignatures.Text = "Call Signatures";
+            chkFunctionSignatures.UseVisualStyleBackColor = true;
+            // 
+            // chkSystemVariables
+            // 
+            chkSystemVariables.AutoSize = true;
+            chkSystemVariables.Location = new Point(10, 97);
+            chkSystemVariables.Name = "chkSystemVariables";
+            chkSystemVariables.Size = new Size(113, 19);
+            chkSystemVariables.TabIndex = 3;
+            chkSystemVariables.Text = "System Variables";
+            chkSystemVariables.UseVisualStyleBackColor = true;
+            // 
+            // label1
+            // 
+            label1.AutoSize = true;
+            label1.Location = new Point(10, 122);
+            label1.Name = "label1";
+            label1.Size = new Size(47, 15);
+            label1.TabIndex = 4;
+            label1.Text = "Theme:";
+            // 
+            // cmbTheme
+            // 
+            cmbTheme.FormattingEnabled = true;
+            cmbTheme.Location = new Point(60, 119);
+            cmbTheme.Name = "cmbTheme";
+            cmbTheme.Size = new Size(100, 23);
+            cmbTheme.TabIndex = 5;
+            cmbTheme.SelectedIndexChanged += ThemeSetting_Changed;
+            // 
+            // chkFilled
+            // 
+            chkFilled.AutoSize = true;
+            chkFilled.Location = new Point(170, 121);
+            chkFilled.Name = "chkFilled";
+            chkFilled.Size = new Size(54, 19);
+            chkFilled.TabIndex = 6;
+            chkFilled.Text = "Filled";
+            chkFilled.UseVisualStyleBackColor = true;
+            chkFilled.CheckedChanged += ThemeSetting_Changed;
+            // 
+            // grpAppearance
+            // 
+            grpAppearance.Controls.Add(chkAutoDark);
+            grpAppearance.Controls.Add(chkAutoCenterDialogs);
+            grpAppearance.Location = new Point(284, 6);
+            grpAppearance.Name = "grpAppearance";
+            grpAppearance.Size = new Size(270, 72);
+            grpAppearance.TabIndex = 3;
+            grpAppearance.TabStop = false;
+            grpAppearance.Text = "Appearance";
             // 
             // chkAutoDark
             // 
             chkAutoDark.AutoSize = true;
-            chkAutoDark.Location = new Point(139, 22);
+            chkAutoDark.Location = new Point(10, 22);
             chkAutoDark.Name = "chkAutoDark";
             chkAutoDark.Size = new Size(113, 19);
-            chkAutoDark.TabIndex = 14;
+            chkAutoDark.TabIndex = 0;
             chkAutoDark.Text = "Auto Dark Mode";
             chkAutoDark.UseVisualStyleBackColor = true;
+            // 
+            // chkAutoCenterDialogs
+            // 
+            chkAutoCenterDialogs.AutoSize = true;
+            chkAutoCenterDialogs.Location = new Point(10, 47);
+            chkAutoCenterDialogs.Name = "chkAutoCenterDialogs";
+            chkAutoCenterDialogs.Size = new Size(103, 19);
+            chkAutoCenterDialogs.TabIndex = 1;
+            chkAutoCenterDialogs.Text = "Center Dialogs";
+            chkAutoCenterDialogs.UseVisualStyleBackColor = true;
+            // 
+            // grpFeatureOverrides
+            // 
+            grpFeatureOverrides.Controls.Add(chkUseEnhancedEditor);
+            grpFeatureOverrides.Controls.Add(chkOverrideFindReplace);
+            grpFeatureOverrides.Controls.Add(chkOverrideOpen);
+            grpFeatureOverrides.Controls.Add(btnConfigSmartOpen);
+            grpFeatureOverrides.Controls.Add(chkBetterSQL);
+            grpFeatureOverrides.Location = new Point(284, 84);
+            grpFeatureOverrides.Name = "grpFeatureOverrides";
+            grpFeatureOverrides.Size = new Size(270, 129);
+            grpFeatureOverrides.TabIndex = 4;
+            grpFeatureOverrides.TabStop = false;
+            grpFeatureOverrides.Text = "Feature Overrides";
+            // 
+            // chkOverrideFindReplace
+            // 
+            chkOverrideFindReplace.AutoSize = true;
+            chkOverrideFindReplace.Location = new Point(10, 22);
+            chkOverrideFindReplace.Name = "chkOverrideFindReplace";
+            chkOverrideFindReplace.Size = new Size(143, 19);
+            chkOverrideFindReplace.TabIndex = 0;
+            chkOverrideFindReplace.Text = "Override Find/Replace";
+            chkOverrideFindReplace.UseVisualStyleBackColor = true;
+            // 
+            // chkOverrideOpen
+            // 
+            chkOverrideOpen.AutoSize = true;
+            chkOverrideOpen.Location = new Point(10, 47);
+            chkOverrideOpen.Name = "chkOverrideOpen";
+            chkOverrideOpen.Size = new Size(140, 19);
+            chkOverrideOpen.TabIndex = 1;
+            chkOverrideOpen.Text = "Override Open Dialog";
+            chkOverrideOpen.UseVisualStyleBackColor = true;
+            // 
+            // btnConfigSmartOpen
+            // 
+            btnConfigSmartOpen.Location = new Point(180, 44);
+            btnConfigSmartOpen.Name = "btnConfigSmartOpen";
+            btnConfigSmartOpen.Size = new Size(80, 23);
+            btnConfigSmartOpen.TabIndex = 2;
+            btnConfigSmartOpen.Text = "Config...";
+            btnConfigSmartOpen.UseVisualStyleBackColor = true;
+            btnConfigSmartOpen.Click += btnConfigSmartOpen_Click;
+            // 
+            // chkBetterSQL
+            // 
+            chkBetterSQL.AutoSize = true;
+            chkBetterSQL.Location = new Point(10, 75);
+            chkBetterSQL.Name = "chkBetterSQL";
+            chkBetterSQL.Size = new Size(88, 19);
+            chkBetterSQL.TabIndex = 3;
+            chkBetterSQL.Text = "Format SQL";
+            chkBetterSQL.UseVisualStyleBackColor = true;
+            // 
+            // groupBox2
+            // 
+            groupBox2.Controls.Add(chkEventMapping);
+            groupBox2.Controls.Add(chkEventMapXrefs);
+            groupBox2.Controls.Add(groupBox4);
+            groupBox2.Location = new Point(284, 219);
+            groupBox2.Name = "groupBox2";
+            groupBox2.Size = new Size(270, 115);
+            groupBox2.TabIndex = 5;
+            groupBox2.TabStop = false;
+            groupBox2.Text = "Event Mapping";
+            // 
+            // chkEventMapping
+            // 
+            chkEventMapping.AutoSize = true;
+            chkEventMapping.Location = new Point(10, 22);
+            chkEventMapping.Name = "chkEventMapping";
+            chkEventMapping.Size = new Size(143, 19);
+            chkEventMapping.TabIndex = 0;
+            chkEventMapping.Text = "Detect Event Mapping";
+            chkEventMapping.UseVisualStyleBackColor = true;
+            // 
+            // chkEventMapXrefs
+            // 
+            chkEventMapXrefs.AutoSize = true;
+            chkEventMapXrefs.Location = new Point(10, 47);
+            chkEventMapXrefs.Name = "chkEventMapXrefs";
+            chkEventMapXrefs.Size = new Size(194, 19);
+            chkEventMapXrefs.TabIndex = 1;
+            chkEventMapXrefs.Text = "Show Event Mapped References";
+            chkEventMapXrefs.UseVisualStyleBackColor = true;
+            // 
+            // groupBox4
+            // 
+            groupBox4.Controls.Add(optClassPath);
+            groupBox4.Controls.Add(optClassText);
+            groupBox4.Location = new Point(10, 72);
+            groupBox4.Name = "groupBox4";
+            groupBox4.Size = new Size(250, 38);
+            groupBox4.TabIndex = 2;
+            groupBox4.TabStop = false;
+            groupBox4.Text = "Show";
+            // 
+            // optClassPath
+            // 
+            optClassPath.AutoSize = true;
+            optClassPath.Location = new Point(10, 15);
+            optClassPath.Name = "optClassPath";
+            optClassPath.Size = new Size(79, 19);
+            optClassPath.TabIndex = 0;
+            optClassPath.TabStop = true;
+            optClassPath.Text = "Class Path";
+            optClassPath.UseVisualStyleBackColor = true;
+            // 
+            // optClassText
+            // 
+            optClassText.AutoSize = true;
+            optClassText.Location = new Point(100, 15);
+            optClassText.Name = "optClassText";
+            optClassText.Size = new Size(76, 19);
+            optClassText.TabIndex = 1;
+            optClassText.TabStop = true;
+            optClassText.Text = "Class Text";
+            optClassText.UseVisualStyleBackColor = true;
+            // 
+            // grpApplication
+            // 
+            grpApplication.Controls.Add(chkOnlyPPC);
+            grpApplication.Controls.Add(chkPromptForDB);
+            grpApplication.Controls.Add(btnPlugins);
+            grpApplication.Controls.Add(lblLintReportDir);
+            grpApplication.Controls.Add(txtLintReportDir);
+            grpApplication.Controls.Add(btnBrowseLintReport);
+            grpApplication.Controls.Add(lblTnsAdminDir);
+            grpApplication.Controls.Add(txtTnsAdminDir);
+            grpApplication.Controls.Add(btnBrowseTnsAdmin);
+            grpApplication.Location = new Point(8, 411);
+            grpApplication.Name = "grpApplication";
+            grpApplication.Size = new Size(546, 105);
+            grpApplication.TabIndex = 6;
+            grpApplication.TabStop = false;
+            grpApplication.Text = "Application";
+            // 
+            // chkOnlyPPC
+            // 
+            chkOnlyPPC.AutoSize = true;
+            chkOnlyPPC.Location = new Point(10, 22);
+            chkOnlyPPC.Name = "chkOnlyPPC";
+            chkOnlyPPC.Size = new Size(200, 19);
+            chkOnlyPPC.TabIndex = 0;
+            chkOnlyPPC.Text = "Only Process PeopleCode Editors";
+            chkOnlyPPC.UseVisualStyleBackColor = true;
+            // 
+            // chkPromptForDB
+            // 
+            chkPromptForDB.AutoSize = true;
+            chkPromptForDB.Location = new Point(220, 22);
+            chkPromptForDB.Name = "chkPromptForDB";
+            chkPromptForDB.Size = new Size(222, 19);
+            chkPromptForDB.TabIndex = 1;
+            chkPromptForDB.Text = "Prompt for DB Connection on Attach";
+            chkPromptForDB.UseVisualStyleBackColor = true;
+            // 
+            // btnPlugins
+            // 
+            btnPlugins.Location = new Point(456, 18);
+            btnPlugins.Name = "btnPlugins";
+            btnPlugins.Size = new Size(80, 23);
+            btnPlugins.TabIndex = 2;
+            btnPlugins.Text = "Plugins...";
+            btnPlugins.UseVisualStyleBackColor = true;
+            btnPlugins.Click += btnPlugins_Click;
+            // 
+            // lblLintReportDir
+            // 
+            lblLintReportDir.AutoSize = true;
+            lblLintReportDir.Location = new Point(6, 52);
+            lblLintReportDir.Name = "lblLintReportDir";
+            lblLintReportDir.Size = new Size(119, 15);
+            lblLintReportDir.TabIndex = 3;
+            lblLintReportDir.Text = "Lint Report Directory:";
+            // 
+            // txtLintReportDir
+            // 
+            txtLintReportDir.Location = new Point(130, 49);
+            txtLintReportDir.Name = "txtLintReportDir";
+            txtLintReportDir.Size = new Size(375, 23);
+            txtLintReportDir.TabIndex = 4;
+            // 
+            // btnBrowseLintReport
+            // 
+            btnBrowseLintReport.Location = new Point(511, 48);
+            btnBrowseLintReport.Name = "btnBrowseLintReport";
+            btnBrowseLintReport.Size = new Size(25, 23);
+            btnBrowseLintReport.TabIndex = 5;
+            btnBrowseLintReport.Text = "...";
+            btnBrowseLintReport.UseVisualStyleBackColor = true;
+            btnBrowseLintReport.Click += btnReportDirectory_Click;
+            // 
+            // lblTnsAdminDir
+            // 
+            lblTnsAdminDir.AutoSize = true;
+            lblTnsAdminDir.Location = new Point(2, 79);
+            lblTnsAdminDir.Name = "lblTnsAdminDir";
+            lblTnsAdminDir.Size = new Size(127, 15);
+            lblTnsAdminDir.TabIndex = 6;
+            lblTnsAdminDir.Text = "TNS_ADMIN Directory:";
+            // 
+            // txtTnsAdminDir
+            // 
+            txtTnsAdminDir.Location = new Point(130, 76);
+            txtTnsAdminDir.Name = "txtTnsAdminDir";
+            txtTnsAdminDir.Size = new Size(375, 23);
+            txtTnsAdminDir.TabIndex = 7;
+            // 
+            // btnBrowseTnsAdmin
+            // 
+            btnBrowseTnsAdmin.Location = new Point(511, 75);
+            btnBrowseTnsAdmin.Name = "btnBrowseTnsAdmin";
+            btnBrowseTnsAdmin.Size = new Size(25, 23);
+            btnBrowseTnsAdmin.TabIndex = 8;
+            btnBrowseTnsAdmin.Text = "...";
+            btnBrowseTnsAdmin.UseVisualStyleBackColor = true;
+            btnBrowseTnsAdmin.Click += btnTNSADMIN_Click;
+            // 
+            // lnkWhatsNew
+            // 
+            lnkWhatsNew.AutoSize = true;
+            lnkWhatsNew.Location = new Point(14, 528);
+            lnkWhatsNew.Name = "lnkWhatsNew";
+            lnkWhatsNew.Size = new Size(79, 15);
+            lnkWhatsNew.TabIndex = 7;
+            lnkWhatsNew.TabStop = true;
+            lnkWhatsNew.Text = "What's New...";
+            lnkWhatsNew.LinkClicked += lnkWhatsNew_LinkClicked;
+            // 
+            // linkDocs
+            // 
+            linkDocs.AutoSize = true;
+            linkDocs.Location = new Point(334, 528);
+            linkDocs.Name = "linkDocs";
+            linkDocs.Size = new Size(127, 15);
+            linkDocs.TabIndex = 8;
+            linkDocs.TabStop = true;
+            linkDocs.Text = "View Documentation...";
+            linkDocs.LinkClicked += linkDocs_LinkClicked;
+            // 
+            // btnDebugLog
+            // 
+            btnDebugLog.Location = new Point(467, 524);
+            btnDebugLog.Name = "btnDebugLog";
+            btnDebugLog.Size = new Size(85, 23);
+            btnDebugLog.TabIndex = 9;
+            btnDebugLog.Text = "Debug Log...";
+            btnDebugLog.UseVisualStyleBackColor = true;
+            btnDebugLog.Click += btnDebugLog_Click;
             // 
             // tabPage4
             // 
@@ -587,7 +688,7 @@ namespace AppRefiner
             tabPage4.Location = new Point(4, 24);
             tabPage4.Name = "tabPage4";
             tabPage4.Padding = new Padding(3);
-            tabPage4.Size = new Size(562, 490);
+            tabPage4.Size = new Size(562, 563);
             tabPage4.TabIndex = 3;
             tabPage4.Text = "Stylers";
             tabPage4.UseVisualStyleBackColor = true;
@@ -603,7 +704,7 @@ namespace AppRefiner
             dataGridView3.Location = new Point(3, 3);
             dataGridView3.Name = "dataGridView3";
             dataGridView3.RowHeadersVisible = false;
-            dataGridView3.Size = new Size(556, 484);
+            dataGridView3.Size = new Size(556, 557);
             dataGridView3.TabIndex = 3;
             dataGridView3.CellContentClick += dataGridView3_CellContentClick;
             dataGridView3.CellValueChanged += dataGridView3_CellValueChanged;
@@ -629,7 +730,7 @@ namespace AppRefiner
             tabPage3.Location = new Point(4, 24);
             tabPage3.Name = "tabPage3";
             tabPage3.Padding = new Padding(3);
-            tabPage3.Size = new Size(562, 490);
+            tabPage3.Size = new Size(562, 563);
             tabPage3.TabIndex = 7;
             tabPage3.Text = "Linters";
             tabPage3.UseVisualStyleBackColor = true;
@@ -649,8 +750,8 @@ namespace AppRefiner
             // splitContainer4.Panel2
             // 
             splitContainer4.Panel2.Controls.Add(dataGridView1);
-            splitContainer4.Size = new Size(556, 484);
-            splitContainer4.SplitterDistance = 51;
+            splitContainer4.Size = new Size(556, 557);
+            splitContainer4.SplitterDistance = 58;
             splitContainer4.TabIndex = 0;
             // 
             // btnConnectDB
@@ -658,7 +759,7 @@ namespace AppRefiner
             btnConnectDB.Dock = DockStyle.Right;
             btnConnectDB.Location = new Point(449, 0);
             btnConnectDB.Name = "btnConnectDB";
-            btnConnectDB.Size = new Size(107, 51);
+            btnConnectDB.Size = new Size(107, 58);
             btnConnectDB.TabIndex = 14;
             btnConnectDB.Text = "Connect DB...";
             btnConnectDB.UseVisualStyleBackColor = true;
@@ -670,7 +771,7 @@ namespace AppRefiner
             btnClearLint.Enabled = false;
             btnClearLint.Location = new Point(0, 0);
             btnClearLint.Name = "btnClearLint";
-            btnClearLint.Size = new Size(123, 51);
+            btnClearLint.Size = new Size(123, 58);
             btnClearLint.TabIndex = 13;
             btnClearLint.Text = "Clear Annotations";
             btnClearLint.UseVisualStyleBackColor = true;
@@ -687,7 +788,7 @@ namespace AppRefiner
             dataGridView1.Location = new Point(0, 0);
             dataGridView1.Name = "dataGridView1";
             dataGridView1.RowHeadersVisible = false;
-            dataGridView1.Size = new Size(556, 429);
+            dataGridView1.Size = new Size(556, 495);
             dataGridView1.TabIndex = 6;
             dataGridView1.CellContentClick += dataGridView1_CellContentClick;
             dataGridView1.CellPainting += dataGridView1_CellPainting;
@@ -723,7 +824,7 @@ namespace AppRefiner
             tabPageTooltips.Location = new Point(4, 24);
             tabPageTooltips.Name = "tabPageTooltips";
             tabPageTooltips.Padding = new Padding(3);
-            tabPageTooltips.Size = new Size(562, 490);
+            tabPageTooltips.Size = new Size(562, 563);
             tabPageTooltips.TabIndex = 6;
             tabPageTooltips.Text = "Tooltips";
             tabPageTooltips.UseVisualStyleBackColor = true;
@@ -739,7 +840,7 @@ namespace AppRefiner
             dataGridViewTooltips.Location = new Point(3, 3);
             dataGridViewTooltips.Name = "dataGridViewTooltips";
             dataGridViewTooltips.RowHeadersVisible = false;
-            dataGridViewTooltips.Size = new Size(556, 484);
+            dataGridViewTooltips.Size = new Size(556, 557);
             dataGridViewTooltips.TabIndex = 3;
             dataGridViewTooltips.CellContentClick += dataGridViewTooltips_CellContentClick;
             dataGridViewTooltips.CellValueChanged += dataGridViewTooltips_CellValueChanged;
@@ -765,7 +866,7 @@ namespace AppRefiner
             tabPage2.Location = new Point(4, 24);
             tabPage2.Name = "tabPage2";
             tabPage2.Padding = new Padding(3);
-            tabPage2.Size = new Size(562, 490);
+            tabPage2.Size = new Size(562, 563);
             tabPage2.TabIndex = 8;
             tabPage2.Text = "Refactors";
             tabPage2.UseVisualStyleBackColor = true;
@@ -781,7 +882,7 @@ namespace AppRefiner
             gridRefactors.Location = new Point(3, 3);
             gridRefactors.Name = "gridRefactors";
             gridRefactors.RowHeadersVisible = false;
-            gridRefactors.Size = new Size(556, 484);
+            gridRefactors.Size = new Size(556, 557);
             gridRefactors.TabIndex = 7;
             gridRefactors.CellContentClick += gridRefactors_CellContentClick;
             gridRefactors.CellPainting += gridRefactors_CellPainting;
@@ -815,7 +916,7 @@ namespace AppRefiner
             tabPage6.Location = new Point(4, 24);
             tabPage6.Name = "tabPage6";
             tabPage6.Padding = new Padding(3);
-            tabPage6.Size = new Size(562, 490);
+            tabPage6.Size = new Size(562, 563);
             tabPage6.TabIndex = 9;
             tabPage6.Text = "Extensions";
             tabPage6.UseVisualStyleBackColor = true;
@@ -831,81 +932,10 @@ namespace AppRefiner
             gridExtensions.Location = new Point(3, 3);
             gridExtensions.Name = "gridExtensions";
             gridExtensions.RowHeadersVisible = false;
-            gridExtensions.Size = new Size(556, 484);
+            gridExtensions.Size = new Size(556, 557);
             gridExtensions.TabIndex = 8;
-            gridExtensions.CellContentClick += new DataGridViewCellEventHandler(this.gridExtensions_CellContentClick);
-            gridExtensions.CellValueChanged += new DataGridViewCellEventHandler(this.gridExtensions_CellValueChanged);
-            // 
-            // tabPage5
-            // 
-            tabPage5.Controls.Add(splitContainer3);
-            tabPage5.Controls.Add(cmbTemplates);
-            tabPage5.Location = new Point(4, 24);
-            tabPage5.Name = "tabPage5";
-            tabPage5.Padding = new Padding(3);
-            tabPage5.Size = new Size(562, 490);
-            tabPage5.TabIndex = 5;
-            tabPage5.Text = "Templates";
-            tabPage5.UseVisualStyleBackColor = true;
-            // 
-            // splitContainer3
-            // 
-            splitContainer3.Dock = DockStyle.Fill;
-            splitContainer3.Location = new Point(3, 26);
-            splitContainer3.Name = "splitContainer3";
-            splitContainer3.Orientation = Orientation.Horizontal;
-            // 
-            // splitContainer3.Panel1
-            // 
-            splitContainer3.Panel1.Controls.Add(pnlTemplateParams);
-            // 
-            // splitContainer3.Panel2
-            // 
-            splitContainer3.Panel2.Controls.Add(btnApplyTemplate);
-            splitContainer3.Size = new Size(556, 461);
-            splitContainer3.SplitterDistance = 424;
-            splitContainer3.TabIndex = 1;
-            // 
-            // pnlTemplateParams
-            // 
-            pnlTemplateParams.Dock = DockStyle.Fill;
-            pnlTemplateParams.Location = new Point(0, 0);
-            pnlTemplateParams.Name = "pnlTemplateParams";
-            pnlTemplateParams.Size = new Size(556, 424);
-            pnlTemplateParams.TabIndex = 3;
-            // 
-            // btnApplyTemplate
-            // 
-            btnApplyTemplate.Dock = DockStyle.Fill;
-            btnApplyTemplate.Location = new Point(0, 0);
-            btnApplyTemplate.Name = "btnApplyTemplate";
-            btnApplyTemplate.Size = new Size(556, 33);
-            btnApplyTemplate.TabIndex = 1;
-            btnApplyTemplate.Text = "Generate Template";
-            btnApplyTemplate.UseVisualStyleBackColor = true;
-            btnApplyTemplate.Click += btnApplyTemplate_Click;
-            // 
-            // cmbTemplates
-            // 
-            cmbTemplates.Dock = DockStyle.Top;
-            cmbTemplates.DropDownStyle = ComboBoxStyle.DropDownList;
-            cmbTemplates.FormattingEnabled = true;
-            cmbTemplates.Location = new Point(3, 3);
-            cmbTemplates.Name = "cmbTemplates";
-            cmbTemplates.Size = new Size(556, 23);
-            cmbTemplates.TabIndex = 0;
-            // 
-            // lnkNewVersion
-            // 
-            lnkNewVersion.Dock = DockStyle.Fill;
-            lnkNewVersion.Location = new Point(0, 0);
-            lnkNewVersion.Name = "lnkNewVersion";
-            lnkNewVersion.Size = new Size(570, 35);
-            lnkNewVersion.TabIndex = 37;
-            lnkNewVersion.TabStop = true;
-            lnkNewVersion.Text = "A newer version is available";
-            lnkNewVersion.TextAlign = ContentAlignment.MiddleCenter;
-            lnkNewVersion.LinkClicked += lnkNewVersion_LinkClicked;
+            gridExtensions.CellContentClick += gridExtensions_CellContentClick;
+            gridExtensions.CellValueChanged += gridExtensions_CellValueChanged;
             // 
             // colExtActive
             // 
@@ -928,15 +958,96 @@ namespace AppRefiner
             colExtContents.Width = 300;
             // 
             // colExtConfigure
-            //
+            // 
             colExtConfigure.HeaderText = "Inspect";
             colExtConfigure.Name = "colExtConfigure";
+            // 
+            // tabPage5
+            // 
+            tabPage5.Controls.Add(splitContainer3);
+            tabPage5.Controls.Add(cmbTemplates);
+            tabPage5.Location = new Point(4, 24);
+            tabPage5.Name = "tabPage5";
+            tabPage5.Padding = new Padding(3);
+            tabPage5.Size = new Size(562, 563);
+            tabPage5.TabIndex = 5;
+            tabPage5.Text = "Templates";
+            tabPage5.UseVisualStyleBackColor = true;
+            // 
+            // splitContainer3
+            // 
+            splitContainer3.Dock = DockStyle.Fill;
+            splitContainer3.Location = new Point(3, 26);
+            splitContainer3.Name = "splitContainer3";
+            splitContainer3.Orientation = Orientation.Horizontal;
+            // 
+            // splitContainer3.Panel1
+            // 
+            splitContainer3.Panel1.Controls.Add(pnlTemplateParams);
+            // 
+            // splitContainer3.Panel2
+            // 
+            splitContainer3.Panel2.Controls.Add(btnApplyTemplate);
+            splitContainer3.Size = new Size(556, 534);
+            splitContainer3.SplitterDistance = 490;
+            splitContainer3.TabIndex = 1;
+            // 
+            // pnlTemplateParams
+            // 
+            pnlTemplateParams.Dock = DockStyle.Fill;
+            pnlTemplateParams.Location = new Point(0, 0);
+            pnlTemplateParams.Name = "pnlTemplateParams";
+            pnlTemplateParams.Size = new Size(556, 490);
+            pnlTemplateParams.TabIndex = 3;
+            // 
+            // btnApplyTemplate
+            // 
+            btnApplyTemplate.Dock = DockStyle.Fill;
+            btnApplyTemplate.Location = new Point(0, 0);
+            btnApplyTemplate.Name = "btnApplyTemplate";
+            btnApplyTemplate.Size = new Size(556, 40);
+            btnApplyTemplate.TabIndex = 1;
+            btnApplyTemplate.Text = "Generate Template";
+            btnApplyTemplate.UseVisualStyleBackColor = true;
+            btnApplyTemplate.Click += btnApplyTemplate_Click;
+            // 
+            // cmbTemplates
+            // 
+            cmbTemplates.Dock = DockStyle.Top;
+            cmbTemplates.DropDownStyle = ComboBoxStyle.DropDownList;
+            cmbTemplates.FormattingEnabled = true;
+            cmbTemplates.Location = new Point(3, 3);
+            cmbTemplates.Name = "cmbTemplates";
+            cmbTemplates.Size = new Size(556, 23);
+            cmbTemplates.TabIndex = 0;
+            // 
+            // lnkNewVersion
+            // 
+            lnkNewVersion.Dock = DockStyle.Fill;
+            lnkNewVersion.Location = new Point(0, 0);
+            lnkNewVersion.Name = "lnkNewVersion";
+            lnkNewVersion.Size = new Size(570, 42);
+            lnkNewVersion.TabIndex = 37;
+            lnkNewVersion.TabStop = true;
+            lnkNewVersion.Text = "A newer version is available";
+            lnkNewVersion.TextAlign = ContentAlignment.MiddleCenter;
+            lnkNewVersion.LinkClicked += lnkNewVersion_LinkClicked;
+            // 
+            // chkUseEnhancedEditor
+            // 
+            chkUseEnhancedEditor.AutoSize = true;
+            chkUseEnhancedEditor.Location = new Point(10, 100);
+            chkUseEnhancedEditor.Name = "chkUseEnhancedEditor";
+            chkUseEnhancedEditor.Size = new Size(139, 19);
+            chkUseEnhancedEditor.TabIndex = 4;
+            chkUseEnhancedEditor.Text = "Use Enhanced Editor*";
+            chkUseEnhancedEditor.UseVisualStyleBackColor = true;
             // 
             // MainForm
             // 
             AutoScaleDimensions = new SizeF(7F, 15F);
             AutoScaleMode = AutoScaleMode.Font;
-            ClientSize = new Size(570, 557);
+            ClientSize = new Size(570, 637);
             Controls.Add(splitContainer1);
             Icon = (Icon)resources.GetObject("$this.Icon");
             Name = "MainForm";
@@ -948,15 +1059,22 @@ namespace AppRefiner
             tabControl1.ResumeLayout(false);
             tabPage1.ResumeLayout(false);
             tabPage1.PerformLayout();
+            grpCodeFolding.ResumeLayout(false);
+            grpCodeFolding.PerformLayout();
+            grpEditorFeatures.ResumeLayout(false);
+            grpEditorFeatures.PerformLayout();
             groupBox3.ResumeLayout(false);
             groupBox3.PerformLayout();
+            grpAppearance.ResumeLayout(false);
+            grpAppearance.PerformLayout();
+            grpFeatureOverrides.ResumeLayout(false);
+            grpFeatureOverrides.PerformLayout();
             groupBox2.ResumeLayout(false);
             groupBox2.PerformLayout();
             groupBox4.ResumeLayout(false);
             groupBox4.PerformLayout();
-            groupBox1.ResumeLayout(false);
-            grpEditorSettings.ResumeLayout(false);
-            grpEditorSettings.PerformLayout();
+            grpApplication.ResumeLayout(false);
+            grpApplication.PerformLayout();
             tabPage4.ResumeLayout(false);
             ((System.ComponentModel.ISupportInitialize)dataGridView3).EndInit();
             tabPage3.ResumeLayout(false);
@@ -990,14 +1108,61 @@ namespace AppRefiner
         private TabControl tabControl1;
         private TabPage tabPage1;
         private Button btnDebugLog;
-        private GroupBox grpEditorSettings;
-        private CheckBox chkPromptForDB;
-        private CheckBox chkAutoPairing;
-        private Button btnPlugins;
-        private CheckBox chkBetterSQL;
-        private CheckBox chkOnlyPPC;
+        // New GroupBoxes for reorganized Editor Tweaks tab
+        private GroupBox grpCodeFolding;
+        private GroupBox grpEditorFeatures;
+        private GroupBox grpAppearance;
+        private GroupBox grpFeatureOverrides;
+        private GroupBox grpApplication;
+        // Code Folding controls
+        private CheckBox chkCodeFolding;
         private CheckBox chkInitCollapsed;
+        private CheckBox chkRememberFolds;
+        // Editor Features controls
+        private CheckBox chkMultiSelection;
+        private CheckBox chkAutoPairing;
+        private CheckBox chkDocMinimap;
+        private CheckBox chkInlineParameterHints;
+        private CheckBox chkLineSelectionFix;
+        // Appearance controls
         private CheckBox chkAutoDark;
+        private CheckBox chkAutoCenterDialogs;
+        // Feature Overrides controls
+        private CheckBox chkOverrideFindReplace;
+        private CheckBox chkOverrideOpen;
+        private Button btnConfigSmartOpen;
+        private CheckBox chkBetterSQL;
+        // Application controls
+        private CheckBox chkOnlyPPC;
+        private CheckBox chkPromptForDB;
+        private Button btnPlugins;
+        private Label lblLintReportDir;
+        private TextBox txtLintReportDir;
+        private Button btnBrowseLintReport;
+        private Label lblTnsAdminDir;
+        private TextBox txtTnsAdminDir;
+        private Button btnBrowseTnsAdmin;
+        // Auto Suggest group
+        private GroupBox groupBox3;
+        private CheckBox chkFunctionSignatures;
+        private CheckBox chkVariableSuggestions;
+        private CheckBox chkObjectMembers;
+        private CheckBox chkSystemVariables;
+        private ComboBox cmbTheme;
+        private Label label1;
+        private CheckBox chkFilled;
+        // Event Mapping group
+        private GroupBox groupBox2;
+        private CheckBox chkEventMapping;
+        private GroupBox groupBox4;
+        private RadioButton optClassText;
+        private RadioButton optClassPath;
+        private CheckBox chkEventMapXrefs;
+        // Footer links
+        private LinkLabel linkDocs;
+        private LinkLabel lnkWhatsNew;
+        private LinkLabel lnkNewVersion;
+        // Other tabs
         private TabPage tabPage4;
         private DataGridView dataGridView3;
         private DataGridViewCheckBoxColumn dataGridViewCheckBoxColumn1;
@@ -1019,45 +1184,18 @@ namespace AppRefiner
         private Panel pnlTemplateParams;
         private Button btnApplyTemplate;
         private ComboBox cmbTemplates;
-        private Button btnReportDirectory;
-        private Button btnTNSADMIN;
-        private GroupBox groupBox1;
-        private GroupBox groupBox2;
-        private CheckBox chkEventMapping;
-        private GroupBox groupBox4;
-        private RadioButton optClassText;
-        private RadioButton optClassPath;
-        private CheckBox chkEventMapXrefs;
-        private LinkLabel linkDocs;
-        private CheckBox chkCodeFolding;
-        private CheckBox chkRememberFolds;
         private TabPage tabPage2;
         private DataGridView gridRefactors;
         private DataGridViewTextBoxColumn dataGridViewTextBoxColumn2;
         private DataGridViewTextBoxColumn Column1;
         private DataGridViewButtonColumn dataGridViewButtonColumn1;
-        private CheckBox chkOverrideFindReplace;
-        private CheckBox chkOverrideOpen;
-        private Button btnConfigSmartOpen;
-        private CheckBox chkAutoCenterDialogs;
-        private CheckBox chkMultiSelection;
-        private CheckBox chkLineSelectionFix;
-        private GroupBox groupBox3;
-        private CheckBox chkFunctionSignatures;
-        private CheckBox chkVariableSuggestions;
-        private CheckBox chkObjectMembers;
-        private CheckBox chkSystemVariables;
-        private ComboBox cmbTheme;
-        private Label label1;
-        private CheckBox chkFilled;
         private TabPage tabPage6;
         private DataGridView gridExtensions;
         private DataGridViewTextBoxColumn colExtType;
-        private LinkLabel lnkWhatsNew;
-        private LinkLabel lnkNewVersion;
         private DataGridViewCheckBoxColumn colExtActive;
         private DataGridViewTextBoxColumn colExtTarget;
         private DataGridViewTextBoxColumn colExtContents;
         private DataGridViewButtonColumn colExtConfigure;
+        private CheckBox chkUseEnhancedEditor;
     }
 }

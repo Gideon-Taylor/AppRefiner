@@ -14,6 +14,8 @@ namespace AppRefiner.Events
         private const uint WM_AR_SUBCLASS_RESULTS_LIST = WM_USER + 1007;
         private const uint WM_AR_SET_OPEN_TARGET = WM_USER + 1008;
         private const uint WM_LOAD_SCINTILLA_DLL = WM_USER + 1009;
+        private const uint WM_AR_SET_MINIMAP = WM_USER + 1010;
+        private const uint WM_AR_SET_PARAM_NAMES = WM_USER + 1011;
 
         // Bit field for shortcut types
         [Flags]
@@ -224,6 +226,28 @@ namespace AppRefiner.Events
                 return WinApi.SendMessage(mainWindowHandle, (int)WM_TOGGLE_AUTO_PAIRING, enabled ? 1 : 0, IntPtr.Zero) != IntPtr.Zero;
             }
             return false;
+        }
+
+        /// <summary>
+        /// Enables or disables the minimap for a specific editor.
+        /// Posts a message to the editor's thread; the hook enables/disables via MinimapManager
+        /// and syncs the context-menu checkbox.
+        /// </summary>
+        public static bool SetMinimap(ScintillaEditor editor, bool enabled)
+        {
+            uint threadId = WinApi.GetWindowThreadProcessId(editor.hWnd, out _);
+            return PostThreadMessage(threadId, WM_AR_SET_MINIMAP, editor.hWnd, enabled ? (IntPtr)1 : IntPtr.Zero);
+        }
+
+        /// <summary>
+        /// Syncs the parameter-names checkbox state in the hook's context menu for a specific editor.
+        /// The caller is responsible for the actual inlay-hint toggle on the C# side
+        /// (e.g. activating/deactivating the FunctionParameterNames styler).
+        /// </summary>
+        public static bool SetParamNames(ScintillaEditor editor, bool enabled)
+        {
+            uint threadId = WinApi.GetWindowThreadProcessId(editor.hWnd, out _);
+            return PostThreadMessage(threadId, WM_AR_SET_PARAM_NAMES, editor.hWnd, enabled ? (IntPtr)1 : IntPtr.Zero);
         }
 
         // Helper method to ensure Command Palette is always enabled

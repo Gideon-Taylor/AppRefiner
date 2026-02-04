@@ -258,6 +258,12 @@ namespace AppRefiner
 
             ScintillaManager.InitAnnotationStyles(editor);
 
+            // Apply persisted editor-feature states now that subclassing is complete.
+            // Both messages are posted to the same thread as the subclass message, so they
+            // will be processed after ComboBoxButton::Setup has run.
+            EventHookInstaller.SetMinimap(editor, Properties.Settings.Default.miniMapOpen);
+            EventHookInstaller.SetParamNames(editor, Properties.Settings.Default.showParamNames);
+
             editor.Initialized = true;
             return editor;
         }

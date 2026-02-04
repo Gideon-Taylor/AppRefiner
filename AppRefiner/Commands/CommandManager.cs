@@ -88,6 +88,12 @@ namespace AppRefiner.Commands
             return _discoveredCommands.Select(cmd => (cmd.CommandId, cmd.Instance));
         }
 
+        public (string CommandId, BaseCommand Instance) GetCommandByType(Type commandType)
+        {
+            var cmd = _discoveredCommands.FirstOrDefault(c => c.CommandType == commandType);
+            return (cmd.CommandId, cmd.Instance);
+        }
+
         /// <summary>
         /// Executes a command with proper error handling.
         /// </summary>

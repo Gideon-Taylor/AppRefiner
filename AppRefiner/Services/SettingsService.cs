@@ -30,6 +30,9 @@ namespace AppRefiner
         public bool LineSelectionFix { get; set; }
         public string Theme { get; set; } = "Default";
         public bool ThemeFilled { get; set; } = false;
+        public bool ShowParamNames { get; set; }
+        public bool MiniMapOpen { get; set; }
+        public bool UseEnhancedEditor { get; set; }
     }
 
     public class SettingsService
@@ -69,6 +72,9 @@ namespace AppRefiner
                 settings.LineSelectionFix = Properties.Settings.Default.lineSelectionFix;
                 settings.Theme = Properties.Settings.Default.theme;
                 settings.ThemeFilled = Properties.Settings.Default.theme_filled;
+                settings.ShowParamNames = Properties.Settings.Default.showParamNames;
+                settings.MiniMapOpen = Properties.Settings.Default.miniMapOpen;
+                settings.UseEnhancedEditor = Properties.Settings.Default.useEnhancedEditor;
             }
             catch (Exception ex)
             {
@@ -103,6 +109,9 @@ namespace AppRefiner
             Properties.Settings.Default.lineSelectionFix = settings.LineSelectionFix;
             Properties.Settings.Default.theme = settings.Theme;
             Properties.Settings.Default.theme_filled = settings.ThemeFilled;
+            Properties.Settings.Default.showParamNames = settings.ShowParamNames;
+            Properties.Settings.Default.miniMapOpen = settings.MiniMapOpen;
+            Properties.Settings.Default.useEnhancedEditor = settings.UseEnhancedEditor;
         }
 
         public void SaveChanges()

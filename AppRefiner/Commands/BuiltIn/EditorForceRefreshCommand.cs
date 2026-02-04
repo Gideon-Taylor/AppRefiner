@@ -23,6 +23,8 @@ namespace AppRefiner.Commands.BuiltIn
                 ScintillaManager.ClearAnnotations(context.ActiveEditor);
                 // Reset styles
                 ScintillaManager.ResetStyles(context.ActiveEditor);
+                //
+                ScintillaManager.ClearAllIndicators(context.ActiveEditor);
 
                 // Call CheckForContentChanges on the main form
                 // Note: This requires access to the MainForm instance which we now have in context

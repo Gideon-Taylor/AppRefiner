@@ -488,5 +488,41 @@ namespace AppRefiner.Properties {
                 this["LastSeenVersion"] = value;
             }
         }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("True")]
+        public bool miniMapOpen {
+            get {
+                return ((bool)(this["miniMapOpen"]));
+            }
+            set {
+                this["miniMapOpen"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("True")]
+        public bool showParamNames {
+            get {
+                return ((bool)(this["showParamNames"]));
+            }
+            set {
+                this["showParamNames"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("False")]
+        public bool useEnhancedEditor {
+            get {
+                return ((bool)(this["useEnhancedEditor"]));
+            }
+            set {
+                this["useEnhancedEditor"] = value;
+            }
+        }
     }
 }

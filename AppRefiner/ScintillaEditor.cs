@@ -321,7 +321,7 @@ namespace AppRefiner
         public IReadOnlyList<ParseError> ParserErrors { get; set; } = [];
         public AppDesignerProcess AppDesignerProcess { get; set; }
 
-
+        public bool ParameterNamesEnabled { get; set; }
         /// <summary>
         /// Gets the self-hosted parsed program, with caching support.
         /// </summary>
@@ -497,6 +497,7 @@ namespace AppRefiner
             AppDesignerProcess = appProc;
             Caption = caption;
             AppDesignerProcess = null;
+            ParameterNamesEnabled = Properties.Settings.Default.showParamNames;
         }
 
         public IntPtr SendMessage(int Msg, IntPtr wParam, IntPtr lParam)

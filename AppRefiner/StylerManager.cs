@@ -53,8 +53,13 @@ namespace AppRefiner.Stylers
                     // Create instance - all stylers now inherit from ScopedStyler which implements IStyler
                     if (Activator.CreateInstance(type) is BaseStyler styler)
                     {
-                        int rowIndex = stylerGrid.Rows.Add(styler.Active, styler.Description);
-                        stylerGrid.Rows[rowIndex].Tag = styler;
+                        /* We don't want to add this styler to the grid as its controlled by editor tweak setting/editor toggle */
+                        if (type != typeof(FunctionParameterNames))
+                        {
+                            int rowIndex = stylerGrid.Rows.Add(styler.Active, styler.Description);
+                            stylerGrid.Rows[rowIndex].Tag = styler;
+                        }
+                        
                         stylers.Add(styler);
                     }
                 }

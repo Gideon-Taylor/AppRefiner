@@ -1,4 +1,5 @@
 using AppRefiner.Commands;
+using AppRefiner.Commands.BuiltIn;
 using AppRefiner.Database;
 using AppRefiner.Database.Models;
 using AppRefiner.Dialogs;
@@ -6,6 +7,7 @@ using AppRefiner.Events;
 using AppRefiner.LanguageExtensions;
 using AppRefiner.Linters;
 using AppRefiner.Plugins;
+using AppRefiner.Properties;
 using AppRefiner.Refactors;
 using AppRefiner.Services;
 using AppRefiner.Snapshots;
@@ -13,6 +15,7 @@ using AppRefiner.Stylers;
 using AppRefiner.Templates;
 using AppRefiner.TooltipProviders;
 using DiffPlex.Model;
+using Microsoft.Win32;
 using PeopleCodeParser.SelfHosted;
 using PeopleCodeParser.SelfHosted.Lexing;
 using PeopleCodeParser.SelfHosted.Nodes;
@@ -28,7 +31,6 @@ using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Json;
 using System.Threading;
-using Microsoft.Win32;
 using static AppRefiner.AutoCompleteService;
 using static AppRefiner.ScintillaEditor;
 
@@ -120,8 +122,14 @@ namespace AppRefiner
         private const int AR_SCINTILLA_LOAD_FAILED = 2516; // Scintilla DLL load failed (wParam contains GetLastError)
         private const int AR_SCINTILLA_IN_USE = 2517; // Scintilla DLL in use (active windows exist, cannot replace)
         private const int AR_SCINTILLA_NOT_FOUND = 2518; // Scintilla DLL file not found at specified path (wParam=(major<<16)|minor, lParam=(build<<16)|revision)
+        private const int AR_CONTEXT_MENU_OPTION = 2520; // Context menu option selected (wParam=option ID, lParam=toggle state for checkboxes or 0)
         private const int AR_SUBCLASS_RESULTS_LIST = 1007; // Message to subclass Results list view
         private const int AR_SET_OPEN_TARGET = 1008; // Message to set open target for Results list interception
+
+        // Context menu option IDs
+        private const int IDM_COMMAND_PALETTE = 1001;
+        private const int IDM_MINIMAP = 1002;
+        private const int IDM_PARAM_NAMES = 1003;
         private const int SCN_USERLISTSELECTION = 2014; // User list selection notification
         private const int SCN_CALLTIPCLICK = 2021;
         private const int SCN_AUTOCSELECTION = 2022; // Autocompletion selection notification
@@ -219,6 +227,12 @@ namespace AppRefiner
             chkMultiSelection.Checked = generalSettings.MultiSelection;
             chkOverrideOpen.Checked = generalSettings.OverrideOpen;
             chkLineSelectionFix.Checked = generalSettings.LineSelectionFix;
+            chkInlineParameterHints.Checked = generalSettings.ShowParamNames;
+            chkDocMinimap.Checked = generalSettings.MiniMapOpen;
+            chkUseEnhancedEditor.Checked = generalSettings.UseEnhancedEditor;
+            chkInlineParameterHints.Enabled = chkUseEnhancedEditor.Checked;
+            txtLintReportDir.Text = generalSettings.LintReportPath;
+            txtTnsAdminDir.Text = generalSettings.TNS_ADMIN;
 
             // Initialize theme combo box with all available themes
             cmbTheme.Items.Clear();
@@ -533,6 +547,9 @@ namespace AppRefiner
             chkAutoCenterDialogs.CheckedChanged += GeneralSetting_Changed;
             chkMultiSelection.CheckedChanged += GeneralSetting_Changed;
             chkLineSelectionFix.CheckedChanged += GeneralSetting_Changed;
+            chkInlineParameterHints.CheckedChanged += GeneralSetting_Changed;
+            chkDocMinimap.CheckedChanged += GeneralSetting_Changed;
+            chkUseEnhancedEditor.CheckedChanged += GeneralSetting_Changed;
 
             // Theme controls
             cmbTheme.SelectedIndexChanged += ThemeSetting_Changed;
@@ -550,6 +567,40 @@ namespace AppRefiner
         private void GeneralSetting_Changed(object? sender, EventArgs e)
         {
             if (isLoadingSettings) return;
+
+            // Enhanced editor disclaimer — only when toggling ON
+            if (sender == chkUseEnhancedEditor)
+            {
+                if (chkUseEnhancedEditor.Checked)
+                {
+                    var disclaimer = new EnhancedEditorDisclaimerDialog(this.Handle);
+                    var result = disclaimer.ShowDialog(new WindowWrapper(this.Handle));
+
+                    if (result == DialogResult.OK)
+                    {
+                        chkInlineParameterHints.Enabled = true;
+                    }
+                    else
+                    {
+                        // User declined — revert without re-triggering this handler
+                        isLoadingSettings = true;
+                        chkUseEnhancedEditor.Checked = false;
+                        chkInlineParameterHints.Checked = false;
+                        chkInlineParameterHints.Enabled = false;
+                        isLoadingSettings = false;
+                        SaveSettings();
+                        return;
+                    }
+                }
+                else
+                {
+                    // Enhanced editor unchecked directly — disable parameter hints
+                    isLoadingSettings = true;
+                    chkInlineParameterHints.Checked = false;
+                    chkInlineParameterHints.Enabled = false;
+                    isLoadingSettings = false;
+                }
+            }
 
             // Check if this is a shortcut-related checkbox change
             if (sender == chkOverrideOpen || sender == chkOverrideFindReplace || sender == chkLineSelectionFix)
@@ -851,7 +902,10 @@ namespace AppRefiner
                 MultiSelection = chkMultiSelection.Checked,
                 LineSelectionFix = chkLineSelectionFix.Checked,
                 Theme = cmbTheme.SelectedItem?.ToString() ?? Theme.Default.ToString(),
-                ThemeFilled = chkFilled.Checked
+                ThemeFilled = chkFilled.Checked,
+                ShowParamNames = chkInlineParameterHints.Checked,
+                MiniMapOpen = chkDocMinimap.Checked,
+                UseEnhancedEditor = chkUseEnhancedEditor.Checked
             };
         }
 
@@ -1086,6 +1140,22 @@ namespace AppRefiner
             }
         }
 
+        private void HandleParamNamesToggle(bool enabled)
+        {
+            Debug.Log($"HandleParamNamesToggle called with enabled={enabled}");
+            var paramStyler = stylerManager.StylerRules.Where(r => r is FunctionParameterNames).First();
+                
+            paramStyler.Active = enabled;
+            if (enabled)
+            {
+                stylerManager.ProcessStylersForEditor(activeEditor);
+            } else
+            {
+                int SCI_INLAYHINTCLEARALL = 2904;
+                activeEditor.SendMessage(SCI_INLAYHINTCLEARALL, 0, 0);
+            }
+            activeEditor.ParameterNamesEnabled = enabled;
+        }
 
         private void expandAllHandler(object? sender, KeyPressedEventArgs e)
         {
@@ -1929,13 +1999,17 @@ namespace AppRefiner
                     {
                         activeEditor = process.GetOrInitEditor(hwnd);
                         activeAppDesigner = activeEditor.AppDesignerProcess;
+                        stylerManager.StylerRules.Where(s => s is FunctionParameterNames).First().Active = activeEditor.ParameterNamesEnabled;
                         return;
                     }
                     else
                     {
                         var newProcess = new AppDesignerProcess(pid, IntPtr.Zero, GetGeneralSettingsObject(), currentShortcutFlags);
-                        string testPath = @"C:\Users\tslat\repos\GitHub\AppRefiner\AppRefiner\bin\Debug\net8.0-windows7.0\scintilla_mods";
-                        newProcess.LoadScintillaDll(testPath);
+                        string testPath = Path.Combine(Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location)!, "scintilla_mods");
+                        if (Settings.Default.useEnhancedEditor)
+                        {
+                            newProcess.LoadScintillaDll(testPath);
+                        }
                         AppDesignerProcesses.Add(pid, newProcess);
                         trackedProcessIds.Add(pid);
                         activeEditor = newProcess.GetOrInitEditor(hwnd);
@@ -1944,6 +2018,7 @@ namespace AppRefiner
                         // Apply current theme to newly created process
                         ApplyCurrentThemeToProcess(newProcess);
                         activeAppDesigner = activeEditor.AppDesignerProcess;
+                        stylerManager.StylerRules.Where(s => s is FunctionParameterNames).First().Active = activeEditor.ParameterNamesEnabled;
                         return;
                     }
                 }
@@ -2731,45 +2806,10 @@ namespace AppRefiner
             {
                 uint errorCode = (uint)m.WParam.ToInt32();
                 Debug.Log($"Callback: Scintilla.dll load failed, error code {errorCode} (0x{errorCode:X})");
-
-                // Display error to user - marshal to UI thread
-                BeginInvoke(new Action(() =>
-                {
-                    var mainHandle = System.Diagnostics.Process.GetCurrentProcess().MainWindowHandle;
-                    var handleWrapper = new WindowWrapper(mainHandle);
-
-                    string errorMessage = $"Failed to load Scintilla.dll into Application Designer.\n\n" +
-                                        $"Error code: {errorCode} (0x{errorCode:X})\n\n" +
-                                        $"Common causes:\n" +
-                                        $"- DLL file is missing or corrupted\n" +
-                                        $"- DLL architecture mismatch (32-bit vs 64-bit)\n" +
-                                        $"- Missing dependencies\n" +
-                                        $"- Access permissions";
-
-                    new MessageBoxDialog(errorMessage, "Scintilla Load Failed",
-                                       MessageBoxButtons.OK, mainHandle).ShowDialog(handleWrapper);
-                }));
             }
             else if (m.Msg == AR_SCINTILLA_IN_USE)
             {
                 Debug.Log("Callback: Scintilla.dll is in use (active windows exist, cannot replace)");
-
-                // Display informational message to user - marshal to UI thread
-                BeginInvoke(new Action(() =>
-                {
-                    var mainHandle = System.Diagnostics.Process.GetCurrentProcess().MainWindowHandle;
-                    var handleWrapper = new WindowWrapper(mainHandle);
-
-                    string message = "Cannot load Scintilla.dll because Application Designer has active " +
-                                   "Scintilla editor windows.\n\n" +
-                                   "To load a custom Scintilla.dll:\n" +
-                                   "1. Close all open PeopleCode editors\n" +
-                                   "2. Try loading the DLL again\n\n" +
-                                   "Note: The DLL cannot be replaced while editor windows are open.";
-
-                    new MessageBoxDialog(message, "Scintilla In Use",
-                                       MessageBoxButtons.OK, mainHandle).ShowDialog(handleWrapper);
-                }));
             }
             else if (m.Msg == AR_SCINTILLA_NOT_FOUND)
             {
@@ -2781,21 +2821,43 @@ namespace AppRefiner
                 string version = $"{major}.{minor}.{build}.{revision}";
 
                 Debug.Log($"Callback: Target Scintilla.dll file not found (version {version})");
+            }
 
-                // Display error message to user - marshal to UI thread
-                BeginInvoke(new Action(() =>
+            const int WM_AR_COMBO_BUTTON_CLICKED = 2519;
+            if (m.Msg == WM_AR_COMBO_BUTTON_CLICKED)
+            {
+                // Handle button click
+                Debug.Log("Button clicked!");
+            }
+            else if (m.Msg == AR_CONTEXT_MENU_OPTION)
+            {
+                int optionId = m.WParam.ToInt32();
+                int toggleState = m.LParam.ToInt32();
+
+                switch (optionId)
                 {
-                    var mainHandle = System.Diagnostics.Process.GetCurrentProcess().MainWindowHandle;
-                    var handleWrapper = new WindowWrapper(mainHandle);
+                    case IDM_COMMAND_PALETTE:
+                        Debug.Log("Command Palette selected from context menu");
+                        BeginInvoke(new Action(() =>
+                        {
+                            ShowCommandPalette();
+                        }));
+                        break;
 
-                    string message = $"Cannot load Scintilla.dll because the DLL file was not found.\n\n" +
-                                   $"The system attempted to load version {version} based on the currently " +
-                                   $"loaded Scintilla version, but the file does not exist.\n\n" +
-                                   $"Please report this issue on the AppRefiner GitHub and make sure to include the version number above.";
+                    case IDM_MINIMAP:
+                        Debug.Log($"Minimap toggle: {(toggleState != 0 ? "enabled" : "disabled")}");
+                        // Minimap toggle is already handled in C++ hook
+                        break;
 
-                    new MessageBoxDialog(message, "Scintilla DLL Not Found",
-                                       MessageBoxButtons.OK, mainHandle).ShowDialog(handleWrapper);
-                }));
+                    case IDM_PARAM_NAMES:
+                        Debug.Log($"Param Names toggle: {(toggleState != 0 ? "enabled" : "disabled")}");
+                        HandleParamNamesToggle(toggleState != 0);
+                        break;
+
+                    default:
+                        Debug.Log($"Unknown context menu option: {optionId}");
+                        break;
+                }
             }
         }
 
@@ -2915,7 +2977,7 @@ namespace AppRefiner
                                 Task.Delay(500).ContinueWith(_ => TooltipManager.IgnoreNextCallTip = false);
 
                                 TooltipManager.HideTooltip(editor);
-                                
+
                                 return true;
                             }
                         }
@@ -4409,8 +4471,11 @@ namespace AppRefiner
 
                 // All validations passed - create and track the AppDesignerProcess
                 var newProcess = new AppDesignerProcess(processId, resultsListView, GetGeneralSettingsObject(), currentShortcutFlags);
-                string testPath = @"C:\Users\tslat\repos\GitHub\AppRefiner\AppRefiner\bin\Debug\net8.0-windows7.0\scintilla_mods";
-                newProcess.LoadScintillaDll(testPath);
+                if (Settings.Default.useEnhancedEditor)
+                {
+                    string testPath = Path.Combine(Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location)!, "scintilla_mods");
+                    newProcess.LoadScintillaDll(testPath);
+                }
 
                 AppDesignerProcesses.Add(processId, newProcess);
                 trackedProcessIds.Add(processId);
@@ -4652,6 +4717,7 @@ namespace AppRefiner
         private void btnReportDirectory_Click(object sender, EventArgs e)
         {
             linterManager?.SetLintReportDirectory();
+            txtLintReportDir.Text = Properties.Settings.Default.LintReportPath;
         }
 
         private void btnTNSADMIN_Click(object sender, EventArgs e)
@@ -4671,6 +4737,7 @@ namespace AppRefiner
             if (folderDialog.ShowDialog(this) == DialogResult.OK)
             {
                 TNS_ADMIN = folderDialog.SelectedPath;
+                txtTnsAdminDir.Text = TNS_ADMIN;
                 SaveSettings(); // Save all settings
                 Debug.Log($"TNS_ADMIN property set to: {folderDialog.SelectedPath}");
             }
