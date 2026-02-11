@@ -92,7 +92,10 @@ namespace AppRefiner.Refactors
                 if (insertIndex >= 0)
                 {
                     var funcCallIndex = CurrentPosition;
-                    var exampleCall = _functionToDeclare.GetExampleCall();
+                    var currentLineText = ScintillaManager.GetLineText(Editor, LineNumber);
+                    var exampleCall = string.IsNullOrWhiteSpace(currentLineText)
+                        ? _functionToDeclare.GetExampleCall()
+                        : _functionToDeclare.GetFunctionCall();
                     if (CurrentPosition == insertIndex)
                     {
                         InsertText(funcCallIndex, exampleCall, "Insert example call of function");

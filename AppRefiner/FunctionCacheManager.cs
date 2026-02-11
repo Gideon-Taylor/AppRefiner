@@ -53,17 +53,19 @@ namespace AppRefiner
             return $"Declare Function {FunctionName} PeopleCode {parts[0]}.{parts[1]} {parts[2]};";
         }
 
+        public string GetFunctionCall()
+        {
+            return $"{FunctionName}({string.Join(", ", ParameterNames ?? [])});";
+        }
+
         public string GetExampleCall()
         {
-            var sb = new StringBuilder();
             if (!string.IsNullOrEmpty(ReturnType))
             {
-                sb.Append($"Local {ReturnType} &funcResult = ");
+                return $"Local {ReturnType} &funcResult = {GetFunctionCall()}";
             }
 
-            sb.Append($"{FunctionName}({string.Join(", ", ParameterNames ?? [])});");
-
-            return sb.ToString();
+            return GetFunctionCall();
         }
 
     }
