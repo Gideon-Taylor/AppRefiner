@@ -1,5 +1,6 @@
 ﻿using PeopleCodeParser.SelfHosted;
 using PeopleCodeParser.SelfHosted.Nodes;
+using PeopleCodeTypeInfo.Functions;
 using PeopleCodeTypeInfo.Types;
 using PeopleCodeTypeInfo.Validation;
 using System;
@@ -90,77 +91,71 @@ namespace AppRefiner.Stylers
             SynchronizeInlayHints();
         }
 
+        public override void VisitObjectCreation(ObjectCreationNode node)
+        {
+            base.VisitObjectCreation(node);
+
+            var functionInfo = node.GetFunctionInfo();
+            if (functionInfo == null || node.Arguments.Count == 0)
+                return;
+
+            CollectHintsForArguments(functionInfo, node.Arguments);
+        }
+
         public override void VisitFunctionCall(FunctionCallNode node)
         {
             base.VisitFunctionCall(node);
 
-            // Get function info attached to the node (populated by type inference)
             var funcInfo = node.GetFunctionInfo();
             if (funcInfo == null || node.Arguments.Count == 0)
                 return;
 
-            // Get argument types from inferred types
-            List<TypeInfo> arguments = new();
-            foreach (var arg in node.Arguments)
-            {
-                var inferredType = arg.GetInferredType();
-                if (inferredType == null)
-                {
-                    inferredType = UnknownTypeInfo.Instance;
-                }
-                arguments.Add(inferredType);
-            }
+            CollectHintsForArguments(funcInfo, node.Arguments);
+        }
 
-            // Get TypeResolver from editor
+        private void CollectHintsForArguments(FunctionInfo functionInfo, List<ExpressionNode> arguments)
+        {
+            var argTypes = new TypeInfo[arguments.Count];
+            for (int i = 0; i < arguments.Count; i++)
+                argTypes[i] = arguments[i].GetInferredType() ?? UnknownTypeInfo.Instance;
+
             var typeResolver = Editor?.AppDesignerProcess?.TypeResolver;
             if (typeResolver == null)
             {
-                // No type resolver available - collect generic names
-                CollectGenericParameterNames(node);
+                CollectGenericParameterNames(arguments);
                 return;
             }
 
-            // Validate and get parameter mappings
             var validator = new FunctionCallValidator(typeResolver);
-            var result = validator.Validate(funcInfo, arguments.ToArray());
+            var result = validator.Validate(functionInfo, argTypes);
 
             if (result.IsValid && result.ArgumentMappings != null)
             {
-                // Collect actual parameter names from mappings
                 foreach (var mapping in result.ArgumentMappings)
                 {
-                    if (mapping.ArgumentIndex >= node.Arguments.Count)
+                    if (mapping.ArgumentIndex >= arguments.Count)
                         continue;
 
-                    var arg = node.Arguments[mapping.ArgumentIndex];
-
-                    // Use actual parameter name or fallback to generic
+                    var arg = arguments[mapping.ArgumentIndex];
                     var displayName = string.IsNullOrEmpty(mapping.ParameterName)
                         ? $"arg{mapping.ArgumentIndex}"
                         : mapping.ParameterName;
 
-                    var paramText = $"{displayName}:";
-
-                    // Add to collection instead of immediately displaying
-                    AddDesiredHint(arg.SourceSpan.Start.Line, arg.SourceSpan.Start.Column - 1, paramText);
+                    AddDesiredHint(arg.SourceSpan.Start.Line, arg.SourceSpan.Start.Column - 1, $"{displayName}:");
                 }
             }
             else
             {
-                // Validation failed - collect generic names
-                CollectGenericParameterNames(node);
+                CollectGenericParameterNames(arguments);
             }
         }
 
-        private void CollectGenericParameterNames(FunctionCallNode node)
+        private void CollectGenericParameterNames(List<ExpressionNode> arguments)
         {
-            for (int i = 0; i < node.Arguments.Count; i++)
+            for (int i = 0; i < arguments.Count; i++)
             {
-                var arg = node.Arguments[i];
-                var paramText = $"arg{i}:";
-
-                // Add to collection instead of immediately displaying
-                AddDesiredHint(arg.SourceSpan.Start.Line, arg.SourceSpan.Start.Column - 1, paramText);
+                var arg = arguments[i];
+                AddDesiredHint(arg.SourceSpan.Start.Line, arg.SourceSpan.Start.Column - 1, $"arg{i}:");
             }
         }
 
