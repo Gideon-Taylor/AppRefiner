@@ -4,6 +4,7 @@ using PeopleCodeParser.SelfHosted;
 using PeopleCodeParser.SelfHosted.Nodes;
 using PeopleCodeParser.SelfHosted.Visitors;
 using PeopleCodeParser.SelfHosted.Visitors.Models;
+using PeopleCodeTypeInfo.Types;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -120,19 +121,6 @@ namespace AppRefiner
             {
                 _targetFunctionName = literalFunc.Name;
             }
-
-           /* if (node.Function is MemberAccessNode memberAcc && memberAcc.Target is IdentifierNode memberTarget)
-            {
-                if (memberAcc.MemberNameSpan.ContainsPosition(_position))
-                {
-                    if (memberTarget.Name.ToLower() == "%this" || memberTarget.Name.ToLower() == "%super")
-                    {
-                        int i = 3;
-                    }
-                }
-            }
-           */
-
         }
 
 
@@ -177,6 +165,15 @@ namespace AppRefiner
 
         }
 
+        public override void VisitProperty(PropertyNode node)
+        {
+            base.VisitProperty(node);
+            // ScopedAstVisitor.VisitProperty skips node.Type (unlike all other declaration
+            // handlers).  Visit it explicitly so VisitAppClassType fires for class-typed
+            // property declarations.
+            node.Type.Accept(this);
+        }
+
         public override void VisitMemberAccess(MemberAccessNode node)
         {
             base.VisitMemberAccess(node);
@@ -213,7 +210,7 @@ namespace AppRefiner
                         }
                         else if (foundSpan != null)
                         {
-                            Result.TargetProgram = CreateAppClassOpenTarget(appClassType);
+                            Result.TargetProgram = CreateAppClassOpenTarget(appClassType.PackagePath, appClassType.ClassName);
                             Result.SourceSpan = foundSpan;
                         }
                     }
@@ -244,6 +241,31 @@ namespace AppRefiner
                             /* Its in a different app class, we need to set the open target */
                             Result.TargetProgram = foundTarget;
                             Result.SourceSpan = foundSpan;
+                        }
+                    }
+                }
+
+                /* Fallback: use type inference on the target expression.
+                   Handles chained access (%This.Property.Method, &obj.Prop.Method, etc.)
+                   where the target is not a simple identifier. */
+                if (Result.SourceSpan == null && Result.TargetProgram == null)
+                {
+                    var targetType = node.Target.GetInferredType();
+                    if (targetType is AppClassTypeInfo appClassType)
+                    {
+                        var memberName = node.MemberName;
+                        var isMethod = DetermineMemberType(node);
+                        var openTarget = CreateAppClassOpenTarget(appClassType.PackagePath, appClassType.ClassName);
+                        var parsedProg = GetParsedProgram(openTarget);
+
+                        if (parsedProg?.AppClass != null)
+                        {
+                            (var foundTarget, var foundSpan) = FindMemberInClass(parsedProg.AppClass, memberName, isMethod, false);
+                            if (foundSpan != null)
+                            {
+                                Result.TargetProgram = foundTarget ?? openTarget;
+                                Result.SourceSpan = foundSpan;
+                            }
                         }
                     }
                 }
@@ -288,7 +310,7 @@ namespace AppRefiner
 
             if (baseClassType != null)
             {
-                var openTarget = CreateAppClassOpenTarget(baseClassType);
+                var openTarget = CreateAppClassOpenTarget(baseClassType.PackagePath, baseClassType.ClassName);
 
                 var parsedProg = GetParsedProgram(openTarget);
                 if (parsedProg != null && parsedProg.AppClass != null)
@@ -312,7 +334,12 @@ namespace AppRefiner
 
             if (node.SourceSpan.ContainsPosition(_position))
             {
-                var openTarget = CreateAppClassOpenTarget(node);
+                // Prefer the resolved type from inference — it has the full package path
+                // even when the source used a short name via a wildcard import.
+                var openTarget = node.GetInferredType() is AppClassTypeInfo resolved
+                    ? CreateAppClassOpenTarget(resolved.PackagePath, resolved.ClassName)
+                    : CreateAppClassOpenTarget(node.PackagePath, node.ClassName);
+
                 Result.TargetProgram = openTarget;
 
                 var parsedProg = GetParsedProgram(openTarget);
@@ -340,17 +367,17 @@ namespace AppRefiner
             return parser.ParseProgram();
         }
 
-        private OpenTarget CreateAppClassOpenTarget(AppClassTypeNode appClassType)
+        private OpenTarget CreateAppClassOpenTarget(IReadOnlyList<string> packagePath, string className)
         {
             List<(PSCLASSID, string)> targetParts = [];
             var packageClassID = 104;
-            foreach (var package in appClassType.PackagePath)
+            foreach (var package in packagePath)
             {
                 targetParts.Add(((PSCLASSID)packageClassID++, package));
             }
-            targetParts.Add((PSCLASSID.APPLICATION_CLASS, appClassType.ClassName));
+            targetParts.Add((PSCLASSID.APPLICATION_CLASS, className));
             targetParts.Add((PSCLASSID.METHOD, "OnExecute"));
-            return new OpenTarget(OpenTargetType.ApplicationClass, appClassType.ClassName, "", targetParts);
+            return new OpenTarget(OpenTargetType.ApplicationClass, className, "", targetParts);
         }
 
         private AppClassTypeNode? GetBaseClassType(AppClassNode classNode)
@@ -369,7 +396,7 @@ namespace AppRefiner
 
         private (OpenTarget? targetClass, SourceSpan? span) FindMemberInClassHierarchy(AppClassTypeNode appClassType, string memberName, bool isMethod)
         {
-            var openTarget = CreateAppClassOpenTarget(appClassType);
+            var openTarget = CreateAppClassOpenTarget(appClassType.PackagePath, appClassType.ClassName);
             var parsedProg = GetParsedProgram(openTarget);
 
             if (parsedProg != null && parsedProg.AppClass != null)
