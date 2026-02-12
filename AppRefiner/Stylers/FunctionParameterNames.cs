@@ -16,30 +16,33 @@ namespace AppRefiner.Stylers
     {
         public override string Description => "Parameter names";
 
-        int SCI_SETINLAYHINT = 2900;
-        int SCI_GETINLAYHINT = 2901;
-        int SCI_INLAYHINTREMOVE = 2902;
-        int SCI_INLAYHINTCLEARLINE = 2903;
         int SCI_INLAYHINTCLEARALL = 2904;
-        int SCI_GETINLAYINFO = 2905;
+        int SCI_SETINLAYINFO = 2905;
         int SCI_INLAYHINTSSUPPORTED = 2906;
         int SCI_STYLESETFORE = 2051;
-        int SCI_STYLESETBACK = 2052;
-        int SCI_STYLESETBOLD = 2053;
         int SCI_STYLESETITALIC = 2054;
+        int SCI_STYLESETBOLD = 2053;
         int SCI_STYLESETSIZE = 2055;
         const int STYLE_INLAY_HINT = 40;
 
         [StructLayout(LayoutKind.Sequential)]
-        private struct Sci_InlayInfo
+        private struct Sci_InlayHintInfo
         {
-            public int handle;
             public IntPtr line;
             public IntPtr position;
-            public int style;
             public IntPtr text;
+            public int style;
+            [MarshalAs(UnmanagedType.I1)]
             public bool paddingLeft;
+            [MarshalAs(UnmanagedType.I1)]
             public bool paddingRight;
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct Sci_InlayHintSet
+        {
+            public nuint count;
+            public IntPtr hints;
         }
 
         private struct DesiredInlayHint
@@ -53,10 +56,13 @@ namespace AppRefiner.Stylers
         }
 
         Dictionary<string, nint> paramNameAddresses = new();
-        Dictionary<int, string> handleToText = new();  // Maps hint handle -> text for change detection
         RemoteBuffer paramNameBuffer;
         int currentLineNumber = -1;
         List<DesiredInlayHint> desiredHints = new();
+        ScintillaEditor? lastEditor;
+        bool stylesConfigured;
+        int previousHintHash;
+        HashCode runningHash;
         public override void VisitProgram(ProgramNode node)
         {
             // Check if inlay hints are supported by this version of Scintilla
@@ -67,25 +73,44 @@ namespace AppRefiner.Stylers
                 return;
             }
 
-            // Clear state for this run
+            // If the editor changed, invalidate cached remote addresses and styles
+            if (Editor != lastEditor)
+            {
+                paramNameAddresses.Clear();
+                stylesConfigured = false;
+                previousHintHash = 0;
+                lastEditor = Editor;
+            }
+
+            // Clear per-run state (string buffer and addresses persist across runs)
             desiredHints.Clear();
-            paramNameAddresses.Clear();
+            runningHash = new HashCode();
 
-            // Configure inlay hint style
-            Editor?.SendMessage(SCI_STYLESETFORE, STYLE_INLAY_HINT, 0x808080);  // Gray
-            Editor?.SendMessage(SCI_STYLESETITALIC, STYLE_INLAY_HINT, 1);
-            Editor?.SendMessage(SCI_STYLESETBOLD, STYLE_INLAY_HINT, 1);
-            Editor?.SendMessage(SCI_STYLESETSIZE, STYLE_INLAY_HINT, 8);  // Smaller font to reduce horizontal space
+            // Configure inlay hint style (only once per editor)
+            if (!stylesConfigured)
+            {
+                Editor?.SendMessage(SCI_STYLESETFORE, STYLE_INLAY_HINT, 0x808080);  // Gray
+                Editor?.SendMessage(SCI_STYLESETITALIC, STYLE_INLAY_HINT, 1);
+                Editor?.SendMessage(SCI_STYLESETBOLD, STYLE_INLAY_HINT, 1);
+                Editor?.SendMessage(SCI_STYLESETSIZE, STYLE_INLAY_HINT, 8);  // Smaller font to reduce horizontal space
+                stylesConfigured = true;
+            }
 
-            // Get or create buffer and reset for this run
-            // Scintilla copies strings internally, so we don't need to maintain addresses
+            // Get or create string buffer (persists across runs — only new unique strings get written)
             paramNameBuffer = Editor.AppDesignerProcess.MemoryManager.GetOrCreateBuffer("parameterNames");
-            paramNameBuffer.Reset();
 
             currentLineNumber = ScintillaManager.GetCurrentLineNumber(Editor);
 
             // Traverse AST to collect desired hints
             base.VisitProgram(node);
+
+            // Skip synchronization if the hint set is identical to the previous run
+            var currentHash = runningHash.ToHashCode();
+            if (currentHash == previousHintHash && desiredHints.Count > 0)
+            {
+                return;
+            }
+            previousHintHash = currentHash;
 
             // Synchronize desired hints with current Scintilla state
             SynchronizeInlayHints();
@@ -180,7 +205,7 @@ namespace AppRefiner.Stylers
                 paramNameAddresses.Add(paramText, paramNameAddr);
             }
 
-            // Add to desired hints collection
+            // Add to desired hints collection and update running hash
             desiredHints.Add(new DesiredInlayHint
             {
                 Line = line,
@@ -188,205 +213,74 @@ namespace AppRefiner.Stylers
                 Text = paramText,
                 TextAddress = paramNameAddr
             });
+            runningHash.Add(line);
+            runningHash.Add(position);
+            runningHash.Add(paramText);
         }
 
         /// <summary>
-        /// Queries Scintilla for all current inlay hints using two-phase SCI_GETINLAYINFO call.
-        /// Phase 1: Query with null buffer to get required size
-        /// Phase 2: Allocate buffer and query again to get actual data
-        /// </summary>
-        /// <returns>List of current inlay hints, or empty list if none exist</returns>
-        private List<Sci_InlayInfo> GetCurrentInlayHints()
-        {
-            if (Editor == null)
-                return new List<Sci_InlayInfo>();
-
-            // Phase 1: Get required buffer size (in bytes)
-            var requiredSize = Editor.SendMessage(SCI_GETINLAYINFO, 0, IntPtr.Zero);
-            if (requiredSize == IntPtr.Zero || requiredSize.ToInt32() <= 0)
-            {
-                // No inlay hints exist
-                return new List<Sci_InlayInfo>();
-            }
-
-            // Phase 2: Allocate buffer and get data
-            int structSize = Marshal.SizeOf<Sci_InlayInfo>();
-            int count = requiredSize.ToInt32() / structSize;
-
-            // Allocate RemoteBuffer for receiving the array
-            var infoBuffer = Editor.AppDesignerProcess.MemoryManager.GetOrCreateBuffer("inlayInfoQuery", (uint)requiredSize.ToInt32());
-            infoBuffer.Reset(); // Ensure we start at offset 0
-
-            // Call SCI_GETINLAYINFO with buffer address
-            var bytesWritten = Editor.SendMessage(SCI_GETINLAYINFO, infoBuffer.Address, requiredSize);
-
-            if (bytesWritten.ToInt32() != requiredSize.ToInt32())
-            {
-                Debug.Log($"FunctionParameterNames: Warning - SCI_GETINLAYINFO returned {bytesWritten} bytes, expected {requiredSize}");
-                return new List<Sci_InlayInfo>();
-            }
-
-            // Read the array from remote buffer
-            byte[] data = infoBuffer.Read(requiredSize.ToInt32());
-
-            // Marshal byte array to struct array
-            List<Sci_InlayInfo> results = new List<Sci_InlayInfo>(count);
-            for (int i = 0; i < count; i++)
-            {
-                int offset = i * structSize;
-                IntPtr structPtr = Marshal.AllocHGlobal(structSize);
-                try
-                {
-                    Marshal.Copy(data, offset, structPtr, structSize);
-                    var info = Marshal.PtrToStructure<Sci_InlayInfo>(structPtr);
-                    results.Add(info);
-                }
-                finally
-                {
-                    Marshal.FreeHGlobal(structPtr);
-                }
-            }
-
-            Debug.Log($"FunctionParameterNames: Retrieved {results.Count} current inlay hints from Scintilla");
-            return results;
-        }
-
-        /// <summary>
-        /// Synchronizes desired inlay hints with current Scintilla state.
-        /// Uses handle -> text mapping to detect when hint text has changed.
-        /// Uses the new unified SetInlayHint API (single call instead of add/set text/set style).
+        /// Sends all desired inlay hints to Scintilla as a single atomic operation.
+        /// Allocates a buffer of Sci_InlayHintInfo structs and calls SCI_SETINLAYINFO
+        /// with lParam=1 to clear existing hints and apply the new set atomically.
         /// </summary>
         private void SynchronizeInlayHints()
         {
             if (Editor == null)
                 return;
 
-            var currentHints = GetCurrentInlayHints();
-
-            Debug.Log($"FunctionParameterNames: Synchronizing - Desired: {desiredHints.Count}, Current: {currentHints.Count}");
-
-            // Build lookup dictionaries for efficient comparison
-            // Key: "line:position" -> hint data
-            var currentByLocation = new Dictionary<string, Sci_InlayInfo>();
-            foreach (var hint in currentHints)
+            if (desiredHints.Count == 0)
             {
-                string key = $"{hint.line.ToInt32()}:{hint.position.ToInt32()}";
-                currentByLocation[key] = hint;
+                Editor.SendMessage(SCI_INLAYHINTCLEARALL, 0, 0);
+                Debug.Log("FunctionParameterNames: Cleared all inlay hints (no desired hints)");
+                return;
             }
 
-            var desiredByLocation = new Dictionary<string, DesiredInlayHint>();
-            foreach (var hint in desiredHints)
-            {
-                string key = hint.GetLocationKey();
-                desiredByLocation[key] = hint;
-            }
+            int hintSize = Marshal.SizeOf<Sci_InlayHintInfo>();
+            int setSize = Marshal.SizeOf<Sci_InlayHintSet>();
+            uint arraySize = (uint)(hintSize * desiredHints.Count);
+            uint totalSize = (uint)setSize + arraySize;
 
-            // Track statistics for logging
-            int addedCount = 0;
-            int updatedCount = 0;
-            int removedCount = 0;
-            int unchangedCount = 0;
+            // Get or create buffer sized for the set struct + the array of hint structs
+            var infoBuffer = Editor.AppDesignerProcess.MemoryManager.GetOrCreateBuffer("inlayInfoSet", totalSize);
+            infoBuffer.Reset();
 
-            // Get or create buffer for InlayInfo struct (reuse for all hints)
-            var infoBuffer = Editor.AppDesignerProcess.MemoryManager.GetOrCreateBuffer("inlayInfoSet", (uint)Marshal.SizeOf<Sci_InlayInfo>());
+            // Reserve space for the Sci_InlayHintSet struct at the start (we'll write it after the array)
+            var setAddress = infoBuffer.Address;
+            infoBuffer.Write(new byte[setSize]);
 
-            // Process desired hints: add new, update changed, or skip unchanged
+            // Write each hint struct sequentially into the buffer after the set struct
+            var arrayAddress = IntPtr.Add(infoBuffer.Address, setSize);
             foreach (var desired in desiredHints)
             {
-                string locationKey = desired.GetLocationKey();
-
-                if (currentByLocation.TryGetValue(locationKey, out var existing))
+                var hintInfo = new Sci_InlayHintInfo
                 {
-                    // Hint exists at this location - check if text changed
-                    if (handleToText.TryGetValue(existing.handle, out string storedText))
-                    {
-                        if (storedText == desired.Text)
-                        {
-                            // Text hasn't changed - skip
-                            unchangedCount++;
-                            continue;
-                        }
-                    }
+                    line = new IntPtr(desired.Line),
+                    position = new IntPtr(desired.Position),
+                    text = desired.TextAddress,
+                    style = STYLE_INLAY_HINT,
+                    paddingLeft = false,
+                    paddingRight = false
+                };
 
-                    // Text changed or not tracked - update the existing hint
-                    var updateInfo = new Sci_InlayInfo
-                    {
-                        handle = existing.handle,
-                        line = new IntPtr(desired.Line),
-                        position = new IntPtr(desired.Position),
-                        style = STYLE_INLAY_HINT,
-                        text = desired.TextAddress,
-                        paddingLeft = false,
-                        paddingRight = false
-                    };
-
-                    infoBuffer.Reset();
-                    if (infoBuffer.WriteStruct(updateInfo) == null)
-                    {
-                        Debug.Log($"FunctionParameterNames: Warning - Failed to write struct to buffer for update");
-                        continue;
-                    }
-
-                    var result = Editor.SendMessage(SCI_SETINLAYHINT, infoBuffer.Address, IntPtr.Zero);
-
-                    if (result.ToInt32() == -1)
-                    {
-                        Debug.Log($"FunctionParameterNames: Warning - Failed to update hint with handle {existing.handle}");
-                    }
-                    else
-                    {
-                        handleToText[existing.handle] = desired.Text;
-                        updatedCount++;
-                    }
-                }
-                else
+                if (infoBuffer.WriteStruct(hintInfo) == null)
                 {
-                    // New hint - create it (handle=0)
-                    var createInfo = new Sci_InlayInfo
-                    {
-                        handle = 0,
-                        line = new IntPtr(desired.Line),
-                        position = new IntPtr(desired.Position),
-                        style = STYLE_INLAY_HINT,
-                        text = desired.TextAddress
-                    };
-
-                    infoBuffer.Reset();
-                    if (infoBuffer.WriteStruct(createInfo) == null)
-                    {
-                        Debug.Log($"FunctionParameterNames: Warning - Failed to write struct to buffer for create");
-                        continue;
-                    }
-
-                    var handle = Editor.SendMessage(SCI_SETINLAYHINT, infoBuffer.Address, IntPtr.Zero);
-
-                    if (handle.ToInt32() > 0)
-                    {
-                        handleToText[handle.ToInt32()] = desired.Text;
-                        addedCount++;
-                    }
-                    else
-                    {
-                        Debug.Log($"FunctionParameterNames: Warning - Failed to create hint at {locationKey}");
-                    }
+                    Debug.Log($"FunctionParameterNames: Warning - Buffer full writing hint at {desired.Line}:{desired.Position}");
+                    return;
                 }
             }
 
-            // Remove hints that are no longer desired
-            foreach (var current in currentHints)
+            // Now write the set struct at the beginning, pointing to the array
+            var hintSet = new Sci_InlayHintSet
             {
-                string locationKey = $"{current.line.ToInt32()}:{current.position.ToInt32()}";
+                count = (nuint)desiredHints.Count,
+                hints = arrayAddress
+            };
+            infoBuffer.WriteStruct(hintSet, offset: 0);
 
-                if (!desiredByLocation.ContainsKey(locationKey))
-                {
-                    // This hint is no longer desired - remove it
-                    Editor.SendMessage(SCI_INLAYHINTREMOVE, current.handle, 0);
-                    handleToText.Remove(current.handle);
-                    removedCount++;
-                }
-            }
+            // Send atomically - wParam points to Sci_InlayHintSet, lParam=1 means clear-and-replace
+            Editor.SendMessage(SCI_SETINLAYINFO, setAddress, new IntPtr(1));
 
-            Debug.Log($"FunctionParameterNames: Sync complete - Added: {addedCount}, Updated: {updatedCount}, Removed: {removedCount}, Unchanged: {unchangedCount}");
+            Debug.Log($"FunctionParameterNames: Sent {desiredHints.Count} inlay hints atomically");
         }
 
     }

@@ -38,6 +38,11 @@ namespace AppRefiner
             if (_buffers.TryGetValue(name, out RemoteBuffer? buffer))
             {
                 Debug.Log($"MemoryManager: Reusing existing buffer '{name}'");
+                if (initialSize > buffer.Size)
+                {
+                    Debug.Log("Resizing buffer...");
+                    buffer.Resize(initialSize);
+                }
                 return buffer;
             }
 
@@ -70,21 +75,9 @@ namespace AppRefiner
         /// <param name="initialSize">Initial size in bytes</param>
         /// <returns>The newly created RemoteBuffer instance</returns>
         /// <exception cref="InvalidOperationException">Thrown if a buffer with the same name already exists</exception>
-        public RemoteBuffer CreateBuffer(string name, uint initialSize = 4096)
+        public RemoteBuffer CreateTempBuffer(uint initialSize = 4096)
         {
-            if (string.IsNullOrWhiteSpace(name))
-            {
-                throw new ArgumentException("Buffer name cannot be null or whitespace", nameof(name));
-            }
-
-            if (_buffers.ContainsKey(name))
-            {
-                throw new InvalidOperationException($"A buffer with the name '{name}' already exists. Use GetOrCreateBuffer or remove the existing buffer first.");
-            }
-
-            var buffer = new RemoteBuffer(_process.ProcessHandle, _process.ProcessId, name, initialSize);
-            _buffers[name] = buffer;
-            Debug.Log($"MemoryManager: Created buffer '{name}' with size {initialSize}");
+            var buffer = new RemoteBuffer(_process.ProcessHandle, _process.ProcessId, "temp", initialSize);
             return buffer;
         }
 

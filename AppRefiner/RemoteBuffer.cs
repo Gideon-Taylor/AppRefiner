@@ -17,7 +17,7 @@ namespace AppRefiner
         /// <summary>
         /// Name of this buffer for debugging purposes
         /// </summary>
-        public string Name { get; }
+        public string Name { get; private set; }
 
         /// <summary>
         /// Address of the allocated memory in the remote process
@@ -37,12 +37,26 @@ namespace AppRefiner
         /// <summary>
         /// Handle to the remote process
         /// </summary>
-        public IntPtr ProcessHandle { get; }
+        public IntPtr ProcessHandle { get; private set; }
 
         /// <summary>
         /// Process ID for debugging purposes
         /// </summary>
-        public uint ProcessId { get; }
+        public uint ProcessId { get; private set; }
+
+        private RemoteBuffer() { }
+
+        public static RemoteBuffer FromRemoteAddress(AppDesignerProcess process, IntPtr address, uint size, string name)
+        {
+            return new RemoteBuffer
+            {
+                ProcessHandle = process.ProcessHandle,
+                ProcessId = process.ProcessId,
+                Address = address,
+                Size = size,
+                Name = name
+            };
+        }
 
         /// <summary>
         /// Creates a new RemoteBuffer by allocating memory in the target process
