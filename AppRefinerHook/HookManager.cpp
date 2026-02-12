@@ -27,33 +27,6 @@ thread_local wchar_t g_openTargetBuffer[OPEN_TARGET_BUFFER_SIZE] = { 0 };
 
 static void InvalidateMinimapForScintilla(HWND scintillaHwnd);
 
-// Function to check for unprocessed copy operation
-bool HasUnprocessedCopyOperation() {
-    DWORD currentSequence = GetClipboardSequenceNumber();
-    
-    // Check if clipboard sequence changed (indicating new copy/cut operation)
-    if (currentSequence != g_lastClipboardSequence) {
-        g_lastClipboardSequence = currentSequence;
-        g_hasUnprocessedCopy = true;
-        
-        char debugMsg[100];
-        sprintf_s(debugMsg, "New clipboard activity detected. Sequence: %lu\n", currentSequence);
-        OutputDebugStringA(debugMsg);
-    }
-    
-    return g_hasUnprocessedCopy;
-}
-
-// Function to mark copy operation as processed (called after paste detection)
-void MarkCopyOperationProcessed() {
-    g_hasUnprocessedCopy = false;
-    g_lastSeenClipboardSequence = g_lastClipboardSequence;
-    
-    char debugMsg[100];
-    sprintf_s(debugMsg, "Copy operation marked as processed. Sequence: %lu\n", g_lastSeenClipboardSequence);
-    OutputDebugStringA(debugMsg);
-}
-
 // Function to handle Scintilla notifications
 void HandleScintillaNotification(HWND hwnd, SCNotification* scn, HWND callbackWindow) {
     if (!scn || !hwnd || !IsWindow(hwnd)) return;
@@ -96,24 +69,28 @@ void HandleScintillaNotification(HWND hwnd, SCNotification* scn, HWND callbackWi
         }
 
         // Handle paste operations specifically
-        if (scn->nmhdr.code == SCN_MODIFIED && 
-            (scn->modificationType & SC_MOD_INSERTTEXT) && 
-            (scn->modificationType & SC_PERFORMED_USER)) {
-            
-            // Check if this is likely a paste operation
-            // Criteria: 1) Multi-character insert (more than typical typing)
-            //          2) There's an unprocessed copy operation available
-            //          3) Insert size suggests paste rather than single character or newline
-            if (scn->length > 5 && HasUnprocessedCopyOperation()) {
-                sprintf_s(debugMsg, "Detected paste operation: length=%d, position=%d\n", scn->length, scn->position);
+        if (scn->nmhdr.code == SCN_MODIFIED &&
+            /* only trigger for > 3 characters so that normal typing and pressing enter don't trigger */
+            (scn->modificationType & SC_MOD_INSERTCHECK) && scn->length > 3) {
+                sprintf_s(debugMsg, "Detected Insert Check: length=%d, position=%d\n", scn->length, scn->position);
                 OutputDebugStringA(debugMsg);
+
+                /* Get current document length */
+				int docLength = SendMessage(scn->nmhdr.hwndFrom, SCI_GETLENGTH, 0, 0);
+                sprintf_s(debugMsg, "Current doc length: length=%d\n", docLength);
+                OutputDebugStringA(debugMsg);
+
+                /* only send if document has content in it right now. this stops "save" from triggering when App Designer inserts the formatted content. */
+                if (docLength > 0) {
+                    sprintf_s(debugMsg, "Sending Insert Check to callback...\n");
+                    OutputDebugStringA(debugMsg);
+
+                    /* allocate size_t[3] on the stack */
+					size_t insertCheckData[3] = { scn->position, scn->length, (size_t)scn->text }; // wParam = position, lParam = length, reserved for future use
+
+                    SendMessage(callbackWindow, WM_AR_INSERT_CHECK, (WPARAM) &insertCheckData, 0);
+				} 
                 
-                // Mark the copy operation as processed so we don't trigger on subsequent edits
-                MarkCopyOperationProcessed();
-                
-                // Send paste notification to callback window
-                SendMessage(callbackWindow, WM_AR_TEXT_PASTED, (WPARAM)scn->position, (LPARAM)scn->length);
-            }
         }
 
         // Handle typing events for EditorManager

@@ -9,6 +9,7 @@ using AppRefiner.Linters;
 using AppRefiner.Plugins;
 using AppRefiner.Properties;
 using AppRefiner.Refactors;
+using AppRefiner.Refactors.Hidden;
 using AppRefiner.Services;
 using AppRefiner.Snapshots;
 using AppRefiner.Stylers;
@@ -24,13 +25,16 @@ using PeopleCodeParser.SelfHosted.Visitors.Models;
 using PeopleCodeTypeInfo.Functions;
 using PeopleCodeTypeInfo.Inference;
 using PeopleCodeTypeInfo.Types;
+using SqlParser;
 using System.Data;
 using System.Diagnostics;
 using System.Net.Http;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Threading;
+using System.Xml;
 using static AppRefiner.AutoCompleteService;
 using static AppRefiner.ScintillaEditor;
 
@@ -109,7 +113,8 @@ namespace AppRefiner
         private const int AR_BEFORE_DELETE_ALL = 2503; // New constant for before delete all detection
         private const int AR_FOLD_MARGIN_CLICK = 2504;
         private const int AR_CONCAT_SHORTHAND = 2505; // New constant for concat shorthand detection
-        private const int AR_TEXT_PASTED = 2506; // New constant for text pasted detection
+        private const int AR_INSERT_CHECK = 2506; // New constant for text insert check (can change the text with SC_CHANGEINSERTION)
+        
         private const int AR_KEY_COMBINATION = 2507; // New constant for key combination detection
         private const int AR_MSGBOX_SHORTHAND = 2508;
         private const int AR_VARIABLE_SUGGEST = 2509; // New constant for variable auto suggest when & is typed
@@ -2488,16 +2493,74 @@ namespace AppRefiner
             {
                 UpdateSavedFoldsForEditor(activeEditor);
             }
-            else if (m.Msg == AR_TEXT_PASTED)
+            else if (m.Msg == AR_INSERT_CHECK)
             {
                 // Only process if we have an active editor
                 if (activeEditor == null || !activeEditor.IsValid()) return;
+                if (activeEditor.Type == EditorType.PeopleCode)
+                {
+                    RemoteBuffer insertCheckDataBuffer = RemoteBuffer.FromRemoteAddress(activeEditor.AppDesignerProcess, m.WParam, 24, "InsertCheckData");
+                    byte[] insertCheckData = insertCheckDataBuffer.Read(24);
 
-                Debug.Log($"Text pasted detected at position: {m.WParam}, length: {m.LParam}");
+                    var pasteStart = (IntPtr)BitConverter.ToInt64(insertCheckData, 0);
+                    var length = (IntPtr)BitConverter.ToInt64(insertCheckData, 8);
+                    var pasteEnd = pasteStart + length;
+                    var textPointer = (IntPtr)BitConverter.ToInt64(insertCheckData, 16);
 
-                // Trigger ResolveImports refactor automatically
-                // Disabling this because it really messes up the "undo" where the user expects to just undo the paste
-                // TriggerResolveImportsRefactor();
+                    var lineText = ScintillaManager.GetCurrentLineText(activeEditor);
+                    var relativeLinePosition = pasteStart - ScintillaManager.GetLineStartIndex(activeEditor, ScintillaManager.GetCurrentLineNumber(activeEditor));
+
+                    PeopleCodeLexer lexer = new PeopleCodeLexer(lineText);
+                    PeopleCodeParser.SelfHosted.PeopleCodeParser parser = new PeopleCodeParser.SelfHosted.PeopleCodeParser(lexer.TokenizeAll());
+                    var program = parser.ParseProgram();
+                    var literalNode = program.FindDescendants<LiteralNode>().FirstOrDefault(n => n.SourceSpan.ContainsPosition((int)relativeLinePosition));
+                    if (literalNode != null && literalNode.LiteralType == LiteralType.String)
+                    {
+                        RemoteBuffer textContent = RemoteBuffer.FromRemoteAddress(activeEditor.AppDesignerProcess, textPointer, (uint)length, "InsertTextData");
+                        byte[] textData = textContent.Read((int)length);
+                        string originalText = Encoding.UTF8.GetString(textData);
+
+                        Debug.Log($"Text insert check at position: {m.WParam}, length: {m.LParam}");
+                        string newText = originalText;
+                        var parsedSQL = SQLHelper.ParseSQL(originalText);
+                        if (parsedSQL != null)
+                        {
+                            Debug.Log("Parsed SQL successfully, applying formatting refactor");
+                            StringBuilder sb = new();
+                            SqlTextWriter writer = new SqlTextWriter(sb);
+                            newText = parsedSQL.ToSql();
+                        }
+
+                        if (newText[0] == '[' || newText[0] == '{')
+                        {
+                            /* parse the JSON using system.text.json and re-serialize it so that it is all one line */
+                            try
+                            {
+                                var jsonNode = JsonNode.Parse(newText);
+                                newText = jsonNode.ToJsonString(new JsonSerializerOptions
+                                {
+                                    WriteIndented = false
+                                });
+                            }
+                            catch { }
+
+                        }
+
+                        /* strip all carriage returns/new lines */
+                        newText = newText.Replace("\"", "\"\"");
+                        newText = newText.Replace("\r\n", "\" | Char(13) | Char(10) | \"");
+                        newText = newText.Replace("\r", "\" | Char(13) | \"").Replace("\n", "\" | Char(10) | \"");
+                        
+
+                        var replacementBuffer = activeEditor.AppDesignerProcess.MemoryManager.GetOrCreateBuffer("pasteReplaceBuffer", (uint)Encoding.UTF8.GetByteCount(newText) + 1);
+                        replacementBuffer.Reset();
+
+                        replacementBuffer.WriteString(newText, Encoding.UTF8);
+
+                        int SCI_CHANGEINSERTION = 2672;
+                        activeEditor.SendMessage(SCI_CHANGEINSERTION, (IntPtr)(replacementBuffer.WriteOffset - 1), replacementBuffer.Address);
+                    }
+                }
             }
             else if (m.Msg == AR_KEY_COMBINATION)
             {
