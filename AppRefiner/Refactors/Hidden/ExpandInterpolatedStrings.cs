@@ -1,7 +1,7 @@
 using PeopleCodeParser.SelfHosted.Nodes;
 using System.Text;
 
-namespace AppRefiner.Refactors
+namespace AppRefiner.Refactors.Hidden
 {
     /// <summary>
     /// Hidden refactor that expands interpolated strings to native PeopleCode string concatenation.
