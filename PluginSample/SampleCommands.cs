@@ -23,11 +23,7 @@ namespace PluginSample
             if (registrar.TryRegisterShortcut(commandId,
                 ModifierKeys.Control | ModifierKeys.Alt,
                 Keys.H,
-                () =>
-                {
-                    // Create empty context for shortcut execution
-                    Execute(new CommandContext());
-                }))
+                this))
             {
                 SetRegisteredShortcut(registrar.GetShortcutDisplayText(
                     ModifierKeys.Control | ModifierKeys.Alt, Keys.H));

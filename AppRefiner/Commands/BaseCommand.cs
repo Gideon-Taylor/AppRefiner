@@ -48,11 +48,11 @@ namespace AppRefiner.Commands
         /// <code>
         /// public override void InitializeShortcuts(IShortcutRegistrar registrar, string commandId)
         /// {
-        ///     // Try to register Ctrl+Alt+H
+        ///     // Try to register Ctrl+Alt+H - pass 'this' so the keyboard service can call Execute with proper context
         ///     if (registrar.TryRegisterShortcut(commandId,
         ///         ModifierKeys.Control | ModifierKeys.Alt,
         ///         Keys.H,
-        ///         () => ExecuteFromShortcut()))
+        ///         this))
         ///     {
         ///         SetRegisteredShortcut(registrar.GetShortcutDisplayText(
         ///             ModifierKeys.Control | ModifierKeys.Alt, Keys.H));
@@ -63,7 +63,7 @@ namespace AppRefiner.Commands
         ///         if (registrar.TryRegisterShortcut(commandId,
         ///             ModifierKeys.Control | ModifierKeys.Shift,
         ///             Keys.H,
-        ///             () => ExecuteFromShortcut()))
+        ///             this))
         ///         {
         ///             SetRegisteredShortcut(registrar.GetShortcutDisplayText(
         ///                 ModifierKeys.Control | ModifierKeys.Shift, Keys.H));

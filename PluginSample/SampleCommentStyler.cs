@@ -10,7 +10,7 @@ namespace PluginSample
     /// </summary>
     public class SampleCommentStyler : BaseStyler
     {
-        private const uint HIGHLIGHT_COLOR = 0xADD8E6; // Light Blue
+        private const uint HIGHLIGHT_COLOR = 0xE6D8ADFF; // Light Blue
 
         public SampleCommentStyler()
         {

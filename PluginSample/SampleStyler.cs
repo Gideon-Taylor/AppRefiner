@@ -9,7 +9,7 @@ namespace PluginSample
     /// </summary>
     public class SampleStyler : BaseStyler
     {
-        private const uint METHOD_NAME_COLOR = 0x90EE90; // Light Green
+        private const uint METHOD_NAME_COLOR = 0x90EE9080; // Light Green
 
         public SampleStyler()
         {
