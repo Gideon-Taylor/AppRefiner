@@ -5149,7 +5149,8 @@ public class PeopleCodeParser
                                 interpolation.LastToken = closeBrace;
                             }
 
-                            // After }, we should get either InterpStringMid or InterpStringEnd
+                            // After }, we should get InterpStringMid, InterpStringEnd,
+                            // or LeftBrace (adjacent interpolations like {expr1}{expr2})
                             if (Check(TokenType.InterpStringMid))
                             {
                                 // Middle fragment
@@ -5168,6 +5169,12 @@ public class PeopleCodeParser
                                 }
 
                                 // Continue to next interpolation
+                                continue;
+                            }
+                            else if (Check(TokenType.LeftBrace))
+                            {
+                                // Adjacent interpolation with no text between: {expr1}{expr2}
+                                // Continue directly to the next iteration which will consume the {
                                 continue;
                             }
                             else if (Check(TokenType.InterpStringEnd))
