@@ -12,8 +12,8 @@
     <AnalysisLevel>latest</AnalysisLevel>
     <SignAssembly>True</SignAssembly>
     <AssemblyOriginatorKeyFile>D:\Work\AppRefinerStrongKey\AppRefiner.snk</AssemblyOriginatorKeyFile>
-	<Version>1.1.0</Version>
-	  <FileVersion>1.1.0.0</FileVersion>
+	<Version>1.2.0</Version>
+	  <FileVersion>1.2.0.0</FileVersion>
   </PropertyGroup>
 
   <ItemGroup>

@@ -1,69 +1,56 @@
 NEW FEATURES
 ============
 
-Autocomplete & Type Inference
-------------------------------
-• Smart Autosuggest - Auto-triggers when backspacing to & or . symbols, helping recover from typos
-• Unexpanded Class Names - Autocomplete, calltips, and type inference work with unexpanded class names
-  (expansion occurs automatically at save time)
-• Polymorphic Type Display - Function call tips display known types for polymorphic constructs like
-  `elementofarray` and `sameasobject`
-• Keyboard Shortcuts - Ctrl+Space triggers autosuggest; Esc cancels function call tips
-
-Language Extensions & Modern Syntax
-------------------------------------
-• Language Extensions Framework - Transform code patterns in real-time using specialized refactors
-• F-String Support - Proper language and parser support for modern string formatting
-• Import Syntax Enhancement - Use ^ symbol to replace "current package" for smoother sibling class imports
-  (multiple ^ indicates relative movement up directory levels)
+Enhanced Editor & Parameter Name Inlay Hints
+----------------------------------------------
+• Parameter Name Inlay Hints - Function parameter names displayed as inline hints at call sites,
+  including inside object constructors
+• Enhanced Editor - Opt-in setting (General Settings > Feature Overrides > "Use Enhanced Editor")
+  loads a modified Scintilla editor at runtime. Your Application Designer files are NOT modified —
+  this is a temporary, runtime-only change. A restart of Application Designer is required.
 
 Code Quality & Styling
 -----------------------
-• Class Import Styling - Visual indicators and quick-fixes for unimported and ambiguous class names
+• Invalid Member Access Styler - Highlights invalid member access such as calling a non-existent
+  method or property on a typed object
+
+Editor Enhancements
+---------------------
+• Document Minimap - A minimap overview of your code displayed alongside the editor, togglable via
+  the AppRefiner button or command palette
+• Smart Paste - When pasting text into a string literal, special characters are automatically escaped
+• AppRefiner Button - New in-editor button with a context menu offering quick access to the
+  Command Palette, Toggle Minimap, and Toggle Parameter Names (if enabled).
+
+Language Extensions
+--------------------
+• Array .Filter() - New language extension for filtering arrays
+• %Response.HTMLLine() - New type extension that makes appending a break tag automatic
+
 
 IMPROVEMENTS
 ============
 
-• Function Cache Updates - Program save now parses function implementations and updates cache entries automatically
-• Autocomplete Lists - Converted from user lists to autocomplete for improved user experience
+• Go To Definition - Now works on chained member access expressions (e.g. thing.property.method())
+• Declare Function - Improved behavior in various contexts
+• Autocomplete Conflict Warning - Alert when both AppRefiner and App Designer autocompletions are
+  enabled simultaneously
+• Language Extensions - Support for implicit parameters and contextual usage info for transforms
+• Plugin UX - Improved plugin management and fixed duplication issue with plugin
+  commands/linters/refactors
+• Dark Mode - Properly style /* */ block comments
+• Improved highlighting in function call tips
 
 
-NEW KEYBOARD SHORTCUTS
-======================
+BUG FIXES
+=========
 
-• Ctrl+Space - Trigger autosuggest
-• Esc - Cancel function call tips
-
-
-EXAMPLES
-========
-
-Unexpanded Class Names
-----------------------
-Type "MyClass" instead of "MYAPP_PACKAGE:MyClass" - autocomplete and type checking work
-immediately, and the full path is added when you save.
-
-Language Extensions
--------------------
-String Extensions:
-  &myString.Len           → transforms to Len(&myString)
-  &myString.ToUpper       → transforms to Upper(&myString)
-  &myString.IndexOf("x")  → transforms to Find("x", &myString)
-
-Array Extensions:
-  &myArray.ForEach(&item) → expands to a For loop iterating the array
-
-F-String Syntax
----------------
-f"Hello {&name}, you have {&count} items"
-
-Combines variable interpolation directly in string literals.
-
-Import Syntax Enhancement
--------------------------
-import ^:SiblingClass;        (same package)
-import ^^:ParentPackage;      (parent package)
-import ^^^:GrandparentPkg;    (grandparent package)
+• Fix false reports of unused imports
+• Fix issue where function call tip shows the wrong one
+• Fix issue with string interpolation that prevents sequential interpolation blocks from parsing
+  correctly
+• Fix issue with using ":" as a fillup character in Tools 8.60
+• Only check for call tips and interpolated strings in PeopleCode editors
 
 
 RESOURCES
