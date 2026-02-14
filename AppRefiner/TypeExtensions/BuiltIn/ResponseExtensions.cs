@@ -20,7 +20,7 @@ namespace AppRefiner.LanguageExtensions.BuiltIn
             // ========== SEARCH METHODS ==========
 
             ExtensionTransform.CreateSimple(
-                signature: "WriteHTMLLine(text: string) -> void",
+                signature: "HTMLLine(text: string) -> void",
                 description: "Writes a line of text to the output with a break tag afterward",
                 transformPattern: "Write(%1 | \"<br />\")"
             ),
