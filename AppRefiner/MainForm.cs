@@ -2252,7 +2252,7 @@ namespace AppRefiner
                             }
                             else
                             {
-                                TooltipManager.ShowFunctionCallTooltip(activeEditor, activeEditor.FunctionCallTipProgram, activeEditor.FunctionCallNode);
+                                TooltipManager.ShowFunctionCallTooltip(activeEditor, activeEditor.FunctionCallTipProgram, activeEditor.FunctionCallNode, ScintillaManager.GetCursorPosition(activeEditor));
                             }
                         }
                         break;
@@ -2328,7 +2328,7 @@ namespace AppRefiner
                                     else
                                     {
                                         TooltipManager.ShowFunctionCallTooltip(activeEditor,
-                                            activeEditor.FunctionCallTipProgram, activeEditor.FunctionCallNode);
+                                            activeEditor.FunctionCallTipProgram, activeEditor.FunctionCallNode, ScintillaManager.GetCursorPosition(activeEditor));
                                     }
                                 }
                             }
@@ -2725,7 +2725,7 @@ namespace AppRefiner
                             activeEditor.FunctionCallNode = fcn;
                             activeEditor.FunctionCallTipActive = true;
                             activeEditor.FunctionCallStartPosition = ScintillaManager.GetCursorPosition(activeEditor);
-                            TooltipManager.ShowFunctionCallTooltip(activeEditor, program, fcn);
+                            TooltipManager.ShowFunctionCallTooltip(activeEditor, program, fcn, position);
                         }
                         else if (targetCreationNode != null && targetCreationNode is ObjectCreationNode ocn)
                         {
@@ -2741,7 +2741,7 @@ namespace AppRefiner
                             activeEditor.FunctionCallTipActive = true;
                             activeEditor.FunctionCallStartPosition = ScintillaManager.GetCursorPosition(activeEditor);
 
-                            TooltipManager.ShowFunctionCallTooltip(activeEditor, program, fakeFCN);
+                            TooltipManager.ShowFunctionCallTooltip(activeEditor, program, fakeFCN, position);
                         }
 
                     }

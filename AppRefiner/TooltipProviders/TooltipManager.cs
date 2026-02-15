@@ -51,7 +51,7 @@ namespace AppRefiner.TooltipProviders
             Debug.Log($"Initialized TooltipManager with {providers.Count} providers");
         }
 
-        public static void ShowFunctionCallTooltip(ScintillaEditor editor, ProgramNode program, FunctionCallNode node)
+        public static void ShowFunctionCallTooltip(ScintillaEditor editor, ProgramNode program, FunctionCallNode node, int cursorPosition = -1)
         {
             FunctionInfo? funcInfo = node.GetFunctionInfo();
 
@@ -100,7 +100,28 @@ namespace AppRefiner.TooltipProviders
                     arguments.Add(inferredType);
                 }
 
-                var allowedTypes = validator.GetAllowedNextTypes(funcInfo, arguments.ToArray());
+                // Determine which argument the cursor is inside by counting
+                // how many arguments end before the cursor position.
+                // This gives us the index of the argument currently being edited.
+                var argumentsForHighlight = arguments;
+                if (cursorPosition >= 0)
+                {
+                    int cursorArgIndex = 0;
+                    for (int i = 0; i < node.Arguments.Count; i++)
+                    {
+                        if (node.Arguments[i].SourceSpan.End.ByteIndex <= cursorPosition)
+                            cursorArgIndex = i + 1;
+                        else
+                            break;
+                    }
+                    // Only pass arguments before the cursor's position to highlight the current parameter
+                    if (cursorArgIndex < arguments.Count)
+                    {
+                        argumentsForHighlight = arguments.Take(cursorArgIndex).ToList();
+                    }
+                }
+
+                var allowedTypes = validator.GetAllowedNextTypes(funcInfo, argumentsForHighlight.ToArray());
 
                 // Extract object type for polymorphic type resolution
                 PeopleCodeTypeInfo.Types.TypeInfo? objectType = GetObjectTypeFromFunctionCall(node);
