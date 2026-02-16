@@ -4,10 +4,10 @@ NEW FEATURES
 Enhanced Editor & Parameter Name Inlay Hints
 ----------------------------------------------
 • Parameter Name Inlay Hints - Function parameter names displayed as inline hints at call sites,
-  including inside object constructors
+  including inside object constructors. Requires the "Use Enhanced Editor" setting to be enabled.
 • Enhanced Editor - Opt-in setting (General Settings > Feature Overrides > "Use Enhanced Editor")
   loads a modified Scintilla editor at runtime. Your Application Designer files are NOT modified —
-  this is a temporary, runtime-only change. A restart of Application Designer is required.
+  this is a runtime-only change. A restart of Application Designer is required.
 
 Code Quality & Styling
 -----------------------
@@ -16,8 +16,10 @@ Code Quality & Styling
 
 Editor Enhancements
 ---------------------
-• Document Minimap - A minimap overview of your code displayed alongside the editor, togglable via
-  the AppRefiner button or command palette
+• Toggle Line Comment - Comment or uncomment selected lines with Ctrl+/ using aligned block
+  comment markers (<* ... *>)
+• Document Minimap - A minimap overview of your code displayed alongside the editor, default state set via
+  AppRefiner settings. Toggle-able via the AppRefiner button in the editor.
 • Smart Paste - When pasting text into a string literal, special characters are automatically escaped
 • AppRefiner Button - New in-editor button with a context menu offering quick access to the
   Command Palette, Toggle Minimap, and Toggle Parameter Names (if enabled).
