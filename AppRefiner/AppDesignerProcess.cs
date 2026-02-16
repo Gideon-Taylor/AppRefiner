@@ -264,6 +264,15 @@ namespace AppRefiner
             EventHookInstaller.SetMinimap(editor, Properties.Settings.Default.miniMapOpen);
             EventHookInstaller.SetParamNames(editor, Properties.Settings.Default.showParamNames);
 
+            /* Disable default Ctrl+/ and Ctrl+\ */
+            // For Ctrl+/
+            int keyDef_CtrlSlash = '/' + (2 << 16);
+            editor.SendMessage(2071, (IntPtr)keyDef_CtrlSlash, (IntPtr)0); // SCI_CLEARCMDKEY = 2071
+
+            // For Ctrl+\
+            int keyDef_CtrlBackslash = '\\' + (2 << 16);
+            editor.SendMessage(2071, (IntPtr)keyDef_CtrlBackslash, (IntPtr)0);
+
             editor.Initialized = true;
             return editor;
         }

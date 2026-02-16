@@ -52,6 +52,7 @@ namespace AppRefiner
         private const int SCI_GETTEXT = 2182;
         private const int SCI_INSERTTEXT = 2003;
         private const int SCI_GETLENGTH = 2006;
+        private const int SCI_GETRANGEPOINTER = 2643;
         private const int SCI_SETPROPERTY = 4004;
         private const int SCI_SETFOLDLEVEL = 2222;
         private const int SCI_GETFOLDEXPANDED = 2230;
@@ -498,22 +499,15 @@ namespace AppRefiner
 
             // Convert the new text into a byte array using the default encoding.
             // We need to include an extra byte for the terminating null.
-            byte[] textBytes = Encoding.Default.GetBytes(newText);
-            int neededSize = textBytes.Length + 1; // +1 for the null terminator
+            int neededSize = Encoding.Default.GetByteCount(newText) + 1; // +1 for the null terminator
+            var remoteBuffer = editor.AppDesignerProcess.MemoryManager.CreateTempBuffer((uint)neededSize);
 
-            var remoteBuffer = GetProcessBuffer(editor, (uint)neededSize);
-
-            // Create a buffer that includes a terminating null.
-            byte[] buffer = new byte[neededSize];
-            Buffer.BlockCopy(textBytes, 0, buffer, 0, textBytes.Length);
-            buffer[neededSize - 1] = 0;  // Ensure null termination.
-
-            // Write the text into the remote process's memory.
-            if (!WinApi.WriteProcessMemory(editor.AppDesignerProcess.ProcessHandle, remoteBuffer, buffer, neededSize, out int bytesWritten) || bytesWritten != neededSize)
-                return false;
+            remoteBuffer.WriteString(newText, Encoding.UTF8);
 
             // Replace the target with the new text
-            editor.SendMessage(SCI_REPLACETARGET, textBytes.Length, remoteBuffer);
+            editor.SendMessage(SCI_REPLACETARGET, neededSize - 1, remoteBuffer.Address);
+
+            remoteBuffer.Free();
 
             if (isInsideReplacement)
             {
@@ -1281,6 +1275,39 @@ namespace AppRefiner
             {
                 Debug.LogError($"Error setting annotation: {ex.Message}");
             }
+        }
+
+        /// <summary>
+        /// Gets the currently selected text in the Scintilla editor
+        /// </summary>
+        /// <param name="editor">The editor to get the selected text from</param>
+        /// <returns>The selected text as a string, or null if no text is selected</returns>
+        public static (List<string>?, int, int) GetSelectedLines(ScintillaEditor editor)
+        {
+            var selectionStart = (int)editor.SendMessage(SCI_GETSELECTIONSTART, IntPtr.Zero, IntPtr.Zero);
+            var selectionEnd = (int)editor.SendMessage(SCI_GETSELECTIONEND, IntPtr.Zero, IntPtr.Zero);
+
+            // Return null if there's no selection
+            if (selectionStart == selectionEnd)
+            {
+                return (null, 0, 0);
+            }
+            
+            var startLine = (int)editor.SendMessage(SCI_LINEFROMPOSITION, selectionStart, IntPtr.Zero);
+            var endLine = (int)editor.SendMessage(SCI_LINEFROMPOSITION, selectionEnd, IntPtr.Zero);
+
+
+            var startPos = (int)editor.SendMessage(SCI_POSITIONFROMLINE, startLine, IntPtr.Zero);
+            var endPos = (int)editor.SendMessage(SCI_GETLINEENDPOSITION, endLine, IntPtr.Zero);
+
+            var length = (endPos - startPos);
+            var rangePointer = editor.SendMessage(SCI_GETRANGEPOINTER, startPos, length);
+
+            var rangeBuffer = RemoteBuffer.FromRemoteAddress(editor.AppDesignerProcess, rangePointer, (uint)length,"");
+            var selectedLines = Encoding.UTF8.GetString(rangeBuffer.Read(length), 0, length);
+
+            return (selectedLines.Split("\n").ToList(), startPos, endPos);
+           
         }
 
         public static int GetSelectionLength(ScintillaEditor editor)
