@@ -1,11 +1,15 @@
 param(
     [switch]$SelfContained = $false,
+    [switch]$Clean = $false,
     [string]$Version = "",  # Allow manual version override
-    [string]$SigningKeyPath = ""  # Path to strong name key file (.snk)
+    [string]$SigningKeyPath = "",  # Path to strong name key file (.snk)
+    [string]$SignToolPath = "",  # Path to signtool.exe
+    [string]$SignDlibPath = "",  # Path to Azure.CodeSigning.Dlib.dll
+    [string]$SignMetadataPath = ""  # Path to signing metadata JSON
 )
 
-# Get the next semantic version
-function Get-NextVersion {
+# Get the latest semantic version tag
+function Get-LatestVersion {
     # Fetch tags from remote to ensure we have the latest
     Write-Host "Fetching tags from remote..."
     git fetch --tags --quiet 2>$null
@@ -14,9 +18,8 @@ function Get-NextVersion {
     $tags = git tag -l | Where-Object { $_ -match '^\d+\.\d+\.\d+$' }
 
     if (-not $tags) {
-        # No previous semantic version tags, use default
-        Write-Host "No previous semantic version tags found, using default: 1.1.0"
-        return "1.1.0"
+        Write-Error "No semantic version tags found. Please create a tag first (e.g., git tag 1.0.0)."
+        exit 1
     }
 
     # Parse and sort versions
@@ -32,28 +35,8 @@ function Get-NextVersion {
 
     # Get the latest version
     $latest = $versions[0]
-    Write-Host "Latest version: $($latest.Original)"
-
-    # Increment version
-    $newBuild = $latest.Build + 1
-    $newMinor = $latest.Minor
-    $newMajor = $latest.Major
-
-    # Handle build overflow: 1.0.9 → 1.1.0
-    if ($newBuild -gt 9) {
-        $newBuild = 0
-        $newMinor++
-
-        # Handle minor overflow: 1.9.0 → 2.0.0
-        if ($newMinor -gt 9) {
-            $newMinor = 0
-            $newMajor++
-        }
-    }
-
-    $newVersion = "$newMajor.$newMinor.$newBuild"
-    Write-Host "Next version: $newVersion"
-    return $newVersion
+    Write-Host "Using version from latest tag: $($latest.Original)"
+    return $latest.Original
 }
 
 # Build configuration
@@ -187,6 +170,73 @@ function Build-AppRefiner {
     }
 }
 
+# Build Scintilla Mods
+function Build-ScintillaMods {
+    param(
+        [string]$DestinationDir
+    )
+
+    $scintillaWin32 = Join-Path $PSScriptRoot "..\Scintilla\win32"
+    if (-not (Test-Path $scintillaWin32)) {
+        Write-Error "Error: Scintilla repo not found at $scintillaWin32"
+        exit 1
+    }
+
+    $scintillaWin32 = Resolve-Path $scintillaWin32
+
+    # Save the current branch so we can restore it afterwards
+    $originalBranch = git -C $scintillaWin32 rev-parse --abbrev-ref HEAD
+
+    # Define branch -> build info mapping
+    $branches = @(
+        @{ Branch = "4-4-6-mods"; Version = "4.4.6.0"; Project = "SciLexer.vcxproj"; Artifact = "SciLexer.dll" },
+        @{ Branch = "5-3-3-mods"; Version = "5.3.3.0"; Project = "Scintilla.vcxproj"; Artifact = "Scintilla.dll" },
+        @{ Branch = "5-5-0-mods"; Version = "5.5.0.0"; Project = "Scintilla.vcxproj"; Artifact = "Scintilla.dll" }
+    )
+
+    $modsDir = Join-Path $DestinationDir "scintilla_mods"
+
+    foreach ($entry in $branches) {
+        Write-Host ""
+        Write-Host "Building Scintilla mod: $($entry.Branch) -> $($entry.Version)..."
+
+        # Checkout the branch
+        git -C $scintillaWin32 checkout $entry.Branch --quiet
+        if ($LASTEXITCODE -ne 0) {
+            Write-Error "Error: Failed to checkout branch $($entry.Branch)"
+            exit 1
+        }
+
+        # Build
+        $projectPath = Join-Path $scintillaWin32 $entry.Project
+        & msbuild $projectPath /p:Configuration=$Configuration /p:Platform=$Platform /verbosity:minimal
+        if ($LASTEXITCODE -ne 0) {
+            Write-Error "Error building Scintilla mod $($entry.Branch)."
+            exit 1
+        }
+
+        # Copy artifact to versioned folder
+        $versionDir = Join-Path $modsDir $entry.Version
+        if (-not (Test-Path $versionDir)) {
+            New-Item -ItemType Directory -Path $versionDir | Out-Null
+        }
+
+        $artifactPath = Join-Path $scintillaWin32 "x64\Release\$($entry.Artifact)"
+        if (-not (Test-Path $artifactPath)) {
+            Write-Error "Error: Build artifact not found at $artifactPath"
+            exit 1
+        }
+
+        Copy-Item -Path $artifactPath -Destination (Join-Path $versionDir $entry.Artifact) -Force
+        Write-Host "Copied $($entry.Artifact) to scintilla_mods/$($entry.Version)/"
+    }
+
+    # Restore original branch
+    Write-Host ""
+    Write-Host "Restoring Scintilla repo to branch: $originalBranch"
+    git -C $scintillaWin32 checkout $originalBranch --quiet
+}
+
 # Copy Hook DLL to output directory
 function Copy-HookDll {
     param(
@@ -229,6 +279,105 @@ function Create-ReleaseZip {
     return $zipFileName
 }
 
+# Digitally sign binaries
+function Invoke-Signing {
+    param(
+        [string]$TargetDir
+    )
+
+    if ([string]::IsNullOrWhiteSpace($SignToolPath) -or
+        [string]::IsNullOrWhiteSpace($SignDlibPath) -or
+        [string]::IsNullOrWhiteSpace($SignMetadataPath)) {
+        Write-Host "Skipping code signing (signing parameters not provided)."
+        return
+    }
+
+    foreach ($path in @($SignToolPath, $SignDlibPath, $SignMetadataPath)) {
+        if (-not (Test-Path $path)) {
+            Write-Error "Error: Signing dependency not found at $path"
+            exit 1
+        }
+    }
+
+    Write-Host ""
+    Write-Host "Signing binaries..."
+
+    # Core AppRefiner binaries
+    $filesToSign = @(
+        (Join-Path $TargetDir "AppRefiner.dll"),
+        (Join-Path $TargetDir "AppRefiner.exe"),
+        (Join-Path $TargetDir "AppRefinerHook.dll"),
+        (Join-Path $TargetDir "PeopleCodeParser.SelfHosted.dll"),
+        (Join-Path $TargetDir "PeopleCodeTypeInfo.dll")
+    )
+
+    # Scintilla mod DLLs
+    $modsDir = Join-Path $TargetDir "scintilla_mods"
+    if (Test-Path $modsDir) {
+        $modDlls = Get-ChildItem -Path $modsDir -Filter "*.dll" -Recurse
+        foreach ($dll in $modDlls) {
+            $filesToSign += $dll.FullName
+        }
+    }
+
+    # Verify all files exist
+    foreach ($file in $filesToSign) {
+        if (-not (Test-Path $file)) {
+            Write-Error "Error: File to sign not found: $file"
+            exit 1
+        }
+    }
+
+    Write-Host "Signing $($filesToSign.Count) files..."
+
+    & $SignToolPath sign /v /fd SHA256 `
+        /tr "http://timestamp.acs.microsoft.com" /td SHA256 `
+        /dlib $SignDlibPath `
+        /dmdf $SignMetadataPath `
+        $filesToSign
+
+    if ($LASTEXITCODE -ne 0) {
+        Write-Error "Error signing binaries."
+        exit $LASTEXITCODE
+    }
+
+    Write-Host "Signing completed successfully."
+}
+
+# Clean build artifacts
+function Invoke-Clean {
+    Write-Host "Cleaning build artifacts..."
+
+    # Remove publish output directory
+    if (Test-Path $OutputDir) {
+        Write-Host "Removing $OutputDir..."
+        Remove-Item -Path $OutputDir -Recurse -Force
+    }
+
+    # Remove C++ hook build artifacts
+    $hookBuildDir = "AppRefinerHook\x64"
+    if (Test-Path $hookBuildDir) {
+        Write-Host "Removing $hookBuildDir..."
+        Remove-Item -Path $hookBuildDir -Recurse -Force
+    }
+
+    # Remove release ZIP files
+    $zipFiles = Get-ChildItem -Path "." -Filter "AppRefiner-*.zip" -ErrorAction SilentlyContinue
+    foreach ($zip in $zipFiles) {
+        Write-Host "Removing $($zip.Name)..."
+        Remove-Item -Path $zip.FullName -Force
+    }
+
+    Write-Host "Clean completed."
+}
+
+# Handle clean-only invocation
+if ($Clean) {
+    Set-Location $PSScriptRoot
+    Invoke-Clean
+    exit 0
+}
+
 # Main build process
 if (-not (Test-BuildRequirements)) {
     exit 1
@@ -246,7 +395,7 @@ if (-not (Test-Path $targetDir)) {
 
 # Get version
 if ([string]::IsNullOrWhiteSpace($Version)) {
-    $Version = Get-NextVersion
+    $Version = Get-LatestVersion
 }
 
 # Execute build steps
@@ -254,6 +403,8 @@ Restore-Dependencies
 Build-HookDll
 Build-AppRefiner -IsSelfContained $SelfContained -Version $Version -SigningKeyPath $SigningKeyPath
 Copy-HookDll -DestinationDir $targetDir
+Build-ScintillaMods -DestinationDir $targetDir
+Invoke-Signing -TargetDir $targetDir
 $zipFile = Create-ReleaseZip -SourceDir $targetDir -IsSelfContained $SelfContained -Version $Version
 
 Write-Host ""
