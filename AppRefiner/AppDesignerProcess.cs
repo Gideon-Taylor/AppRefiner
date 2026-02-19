@@ -50,15 +50,13 @@ namespace AppRefiner
     {
         public static IntPtr CallbackWindow;
         public Dictionary<IntPtr, ScintillaEditor> Editors = [];
-        private (IntPtr address, uint size) processBuffer = (0, 0);
-        public IntPtr ProcessBuffer { get { return processBuffer.address; } }
 
         public uint ProcessId = 0;
         public IntPtr ProcessHandle = IntPtr.Zero;
         public bool HasLexilla { get; set; }
         public uint MainThreadId { get; private set; }
         public IntPtr MainWindowHandle { get; set; }
-        public Dictionary<string, IntPtr> iconBuffers = new();
+        public Dictionary<string, RemoteBuffer> iconBuffers = new();
 
         /// <summary>
         /// Memory manager for allocating and managing buffers in the Application Designer process
@@ -293,34 +291,6 @@ namespace AppRefiner
             WinApi.CloseHandle(ProcessHandle);
         }
 
-
-        public IntPtr GetStandaloneProcessBuffer(uint neededSize)
-        {
-            var buffer = WinApi.VirtualAllocEx(ProcessHandle, IntPtr.Zero, neededSize, WinApi.MEM_COMMIT, WinApi.PAGE_READWRITE);
-            return buffer;
-        }
-
-        public void FreeStandaloneProcessBuffer(IntPtr address)
-        {
-            WinApi.VirtualFreeEx(ProcessHandle, address, 0, WinApi.MEM_RELEASE);
-        }
-
-        public IntPtr GetProcessBuffer(uint neededSize)
-        {
-            var currentBuffer = processBuffer.address;
-            var currentSize = processBuffer.size;
-            if (neededSize > currentSize) {
-                if (currentBuffer != IntPtr.Zero)
-                {
-                    WinApi.VirtualFreeEx(ProcessHandle, currentBuffer, 0, WinApi.MEM_RELEASE);
-                }
-                var buffer = WinApi.VirtualAllocEx(ProcessHandle, IntPtr.Zero, neededSize, WinApi.MEM_COMMIT, WinApi.PAGE_READWRITE);
-                processBuffer = (buffer, neededSize);
-            }
-
-            return processBuffer.address;
-        }
-
         /// <summary>
         /// Sets the open target string for Results list interception and triggers double-click
         /// </summary>
@@ -357,27 +327,22 @@ namespace AppRefiner
                 int charCount = openTarget.Length;
                 uint bufferSize = (uint)(charCount + 1) * 2; // +1 for null terminator, *2 for wide chars
 
-                IntPtr remoteBuffer = GetStandaloneProcessBuffer(bufferSize);
+                var remoteBuffer = MemoryManager.GetOrCreateBuffer("openTarget", bufferSize);
+                remoteBuffer.Reset();
                 Debug.Log($"SetOpenTarget Got remote buffer: 0x{remoteBuffer:X}");
-                if (remoteBuffer == IntPtr.Zero)
+                if (remoteBuffer.Address == IntPtr.Zero)
                 {
                     Debug.Log($"SetOpenTarget Remote Buffer was 0");
                     return false;
                 }
 
                 // Write the wide string to the remote buffer
-                bool writeSuccess = WriteWideStringToProcess(remoteBuffer, openTarget);
-                Debug.Log($"SetOpenTarget Write Success: {writeSuccess}");
-                if (!writeSuccess)
-                {
-                    Debug.Log("SetOpenTarget Since we didn't succeed, freeing the buffer!");
-                    FreeStandaloneProcessBuffer(remoteBuffer);
-                    return false;
-                }
+                remoteBuffer.WriteString(openTarget, Encoding.Unicode);
+                
 
                 // Send the set open target message with the remote buffer pointer and character count
-                Debug.Log($"SetOpenTarget Sending the message with buffer: 0x{remoteBuffer:X}");
-                bool setTargetSuccess = SendMessage(MainWindowHandle, (int)WM_AR_SET_OPEN_TARGET, remoteBuffer, charCount) != IntPtr.Zero;
+                Debug.Log($"SetOpenTarget Sending the message with buffer: 0x{remoteBuffer.Address:X}");
+                bool setTargetSuccess = SendMessage(MainWindowHandle, (int)WM_AR_SET_OPEN_TARGET, remoteBuffer.Address, charCount) != IntPtr.Zero;
                 Debug.Log($"SetOpenTarget setTargetSuccess: {setTargetSuccess}");
                 if (setTargetSuccess)
                 {
@@ -388,18 +353,11 @@ namespace AppRefiner
                     Debug.Log("SetOpenTarget Sending Double Click.");
                     bool doubleClickSuccess = SendMessage(ResultsListView, WM_LBUTTONDBLCLK, MK_LBUTTON, lParam) != IntPtr.Zero;
                     Debug.Log($"SetOpenTarget Double Click Success: {doubleClickSuccess}");
-                    // Free the buffer after use
-                    FreeStandaloneProcessBuffer(remoteBuffer);
                     Debug.Log($"SetOpenTarget Freed buffer 0x{remoteBuffer:X} after double click");
                     return doubleClickSuccess;
                 }
-                else
-                {
-                    Debug.Log("SetOpenTarget Freeing buffer because setTargetSuccess was false");
-                    // Free the buffer if set target failed
-                    FreeStandaloneProcessBuffer(remoteBuffer);
-                    return false;
-                }
+                return false;
+
             }
             catch (Exception)
             {
@@ -444,37 +402,22 @@ namespace AppRefiner
                 int charCount = dllPath.Length;
                 uint bufferSize = (uint)(charCount + 1) * 2; // Wide chars
 
-                IntPtr remoteBuffer = GetStandaloneProcessBuffer(bufferSize);
+                var remoteBuffer = MemoryManager.GetOrCreateBuffer("scintillaDLL", bufferSize);
                 Debug.Log($"LoadScintillaDll: Allocated remote buffer at 0x{remoteBuffer:X}");
 
-                if (remoteBuffer == IntPtr.Zero)
+                if (remoteBuffer.Address == IntPtr.Zero)
                 {
                     Debug.Log("LoadScintillaDll: Failed to allocate remote buffer");
                     return false;
                 }
 
-                bool writeSuccess = WriteWideStringToProcess(remoteBuffer, dllPath);
-                Debug.Log($"LoadScintillaDll: Write to buffer: {writeSuccess}");
-
-                if (!writeSuccess)
-                {
-                    FreeStandaloneProcessBuffer(remoteBuffer);
-                    return false;
-                }
+                remoteBuffer.WriteString(dllPath, Encoding.Unicode);
 
                 Debug.Log($"LoadScintillaDll: Sending message to thread {MainThreadId}");
                 bool postSuccess = PostThreadMessage(MainThreadId, WM_LOAD_SCINTILLA_DLL,
-                                                    remoteBuffer, (IntPtr)charCount);
-
-                if (!postSuccess)
-                {
-                    Debug.Log($"LoadScintillaDll: PostThreadMessage failed");
-                    FreeStandaloneProcessBuffer(remoteBuffer);
-                    return false;
-                }
+                                                    remoteBuffer.Address, (IntPtr)charCount);
 
                 Debug.Log("LoadScintillaDll: Message sent successfully");
-                // Note: Buffer intentionally not freed - async message processing
                 return true;
             }
             catch (Exception ex)
@@ -482,29 +425,6 @@ namespace AppRefiner
                 Debug.Log($"LoadScintillaDll: Exception: {ex.Message}");
                 return false;
             }
-        }
-
-        /// <summary>
-        /// Writes a wide string (UTF-16) to the remote process memory
-        /// </summary>
-        /// <param name="remoteBuffer">Remote buffer address</param>
-        /// <param name="text">Text to write</param>
-        /// <returns>True if successful</returns>
-        private bool WriteWideStringToProcess(IntPtr remoteBuffer, string text)
-        {
-            if (string.IsNullOrEmpty(text))
-                return false;
-                
-            // Convert to wide string (UTF-16) and marshall to remote process
-            byte[] stringBytes = Encoding.Unicode.GetBytes(text);
-            int neededSize = stringBytes.Length + 2; // +2 for null terminator
-            // Create buffer with null terminator
-            byte[] buffer = new byte[neededSize];
-            Buffer.BlockCopy(stringBytes, 0, buffer, 0, stringBytes.Length);
-            buffer[neededSize - 2] = 0; // Ensure null termination
-            buffer[neededSize - 1] = 0; // Ensure null termination
-            // Write to remote process memory
-            return WinApi.WriteProcessMemory(ProcessHandle, remoteBuffer, buffer, neededSize, out int bytesWritten) && bytesWritten == neededSize;
         }
 
         /// <summary>

@@ -310,11 +310,6 @@ namespace AppRefiner
             editor.SendMessage(SCI_SETBACKSPACEUNINDENTS, 1, 0);
         }
 
-        public static IntPtr GetProcessBuffer(ScintillaEditor editor, uint neededSize)
-        {
-            return editor.AppDesignerProcess.GetProcessBuffer(neededSize);
-        }
-
         /// <summary>
         /// Retrieves the text from a Scintilla editor window in another process,
         /// reusing a persistent remote memory buffer.
@@ -332,22 +327,13 @@ namespace AppRefiner
             // Determine the size needed (text length plus one for the terminating NUL).
             int neededSize = textLength + 1;
 
-            var remoteBuffer = GetProcessBuffer(editor, (uint)neededSize);
+            var docTextBuffer = editor.AppDesignerProcess.MemoryManager.GetOrCreateBuffer("docText", (uint)neededSize);
 
-
+            
             // Request the text. SCI_GETTEXT writes the text (with a terminating NUL) into the remote buffer.
-            editor.SendMessage(SCI_GETTEXT, new IntPtr(neededSize), remoteBuffer);
+            editor.SendMessage(SCI_GETTEXT, new IntPtr(neededSize), docTextBuffer.Address);
 
-            // Read the text from the remote process into a local buffer.
-            byte[] buffer = new byte[neededSize];
-            if (!WinApi.ReadProcessMemory(editor.AppDesignerProcess.ProcessHandle, remoteBuffer, buffer, neededSize, out int bytesRead) || bytesRead == 0)
-                return null;
-
-            // Convert the retrieved bytes into a string (up to the first null terminator).
-            int stringLength = Array.IndexOf(buffer, (byte)0);
-            if (stringLength < 0)
-                stringLength = buffer.Length;
-            return Encoding.Default.GetString(buffer, 0, stringLength);
+            return docTextBuffer.ReadString(textLength, Encoding.UTF8);
         }
 
         public static void SetJSONLexer(ScintillaEditor editor)
@@ -376,23 +362,16 @@ namespace AppRefiner
         {
             // Convert the new text into a byte array using the default encoding.
             // We need to include an extra byte for the terminating null.
-            byte[] textBytes = Encoding.Default.GetBytes(text ?? string.Empty);
-            int neededSize = textBytes.Length + 1; // +1 for the null terminator
+            int neededSize = Encoding.Default.GetByteCount(text ?? string.Empty) + 1; // +1 for the null terminator
 
-            var remoteBuffer = GetProcessBuffer(editor, (uint)neededSize);
+            var docTextBuffer = editor.AppDesignerProcess.MemoryManager.GetOrCreateBuffer("docText", (uint)neededSize);
+            docTextBuffer.Reset(); // Write to the start of the buffer
 
-            // Create a buffer that includes a terminating null.
-            byte[] buffer = new byte[neededSize];
-            Buffer.BlockCopy(textBytes, 0, buffer, 0, textBytes.Length);
-            buffer[neededSize - 1] = 0;  // Ensure null termination.
-
-            // Write the text into the remote process's memory.
-            if (!WinApi.WriteProcessMemory(editor.AppDesignerProcess.ProcessHandle, remoteBuffer, buffer, neededSize, out int bytesWritten) || bytesWritten != neededSize)
-                return false;
+            docTextBuffer.WriteString(text ?? string.Empty, Encoding.UTF8);
 
             // Use SCI_SETTEXT to replace the document text.
             // SCI_SETTEXT(wParam unused, lParam = pointer to null-terminated string in remote process)
-            editor.SendMessage(SCI_SETTEXT, IntPtr.Zero, remoteBuffer);
+            editor.SendMessage(SCI_SETTEXT, IntPtr.Zero, docTextBuffer.Address);
 
             return true;
         }
@@ -410,24 +389,17 @@ namespace AppRefiner
 
             // Convert the text into a byte array using the default encoding.
             // We need to include an extra byte for the terminating null.
-            byte[] textBytes = Encoding.Default.GetBytes(text);
-            int neededSize = textBytes.Length + 1; // +1 for the null terminator
+            int neededSize = Encoding.Default.GetByteCount(text ?? string.Empty) + 1; // +1 for the null terminator
 
-            var remoteBuffer = GetProcessBuffer(editor, (uint)neededSize);
+            var buffer = editor.AppDesignerProcess.MemoryManager.CreateTempBuffer((uint)neededSize);
 
-            // Create a buffer that includes a terminating null.
-            byte[] buffer = new byte[neededSize];
-            Buffer.BlockCopy(textBytes, 0, buffer, 0, textBytes.Length);
-            buffer[neededSize - 1] = 0;  // Ensure null termination.
-
-            // Write the text into the remote process's memory.
-            if (!WinApi.WriteProcessMemory(editor.AppDesignerProcess.ProcessHandle, remoteBuffer, buffer, neededSize, out int bytesWritten) || bytesWritten != neededSize)
-                return false;
+            buffer.WriteString(text, Encoding.UTF8);
 
             // Use SCI_REPLACESEL to insert text at the current cursor position
             // SCI_REPLACESEL(0, pointer to null-terminated string)
-            editor.SendMessage(SCI_REPLACESEL, IntPtr.Zero, remoteBuffer);
+            editor.SendMessage(SCI_REPLACESEL, IntPtr.Zero, buffer.Address);
 
+            buffer.Free();
             return true;
         }
 
@@ -1412,8 +1384,7 @@ namespace AppRefiner
                 // First construct complete strings with prefixes to match exact byte layout
                 var formattedAnnotations = annotations.Select(a => $"^^ {a}").ToList();
                 var combinedText = string.Join("\n", formattedAnnotations);
-                var textBytes = Encoding.Default.GetBytes(combinedText);
-                var neededSize = textBytes.Length + 1; // +1 for null terminator
+                var neededSize = Encoding.Default.GetByteCount(combinedText) + 1; // +1 for the null terminator
 
                 // Create style bytes array matching exact text bytes length
                 var styleBytes = new byte[neededSize];
@@ -1446,7 +1417,7 @@ namespace AppRefiner
                 var styleBuffer = editor.AppDesignerProcess.MemoryManager.GetOrCreateBuffer("styled_annotations_styles", 16384);
 
                 // Write text and style bytes sequentially to their respective buffers
-                IntPtr? remoteTextAddress = textBuffer.Write(textBytes);
+                IntPtr? remoteTextAddress = textBuffer.WriteString(combinedText);
                 IntPtr? remoteStyleAddress = styleBuffer.Write(styleBytes);
 
                 // Handle resize if either buffer is full
@@ -1458,7 +1429,7 @@ namespace AppRefiner
                     styleBuffer.Resize(newSize);
 
                     // Retry writes (buffers have been reset by Resize)
-                    remoteTextAddress = textBuffer.Write(textBytes);
+                    remoteTextAddress = textBuffer.WriteString(combinedText);
                     remoteStyleAddress = styleBuffer.Write(styleBytes);
 
                     if (!remoteTextAddress.HasValue || !remoteStyleAddress.HasValue)
@@ -1756,9 +1727,9 @@ namespace AppRefiner
             {
                 var icon = iconNames[x];
 
-                if (process.iconBuffers.TryGetValue(icon, out nint value))
+                if (process.iconBuffers.TryGetValue(icon, out RemoteBuffer? value))
                 {
-                    editor.SendMessage(SCI_REGISTERRGBAIMAGE, (int)Enum.Parse(typeof(AutoCompleteIcons), icon), value);
+                    editor.SendMessage(SCI_REGISTERRGBAIMAGE, (int)Enum.Parse(typeof(AutoCompleteIcons), icon), value.Address);
                 }
             }
         }
@@ -2165,23 +2136,16 @@ namespace AppRefiner
 
             // Convert the text into a byte array using the default encoding.
             // We need to include an extra byte for the terminating null.
-            byte[] textBytes = Encoding.Default.GetBytes(text);
-            int neededSize = textBytes.Length + 1; // +1 for the null terminator
+            int neededSize = Encoding.Default.GetByteCount(text) + 1; // +1 for the null terminator
 
-            var remoteBuffer = GetProcessBuffer(editor, (uint)neededSize);
 
-            // Create a buffer that includes a terminating null.
-            byte[] buffer = new byte[neededSize];
-            Buffer.BlockCopy(textBytes, 0, buffer, 0, textBytes.Length);
-            buffer[neededSize - 1] = 0;  // Ensure null termination.
-
-            // Write the text into the remote process's memory.
-            if (!WinApi.WriteProcessMemory(editor.AppDesignerProcess.ProcessHandle, remoteBuffer, buffer, neededSize, out int bytesWritten) || bytesWritten != neededSize)
-                return false;
+            var textBuf = editor.AppDesignerProcess.MemoryManager.CreateTempBuffer((uint)neededSize);
+            textBuf.WriteString(text, Encoding.UTF8);
 
             // Use SCI_REPLACESEL to insert text at the current cursor position
             // SCI_REPLACESEL(0, pointer to null-terminated string)
-            editor.SendMessage(SCI_INSERTTEXT, location, remoteBuffer);
+            editor.SendMessage(SCI_INSERTTEXT, location, textBuf.Address);
+            textBuf.Free();
 
             return true;
         }
@@ -2500,21 +2464,11 @@ namespace AppRefiner
             // Convert search term to bytes and marshall to remote process
             byte[] searchBytes = Encoding.Default.GetBytes(searchTerm);
             int neededSize = searchBytes.Length + 1; // +1 for null terminator
-
-            var remoteBuffer = GetProcessBuffer(editor, (uint)neededSize);
-
-            // Create buffer with null terminator
-            byte[] buffer = new byte[neededSize];
-            Buffer.BlockCopy(searchBytes, 0, buffer, 0, searchBytes.Length);
-            buffer[neededSize - 1] = 0; // Ensure null termination
-
-            // Write to remote process memory
-            if (!WinApi.WriteProcessMemory(editor.AppDesignerProcess.ProcessHandle, remoteBuffer, buffer, neededSize, out int bytesWritten) || bytesWritten != neededSize)
-                return false;
-
+            var searchBuffer = editor.AppDesignerProcess.MemoryManager.GetOrCreateBuffer("searchBuffer", (uint)neededSize);
+            searchBuffer.Reset();
+            searchBuffer.WriteString(searchTerm, Encoding.UTF8);
             // Perform the search
-            int result = (int)editor.SendMessage(SCI_SEARCHINTARGET, searchBytes.Length, remoteBuffer);
-
+            int result = (int)editor.SendMessage(SCI_SEARCHINTARGET, searchBytes.Length, searchBuffer.Address);
             return result != -1;
         }
 
@@ -2567,28 +2521,23 @@ namespace AppRefiner
             editor.SendMessage(SCI_SETTARGETRANGE, start, end);
 
             // Marshall replacement text
-            byte[] replaceBytes = Encoding.Default.GetBytes(replaceText);
-            int neededSize = replaceBytes.Length + 1;
+            int neededSize = Encoding.Default.GetByteCount(replaceText) + 1;
 
-            var remoteBuffer = GetProcessBuffer(editor, (uint)neededSize);
+            var replaceBuffer = editor.AppDesignerProcess.MemoryManager.GetOrCreateBuffer("replaceBuffer", (uint)neededSize);
+            replaceBuffer.Reset();
 
-            byte[] buffer = new byte[neededSize];
-            Buffer.BlockCopy(replaceBytes, 0, buffer, 0, replaceBytes.Length);
-            buffer[neededSize - 1] = 0;
-
-            if (!WinApi.WriteProcessMemory(editor.AppDesignerProcess.ProcessHandle, remoteBuffer, buffer, neededSize, out int bytesWritten) || bytesWritten != neededSize)
-                return false;
+            replaceBuffer.WriteString(replaceText, Encoding.UTF8);
 
             var replacementLength = replaceText.Length;
 
             // Perform replacement
             if (searchState.UseRegex)
             {
-                replacementLength = (int)editor.SendMessage(SCI_REPLACETARGETRE, replaceBytes.Length, remoteBuffer);
+                replacementLength = (int)editor.SendMessage(SCI_REPLACETARGETRE, neededSize-1, replaceBuffer.Address);
             }
             else
             {
-                replacementLength = (int)editor.SendMessage(SCI_REPLACETARGET, replaceBytes.Length, remoteBuffer);
+                replacementLength = (int)editor.SendMessage(SCI_REPLACETARGET, neededSize - 1, replaceBuffer.Address);
             }
 
             /* move to the end of the replacement */
@@ -2651,18 +2600,11 @@ namespace AppRefiner
             editor.SendMessage(SCI_SETSEARCHFLAGS, searchFlags, IntPtr.Zero);
 
             // Marshall search string
-            byte[] searchBytes = Encoding.Default.GetBytes(searchTerm);
-            int searchSize = searchBytes.Length + 1;
+            int searchSize = Encoding.Default.GetByteCount(searchTerm) + 1;
 
-            var searchBuffer = GetProcessBuffer(editor, (uint)searchSize);
+            var searchBuffer = editor.AppDesignerProcess.MemoryManager.GetOrCreateBuffer("searchBuffer", (uint)searchSize);
 
-            byte[] searchBufferData = new byte[searchSize];
-            Buffer.BlockCopy(searchBytes, 0, searchBufferData, 0, searchBytes.Length);
-            searchBufferData[searchSize - 1] = 0;
-
-            if (!WinApi.WriteProcessMemory(editor.AppDesignerProcess.ProcessHandle, searchBuffer, searchBufferData, searchSize, out int searchBytesWritten) ||
-                searchBytesWritten != searchSize)
-                return 0;
+            searchBuffer.WriteString(searchTerm, Encoding.UTF8);
 
             // Find and mark all matches
             int currentPos = rangeStart;
@@ -2672,17 +2614,11 @@ namespace AppRefiner
                 replaceText = string.Empty;
 
             // Marshall replacement text
-            byte[] replaceBytes = Encoding.Default.GetBytes(replaceText);
-            int neededSize = replaceBytes.Length + 1;
+            int replaceTextSize = Encoding.Default.GetByteCount(replaceText) + 1;
 
-            var replaceTextBuffer = editor.AppDesignerProcess.GetStandaloneProcessBuffer((uint)neededSize);
-
-            byte[] buffer = new byte[neededSize];
-            Buffer.BlockCopy(replaceBytes, 0, buffer, 0, replaceBytes.Length);
-            buffer[neededSize - 1] = 0;
-
-            if (!WinApi.WriteProcessMemory(editor.AppDesignerProcess.ProcessHandle, replaceTextBuffer, buffer, neededSize, out int bytesWritten) || bytesWritten != neededSize)
-                return (0);
+            var replaceTextBuffer = editor.AppDesignerProcess.MemoryManager.GetOrCreateBuffer("replaceBuffer", (uint)replaceTextSize);
+            replaceTextBuffer.Reset();
+            replaceTextBuffer.WriteString(replaceText, Encoding.UTF8);
 
             try
             {
@@ -2691,7 +2627,7 @@ namespace AppRefiner
                 {
                     editor.SendMessage(SCI_SETTARGETRANGE, currentPos, rangeEnd);
 
-                    int result = (int)editor.SendMessage(SCI_SEARCHINTARGET, searchBytes.Length, searchBuffer);
+                    int result = (int)editor.SendMessage(SCI_SEARCHINTARGET, searchSize-1, searchBuffer.Address);
                     if (result == -1)
                         break;
 
@@ -2701,7 +2637,7 @@ namespace AppRefiner
                     if (targetStart < rangeStart || targetStart >= rangeEnd)
                         break;
 
-                    var (success, length) = ReplaceRange(editor, targetStart, targetEnd, replaceText.Length, replaceTextBuffer);
+                    var (success, length) = ReplaceRange(editor, targetStart, targetEnd, replaceTextSize, replaceTextBuffer.Address);
                     if (success)
                     {
                         currentPos = targetStart + length;
@@ -2717,7 +2653,6 @@ namespace AppRefiner
             finally
             {
                 editor.SendMessage(SCI_ENDUNDOACTION, 0, 0);
-                editor.AppDesignerProcess.FreeStandaloneProcessBuffer(replaceTextBuffer);
             }
 
             return replaceCount;
@@ -2755,18 +2690,10 @@ namespace AppRefiner
             editor.SendMessage(SCI_SETSEARCHFLAGS, searchFlags, IntPtr.Zero);
 
             // Marshall search string
-            byte[] searchBytes = Encoding.Default.GetBytes(searchTerm);
-            int searchSize = searchBytes.Length + 1;
-
-            var searchBuffer = GetProcessBuffer(editor, (uint)searchSize);
-
-            byte[] searchBufferData = new byte[searchSize];
-            Buffer.BlockCopy(searchBytes, 0, searchBufferData, 0, searchBytes.Length);
-            searchBufferData[searchSize - 1] = 0;
-
-            if (!WinApi.WriteProcessMemory(editor.AppDesignerProcess.ProcessHandle, searchBuffer, searchBufferData, searchSize, out int searchBytesWritten) ||
-                searchBytesWritten != searchSize)
-                return 0;
+            int searchSize = Encoding.Default.GetByteCount(searchTerm) + 1;
+            var searchBuffer = editor.AppDesignerProcess.MemoryManager.GetOrCreateBuffer("searchBuffer", (uint)searchSize);
+            searchBuffer.Reset();
+            searchBuffer.WriteString(searchTerm, Encoding.UTF8);
 
             // Count matches
             int currentPos = rangeStart;
@@ -2774,7 +2701,7 @@ namespace AppRefiner
             {
                 editor.SendMessage(SCI_SETTARGETRANGE, currentPos, rangeEnd);
 
-                int result = (int)editor.SendMessage(SCI_SEARCHINTARGET, searchBytes.Length, searchBuffer);
+                int result = (int)editor.SendMessage(SCI_SEARCHINTARGET, searchSize - 1, searchBuffer.Address);
                 if (result == -1)
                     break;
 
@@ -2830,18 +2757,11 @@ namespace AppRefiner
             editor.SendMessage(SCI_SETSEARCHFLAGS, searchFlags, IntPtr.Zero);
 
             // Marshall search string
-            byte[] searchBytes = Encoding.Default.GetBytes(searchTerm);
-            int searchSize = searchBytes.Length + 1;
+            int searchSize = Encoding.Default.GetByteCount(searchTerm) + 1;
 
-            var searchBuffer = GetProcessBuffer(editor, (uint)searchSize);
-
-            byte[] searchBufferData = new byte[searchSize];
-            Buffer.BlockCopy(searchBytes, 0, searchBufferData, 0, searchBytes.Length);
-            searchBufferData[searchSize - 1] = 0;
-
-            if (!WinApi.WriteProcessMemory(editor.AppDesignerProcess.ProcessHandle, searchBuffer, searchBufferData, searchSize, out int searchBytesWritten) ||
-                searchBytesWritten != searchSize)
-                return 0;
+            var searchBuffer = editor.AppDesignerProcess.MemoryManager.GetOrCreateBuffer("searchBuffer", (uint)searchSize);
+            searchBuffer.Reset();
+            searchBuffer.WriteString(searchTerm, Encoding.UTF8);
 
             // Find and mark all matches
             int currentPos = rangeStart;
@@ -2849,7 +2769,7 @@ namespace AppRefiner
             {
                 editor.SendMessage(SCI_SETTARGETRANGE, currentPos, rangeEnd);
 
-                int result = (int)editor.SendMessage(SCI_SEARCHINTARGET, searchBytes.Length, searchBuffer);
+                int result = (int)editor.SendMessage(SCI_SEARCHINTARGET, searchSize - 1, searchBuffer.Address);
                 if (result == -1)
                     break;
 
@@ -2910,18 +2830,11 @@ namespace AppRefiner
             editor.SendMessage(SCI_SETSEARCHFLAGS, searchFlags, IntPtr.Zero);
 
             // Marshall search string
-            byte[] searchBytes = Encoding.Default.GetBytes(searchTerm);
-            int searchSize = searchBytes.Length + 1;
+            int searchSize = Encoding.Default.GetByteCount(searchTerm) + 1;
 
-            var searchBuffer = GetProcessBuffer(editor, (uint)searchSize);
-
-            byte[] searchBufferData = new byte[searchSize];
-            Buffer.BlockCopy(searchBytes, 0, searchBufferData, 0, searchBytes.Length);
-            searchBufferData[searchSize - 1] = 0;
-
-            if (!WinApi.WriteProcessMemory(editor.AppDesignerProcess.ProcessHandle, searchBuffer, searchBufferData, searchSize, out int searchBytesWritten) ||
-                searchBytesWritten != searchSize)
-                return matches;
+            var searchBuffer = editor.AppDesignerProcess.MemoryManager.GetOrCreateBuffer("searchBuffer", (uint)searchSize);
+            searchBuffer.Reset();
+            searchBuffer.WriteString(searchTerm, Encoding.UTF8);
 
             // Count matches
             int currentPos = rangeStart;
@@ -2929,7 +2842,7 @@ namespace AppRefiner
             {
                 editor.SendMessage(SCI_SETTARGETRANGE, currentPos, rangeEnd);
 
-                int result = (int)editor.SendMessage(SCI_SEARCHINTARGET, searchBytes.Length, searchBuffer);
+                int result = (int)editor.SendMessage(SCI_SEARCHINTARGET, searchSize - 1, searchBuffer.Address);
                 if (result == -1)
                     break;
 
@@ -2958,7 +2871,7 @@ namespace AppRefiner
 
 
             }
-
+            var lineBuffer = editor.AppDesignerProcess.MemoryManager.GetOrCreateBuffer("lineBuffer", 1024);
             /* Now that the process buffer is free to use, retrieve line information (line text) */
             foreach (var match in matches)
             {
@@ -2974,20 +2887,14 @@ namespace AppRefiner
 
                     if (lineLength > 0)
                     {
-                        var lineBuffer = GetProcessBuffer(editor, (uint)(lineLength + 1));
+                        lineBuffer.Resize((uint)(lineLength + 1)); // Resize buffer for line text
 
-                        if (lineBuffer != IntPtr.Zero)
+
+                        int lineResult = (int)editor.SendMessage(SCI_GETTARGETTEXT, IntPtr.Zero, lineBuffer.Address);
+                        if (lineResult > 0)
                         {
-                            int lineResult = (int)editor.SendMessage(SCI_GETTARGETTEXT, IntPtr.Zero, lineBuffer);
-                            if (lineResult > 0)
-                            {
-                                byte[] lineData = new byte[lineLength];
-                                if (WinApi.ReadProcessMemory(editor.AppDesignerProcess.ProcessHandle, lineBuffer, lineData, lineLength, out int lineRead) && lineRead == lineLength)
-                                {
-                                    lineText = Encoding.Default.GetString(lineData).TrimEnd('\r', '\n');
-                                    match.LineText = lineText;
-                                }
-                            }
+                            lineText = lineBuffer.ReadString(lineLength, Encoding.UTF8) ?? string.Empty;
+                            match.LineText = lineText.TrimEnd('\r', '\n');
                         }
                     }
                 }

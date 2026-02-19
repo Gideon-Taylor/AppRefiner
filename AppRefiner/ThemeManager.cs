@@ -66,42 +66,28 @@ namespace AppRefiner
                     }
 
                     // Always allocate a new buffer to ensure fresh data
-                    IntPtr newBuffer = process.GetStandaloneProcessBuffer((uint)iconData.Length);
+                    var newBuffer = process.MemoryManager.CreateTempBuffer((uint)iconData.Length);
 
-                    if (newBuffer == IntPtr.Zero)
+                    if (newBuffer.Address == IntPtr.Zero)
                     {
                         Debug.Log($"ThemeManager: Failed to allocate buffer for icon '{iconName}'");
                         continue;
                     }
 
-                    // Write the new icon data to the new buffer
-                    bool writeSuccess = WinApi.WriteProcessMemory(
-                        process.ProcessHandle,
-                        newBuffer,
-                        iconData,
-                        iconData.Length,
-                        out int bytesWritten);
+                    IntPtr? writeSuccess = newBuffer.Write(iconData);
 
-                    if (writeSuccess && bytesWritten == iconData.Length)
+                    // Check if there was an old buffer and free it
+                    if (process.iconBuffers.TryGetValue(iconName, out RemoteBuffer? oldBuffer))
                     {
-                        // Check if there was an old buffer and free it
-                        if (process.iconBuffers.TryGetValue(iconName, out IntPtr oldBuffer) && oldBuffer != IntPtr.Zero)
-                        {
-                            process.FreeStandaloneProcessBuffer(oldBuffer);
-                            Debug.Log($"ThemeManager: Freed old buffer for icon '{iconName}'");
-                        }
+                        oldBuffer.Free();
+                        Debug.Log($"ThemeManager: Freed old buffer for icon '{iconName}'");
+                    }
 
-                        // Update the dictionary with the new buffer
-                        process.iconBuffers[iconName] = newBuffer;
-                        successCount++;
-                        Debug.Log($"ThemeManager: Successfully applied new buffer for icon '{iconName}'");
-                    }
-                    else
-                    {
-                        // Free the new buffer if write failed
-                        process.FreeStandaloneProcessBuffer(newBuffer);
-                        Debug.Log($"ThemeManager: Failed to write to new buffer for icon '{iconName}'");
-                    }
+                    // Update the dictionary with the new buffer
+                    process.iconBuffers[iconName] = newBuffer;
+                    successCount++;
+                    Debug.Log($"ThemeManager: Successfully applied new buffer for icon '{iconName}'");
+
                 }
                 catch (Exception ex)
                 {

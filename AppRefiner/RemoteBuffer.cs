@@ -90,9 +90,9 @@ namespace AppRefiner
         /// <param name="newSize">New size in bytes</param>
         public void Resize(uint newSize)
         {
-            if (newSize == Size)
+            if (newSize == Size || newSize < Size)
             {
-                return; // Already the correct size
+                return; // Already the correct size or bigger
             }
 
             Debug.Log($"RemoteBuffer '{Name}': Resizing from {Size} to {newSize} bytes");
@@ -413,6 +413,11 @@ namespace AppRefiner
                 Address = IntPtr.Zero;
                 Size = 0;
             }
+        }
+
+        internal string? ReadString(int length, Encoding encoding)
+        {
+            return encoding.GetString(Read(length));
         }
 
         /// <summary>
