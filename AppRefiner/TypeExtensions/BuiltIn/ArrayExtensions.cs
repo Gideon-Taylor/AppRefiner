@@ -157,7 +157,7 @@ namespace AppRefiner.LanguageExtensions.BuiltIn
 
                 var newCursorPosition = fcn.SourceSpan.Start.ByteIndex + forLoopText.Length;
 
-                forLoopText += $"\n{indent}End-For";
+                forLoopText += $"\n{indent}End-For;";
 
                 // Replace entire function call
                 ScintillaManager.ReplaceTextRange(
