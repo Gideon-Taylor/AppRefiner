@@ -25,6 +25,9 @@ using PeopleCodeParser.SelfHosted.Visitors.Models;
 using PeopleCodeTypeInfo.Functions;
 using PeopleCodeTypeInfo.Inference;
 using PeopleCodeTypeInfo.Types;
+using SQL.Formatter;
+using SQL.Formatter.Core;
+using SQL.Formatter.Language;
 using SqlParser;
 using System.Data;
 using System.Diagnostics;
@@ -2526,9 +2529,21 @@ namespace AppRefiner
                         if (parsedSQL != null)
                         {
                             Debug.Log("Parsed SQL successfully, applying formatting refactor");
-                            StringBuilder sb = new();
-                            SqlTextWriter writer = new SqlTextWriter(sb);
-                            newText = parsedSQL.ToSql();
+
+                            FormatConfig formatConfig = FormatConfig.Builder().Indent("")
+                            .Uppercase(true)
+                            .LinesBetweenQueries(0)
+                            .MaxColumnLength(int.MaxValue)
+                            .Build();
+
+                            var formatted = SqlFormatter.Of(Dialect.StandardSql)
+                            .Extend(cfg => cfg.PlusSpecialWordChars("%").PlusNamedPlaceholderTypes(new string[] { ":" }).PlusOperators(new string[] { "%Concat" }))
+                            .Format(originalText, formatConfig).Replace("\n", " ");
+                            if (string.IsNullOrEmpty(formatted))
+                            {
+                                return;
+                            }
+                            newText = formatted;
                         }
 
                         if (newText[0] == '[' || newText[0] == '{')
