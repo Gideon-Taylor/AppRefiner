@@ -1,3 +1,29 @@
+VERSION 1.2.1
+=============
+
+BUG FIXES
+---------
+
+• Autocomplete - Fixed autocomplete being broken in the 1.2.0 release.
+• Array.ForEach() - Fixed generated code missing a semicolon at the end of the
+  loop variable declaration.
+• SQL Formatting on Paste - Fixed SQL auto-formatting not applying correctly
+  when pasting into a string literal.
+
+INTERNAL IMPROVEMENTS
+---------------------
+
+• Remote Buffer Handling - Overhauled how AppRefiner allocates memory in the
+  Application Designer process. Buffers are now individually named or
+  temporary rather than sharing one large allocation, improving reliability
+  and reducing memory overhead.
+• Performance - Line-text retrieval now uses a direct range pointer, reducing
+  unnecessary cross-process reads.
+
+
+VERSION 1.2.0
+=============
+
 NEW FEATURES
 ============
 
