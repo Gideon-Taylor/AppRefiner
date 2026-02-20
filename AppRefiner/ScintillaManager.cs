@@ -1576,12 +1576,11 @@ namespace AppRefiner
             if (editor == null) return string.Empty;
             int start = (int)editor.SendMessage(SCI_POSITIONFROMLINE, lineNumber, IntPtr.Zero);
             int end = (int)editor.SendMessage(SCI_GETLINEENDPOSITION, lineNumber, IntPtr.Zero);
+            var length = end - start;
+            var rangePointer = editor.SendMessage(SCI_GETRANGEPOINTER, start, length);
+            var lineText = RemoteBuffer.FromRemoteAddress(editor.AppDesignerProcess, rangePointer, (uint)length, "").ReadString(length,Encoding.UTF8);
 
-            /* Get fresh copy of content */
-            editor.ContentString = GetScintillaText(editor);
-
-
-            return editor.ContentString?.Substring(start, end - start) ?? string.Empty;
+            return lineText ?? string.Empty;
         }
 
         public static string GetCurrentLineText(ScintillaEditor editor)
