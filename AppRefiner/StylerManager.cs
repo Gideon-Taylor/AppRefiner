@@ -2,6 +2,7 @@ using AppRefiner.Database;
 using AppRefiner.Plugins;
 using PeopleCodeParser.SelfHosted.Visitors; // For settings serialization and TypeInferenceVisitor
 using PeopleCodeTypeInfo.Inference; // For TypeMetadataBuilder
+using System.Collections.Concurrent;
 using System.Reflection; // Added for Assembly.GetExecutingAssembly
 using PeopleCodeParser.SelfHosted.Nodes; // For ProgramNode
 
@@ -16,6 +17,25 @@ namespace AppRefiner.Stylers
         private readonly DataGridView stylerGrid; // DataGridView for styler options
         private readonly MainForm mainForm; // Needed for Invoke potentially, though aiming to minimize direct use
         private readonly SettingsService settingsService; // Added SettingsService
+
+        /// <summary>
+        /// Pending styler work per editor. New requests for the same editor replace older ones.
+        /// </summary>
+        private readonly ConcurrentDictionary<ScintillaEditor, StylerWorkItem> _pendingWork = new();
+
+        /// <summary>
+        /// 0 = idle, 1 = background consumer is running.
+        /// </summary>
+        private int _isProcessing = 0;
+
+        /// <summary>
+        /// Encapsulates the state captured at request time for async styler processing.
+        /// </summary>
+        private record StylerWorkItem(
+            ScintillaEditor Editor,
+            ProgramNode Program,
+            int ContentHash,
+            IDataManager? DataManager);
 
         public StylerManager(MainForm form, DataGridView stylerOptionsGrid, SettingsService settings)
         {
@@ -96,9 +116,11 @@ namespace AppRefiner.Stylers
 
         /// <summary>
         /// Processes active stylers for the given editor.
+        /// Parsing and type inference run synchronously (fast, cached).
+        /// Styler execution runs on a background thread; results are verified
+        /// against a content hash before being applied.
         /// </summary>
         /// <param name="editor">The Scintilla editor to process.</param>
-        /// <param name="editorDataManager">The data manager associated with the editor.</param>
         public void ProcessStylersForEditor(ScintillaEditor? editor)
         {
             if (editor == null || !editor.IsValid() || editor.Type != EditorType.PeopleCode)
@@ -106,22 +128,74 @@ namespace AppRefiner.Stylers
                 return; // Only process valid PeopleCode editors
             }
 
-            var editorDataManager = editor?.DataManager;
-
-            // Get the self-hosted parsed program
-            var program = editor?.GetParsedProgram();
+            // Parse synchronously (fast, cached)
+            var program = editor.GetParsedProgram();
             if (program == null)
             {
                 return; // Unable to parse
             }
 
-            // Run type inference BEFORE processing stylers
-            // This ensures all stylers have access to type information
-            RunTypeInferenceForProgram(program, editor);
+            // Capture content hash for staleness check after async processing
+            int contentHash = editor.ContentString?.GetHashCode() ?? 0;
 
-            // Get active stylers, filtering by database requirement and excluding base class
+            // Enqueue work — replaces any pending request for the same editor
+            _pendingWork[editor] = new StylerWorkItem(editor, program, contentHash, editor.DataManager);
+
+            // Start the background consumer if not already running
+            if (Interlocked.CompareExchange(ref _isProcessing, 1, 0) == 0)
+            {
+                Task.Run(DrainPendingWork);
+            }
+        }
+
+        /// <summary>
+        /// Background consumer that processes pending styler work items sequentially.
+        /// Serialization is required because styler instances are shared across editors.
+        /// </summary>
+        private void DrainPendingWork()
+        {
+            try
+            {
+                while (!_pendingWork.IsEmpty)
+                {
+                    foreach (var key in _pendingWork.Keys.ToList())
+                    {
+                        if (_pendingWork.TryRemove(key, out var item))
+                        {
+                            ProcessStylerWorkItem(item);
+                        }
+                    }
+                }
+            }
+            finally
+            {
+                Interlocked.Exchange(ref _isProcessing, 0);
+
+                // Re-check: work may have been enqueued while we were resetting the flag
+                if (!_pendingWork.IsEmpty && Interlocked.CompareExchange(ref _isProcessing, 1, 0) == 0)
+                {
+                    Task.Run(DrainPendingWork);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Runs all active stylers for a single work item and applies indicators
+        /// only if the editor content has not changed since the request was captured.
+        /// </summary>
+        private void ProcessStylerWorkItem(StylerWorkItem item)
+        {
+            var editor = item.Editor;
+
+            if (!editor.IsValid())
+                return;
+
+            // Run type inference on the background thread — this may hit the database
+            // for AppClass resolution and should not block the caller
+            RunTypeInferenceForProgram(item.Program, editor);
+
             var activeStylers = stylers.Where(a => a.Active
-                && (a.DatabaseRequirement != DataManagerRequirement.Required || editorDataManager != null)
+                && (a.DatabaseRequirement != DataManagerRequirement.Required || item.DataManager != null)
                 && a.GetType() != typeof(BaseStyler));
 
             List<Indicator> newIndicators = new();
@@ -130,14 +204,12 @@ namespace AppRefiner.Stylers
             {
                 try
                 {
-                    styler.Reset(); // Reset internal state before processing
-                    styler.DataManager = editorDataManager;
+                    styler.Reset();
+                    styler.DataManager = item.DataManager;
                     styler.Editor = editor;
 
-                    // Visit the program using the styler
-                    program.Accept((IAstVisitor)styler);
+                    item.Program.Accept((IAstVisitor)styler);
 
-                    // Collect indicators from this styler
                     newIndicators.AddRange(styler.Indicators);
                 }
                 catch (Exception ex)
@@ -146,7 +218,19 @@ namespace AppRefiner.Stylers
                 }
             }
 
-            // Now apply the collected indicators, comparing against existing ones
+            // Verify content hasn't changed before applying indicators
+            if (!editor.IsValid())
+                return;
+
+            var currentContent = ScintillaManager.GetScintillaText(editor);
+            int currentHash = currentContent?.GetHashCode() ?? 0;
+
+            if (currentHash != item.ContentHash)
+            {
+                Debug.Log($"ProcessStylerWorkItem: Content changed during processing for {editor.RelativePath ?? "unknown"}, discarding results");
+                return;
+            }
+
             ApplyIndicators(editor, newIndicators);
         }
 
