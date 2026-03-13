@@ -77,16 +77,23 @@ public class InvalidMemberAccess : BaseStyler
     }
 
     #region Member existence checks
-
+    Dictionary<(TypeInfo Type, string MemberName, bool IsMethodCall), bool> _memberExistenceCache = new();
     private bool MemberExists(TypeInfo type, string name, bool isMethodCall)
     {
-        return type.Kind switch
+        if (_memberExistenceCache.TryGetValue((type, name, isMethodCall), out bool exists))
+            return exists;
+
+        var result = type.Kind switch
         {
-            TypeKind.BuiltinObject                  => BuiltinHasMember(type.PeopleCodeType?.GetTypeName(), name, isMethodCall),
-            TypeKind.Array                          => BuiltinHasMember("array", name, isMethodCall),
+            TypeKind.BuiltinObject => BuiltinHasMember(type.PeopleCodeType?.GetTypeName(), name, isMethodCall),
+            TypeKind.Array => BuiltinHasMember("array", name, isMethodCall),
             TypeKind.AppClass or TypeKind.Interface => AppClassHasMember(type as AppClassTypeInfo, name, isMethodCall),
-            _                                       => true   // Unhandled kinds assumed valid
+            _ => true   // Unhandled kinds assumed valid
         };
+
+        _memberExistenceCache.Add((type, name, isMethodCall), result);
+
+        return result;
     }
 
     private static bool BuiltinHasMember(string? typeName, string memberName, bool isMethodCall)
@@ -156,4 +163,16 @@ public class InvalidMemberAccess : BaseStyler
         AppClassTypeInfo app => app.QualifiedName ?? app.Name,
         _                                              => type.Name
     };
+    internal void ClearMemberCache()
+    {
+        _memberExistenceCache.Clear();
+    }
+    internal void ClearMemberCacheForClass(string appClassPath)
+    {
+        foreach(var key in _memberExistenceCache.Keys.Where(k => k.Type.Kind is TypeKind.AppClass or TypeKind.Interface
+            && (k.Type as AppClassTypeInfo)?.QualifiedName.Equals(appClassPath, StringComparison.OrdinalIgnoreCase) == true))
+        {
+            _memberExistenceCache.Remove(key);
+        }
+    }
 }

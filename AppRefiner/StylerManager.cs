@@ -73,6 +73,27 @@ namespace AppRefiner.Stylers
             settingsService.LoadStylerStates(stylers, stylerGrid);
         }
 
+        public void ClearMemberCache()
+        {
+            foreach (var styler in stylers)
+            {
+                if (styler is InvalidMemberAccess invalidMemberAccessStyler)
+                {
+                    invalidMemberAccessStyler.ClearMemberCache();
+                }
+            }
+        }
+
+        public void ClearMemberCacheForClass(string appClassPath)         {
+            foreach (var styler in stylers)
+            {
+                if (styler is InvalidMemberAccess invalidMemberAccessStyler)
+                {
+                    invalidMemberAccessStyler.ClearMemberCacheForClass(appClassPath);
+                }
+            }
+        }
+
         /// <summary>
         /// Processes active stylers for the given editor.
         /// </summary>

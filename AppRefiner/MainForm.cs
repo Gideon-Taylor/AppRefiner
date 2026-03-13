@@ -2026,6 +2026,12 @@ namespace AppRefiner
                     if (AppDesignerProcesses.TryGetValue(pid, out var process))
                     {
                         activeEditor = process.GetOrInitEditor(hwnd);
+
+                        if (activeAppDesigner != activeEditor.AppDesignerProcess)
+                        {
+                            stylerManager?.ClearMemberCache();
+                        }
+
                         activeAppDesigner = activeEditor.AppDesignerProcess;
                         stylerManager.StylerRules.Where(s => s is FunctionParameterNames).First().Active = activeEditor.ParameterNamesEnabled;
                         return;
@@ -2045,6 +2051,12 @@ namespace AppRefiner
 
                         // Apply current theme to newly created process
                         ApplyCurrentThemeToProcess(newProcess);
+
+                        if (activeAppDesigner != activeEditor.AppDesignerProcess)
+                        {
+                            stylerManager?.ClearMemberCache();
+                        }
+
                         activeAppDesigner = activeEditor.AppDesignerProcess;
                         stylerManager.StylerRules.Where(s => s is FunctionParameterNames).First().Active = activeEditor.ParameterNamesEnabled;
                         return;
@@ -3974,6 +3986,13 @@ namespace AppRefiner
                         // Invalidate type metadata cache for this program
                         InvalidateTypeCacheForEditor(editorToSave);
 
+                        if (editorToSave.Type == EditorType.PeopleCode && editorToSave.Caption.Contains("Application Package"))
+                        {
+                            /* are we in an application class */
+                            var programName = DetermineQualifiedName(activeEditor);
+                            stylerManager?.ClearMemberCacheForClass(programName);
+                        }
+
                         Debug.Log("Event mapping flags: " + chkEventMapping.Checked + ", " + chkEventMapXrefs.Checked);
                         if (editorToSave.Type == EditorType.PeopleCode &&
                             editorToSave.DataManager != null &&
@@ -4358,6 +4377,7 @@ namespace AppRefiner
                         if (activeAppDesigner != appDesignerProcess)
                         {
                             activeAppDesigner = appDesignerProcess;
+                            stylerManager?.ClearMemberCache(); // Clear styler member cache when switching AppDesigner processes
                             Debug.Log($"Active AppDesigner changed to process ID: {focusedProcessId}");
                         }
                     }
