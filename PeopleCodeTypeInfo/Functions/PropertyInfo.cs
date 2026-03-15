@@ -81,6 +81,12 @@ public class PropertyInfo : IEquatable<PropertyInfo>
     public bool IsAppClass => Type == PeopleCodeType.AppClass && !string.IsNullOrEmpty(AppClassPath);
 
     /// <summary>
+    /// Whether this property's type is a definition reference (e.g. @Page, @Record).
+    /// Only meaningful for non-union scalar properties; union members carry their own IsReference.
+    /// </summary>
+    public bool IsReference { get; set; }
+
+    /// <summary>
     /// Whether this property has a union type (multiple possible types)
     /// </summary>
     public bool IsUnion => UnionTypes != null && UnionTypes.Count > 1;
@@ -130,7 +136,7 @@ public class PropertyInfo : IEquatable<PropertyInfo>
     /// </summary>
     public TypeWithDimensionality ToTypeWithDimensionality()
     {
-        return new TypeWithDimensionality(Type, ArrayDimensionality, AppClassPath);
+        return new TypeWithDimensionality(Type, ArrayDimensionality, AppClassPath, isReference: IsReference);
     }
 
     /// <summary>
@@ -150,10 +156,11 @@ public class PropertyInfo : IEquatable<PropertyInfo>
 
         return Type == other.Type &&
                ArrayDimensionality == other.ArrayDimensionality &&
-               AppClassPath == other.AppClassPath;
+               AppClassPath == other.AppClassPath &&
+               IsReference == other.IsReference;
     }
 
-    public override int GetHashCode() => HashCode.Combine(Type, ArrayDimensionality, AppClassPath);
+    public override int GetHashCode() => HashCode.Combine(Type, ArrayDimensionality, AppClassPath, IsReference);
 
     public static bool operator ==(PropertyInfo? left, PropertyInfo? right)
     {
@@ -197,6 +204,7 @@ public static class PropertyInfoExtensions
         byte flags = 0;
         if (propertyInfo.IsUnion) flags |= 0x01; // Bit 0: Has union types
         if (propertyInfo.IsOptionalReturn) flags |= 0x02; // Bit 1: Optional return
+        if (propertyInfo.IsReference) flags |= 0x04; // Bit 2: Is definition reference (@Page etc.)
 
         writer.Write(flags);
 
@@ -209,6 +217,7 @@ public static class PropertyInfoExtensions
                 writer.Write((byte)unionType.Type);
                 writer.Write(unionType.ArrayDimensionality);
                 WriteString(writer, unionType.AppClassPath ?? "");
+                writer.Write((byte)(unionType.IsReference ? 1 : 0));
             }
         }
         else
@@ -228,6 +237,7 @@ public static class PropertyInfoExtensions
         byte flags = reader.ReadByte();
         bool hasUnionTypes = (flags & 0x01) != 0;
         bool isOptionalReturn = (flags & 0x02) != 0;
+        bool isReference = (flags & 0x04) != 0;
 
         if (hasUnionTypes)
         {
@@ -240,10 +250,11 @@ public static class PropertyInfoExtensions
                 var type = (PeopleCodeType)reader.ReadByte();
                 var arrayDim = reader.ReadByte();
                 var appClassPath = ReadString(reader);
+                bool memberIsRef = reader.ReadByte() != 0;
 
                 unionTypes.Add(string.IsNullOrEmpty(appClassPath)
-                    ? new TypeWithDimensionality(type, arrayDim)
-                    : new TypeWithDimensionality(type, arrayDim, appClassPath));
+                    ? new TypeWithDimensionality(type, arrayDim, null, memberIsRef)
+                    : new TypeWithDimensionality(type, arrayDim, appClassPath, memberIsRef));
             }
 
             var propertyInfo = PropertyInfo.CreateUnion(unionTypes.ToArray());
@@ -261,6 +272,7 @@ public static class PropertyInfoExtensions
                 ? new PropertyInfo(type, arrayDim)
                 : new PropertyInfo(type, arrayDim, appClassPath);
             propertyInfo.IsOptionalReturn = isOptionalReturn;
+            propertyInfo.IsReference = isReference;
             return propertyInfo;
         }
     }

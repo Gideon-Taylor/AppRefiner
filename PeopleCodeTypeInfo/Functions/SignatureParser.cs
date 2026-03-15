@@ -101,7 +101,10 @@ public static class SignatureParser
         else
         {
             var typeWithDim = TypeWithDimensionality.Parse(typeStr);
-            propertyInfo = new PropertyInfo(typeWithDim.Type, typeWithDim.ArrayDimensionality, typeWithDim.AppClassPath);
+            propertyInfo = new PropertyInfo(typeWithDim.Type, typeWithDim.ArrayDimensionality, typeWithDim.AppClassPath)
+            {
+                IsReference = typeWithDim.IsReference
+            };
         }
 
         // Set name and optional return flag
