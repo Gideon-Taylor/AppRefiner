@@ -1378,8 +1378,9 @@ namespace AppRefiner
             var mainHandle = activeAppDesigner.MainWindowHandle;
             var handleWrapper = new WindowWrapper(mainHandle);
             DBConnectDialog dialog = new(mainHandle, activeAppDesigner.DBName);
+            dialog.StartPosition = FormStartPosition.CenterParent;
 
-            if (dialog.ShowDialog() == DialogResult.OK)
+            if (dialog.ShowDialog(handleWrapper) == DialogResult.OK)
             {
                 IDataManager? manager = dialog.DataManager;
                 if (manager != null)
