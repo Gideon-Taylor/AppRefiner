@@ -11,7 +11,7 @@
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <AnalysisLevel>latest</AnalysisLevel>
     <SignAssembly>True</SignAssembly>
-    <AssemblyOriginatorKeyFile>D:\Work\AppRefinerStrongKey\AppRefiner.snk</AssemblyOriginatorKeyFile>
+    <!--AssemblyOriginatorKeyFile>D:\Work\AppRefinerStrongKey\AppRefiner.snk</AssemblyOriginatorKeyFile-->
 	<Version>1.2.1</Version>
 	  <FileVersion>1.2.1.0</FileVersion>
   </PropertyGroup>

@@ -26,6 +26,7 @@ namespace AppRefiner.Database
         /// Gets whether the manager is connected
         /// </summary>
         public bool IsConnected => _connection?.State == ConnectionState.Open;
+        public string? LastConnectionError { get; private set; }
 
         /// <summary>
         /// Creates a new SQL Server PeopleSoft data manager with the specified connection string
@@ -47,6 +48,8 @@ namespace AppRefiner.Database
         {
             try
             {
+                LastConnectionError = null;
+
                 if (_connection.State != ConnectionState.Open)
                 {
                     _connection.Open();
@@ -65,6 +68,7 @@ namespace AppRefiner.Database
             }
             catch (Exception ex)
             {
+                LastConnectionError = ex.Message;
                 Debug.LogError($"Failed to connect to database: {ex.Message}");
                 // Connection failed
                 return false;
