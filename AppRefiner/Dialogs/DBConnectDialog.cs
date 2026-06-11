@@ -276,7 +276,6 @@ namespace AppRefiner.Dialogs
             this.dbServiceComboBox.Size = new Size(170, 23);
             this.dbServiceComboBox.TabIndex = 15;
             this.dbServiceComboBox.Visible = false;
-            this.dbServiceComboBox.SelectedIndexChanged += DbServiceComboBox_SelectedIndexChanged;
 
             // loadButton
             this.loadButton.Text = "Load Services";
@@ -451,15 +450,6 @@ namespace AppRefiner.Dialogs
         private void ConnectionTypeComboBox_SelectedIndexChanged(object? sender, EventArgs e)
         {
             UpdateUIForConnectionType();
-        }
-
-        private void DbServiceComboBox_SelectedIndexChanged(object? sender, EventArgs e)
-        {
-            // When DB Service is selected, sync the Database Name field (if visible)
-            if (connectionTypeComboBox.SelectedItem?.ToString() == "LDAP" && dbServiceComboBox.SelectedIndex >= 0)
-            {
-                dbNameComboBox.Text = dbServiceComboBox.SelectedItem?.ToString() ?? "";
-            }
         }
 
         private void LoadButton_Click(object? sender, EventArgs e)
@@ -712,68 +702,42 @@ namespace AppRefiner.Dialogs
 
         private void UpdateUIForConnectionType()
         {
-            // Get connection mode from radio buttons
             bool isReadOnly = readOnlyRadioButton.Checked;
             bool isOracle = dbTypeComboBox.SelectedItem?.ToString() == "Oracle";
-            
-            // Get connection type from dropdown
             string? connectionType = connectionTypeComboBox.SelectedItem?.ToString();
             bool isLdap = isOracle && connectionType == "LDAP";
 
             dbNameHintLabel.Visible = false;
 
-            // Hide all optional sections first
+            // DB Name is replaced by the DB Service combo in LDAP mode
+            dbNameLabel.Visible = !isLdap;
+            dbNameComboBox.Visible = !isLdap;
             connectionTypeLabel.Visible = isOracle;
             connectionTypeComboBox.Visible = isOracle;
-            namespaceLabel.Visible = false;
-            namespaceTextBox.Visible = false;
-            ldapServerLabel.Visible = false;
-            ldapServerTextBox.Visible = false;
-            contextLabel.Visible = false;
-            contextTextBox.Visible = false;
-            dbServiceLabel.Visible = false;
-            dbServiceComboBox.Visible = false;
-            loadButton.Visible = false;
-            dbNameLabel.Visible = true;
-            dbNameComboBox.Visible = true;
-            dbNameComboBox.Enabled = true;
+            namespaceLabel.Visible = isReadOnly;
+            namespaceTextBox.Visible = isReadOnly;
+            ldapServerLabel.Visible = isLdap;
+            ldapServerTextBox.Visible = isLdap;
+            contextLabel.Visible = isLdap;
+            contextTextBox.Visible = isLdap;
+            dbServiceLabel.Visible = isLdap;
+            dbServiceComboBox.Visible = isLdap;
+            loadButton.Visible = isLdap;
 
             if (!isOracle && connectionTypeComboBox.SelectedItem?.ToString() != "Standard")
             {
                 connectionTypeComboBox.SelectedItem = "Standard";
             }
 
-            // Show namespace field for Read Only mode (both Standard and LDAP)
             if (isReadOnly)
             {
-                namespaceLabel.Visible = true;
-                namespaceTextBox.Visible = true;
                 UpdateNamespaceForSqlServer();
             }
 
-            // Show LDAP-specific controls when LDAP connection type is selected
-            if (isLdap)
-            {
-                ldapServerLabel.Visible = true;
-                ldapServerTextBox.Visible = true;
-                contextLabel.Visible = true;
-                contextTextBox.Visible = true;
-                dbServiceLabel.Visible = true;
-                dbServiceComboBox.Visible = true;
-                loadButton.Visible = true;
-
-                // For LDAP, make Database Name read-only and sync with DB Service
-                dbNameComboBox.Enabled = false;
-                if (dbServiceComboBox.SelectedIndex >= 0)
-                {
-                    dbNameComboBox.Text = dbServiceComboBox.SelectedItem?.ToString() ?? "";
-                }
-            }
-
-            ApplyFormLayout(isLdap, isReadOnly);
+            ApplyFormLayout(isLdap, isReadOnly, isOracle);
         }
 
-        private void ApplyFormLayout(bool isLdap, bool isReadOnly)
+        private void ApplyFormLayout(bool isLdap, bool isReadOnly, bool isOracle)
         {
             const int labelX = 20;
             const int fieldX = 130;
@@ -782,7 +746,42 @@ namespace AppRefiner.Dialogs
             const int progressYGap = 34;
             const int bottomPadding = 62;
 
-            int nextRowY = isLdap ? 280 : 190;
+            // dbType row stays at y=50; dynamic rows begin at y=80.
+            int nextRowY = 80;
+
+            if (!isLdap)
+            {
+                dbNameLabel.Location = new Point(labelX, nextRowY);
+                dbNameComboBox.Location = new Point(fieldX, nextRowY);
+                nextRowY += rowHeight;
+            }
+
+            bootstrapRadioButton.Location = new Point(fieldX + 8, nextRowY);
+            readOnlyRadioButton.Location = new Point(fieldX + 98, nextRowY);
+            nextRowY += rowHeight;
+
+            if (isOracle)
+            {
+                connectionTypeLabel.Location = new Point(labelX, nextRowY);
+                connectionTypeComboBox.Location = new Point(fieldX, nextRowY);
+                nextRowY += rowHeight;
+            }
+
+            if (isLdap)
+            {
+                ldapServerLabel.Location = new Point(labelX, nextRowY);
+                ldapServerTextBox.Location = new Point(fieldX, nextRowY);
+                nextRowY += rowHeight;
+
+                contextLabel.Location = new Point(labelX, nextRowY);
+                contextTextBox.Location = new Point(fieldX, nextRowY);
+                nextRowY += rowHeight;
+
+                dbServiceLabel.Location = new Point(labelX, nextRowY);
+                dbServiceComboBox.Location = new Point(fieldX, nextRowY);
+                loadButton.Location = new Point(fieldX + 175, nextRowY);
+                nextRowY += rowHeight;
+            }
 
             if (isReadOnly)
             {
@@ -804,7 +803,6 @@ namespace AppRefiner.Dialogs
             int buttonY = nextRowY + buttonYGap;
             connectButton.Location = new Point(130, buttonY);
             cancelButton.Location = new Point(280, buttonY);
-
             loadingLabel.Location = new Point(fieldX, buttonY);
             loadingProgressBar.Location = new Point(fieldX, buttonY + progressYGap);
 
@@ -1022,7 +1020,7 @@ namespace AppRefiner.Dialogs
             // Validate connection-type-specific requirements
             string? connectionString = null;
             string? namespaceForConnection = null;
-            string saveKey = dbNameComboBox.Text;
+            string saveKey = isLdap ? dbServiceComboBox.Text : dbNameComboBox.Text;
 
             try
             {
