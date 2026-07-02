@@ -1099,14 +1099,18 @@ namespace AppRefiner
 
             if (isClassSelection)
             {
-                // Insert the class name
+                // Insert the class name. Only import statements get an auto-appended
+                // semicolon; in a variable declaration or an expression (e.g. create(...))
+                // a trailing ';' mid-statement would be a syntax error.
                 var currentLine = ScintillaManager.GetCurrentLineText(editor);
-                if (currentLine.EndsWith(";"))
-                {
-                    ScintillaManager.InsertTextAtCursor(editor, itemText);
-                } else
+                bool isImportStatement = currentLine.TrimStart().StartsWith("import", StringComparison.OrdinalIgnoreCase);
+                if (isImportStatement && !currentLine.TrimEnd().EndsWith(";"))
                 {
                     ScintillaManager.InsertTextAtCursor(editor, $"{itemText};");
+                }
+                else
+                {
+                    ScintillaManager.InsertTextAtCursor(editor, itemText);
                 }
 
                 currentLine = ScintillaManager.GetCurrentLineText(editor);
