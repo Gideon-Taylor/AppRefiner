@@ -1,3 +1,89 @@
+VERSION 1.3.0
+=============
+
+*** PLEASE READ: RESTART APPLICATION DESIGNER ***
+-------------------------------------------------
+
+This release updates the AppRefiner integration that runs inside Application
+Designer. After updating, close and reopen any Application Designer windows
+that were already open — until you do, the new multi-instance and autocomplete
+fixes below will not be active in those windows.
+
+
+NEW FEATURES
+------------
+
+• Instances Tab - A new "Instances" tab lists every Application Designer
+  session AppRefiner is tracking, showing the active session, database
+  connection, PeopleTools version, open editor count, and whether the enhanced
+  editor is loaded. Connect or disconnect a database, or bring a session to the
+  front, per instance — no more guessing which Application Designer a button
+  acts on.
+• Oracle LDAP Connections - The Database Connect dialog now supports connecting
+  to Oracle via LDAP, resolving the service descriptor automatically so no
+  separate ldap.ora configuration is required.
+• tnsnames.ora IFILE Support - AppRefiner now follows IFILE includes when
+  reading your tnsnames.ora, so aliases defined in included files appear in the
+  connection list.
+• Faster Connect Dialog - Database connection lists now load in the background,
+  so the dialog opens immediately instead of pausing while it reads
+  configuration.
+
+
+RELIABILITY & MULTI-INSTANCE FIXES
+----------------------------------
+
+This release includes a large overhaul of how AppRefiner communicates with
+Application Designer, resolving a class of intermittent issues — especially
+when more than one Application Designer is open.
+
+• Correct Instance Routing - Autocomplete, tooltips, call tips, paste handling,
+  and save tracking are now always applied to the editor that triggered them.
+  Previously, switching quickly between editors or running several Application
+  Designers could send a result to the wrong window.
+• "Buffers Go Weird" Fixes - Eliminated the race conditions behind occasional
+  wrong autocomplete values, garbled tooltips, and stale content — the reads
+  and writes AppRefiner makes into Application Designer's memory are now
+  isolated and synchronized.
+• Auto-Connect Prompt Placement - When "Prompt for DB Connection" is enabled
+  and multiple Application Designers are open at startup, the connect dialog
+  now appears on the Application Designer you actually switch to, instead of
+  opening invisibly behind other windows.
+• Session Lifecycle - Closing an editor or exiting an Application Designer no
+  longer leaves stale state behind. Reopening editors and relaunching
+  Application Designer now work correctly without restarting AppRefiner.
+
+
+BUG FIXES
+---------
+
+• Autocomplete Doubling - Accepting a suggestion after typing part of a name no
+  longer duplicates the text (e.g. "&varvariable"), including in files that
+  contain non-ASCII characters.
+• Lingering Error Highlights - Parse and type-error squiggles shown while you
+  type are now cleared automatically once the code becomes valid again — no
+  more leftover highlights at the wrong positions that required a save or
+  refresh to clear.
+• Class Autocomplete Semicolon - A trailing ";" is only added when completing a
+  class inside an import statement, not mid-expression.
+• Find & Replace - "Replace All" now searches the correct term when used more
+  than once in a session, and no longer inserts stray characters.
+• Signature Updates - Added undocumented Json* methods, corrected SQLExec and
+  Hash.SetValue() types, handled "@" references in built-in signatures, and
+  capitalized all system variables.
+
+
+PERFORMANCE
+-----------
+
+• Responsive Editing - Stylers now run asynchronously, keeping the editor
+  responsive while analysis happens in the background.
+• Fewer Cross-Process Reads - AppRefiner reads far less document data while you
+  type, reusing cached parse results when the document hasn't changed.
+• Member Access Caching - Member access validation is memoized, with automatic
+  invalidation on save or when switching Application Designer sessions.
+
+
 VERSION 1.2.1
 =============
 
