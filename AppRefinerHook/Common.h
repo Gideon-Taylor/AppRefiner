@@ -95,7 +95,7 @@
 #define WM_AR_SUBCLASS_ACK 2522             // Result of WM_SUBCLASS_SCINTILLA_PARENT_WINDOW (wParam=PACK(scintillaHwnd, statusFlags), lParam=parentHwnd)
 #define WM_AR_EDITOR_DESTROYED 2523         // Subclassed Scintilla editor received WM_NCDESTROY (posted; wParam=PACK(hwnd, 0)) - receiver evicts tracked editor state
 // 2524 is AR_FUNCTION_SUGGEST (C#-side only: raised by InvokeAutocompleteCommand for
-// Ctrl+Space on a plain identifier; the hook never produces it — reserved here so the
+// Ctrl+Space on a plain identifier; the hook never produces it - reserved here so the
 // next hook message doesn't collide)
 
 // Status flags for WM_AR_SUBCLASS_ACK (low 32 bits of wParam)
