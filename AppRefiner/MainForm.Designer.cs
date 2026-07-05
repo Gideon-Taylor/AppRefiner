@@ -116,6 +116,7 @@ namespace AppRefiner
             dataGridViewTextBoxColumnTooltips = new DataGridViewTextBoxColumn();
             tabPage2 = new TabPage();
             gridRefactors = new DataGridView();
+            dataGridViewTextBoxColumn3 = new DataGridViewTextBoxColumn();
             dataGridViewTextBoxColumn2 = new DataGridViewTextBoxColumn();
             Column1 = new DataGridViewTextBoxColumn();
             dataGridViewButtonColumn1 = new DataGridViewButtonColumn();
@@ -1018,7 +1019,7 @@ namespace AppRefiner
             gridRefactors.AllowUserToDeleteRows = false;
             gridRefactors.AllowUserToResizeColumns = false;
             gridRefactors.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.AutoSize;
-            gridRefactors.Columns.AddRange(new DataGridViewColumn[] { dataGridViewTextBoxColumn2, Column1, dataGridViewButtonColumn1 });
+            gridRefactors.Columns.AddRange(new DataGridViewColumn[] { dataGridViewTextBoxColumn3, dataGridViewTextBoxColumn2, Column1, dataGridViewButtonColumn1 });
             gridRefactors.Dock = DockStyle.Fill;
             gridRefactors.Location = new Point(3, 3);
             gridRefactors.Name = "gridRefactors";
@@ -1027,14 +1028,21 @@ namespace AppRefiner
             gridRefactors.TabIndex = 7;
             gridRefactors.CellContentClick += gridRefactors_CellContentClick;
             gridRefactors.CellPainting += gridRefactors_CellPainting;
-            // 
+            //
+            // dataGridViewTextBoxColumn3
+            //
+            dataGridViewTextBoxColumn3.HeaderText = "Name";
+            dataGridViewTextBoxColumn3.Name = "dataGridViewTextBoxColumn3";
+            dataGridViewTextBoxColumn3.ReadOnly = true;
+            dataGridViewTextBoxColumn3.Width = 140;
+            //
             // dataGridViewTextBoxColumn2
-            // 
+            //
             dataGridViewTextBoxColumn2.FillWeight = 110.569466F;
             dataGridViewTextBoxColumn2.HeaderText = "Description";
             dataGridViewTextBoxColumn2.Name = "dataGridViewTextBoxColumn2";
             dataGridViewTextBoxColumn2.ReadOnly = true;
-            dataGridViewTextBoxColumn2.Width = 372;
+            dataGridViewTextBoxColumn2.Width = 232;
             // 
             // Column1
             // 
@@ -1329,6 +1337,7 @@ namespace AppRefiner
         private ComboBox cmbTemplates;
         private TabPage tabPage2;
         private DataGridView gridRefactors;
+        private DataGridViewTextBoxColumn dataGridViewTextBoxColumn3;
         private DataGridViewTextBoxColumn dataGridViewTextBoxColumn2;
         private DataGridViewTextBoxColumn Column1;
         private DataGridViewButtonColumn dataGridViewButtonColumn1;

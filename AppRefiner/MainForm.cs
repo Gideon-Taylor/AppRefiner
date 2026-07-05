@@ -1807,8 +1807,11 @@ namespace AppRefiner
                 {
                     // Capture the info for the lambda
                     RefactorInfo currentRefactorInfo = refactorInfo;
+                    string refactorTitle = string.IsNullOrEmpty(currentRefactorInfo.ShortcutText)
+                        ? $"Refactor: {currentRefactorInfo.Name}"
+                        : $"Refactor: {currentRefactorInfo.Name} ({currentRefactorInfo.ShortcutText})";
                     AvailableCommands.Add(new Command(
-                            $"Refactor: {currentRefactorInfo.Name}{currentRefactorInfo.ShortcutText}",
+                            refactorTitle,
                             currentRefactorInfo.Description,
                         () =>
                         {
@@ -5484,8 +5487,8 @@ namespace AppRefiner
         // Add this new CellPainting event handler method
         private void gridRefactors_CellPainting(object sender, DataGridViewCellPaintingEventArgs e)
         {
-            // Check if it's the button column (index 2) and a valid row
-            if (e.ColumnIndex == 2 && e.RowIndex >= 0)
+            // Check if it's the button column (index 3) and a valid row
+            if (e.ColumnIndex == 3 && e.RowIndex >= 0)
             {
                 // Check the tag of the cell
                 var cell = gridRefactors.Rows[e.RowIndex].Cells[e.ColumnIndex];

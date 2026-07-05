@@ -147,16 +147,16 @@ namespace AppRefiner.Refactors
 
             foreach (var refactorInfo in availableRefactors)
             {
-                int rowIndex = refactorGrid.Rows.Add(refactorInfo.Description, String.IsNullOrEmpty(refactorInfo.ShortcutText) ? "Cmd Palette" : refactorInfo.ShortcutText);
+                int rowIndex = refactorGrid.Rows.Add(refactorInfo.Name, refactorInfo.Description, String.IsNullOrEmpty(refactorInfo.ShortcutText) ? "Cmd Palette" : refactorInfo.ShortcutText);
                 refactorGrid.Rows[rowIndex].Tag = refactorInfo;
 
                 var configurableProperties = refactorInfo.RefactorType.GetConfigurableProperties();
-                DataGridViewButtonCell buttonCell = (DataGridViewButtonCell)refactorGrid.Rows[rowIndex].Cells[2];
+                DataGridViewButtonCell buttonCell = (DataGridViewButtonCell)refactorGrid.Rows[rowIndex].Cells[3];
 
                 if (configurableProperties.Count > 0)
                 {
                     buttonCell.Value = "Configure...";
-                    refactorGrid.Rows[rowIndex].Cells[2].Tag = null;
+                    refactorGrid.Rows[rowIndex].Cells[3].Tag = null;
                 }
                 else
                 {
@@ -167,7 +167,7 @@ namespace AppRefiner.Refactors
                     buttonCell.Style.ForeColor = SystemColors.Control;
                     buttonCell.Style.SelectionBackColor = SystemColors.Control;
                     buttonCell.Style.SelectionForeColor = SystemColors.Control;
-                    refactorGrid.Rows[rowIndex].Cells[2].Tag = "NoConfig";
+                    refactorGrid.Rows[rowIndex].Cells[3].Tag = "NoConfig";
                 }
             }
         }
@@ -463,7 +463,7 @@ namespace AppRefiner.Refactors
             if (refactorGrid == null) return;
 
             refactorGrid.CommitEdit(DataGridViewDataErrorContexts.Commit);
-            if (e.ColumnIndex == 2 && e.RowIndex >= 0)
+            if (e.ColumnIndex == 3 && e.RowIndex >= 0)
             {
                 if (refactorGrid.Rows[e.RowIndex].Tag is RefactorInfo refactorInfo)
                 {
