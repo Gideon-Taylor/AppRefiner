@@ -126,14 +126,14 @@ namespace AppRefiner.Dialogs
             // headerLabel
             this.headerLabel.Text = "AppRefiner - Command Palette";
             this.headerLabel.ForeColor = Color.White;
-            this.headerLabel.Font = new Font("Segoe UI", 9F, FontStyle.Regular, GraphicsUnit.Point);
+            this.headerLabel.Font = new Font("Verdana", 8.25F, FontStyle.Regular, GraphicsUnit.Point);
             this.headerLabel.Dock = DockStyle.Fill;
             this.headerLabel.TextAlign = ContentAlignment.MiddleCenter;
 
             // searchBox
             this.searchBox.BorderStyle = BorderStyle.FixedSingle;
             this.searchBox.Dock = DockStyle.Top;
-            this.searchBox.Font = new Font("Segoe UI", 11F, FontStyle.Regular, GraphicsUnit.Point);
+            this.searchBox.Font = new Font("Verdana", 10F, FontStyle.Regular, GraphicsUnit.Point);
             this.searchBox.Location = new Point(0, 0);
             this.searchBox.Margin = new Padding(0);
             this.searchBox.Name = "searchBox";
@@ -145,7 +145,7 @@ namespace AppRefiner.Dialogs
             // commandListView
             this.commandListView.BorderStyle = BorderStyle.None;
             this.commandListView.Dock = DockStyle.Fill;
-            this.commandListView.Font = new Font("Segoe UI", 10F, FontStyle.Regular, GraphicsUnit.Point);
+            this.commandListView.Font = new Font("Verdana", 9F, FontStyle.Regular, GraphicsUnit.Point);
             this.commandListView.FullRowSelect = true;
             this.commandListView.HeaderStyle = ColumnHeaderStyle.None;
             this.commandListView.HideSelection = false;
