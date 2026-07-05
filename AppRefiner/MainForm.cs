@@ -2134,8 +2134,14 @@ namespace AppRefiner
                 {
                     Debug.Log($"CheckForContentChanges: Processing stylers for {editor.RelativePath ?? "unknown"}");
 
-                    // Clear annotations and reset styles BEFORE processing stylers
-                    ScintillaManager.ClearAnnotations(editor);
+                    // Reset styles BEFORE processing stylers. Annotations (lint results) are
+                    // only re-created by an explicit lint run — a focus-driven styler pass
+                    // (e.g. editor regaining focus after the command palette closes) must not
+                    // wipe them, so only clear when the content actually changed.
+                    if (editor.ContentDirty)
+                    {
+                        ScintillaManager.ClearAnnotations(editor);
+                    }
                     ScintillaManager.ResetStyles(editor);
 
                     // Apply dark mode if enabled
@@ -4684,6 +4690,11 @@ namespace AppRefiner
                                 // This ensures stylers will run immediately even if they ran recently for the previous program
                                 lastStylerProcessingTime.Remove(changedEditor);
                                 Debug.Log($"CaptionChanged event: Cleared styler debounce timer for reused editor");
+
+                                // A reused editor holds a different program now — mark dirty so
+                                // CheckForContentChanges clears the previous program's annotations
+                                // even if the hook's text-modified message hasn't arrived yet
+                                changedEditor.MarkContentDirty();
 
                                 Debug.Log($"CaptionChanged event: Calling CheckForContentChanges to process new program content");
                                 CheckForContentChanges(changedEditor);

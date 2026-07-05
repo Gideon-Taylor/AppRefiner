@@ -1475,8 +1475,10 @@ namespace AppRefiner
                     var textBuffer = editor.AppDesignerProcess.MemoryManager.GetOrCreateBuffer("styled_annotations_text", 16384);
                     var styleBuffer = editor.AppDesignerProcess.MemoryManager.GetOrCreateBuffer("styled_annotations_styles", 16384);
 
-                    // Write text and style bytes sequentially to their respective buffers
-                    IntPtr? remoteTextAddress = textBuffer.WriteString(combinedText);
+                    // Write text and style bytes sequentially to their respective buffers.
+                    // Encoding.Default must match the styleBytes layout above; WriteString's
+                    // UTF-16 default would null-terminate Scintilla's char* read after one byte.
+                    IntPtr? remoteTextAddress = textBuffer.WriteString(combinedText, Encoding.Default);
                     IntPtr? remoteStyleAddress = styleBuffer.Write(styleBytes);
 
                     // Handle resize if either buffer is full
@@ -1488,7 +1490,7 @@ namespace AppRefiner
                         styleBuffer.Resize(newSize);
 
                         // Retry writes (buffers have been reset by Resize)
-                        remoteTextAddress = textBuffer.WriteString(combinedText);
+                        remoteTextAddress = textBuffer.WriteString(combinedText, Encoding.Default);
                         remoteStyleAddress = styleBuffer.Write(styleBytes);
 
                         if (!remoteTextAddress.HasValue || !remoteStyleAddress.HasValue)
