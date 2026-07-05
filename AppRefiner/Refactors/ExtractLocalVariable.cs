@@ -111,7 +111,15 @@ namespace AppRefiner.Refactors
                 return;
             }
 
-            // Re-evaluated contexts: hoisting out of these changes semantics
+            // Contexts where hoisting the expression before the containing statement
+            // changes semantics. Two distinct hazards:
+            //   - re-evaluation: While/Repeat conditions run every iteration, so a
+            //     hoisted value would freeze the loop's exit test.
+            //   - conditional evaluation: an Evaluate When comparison is only tested
+            //     until an earlier When matches, so hoisting forces it to evaluate
+            //     eagerly and unconditionally.
+            // A For loop header (From/To/Step) is neither — PeopleCode evaluates those
+            // exactly once at loop entry — so it is safe to extract and not guarded here.
             for (AstNode? cur = targetExpression; cur != null && !ReferenceEquals(cur, containingStatement); cur = cur.Parent)
             {
                 switch (cur.Parent)
@@ -122,13 +130,8 @@ namespace AppRefiner.Refactors
                     case RepeatStatementNode r when ReferenceEquals(cur, r.Condition):
                         SetFailure("Cannot extract from a Repeat-Until condition — it is re-evaluated every iteration.");
                         return;
-                    case ForStatementNode f when ReferenceEquals(cur, f.FromValue)
-                                              || ReferenceEquals(cur, f.ToValue)
-                                              || (f.StepValue != null && ReferenceEquals(cur, f.StepValue)):
-                        SetFailure("Cannot extract from a For loop header.");
-                        return;
                     case EvaluateStatementNode ev when ev.WhenClauses.Any(wc => ReferenceEquals(cur, wc.Condition)):
-                        SetFailure("Cannot extract from a When condition.");
+                        SetFailure("Cannot extract from a When condition — it is only evaluated if no earlier When matches.");
                         return;
                 }
             }
@@ -332,6 +335,7 @@ namespace AppRefiner.Refactors
                 txtName.Location = new Point(12, 60);
                 txtName.Size = new Size(260, 23);
                 txtName.Font = new Font("Segoe UI", 11F, FontStyle.Regular, GraphicsUnit.Point);
+                txtName.TabIndex = 0;
                 txtName.KeyDown += (s, e) => { if (e.KeyCode == Keys.Enter) BtnOk_Click(s, e); };
 
                 lblType.AutoSize = true;
@@ -342,6 +346,7 @@ namespace AppRefiner.Refactors
                 chkReplaceAll.AutoSize = true;
                 chkReplaceAll.Location = new Point(12, 112);
                 chkReplaceAll.Text = $"Replace all {occurrenceCount} identical occurrences";
+                chkReplaceAll.TabIndex = 1;
                 chkReplaceAll.Visible = showReplaceAll; // layout only; ReplaceAll gates on the field
 
                 lblError.AutoSize = true;
@@ -353,6 +358,7 @@ namespace AppRefiner.Refactors
                 btnOk.Location = new Point(116, 158);
                 btnOk.Size = new Size(75, 28);
                 btnOk.Text = "&OK";
+                btnOk.TabIndex = 2;
                 btnOk.UseVisualStyleBackColor = true;
                 btnOk.Click += BtnOk_Click;
 
@@ -360,6 +366,7 @@ namespace AppRefiner.Refactors
                 btnCancel.Location = new Point(197, 158);
                 btnCancel.Size = new Size(75, 28);
                 btnCancel.Text = "&Cancel";
+                btnCancel.TabIndex = 3;
                 btnCancel.UseVisualStyleBackColor = true;
 
                 AcceptButton = btnOk;

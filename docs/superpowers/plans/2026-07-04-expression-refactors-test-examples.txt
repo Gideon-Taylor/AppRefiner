@@ -1,0 +1,248 @@
+================================================================================
+EXPRESSION REFACTORS - MANUAL TEST EXAMPLES
+Companion to docs/superpowers/plans/2026-07-04-expression-refactors.md (Task 8)
+================================================================================
+
+Usage:
+- Paste each program into any PeopleCode editor in App Designer. No save or
+  compile needed - refactors run off the parsed editor text.
+- Run refactors from the command palette (Ctrl+Shift+P).
+- Extract Local Variable needs a SELECTION. Inline Variable and
+  Convert If <-> Evaluate only need the CURSOR placed.
+- Caveats:
+  * Do NOT test inside property getter bodies - Extract and Convert refuse
+    there with misleading messages until the PC-2 parser fix lands
+    (PropertyImplNode.Parent == null; see docs/audits/2026-07-04-parser-health-audit.md).
+  * Convert picks the NEAREST enclosing If/Evaluate around the cursor.
+
+================================================================================
+1. EXTRACT LOCAL VARIABLE  (selection required)
+================================================================================
+
+Local string &name = "World";
+Local number &offset = 3;
+Local string &s = "abcdef";
+
+/* E1 - nesting disambiguation: select `6 * 2`, then `4 - (6 * 2)`,
+   then `3 + (4 - (6 * 2))` - three different extractions, all typed number */
+MessageBox(0, "", 0, 0, String(3 + (4 - (6 * 2))));
+
+/* E2 - select `(4 - (6 * 2))` INCLUDING the parens - paren-stripping
+   should still match the inner expression */
+
+/* E3 - select `3, 4 + 6` across the comma -> must refuse:
+   "Selection must cover exactly one complete expression" */
+&result = Mod(3, 4 + 6);
+
+/* E4 - run with NO selection -> refusal telling you to select */
+
+/* E5 - select `Len(&s)` inside the While condition -> refusal
+   (re-evaluated every iteration) */
+While Len(&s) > &offset
+   &offset = &offset + 1;
+End-While;
+
+/* E5b - For loop header (2026-07-05 change): extraction from From/To/Step
+   IS allowed - PeopleCode evaluates the header once at loop entry.
+   - select `Len(&s)` in the To -> declaration lands above the For, header
+     becomes `To &len`
+   - also verify From (`&offset`) and Step expressions extract the same way
+   - sub-expression case: select just `Find("x", &s)` (not the whole
+     `Find("x", &s) + 1`) -> must also extract */
+For &offset = 1 To Len(&s) Step 1
+   &s = &s;
+End-For;
+
+/* E5c - Evaluate scrutinee extracts (guard never blocked it); a When
+   comparison value refuses ("only evaluated if no earlier When matches") */
+Evaluate Upper(&s)
+When = "A"
+   &offset = 1;
+   Break;
+When = Upper(&name)
+   &offset = 2;
+   Break;
+End-Evaluate;
+
+/* E6 - replace-all: select `Len(&name) + 1` on the FIRST line below.
+   Dialog should show Type: number and "Replace all 3 identical occurrences"
+   (the parenthesized one and the one inside the If both count).
+   Test both checked and unchecked. */
+&a = Len(&name) + 1;
+&b = (Len(&name) + 1) * 2;
+If True Then
+   &c = Len(&name) + 1;
+End-If;
+
+/* E7 - whole expression statement (edit-ordering test): select the entire
+   `CreateRecord(Record.PSOPRDEFN)` (not the semicolon). Declaration lands
+   ABOVE, statement becomes the bare variable. Type should show `Record`
+   even with NO DB connection (builtin lookup). */
+CreateRecord(Record.PSOPRDEFN);
+
+/* E8 - name collision: extract anything and type `name` in the dialog ->
+   inline error "&name is already in use", dialog stays open */
+
+/* E9 - undo: after any extraction, Ctrl+Z must revert declaration +
+   replacement(s) as ONE action */
+
+/* E10 - DB vs no-DB: with a DB connected, extract a
+   `create SOME_PKG:SomeClass(...)` expression -> dialog shows the fully
+   qualified class name; without a DB it degrades to `any` */
+
+================================================================================
+2. INLINE VARIABLE  (cursor on the variable, no selection)
+================================================================================
+
+Local string &name = "World";
+
+/* I1 - happy path: cursor on &two -> both reads become 2, line deleted */
+Local number &two = 2;
+&x = &two * 10;
+&y = &two + &x;
+
+/* I2 - parenthesization: cursor on &sum -> reads become (&x + 1) */
+Local number &sum = &x + 1;
+If &sum > 3 Then
+   &y = &sum;
+End-If;
+
+/* I3 - function call + TWO reads -> refusal ("would evaluate it 2 times") */
+Local string &up = Upper(&name);
+&a = &up;
+&b = &up;
+
+/* I3b - function call + ONE read -> allowed */
+Local string &once = Upper(&name);
+&c = &once;
+
+/* I4 - stale value: &x reassigned between declaration and read -> refusal */
+Local number &snap = &x;
+&x = 99;
+&z = &snap;
+
+/* I5 - second write -> refusal (single-assignment only) */
+Local number &n = 1;
+&n = 2;
+&w = &n;
+
+/* I6 - never read -> refusal pointing at Delete Unused Variable quick fix */
+Local number &unused = 42;
+
+/* I7 - self-referencing initializer -> refusal (final-review guard) */
+Local number &q = &q + 1;
+&r = &q;
+
+/* I8 - locals only: open any app class, cursor on an INSTANCE variable
+   reference -> refusal "&X is not a local variable" */
+
+/* I9 - accepted limitation (observe consciously, no refusal expected):
+   inline a twice-read %CurrentDateTime initializer - the two inlined reads
+   can observe different values. Documented limitation, not a bug. */
+Local datetime &now = %Datetime;
+&d1 = &now;
+&d2 = &now;
+
+================================================================================
+3. CONVERT IF <-> EVALUATE  (cursor anywhere inside the construct)
+================================================================================
+
+Local string &status = "B";
+Local number &x = 7;
+Local boolean &a, &b;
+
+/* C1 - chain -> Evaluate: expect two Whens + When-Other, `Break;` after each
+   When body, `End-Evaluate;` keeping the semicolon. ROUND-TRIP: put the
+   cursor in the result and convert back -> this nested shape returns. */
+If &status = "A" Then
+   MessageBox(0, "", 0, 0, "Alpha");
+Else
+   If &status = "B" Then
+      MessageBox(0, "", 0, 0, "Beta");
+   Else
+      MessageBox(0, "", 0, 0, "Other");
+   End-If;
+End-If;
+
+/* C2 - right-side scrutinee: first When must be mirrored to `When > 5` */
+If 5 < &x Then
+   &y = 1;
+Else
+   If &x = 10 Then
+      &y = 2;
+   End-If;
+End-If;
+
+/* C3 - `And` in a condition -> refusal (simple comparisons only) */
+If &status = "A" And &x > 1 Then
+   &y = 3;
+Else
+   If &status = "B" Then
+      &y = 4;
+   End-If;
+End-If;
+
+/* C4 - Break targets the While; wrapping in Evaluate would retarget it
+   -> refusal. (Cursor inside the inner chain converts the CHAIN, so the
+   refusal comes from the chain conversion, not the While.) */
+While &x > 0
+   If &status = "A" Then
+      Break;
+   Else
+      If &status = "B" Then
+         &x = &x - 1;
+      End-If;
+   End-If;
+End-While;
+
+/* C5 - Evaluate -> If: stacked Whens merge to `Or`, When-Other becomes
+   Else, trailing Breaks dropped. Expected first condition:
+   If &status = "A" Or &status = "B" Then */
+Evaluate &status
+When = "A"
+When = "B"
+   MessageBox(0, "", 0, 0, "A or B");
+   Break;
+When = "C"
+   MessageBox(0, "", 0, 0, "Charlie");
+   Break;
+When-Other
+   MessageBox(0, "", 0, 0, "Other");
+End-Evaluate;
+
+/* C6 - first When body has no Break (intentional fall-through) -> refusal */
+Evaluate &x
+When = 1
+   &y = 1;
+When = 2
+   &y = 2;
+   Break;
+End-Evaluate;
+
+/* C7 - logical scrutinee: converted condition MUST come out as
+   `If (&a And &b) = True Then` (parenthesized), never
+   `If &a And &b = True` (which re-parses as `&a And (&b = True)`) */
+Evaluate &a And &b
+When = True
+   MessageBox(0, "", 0, 0, "both");
+   Break;
+End-Evaluate;
+
+/* C8 - neither construct: cursor on a plain assignment ->
+   "Place the cursor inside an If/Else-If chain or an Evaluate statement." */
+
+/* C10 - single If (no chain) converts too (2026-07-05 change): expect one
+   When + Break, plus When-Other from the Else */
+If &status = "A" Then
+   MessageBox(0, "", 0, 0, "solo alpha");
+Else
+   MessageBox(0, "", 0, 0, "solo other");
+End-If;
+
+/* C11 - cursor placement regression (2026-07-05 fix): put the cursor ON the
+   first `If &status = "A" Then` line of C1, and on its first `Else` keyword
+   -> both must convert, not refuse */
+
+/* C9 - indentation: generated code should match the surrounding file's
+   indent style (unit inferred from the first body statement; 3-space
+   fallback) */
