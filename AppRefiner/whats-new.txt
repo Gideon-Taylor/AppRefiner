@@ -4,63 +4,41 @@ VERSION 1.3.0
 *** PLEASE READ: RESTART APPLICATION DESIGNER ***
 -------------------------------------------------
 
-This release updates the AppRefiner integration that runs inside Application
-Designer. After updating, close and reopen any Application Designer windows
-that were already open — until you do, the new multi-instance and autocomplete
-fixes below will not be active in those windows.
+This release updates the AppRefiner integration running inside Application
+Designer. Close and reopen any Application Designer that was already open —
+until you do, the multi-instance and autocomplete fixes below aren't active.
 
 
 NEW FEATURES
 ------------
 
-• Instances Tab - A new "Instances" tab lists every Application Designer
-  session AppRefiner is tracking, showing the active session, database
-  connection, PeopleTools version, open editor count, and whether the enhanced
-  editor is loaded. Connect or disconnect a database, or bring a session to the
-  front, per instance — no more guessing which Application Designer a button
-  acts on.
-• Oracle LDAP Connections - The Database Connect dialog now supports connecting
-  to Oracle via LDAP, resolving the service descriptor automatically so no
-  separate ldap.ora configuration is required.
-• tnsnames.ora IFILE Support - AppRefiner now follows IFILE includes when
-  reading your tnsnames.ora, so aliases defined in included files appear in the
-  connection list.
-• Faster Connect Dialog - Database connection lists now load in the background,
-  so the dialog opens immediately instead of pausing while it reads
-  configuration.
-• Undeclared Function Detection - Calls to functions that aren't built in,
-  declared, or defined above their first use are underlined as you type —
-  including the classic "defined below its first use" mistake. Press Ctrl+.
-  on the underline to import the function from your function cache (works
-  even without a database connection), search for it in the Declare Function
-  dialog, or move a below-defined function above its caller automatically.
-• Function Name Autocomplete - Press Ctrl+Space while typing a plain identifier
-  (no & or % prefix) to see the functions you can call there: functions defined
-  or declared in the current program — honoring PeopleCode's rule that an
-  implementation must appear above its use — plus every builtin function. Pick
-  one and type ( to get its signature call tip.
-• Capture-Result Quick Fix - The "return/expression values must be assigned
-  to a variable" type errors now offer a Ctrl+. fix that captures the value
-  in a new local variable — typed from what AppRefiner inferred, named &_
-  (or the next free underscore name in that scope).
-• Redesigned Snapshot History - Restoring a previous version is now a
-  side-by-side experience: pick a snapshot on the left and its diff against
-  your current code renders instantly on the right — no more opening and
-  closing View Diff for each guess. Rows show at-a-glance change counts
-  (+12 −3), the preview offers Changes-only, Full-file, and Snapshot-content
-  views plus a comparison-direction toggle (all remembered between sessions),
-  and Copy Original / Copy Diff buttons put the old code or a unified diff on
-  the clipboard. Applying a revert automatically snapshots any unsaved edits
-  first so nothing is ever lost, and the dialog is resizable.
-• Message Catalog - Browse and search the Message Catalog without leaving
-  Application Designer. Hover any MsgGet, MsgGetText, MsgGetExplainText,
-  CreateException, MessageBox, or MsgBoxButtonOverride call to see the catalog
-  message, severity, and explain text. Press Ctrl+Space inside the message set
-  or number argument to pick a message from a searchable browser — it fills in
-  the numbers and default text for you. Planning a new message? The dialog
-  shows each set's free number ranges and validates the number you pick, with
-  your intended text carried into the inserted code. Open it any time from the
-  command palette: "Browse Message Catalog".
+• Instances Tab - See every Application Designer session AppRefiner is
+  tracking — database, Tools version, open editors — and connect, disconnect,
+  or bring one to the front. No more guessing which window a button acts on.
+• Oracle LDAP Connections - Connect to Oracle via LDAP with the service
+  descriptor resolved automatically — no ldap.ora setup needed.
+• tnsnames.ora IFILE Support - Aliases defined in IFILE-included files now
+  appear in the connection list.
+• Faster Connect Dialog - Connection lists load in the background, so the
+  dialog opens instantly.
+• Undeclared Function Detection - Functions that aren't built in, declared, or
+  defined above their first use are underlined as you type. Press Ctrl+. to
+  import the declaration from your function cache (no database needed), search
+  for it, or move a below-defined function above its caller automatically.
+• Function Name Autocomplete - Ctrl+Space on a plain identifier lists every
+  function you can call there — defined, declared, and builtin — and typing (
+  brings up its signature call tip.
+• Capture-Result Quick Fix - "Value must be assigned to a variable" errors
+  offer a Ctrl+. fix that captures the result into a new local variable,
+  correctly typed and named for you.
+• Redesigned Snapshot History - Pick a snapshot and instantly see its diff
+  against your current code side by side, with per-row change counts and
+  one-click copy of the old code or a unified diff. Reverting snapshots your
+  unsaved edits first, so nothing is ever lost.
+• Message Catalog - Hover any MsgGet-style call to see the message, severity,
+  and explain text. Ctrl+Space inside the arguments opens a searchable browser
+  that fills in the numbers and text for you — and helps you pick a valid free
+  number when planning a new message.
 
 
 PARSER ENGINE OVERHAUL
@@ -87,59 +65,43 @@ audited this release (~50 fixes, now guarded by an automated test suite).
 RELIABILITY & MULTI-INSTANCE FIXES
 ----------------------------------
 
-This release includes a large overhaul of how AppRefiner communicates with
-Application Designer, resolving a class of intermittent issues — especially
-when more than one Application Designer is open.
+A large overhaul of how AppRefiner talks to Application Designer, resolving a
+class of intermittent issues — especially with multiple instances open.
 
-• Editor Features No Longer Fade Away - Fixed a long-standing timing issue
-  where, if Application Designer was started while AppRefiner was already
-  running, editors opened a few minutes into the session could silently lose
-  autocomplete, the AppRefiner button, and the minimap until both programs
-  were restarted. Editors now stay fully functional for the life of the
-  session.
-• Instant Editor Setup - Editors are now wired up the moment they are created
-  instead of waiting for you to click into them, and the setup is verified and
-  automatically retried if Application Designer wasn't ready yet. Code analysis
-  visuals (inlay hints, error highlights) also appear as the editor opens
-  rather than on first click. When AppRefiner starts while Application Designer
-  already has editors open, those editors are initialized immediately.
-• Enhanced Editor Without Restarting - If AppRefiner attaches to an Application
-  Designer that already has editors open, the enhanced editor previously
-  required a full Application Designer restart. Now it loads automatically as
-  soon as you close all open editors — no restart, no losing your place.
-• Correct Instance Routing - Autocomplete, tooltips, call tips, paste handling,
-  and save tracking are now always applied to the editor that triggered them.
-  Previously, switching quickly between editors or running several Application
-  Designers could send a result to the wrong window.
-• "Buffers Go Weird" Fixes - Eliminated the race conditions behind occasional
-  wrong autocomplete values, garbled tooltips, and stale content — the reads
-  and writes AppRefiner makes into Application Designer's memory are now
-  isolated and synchronized.
-• Auto-Connect Prompt Placement - When "Prompt for DB Connection" is enabled
-  and multiple Application Designers are open at startup, the connect dialog
-  now appears on the Application Designer you actually switch to, instead of
-  opening invisibly behind other windows.
-• Session Lifecycle - Closing an editor or exiting an Application Designer no
-  longer leaves stale state behind. Reopening editors and relaunching
-  Application Designer now work correctly without restarting AppRefiner.
+• Editor Features No Longer Stop Working - Editors opened mid-session no
+  longer silently lose autocomplete, the AppRefiner button, or the minimap —
+  they stay fully functional for the life of the session.
+• Instant Editor Setup - Editors are wired up the moment they open — hints and
+  highlights included — instead of waiting for your first click. Editors
+  already open when AppRefiner starts are picked up immediately.
+• Enhanced Editor Without Restarting - Attaching to a running Application
+  Designer no longer requires restarting it for the enhanced editor; it loads
+  as soon as you close the open editors.
+• Correct Instance Routing - Autocomplete, tooltips, call tips, and save
+  tracking always land in the editor that triggered them — even when switching
+  quickly or running several Application Designers.
+• Wrong Values and Garbled Text - Eliminated the race conditions behind
+  occasional wrong autocomplete values, garbled tooltips, and stale content.
+• Auto-Connect Prompt Placement - The startup connect prompt appears on the
+  Application Designer you actually switch to, instead of hiding behind other
+  windows.
+• Session Lifecycle - Closing editors or exiting an Application Designer no
+  longer leaves stale state behind — reopening and relaunching just work.
 
 
 BUG FIXES
 ---------
 
-• Inlay Hints Survive Saving - Parameter name hints (and error highlights) no
-  longer disappear when you save. Application Designer rewrites the editor
-  contents during a save; AppRefiner now restores its visuals right after.
+• Inlay Hints Survive Saving - Parameter name hints and error highlights no
+  longer disappear when you save.
 • Accurate Enhanced Editor Status - The Instances tab's "Enhanced" column now
-  reflects whether the enhanced editor is actually loaded. Previously it always
-  showed "No" on Tools 8.60 and always "Yes" on 8.61+, regardless of reality.
+  reflects whether the enhanced editor is actually loaded, instead of being
+  decided by your Tools version.
 • Autocomplete Doubling - Accepting a suggestion after typing part of a name no
   longer duplicates the text (e.g. "&varvariable"), including in files that
   contain non-ASCII characters.
-• Lingering Error Highlights - Parse and type-error squiggles shown while you
-  type are now cleared automatically once the code becomes valid again — no
-  more leftover highlights at the wrong positions that required a save or
-  refresh to clear.
+• Lingering Error Highlights - Squiggles now clear automatically once the code
+  is valid again — no more saving or refreshing to clean them up.
 • Class Autocomplete Semicolon - A trailing ";" is only added when completing a
   class inside an import statement, not mid-expression.
 • Find & Replace - "Replace All" now searches the correct term when used more
