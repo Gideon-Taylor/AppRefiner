@@ -96,7 +96,7 @@ public class VariableInfo
     /// True if this variable is safe to refactor (rename) within the current program
     /// Safe variables are those that are only accessible within the current program
     /// </summary>
-    public bool IsSafeToRefactor => Kind is VariableKind.Local or VariableKind.Instance or VariableKind.Parameter;
+    public bool IsSafeToRefactor => Kind is VariableKind.Local or VariableKind.Instance or VariableKind.Parameter or VariableKind.Exception;
 
     /// <summary>
     /// True if this variable has been used (referenced) anywhere in the program

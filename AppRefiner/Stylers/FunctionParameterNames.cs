@@ -174,7 +174,7 @@ namespace AppRefiner.Stylers
             CollectHintsForArguments(funcInfo, node.Arguments);
         }
 
-        private void CollectHintsForArguments(FunctionInfo functionInfo, List<ExpressionNode> arguments)
+        private void CollectHintsForArguments(FunctionInfo functionInfo, IReadOnlyList<ExpressionNode> arguments)
         {
             var argTypes = new TypeInfo[arguments.Count];
             for (int i = 0; i < arguments.Count; i++)
@@ -202,7 +202,7 @@ namespace AppRefiner.Stylers
                         ? $"arg{mapping.ArgumentIndex}"
                         : mapping.ParameterName;
 
-                    AddDesiredHint(arg.SourceSpan.Start.Line, arg.SourceSpan.Start.Column - 1, $"{displayName}:");
+                    AddDesiredHint(arg.SourceSpan.Start.Line, arg.SourceSpan.Start.Column, $"{displayName}:");
                 }
             }
             else
@@ -211,12 +211,12 @@ namespace AppRefiner.Stylers
             }
         }
 
-        private void CollectGenericParameterNames(List<ExpressionNode> arguments)
+        private void CollectGenericParameterNames(IReadOnlyList<ExpressionNode> arguments)
         {
             for (int i = 0; i < arguments.Count; i++)
             {
                 var arg = arguments[i];
-                AddDesiredHint(arg.SourceSpan.Start.Line, arg.SourceSpan.Start.Column - 1, $"arg{i}:");
+                AddDesiredHint(arg.SourceSpan.Start.Line, arg.SourceSpan.Start.Column, $"arg{i}:");
             }
         }
 

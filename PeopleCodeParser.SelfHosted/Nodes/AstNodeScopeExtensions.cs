@@ -26,9 +26,13 @@ public static class AstNodeScopeExtensions
         }
 
         // Fallback: search up the tree for an annotated ancestor
+        // (depth-capped as a cycle guard, mirroring AstNode.FindAncestor)
+        var depth = 0;
         var parent = node.Parent;
         while (parent != null)
         {
+            if (++depth > 100_000)
+                throw new InvalidOperationException("Cycle detected in AST parent chain");
             if (parent.Attributes.TryGetValue(
                 ScopeAnnotationVisitor.ScopeContextAttributeKey,
                 out var parentScope))

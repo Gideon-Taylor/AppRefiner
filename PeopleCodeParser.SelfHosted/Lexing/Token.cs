@@ -137,7 +137,6 @@ public enum TokenType
 
     // Keywords (70+ tokens from ANTLR grammar)
     Abstract,
-    Add,                  // +
     Alias,
     And,
     Any,
@@ -169,7 +168,6 @@ public enum TokenType
     Exception,
     Exit,
     Extends,
-    False,
     Float,
     For,
     Function,
@@ -208,7 +206,6 @@ public enum TokenType
     Throw,
     Time,
     To,
-    True,
     Try,
     Until,
     Value,
@@ -278,7 +275,6 @@ public enum TokenType
 
     // Identifiers
     GenericId,
-    GenericIdLimited,
     UserVariable,         // &variable
     SystemVariable,       // %USERID, %DATE, etc.
     SystemConstant,       // %THIS, etc.
@@ -410,7 +406,6 @@ public static class TokenTypeExtensions
         {
             // Keywords
             TokenType.Abstract => "abstract",
-            TokenType.Add => "+",
             TokenType.Alias => "alias",
             TokenType.And => "And",
             TokenType.Any => "any",
@@ -443,7 +438,6 @@ public static class TokenTypeExtensions
             TokenType.Exception => "Exception",
             TokenType.Exit => "Exit",
             TokenType.Extends => "extends",
-            TokenType.False => "False",
             TokenType.Float => "float",
             TokenType.For => "For",
             TokenType.Function => "Function",
@@ -482,7 +476,6 @@ public static class TokenTypeExtensions
             TokenType.Throw => "Throw",
             TokenType.Time => "Time",
             TokenType.To => "To",
-            TokenType.True => "True",
             TokenType.Try => "try",
             TokenType.Until => "Until",
             TokenType.Value => "Value",
@@ -499,7 +492,7 @@ public static class TokenTypeExtensions
             TokenType.EndIf => "End-If",
             TokenType.EndInterface => "End-Interface",
             TokenType.EndMethod => "End-Method",
-            TokenType.EndSet => "snd-set",
+            TokenType.EndSet => "end-set",
             TokenType.EndTry => "End-Try",
             TokenType.EndWhile => "End-While",
 

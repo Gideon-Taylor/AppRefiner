@@ -12,39 +12,44 @@ public class ProgramNode : AstNode
     /// <summary>
     /// Import declarations at the top of the program
     /// </summary>
-    public List<ImportNode> Imports { get; } = new();
+    private readonly List<ImportNode> _imports = new();
+    public IReadOnlyList<ImportNode> Imports => _imports;
 
     /// <summary>
     /// Application class or interface definition (if this is a class or interface program)
     /// </summary>
-    public AppClassNode? AppClass { get; set; }
+    public AppClassNode? AppClass { get; private set; }
 
     /// <summary>
     /// Function declarations
     /// </summary>
-    public List<FunctionNode> Functions { get; } = new();
+    private readonly List<FunctionNode> _functions = new();
+    public IReadOnlyList<FunctionNode> Functions => _functions;
 
     /// <summary>
     /// Component and global variable declarations (does not include local variables)
     /// </summary>
-    public List<ProgramVariableNode> ComponentAndGlobalVariables { get; } = new();
+    private readonly List<ProgramVariableNode> _componentAndGlobalVariables = new();
+    public IReadOnlyList<ProgramVariableNode> ComponentAndGlobalVariables => _componentAndGlobalVariables;
 
     /// <summary>
     /// Program-level local variable declarations (includes both LocalVariableDeclarationNode and LocalVariableDeclarationWithAssignmentNode)
     /// </summary>
-    public List<StatementNode> LocalVariables { get; } = new();
+    private readonly List<StatementNode> _localVariables = new();
+    public IReadOnlyList<StatementNode> LocalVariables => _localVariables;
 
     public List<VariableInfo> AutoDeclaredVariables { get; } = new();
 
     /// <summary>
     /// Constant declarations
     /// </summary>
-    public List<ConstantNode> Constants { get; } = new();
+    private readonly List<ConstantNode> _constants = new();
+    public IReadOnlyList<ConstantNode> Constants => _constants;
 
     /// <summary>
     /// Main program statements (for non-class programs)
     /// </summary>
-    public BlockNode? MainBlock { get; set; }
+    public BlockNode? MainBlock { get; private set; }
 
     /// <summary>
     /// All comments found in the program (both line and block comments)
@@ -81,31 +86,31 @@ public class ProgramNode : AstNode
 
     public void AddImport(ImportNode import)
     {
-        Imports.Add(import);
+        _imports.Add(import);
         AddChild(import);
     }
 
     public void AddFunction(FunctionNode function)
     {
-        Functions.Add(function);
+        _functions.Add(function);
         AddChild(function);
     }
 
     public void AddConstant(ConstantNode constant)
     {
-        Constants.Add(constant);
+        _constants.Add(constant);
         AddChild(constant);
     }
 
     public void AddComponentAndGlobalVariable(ProgramVariableNode variable)
     {
-        ComponentAndGlobalVariables.Add(variable);
+        _componentAndGlobalVariables.Add(variable);
         AddChild(variable);
     }
 
     public void AddLocalVariable(StatementNode variable)
     {
-        LocalVariables.Add(variable);
+        _localVariables.Add(variable);
         AddChild(variable);
     }
 
@@ -152,10 +157,6 @@ public class ProgramNode : AstNode
         visitor.VisitProgram(this);
     }
 
-    public override TResult Accept<TResult>(IAstVisitor<TResult> visitor)
-    {
-        return visitor.VisitProgram(this);
-    }
 
     public override string ToString()
     {
@@ -251,7 +252,9 @@ public class ImportNode : AstNode
         PackagePath = pathList.AsReadOnly();
         ClassName = className;
 
-        FullPath = string.Join(":", pathList) + (IsWildcard ? ":*" : $":{className}");
+        // className decides wildcard-ness here; the IsWildcard property reads
+        // ImportedType, which is not assigned yet at this point
+        FullPath = string.Join(":", pathList) + (className == null ? ":*" : $":{className}");
 
         // Create appropriate type node
         if (className == null)
@@ -302,10 +305,6 @@ public class ImportNode : AstNode
         visitor.VisitImport(this);
     }
 
-    public override TResult Accept<TResult>(IAstVisitor<TResult> visitor)
-    {
-        return visitor.VisitImport(this);
-    }
 
     public override string ToString()
     {
@@ -346,36 +345,43 @@ public class AppClassNode : AstNode
     /// For interfaces: can extend another interface
     /// Null if no base type
     /// </summary>
-    public TypeNode? BaseType { get; set; }
+    public TypeNode? BaseType { get; private set; }
 
     /// <summary>
     /// Method declarations in the class header
     /// </summary>
-    public List<MethodNode> Methods { get; } = new();
+    private readonly List<MethodNode> _methods = new();
+    public IReadOnlyList<MethodNode> Methods => _methods;
 
-    public List<MethodImplNode> OrphanedMethodImpls { get; } = new();
+    private readonly List<MethodImplNode> _orphanedMethodImpls = new();
+    public IReadOnlyList<MethodImplNode> OrphanedMethodImpls => _orphanedMethodImpls;
 
     /// <summary>
     /// Property declarations
     /// </summary>
-    public List<PropertyNode> Properties { get; } = new();
+    private readonly List<PropertyNode> _properties = new();
+    public IReadOnlyList<PropertyNode> Properties => _properties;
 
-    public List<PropertyImplNode> OrphanedPropertyImpls { get; } = new();
+    private readonly List<PropertyImplNode> _orphanedPropertyImpls = new();
+    public IReadOnlyList<PropertyImplNode> OrphanedPropertyImpls => _orphanedPropertyImpls;
 
     /// <summary>
     /// Instance variable declarations
     /// </summary>
-    public List<ProgramVariableNode> InstanceVariables { get; } = new();
+    private readonly List<ProgramVariableNode> _instanceVariables = new();
+    public IReadOnlyList<ProgramVariableNode> InstanceVariables => _instanceVariables;
 
     /// <summary>
     /// Constant declarations
     /// </summary>
-    public List<ConstantNode> Constants { get; } = new();
+    private readonly List<ConstantNode> _constants = new();
+    public IReadOnlyList<ConstantNode> Constants => _constants;
 
     /// <summary>
     /// Method implementations (outside the class declaration)
     /// </summary>
-    public List<MethodNode> MethodImplementations { get; } = new();
+    private readonly List<MethodNode> _methodImplementations = new();
+    public IReadOnlyList<MethodNode> MethodImplementations => _methodImplementations;
 
     /// <summary>
     /// Visibility sections
@@ -406,13 +412,13 @@ public class AppClassNode : AstNode
 
     public void AddOrphanedMethodImplementation(MethodImplNode methodImplementation)
     {
-        OrphanedMethodImpls.Add(methodImplementation);
+        _orphanedMethodImpls.Add(methodImplementation);
         AddChild(methodImplementation);
     }
 
     public void AddOrphanedPropertyImplementation(PropertyImplNode node)
     {
-        OrphanedPropertyImpls.Add(node);
+        _orphanedPropertyImpls.Add(node);
         AddChild(node);
     }
     public void AddMember(AstNode member, VisibilityModifier visibility = VisibilityModifier.Public)
@@ -425,18 +431,18 @@ public class AppClassNode : AstNode
         {
             case MethodNode method:
                 if (method.IsImplementation)
-                    MethodImplementations.Add(method);
+                    _methodImplementations.Add(method);
                 else
-                    Methods.Add(method);
+                    _methods.Add(method);
                 break;
             case PropertyNode property:
-                Properties.Add(property);
+                _properties.Add(property);
                 break;
             case ProgramVariableNode variable:
-                InstanceVariables.Add(variable);
+                _instanceVariables.Add(variable);
                 break;
             case ConstantNode constant:
-                Constants.Add(constant);
+                _constants.Add(constant);
                 break;
         }
     }
@@ -446,10 +452,6 @@ public class AppClassNode : AstNode
         visitor.VisitAppClass(this);
     }
 
-    public override TResult Accept<TResult>(IAstVisitor<TResult> visitor)
-    {
-        return visitor.VisitAppClass(this);
-    }
 
     public override string ToString()
     {

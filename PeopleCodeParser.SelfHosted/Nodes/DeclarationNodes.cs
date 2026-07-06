@@ -48,19 +48,21 @@ public class MethodNode : DeclarationNode
     /// <summary>
     /// Method parameters
     /// </summary>
-    public List<ParameterNode> Parameters { get; } = new();
+    private readonly List<ParameterNode> _parameters = new();
+    public IReadOnlyList<ParameterNode> Parameters => _parameters;
 
-    public List<ParameterNode> ParameterAnnotations { get; set; } = new();
+    private readonly List<ParameterNode> _parameterAnnotations = new();
+    public IReadOnlyList<ParameterNode> ParameterAnnotations => _parameterAnnotations;
 
     /// <summary>
     /// Return type (null for constructors and procedures)
     /// </summary>
-    public TypeNode? ReturnType { get; set; }
+    public TypeNode? ReturnType { get; private set; }
 
     /// <summary>
     /// Method implementation (null for declarations)
     /// </summary>
-    public MethodImplNode? Implementation { get; set; }
+    public MethodImplNode? Implementation { get; private set; }
 
     /// <summary>
     /// Method body (compatibility property - returns Implementation?.Body)
@@ -100,7 +102,8 @@ public class MethodNode : DeclarationNode
     /// <summary>
     /// Implemented interfaces (from EXTENDS/IMPLEMENTS annotation)
     /// </summary>
-    public List<TypeNode> ImplementedInterfaces { get; } = new();
+    private readonly List<TypeNode> _implementedInterfaces = new();
+    public IReadOnlyList<TypeNode> ImplementedInterfaces => _implementedInterfaces;
 
     /// <summary>
     /// Implemented method name (from EXTENDS/IMPLEMENTS annotation)
@@ -113,13 +116,13 @@ public class MethodNode : DeclarationNode
 
     public void AddImplementedInterface(TypeNode interfaceType)
     {
-        ImplementedInterfaces.Add(interfaceType);
+        _implementedInterfaces.Add(interfaceType);
         AddChild(interfaceType);
     }
 
     public void AddParameter(ParameterNode parameter)
     {
-        Parameters.Add(parameter);
+        _parameters.Add(parameter);
         AddChild(parameter);
     }
 
@@ -168,10 +171,6 @@ public class MethodNode : DeclarationNode
         visitor.VisitMethod(this);
     }
 
-    public override TResult Accept<TResult>(IAstVisitor<TResult> visitor)
-    {
-        return visitor.VisitMethod(this);
-    }
 
     public override string ToString()
     {
@@ -184,7 +183,7 @@ public class MethodNode : DeclarationNode
 
     internal void AddParameterAnnotation(ParameterNode parameter)
     {
-        ParameterAnnotations.Add(parameter);
+        _parameterAnnotations.Add(parameter);
         AddChild(parameter);
     }
 
@@ -227,13 +226,13 @@ public class PropertyNode : DeclarationNode
     /// <summary>
     /// Property getter implementation (for implementations)
     /// </summary>
-    public PropertyImplNode? Getter { get; set; } 
+    public PropertyImplNode? Getter { get; private set; }
 
     /// <summary>
     /// Property setter implementation (for implementations)
     /// </summary>
 
-    public PropertyImplNode? Setter { get; set; }
+    public PropertyImplNode? Setter { get; private set; }
 
     public BlockNode? GetterBody { get { return Getter?.Body ?? null; } }
     public BlockNode? SetterBody { get { return Setter?.Body ?? null; } }
@@ -277,10 +276,6 @@ public class PropertyNode : DeclarationNode
         visitor.VisitProperty(this);
     }
 
-    public override TResult Accept<TResult>(IAstVisitor<TResult> visitor)
-    {
-        return visitor.VisitProperty(this);
-    }
 
     public override string ToString()
     {
@@ -312,11 +307,12 @@ public class PropertyImplNode : AstNode
     public bool IsGetter { get; set; } = false;
     public bool IsSetter { get; set; } = false;
 
-    public List<ParameterNode> ParameterAnnotations { get; } = new();
+    private readonly List<ParameterNode> _parameterAnnotations = new();
+    public IReadOnlyList<ParameterNode> ParameterAnnotations => _parameterAnnotations;
 
     public void AddParameterAnnotation(ParameterNode annotation)
     {
-        ParameterAnnotations.Add(annotation);
+        _parameterAnnotations.Add(annotation);
         AddChild(annotation);
     }
     public void SetBody(BlockNode body)
@@ -336,28 +332,25 @@ public class PropertyImplNode : AstNode
             RemoveChild(ImplementedInterface);
         }
         ImplementedInterface = type;
+        AddChild(type);
     }
     /// <summary>
     /// Class or Interface this property implements
     /// </summary>
-    public TypeNode? ImplementedInterface { get; set; }
+    public TypeNode? ImplementedInterface { get; private set; }
 
     /// <summary>
     /// Gets or sets the name of the implemented property.
     /// </summary>
     public string? ImplementedPropertyName { get; set; }
 
-    public BlockNode? Body { get; set; }
+    public BlockNode? Body { get; private set; }
 
     public override void Accept(IAstVisitor visitor)
     {
         visitor.VisitPropertyImpl(this);
     }
 
-    public override TResult Accept<TResult>(IAstVisitor<TResult> visitor)
-    {
-        return visitor.VisitPropertyImpl(this);
-    }
 }
 /// <summary>
 /// Program-level variable declaration (Component, Global, or Instance scope)
@@ -378,7 +371,7 @@ public class ProgramVariableNode : DeclarationNode
     /// <summary>
     /// Initial value expression (optional)
     /// </summary>
-    public ExpressionNode? InitialValue { get; set; }
+    public ExpressionNode? InitialValue { get; private set; }
 
     /// <summary>
     /// Additional variable names (for multi-variable declarations like LOCAL string &a, &b, &c)
@@ -422,10 +415,6 @@ public class ProgramVariableNode : DeclarationNode
         visitor.VisitProgramVariable(this);
     }
 
-    public override TResult Accept<TResult>(IAstVisitor<TResult> visitor)
-    {
-        return visitor.VisitProgramVariable(this);
-    }
 
     public override string ToString()
     {
@@ -462,10 +451,6 @@ public class ConstantNode : DeclarationNode
         visitor.VisitConstant(this);
     }
 
-    public override TResult Accept<TResult>(IAstVisitor<TResult> visitor)
-    {
-        return visitor.VisitConstant(this);
-    }
 
     public override string ToString()
     {
@@ -486,17 +471,18 @@ public class FunctionNode : DeclarationNode
     /// <summary>
     /// Function parameters
     /// </summary>
-    public List<ParameterNode> Parameters { get; } = new();
+    private readonly List<ParameterNode> _parameters = new();
+    public IReadOnlyList<ParameterNode> Parameters => _parameters;
 
     /// <summary>
     /// Return type (null for procedures)
     /// </summary>
-    public TypeNode? ReturnType { get; set; }
+    public TypeNode? ReturnType { get; private set; }
 
     /// <summary>
     /// Function body (null for declarations)
     /// </summary>
-    public BlockNode? Body { get; set; }
+    public BlockNode? Body { get; private set; }
 
     /// <summary>
     /// Function type (PeopleCode or DLL)
@@ -552,7 +538,7 @@ public class FunctionNode : DeclarationNode
 
     public void AddParameter(ParameterNode parameter)
     {
-        Parameters.Add(parameter);
+        _parameters.Add(parameter);
         AddChild(parameter);
     }
 
@@ -581,10 +567,6 @@ public class FunctionNode : DeclarationNode
         visitor.VisitFunction(this);
     }
 
-    public override TResult Accept<TResult>(IAstVisitor<TResult> visitor)
-    {
-        return visitor.VisitFunction(this);
-    }
 
     public override string ToString()
     {
@@ -640,17 +622,15 @@ public class ParameterNode : AstNode
     /// Parameter type
     /// </summary>
     private TypeNode _type;
-    public TypeNode Type
+    public TypeNode Type => _type;
+
+    public void SetType(TypeNode type)
     {
-        get => _type;
-        set
-        {
-            if (_type != null)
-                RemoveChild(_type);
-            _type = value;
-            if (_type != null)
-                AddChild(_type);
-        }
+        if (_type != null)
+            RemoveChild(_type);
+        _type = type;
+        if (_type != null)
+            AddChild(_type);
     }
 
     /// <summary>
@@ -667,17 +647,12 @@ public class ParameterNode : AstNode
     {
         Name = name ?? throw new ArgumentNullException(nameof(name));
         NameToken = nameToken;
-        Type = type ?? throw new ArgumentNullException(nameof(type));
+        SetType(type ?? throw new ArgumentNullException(nameof(type)));
     }
 
     public override void Accept(IAstVisitor visitor)
     {
         // Parameters are handled by their parent nodes
-    }
-
-    public override TResult Accept<TResult>(IAstVisitor<TResult> visitor)
-    {
-        return default!;
     }
 
     public override string ToString()
@@ -708,12 +683,13 @@ public class MethodImplNode : AstNode
     /// <summary>
     /// Parameter annotations parsed from /+ ... +/ comments in method implementation
     /// </summary>
-    public List<ParameterNode> ParameterAnnotations { get; } = new();
+    private readonly List<ParameterNode> _parameterAnnotations = new();
+    public IReadOnlyList<ParameterNode> ParameterAnnotations => _parameterAnnotations;
 
     /// <summary>
     /// Return type annotation from implementation (if specified in annotations)
     /// </summary>
-    public TypeNode? ReturnTypeAnnotation { get; set; }
+    public TypeNode? ReturnTypeAnnotation { get; private set; }
 
     /// <summary>
     /// The actual method body (statement block)
@@ -733,7 +709,8 @@ public class MethodImplNode : AstNode
     /// <summary>
     /// Implemented interfaces (from EXTENDS/IMPLEMENTS annotation)
     /// </summary>
-    public List<TypeNode> ImplementedInterfaces { get; } = new();
+    private readonly List<TypeNode> _implementedInterfaces = new();
+    public IReadOnlyList<TypeNode> ImplementedInterfaces => _implementedInterfaces;
 
     /// <summary>
     /// Implemented method name (from EXTENDS/IMPLEMENTS annotation)
@@ -741,9 +718,10 @@ public class MethodImplNode : AstNode
     public string? ImplementedMethodName { get; set; }
 
     /// <summary>
-    /// Reference back to the method declaration that this implementation belongs to
+    /// Reference back to the method declaration that this implementation belongs to.
+    /// Cross-link only (not a child slot) — maintained by MethodNode.SetImplementation.
     /// </summary>
-    public MethodNode? Declaration { get; set; }
+    public MethodNode? Declaration { get; internal set; }
 
     public MethodImplNode(string name, Token nameToken, BlockNode body)
     {
@@ -755,7 +733,7 @@ public class MethodImplNode : AstNode
 
     public void AddParameterAnnotation(ParameterNode parameter)
     {
-        ParameterAnnotations.Add(parameter);
+        _parameterAnnotations.Add(parameter);
         AddChild(parameter);
     }
 
@@ -771,7 +749,7 @@ public class MethodImplNode : AstNode
 
     public void AddImplementedInterface(TypeNode interfaceType)
     {
-        ImplementedInterfaces.Add(interfaceType);
+        _implementedInterfaces.Add(interfaceType);
         AddChild(interfaceType);
     }
 
@@ -800,10 +778,6 @@ public class MethodImplNode : AstNode
         visitor.VisitMethodImpl(this);
     }
 
-    public override TResult Accept<TResult>(IAstVisitor<TResult> visitor)
-    {
-        return visitor.VisitMethodImpl(this);
-    }
 
     public override string ToString()
     {

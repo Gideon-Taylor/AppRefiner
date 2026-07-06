@@ -411,7 +411,7 @@ namespace AppRefiner
                         var matchingArg = funcCallNode.Arguments.Where(a => a.SourceSpan.ContainsPosition(position)).FirstOrDefault();
                         if (matchingArg != null)
                         {
-                            var argIndex = funcCallNode.Arguments.IndexOf(matchingArg);
+                            var argIndex = funcCallNode.Arguments.ToList().IndexOf(matchingArg);
                             var funcInfo = funcCallNode.GetFunctionInfo();
                             if (funcInfo != null)
                             {

@@ -38,7 +38,7 @@ namespace AppRefiner.Refactors
         public override void VisitProgram(ProgramNode node)
         {
             base.VisitProgram(node);
-            InsertText(new SourcePosition(0, 1, 0), GenerateFlowerBoxHeader(), "Add flower box");
+            InsertText(new SourcePosition(0), GenerateFlowerBoxHeader(), "Add flower box");
         }
     }
 }

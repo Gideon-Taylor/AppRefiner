@@ -63,6 +63,27 @@ NEW FEATURES
   command palette: "Browse Message Catalog".
 
 
+PARSER ENGINE OVERHAUL
+----------------------
+
+The PeopleCode parser behind linting, styling, and refactoring was deeply
+audited this release (~50 fixes, now guarded by an automated test suite).
+
+• Valid Code Parses Cleanly - Fixed false errors on legal PeopleCode: `&y-1`
+  without spaces, `Not` with comparisons, keyword-named methods, mid-line REM,
+  case-differing implementations, and more. If App Designer accepts it,
+  AppRefiner should too.
+• One Typo, One Error - Mistakes stay contained while you type: a typo or
+  missing End-If no longer blanks styling for the rest of the class or
+  swallows the code below it, and error messages point at the actual problem
+  ("'End-If' has no matching 'If'") instead of flooding the list.
+• No Crashes or Hangs - Input that could previously crash AppRefiner or pin a
+  background thread at 100% CPU now just reports an error and moves on.
+• More Accurate Analysis - Property getters, annotations, and Catch variables
+  are now fully visible to linters, rename, and unused-variable detection, and
+  quick fixes/refactors always edit exactly the text they should.
+
+
 RELIABILITY & MULTI-INSTANCE FIXES
 ----------------------------------
 

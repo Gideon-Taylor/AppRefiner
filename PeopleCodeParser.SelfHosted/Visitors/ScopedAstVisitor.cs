@@ -495,6 +495,9 @@ public abstract class ScopedAstVisitor<T> : AstVisitorBase
         var nameInfo = new VariableNameInfo(node.Name, node.NameToken);
         RegisterVariable(nameInfo, node.Type.TypeName, VariableKind.Property, node);
 
+        // Visit the declared type so type-node visitors fire for property declarations
+        node.Type.Accept(this);
+
         /* Getter and setter get visisted after methods */
     }
     /// <summary>
@@ -678,18 +681,6 @@ public abstract class ScopedAstVisitor<T> : AstVisitorBase
     }
 
     /// <summary>
-    /// Visits property access - skip check prevents re-traversal when called via Accept()
-    /// </summary>
-    public override void VisitPropertyAccess(PropertyAccessNode node)
-    {
-        if (skipChildTraversal)
-        {
-            return;
-        }
-        base.VisitPropertyAccess(node);
-    }
-
-    /// <summary>
     /// Visits parenthesized expressions - skip check prevents re-traversal when called via Accept()
     /// </summary>
     public override void VisitParenthesized(ParenthesizedExpressionNode node)
@@ -734,16 +725,37 @@ public abstract class ScopedAstVisitor<T> : AstVisitorBase
         // If there's an exception variable, register it in the current scope (method/function/global)
         if (node.ExceptionVariable != null)
         {
+            var currentScope = GetCurrentScope();
+            var existing = FindVariable(node.ExceptionVariable.Name);
+            if (existing != null &&
+                existing.Kind == VariableKind.Exception &&
+                existing.DeclarationScope.Id == currentScope.Id)
+            {
+                // A sibling catch reusing the same exception variable is the same
+                // method-scoped slot: merge into the existing entry instead of
+                // replacing it in the registry (which lost the first catch's references)
+                existing.AddReference(new VariableReference(
+                    node.ExceptionVariable.Name,
+                    ReferenceType.Declaration,
+                    node.ExceptionVariable.SourceSpan,
+                    currentScope,
+                    node.ExceptionVariable.FirstToken));
+            }
+            else
+            {
+                // Create variable name info from the exception variable identifier
+                var nameInfo = new VariableNameInfo(node.ExceptionVariable.Name, node.ExceptionVariable.FirstToken);
 
-            // Create variable name info from the exception variable identifier
-            var nameInfo = new VariableNameInfo(node.ExceptionVariable.Name, node.ExceptionVariable.FirstToken);
-
-            // Register the exception variable in the current scope (which is the containing method/function/global scope)
-            RegisterVariable(nameInfo, node.ExceptionType?.TypeName ?? "Exception", VariableKind.Exception, node);
+                // Register the exception variable in the current scope (which is the containing method/function/global scope)
+                RegisterVariable(nameInfo, node.ExceptionType?.TypeName ?? "Exception", VariableKind.Exception, node);
+            }
         }
 
-        // Continue with the base implementation to visit the catch body
-        base.VisitCatch(node);
+        // Visit the exception type and catch body, but NOT the exception variable
+        // identifier — that is its declaration, and visiting it as an identifier
+        // would record a spurious Read reference
+        node.ExceptionType?.Accept(this);
+        node.Body.Accept(this);
     }
 
     /// <summary>
@@ -873,6 +885,7 @@ public abstract class ScopedAstVisitor<T> : AstVisitorBase
         variableRegistry.Clear();
         currentScope = null;
         isInAssignmentContext = false;
+        skipChildTraversal = false;
         _program = null;
 
         OnReset();
@@ -959,22 +972,6 @@ public abstract class ScopedAstVisitor<T> : AstVisitorBase
                 {
                     VisitExpressionAsRead(index);
                 }
-                // Allow other visitors to process (e.g., type inference) but skip re-traversal
-                previousSkip = skipChildTraversal;
-                skipChildTraversal = true;
-                try
-                {
-                    expression.Accept(this);
-                }
-                finally
-                {
-                    skipChildTraversal = previousSkip;
-                }
-                break;
-
-            case PropertyAccessNode propertyAccess:
-                // For property access, target is read, property is written
-                VisitExpressionAsRead(propertyAccess.Target);
                 // Allow other visitors to process (e.g., type inference) but skip re-traversal
                 previousSkip = skipChildTraversal;
                 skipChildTraversal = true;
@@ -1140,22 +1137,6 @@ public abstract class ScopedAstVisitor<T> : AstVisitorBase
                 {
                     VisitExpressionAsRead(index);
                 }
-                // Allow other visitors to process (e.g., type inference) but skip re-traversal
-                previousSkip = skipChildTraversal;
-                skipChildTraversal = true;
-                try
-                {
-                    expression.Accept(this);
-                }
-                finally
-                {
-                    skipChildTraversal = previousSkip;
-                }
-                break;
-
-            case PropertyAccessNode propertyAccess:
-                // Target is read
-                VisitExpressionAsRead(propertyAccess.Target);
                 // Allow other visitors to process (e.g., type inference) but skip re-traversal
                 previousSkip = skipChildTraversal;
                 skipChildTraversal = true;

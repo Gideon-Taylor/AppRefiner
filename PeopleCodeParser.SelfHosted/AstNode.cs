@@ -36,10 +36,13 @@ public abstract class AstNode
     {
         get
         {
-            // Prefer calculated span from tokens
-            if (FirstToken != null && LastToken != null)
+            // Prefer calculated span from tokens; tolerate a single missing token so a
+            // partially-built node never silently reports a span at document offset 0
+            if (FirstToken != null || LastToken != null)
             {
-                return new SourceSpan(FirstToken.SourceSpan.Start, LastToken.SourceSpan.End);
+                var first = FirstToken ?? LastToken!;
+                var last = LastToken ?? FirstToken!;
+                return new SourceSpan(first.SourceSpan.Start, last.SourceSpan.End);
             }
             // Fall back to explicit span (for backward compatibility)
             return _explicitSourceSpan;
@@ -107,11 +110,6 @@ public abstract class AstNode
     public abstract void Accept(IAstVisitor visitor);
 
     /// <summary>
-    /// Accept method for visitor pattern with return value
-    /// </summary>
-    public abstract TResult Accept<TResult>(IAstVisitor<TResult> visitor);
-
-    /// <summary>
     /// Add a child node to this node
     /// </summary>
     protected void AddChild(AstNode child)
@@ -156,11 +154,19 @@ public abstract class AstNode
     /// <summary>
     /// Find the first ancestor of the specified type
     /// </summary>
+    /// <summary>
+    /// Parent-chain walk limit — a chain deeper than this can only be a cycle
+    /// </summary>
+    private const int MaxParentChainDepth = 100_000;
+
     public T? FindAncestor<T>() where T : AstNode
     {
+        var depth = 0;
         var current = Parent;
         while (current != null)
         {
+            if (++depth > MaxParentChainDepth)
+                throw new InvalidOperationException("Cycle detected in AST parent chain");
             if (current is T ancestor)
                 return ancestor;
             current = current.Parent;
@@ -173,13 +179,27 @@ public abstract class AstNode
     /// </summary>
     public IEnumerable<T> FindDescendants<T>() where T : AstNode
     {
-        foreach (var child in Children)
-        {
-            if (child is T match)
-                yield return match;
+        var nodesToVisit = new Stack<AstNode>();
 
-            foreach (var descendant in child.FindDescendants<T>())
-                yield return descendant;
+        // Push children in reverse order to visit them in declaration order
+        for (int i = Children.Count - 1; i >= 0; i--)
+        {
+            nodesToVisit.Push(Children[i]);
+        }
+
+        while (nodesToVisit.Count > 0)
+        {
+            var currentNode = nodesToVisit.Pop();
+
+            if (currentNode is T match)
+            {
+                yield return match;
+            }
+
+            for (int i = currentNode.Children.Count - 1; i >= 0; i--)
+            {
+                nodesToVisit.Push(currentNode.Children[i]);
+            }
         }
     }
 
@@ -188,9 +208,12 @@ public abstract class AstNode
     /// </summary>
     public AstNode GetRoot()
     {
+        var depth = 0;
         var current = this;
         while (current.Parent != null)
         {
+            if (++depth > MaxParentChainDepth)
+                throw new InvalidOperationException("Cycle detected in AST parent chain");
             current = current.Parent;
         }
         return current;
@@ -368,24 +391,29 @@ public struct SourcePosition : IEquatable<SourcePosition>, IComparable<SourcePos
     public int ByteIndex { get; }
 
     /// <summary>
-    /// One-based line number
+    /// Zero-based line number (matching Scintilla)
     /// </summary>
     public int Line { get; }
 
     /// <summary>
-    /// One-based column number
+    /// Zero-based column number (matching Scintilla)
     /// </summary>
     public int Column { get; }
 
-    public SourcePosition(int index, int line = 1, int column = 1)
+    /// <summary>
+    /// Index-only position (byte index defaults to the character index).
+    /// Only the 1-arg and full 4-arg forms exist so a partial call can never
+    /// silently bind line/column arguments into the wrong slots.
+    /// </summary>
+    public SourcePosition(int index)
     {
         Index = index;
         ByteIndex = index; // Default to character index for compatibility
-        Line = line;
-        Column = column;
+        Line = 0;
+        Column = 0;
     }
 
-    public SourcePosition(int index, int byteIndex, int line = 0, int column = 0)
+    public SourcePosition(int index, int byteIndex, int line, int column)
     {
         Index = index;
         ByteIndex = byteIndex;

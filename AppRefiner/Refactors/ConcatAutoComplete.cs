@@ -46,6 +46,22 @@ namespace AppRefiner.Refactors
             base.VisitPartialShortHandAssignment(node);
         }
 
+        public override void VisitAssignment(AssignmentNode node)
+        {
+            // A complete shorthand assignment (e.g. "&x += 1;") parses as a real
+            // AssignmentNode; expand it the same way, leaving the RHS untouched
+            if (!refactorApplied &&
+                node.Operator is AssignmentOperator.AddAssign or AssignmentOperator.SubtractAssign or AssignmentOperator.ConcatenateAssign &&
+                node.OperatorToken != null &&
+                node.SourceSpan.ContainsPosition(CurrentPosition))
+            {
+                ProcessShorthand(node.Target, node.Operator,
+                    node.SourceSpan.Start.ByteIndex, node.OperatorToken.SourceSpan.End.ByteIndex);
+            }
+
+            base.VisitAssignment(node);
+        }
+
         /// <summary>
         /// Processes a concatenation shorthand assignment and transforms it to full form
         /// </summary>
@@ -53,22 +69,21 @@ namespace AppRefiner.Refactors
         {
             if (assignment.LastToken == null) return;
 
+            ProcessShorthand(assignment.Target, assignment.Operator,
+                assignment.SourceSpan.Start.ByteIndex, assignment.LastToken.SourceSpan.End.ByteIndex);
+        }
+
+        private void ProcessShorthand(ExpressionNode? target, AssignmentOperator op, int startByteIndex, int operatorEndIndex)
+        {
             // Get the target expression (left-hand side) by reconstructing from the node
-            var targetText = assignment.Target?.ToString();
+            var targetText = target?.ToString();
             if (string.IsNullOrEmpty(targetText))
             {
                 Debug.Log("ConcatAutoComplete: Could not extract target text");
                 return;
             }
 
-            
-
-            
-            // Calculate the positions
-            int operatorStartIndex = assignment.LastToken.SourceSpan.Start.ByteIndex;
-            int operatorEndIndex = assignment.LastToken.SourceSpan.End.ByteIndex;
-
-            var concatChar = assignment.Operator switch
+            var concatChar = op switch
             {
                 AssignmentOperator.Assign => throw new NotImplementedException(),
                 AssignmentOperator.SubtractAssign => "-",
@@ -81,14 +96,13 @@ namespace AppRefiner.Refactors
             string newText = $"{targetText} = {targetText} {concatChar}";
 
             Debug.Log($"ConcatAutoComplete: Applying refactor for ConcatShorthand.");
-            Debug.Log($"  Original text: '{assignment.Target} {assignment.Operator.GetSymbol()}'");
             Debug.Log($"  Target text: '{targetText}'");
             Debug.Log($"  Operator: '{concatChar}='");
-            Debug.Log($"  Replacement range: {assignment.SourceSpan.Start.ByteIndex} to {operatorEndIndex - 1}");
+            Debug.Log($"  Replacement range: {startByteIndex} to {operatorEndIndex - 1}");
             Debug.Log($"  New text: '{newText}'");
 
             // Replace only the "target operator=" portion, leaving everything after untouched
-            EditText(assignment.SourceSpan.Start.ByteIndex, operatorEndIndex, newText, RefactorDescription);
+            EditText(startByteIndex, operatorEndIndex, newText, RefactorDescription);
 
             refactorApplied = true; // Mark as applied to prevent re-application.
         }

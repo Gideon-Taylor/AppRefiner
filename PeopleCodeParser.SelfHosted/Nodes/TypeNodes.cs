@@ -44,10 +44,6 @@ public class BuiltInTypeNode : TypeNode
         visitor.VisitBuiltInType(this);
     }
 
-    public override TResult Accept<TResult>(IAstVisitor<TResult> visitor)
-    {
-        return visitor.VisitBuiltInType(this);
-    }
 
     public override string ToString()
     {
@@ -68,7 +64,7 @@ public class ArrayTypeNode : TypeNode
     /// <summary>
     /// Element type, null for untyped arrays
     /// </summary>
-    public TypeNode? ElementType { get; set; }
+    public TypeNode? ElementType { get; private set; }
 
     public override string TypeName
     {
@@ -103,10 +99,6 @@ public class ArrayTypeNode : TypeNode
         visitor.VisitArrayType(this);
     }
 
-    public override TResult Accept<TResult>(IAstVisitor<TResult> visitor)
-    {
-        return visitor.VisitArrayType(this);
-    }
 
     public override string ToString()
     {
@@ -170,10 +162,6 @@ public class AppClassTypeNode : TypeNode
         visitor.VisitAppClassType(this);
     }
 
-    public override TResult Accept<TResult>(IAstVisitor<TResult> visitor)
-    {
-        return visitor.VisitAppClassType(this);
-    }
 
     public override string ToString()
     {
@@ -232,10 +220,6 @@ public class AppPackageWildcardTypeNode : TypeNode
         visitor.VisitAppPackageWildcardType(this);
     }
 
-    public override TResult Accept<TResult>(IAstVisitor<TResult> visitor)
-    {
-        return visitor.VisitAppPackageWildcardType(this);
-    }
 
     public override string ToString()
     {

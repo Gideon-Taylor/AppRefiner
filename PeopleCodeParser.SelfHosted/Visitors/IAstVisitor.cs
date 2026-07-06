@@ -50,7 +50,6 @@ public interface IAstVisitor
     void VisitUnaryOperation(UnaryOperationNode node);
     void VisitLiteral(LiteralNode node);
     void VisitIdentifier(IdentifierNode node);
-    void VisitPropertyAccess(PropertyAccessNode node);
     void VisitArrayAccess(ArrayAccessNode node);
     void VisitObjectCreation(ObjectCreationNode node);
     void VisitTypeCast(TypeCastNode node);
@@ -70,77 +69,6 @@ public interface IAstVisitor
     void VisitInterpolatedString(InterpolatedStringNode node);
     void VisitStringFragment(StringFragment node);
     void VisitInterpolation(Interpolation node);
-}
-
-/// <summary>
-/// Visitor interface for traversing the AST with return values
-/// </summary>
-public interface IAstVisitor<out TResult>
-{
-    // Program structure nodes
-    TResult VisitProgram(ProgramNode node);
-    TResult VisitAppClass(AppClassNode node);
-    TResult VisitImport(ImportNode node);
-
-    // Type nodes
-    TResult VisitBuiltInType(BuiltInTypeNode node);
-    TResult VisitArrayType(ArrayTypeNode node);
-    TResult VisitAppClassType(AppClassTypeNode node);
-    TResult VisitAppPackageWildcardType(AppPackageWildcardTypeNode node);
-
-    // Declaration nodes
-    TResult VisitMethod(MethodNode node);
-    TResult VisitMethodImpl(MethodImplNode node);
-    TResult VisitProperty(PropertyNode node);
-    TResult VisitPropertyImpl(PropertyImplNode node);
-    TResult VisitProgramVariable(ProgramVariableNode node);
-    TResult VisitConstant(ConstantNode node);
-    TResult VisitFunction(FunctionNode node);
-
-    // Statement nodes
-    TResult VisitBlock(BlockNode node);
-    TResult VisitIf(IfStatementNode node);
-    TResult VisitFor(ForStatementNode node);
-    TResult VisitWhile(WhileStatementNode node);
-    TResult VisitRepeat(RepeatStatementNode node);
-    TResult VisitEvaluate(EvaluateStatementNode node);
-    TResult VisitTry(TryStatementNode node);
-    TResult VisitCatch(CatchStatementNode node);
-    TResult VisitReturn(ReturnStatementNode node);
-    TResult VisitThrow(ThrowStatementNode node);
-    TResult VisitBreak(BreakStatementNode node);
-    TResult VisitContinue(ContinueStatementNode node);
-    TResult VisitExit(ExitStatementNode node);
-    TResult VisitError(ErrorStatementNode node);
-    TResult VisitWarning(WarningStatementNode node);
-    TResult VisitExpressionStatement(ExpressionStatementNode node);
-
-    // Expression nodes
-    TResult VisitBinaryOperation(BinaryOperationNode node);
-    TResult VisitUnaryOperation(UnaryOperationNode node);
-    TResult VisitLiteral(LiteralNode node);
-    TResult VisitIdentifier(IdentifierNode node);
-    TResult VisitPropertyAccess(PropertyAccessNode node);
-    TResult VisitArrayAccess(ArrayAccessNode node);
-    TResult VisitObjectCreation(ObjectCreationNode node);
-    TResult VisitTypeCast(TypeCastNode node);
-    TResult VisitParenthesized(ParenthesizedExpressionNode node);
-    TResult VisitAssignment(AssignmentNode node);
-    TResult VisitFunctionCall(FunctionCallNode node);
-    TResult VisitMemberAccess(MemberAccessNode node);
-    TResult VisitLocalVariableDeclaration(LocalVariableDeclarationNode node);
-    TResult VisitLocalVariableDeclarationWithAssignment(LocalVariableDeclarationWithAssignmentNode node);
-    TResult VisitMetadataExpression(MetadataExpressionNode node);
-    TResult VisitClassConstant(ClassConstantNode classConstantNode);
-
-    TResult VisitPartialShortHandAssignment(PartialShortHandAssignmentNode node);
-
-    TResult VisitObjectCreateShortHand(ObjectCreateShortHand node);
-
-    // Interpolated string nodes
-    TResult VisitInterpolatedString(InterpolatedStringNode node);
-    TResult VisitStringFragment(StringFragment node);
-    TResult VisitInterpolation(Interpolation node);
 }
 
 /// <summary>
@@ -252,7 +180,8 @@ public abstract class AstVisitorBase : IAstVisitor
         foreach (var child in node.Children)
         {
             // Skip nodes we've already visited
-            if (node.InstanceVariables.Contains(child) ||
+            if (ReferenceEquals(child, node.BaseType) ||
+                node.InstanceVariables.Contains(child) ||
                 node.Properties.Contains(child) ||
                 node.Constants.Contains(child) ||
                 node.Methods.Contains(child) ||
@@ -301,10 +230,11 @@ public abstract class AstVisitorBase : IAstVisitor
             parameter.Type.Accept(this);
         }
 
-        // Visit parameter annotations
+        // Visit parameter annotations (ParameterNode.Accept is intentionally empty,
+        // so visit the annotation's type directly like real parameters above)
         foreach (var annotation in node.ParameterAnnotations)
         {
-            annotation.Accept(this);
+            annotation.Type.Accept(this);
         }
 
         // Visit method implementation if present
@@ -518,11 +448,6 @@ public abstract class AstVisitorBase : IAstVisitor
     }
     public virtual void VisitLiteral(LiteralNode node) => DefaultVisit(node);
     public virtual void VisitIdentifier(IdentifierNode node) => DefaultVisit(node);
-    public virtual void VisitPropertyAccess(PropertyAccessNode node)
-    {
-        // Visit target object first
-        node.Target.Accept(this);
-    }
     public virtual void VisitArrayAccess(ArrayAccessNode node)
     {
         // Visit array object first
@@ -626,6 +551,13 @@ public abstract class AstVisitorBase : IAstVisitor
     public virtual void VisitPropertyImpl(PropertyImplNode node)
     {
         node.ImplementedInterface?.Accept(this);
+
+        // Visit parameter annotation types (ParameterNode.Accept is intentionally empty)
+        foreach (var annotation in node.ParameterAnnotations)
+        {
+            annotation.Type.Accept(this);
+        }
+
         node.Body?.Accept(this);
     }
 

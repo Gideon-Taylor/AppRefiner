@@ -179,7 +179,7 @@ namespace AppRefiner.Refactors
         /// </summary>
         private static bool NeedsParentheses(ExpressionNode initializer) => initializer switch
         {
-            LiteralNode or IdentifierNode or MemberAccessNode or PropertyAccessNode
+            LiteralNode or IdentifierNode or MemberAccessNode
                 or ArrayAccessNode or FunctionCallNode or ParenthesizedExpressionNode
                 or ObjectCreationNode or ObjectCreateShortHand or ClassConstantNode
                 or MetadataExpressionNode => false,

@@ -11,7 +11,7 @@ internal class DirectivePreprocessor
 {
     private readonly List<Token> _originalTokens;
     private readonly ToolsVersion _toolsVersion;
-    private readonly List<string> _errors = new();
+    private readonly List<(string Message, SourceSpan Span)> _errors = new();
     private List<SourceSpan> _skippedSpans = new();
 
     public List<SourceSpan> SkippedSpans => _skippedSpans;
@@ -28,9 +28,9 @@ internal class DirectivePreprocessor
     }
 
     /// <summary>
-    /// Errors encountered during directive preprocessing
+    /// Errors encountered during directive preprocessing, with the directive's source span
     /// </summary>
-    public IReadOnlyList<string> Errors => _errors.AsReadOnly();
+    public IReadOnlyList<(string Message, SourceSpan Span)> Errors => _errors.AsReadOnly();
 
     /// <summary>
     /// Process all compiler directives and return the filtered token stream
@@ -93,7 +93,9 @@ internal class DirectivePreprocessor
         // Check for unclosed directives
         if (directiveStack.Count > 0)
         {
-            _errors.Add($"Unclosed directive block(s): {directiveStack.Count} remaining");
+            var unclosed = directiveStack.Peek();
+            _errors.Add(($"Unclosed directive block(s): {directiveStack.Count} remaining",
+                _originalTokens[unclosed.StartPosition].SourceSpan));
         }
 
 
@@ -106,12 +108,28 @@ internal class DirectivePreprocessor
     private int ProcessDirectiveIf(int position, Stack<DirectiveContext> directiveStack, List<Token> result)
     {
         var startPos = position;
+        var ifToken = _originalTokens[position];
         position++; // Skip #If token
 
         try
         {
-            // Extract condition tokens until #Then
-            var conditionTokens = ExtractConditionTokens(position, out int conditionEndPos);
+            // Extract condition tokens until #Then — bounded to the #If token's line so a
+            // half-typed directive cannot bind to a LATER directive's #Then and swallow
+            // the region between as "condition tokens"
+            var conditionTokens = ExtractConditionTokens(position, ifToken.SourceSpan.Start.Line, out int conditionEndPos);
+            if (conditionTokens == null)
+            {
+                _errors.Add(("#If directive is missing '#Then'", ifToken.SourceSpan));
+                // Re-emit anything scanned on the directive's line so no source is lost
+                if (IsTokenInActiveBranch(directiveStack))
+                {
+                    for (int i = position; i < conditionEndPos; i++)
+                    {
+                        result.Add(_originalTokens[i]);
+                    }
+                }
+                return conditionEndPos;
+            }
             position = conditionEndPos + 1; // Skip #Then token
             /* optional for there to be 0 or more ; after #Then */
             while (position < _originalTokens.Count && _originalTokens[position].Type == TokenType.Semicolon)
@@ -121,7 +139,7 @@ internal class DirectivePreprocessor
 
 
             // Parse and evaluate condition
-            bool conditionResult = EvaluateDirectiveCondition(conditionTokens);
+            bool conditionResult = EvaluateDirectiveCondition(conditionTokens, ifToken.SourceSpan);
 
             // Create directive context
             var context = new DirectiveContext
@@ -139,9 +157,10 @@ internal class DirectivePreprocessor
         }
         catch (Exception ex)
         {
-            _errors.Add($"Error processing #If directive at position {startPos}: {ex.Message}");
-            // Skip to next statement-level token for recovery
-            return RecoverToNextStatement(position);
+            _errors.Add(($"Error processing #If directive: {ex.Message}", ifToken.SourceSpan));
+            // Skip to next statement-level token for recovery, re-emitting the skipped
+            // tokens so they are not silently dropped from the program
+            return RecoverToNextStatement(position, directiveStack, result);
         }
     }
 
@@ -152,7 +171,7 @@ internal class DirectivePreprocessor
     {
         if (directiveStack.Count == 0)
         {
-            _errors.Add($"#Else without matching #If at position {position}");
+            _errors.Add(("#Else without matching #If", _originalTokens[position].SourceSpan));
             return position + 1;
         }
 
@@ -161,7 +180,7 @@ internal class DirectivePreprocessor
 
         if (context.HasElse)
         {
-            _errors.Add($"Multiple #Else blocks in same #If directive at position {position}");
+            _errors.Add(("Multiple #Else blocks in same #If directive", _originalTokens[position].SourceSpan));
             return position + 1;
         }
 
@@ -169,7 +188,10 @@ internal class DirectivePreprocessor
         context.HasElse = true;
         context.IsInElseBranch = true;
         position++; // Skip #Else token
-        context.ElseBlockStart = _originalTokens[position].SourceSpan.Start;
+        if (position < _originalTokens.Count)
+        {
+            context.ElseBlockStart = _originalTokens[position].SourceSpan.Start;
+        }
         return position;
     }
 
@@ -180,12 +202,20 @@ internal class DirectivePreprocessor
     {
         if (directiveStack.Count == 0)
         {
-            _errors.Add($"#End-If without matching #If at position {position}");
+            _errors.Add(("#End-If without matching #If", _originalTokens[position].SourceSpan));
             return (position + 1, null);
         }
 
         var context = directiveStack.Pop();
-        context.ElseBlockEnd = _originalTokens[position].SourceSpan.Start;
+        if (context.HasElse)
+        {
+            context.ElseBlockEnd = _originalTokens[position].SourceSpan.Start;
+        }
+        else
+        {
+            // No #Else: the (possibly skipped) #If block ends here
+            context.IfBlockEnd = _originalTokens[position].SourceSpan.Start;
+        }
 
 
         /* Skip any trailing semicolons after #End-If */
@@ -228,12 +258,15 @@ internal class DirectivePreprocessor
     /// <summary>
     /// Extract tokens from #If to #Then for condition parsing
     /// </summary>
-    private List<Token> ExtractConditionTokens(int startPos, out int endPos)
+    private List<Token>? ExtractConditionTokens(int startPos, int directiveLine, out int endPos)
     {
         var conditionTokens = new List<Token>();
         endPos = startPos;
 
-        while (endPos < _originalTokens.Count && _originalTokens[endPos].Type != TokenType.DirectiveThen)
+        // Directives are line-oriented: the condition and #Then live on the #If's line
+        while (endPos < _originalTokens.Count &&
+               _originalTokens[endPos].Type != TokenType.DirectiveThen &&
+               _originalTokens[endPos].SourceSpan.Start.Line == directiveLine)
         {
             var token = _originalTokens[endPos];
 
@@ -249,9 +282,9 @@ internal class DirectivePreprocessor
             endPos++;
         }
 
-        if (endPos >= _originalTokens.Count)
+        if (endPos >= _originalTokens.Count || _originalTokens[endPos].Type != TokenType.DirectiveThen)
         {
-            throw new InvalidOperationException("#If directive missing #Then");
+            return null; // Missing #Then on the directive's line
         }
 
         return conditionTokens;
@@ -260,11 +293,11 @@ internal class DirectivePreprocessor
     /// <summary>
     /// Evaluate a directive condition using the DirectiveExpressionParser
     /// </summary>
-    private bool EvaluateDirectiveCondition(List<Token> conditionTokens)
+    private bool EvaluateDirectiveCondition(List<Token> conditionTokens, SourceSpan directiveSpan)
     {
         if (conditionTokens.Count == 0)
         {
-            _errors.Add("Empty directive condition");
+            _errors.Add(("Empty directive condition", directiveSpan));
             return false; // Default to false for empty conditions
         }
 
@@ -273,7 +306,10 @@ internal class DirectivePreprocessor
 
         if (expression == null)
         {
-            _errors.AddRange(parser.Errors);
+            foreach (var error in parser.Errors)
+            {
+                _errors.Add((error, directiveSpan));
+            }
             return false; // Default to false for parse failures
         }
 
@@ -283,7 +319,7 @@ internal class DirectivePreprocessor
         }
         catch (Exception ex)
         {
-            _errors.Add($"Error evaluating directive condition: {ex.Message}");
+            _errors.Add(($"Error evaluating directive condition: {ex.Message}", directiveSpan));
             return false; // Default to false for evaluation failures
         }
     }
@@ -291,7 +327,7 @@ internal class DirectivePreprocessor
     /// <summary>
     /// Recover from directive parsing errors by finding the next safe position
     /// </summary>
-    private int RecoverToNextStatement(int position)
+    private int RecoverToNextStatement(int position, Stack<DirectiveContext> directiveStack, List<Token> result)
     {
         // Look for statement-level synchronization tokens
         var syncTokens = new[]
@@ -312,6 +348,12 @@ internal class DirectivePreprocessor
             if (syncTokens.Contains(_originalTokens[position].Type))
             {
                 return position;
+            }
+
+            // Re-emit the skipped token so recovery doesn't silently delete source
+            if (IsTokenInActiveBranch(directiveStack))
+            {
+                result.Add(_originalTokens[position]);
             }
             position++;
         }

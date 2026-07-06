@@ -48,7 +48,8 @@ public class BlockNode : StatementNode
     /// <summary>
     /// Statements in this block
     /// </summary>
-    public List<StatementNode> Statements { get; } = new();
+    private readonly List<StatementNode> _statements = new();
+    public IReadOnlyList<StatementNode> Statements => _statements;
 
     public override bool IntroducesScope => true;
     public override bool CanTransferControl => Statements.Any(s => s.CanTransferControl);
@@ -63,7 +64,7 @@ public class BlockNode : StatementNode
 
     public void AddStatement(StatementNode statement)
     {
-        Statements.Add(statement);
+        _statements.Add(statement);
         AddChild(statement);
     }
 
@@ -80,10 +81,6 @@ public class BlockNode : StatementNode
         visitor.VisitBlock(this);
     }
 
-    public override TResult Accept<TResult>(IAstVisitor<TResult> visitor)
-    {
-        return visitor.VisitBlock(this);
-    }
 
     public override string ToString()
     {
@@ -119,7 +116,7 @@ public class IfStatementNode : StatementNode
     /// <summary>
     /// ELSE block (optional)
     /// </summary>
-    public BlockNode? ElseBlock { get; set; }
+    public BlockNode? ElseBlock { get; private set; }
 
     public override bool CanTransferControl => ThenBlock.CanTransferControl || (ElseBlock?.CanTransferControl ?? false);
 
@@ -146,10 +143,6 @@ public class IfStatementNode : StatementNode
         visitor.VisitIf(this);
     }
 
-    public override TResult Accept<TResult>(IAstVisitor<TResult> visitor)
-    {
-        return visitor.VisitIf(this);
-    }
 
     public override string ToString()
     {
@@ -220,7 +213,7 @@ public class ForStatementNode : StatementNode
     /// <summary>
     /// Step value expression (optional, defaults to 1)
     /// </summary>
-    public ExpressionNode? StepValue { get; set; }
+    public ExpressionNode? StepValue { get; private set; }
 
     /// <summary>
     /// Loop body
@@ -255,7 +248,7 @@ public class ForStatementNode : StatementNode
         return Iterator switch
         {
             IdentifierNode id => id.Name,
-            MemberAccessNode ma => $"{((IdentifierNode)ma.Target).Name}.{ma.MemberName}",
+            MemberAccessNode { Target: IdentifierNode target } ma => $"{target.Name}.{ma.MemberName}",
             _ => Iterator.ToString()
         };
     }
@@ -275,10 +268,6 @@ public class ForStatementNode : StatementNode
         visitor.VisitFor(this);
     }
 
-    public override TResult Accept<TResult>(IAstVisitor<TResult> visitor)
-    {
-        return visitor.VisitFor(this);
-    }
 
     public override string ToString()
     {
@@ -333,10 +322,6 @@ public class WhileStatementNode : StatementNode
         visitor.VisitWhile(this);
     }
 
-    public override TResult Accept<TResult>(IAstVisitor<TResult> visitor)
-    {
-        return visitor.VisitWhile(this);
-    }
 
     public override string ToString()
     {
@@ -390,10 +375,6 @@ public class RepeatStatementNode : StatementNode
         visitor.VisitRepeat(this);
     }
 
-    public override TResult Accept<TResult>(IAstVisitor<TResult> visitor)
-    {
-        return visitor.VisitRepeat(this);
-    }
 
     public override string ToString()
     {
@@ -436,7 +417,7 @@ public class EvaluateStatementNode : StatementNode
     /// WHEN-OTHER clause (optional)
     /// </summary>
     public Token? WhenOtherToken { get; set; }
-    public BlockNode? WhenOtherBlock { get; set; }
+    public BlockNode? WhenOtherBlock { get; private set; }
 
     public override bool IntroducesScope => true;
     public override bool CanTransferControl =>
@@ -471,10 +452,6 @@ public class EvaluateStatementNode : StatementNode
         visitor.VisitEvaluate(this);
     }
 
-    public override TResult Accept<TResult>(IAstVisitor<TResult> visitor)
-    {
-        return visitor.VisitEvaluate(this);
-    }
 
     public override string ToString()
     {
@@ -582,7 +559,8 @@ public class TryStatementNode : StatementNode
     /// <summary>
     /// CATCH clauses
     /// </summary>
-    public List<CatchStatementNode> CatchClauses { get; } = new();
+    private readonly List<CatchStatementNode> _catchClauses = new();
+    public IReadOnlyList<CatchStatementNode> CatchClauses => _catchClauses;
 
     public override bool IntroducesScope => true;
     public override bool CanTransferControl =>
@@ -605,7 +583,7 @@ public class TryStatementNode : StatementNode
 
     public void AddCatchClause(CatchStatementNode catchClause)
     {
-        CatchClauses.Add(catchClause);
+        _catchClauses.Add(catchClause);
         AddChild(catchClause);
     }
 
@@ -614,10 +592,6 @@ public class TryStatementNode : StatementNode
         visitor.VisitTry(this);
     }
 
-    public override TResult Accept<TResult>(IAstVisitor<TResult> visitor)
-    {
-        return visitor.VisitTry(this);
-    }
 
     public override string ToString()
     {
@@ -663,7 +637,7 @@ public class ReturnStatementNode : StatementNode
     /// <summary>
     /// Return value expression (optional)
     /// </summary>
-    public ExpressionNode? Value { get; set; }
+    public ExpressionNode? Value { get; private set; }
 
     public override bool DoesTransferControl => true;
 
@@ -689,10 +663,6 @@ public class ReturnStatementNode : StatementNode
         visitor.VisitReturn(this);
     }
 
-    public override TResult Accept<TResult>(IAstVisitor<TResult> visitor)
-    {
-        return visitor.VisitReturn(this);
-    }
 
     public override string ToString()
     {
@@ -729,10 +699,6 @@ public class ThrowStatementNode : StatementNode
         visitor.VisitThrow(this);
     }
 
-    public override TResult Accept<TResult>(IAstVisitor<TResult> visitor)
-    {
-        return visitor.VisitThrow(this);
-    }
 
     public override string ToString()
     {
@@ -758,10 +724,6 @@ public class BreakStatementNode : StatementNode
         visitor.VisitBreak(this);
     }
 
-    public override TResult Accept<TResult>(IAstVisitor<TResult> visitor)
-    {
-        return visitor.VisitBreak(this);
-    }
 
     public override string ToString()
     {
@@ -787,10 +749,6 @@ public class ContinueStatementNode : StatementNode
         visitor.VisitContinue(this);
     }
 
-    public override TResult Accept<TResult>(IAstVisitor<TResult> visitor)
-    {
-        return visitor.VisitContinue(this);
-    }
 
     public override string ToString()
     {
@@ -812,7 +770,7 @@ public class ExitStatementNode : StatementNode
     /// <summary>
     /// Exit code expression (optional)
     /// </summary>
-    public ExpressionNode? ExitCode { get; set; }
+    public ExpressionNode? ExitCode { get; private set; }
 
     public override bool DoesTransferControl => true;
 
@@ -838,10 +796,6 @@ public class ExitStatementNode : StatementNode
         visitor.VisitExit(this);
     }
 
-    public override TResult Accept<TResult>(IAstVisitor<TResult> visitor)
-    {
-        return visitor.VisitExit(this);
-    }
 
     public override string ToString()
     {
@@ -878,10 +832,6 @@ public class ErrorStatementNode : StatementNode
         visitor.VisitError(this);
     }
 
-    public override TResult Accept<TResult>(IAstVisitor<TResult> visitor)
-    {
-        return visitor.VisitError(this);
-    }
 
     public override string ToString()
     {
@@ -916,10 +866,6 @@ public class WarningStatementNode : StatementNode
         visitor.VisitWarning(this);
     }
 
-    public override TResult Accept<TResult>(IAstVisitor<TResult> visitor)
-    {
-        return visitor.VisitWarning(this);
-    }
 
     public override string ToString()
     {
@@ -956,10 +902,6 @@ public class ExpressionStatementNode : StatementNode
         visitor.VisitExpressionStatement(this);
     }
 
-    public override TResult Accept<TResult>(IAstVisitor<TResult> visitor)
-    {
-        return visitor.VisitExpressionStatement(this);
-    }
 
     public override string ToString()
     {
@@ -1011,10 +953,6 @@ public class LocalVariableDeclarationNode : StatementNode
         visitor.VisitLocalVariableDeclaration(this);
     }
 
-    public override TResult Accept<TResult>(IAstVisitor<TResult> visitor)
-    {
-        return visitor.VisitLocalVariableDeclaration(this);
-    }
 
     public override string ToString()
     {
@@ -1070,10 +1008,6 @@ public class LocalVariableDeclarationWithAssignmentNode : StatementNode
         visitor.VisitLocalVariableDeclarationWithAssignment(this);
     }
 
-    public override TResult Accept<TResult>(IAstVisitor<TResult> visitor)
-    {
-        return visitor.VisitLocalVariableDeclarationWithAssignment(this);
-    }
 
     public override string ToString()
     {
@@ -1128,10 +1062,6 @@ public class CatchStatementNode : StatementNode
         visitor.VisitCatch(this);
     }
 
-    public override TResult Accept<TResult>(IAstVisitor<TResult> visitor)
-    {
-        return visitor.VisitCatch(this);
-    }
 
     public override string ToString()
     {

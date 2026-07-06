@@ -296,9 +296,6 @@ namespace PeopleCodeParser.SelfHosted.Visitors
                 // Simple variable identifier
                 IdentifierNode => true,
 
-                // Property access (e.g., obj.Property)
-                PropertyAccessNode => true,
-
                 // Member access (e.g., obj.Member)
                 MemberAccessNode => true,
 

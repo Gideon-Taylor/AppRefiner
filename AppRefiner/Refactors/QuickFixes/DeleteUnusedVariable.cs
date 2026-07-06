@@ -94,10 +94,10 @@ namespace AppRefiner.Refactors.QuickFixes
 
             if (declNode.Parent is FunctionNode func)
             {
-                parameters = func.Parameters;
+                parameters = func.Parameters.ToList();
             } else if (declNode.Parent is MethodNode method)
             {
-                parameters = method.Parameters;
+                parameters = method.Parameters.ToList();
             }
 
             if (parameters.Count == 1)

@@ -181,7 +181,7 @@ namespace AppRefiner.Refactors
             string text = GetSourceText(expr.SourceSpan);
             return expr switch
             {
-                LiteralNode or IdentifierNode or MemberAccessNode or PropertyAccessNode
+                LiteralNode or IdentifierNode or MemberAccessNode
                     or ArrayAccessNode or FunctionCallNode or ParenthesizedExpressionNode
                     or ObjectCreationNode or ObjectCreateShortHand or ClassConstantNode
                     or MetadataExpressionNode => text,

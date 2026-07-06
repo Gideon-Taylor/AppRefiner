@@ -225,6 +225,7 @@ public class PeopleCodeLexer
         _charToByteIndex[source.Length] = utf8Bytes.Length;
 
         _position = 0;
+        // Zero-based lines and columns throughout, matching Scintilla and all consumers
         _line = 0;
         _column = 0;
     }
@@ -264,7 +265,7 @@ public class PeopleCodeLexer
         if (ch == '\n')
         {
             _line++;
-            _column = 1;
+            _column = 0; // Zero-based columns, consistent with the first line
         }
         else if (ch != '\r') // Don't advance column for \r in \r\n
         {
@@ -320,8 +321,19 @@ public class PeopleCodeLexer
             }
         }
 
-        // Add EOF token
-        tokens.Add(Token.CreateEof(CurrentPosition));
+        // Add EOF token, attaching any trailing comments as its leading trivia so they
+        // remain reachable from the trivia-filtered token stream the parser keeps
+        var eofToken = Token.CreateEof(CurrentPosition);
+        var firstTrailingComment = tokens.Count;
+        while (firstTrailingComment > 0 && tokens[firstTrailingComment - 1].Type.IsCommentType())
+        {
+            firstTrailingComment--;
+        }
+        for (int i = firstTrailingComment; i < tokens.Count; i++)
+        {
+            eofToken.AddLeadingTrivia(tokens[i]);
+        }
+        tokens.Add(eofToken);
 
         return tokens;
     }
@@ -370,13 +382,22 @@ public class PeopleCodeLexer
 
         if (IsAtEnd)
         {
-            // If we have collected trivia but reached EOF, return the last non-whitespace trivia as a token
-            // This handles cases like standalone comments at the end of a file
+            // If we have collected trivia but reached EOF, return the last non-whitespace
+            // trivia as a token, carrying any earlier comments as its leading trivia so
+            // TokenizeAll's flattening preserves them all
             for (int i = leadingTrivia.Count - 1; i >= 0; i--)
             {
                 if (leadingTrivia[i].Type != TokenType.Whitespace)
                 {
-                    return leadingTrivia[i];
+                    var lastComment = leadingTrivia[i];
+                    for (int j = 0; j < i; j++)
+                    {
+                        if (leadingTrivia[j].Type != TokenType.Whitespace)
+                        {
+                            lastComment.AddLeadingTrivia(leadingTrivia[j]);
+                        }
+                    }
+                    return lastComment;
                 }
             }
             return null;
@@ -392,12 +413,12 @@ public class PeopleCodeLexer
             '/' when PeekChar() == '+' => ScanSlashPlus(),
 
             // Operators and punctuation
-            '+' when PeekChar() == '/' => ScanPlusSlash(),
+            // '+/' followed by '*' is '+' then a block comment, not the annotation-close operator
+            '+' when PeekChar() == '/' && PeekChar(2) != '*' => ScanPlusSlash(),
             '+' when PeekChar() == '=' => ScanTwoCharOperator(TokenType.PlusEqual),
             '+' => ScanSingleCharOperator(TokenType.Plus),
 
             '-' when PeekChar() == '=' => ScanTwoCharOperator(TokenType.MinusEqual),
-            '-' when char.IsDigit(PeekChar()) => ScanNumber(),
             '-' => ScanSingleCharOperator(TokenType.Minus),
 
             '*' when PeekChar() == '*' => ScanTwoCharOperator(TokenType.Power),
@@ -523,10 +544,33 @@ public class PeopleCodeLexer
             if (ch == ';')
                 return true; // After statement separator
             if (!char.IsWhiteSpace(ch))
-                return false; // Found non-whitespace, non-separator
+            {
+                // REM is also valid mid-line after THEN/ELSE and after a closing comment
+                if (ch == '/' && i > 0 && _source[i - 1] == '*')
+                    return true; // End of a block comment
+                if (ch == '>' && i > 0 && _source[i - 1] == '*')
+                    return true; // End of a nested comment
+                return EndsWithKeyword(i, "then") || EndsWithKeyword(i, "else");
+            }
         }
 
         return true; // Beginning of file
+    }
+
+    /// <summary>
+    /// True if the source text ending at endIndex (inclusive) is the given keyword
+    /// with a word boundary before it
+    /// </summary>
+    private bool EndsWithKeyword(int endIndex, string keyword)
+    {
+        var startIndex = endIndex - keyword.Length + 1;
+        if (startIndex < 0)
+            return false;
+        if (string.Compare(_source, startIndex, keyword, 0, keyword.Length, StringComparison.OrdinalIgnoreCase) != 0)
+            return false;
+        if (startIndex > 0 && IsIdentifierChar(_source[startIndex - 1]))
+            return false;
+        return true;
     }
 
     private bool IsRemComment()
@@ -582,6 +626,10 @@ public class PeopleCodeLexer
         {
             sb.Append(Advance());
         }
+        else
+        {
+            AddError("Unterminated REM comment", start);
+        }
 
         return Token.CreateTrivia(TokenType.LineComment, sb.ToString(), CreateSpan(start));
     }
@@ -602,15 +650,22 @@ public class PeopleCodeLexer
             sb.Append(Advance()); // Additional '*'
         }
 
+        var terminated = false;
         while (!IsAtEnd)
         {
             if (CurrentChar == '*' && PeekChar() == '/')
             {
                 sb.Append(Advance()); // '*'
                 sb.Append(Advance()); // '/'
+                terminated = true;
                 break;
             }
             sb.Append(Advance());
+        }
+
+        if (!terminated)
+        {
+            AddError("Unterminated block comment", start);
         }
 
         var tokenType = isApiComment ? TokenType.ApiComment : TokenType.BlockComment;
@@ -644,6 +699,11 @@ public class PeopleCodeLexer
             }
         }
 
+        if (depth > 0)
+        {
+            AddError("Unterminated nested comment", start);
+        }
+
         return Token.CreateTrivia(TokenType.NestedComment, sb.ToString(), CreateSpan(start));
     }
 
@@ -655,6 +715,7 @@ public class PeopleCodeLexer
 
         rawText.Append(Advance()); // Opening quote
 
+        var terminated = false;
         while (!IsAtEnd)
         {
             if (CurrentChar == quote)
@@ -669,8 +730,15 @@ public class PeopleCodeLexer
                 else
                 {
                     // End of string
+                    terminated = true;
                     break;
                 }
+            }
+            else if (CurrentChar is '\n' or '\r')
+            {
+                // Plain string literals are single-line: recover at end of line so a
+                // stray quote does not re-tokenize the rest of the program
+                break;
             }
             else
             {
@@ -680,9 +748,9 @@ public class PeopleCodeLexer
             }
         }
 
-        if (IsAtEnd)
+        if (!terminated)
         {
-            AddError($"Unterminated string literal");
+            AddError("Unterminated string literal", start);
             return Token.CreateLiteral(TokenType.StringLiteral, rawText.ToString(), CreateSpan(start), value.ToString());
         }
 
@@ -1035,12 +1103,12 @@ public class PeopleCodeLexer
             '/' when PeekChar() == '+' => ScanSlashPlus(),
 
             // Operators and punctuation
-            '+' when PeekChar() == '/' => ScanPlusSlash(),
+            // '+/' followed by '*' is '+' then a block comment, not the annotation-close operator
+            '+' when PeekChar() == '/' && PeekChar(2) != '*' => ScanPlusSlash(),
             '+' when PeekChar() == '=' => ScanTwoCharOperator(TokenType.PlusEqual),
             '+' => ScanSingleCharOperator(TokenType.Plus),
 
             '-' when PeekChar() == '=' => ScanTwoCharOperator(TokenType.MinusEqual),
-            '-' when char.IsDigit(PeekChar()) => ScanNumber(),
             '-' => ScanSingleCharOperator(TokenType.Minus),
 
             '*' when PeekChar() == '*' => ScanTwoCharOperator(TokenType.Power),
@@ -1156,17 +1224,27 @@ public class PeopleCodeLexer
         object value;
         TokenType tokenType;
 
+        // PeopleCode numbers are arbitrary-precision: widen on overflow and fall back
+        // to the raw source text rather than corrupting the value (previously became 0)
         if (hasDecimal)
         {
             tokenType = TokenType.DecimalLiteral;
-            value = decimal.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out var decimalValue)
-                ? decimalValue : 0m;
+            if (decimal.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out var decimalValue))
+                value = decimalValue;
+            else
+                value = text;
         }
         else
         {
             tokenType = TokenType.IntegerLiteral;
-            value = int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var intValue)
-                ? intValue : 0;
+            if (int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var intValue))
+                value = intValue;
+            else if (long.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var longValue))
+                value = longValue;
+            else if (decimal.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var decValue))
+                value = decValue;
+            else
+                value = text;
         }
 
         return Token.CreateLiteral(tokenType, text, CreateSpan(start), value);
@@ -1317,23 +1395,22 @@ public class PeopleCodeLexer
         var savedPosition = _position;
         var savedLine = _line;
         var savedColumn = _column;
+        var savedLength = sb.Length;
 
-        // Skip whitespace and hyphens
-        while (!IsAtEnd && (CurrentChar == ' ' || CurrentChar == '-'))
+        // Strict form only: END-<keyword> with a single hyphen and no spaces —
+        // "End Class" / "End - Class" are not valid END keywords
+        if (IsAtEnd || CurrentChar != '-')
+        {
+            return null;
+        }
+        sb.Append(Advance()); // '-'
+
+        while (!IsAtEnd && char.IsLetter(CurrentChar))
         {
             sb.Append(Advance());
         }
 
-        // Scan the next word
-        var secondWord = new StringBuilder();
-        while (!IsAtEnd && char.IsLetter(CurrentChar))
-        {
-            var ch = Advance();
-            sb.Append(ch);
-            secondWord.Append(ch);
-        }
-
-        var fullKeyword = sb.ToString().Replace(" ", "-").Replace("--", "-").ToUpperInvariant();
+        var fullKeyword = sb.ToString().ToUpperInvariant();
 
         if (Keywords.TryGetValue(fullKeyword, out var keywordType))
         {
@@ -1344,6 +1421,7 @@ public class PeopleCodeLexer
         _position = savedPosition;
         _line = savedLine;
         _column = savedColumn;
+        sb.Length = savedLength;
         return null;
     }
 
@@ -1385,9 +1463,14 @@ public class PeopleCodeLexer
     private Token ScanInvalidCharacter()
     {
         var start = CurrentPosition;
-        var ch = Advance();
-        AddError($"Invalid character: '{ch}'");
-        return new Token(TokenType.Invalid, ch.ToString(), CreateSpan(start));
+        var text = Advance().ToString();
+        // Consume the full code point: a surrogate pair is one character, not two
+        if (char.IsHighSurrogate(text[0]) && !IsAtEnd && char.IsLowSurrogate(CurrentChar))
+        {
+            text += Advance();
+        }
+        AddError($"Invalid character: '{text}'");
+        return new Token(TokenType.Invalid, text, CreateSpan(start));
     }
 
     private bool IsIdentifierChar(char ch)

@@ -1015,12 +1015,6 @@ end-method;
             base.VisitIdentifier(node);
         }
 
-        public override void VisitPropertyAccess(PropertyAccessNode node)
-        {
-            CheckExpressionType(node, "Property access");
-            base.VisitPropertyAccess(node);
-        }
-
         public override void VisitArrayAccess(ArrayAccessNode node)
         {
             CheckExpressionType(node, "Array access");

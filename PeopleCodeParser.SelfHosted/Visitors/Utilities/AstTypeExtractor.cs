@@ -72,7 +72,6 @@ public static class AstTypeExtractor
             BinaryOperationNode => "any",
             UnaryOperationNode => "any",
             FunctionCallNode => "any",
-            PropertyAccessNode => "any",
             ArrayAccessNode => "any",
             ObjectCreationNode => "any",
             TypeCastNode cast => GetTypeFromNode(cast.TargetType),

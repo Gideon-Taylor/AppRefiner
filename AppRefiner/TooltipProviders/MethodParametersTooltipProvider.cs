@@ -216,31 +216,32 @@ namespace AppRefiner.TooltipProviders
                 var type = typeStack.Pop();
                 if (type.Contains(':'))
                 {
-                    ProgramNode? typeProgram = null;
+                    AppClassNode? typeClass;
                     /* if it matches our class path, it has to be a class, not an interface, because we trigger on
-                     * function calls, and interfaces can't contain those 
+                     * function calls, and interfaces can't contain those
                      */
                     if (type.Equals($"{basePackage}"))
                     {
-                        /* Synthetic program node since that's what used in the "not this" case */
-                        typeProgram = new ProgramNode() { AppClass = classNode };
+                        /* Use our own class node directly; wrapping it in a synthetic ProgramNode
+                         * would reparent it out of the real AST */
+                        typeClass = classNode;
                     }
                     else
                     {
-                      typeProgram = ParseExternalClass(type);
+                        var typeProgram = ParseExternalClass(type);
+                        if (typeProgram == null) return null;
+                        typeClass = typeProgram.AppClass;
                     }
 
-                    if (typeProgram == null) return null;
-
-                    if (typeProgram.AppClass != null)
+                    if (typeClass != null)
                     {
-                        var parentMethod = typeProgram.AppClass.Methods.Where(m => m.Name == methodName).FirstOrDefault();
+                        var parentMethod = typeClass.Methods.Where(m => m.Name == methodName).FirstOrDefault();
                         if (parentMethod != null)
                         {
                             return FormatTooltipForMethod(parentMethod, type);
-                        } else if (typeProgram.AppClass.BaseType != null)
+                        } else if (typeClass.BaseType != null)
                         {
-                            typeStack.Push(typeProgram.AppClass.BaseType.TypeName);
+                            typeStack.Push(typeClass.BaseType.TypeName);
                         }
                     }
                 }

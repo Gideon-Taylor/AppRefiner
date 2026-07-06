@@ -8,11 +8,6 @@ namespace PeopleCodeParser.SelfHosted.Nodes;
 public abstract class ExpressionNode : AstNode
 {
     /// <summary>
-    /// Inferred type of this expression (set during semantic analysis)
-    /// </summary>
-    public TypeNode? InferredType { get; set; }
-
-    /// <summary>
     /// True if this expression can be assigned to (is an l-value)
     /// </summary>
     public virtual bool IsLValue => false;
@@ -41,10 +36,6 @@ public class ClassConstantNode : ExpressionNode
         visitor.VisitClassConstant(this);
     }
 
-    public override TResult Accept<TResult>(IAstVisitor<TResult> visitor)
-    {
-        return visitor.VisitClassConstant(this);
-    }
 }
 
 /// <summary>
@@ -89,10 +80,6 @@ public class BinaryOperationNode : ExpressionNode
         visitor.VisitBinaryOperation(this);
     }
 
-    public override TResult Accept<TResult>(IAstVisitor<TResult> visitor)
-    {
-        return visitor.VisitBinaryOperation(this);
-    }
 
     public override string ToString()
     {
@@ -132,10 +119,6 @@ public class UnaryOperationNode : ExpressionNode
         visitor.VisitUnaryOperation(this);
     }
 
-    public override TResult Accept<TResult>(IAstVisitor<TResult> visitor)
-    {
-        return visitor.VisitUnaryOperation(this);
-    }
 
     public override string ToString()
     {
@@ -169,10 +152,6 @@ public class LiteralNode : ExpressionNode
         visitor.VisitLiteral(this);
     }
 
-    public override TResult Accept<TResult>(IAstVisitor<TResult> visitor)
-    {
-        return visitor.VisitLiteral(this);
-    }
 
     public override string ToString()
     {
@@ -213,10 +192,6 @@ public class IdentifierNode : ExpressionNode
         visitor.VisitIdentifier(this);
     }
 
-    public override TResult Accept<TResult>(IAstVisitor<TResult> visitor)
-    {
-        return visitor.VisitIdentifier(this);
-    }
 
     public override string ToString()
     {
@@ -224,48 +199,6 @@ public class IdentifierNode : ExpressionNode
     }
 }
 
-
-/// <summary>
-/// Property access expression (obj.Property)
-/// </summary>
-public class PropertyAccessNode : ExpressionNode
-{
-    /// <summary>
-    /// Target object
-    /// </summary>
-    public ExpressionNode Target { get; }
-
-    /// <summary>
-    /// Property name
-    /// </summary>
-    public string PropertyName { get; }
-
-    public override bool IsLValue => true;
-    public override bool HasSideEffects => Target.HasSideEffects;
-
-    public PropertyAccessNode(ExpressionNode target, string propertyName)
-    {
-        Target = target ?? throw new ArgumentNullException(nameof(target));
-        PropertyName = propertyName ?? throw new ArgumentNullException(nameof(propertyName));
-
-        AddChild(target);
-    }
-
-    public override void Accept(IAstVisitor visitor)
-    {
-        visitor.VisitPropertyAccess(this);
-    }
-
-    public override TResult Accept<TResult>(IAstVisitor<TResult> visitor)
-    {
-        return visitor.VisitPropertyAccess(this);
-    }
-
-    public override string ToString()
-    {
-        return $"{Target}.{PropertyName}";
-    }
-}
 
 /// <summary>
 /// Array access expression (array[index])
@@ -280,7 +213,8 @@ public class ArrayAccessNode : ExpressionNode
     /// <summary>
     /// Index expressions
     /// </summary>
-    public List<ExpressionNode> Indices { get; }
+    private readonly List<ExpressionNode> _indices;
+    public IReadOnlyList<ExpressionNode> Indices => _indices;
 
     public override bool IsLValue => true;
     public override bool HasSideEffects => Array.HasSideEffects || Indices.Any(i => i.HasSideEffects);
@@ -288,13 +222,13 @@ public class ArrayAccessNode : ExpressionNode
     public ArrayAccessNode(ExpressionNode array, IEnumerable<ExpressionNode> indices)
     {
         Array = array ?? throw new ArgumentNullException(nameof(array));
-        Indices = indices?.ToList() ?? throw new ArgumentNullException(nameof(indices));
+        _indices = indices?.ToList() ?? throw new ArgumentNullException(nameof(indices));
 
-        if (Indices.Count == 0)
+        if (_indices.Count == 0)
             throw new ArgumentException("At least one index is required", nameof(indices));
 
         AddChild(array);
-        AddChildren(Indices);
+        AddChildren(_indices);
     }
 
     public override void Accept(IAstVisitor visitor)
@@ -302,10 +236,6 @@ public class ArrayAccessNode : ExpressionNode
         visitor.VisitArrayAccess(this);
     }
 
-    public override TResult Accept<TResult>(IAstVisitor<TResult> visitor)
-    {
-        return visitor.VisitArrayAccess(this);
-    }
 
     public override string ToString()
     {
@@ -321,10 +251,6 @@ public class ObjectCreateShortHand : ExpressionNode
         visitor.VisitObjectCreateShortHand(this);
     }
 
-    public override TResult Accept<TResult>(IAstVisitor<TResult> visitor)
-    {
-        return visitor.VisitObjectCreateShortHand(this);
-    }
 
     public override string ToString()
     {
@@ -345,17 +271,18 @@ public class ObjectCreationNode : ExpressionNode
     /// <summary>
     /// Constructor arguments
     /// </summary>
-    public List<ExpressionNode> Arguments { get; }
+    private readonly List<ExpressionNode> _arguments;
+    public IReadOnlyList<ExpressionNode> Arguments => _arguments;
 
     public override bool HasSideEffects => true; // Object creation has side effects
 
     public ObjectCreationNode(TypeNode type, IEnumerable<ExpressionNode> arguments)
     {
         Type = type ?? throw new ArgumentNullException(nameof(type));
-        Arguments = arguments?.ToList() ?? throw new ArgumentNullException(nameof(arguments));
+        _arguments = arguments?.ToList() ?? throw new ArgumentNullException(nameof(arguments));
 
         AddChild(type);
-        AddChildren(Arguments);
+        AddChildren(_arguments);
     }
 
     public override void Accept(IAstVisitor visitor)
@@ -363,10 +290,6 @@ public class ObjectCreationNode : ExpressionNode
         visitor.VisitObjectCreation(this);
     }
 
-    public override TResult Accept<TResult>(IAstVisitor<TResult> visitor)
-    {
-        return visitor.VisitObjectCreation(this);
-    }
 
     public override string ToString()
     {
@@ -405,10 +328,6 @@ public class TypeCastNode : ExpressionNode
         visitor.VisitTypeCast(this);
     }
 
-    public override TResult Accept<TResult>(IAstVisitor<TResult> visitor)
-    {
-        return visitor.VisitTypeCast(this);
-    }
 
     public override string ToString()
     {
@@ -440,10 +359,6 @@ public class ParenthesizedExpressionNode : ExpressionNode
         visitor.VisitParenthesized(this);
     }
 
-    public override TResult Accept<TResult>(IAstVisitor<TResult> visitor)
-    {
-        return visitor.VisitParenthesized(this);
-    }
 
     public override string ToString()
     {
@@ -476,10 +391,6 @@ public class PartialShortHandAssignmentNode : ExpressionNode
         visitor.VisitPartialShortHandAssignment(this);
     }
 
-    public override TResult Accept<TResult>(IAstVisitor<TResult> visitor)
-    {
-        return visitor.VisitPartialShortHandAssignment(this);
-    }
 
 }
 
@@ -503,6 +414,12 @@ public class AssignmentNode : ExpressionNode
     /// </summary>
     public ExpressionNode Value { get; }
 
+    /// <summary>
+    /// The assignment operator token (for tooling that edits around the operator,
+    /// e.g. shorthand expansion)
+    /// </summary>
+    public Lexing.Token? OperatorToken { get; init; }
+
     public override bool HasSideEffects => true; // Assignments have side effects
 
     public AssignmentNode(ExpressionNode target, AssignmentOperator op, ExpressionNode value)
@@ -519,10 +436,6 @@ public class AssignmentNode : ExpressionNode
         visitor.VisitAssignment(this);
     }
 
-    public override TResult Accept<TResult>(IAstVisitor<TResult> visitor)
-    {
-        return visitor.VisitAssignment(this);
-    }
 
     public override string ToString()
     {
@@ -695,17 +608,18 @@ public class FunctionCallNode : ExpressionNode
     /// <summary>
     /// Function arguments
     /// </summary>
-    public List<ExpressionNode> Arguments { get; }
+    private readonly List<ExpressionNode> _arguments;
+    public IReadOnlyList<ExpressionNode> Arguments => _arguments;
 
     public override bool HasSideEffects => true; // Function calls generally have side effects
 
     public FunctionCallNode(ExpressionNode function, IEnumerable<ExpressionNode> arguments)
     {
         Function = function ?? throw new ArgumentNullException(nameof(function));
-        Arguments = arguments?.ToList() ?? new List<ExpressionNode>();
+        _arguments = arguments?.ToList() ?? new List<ExpressionNode>();
 
         AddChild(function);
-        AddChildren(Arguments);
+        AddChildren(_arguments);
     }
 
     public override void Accept(IAstVisitor visitor)
@@ -713,10 +627,6 @@ public class FunctionCallNode : ExpressionNode
         visitor.VisitFunctionCall(this);
     }
 
-    public override TResult Accept<TResult>(IAstVisitor<TResult> visitor)
-    {
-        return visitor.VisitFunctionCall(this);
-    }
 
     public override string ToString()
     {
@@ -762,10 +672,6 @@ public class MemberAccessNode : ExpressionNode
         visitor.VisitMemberAccess(this);
     }
 
-    public override TResult Accept<TResult>(IAstVisitor<TResult> visitor)
-    {
-        return visitor.VisitMemberAccess(this);
-    }
 
     public override string ToString()
     {
@@ -795,10 +701,6 @@ public class MetadataExpressionNode : ExpressionNode
         visitor.VisitMetadataExpression(this);
     }
 
-    public override TResult Accept<TResult>(IAstVisitor<TResult> visitor)
-    {
-        return visitor.VisitMetadataExpression(this);
-    }
 
     public override string ToString()
     {

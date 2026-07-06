@@ -10,7 +10,8 @@ public class InterpolatedStringNode : ExpressionNode
     /// <summary>
     /// The parts of the interpolated string (alternating StringFragments and Interpolations)
     /// </summary>
-    public List<InterpolatedStringPart> Parts { get; }
+    private readonly List<InterpolatedStringPart> _parts;
+    public IReadOnlyList<InterpolatedStringPart> Parts => _parts;
 
     /// <summary>
     /// True if error recovery occurred during parsing (unterminated string, unclosed braces, etc.)
@@ -21,10 +22,10 @@ public class InterpolatedStringNode : ExpressionNode
 
     public InterpolatedStringNode(IEnumerable<InterpolatedStringPart> parts, bool hasErrors = false)
     {
-        Parts = parts?.ToList() ?? new List<InterpolatedStringPart>();
+        _parts = parts?.ToList() ?? new List<InterpolatedStringPart>();
         HasErrors = hasErrors;
 
-        AddChildren(Parts);
+        AddChildren(_parts);
     }
 
     public override void Accept(IAstVisitor visitor)
@@ -32,10 +33,6 @@ public class InterpolatedStringNode : ExpressionNode
         visitor.VisitInterpolatedString(this);
     }
 
-    public override TResult Accept<TResult>(IAstVisitor<TResult> visitor)
-    {
-        return visitor.VisitInterpolatedString(this);
-    }
 
     public override string ToString()
     {
@@ -72,10 +69,6 @@ public class StringFragment : InterpolatedStringPart
         visitor.VisitStringFragment(this);
     }
 
-    public override TResult Accept<TResult>(IAstVisitor<TResult> visitor)
-    {
-        return visitor.VisitStringFragment(this);
-    }
 
     public override string ToString()
     {
@@ -115,10 +108,6 @@ public class Interpolation : InterpolatedStringPart
         visitor.VisitInterpolation(this);
     }
 
-    public override TResult Accept<TResult>(IAstVisitor<TResult> visitor)
-    {
-        return visitor.VisitInterpolation(this);
-    }
 
     public override string ToString()
     {
