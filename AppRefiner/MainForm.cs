@@ -140,6 +140,7 @@ namespace AppRefiner
         private const int AR_DOC_MODIFIED = 2521; // Document text changed (posted; wParam=PACK(hwnd, 0)) - invalidates content caches
         private const int AR_SUBCLASS_ACK = 2522; // Subclass request result (wParam=PACK(scintillaHwnd, SubclassAckFlags), lParam=parentHwnd)
         private const int AR_EDITOR_DESTROYED = 2523; // Subclassed editor received WM_NCDESTROY (posted; wParam=PACK(hwnd, 0)) - evicts tracked editor state
+        private const int AR_FUNCTION_SUGGEST = 2524; // Function name suggestions (Ctrl+Space on a plain identifier; C#-only, no hook producer)
         private const int AR_SUBCLASS_RESULTS_LIST = 1007; // Message to subclass Results list view
         private const int AR_SET_OPEN_TARGET = 1008; // Message to set open target for Results list interception
 
@@ -2386,6 +2387,7 @@ namespace AppRefiner
                                         AutoCompleteContext.Variable => UserListType.Variable,
                                         AutoCompleteContext.ObjectMembers => UserListType.ObjectMembers,
                                         AutoCompleteContext.SystemVariables => UserListType.SystemVariables,
+                                        AutoCompleteContext.FunctionNames => UserListType.FunctionNames,
                                         _ => UserListType.QuickFix  // Fallback (should never happen)
                                     };
 
@@ -3009,6 +3011,26 @@ namespace AppRefiner
                 catch (Exception ex)
                 {
                     Debug.LogException(ex, "Error processing system variable suggestion");
+                }
+            }
+            else if (m.Msg == AR_FUNCTION_SUGGEST)
+            {
+                var editor = ResolveEditorFromHwnd(UnpackHwnd(m.LParam));
+                if (editor == null || autoCompleteService == null) return;
+
+                // Manual trigger only (Ctrl+Space on a plain identifier) — explicit user
+                // intent, so no AutoSuggestSettings gate
+                int position = m.WParam.ToInt32();
+
+                try
+                {
+                    // GetParsedProgram inside the service is hash-cached and needs no type
+                    // inference, unlike the char-typed suggest handlers above
+                    autoCompleteService.ShowFunctionSuggestions(editor, position);
+                }
+                catch (Exception ex)
+                {
+                    Debug.LogException(ex, "Error processing function name suggestion");
                 }
             }
             else if (m.Msg == AR_SCINTILLA_ALREADY_LOADED)

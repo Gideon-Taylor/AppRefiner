@@ -171,7 +171,8 @@ namespace AppRefiner
             QuickFix = 2,
             Variable = 3,
             ObjectMembers = 4,
-            SystemVariables = 5
+            SystemVariables = 5,
+            FunctionNames = 6
         }
 
         // Constants related to Scintilla messages (can be kept private if only used here)
@@ -795,6 +796,92 @@ namespace AppRefiner
         }
 
         /// <summary>
+        /// Display entries for builtin global functions (methods of the "System" builtin
+        /// object), built once — the typeinfo catalog is immutable. Names are kept alongside
+        /// the formatted entries so user functions can shadow same-named builtins.
+        /// </summary>
+        private static readonly Lazy<List<(string Name, string Entry)>> BuiltinFunctionEntries = new(() =>
+        {
+            var entries = new List<(string, string)>();
+            var systemObj = PeopleCodeTypeDatabase.GetObject("System");
+            if (systemObj == null)
+            {
+                Debug.Log("System builtin object not found; no builtin function suggestions");
+                return entries;
+            }
+
+            foreach (var fn in systemObj.GetAllMethods()
+                         .Where(m => !string.IsNullOrEmpty(m.Name) && m.Visibility <= MemberVisibility.Public)
+                         .OrderBy(m => m.Name))
+            {
+                entries.Add((fn.Name, $"{fn.Name}?{(int)AutoCompleteIcons.ClassMethod}"));
+            }
+            return entries;
+        });
+
+        /// <summary>
+        /// Shows function-name suggestions at the cursor: user functions visible at this
+        /// position (declares anywhere; implementations only above — PeopleCode is
+        /// single-pass) followed by builtin global functions. Triggered by Ctrl+Space on a
+        /// plain identifier (no prefix character).
+        /// </summary>
+        public void ShowFunctionSuggestions(ScintillaEditor editor, int position)
+        {
+            if (editor == null || !editor.IsValid()) return;
+
+            try
+            {
+                var suggestions = new List<string>();
+                var userNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+                var program = editor.GetParsedProgram();
+                if (program != null)
+                {
+                    // Positions from Scintilla are UTF-8 byte offsets, matching SourceSpan
+                    var visible = FunctionVisibilityIndex.Build(program).GetVisibleAt(position)
+                        .Where(fn => !string.IsNullOrEmpty(fn.Name))
+                        .OrderBy(fn => fn.Name);
+
+                    foreach (var fn in visible)
+                    {
+                        if (userNames.Add(fn.Name))
+                        {
+                            suggestions.Add($"{fn.Name}?{(int)AutoCompleteIcons.ExternalFunction}");
+                        }
+                    }
+                }
+
+                // Builtins after user functions, minus any shadowed by a user function
+                foreach (var (name, entry) in BuiltinFunctionEntries.Value)
+                {
+                    if (!userNames.Contains(name))
+                    {
+                        suggestions.Add(entry);
+                    }
+                }
+
+                if (suggestions.Count > 0)
+                {
+                    Debug.Log($"Showing {suggestions.Count} function suggestions at position {position}");
+                    // customOrder keeps user functions (alphabetical) above builtins (alphabetical)
+                    bool result = ScintillaManager.ShowAutoComplete(editor, AutoCompleteContext.FunctionNames, position, suggestions, customOrder: true);
+                    if (!result)
+                    {
+                        Debug.Log("Failed to show function name suggestions.");
+                    }
+                }
+                else
+                {
+                    Debug.Log("No function suggestions available at this position.");
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.LogException(ex, "Error showing function suggestions");
+            }
+        }
+
+        /// <summary>
         /// Converts a PropertyInfo to TypeInfo for type compatibility checking.
         /// </summary>
         private TypeInfo ConvertPropertyToTypeInfo(PeopleCodeTypeInfo.Functions.PropertyInfo prop)
@@ -1258,6 +1345,26 @@ namespace AppRefiner
 
             return null; // No refactoring needed for variable insertion
         }
+
+        private BaseRefactor? HandleFunctionNamesSelection(ScintillaEditor editor, string selection)
+        {
+            // Entries are bare names (the "?icon" suffix is stripped by Scintilla before
+            // the notification). Defensive: strip a " -> " decoration if the entry format
+            // ever gains type info, mirroring the other handlers.
+            string functionName = selection;
+            var nameEndIndex = selection.IndexOf(" -> ");
+            if (nameEndIndex > 0)
+            {
+                functionName = selection.Substring(0, nameEndIndex);
+            }
+
+            // The typed prefix was already removed by the SCN_AUTOCSELECTION handler.
+            // Bare-name insertion: typing '(' afterwards fires the existing call tip.
+            ScintillaManager.InsertTextAtCursor(editor, functionName);
+
+            return null;
+        }
+
         private BaseRefactor? HandleObjectMemberListSelection(ScintillaEditor editor, string selection)
         {
             // Extract the variable name and kind from the formatted selection
@@ -1393,6 +1500,8 @@ namespace AppRefiner
                     return HandleObjectMemberListSelection(editor, selection);
                 case UserListType.SystemVariables:
                     return HandleSystemVariableListSelection(editor, selection);
+                case UserListType.FunctionNames:
+                    return HandleFunctionNamesSelection(editor, selection);
                 default:
                     Debug.Log($"Unknown list type: {listType}");
                     return null;

@@ -322,7 +322,8 @@ namespace AppRefiner
             Variable = 2,
             ObjectMembers = 3,
             SystemVariables = 4,
-            FunctionCallTip = 5
+            FunctionCallTip = 5,
+            FunctionNames = 6
         }
 
         /// <summary>

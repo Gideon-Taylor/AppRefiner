@@ -13,6 +13,7 @@ namespace AppRefiner.Commands.BuiltIn
         private const int AR_FUNCTION_CALL_TIP = 2511;
         private const int AR_OBJECT_MEMBERS = 2512;
         private const int AR_SYSTEM_VARIABLE_SUGGEST = 2513;
+        private const int AR_FUNCTION_SUGGEST = 2524;
 
         [DllImport("user32.dll", CharSet = CharSet.Auto)]
         private static extern IntPtr SendMessage(IntPtr hWnd, int msg, IntPtr wParam, IntPtr lParam);
@@ -74,6 +75,7 @@ namespace AppRefiner.Commands.BuiltIn
                     AutoCompleteContext.ObjectMembers => AR_OBJECT_MEMBERS,
                     AutoCompleteContext.SystemVariables => AR_SYSTEM_VARIABLE_SUGGEST,
                     AutoCompleteContext.FunctionCallTip => AR_FUNCTION_CALL_TIP,
+                    AutoCompleteContext.FunctionNames => AR_FUNCTION_SUGGEST,
                     _ => AR_VARIABLE_SUGGEST
                 };
 
@@ -118,11 +120,26 @@ namespace AppRefiner.Commands.BuiltIn
                 if (ch == ':') return (AutoCompleteContext.AppPackage, i, ch);
                 if (ch == '(' || ch == ',') return (AutoCompleteContext.FunctionCallTip, i, ch);
 
-                // Hit non-identifier, non-trigger character
-                return null;
+                // Hit a non-trigger boundary: a plain identifier (no prefix) means
+                // function-name suggestions; anything else falls back to the default
+                return IdentifierContextOrNull(text, i + 1, position);
             }
 
-            return null; // Reached start of document
+            // Reached start of document — the whole prefix may be a plain identifier
+            return IdentifierContextOrNull(text, 0, position);
+        }
+
+        /// <summary>
+        /// FunctionNames context when [identifierStart, position) is a non-empty run that
+        /// starts with a letter (PeopleCode identifiers cannot start with a digit);
+        /// otherwise null so Execute falls back to variable suggestions.
+        /// </summary>
+        private static (AutoCompleteContext context, int triggerPosition, char triggerChar)? IdentifierContextOrNull(
+            string text, int identifierStart, int position)
+        {
+            if (identifierStart < position && char.IsLetter(text[identifierStart]))
+                return (AutoCompleteContext.FunctionNames, identifierStart, '\0');
+            return null;
         }
     }
 }

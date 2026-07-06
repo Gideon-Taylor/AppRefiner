@@ -2038,6 +2038,12 @@ namespace AppRefiner
                 return 0;
             }
 
+            // FunctionNames has no trigger character — the typed prefix is the identifier itself
+            if (context == AutoCompleteContext.FunctionNames)
+            {
+                return CountIdentifierBytesBeforePosition(editor, position);
+            }
+
             // Determine trigger character based on context
             char triggerChar = context switch
             {
@@ -2109,6 +2115,46 @@ namespace AppRefiner
         }
 
         /// <summary>
+        /// Counts identifier bytes ([A-Za-z0-9_]) immediately before the cursor on the
+        /// current line. Used by contexts with no trigger character (FunctionNames), where
+        /// the typed prefix is the identifier itself. Positions are UTF-8 byte offsets and
+        /// PeopleCode identifier characters are ASCII, so byte-wise counting is exact.
+        /// </summary>
+        private static int CountIdentifierBytesBeforePosition(ScintillaEditor editor, int position)
+        {
+            int lineNumber = (int)editor.SendMessage(SCI_LINEFROMPOSITION, position, IntPtr.Zero);
+            int lineStart = (int)editor.SendMessage(SCI_POSITIONFROMLINE, lineNumber, IntPtr.Zero);
+            int scanLength = position - lineStart;
+            if (scanLength <= 0)
+            {
+                return 0;
+            }
+
+            byte[]? lineBytes = ReadDocumentRange(editor, lineStart, scanLength);
+            if (lineBytes == null)
+            {
+                return 0;
+            }
+
+            int lengthEntered = 0;
+            for (int i = scanLength - 1; i >= 0; i--)
+            {
+                byte b = lineBytes[i];
+                if (b < 0x80 && (char.IsLetterOrDigit((char)b) || b == (byte)'_'))
+                {
+                    lengthEntered++;
+                }
+                else
+                {
+                    break;
+                }
+            }
+
+            Debug.Log($"CountIdentifierBytesBeforePosition: lengthEntered={lengthEntered}");
+            return lengthEntered;
+        }
+
+        /// <summary>
         /// Sets context-specific fillup and stop characters for autocompletion
         /// </summary>
         /// <param name="editor">The editor</param>
@@ -2129,6 +2175,7 @@ namespace AppRefiner
                     AutoCompleteContext.ObjectMembers => "(\t;",   // '(' chains to parameters
                     AutoCompleteContext.AppPackage => ":\t",      // ':' drills down into packages
                     AutoCompleteContext.SystemVariables => "\t;",  // No chaining for system variables
+                    AutoCompleteContext.FunctionNames => "(\t;",   // '(' chains to the function call tip
                     _ => "\t"
                 };
                 if (context is AutoCompleteContext.AppPackage && editor.HasLexilla == false)

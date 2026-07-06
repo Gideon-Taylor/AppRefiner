@@ -34,6 +34,11 @@ NEW FEATURES
   on the underline to import the function from your function cache (works
   even without a database connection), search for it in the Declare Function
   dialog, or move a below-defined function above its caller automatically.
+• Function Name Autocomplete - Press Ctrl+Space while typing a plain identifier
+  (no & or % prefix) to see the functions you can call there: functions defined
+  or declared in the current program — honoring PeopleCode's rule that an
+  implementation must appear above its use — plus every builtin function. Pick
+  one and type ( to get its signature call tip.
 • Capture-Result Quick Fix - The "return/expression values must be assigned
   to a variable" type errors now offer a Ctrl+. fix that captures the value
   in a new local variable — typed from what AppRefiner inferred, named &_

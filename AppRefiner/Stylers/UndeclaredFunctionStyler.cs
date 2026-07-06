@@ -1,6 +1,7 @@
 using AppRefiner.Database;
 using AppRefiner.Refactors;
 using AppRefiner.Refactors.QuickFixes;
+using PeopleCodeParser.SelfHosted;
 using PeopleCodeParser.SelfHosted.Nodes;
 using PeopleCodeTypeInfo.Database;
 
@@ -22,8 +23,7 @@ namespace AppRefiner.Stylers
         private const uint SQUIGGLE_COLOR = 0x0000FFA0; // Red + alpha
         private const int MAX_IMPORT_OPTIONS = 10;
 
-        private readonly Dictionary<string, FunctionNode> _declarations = new(StringComparer.OrdinalIgnoreCase);
-        private readonly Dictionary<string, FunctionNode> _implementations = new(StringComparer.OrdinalIgnoreCase);
+        private FunctionVisibilityIndex? _functionIndex;
 
         public UndeclaredFunctionStyler()
         {
@@ -32,23 +32,7 @@ namespace AppRefiner.Stylers
 
         public override void VisitProgram(ProgramNode node)
         {
-            _declarations.Clear();
-            _implementations.Clear();
-
-            foreach (var fn in node.Functions)
-            {
-                if (fn.IsDeclaration)
-                {
-                    _declarations[fn.Name] = fn;
-                }
-                else if (fn.IsImplementation)
-                {
-                    // Keep the FIRST implementation: visibility is judged against the
-                    // earliest definition of the name
-                    _implementations.TryAdd(fn.Name, fn);
-                }
-            }
-
+            _functionIndex = FunctionVisibilityIndex.Build(node);
             base.VisitProgram(node);
         }
 
@@ -66,10 +50,10 @@ namespace AppRefiner.Stylers
 
             // Declares must precede implementations and executable code, so existence
             // alone makes the name visible everywhere
-            if (_declarations.ContainsKey(name))
+            if (_functionIndex == null || _functionIndex.Declarations.ContainsKey(name))
                 return;
 
-            if (_implementations.TryGetValue(name, out var impl))
+            if (_functionIndex.Implementations.TryGetValue(name, out var impl))
             {
                 if (impl.SourceSpan.Start.ByteIndex < node.SourceSpan.Start.ByteIndex)
                     return; // Defined above the call — valid
