@@ -740,6 +740,17 @@ public class PeopleCodeParser
                     {
                         var startPosition = _position;
                         var variable = ParseLocalVariableStatement();
+                        if (variable is LocalVariableDeclarationWithAssignmentNode)
+                        {
+                            // A local declaration WITH an initializer (Local type &v = expr)
+                            // is an executable statement, not a program-level declaration, so
+                            // it belongs to the main block rather than the preamble. Rewind
+                            // and let the main-block parser own it (and everything after it),
+                            // so ordinary statement rules — like requiring a terminating
+                            // semicolon on all but the last statement — apply to it.
+                            _position = startPosition;
+                            break;
+                        }
                         if (variable != null)
                         {
                             // Add to LocalVariables list (program-level locals)

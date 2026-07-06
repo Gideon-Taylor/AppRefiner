@@ -39,4 +39,25 @@ public class MissingSemicolonCheckTests
 
         Assert.DoesNotContain(diags, d => d.Code == DiagnosticCode.MissingSemicolon);
     }
+
+    [Fact]
+    public void Reports_missing_semicolon_on_top_level_local_with_initializer()
+    {
+        // A top-level `Local type &v = expr` is an executable statement (it initializes),
+        // so it belongs to the main block, not the declaration preamble. Because it is not
+        // the last statement here, its missing semicolon must be reported.
+        var diags = Check("local number &f = 3\n&f = &f + 1;");
+
+        Assert.Contains(diags, d => d.Code == DiagnosticCode.MissingSemicolon &&
+            d.Message == "Missing semicolon");
+    }
+
+    [Fact]
+    public void Does_not_report_last_top_level_local_with_initializer()
+    {
+        // Same statement as the only/last statement in the main block needs no semicolon.
+        var diags = Check("local number &f = 3");
+
+        Assert.DoesNotContain(diags, d => d.Code == DiagnosticCode.MissingSemicolon);
+    }
 }

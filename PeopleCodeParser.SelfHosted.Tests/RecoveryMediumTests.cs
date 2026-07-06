@@ -102,7 +102,10 @@ public class RecoveryMediumTests
             a => (a.Target as IdentifierNode)?.Name == "&y");
         Assert.Contains(program.FindDescendants<AssignmentNode>(),
             a => (a.Target as IdentifierNode)?.Name == "&z");
-        Assert.NotEmpty(program.LocalVariables);
+        // `Local number &x = 1;` has an initializer, so it is an executable main-block
+        // statement (not a program-level declaration); assert it survived recovery there.
+        Assert.Contains(program.FindDescendants<LocalVariableDeclarationWithAssignmentNode>(),
+            d => d.VariableNameInfo.Name == "&x");
     }
 
     [Fact]
