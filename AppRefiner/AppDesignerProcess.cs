@@ -74,29 +74,33 @@ namespace AppRefiner
         /// </summary>
 
         private ITypeMetadataResolver? _typeResolver;
+        private IDataManager? _typeResolverDataManager;
 
         /// <summary>
         /// Type metadata resolver that retrieves type information from the database.
-        /// Initialized lazily when DataManager is available.
+        /// Initialized lazily when DataManager is available and cached — the resolver holds
+        /// metadata caches that must survive across accesses. Recreated only when the
+        /// DataManager instance changes (connect/disconnect/reconnect).
         /// </summary>
         public ITypeMetadataResolver? TypeResolver
         {
             get
             {
-                // Lazy initialization when DataManager is available
-                if (_typeResolver == null && DataManager != null)
+                if (DataManager != null)
                 {
-                    _typeResolver = new DatabaseTypeMetadataResolver(DataManager);
+                    if (_typeResolver is not DatabaseTypeMetadataResolver || !ReferenceEquals(_typeResolverDataManager, DataManager))
+                    {
+                        _typeResolver = new DatabaseTypeMetadataResolver(DataManager);
+                        _typeResolverDataManager = DataManager;
+                    }
                 }
-                // Clear resolver if DataManager was disconnected
-                else 
+                else
                 {
-                    _typeResolver = new NullTypeMetadataResolver();
-                }
-
-                if (_typeResolver is NullTypeMetadataResolver && DataManager != null)
-                {
-                    _typeResolver = new DatabaseTypeMetadataResolver(DataManager);
+                    if (_typeResolver is not NullTypeMetadataResolver)
+                    {
+                        _typeResolver = new NullTypeMetadataResolver();
+                        _typeResolverDataManager = null;
+                    }
                 }
 
                 return _typeResolver;
@@ -129,6 +133,31 @@ namespace AppRefiner
             ResultsListView = resultsListView;
         }
 
+        /// <summary>
+        /// Reads raw bytes from an arbitrary address in this App Designer process.
+        /// Use for pointers handed to us by the hook (e.g. notification payloads) — this
+        /// performs a plain read with no ownership semantics, unlike RemoteBuffer which
+        /// frees its memory and must only wrap allocations AppRefiner made itself.
+        /// </summary>
+        /// <param name="address">Address in the remote process</param>
+        /// <param name="length">Number of bytes to read</param>
+        /// <returns>The bytes read, or null on failure</returns>
+        public byte[]? ReadMemory(IntPtr address, int length)
+        {
+            if (address == IntPtr.Zero || length <= 0)
+            {
+                return null;
+            }
+
+            byte[] buffer = new byte[length];
+            if (!WinApi.ReadProcessMemory(ProcessHandle, address, buffer, length, out int bytesRead) || bytesRead != length)
+            {
+                return null;
+            }
+
+            return buffer;
+        }
+
         public AppDesignerProcess(uint pid, IntPtr resultsListView, GeneralSettingsData settings, EventHookInstaller.ShortcutType enabledShortcuts = EventHookInstaller.ShortcutType.All)
         {
             ProcessId = pid;
@@ -146,10 +175,21 @@ namespace AppRefiner
                     .Any(module => string.Equals(module.ModuleName, "Lexilla.dll", StringComparison.OrdinalIgnoreCase));
             HasLexilla = lexillaLoaded;
 
-            // Get the main thread ID for this process
-            MainThreadId = (uint)process.Threads[0].Id;
-
             MainWindowHandle = process.MainWindowHandle;
+
+            // The UI thread is the one that owns the main window — Process.Threads has no
+            // guaranteed ordering, so Threads[0] may be a worker thread and hooks installed
+            // on it would never see any messages
+            if (MainWindowHandle != IntPtr.Zero)
+            {
+                MainThreadId = WinApi.GetWindowThreadProcessId(MainWindowHandle, out _);
+            }
+            else
+            {
+                // Fallback for the rare case the main window isn't available yet
+                MainThreadId = (uint)process.Threads[0].Id;
+                Debug.Log($"AppDesignerProcess: no main window for process {ProcessId}, falling back to first thread {MainThreadId}");
+            }
 
             // Proactively install hooks for this process's main thread
             // This ensures hooks are available immediately for operations like SetOpenTarget
@@ -327,22 +367,31 @@ namespace AppRefiner
                 int charCount = openTarget.Length;
                 uint bufferSize = (uint)(charCount + 1) * 2; // +1 for null terminator, *2 for wide chars
 
-                var remoteBuffer = MemoryManager.GetOrCreateBuffer("openTarget", bufferSize);
-                remoteBuffer.Reset();
-                Debug.Log($"SetOpenTarget Got remote buffer: 0x{remoteBuffer:X}");
-                if (remoteBuffer.Address == IntPtr.Zero)
+                bool setTargetSuccess;
+
+                // Shared buffer: hold the lock for the full write → send sequence
+                lock (MemoryManager.SyncRoot)
                 {
-                    Debug.Log($"SetOpenTarget Remote Buffer was 0");
-                    return false;
+                    var remoteBuffer = MemoryManager.GetOrCreateBuffer("openTarget", bufferSize);
+                    remoteBuffer.Reset();
+                    Debug.Log($"SetOpenTarget Got remote buffer: 0x{remoteBuffer.Address:X}");
+                    if (remoteBuffer.Address == IntPtr.Zero)
+                    {
+                        Debug.Log($"SetOpenTarget Remote Buffer was 0");
+                        return false;
+                    }
+
+                    // Write the wide string to the remote buffer
+                    if (remoteBuffer.WriteString(openTarget, Encoding.Unicode) == null)
+                    {
+                        Debug.Log("SetOpenTarget Failed to write target string to remote buffer");
+                        return false;
+                    }
+
+                    // Send the set open target message with the remote buffer pointer and character count
+                    Debug.Log($"SetOpenTarget Sending the message with buffer: 0x{remoteBuffer.Address:X}");
+                    setTargetSuccess = SendMessage(MainWindowHandle, (int)WM_AR_SET_OPEN_TARGET, remoteBuffer.Address, charCount) != IntPtr.Zero;
                 }
-
-                // Write the wide string to the remote buffer
-                remoteBuffer.WriteString(openTarget, Encoding.Unicode);
-                
-
-                // Send the set open target message with the remote buffer pointer and character count
-                Debug.Log($"SetOpenTarget Sending the message with buffer: 0x{remoteBuffer.Address:X}");
-                bool setTargetSuccess = SendMessage(MainWindowHandle, (int)WM_AR_SET_OPEN_TARGET, remoteBuffer.Address, charCount) != IntPtr.Zero;
                 Debug.Log($"SetOpenTarget setTargetSuccess: {setTargetSuccess}");
                 if (setTargetSuccess)
                 {
@@ -353,7 +402,6 @@ namespace AppRefiner
                     Debug.Log("SetOpenTarget Sending Double Click.");
                     bool doubleClickSuccess = SendMessage(ResultsListView, WM_LBUTTONDBLCLK, MK_LBUTTON, lParam) != IntPtr.Zero;
                     Debug.Log($"SetOpenTarget Double Click Success: {doubleClickSuccess}");
-                    Debug.Log($"SetOpenTarget Freed buffer 0x{remoteBuffer:X} after double click");
                     return doubleClickSuccess;
                 }
                 return false;
@@ -402,23 +450,34 @@ namespace AppRefiner
                 int charCount = dllPath.Length;
                 uint bufferSize = (uint)(charCount + 1) * 2; // Wide chars
 
-                var remoteBuffer = MemoryManager.GetOrCreateBuffer("scintillaDLL", bufferSize);
-                Debug.Log($"LoadScintillaDll: Allocated remote buffer at 0x{remoteBuffer:X}");
-
-                if (remoteBuffer.Address == IntPtr.Zero)
+                // Shared buffer: hold the lock for the write → post sequence. Note the message is
+                // POSTED (async) — the remote thread reads the buffer later, so this buffer must
+                // not be rewritten until then. In practice LoadScintillaDll runs once per process.
+                lock (MemoryManager.SyncRoot)
                 {
-                    Debug.Log("LoadScintillaDll: Failed to allocate remote buffer");
-                    return false;
+                    var remoteBuffer = MemoryManager.GetOrCreateBuffer("scintillaDLL", bufferSize);
+                    Debug.Log($"LoadScintillaDll: Allocated remote buffer at 0x{remoteBuffer.Address:X}");
+
+                    if (remoteBuffer.Address == IntPtr.Zero)
+                    {
+                        Debug.Log("LoadScintillaDll: Failed to allocate remote buffer");
+                        return false;
+                    }
+
+                    remoteBuffer.Reset();
+                    if (remoteBuffer.WriteString(dllPath, Encoding.Unicode) == null)
+                    {
+                        Debug.Log("LoadScintillaDll: Failed to write DLL path to remote buffer");
+                        return false;
+                    }
+
+                    Debug.Log($"LoadScintillaDll: Sending message to thread {MainThreadId}");
+                    bool postSuccess = PostThreadMessage(MainThreadId, WM_LOAD_SCINTILLA_DLL,
+                                                        remoteBuffer.Address, (IntPtr)charCount);
+
+                    Debug.Log($"LoadScintillaDll: PostThreadMessage returned {postSuccess}");
+                    return postSuccess;
                 }
-
-                remoteBuffer.WriteString(dllPath, Encoding.Unicode);
-
-                Debug.Log($"LoadScintillaDll: Sending message to thread {MainThreadId}");
-                bool postSuccess = PostThreadMessage(MainThreadId, WM_LOAD_SCINTILLA_DLL,
-                                                    remoteBuffer.Address, (IntPtr)charCount);
-
-                Debug.Log("LoadScintillaDll: Message sent successfully");
-                return true;
             }
             catch (Exception ex)
             {

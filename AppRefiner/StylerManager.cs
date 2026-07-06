@@ -34,7 +34,7 @@ namespace AppRefiner.Stylers
         private record StylerWorkItem(
             ScintillaEditor Editor,
             ProgramNode Program,
-            int ContentHash,
+            int ContentVersion,
             IDataManager? DataManager);
 
         public StylerManager(MainForm form, DataGridView stylerOptionsGrid, SettingsService settings)
@@ -135,11 +135,12 @@ namespace AppRefiner.Stylers
                 return; // Unable to parse
             }
 
-            // Capture content hash for staleness check after async processing
-            int contentHash = editor.ContentString?.GetHashCode() ?? 0;
+            // Capture the content version for the staleness check after async processing —
+            // the version increments on every WM_AR_DOC_MODIFIED from the hook
+            int contentVersion = editor.ContentVersion;
 
             // Enqueue work — replaces any pending request for the same editor
-            _pendingWork[editor] = new StylerWorkItem(editor, program, contentHash, editor.DataManager);
+            _pendingWork[editor] = new StylerWorkItem(editor, program, contentVersion, editor.DataManager);
 
             // Start the background consumer if not already running
             if (Interlocked.CompareExchange(ref _isProcessing, 1, 0) == 0)
@@ -218,14 +219,13 @@ namespace AppRefiner.Stylers
                 }
             }
 
-            // Verify content hasn't changed before applying indicators
+            // Verify content hasn't changed before applying indicators. The version counter
+            // (bumped per WM_AR_DOC_MODIFIED) replaces the previous full document re-read +
+            // hash comparison — one less cross-process copy per styler pass.
             if (!editor.IsValid())
                 return;
 
-            var currentContent = ScintillaManager.GetScintillaText(editor);
-            int currentHash = currentContent?.GetHashCode() ?? 0;
-
-            if (currentHash != item.ContentHash)
+            if (editor.ContentVersion != item.ContentVersion)
             {
                 Debug.Log($"ProcessStylerWorkItem: Content changed during processing for {editor.RelativePath ?? "unknown"}, discarding results");
                 return;
@@ -251,31 +251,29 @@ namespace AppRefiner.Stylers
                 currentIndicators = new List<Indicator>(editor.ActiveIndicators);
             }
 
-            // Optimize comparison by using HashSet for quick lookups
-            var newIndicatorSet = new HashSet<Indicator>(newIndicators);
-            var currentIndicatorSet = new HashSet<Indicator>(currentIndicators);
-
-            // Find indicators to remove (present in current, not in new)
-            var indicatorsToRemove = currentIndicators.Where(ci => !newIndicatorSet.Contains(ci)).ToList();
-
-            // Find indicators to add (present in new, not in current)
-            var indicatorsToAdd = newIndicators.Where(ni => !currentIndicatorSet.Contains(ni)).ToList();
-
             Debug.Log($"ApplyIndicators: Editor {editor.RelativePath ?? "unknown"} - " +
-                     $"Current: {currentIndicators.Count}, New: {newIndicators.Count}, " +
-                     $"ToRemove: {indicatorsToRemove.Count}, ToAdd: {indicatorsToAdd.Count}");
+                     $"Current: {currentIndicators.Count}, New: {newIndicators.Count}");
 
-            // Use Invoke if required for UI thread safety, though ScintillaManager might handle this internally
-            // For now, assume direct calls are safe or handled by ScintillaManager/caller.
+            // Do NOT diff old vs new and remove by recorded ranges: Scintilla shifts painted
+            // indicator ranges as the user edits, while our recorded Start/Length do not move.
+            // Removing by stale recorded range clears the wrong spot and leaves lingering
+            // paint (only a save/force-refresh used to fix it). Instead, wipe the full
+            // document range for every indicator number involved and repaint the fresh set —
+            // a handful of messages per distinct indicator color, and deterministic.
+            ScintillaManager.ClearIndicatorNumbers(
+                editor,
+                currentIndicators
+                    .Concat(newIndicators)
+                    .Concat(editor.SearchIndicators)
+                    .Concat(editor.BookmarkIndicators));
 
-            // Remove indicators that are no longer needed
-            foreach (var indicator in indicatorsToRemove)
+            lock (editor.IndicatorLock)
             {
-                RemoveIndicator(editor, indicator);
+                editor.ActiveIndicators.Clear();
             }
 
-            // Add new indicators
-            foreach (var indicator in indicatorsToAdd)
+            // Add new indicators (AddIndicator repopulates editor.ActiveIndicators)
+            foreach (var indicator in newIndicators)
             {
                 AddIndicator(editor, indicator);
             }
@@ -291,9 +289,6 @@ namespace AppRefiner.Stylers
             {
                 AddIndicator(editor, indicator);
             }
-
-            // Update the editor's active indicator list with the new set
-            //editor.ActiveIndicators = newIndicators; // Replace the old list
         }
 
         public void RemoveIndicator(ScintillaEditor editor, Indicator indicator)

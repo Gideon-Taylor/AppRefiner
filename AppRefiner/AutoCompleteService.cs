@@ -275,18 +275,24 @@ namespace AppRefiner
 
             try
             {
-                // Get the current line and content up to the cursor position
+                // Get the current line content up to the cursor position. Only the line is
+                // needed, so read just that byte range instead of copying the whole document.
                 int currentLine = (int)editor.SendMessage(SCI_LINEFROMPOSITION, position, 0);
                 int lineStartPos = (int)editor.SendMessage(SCI_POSITIONFROMLINE, currentLine, 0);
 
-                string content = ScintillaManager.GetScintillaText(editor) ?? "";
-                // Ensure position is within content bounds before substring
-                if (position < lineStartPos || position > lineStartPos + content.Length)
+                if (position < lineStartPos)
                 {
                     Debug.Log($"Position {position} is out of bounds for line {currentLine} starting at {lineStartPos}");
                     return;
                 }
-                string lineContent = content.Substring(lineStartPos, position - lineStartPos);
+
+                byte[]? lineBytes = ScintillaManager.ReadDocumentRange(editor, lineStartPos, position - lineStartPos);
+                if (lineBytes == null)
+                {
+                    Debug.Log($"Failed to read line content for line {currentLine}");
+                    return;
+                }
+                string lineContent = Encoding.UTF8.GetString(lineBytes);
 
                 // Check if there's a colon in the line content (or if it ends with one)
                 if (!lineContent.Contains(':'))
@@ -1228,10 +1234,9 @@ namespace AppRefiner
 
         private BaseRefactor? HandleSystemVariableListSelection(ScintillaEditor editor, string selection)
         {
-            // Extract the variable name and kind from the formatted selection
-            // Format is: "variableName (Type Kind)" or "variableName (Kind)"
+            // Extract the variable name from the formatted selection
+            // Format is: "%variableName -> Type"
             string variableName = selection;
-            bool isProperty = false;
 
             var variableEndIndex = selection.IndexOf(" -> ");
             if (variableEndIndex > 0)
@@ -1239,50 +1244,8 @@ namespace AppRefiner
                 variableName = selection.Substring(0, variableEndIndex);
             }
 
-            // Replace the partial variable reference with the complete variable name
-            try
-            {
-                // Get current cursor position
-                int currentPos = (int)editor.SendMessage(SCI_GETCURRENTPOS, 0, 0);
-
-                // Find the start of the variable reference by looking backwards for the & character
-                string content = ScintillaManager.GetScintillaText(editor) ?? "";
-
-                int percentPos = -1;
-                for (int i = currentPos - 1; i >= 0; i--)
-                {
-                    if (i < content.Length && content[i] == '%')
-                    {
-                        percentPos = i;
-                        break;
-                    }
-                    // Stop if we hit whitespace or other non-identifier characters
-                    if (i < content.Length && !char.IsLetterOrDigit(content[i]) && content[i] != '_')
-                    {
-                        break;
-                    }
-                }
-
-                if (percentPos >= 0)
-                {
-                    // Replace from & position to current position with the full variable name
-                    editor.SendMessage(SCI_SETSEL, percentPos + 1, currentPos);
-                    ScintillaManager.InsertTextAtCursor(editor, variableName);
-                    Debug.Log($"Replaced text from position {percentPos + 1} to {currentPos} with {variableName}");
-                }
-                else
-                {
-                    // Fallback: just insert the full variable name
-                    ScintillaManager.InsertTextAtCursor(editor, variableName);
-                    Debug.Log($"Could not find & start position, inserted {variableName} at cursor");
-                }
-            }
-            catch (Exception ex)
-            {
-                Debug.LogException(ex, "Error handling variable selection");
-                // Fallback to simple insertion
-                ScintillaManager.InsertTextAtCursor(editor, variableName);
-            }
+            // The typed prefix (including '%') was already removed by the caller
+            ScintillaManager.InsertTextAtCursor(editor, variableName);
 
             return null; // No refactoring needed for variable insertion
         }
@@ -1349,58 +1312,17 @@ namespace AppRefiner
                 }
             }
 
-            // Replace the partial variable reference with the complete variable name
-            try
+            // The typed prefix (after the '.') was already removed by the caller — insert directly
+            ScintillaManager.InsertTextAtCursor(editor, memberName);
+            var positionAfterInsert = ScintillaManager.GetCursorPosition(editor);
+            // Match the hook's AR_FUNCTION_CALL_TIP layout: source editor HWND in the
+            // high 32 bits of lParam, character in the low 32 bits
+            IntPtr packedLParam = MainForm.PackHwnd(editor.hWnd, '(');
+            Task.Delay(100).ContinueWith((a) =>
             {
-                // Get current cursor position
-                int currentPos = (int)editor.SendMessage(SCI_GETCURRENTPOS, 0, 0);
+                WinApi.SendMessage(AppDesignerProcess.CallbackWindow, MainForm.AR_FUNCTION_CALL_TIP, positionAfterInsert, packedLParam);
+            });
 
-                // Find the start of the variable reference by looking backwards for the & character
-                string content = ScintillaManager.GetScintillaText(editor) ?? "";
-
-                int dotPos = -1;
-                for (int i = currentPos - 1; i >= 0; i--)
-                {
-                    if (i < content.Length && content[i] == '.')
-                    {
-                        dotPos = i;
-                        break;
-                    }
-                    // Stop if we hit whitespace or other non-identifier characters
-                    if (i < content.Length && !char.IsLetterOrDigit(content[i]) && content[i] != '_')
-                    {
-                        break;
-                    }
-                }
-
-                if (dotPos >= 0)
-                {
-                    // Replace from & position to current position with the full variable name
-                    editor.SendMessage(SCI_SETSEL, dotPos + 1, currentPos);
-                    ScintillaManager.InsertTextAtCursor(editor, memberName);
-                    var newPosition = ScintillaManager.GetCursorPosition(editor);
-                    Task.Delay(100).ContinueWith((a) =>
-                    {
-                        WinApi.SendMessage(AppDesignerProcess.CallbackWindow, MainForm.AR_FUNCTION_CALL_TIP, newPosition, '(');
-                    });
-
-                    Debug.Log($"Replaced text from position {dotPos + 1} to {currentPos} with {memberName}");
-                }
-                else
-                {
-                    // Fallback: just insert the full variable name
-                    ScintillaManager.InsertTextAtCursor(editor, memberName);
-                    Debug.Log($"Could not find & start position, inserted {memberName} at cursor");
-                }
-            }
-            catch (Exception ex)
-            {
-                Debug.LogException(ex, "Error handling variable selection");
-                // Fallback to simple insertion
-                ScintillaManager.InsertTextAtCursor(editor, memberName);
-            }
-
-            // Clear cache for non-extension selections
             return null; // No refactoring needed for variable insertion
         }
 
@@ -1420,82 +1342,16 @@ namespace AppRefiner
 
             Debug.Log($"Variable selected: {variableName} from formatted text: {selection}, isProperty: {isProperty}");
 
-            // Replace the partial variable reference with the complete variable name
-            try
+            // The typed prefix (including '&') was already removed by the caller.
+            // Properties are inserted as %This.propertyName; variables keep their & prefix.
+            if (isProperty)
             {
-                // Get current cursor position
-                int currentPos = (int)editor.SendMessage(SCI_GETCURRENTPOS, 0, 0);
-
-                // Find the start of the variable reference by looking backwards for the & character
-                string content = ScintillaManager.GetScintillaText(editor) ?? "";
-
-                int ampersandPos = -1;
-                for (int i = currentPos - 1; i >= 0; i--)
-                {
-                    if (i < content.Length && content[i] == '&')
-                    {
-                        ampersandPos = i;
-                        break;
-                    }
-                    // Stop if we hit whitespace or other non-identifier characters
-                    if (i < content.Length && !char.IsLetterOrDigit(content[i]) && content[i] != '_')
-                    {
-                        break;
-                    }
-                }
-
-                if (ampersandPos >= 0)
-                {
-                    // For properties, replace with %This.propertyName
-                    // For regular variables, preserve the & and replace after it
-                    if (isProperty)
-                    {
-                        // Strip the & prefix and prepend %This.
-                        string propertyName = variableName.StartsWith("&") ? variableName.Substring(1) : variableName;
-                        string insertName = $"%This.{propertyName}";
-                        editor.SendMessage(SCI_SETSEL, ampersandPos, currentPos);
-                        ScintillaManager.InsertTextAtCursor(editor, insertName);
-                        Debug.Log($"Replaced text from position {ampersandPos} to {currentPos} with {insertName}");
-                    }
-                    else
-                    {
-                        // Replace from AFTER & to cursor, preserving the & (like system variables preserve %)
-                        // Strip the & prefix from variableName since we're preserving the original &
-                        string insertName = variableName.StartsWith("&") ? variableName.Substring(1) : variableName;
-                        editor.SendMessage(SCI_SETSEL, ampersandPos + 1, currentPos);
-                        ScintillaManager.InsertTextAtCursor(editor, insertName);
-                        Debug.Log($"Replaced text from position {ampersandPos + 1} to {currentPos} with {insertName}");
-                    }
-                }
-                else
-                {
-                    // Fallback: just insert the appropriate form
-                    if (isProperty)
-                    {
-                        string propertyName = variableName.StartsWith("&") ? variableName.Substring(1) : variableName;
-                        ScintillaManager.InsertTextAtCursor(editor, $"%This.{propertyName}");
-                        Debug.Log($"Could not find & start position, inserted %This.{propertyName} at cursor");
-                    }
-                    else
-                    {
-                        ScintillaManager.InsertTextAtCursor(editor, variableName);
-                        Debug.Log($"Could not find & start position, inserted {variableName} at cursor");
-                    }
-                }
+                string propertyName = variableName.StartsWith("&") ? variableName.Substring(1) : variableName;
+                ScintillaManager.InsertTextAtCursor(editor, $"%This.{propertyName}");
             }
-            catch (Exception ex)
+            else
             {
-                Debug.LogException(ex, "Error handling variable selection");
-                // Fallback to simple insertion
-                if (isProperty)
-                {
-                    string propertyName = variableName.StartsWith("&") ? variableName.Substring(1) : variableName;
-                    ScintillaManager.InsertTextAtCursor(editor, $"%This.{propertyName}");
-                }
-                else
-                {
-                    ScintillaManager.InsertTextAtCursor(editor, variableName);
-                }
+                ScintillaManager.InsertTextAtCursor(editor, variableName);
             }
 
             return null; // No refactoring needed for variable insertion
@@ -1503,6 +1359,9 @@ namespace AppRefiner
 
         /// <summary>
         /// Handles the selection made by the user from an autocomplete list.
+        /// The caller (SCN_AUTOCSELECTION handler) has already removed the typed prefix —
+        /// including the trigger character for variable/system-variable lists — using the
+        /// completion start position provided by the hook, so handlers insert at the cursor.
         /// </summary>
         /// <param name="editor">The active Scintilla editor.</param>
         /// <param name="selection">The raw text selected by the user.</param>

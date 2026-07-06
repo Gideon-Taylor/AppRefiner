@@ -74,7 +74,8 @@ namespace AppRefiner.Stylers
             }
 
             // If the editor changed, invalidate cached remote addresses and styles
-            if (Editor != lastEditor)
+            bool editorChanged = Editor != lastEditor;
+            if (editorChanged)
             {
                 paramNameAddresses.Clear();
                 stylesConfigured = false;
@@ -96,8 +97,21 @@ namespace AppRefiner.Stylers
                 stylesConfigured = true;
             }
 
-            // Get or create string buffer (persists across runs — only new unique strings get written)
+            // Get or create string buffer (persists across runs — only new unique strings get written).
+            // No MemoryManager.SyncRoot lock is held across this styler's buffer use: the
+            // "parameterNames"/"inlayInfoSet" buffers are only ever touched by the StylerManager's
+            // single serialized background consumer, so there is no concurrent access to guard.
             paramNameBuffer = Editor.AppDesignerProcess.MemoryManager.GetOrCreateBuffer("parameterNames");
+
+            // On editor change the address cache was cleared, so nothing references the
+            // previously written strings — rewind the write offset. Without this the buffer
+            // fills monotonically across editor switches until hints silently stop.
+            // (Assumes the enhanced Scintilla copies hint text during SCI_SETINLAYINFO rather
+            // than retaining our buffer pointers for paint time — verify in the test pass.)
+            if (editorChanged)
+            {
+                paramNameBuffer.Reset();
+            }
 
             currentLineNumber = ScintillaManager.GetCurrentLineNumber(Editor);
 

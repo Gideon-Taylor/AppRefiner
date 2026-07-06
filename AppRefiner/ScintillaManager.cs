@@ -311,14 +311,15 @@ namespace AppRefiner
         }
 
         /// <summary>
-        /// Retrieves the text from a Scintilla editor window in another process,
-        /// reusing a persistent remote memory buffer.
+        /// Retrieves the text from a Scintilla editor window in another process.
+        /// Uses a per-call temporary buffer: the SCI_GETTEXT → ReadProcessMemory sequence is
+        /// not atomic, so a shared buffer would let concurrent callers (background stylers,
+        /// autocomplete continuations, reentrant WndProc handlers) read each other's text.
         /// </summary>
-        /// <param name="scintillaHwnd">The window handle of the Scintilla control.</param>
+        /// <param name="editor">The editor to read the document from.</param>
         /// <returns>The document text, or null if retrieval failed.</returns>
         public static string? GetScintillaText(ScintillaEditor editor)
         {
-
             // Retrieve the text length.
             int textLength = (int)editor.SendMessage(SCI_GETLENGTH, IntPtr.Zero, IntPtr.Zero);
             if (textLength == 0)
@@ -327,13 +328,29 @@ namespace AppRefiner
             // Determine the size needed (text length plus one for the terminating NUL).
             int neededSize = textLength + 1;
 
-            var docTextBuffer = editor.AppDesignerProcess.MemoryManager.GetOrCreateBuffer("docText", (uint)neededSize);
+            var docTextBuffer = editor.AppDesignerProcess.MemoryManager.CreateTempBuffer((uint)neededSize);
+            try
+            {
+                // Request the text. SCI_GETTEXT writes the text (with a terminating NUL) into the remote buffer.
+                editor.SendMessage(SCI_GETTEXT, new IntPtr(neededSize), docTextBuffer.Address);
 
-            
-            // Request the text. SCI_GETTEXT writes the text (with a terminating NUL) into the remote buffer.
-            editor.SendMessage(SCI_GETTEXT, new IntPtr(neededSize), docTextBuffer.Address);
+                byte[] textBytes = docTextBuffer.Read(textLength);
 
-            return docTextBuffer.ReadString(textLength, Encoding.UTF8);
+                // If the document shrank between SCI_GETLENGTH and SCI_GETTEXT, the tail is
+                // untouched (zero-filled) buffer — truncate at the first NUL. UTF-8 document
+                // text contains no embedded NULs.
+                int actualLength = Array.IndexOf(textBytes, (byte)0);
+                if (actualLength < 0)
+                {
+                    actualLength = textLength;
+                }
+
+                return Encoding.UTF8.GetString(textBytes, 0, actualLength);
+            }
+            finally
+            {
+                docTextBuffer.Free();
+            }
         }
 
         public static void SetJSONLexer(ScintillaEditor editor)
@@ -360,20 +377,24 @@ namespace AppRefiner
         /// <returns>True if the text was successfully set; false otherwise.</returns>
         public static bool SetScintillaText(ScintillaEditor editor, string text)
         {
-            // Convert the new text into a byte array using the default encoding.
-            // We need to include an extra byte for the terminating null.
-            int neededSize = Encoding.Default.GetByteCount(text ?? string.Empty) + 1; // +1 for the null terminator
+            // Size and content must use the same encoding (UTF-8); include the terminating null.
+            int neededSize = Encoding.UTF8.GetByteCount(text ?? string.Empty) + 1;
 
-            var docTextBuffer = editor.AppDesignerProcess.MemoryManager.GetOrCreateBuffer("docText", (uint)neededSize);
-            docTextBuffer.Reset(); // Write to the start of the buffer
+            var docTextBuffer = editor.AppDesignerProcess.MemoryManager.CreateTempBuffer((uint)neededSize);
+            try
+            {
+                docTextBuffer.WriteString(text ?? string.Empty, Encoding.UTF8);
 
-            docTextBuffer.WriteString(text ?? string.Empty, Encoding.UTF8);
+                // Use SCI_SETTEXT to replace the document text.
+                // SCI_SETTEXT(wParam unused, lParam = pointer to null-terminated string in remote process)
+                editor.SendMessage(SCI_SETTEXT, IntPtr.Zero, docTextBuffer.Address);
 
-            // Use SCI_SETTEXT to replace the document text.
-            // SCI_SETTEXT(wParam unused, lParam = pointer to null-terminated string in remote process)
-            editor.SendMessage(SCI_SETTEXT, IntPtr.Zero, docTextBuffer.Address);
-
-            return true;
+                return true;
+            }
+            finally
+            {
+                docTextBuffer.Free();
+            }
         }
 
         /// <summary>
@@ -504,39 +525,43 @@ namespace AppRefiner
 
         public static void SetWindowProperty(ScintillaEditor editor, string propName, string propValue)
         {
-            // Use shared properties buffer to avoid accumulating allocations
-            var propertiesBuffer = editor.AppDesignerProcess.MemoryManager.GetOrCreateBuffer("properties", 1024);
-
-            // Reset buffer for writing both strings sequentially
-            propertiesBuffer.Reset();
-
-            // Write property name and value as sequential ASCII strings
-            var addresses = propertiesBuffer.WriteStrings(new[] { propName, propValue }, Encoding.ASCII);
-
-            if (addresses == null)
+            // Shared buffer: hold the lock for the full write → send sequence
+            lock (editor.AppDesignerProcess.MemoryManager.SyncRoot)
             {
-                // Buffer too small, resize and retry
-                int requiredSize = Encoding.ASCII.GetByteCount(propName) + 1 + Encoding.ASCII.GetByteCount(propValue) + 1;
-                propertiesBuffer.Resize((uint)requiredSize);
+                // Use shared properties buffer to avoid accumulating allocations
+                var propertiesBuffer = editor.AppDesignerProcess.MemoryManager.GetOrCreateBuffer("properties", 1024);
+
+                // Reset buffer for writing both strings sequentially
                 propertiesBuffer.Reset();
-                addresses = propertiesBuffer.WriteStrings(new[] { propName, propValue }, Encoding.ASCII);
+
+                // Write property name and value as sequential ASCII strings
+                var addresses = propertiesBuffer.WriteStrings(new[] { propName, propValue }, Encoding.ASCII);
 
                 if (addresses == null)
                 {
-                    Debug.Log($"Failed to write property '{propName}={propValue}' to shared buffer even after resize");
-                    return;
+                    // Buffer too small, resize and retry
+                    int requiredSize = Encoding.ASCII.GetByteCount(propName) + 1 + Encoding.ASCII.GetByteCount(propValue) + 1;
+                    propertiesBuffer.Resize((uint)requiredSize);
+                    propertiesBuffer.Reset();
+                    addresses = propertiesBuffer.WriteStrings(new[] { propName, propValue }, Encoding.ASCII);
+
+                    if (addresses == null)
+                    {
+                        Debug.Log($"Failed to write property '{propName}={propValue}' to shared buffer even after resize");
+                        return;
+                    }
                 }
+
+                // addresses[0] = property name, addresses[1] = property value
+                IntPtr remoteName = addresses[0];
+                IntPtr remoteValue = addresses[1];
+
+                // Send the SCI_SETPROPERTY message with the remote pointers
+                editor.SendMessage(SCI_SETPROPERTY, remoteName, remoteValue);
+
+                // Note: No cleanup needed! Buffer is reused for next property.
+                // This fixes the accumulation issue where PropertyBuffers list grew unbounded.
             }
-
-            // addresses[0] = property name, addresses[1] = property value
-            IntPtr remoteName = addresses[0];
-            IntPtr remoteValue = addresses[1];
-
-            // Send the SCI_SETPROPERTY message with the remote pointers
-            editor.SendMessage(SCI_SETPROPERTY, remoteName, remoteValue);
-
-            // Note: No cleanup needed! Buffer is reused for next property.
-            // This fixes the accumulation issue where PropertyBuffers list grew unbounded.
         }
 
         /// <summary>
@@ -601,24 +626,55 @@ namespace AppRefiner
         /// </summary>
         /// <param name="editor">The ScintillaEditor to remove the indicator from</param>
         /// <param name="indicator">The indicator to remove</param>
+        /// <summary>
+        /// Resolves the Scintilla indicator number allocated for an indicator's type+color.
+        /// </summary>
+        internal static int GetIndicatorNumber(ScintillaEditor editor, Indicator indicator)
+        {
+            return indicator.Type switch
+            {
+                IndicatorType.HIGHLIGHTER => editor.GetHighlighter(indicator.Color),
+                IndicatorType.SQUIGGLE => editor.GetSquiggle(indicator.Color),
+                IndicatorType.TEXTCOLOR => editor.GetTextColor(indicator.Color),
+                _ => 0
+            };
+        }
+
+        /// <summary>
+        /// Clears the FULL document range for every distinct indicator number used by the
+        /// given indicators. This is the only reliable way to remove previously painted
+        /// indicators: Scintilla shifts painted ranges as the document is edited, while the
+        /// positions recorded in our Indicator structs do not move — clearing by recorded
+        /// range misses the drifted paint and leaves lingering artifacts.
+        /// </summary>
+        public static void ClearIndicatorNumbers(ScintillaEditor editor, IEnumerable<Indicator> indicators)
+        {
+            if (editor == null)
+                return;
+
+            int docLength = (int)editor.SendMessage(SCI_GETLENGTH, IntPtr.Zero, IntPtr.Zero);
+            if (docLength <= 0)
+                return;
+
+            var numbers = new HashSet<int>();
+            foreach (var indicator in indicators)
+            {
+                numbers.Add(GetIndicatorNumber(editor, indicator));
+            }
+
+            foreach (var number in numbers)
+            {
+                editor.SendMessage(SCI_SETINDICATORCURRENT, number, IntPtr.Zero);
+                editor.SendMessage(SCI_INDICATORCLEARRANGE, 0, docLength);
+            }
+        }
+
         public static void RemoveIndicator(ScintillaEditor editor, Indicator indicator)
         {
             if (editor == null || editor.ActiveIndicators == null)
                 return;
 
-            int indicatorNumber = 0;
-            switch (indicator.Type)
-            {
-                case IndicatorType.HIGHLIGHTER:
-                    indicatorNumber = editor.GetHighlighter(indicator.Color);
-                    break;
-                case IndicatorType.SQUIGGLE:
-                    indicatorNumber = editor.GetSquiggle(indicator.Color);
-                    break;
-                case IndicatorType.TEXTCOLOR:
-                    indicatorNumber = editor.GetTextColor(indicator.Color);
-                    break;
-            }
+            int indicatorNumber = GetIndicatorNumber(editor, indicator);
 
             editor.SendMessage(SCI_SETINDICATORCURRENT, indicatorNumber, IntPtr.Zero);
             editor.SendMessage(SCI_INDICATORCLEARRANGE, indicator.Start, indicator.Length);
@@ -644,28 +700,13 @@ namespace AppRefiner
                 var count = editor.ActiveIndicators.Count;
                 Debug.Log($"ClearAllIndicators: Clearing {count} indicators from editor {editor.RelativePath ?? "unknown"}");
 
-                // Iterate backwards to safely remove items during iteration
-                for (var x = editor.ActiveIndicators.Count - 1; x >= 0; x--)
-                {
-                    // Note: RemoveIndicator also locks, but we're already in the lock
-                    // We need to remove the lock from RemoveIndicator's ActiveIndicators.Remove call
-                    int indicatorNumber = 0;
-                    switch (editor.ActiveIndicators[x].Type)
-                    {
-                        case IndicatorType.HIGHLIGHTER:
-                            indicatorNumber = editor.GetHighlighter(editor.ActiveIndicators[x].Color);
-                            break;
-                        case IndicatorType.SQUIGGLE:
-                            indicatorNumber = editor.GetSquiggle(editor.ActiveIndicators[x].Color);
-                            break;
-                        case IndicatorType.TEXTCOLOR:
-                            indicatorNumber = editor.GetTextColor(editor.ActiveIndicators[x].Color);
-                            break;
-                    }
-
-                    editor.SendMessage(SCI_SETINDICATORCURRENT, indicatorNumber, IntPtr.Zero);
-                    editor.SendMessage(SCI_INDICATORCLEARRANGE, editor.ActiveIndicators[x].Start, editor.ActiveIndicators[x].Length);
-                }
+                // Clear the FULL document range for each distinct indicator number in use, NOT
+                // each indicator's recorded Start/Length. Scintilla drifts painted indicator
+                // ranges as the document is edited while our recorded positions do not move, so
+                // clearing by recorded range misses the drifted paint and leaves lingering
+                // artifacts (e.g. an "undefined variable" squiggle surviving after the variable
+                // is declared on a new line above). Same reasoning as ApplyIndicators (F25).
+                ClearIndicatorNumbers(editor, editor.ActiveIndicators);
 
                 // Clear the active indicators list to ensure state consistency
                 editor.ActiveIndicators.Clear();
@@ -1115,31 +1156,35 @@ namespace AppRefiner
                         return;
                     }
 
-                    // Use shared call tip buffer (process-level, since only one editor has focus at a time)
-                    var callTipBuffer = editor.AppDesignerProcess.MemoryManager.GetOrCreateBuffer("calltip", 4096);
-
-                    // Write call tip text to shared buffer
-                    IntPtr? remoteAddress = callTipBuffer.WriteString(text, Encoding.Default, offset: 0);
-
-                    if (!remoteAddress.HasValue)
+                    // Shared buffer: hold the lock for the full write → send sequence
+                    lock (editor.AppDesignerProcess.MemoryManager.SyncRoot)
                     {
-                        // Buffer too small, resize and retry
-                        int requiredSize = Encoding.Default.GetByteCount(text) + 1;
-                        callTipBuffer.Resize((uint)requiredSize);
-                        remoteAddress = callTipBuffer.WriteString(text, Encoding.Default, offset: 0);
+                        // Use shared call tip buffer (process-level, since only one editor has focus at a time)
+                        var callTipBuffer = editor.AppDesignerProcess.MemoryManager.GetOrCreateBuffer("calltip", 4096);
+
+                        // Write call tip text to shared buffer
+                        IntPtr? remoteAddress = callTipBuffer.WriteString(text, Encoding.Default, offset: 0);
 
                         if (!remoteAddress.HasValue)
                         {
-                            Debug.LogError($"Failed to write call tip text to shared buffer even after resize");
-                            return;
+                            // Buffer too small, resize and retry
+                            int requiredSize = Encoding.Default.GetByteCount(text) + 1;
+                            callTipBuffer.Resize((uint)requiredSize);
+                            remoteAddress = callTipBuffer.WriteString(text, Encoding.Default, offset: 0);
+
+                            if (!remoteAddress.HasValue)
+                            {
+                                Debug.LogError($"Failed to write call tip text to shared buffer even after resize");
+                                return;
+                            }
                         }
+
+                        // Show the call tip using the shared buffer address
+                        editor.SendMessage(SCI_CALLTIPSHOW, new IntPtr(position), remoteAddress.Value);
+
+                        // Note: No cleanup needed! Buffer persists and is reused for next call tip.
+                        // This eliminates the alloc/free churn that happened on every call tip display.
                     }
-
-                    // Show the call tip using the shared buffer address
-                    editor.SendMessage(SCI_CALLTIPSHOW, new IntPtr(position), remoteAddress.Value);
-
-                    // Note: No cleanup needed! Buffer persists and is reused for next call tip.
-                    // This eliminates the alloc/free churn that happened on every call tip display.
                 }
                 catch (Exception ex)
                 {
@@ -1214,34 +1259,38 @@ namespace AppRefiner
         {
             try
             {
-                // Use shared annotations buffer (process-level) with sequential writing
-                var annotationsBuffer = editor.AppDesignerProcess.MemoryManager.GetOrCreateBuffer("annotations", 16384);
-
-                // Write annotation text to shared buffer using sequential mode
-                IntPtr? remoteAddress = annotationsBuffer.WriteString(text, Encoding.Default);
-
-                if (!remoteAddress.HasValue)
+                // Shared buffer: hold the lock for the full write → send sequence
+                lock (editor.AppDesignerProcess.MemoryManager.SyncRoot)
                 {
-                    // Buffer full, resize and reset, then retry
-                    int requiredSize = Encoding.Default.GetByteCount(text) + 1;
-                    uint newSize = Math.Max((uint)(annotationsBuffer.Size * 2), (uint)(annotationsBuffer.WriteOffset + requiredSize));
-                    annotationsBuffer.Resize(newSize);
-                    // Note: Resize automatically resets WriteOffset to 0
-                    remoteAddress = annotationsBuffer.WriteString(text, Encoding.Default);
+                    // Use shared annotations buffer (process-level) with sequential writing
+                    var annotationsBuffer = editor.AppDesignerProcess.MemoryManager.GetOrCreateBuffer("annotations", 16384);
+
+                    // Write annotation text to shared buffer using sequential mode
+                    IntPtr? remoteAddress = annotationsBuffer.WriteString(text, Encoding.Default);
 
                     if (!remoteAddress.HasValue)
                     {
-                        Debug.LogError($"Failed to write annotation text to shared buffer even after resize");
-                        return;
+                        // Buffer full, resize and reset, then retry
+                        int requiredSize = Encoding.Default.GetByteCount(text) + 1;
+                        uint newSize = Math.Max((uint)(annotationsBuffer.Size * 2), (uint)(annotationsBuffer.WriteOffset + requiredSize));
+                        annotationsBuffer.Resize(newSize);
+                        // Note: Resize automatically resets WriteOffset to 0
+                        remoteAddress = annotationsBuffer.WriteString(text, Encoding.Default);
+
+                        if (!remoteAddress.HasValue)
+                        {
+                            Debug.LogError($"Failed to write annotation text to shared buffer even after resize");
+                            return;
+                        }
                     }
+
+                    // Set the annotation using the shared buffer address
+                    editor.SendMessage(SCI_ANNOTATIONSETSTYLE, line, (int)style);
+                    editor.SendMessage(SCI_ANNOTATIONSETTEXT, line, remoteAddress.Value);
+
+                    // Note: No cleanup needed! Buffer grows as needed and persists.
+                    // When resized, all annotations are invalidated and must be re-set (which happens naturally during linting).
                 }
-
-                // Set the annotation using the shared buffer address
-                editor.SendMessage(SCI_ANNOTATIONSETSTYLE, line, (int)style);
-                editor.SendMessage(SCI_ANNOTATIONSETTEXT, line, remoteAddress.Value);
-
-                // Note: No cleanup needed! Buffer grows as needed and persists.
-                // When resized, all annotations are invalidated and must be re-set (which happens naturally during linting).
             }
             catch (Exception ex)
             {
@@ -1273,10 +1322,12 @@ namespace AppRefiner
             var endPos = (int)editor.SendMessage(SCI_GETLINEENDPOSITION, endLine, IntPtr.Zero);
 
             var length = (endPos - startPos);
-            var rangePointer = editor.SendMessage(SCI_GETRANGEPOINTER, startPos, length);
-
-            var rangeBuffer = RemoteBuffer.FromRemoteAddress(editor.AppDesignerProcess, rangePointer, (uint)length,"");
-            var selectedLines = Encoding.UTF8.GetString(rangeBuffer.Read(length), 0, length);
+            var rangeBytes = ReadDocumentRange(editor, startPos, length);
+            if (rangeBytes == null)
+            {
+                return (null, 0, 0);
+            }
+            var selectedLines = Encoding.UTF8.GetString(rangeBytes);
 
             return (selectedLines.Split("\n").ToList(), startPos, endPos);
            
@@ -1305,21 +1356,16 @@ namespace AppRefiner
                 return (null, 0, 0);
             }
 
-            // Get the full text
-            var fullText = GetScintillaText(editor);
-            if (fullText == null)
-            {
-                return (null, 0, 0);
-            }
-
-            // Extract the selected portion
+            // Read just the selected byte range — selection positions are byte offsets,
+            // so slicing bytes (not a UTF-16 string) is also correct for non-ASCII documents
             int length = selectionEnd - selectionStart;
-            if (selectionStart < 0 || length <= 0 || selectionStart + length > fullText.Length)
+            var selectionBytes = ReadDocumentRange(editor, selectionStart, length);
+            if (selectionBytes == null)
             {
                 return (null, 0, 0);
             }
 
-            return (fullText.Substring(selectionStart, length), selectionStart, selectionEnd);
+            return (Encoding.UTF8.GetString(selectionBytes), selectionStart, selectionEnd);
         }
 
         /// <summary>
@@ -1412,38 +1458,42 @@ namespace AppRefiner
                 // Set last byte as null terminator style
                 styleBytes[neededSize - 1] = styleBytes[Math.Max(0, neededSize - 2)];
 
-                // Use shared buffers for styled annotations (process-level)
-                var textBuffer = editor.AppDesignerProcess.MemoryManager.GetOrCreateBuffer("styled_annotations_text", 16384);
-                var styleBuffer = editor.AppDesignerProcess.MemoryManager.GetOrCreateBuffer("styled_annotations_styles", 16384);
-
-                // Write text and style bytes sequentially to their respective buffers
-                IntPtr? remoteTextAddress = textBuffer.WriteString(combinedText);
-                IntPtr? remoteStyleAddress = styleBuffer.Write(styleBytes);
-
-                // Handle resize if either buffer is full
-                if (!remoteTextAddress.HasValue || !remoteStyleAddress.HasValue)
+                // Shared buffers: hold the lock for the full write → send sequence
+                lock (editor.AppDesignerProcess.MemoryManager.SyncRoot)
                 {
-                    // Resize both buffers to match (they need to stay synchronized)
-                    uint newSize = Math.Max(textBuffer.Size * 2, (uint)neededSize * 2);
-                    textBuffer.Resize(newSize);
-                    styleBuffer.Resize(newSize);
+                    // Use shared buffers for styled annotations (process-level)
+                    var textBuffer = editor.AppDesignerProcess.MemoryManager.GetOrCreateBuffer("styled_annotations_text", 16384);
+                    var styleBuffer = editor.AppDesignerProcess.MemoryManager.GetOrCreateBuffer("styled_annotations_styles", 16384);
 
-                    // Retry writes (buffers have been reset by Resize)
-                    remoteTextAddress = textBuffer.WriteString(combinedText);
-                    remoteStyleAddress = styleBuffer.Write(styleBytes);
+                    // Write text and style bytes sequentially to their respective buffers
+                    IntPtr? remoteTextAddress = textBuffer.WriteString(combinedText);
+                    IntPtr? remoteStyleAddress = styleBuffer.Write(styleBytes);
 
+                    // Handle resize if either buffer is full
                     if (!remoteTextAddress.HasValue || !remoteStyleAddress.HasValue)
                     {
-                        throw new Exception("Failed to write styled annotations to shared buffers even after resize");
+                        // Resize both buffers to match (they need to stay synchronized)
+                        uint newSize = Math.Max(textBuffer.Size * 2, (uint)neededSize * 2);
+                        textBuffer.Resize(newSize);
+                        styleBuffer.Resize(newSize);
+
+                        // Retry writes (buffers have been reset by Resize)
+                        remoteTextAddress = textBuffer.WriteString(combinedText);
+                        remoteStyleAddress = styleBuffer.Write(styleBytes);
+
+                        if (!remoteTextAddress.HasValue || !remoteStyleAddress.HasValue)
+                        {
+                            throw new Exception("Failed to write styled annotations to shared buffers even after resize");
+                        }
                     }
+
+                    // Set the annotation text and styles using shared buffer addresses
+                    editor.SendMessage(SCI_ANNOTATIONSETTEXT, line, remoteTextAddress.Value);
+                    editor.SendMessage(SCI_ANNOTATIONSETSTYLES, line, remoteStyleAddress.Value);
+
+                    // Note: No cleanup needed! Buffers persist and grow as needed.
+                    // Both buffers reset together when ClearAnnotations() is called.
                 }
-
-                // Set the annotation text and styles using shared buffer addresses
-                editor.SendMessage(SCI_ANNOTATIONSETTEXT, line, remoteTextAddress.Value);
-                editor.SendMessage(SCI_ANNOTATIONSETSTYLES, line, remoteStyleAddress.Value);
-
-                // Note: No cleanup needed! Buffers persist and grow as needed.
-                // Both buffers reset together when ClearAnnotations() is called.
             }
             catch (Exception ex)
             {
@@ -1571,16 +1621,48 @@ namespace AppRefiner
             return editor == null ? -1 : (int)editor.SendMessage(SCI_LINEFROMPOSITION, editor.SendMessage(SCI_GETCURRENTPOS, 0, 0), 0);
         }
 
+        /// <summary>
+        /// Reads a byte range of the document directly via SCI_GETRANGEPOINTER, which returns a
+        /// pointer into Scintilla's own document memory. Much cheaper than GetScintillaText for
+        /// small ranges: no remote allocation and no full-document copy. Reads the memory directly
+        /// rather than wrapping the pointer in a RemoteBuffer, whose finalizer would try to free
+        /// document memory AppRefiner does not own.
+        /// </summary>
+        /// <param name="editor">The editor to read from</param>
+        /// <param name="start">Start byte position in the document</param>
+        /// <param name="length">Number of bytes to read</param>
+        /// <returns>The bytes read, or null on failure</returns>
+        public static byte[]? ReadDocumentRange(ScintillaEditor editor, int start, int length)
+        {
+            if (editor == null || start < 0 || length <= 0)
+            {
+                return null;
+            }
+
+            var rangePointer = editor.SendMessage(SCI_GETRANGEPOINTER, start, length);
+            if (rangePointer == IntPtr.Zero)
+            {
+                return null;
+            }
+
+            byte[] buffer = new byte[length];
+            if (!WinApi.ReadProcessMemory(editor.AppDesignerProcess.ProcessHandle, rangePointer, buffer, length, out int bytesRead) || bytesRead != length)
+            {
+                return null;
+            }
+
+            return buffer;
+        }
+
         public static string GetLineText(ScintillaEditor editor, int lineNumber)
         {
             if (editor == null) return string.Empty;
             int start = (int)editor.SendMessage(SCI_POSITIONFROMLINE, lineNumber, IntPtr.Zero);
             int end = (int)editor.SendMessage(SCI_GETLINEENDPOSITION, lineNumber, IntPtr.Zero);
             var length = end - start;
-            var rangePointer = editor.SendMessage(SCI_GETRANGEPOINTER, start, length);
-            var lineText = RemoteBuffer.FromRemoteAddress(editor.AppDesignerProcess, rangePointer, (uint)length, "").ReadString(length,Encoding.UTF8);
+            var lineBytes = ReadDocumentRange(editor, start, length);
 
-            return lineText ?? string.Empty;
+            return lineBytes == null ? string.Empty : Encoding.UTF8.GetString(lineBytes);
         }
 
         public static string GetCurrentLineText(ScintillaEditor editor)
@@ -1749,27 +1831,31 @@ namespace AppRefiner
         }
         public static void SetAutoCompleteFillups(ScintillaEditor editor)
         {
-            // Use shared autocomplete fillups buffer (process-level)
-            var fillupsBuffer = editor.AppDesignerProcess.MemoryManager.GetOrCreateBuffer("autocomplete_fillups", 256);
-
-            string fillups = "\t";
-            string stops = " ";
-
-            // Write both strings sequentially to the buffer
-            fillupsBuffer.Reset();
-            var addresses = fillupsBuffer.WriteStrings(new[] { fillups, stops }, Encoding.UTF8);
-
-            if (addresses == null)
+            // Shared buffer: hold the lock for the full write → send sequence
+            lock (editor.AppDesignerProcess.MemoryManager.SyncRoot)
             {
-                Debug.Log("SetAutoCompleteFillups: Failed to write fillups to shared buffer");
-                return;
+                // Use shared autocomplete fillups buffer (process-level)
+                var fillupsBuffer = editor.AppDesignerProcess.MemoryManager.GetOrCreateBuffer("autocomplete_fillups", 256);
+
+                string fillups = "\t";
+                string stops = " ";
+
+                // Write both strings sequentially to the buffer
+                fillupsBuffer.Reset();
+                var addresses = fillupsBuffer.WriteStrings(new[] { fillups, stops }, Encoding.UTF8);
+
+                if (addresses == null)
+                {
+                    Debug.Log("SetAutoCompleteFillups: Failed to write fillups to shared buffer");
+                    return;
+                }
+
+                // addresses[0] = fillups string, addresses[1] = stops string
+                editor.SendMessage(SCI_AUTOCSETFILLUPS, 0, addresses[0]);
+                editor.SendMessage(SCI_AUTOCSTOPS, 0, addresses[1]);
+
+                // Note: No cleanup needed! Buffer persists and is reused.
             }
-
-            // addresses[0] = fillups string, addresses[1] = stops string
-            editor.SendMessage(SCI_AUTOCSETFILLUPS, 0, addresses[0]);
-            editor.SendMessage(SCI_AUTOCSTOPS, 0, addresses[1]);
-
-            // Note: No cleanup needed! Buffer persists and is reused.
         }
 
         /// <summary>
@@ -1788,57 +1874,64 @@ namespace AppRefiner
                 Debug.Log("ShowUserList: Invalid parameters");
                 return false;
             }
-            SetAutoCompleteFillups(editor);
-            SetAutoCompletionSeparator(editor, '/');
-            //#define SCI_AUTOCSTOPS 2105
-            //#define SCI_AUTOCSETOPTIONS 2638
-            //#define SCI_AUTOCGETOPTIONS 2639
 
-            var autoCOptions = editor.SendMessage(2639, 0, 0);
-            editor.SendMessage(2638, 0, 1);
-
-            var sortOrder = editor.SendMessage(SCI_AUTOCGETORDER, 0, 0);
-            editor.SendMessage(SCI_AUTOCSETORDER, customOrder ? SC_ORDER_CUSTOM: SC_ORDER_PERFORMSORT, 0);
-            editor.SendMessage(SCI_AUTOCSETIGNORECASE, 1, 0);
-            editor.SendMessage(SCI_AUTOCSETCASEINSENSITIVEBEHAVIOUR, 1, 0);
-
-            try
+            // Lock across the entire sequence: the separator/fillups/options/order settings are
+            // global editor state that must not interleave with another thread's show sequence,
+            // and the shared "userlist" buffer must not be overwritten before SCI_USERLISTSHOW.
+            lock (editor.AppDesignerProcess.MemoryManager.SyncRoot)
             {
-                // Create a string with all options separated by /
-                string optionsString = string.Join("/", options);
+                SetAutoCompleteFillups(editor);
+                SetAutoCompletionSeparator(editor, '/');
+                //#define SCI_AUTOCSTOPS 2105
+                //#define SCI_AUTOCSETOPTIONS 2638
+                //#define SCI_AUTOCGETOPTIONS 2639
 
-                // Use shared user list buffer (process-level, since only one autocomplete at a time)
-                var userListBuffer = editor.AppDesignerProcess.MemoryManager.GetOrCreateBuffer("userlist", 8192);
+                var autoCOptions = editor.SendMessage(2639, 0, 0);
+                editor.SendMessage(2638, 0, 1);
 
-                // Write options string to shared buffer
-                IntPtr? remoteAddress = userListBuffer.WriteString(optionsString, Encoding.UTF8, offset: 0);
+                var sortOrder = editor.SendMessage(SCI_AUTOCGETORDER, 0, 0);
+                editor.SendMessage(SCI_AUTOCSETORDER, customOrder ? SC_ORDER_CUSTOM : SC_ORDER_PERFORMSORT, 0);
+                editor.SendMessage(SCI_AUTOCSETIGNORECASE, 1, 0);
+                editor.SendMessage(SCI_AUTOCSETCASEINSENSITIVEBEHAVIOUR, 1, 0);
 
-                if (!remoteAddress.HasValue)
+                try
                 {
-                    // Buffer too small, resize and retry
-                    int requiredSize = Encoding.UTF8.GetByteCount(optionsString) + 1;
-                    userListBuffer.Resize((uint)requiredSize);
-                    remoteAddress = userListBuffer.WriteString(optionsString, Encoding.UTF8, offset: 0);
+                    // Create a string with all options separated by /
+                    string optionsString = string.Join("/", options);
+
+                    // Use shared user list buffer (process-level, since only one autocomplete at a time)
+                    var userListBuffer = editor.AppDesignerProcess.MemoryManager.GetOrCreateBuffer("userlist", 8192);
+
+                    // Write options string to shared buffer
+                    IntPtr? remoteAddress = userListBuffer.WriteString(optionsString, Encoding.UTF8, offset: 0);
 
                     if (!remoteAddress.HasValue)
                     {
-                        Debug.Log($"ShowUserList: Failed to write options to shared buffer even after resize");
-                        return false;
+                        // Buffer too small, resize and retry
+                        int requiredSize = Encoding.UTF8.GetByteCount(optionsString) + 1;
+                        userListBuffer.Resize((uint)requiredSize);
+                        remoteAddress = userListBuffer.WriteString(optionsString, Encoding.UTF8, offset: 0);
+
+                        if (!remoteAddress.HasValue)
+                        {
+                            Debug.Log($"ShowUserList: Failed to write options to shared buffer even after resize");
+                            return false;
+                        }
                     }
+
+                    // Send the Scintilla message to show the user list using shared buffer
+                    IntPtr ret = editor.SendMessage(SCI_USERLISTSHOW, (IntPtr)listType, remoteAddress.Value);
+                    //IntPtr ret = editor.SendMessage(SCI_AUTOCSHOW, 1, remoteAddress.Value);
+                    SetAutoCompletionSeparator(editor, ' '); // Reset separator to default
+
+                    // Note: No cleanup needed! Buffer persists and is reused for next user list.
+                    return ret != IntPtr.Zero;
                 }
-
-                // Send the Scintilla message to show the user list using shared buffer
-                IntPtr ret = editor.SendMessage(SCI_USERLISTSHOW, (IntPtr)listType, remoteAddress.Value);
-                //IntPtr ret = editor.SendMessage(SCI_AUTOCSHOW, 1, remoteAddress.Value);
-                SetAutoCompletionSeparator(editor, ' '); // Reset separator to default
-
-                // Note: No cleanup needed! Buffer persists and is reused for next user list.
-                return ret != IntPtr.Zero;
-            }
-            catch (Exception ex)
-            {
-                Debug.Log($"ShowUserList: Exception: {ex.Message}");
-                return false;
+                catch (Exception ex)
+                {
+                    Debug.Log($"ShowUserList: Exception: {ex.Message}");
+                    return false;
+                }
             }
         }
 
@@ -1859,71 +1952,75 @@ namespace AppRefiner
                 return false;
             }
 
-            // Set context-specific fillup and stop characters
-            SetAutoCompleteContextCharacters(editor, context);
-
-            // Set separator to '/'
-            SetAutoCompletionSeparator(editor, '/');
-
-            // Configure autocomplete options
-            var autoCOptions = editor.SendMessage(2639, 0, 0); // SCI_AUTOCGETOPTIONS
-            editor.SendMessage(2638, 0, 1); // SCI_AUTOCSETOPTIONS with SC_AUTOCOMPLETE_NORMAL
-
-            // Set sort order
-            var sortOrder = editor.SendMessage(SCI_AUTOCGETORDER, 0, 0);
-            editor.SendMessage(SCI_AUTOCSETORDER, customOrder ? SC_ORDER_CUSTOM : SC_ORDER_PERFORMSORT, 0);
-            editor.SendMessage(SCI_AUTOCSETIGNORECASE, 1, 0);
-            editor.SendMessage(SCI_AUTOCSETCASEINSENSITIVEBEHAVIOUR, 1, 0);
-
-            try
+            // Lock across the entire sequence: the separator/fillups/options/order settings are
+            // global editor state that must not interleave with another thread's show sequence,
+            // and the shared "autocomplete" buffer must not be overwritten before SCI_AUTOCSHOW.
+            lock (editor.AppDesignerProcess.MemoryManager.SyncRoot)
             {
-                // Calculate lengthEntered by parsing backward from position to trigger character
-                int lengthEntered = CalculateLengthEntered(editor, context, position);
+                // Set context-specific fillup and stop characters
+                SetAutoCompleteContextCharacters(editor, context);
 
-                // Create options string
-                string optionsString = string.Join("/", options);
+                // Set separator to '/'
+                SetAutoCompletionSeparator(editor, '/');
 
-                // Use shared autocomplete buffer (process-level, separate from userlist)
-                var autocompleteBuffer = editor.AppDesignerProcess.MemoryManager.GetOrCreateBuffer("autocomplete", 8192);
+                // Configure autocomplete options
+                var autoCOptions = editor.SendMessage(2639, 0, 0); // SCI_AUTOCGETOPTIONS
+                editor.SendMessage(2638, 0, 1); // SCI_AUTOCSETOPTIONS with SC_AUTOCOMPLETE_NORMAL
 
-                // Write options string to shared buffer
-                IntPtr? remoteAddress = autocompleteBuffer.WriteString(optionsString, Encoding.UTF8, offset: 0);
+                // Set sort order
+                var sortOrder = editor.SendMessage(SCI_AUTOCGETORDER, 0, 0);
+                editor.SendMessage(SCI_AUTOCSETORDER, customOrder ? SC_ORDER_CUSTOM : SC_ORDER_PERFORMSORT, 0);
+                editor.SendMessage(SCI_AUTOCSETIGNORECASE, 1, 0);
+                editor.SendMessage(SCI_AUTOCSETCASEINSENSITIVEBEHAVIOUR, 1, 0);
 
-                if (!remoteAddress.HasValue)
+                try
                 {
-                    // Buffer too small, resize and retry
-                    int requiredSize = Encoding.UTF8.GetByteCount(optionsString) + 1;
-                    autocompleteBuffer.Resize((uint)requiredSize);
-                    remoteAddress = autocompleteBuffer.WriteString(optionsString, Encoding.UTF8, offset: 0);
+                    // Calculate lengthEntered by parsing backward from position to trigger character
+                    int lengthEntered = CalculateLengthEntered(editor, context, position);
+
+                    // Create options string
+                    string optionsString = string.Join("/", options);
+
+                    // Use shared autocomplete buffer (process-level, separate from userlist)
+                    var autocompleteBuffer = editor.AppDesignerProcess.MemoryManager.GetOrCreateBuffer("autocomplete", 8192);
+
+                    // Write options string to shared buffer
+                    IntPtr? remoteAddress = autocompleteBuffer.WriteString(optionsString, Encoding.UTF8, offset: 0);
 
                     if (!remoteAddress.HasValue)
                     {
-                        Debug.Log($"ShowAutoComplete: Failed to write options to shared buffer even after resize");
-                        return false;
+                        // Buffer too small, resize and retry
+                        int requiredSize = Encoding.UTF8.GetByteCount(optionsString) + 1;
+                        autocompleteBuffer.Resize((uint)requiredSize);
+                        remoteAddress = autocompleteBuffer.WriteString(optionsString, Encoding.UTF8, offset: 0);
+
+                        if (!remoteAddress.HasValue)
+                        {
+                            Debug.Log($"ShowAutoComplete: Failed to write options to shared buffer even after resize");
+                            return false;
+                        }
                     }
+
+                    // Store the context in the editor BEFORE showing autocomplete
+                    editor.ActiveAutoCompleteContext = context;
+
+                    // Send SCI_AUTOCSHOW message with lengthEntered in wParam
+                    IntPtr ret = editor.SendMessage(SCI_AUTOCSHOW, lengthEntered, remoteAddress.Value);
+
+                    // Reset separator to default
+                    SetAutoCompletionSeparator(editor, ' ');
+
+                    Debug.Log($"ShowAutoComplete: Shown {options.Count} options for context {context} with lengthEntered={lengthEntered}");
+
+                    return ret != IntPtr.Zero;
                 }
-
-                // Store the context and lengthEntered in the editor BEFORE showing autocomplete
-                editor.ActiveAutoCompleteContext = context;
-                editor.AutoCompleteLengthEntered = lengthEntered;
-
-                // Send SCI_AUTOCSHOW message with lengthEntered in wParam
-                IntPtr ret = editor.SendMessage(SCI_AUTOCSHOW, lengthEntered, remoteAddress.Value);
-
-                // Reset separator to default
-                SetAutoCompletionSeparator(editor, ' ');
-
-                Debug.Log($"ShowAutoComplete: Shown {options.Count} options for context {context} with lengthEntered={lengthEntered}");
-
-                return ret != IntPtr.Zero;
-            }
-            catch (Exception ex)
-            {
-                Debug.Log($"ShowAutoComplete: Exception: {ex.Message}");
-                // Clear context and lengthEntered on failure
-                editor.ActiveAutoCompleteContext = AutoCompleteContext.None;
-                editor.AutoCompleteLengthEntered = 0;
-                return false;
+                catch (Exception ex)
+                {
+                    Debug.Log($"ShowAutoComplete: Exception: {ex.Message}");
+                    // Clear context on failure
+                    editor.ActiveAutoCompleteContext = AutoCompleteContext.None;
+                    return false;
+                }
             }
         }
 
@@ -1936,10 +2033,7 @@ namespace AppRefiner
         /// <returns>Number of characters entered after trigger</returns>
         public static int CalculateLengthEntered(ScintillaEditor editor, AutoCompleteContext context, int position)
         {
-            // Get document content
-            string? content = GetScintillaText(editor);
-
-            if (string.IsNullOrEmpty(content) || position <= 0 || position > content.Length)
+            if (editor == null || position <= 0)
             {
                 return 0;
             }
@@ -1959,32 +2053,52 @@ namespace AppRefiner
                 return 0;
             }
 
-            // Parse backward from position to find trigger character
-            int lengthEntered = 0;
-            for (int i = position - 1; i >= 0; i--)
+            // The trigger character and typed prefix are identifier characters that cannot span
+            // lines, so only the current line up to the cursor is needed — reading the whole
+            // document here was a full cross-process copy per autocomplete show.
+            // Positions are UTF-8 byte offsets, so scanning bytes is also correct for
+            // documents containing non-ASCII characters.
+            int lineNumber = (int)editor.SendMessage(SCI_LINEFROMPOSITION, position, IntPtr.Zero);
+            int lineStart = (int)editor.SendMessage(SCI_POSITIONFROMLINE, lineNumber, IntPtr.Zero);
+            int scanLength = position - lineStart;
+            if (scanLength <= 0)
             {
-                char ch = content[i];
+                return 0;
+            }
 
-                if (ch == triggerChar)
+            byte[]? lineBytes = ReadDocumentRange(editor, lineStart, scanLength);
+            if (lineBytes == null)
+            {
+                return 0;
+            }
+
+            // Parse backward from the cursor to find the trigger character.
+            // Identifier characters are ASCII in PeopleCode, so byte-wise counting is exact.
+            int lengthEntered = 0;
+            for (int i = scanLength - 1; i >= 0; i--)
+            {
+                byte b = lineBytes[i];
+
+                if (b == (byte)triggerChar)
                 {
                     // Found trigger, return count
                     // For SystemVariables and Variable, add 1 to include the % or & itself
                     int result = (context == AutoCompleteContext.SystemVariables || context == AutoCompleteContext.Variable)
                         ? lengthEntered + 1
                         : lengthEntered;
-                    Debug.Log($"CalculateLengthEntered: Found '{triggerChar}' at position {i}, lengthEntered={result}");
+                    Debug.Log($"CalculateLengthEntered: Found '{triggerChar}' at position {lineStart + i}, lengthEntered={result}");
                     return result;
                 }
 
-                // Check if character is valid identifier character
-                if (char.IsLetterOrDigit(ch) || ch == '_')
+                // Check if byte is a valid ASCII identifier character
+                if (b < 0x80 && (char.IsLetterOrDigit((char)b) || b == (byte)'_'))
                 {
                     lengthEntered++;
                 }
                 else
                 {
-                    // Hit non-identifier character before trigger, return 0
-                    Debug.Log($"CalculateLengthEntered: Hit non-identifier '{ch}' at position {i}, returning 0");
+                    // Hit non-identifier byte before trigger, return 0
+                    Debug.Log($"CalculateLengthEntered: Hit non-identifier byte 0x{b:X2} at position {lineStart + i}, returning 0");
                     return 0;
                 }
             }
@@ -2001,40 +2115,45 @@ namespace AppRefiner
         /// <param name="context">The autocomplete context</param>
         private static void SetAutoCompleteContextCharacters(ScintillaEditor editor, AutoCompleteContext context)
         {
-            // Use shared autocomplete fillups buffer (process-level)
-            var fillupsBuffer = editor.AppDesignerProcess.MemoryManager.GetOrCreateBuffer("autocomplete_fillups", 256);
+            // Shared buffer: hold the lock for the full write → send sequence
+            // (reentrant when called from ShowAutoComplete's outer lock)
+            lock (editor.AppDesignerProcess.MemoryManager.SyncRoot)
+            {
+                // Use shared autocomplete fillups buffer (process-level)
+                var fillupsBuffer = editor.AppDesignerProcess.MemoryManager.GetOrCreateBuffer("autocomplete_fillups", 256);
 
-            // Define context-specific fillup characters
-            string fillups = context switch
-            {
-                AutoCompleteContext.Variable => ".\t;",        // '.' chains to object members
-                AutoCompleteContext.ObjectMembers => "(\t;",   // '(' chains to parameters
-                AutoCompleteContext.AppPackage => ":\t",      // ':' drills down into packages
-                AutoCompleteContext.SystemVariables => "\t;",  // No chaining for system variables
-                _ => "\t"
-            };
-            if (context is AutoCompleteContext.AppPackage && editor.HasLexilla == false)
-            {
-                fillups = "\t"; /* Do not use ':' as fillup AppDesigner is too old (8.60 and before)  */
+                // Define context-specific fillup characters
+                string fillups = context switch
+                {
+                    AutoCompleteContext.Variable => ".\t;",        // '.' chains to object members
+                    AutoCompleteContext.ObjectMembers => "(\t;",   // '(' chains to parameters
+                    AutoCompleteContext.AppPackage => ":\t",      // ':' drills down into packages
+                    AutoCompleteContext.SystemVariables => "\t;",  // No chaining for system variables
+                    _ => "\t"
+                };
+                if (context is AutoCompleteContext.AppPackage && editor.HasLexilla == false)
+                {
+                    fillups = "\t"; /* Do not use ':' as fillup AppDesigner is too old (8.60 and before)  */
+                }
+
+                string stops = " ";  // Space always stops autocomplete
+
+                // Write both strings sequentially to the buffer
+                fillupsBuffer.Reset();
+                var addresses = fillupsBuffer.WriteStrings(new[] { fillups, stops }, Encoding.UTF8);
+
+                if (addresses == null)
+                {
+                    Debug.Log("SetAutoCompleteContextCharacters: Failed to write fillups to shared buffer");
+                    return;
+                }
+
+                // Set fillup and stop characters
+                editor.SendMessage(SCI_AUTOCSETFILLUPS, 0, addresses[0]);
+                editor.SendMessage(SCI_AUTOCSTOPS, 0, addresses[1]);
+
+                Debug.Log($"SetAutoCompleteContextCharacters: Set fillups='{fillups}' for context {context}");
             }
-
-            string stops = " ";  // Space always stops autocomplete
-
-            // Write both strings sequentially to the buffer
-            fillupsBuffer.Reset();
-            var addresses = fillupsBuffer.WriteStrings(new[] { fillups, stops }, Encoding.UTF8);
-
-            if (addresses == null)
-            {
-                Debug.Log("SetAutoCompleteContextCharacters: Failed to write fillups to shared buffer");
-                return;
-            }
-
-            // Set fillup and stop characters
-            editor.SendMessage(SCI_AUTOCSETFILLUPS, 0, addresses[0]);
-            editor.SendMessage(SCI_AUTOCSTOPS, 0, addresses[1]);
-
-            Debug.Log($"SetAutoCompleteContextCharacters: Set fillups='{fillups}' for context {context}");
         }
 
         /// <summary>
@@ -2089,9 +2208,17 @@ namespace AppRefiner
                 // Read memory from the process
                 if (!WinApi.ReadProcessMemory(editor.AppDesignerProcess.ProcessHandle, address, buffer, maxLength, out bytesRead))
                 {
-                    int error = Marshal.GetLastWin32Error();
-                    Debug.Log($"ReadProcessMemory failed with error code: {error}");
-                    return null;
+                    // The full-length read fails when the string sits near the end of a mapped
+                    // region (the read crosses into an unmapped page). Retry with only the
+                    // bytes up to the next page boundary — the string may end before it.
+                    int toPageBoundary = (int)(0x1000 - ((ulong)address.ToInt64() & 0xFFF));
+                    if (toPageBoundary >= maxLength ||
+                        !WinApi.ReadProcessMemory(editor.AppDesignerProcess.ProcessHandle, address, buffer, toPageBoundary, out bytesRead))
+                    {
+                        int error = Marshal.GetLastWin32Error();
+                        Debug.Log($"ReadProcessMemory failed with error code: {error}");
+                        return null;
+                    }
                 }
 
                 if (bytesRead <= 0)
@@ -2461,14 +2588,19 @@ namespace AppRefiner
                 return false;
 
             // Convert search term to bytes and marshall to remote process
-            byte[] searchBytes = Encoding.Default.GetBytes(searchTerm);
+            byte[] searchBytes = Encoding.UTF8.GetBytes(searchTerm);
             int neededSize = searchBytes.Length + 1; // +1 for null terminator
-            var searchBuffer = editor.AppDesignerProcess.MemoryManager.GetOrCreateBuffer("searchBuffer", (uint)neededSize);
-            searchBuffer.Reset();
-            searchBuffer.WriteString(searchTerm, Encoding.UTF8);
-            // Perform the search
-            int result = (int)editor.SendMessage(SCI_SEARCHINTARGET, searchBytes.Length, searchBuffer.Address);
-            return result != -1;
+
+            // Shared buffer: hold the lock for the full write → send sequence
+            lock (editor.AppDesignerProcess.MemoryManager.SyncRoot)
+            {
+                var searchBuffer = editor.AppDesignerProcess.MemoryManager.GetOrCreateBuffer("searchBuffer", (uint)neededSize);
+                searchBuffer.Reset();
+                searchBuffer.WriteString(searchTerm, Encoding.UTF8);
+                // Perform the search
+                int result = (int)editor.SendMessage(SCI_SEARCHINTARGET, searchBytes.Length, searchBuffer.Address);
+                return result != -1;
+            }
         }
 
         /// <summary>
@@ -2520,23 +2652,27 @@ namespace AppRefiner
             editor.SendMessage(SCI_SETTARGETRANGE, start, end);
 
             // Marshall replacement text
-            int neededSize = Encoding.Default.GetByteCount(replaceText) + 1;
+            int neededSize = Encoding.UTF8.GetByteCount(replaceText) + 1;
 
-            var replaceBuffer = editor.AppDesignerProcess.MemoryManager.GetOrCreateBuffer("replaceBuffer", (uint)neededSize);
-            replaceBuffer.Reset();
+            int replacementLength;
 
-            replaceBuffer.WriteString(replaceText, Encoding.UTF8);
-
-            var replacementLength = replaceText.Length;
-
-            // Perform replacement
-            if (searchState.UseRegex)
+            // Shared buffer: hold the lock for the full write → send sequence
+            lock (editor.AppDesignerProcess.MemoryManager.SyncRoot)
             {
-                replacementLength = (int)editor.SendMessage(SCI_REPLACETARGETRE, neededSize-1, replaceBuffer.Address);
-            }
-            else
-            {
-                replacementLength = (int)editor.SendMessage(SCI_REPLACETARGET, neededSize - 1, replaceBuffer.Address);
+                var replaceBuffer = editor.AppDesignerProcess.MemoryManager.GetOrCreateBuffer("replaceBuffer", (uint)neededSize);
+                replaceBuffer.Reset();
+
+                replaceBuffer.WriteString(replaceText, Encoding.UTF8);
+
+                // Perform replacement
+                if (searchState.UseRegex)
+                {
+                    replacementLength = (int)editor.SendMessage(SCI_REPLACETARGETRE, neededSize - 1, replaceBuffer.Address);
+                }
+                else
+                {
+                    replacementLength = (int)editor.SendMessage(SCI_REPLACETARGET, neededSize - 1, replaceBuffer.Address);
+                }
             }
 
             /* move to the end of the replacement */
@@ -2598,60 +2734,68 @@ namespace AppRefiner
             // Set search flags
             editor.SendMessage(SCI_SETSEARCHFLAGS, searchFlags, IntPtr.Zero);
 
-            // Marshall search string
-            int searchSize = Encoding.Default.GetByteCount(searchTerm) + 1;
-
-            var searchBuffer = editor.AppDesignerProcess.MemoryManager.GetOrCreateBuffer("searchBuffer", (uint)searchSize);
-
-            searchBuffer.WriteString(searchTerm, Encoding.UTF8);
-
-            // Find and mark all matches
-            int currentPos = rangeStart;
-
-            /* Set up separate buffer with the replacement text */
-            if (string.IsNullOrEmpty(replaceText))
-                replaceText = string.Empty;
-
-            // Marshall replacement text
-            int replaceTextSize = Encoding.Default.GetByteCount(replaceText) + 1;
-
-            var replaceTextBuffer = editor.AppDesignerProcess.MemoryManager.GetOrCreateBuffer("replaceBuffer", (uint)replaceTextSize);
-            replaceTextBuffer.Reset();
-            replaceTextBuffer.WriteString(replaceText, Encoding.UTF8);
-
-            try
+            // Shared buffers: hold the lock across the whole loop — the search and
+            // replacement buffer addresses are used on every iteration
+            lock (editor.AppDesignerProcess.MemoryManager.SyncRoot)
             {
-                editor.SendMessage(SCI_BEGINUNDOACTION, 0, 0);
-                while (true)
+                // Marshall search string
+                int searchSize = Encoding.UTF8.GetByteCount(searchTerm) + 1;
+
+                var searchBuffer = editor.AppDesignerProcess.MemoryManager.GetOrCreateBuffer("searchBuffer", (uint)searchSize);
+                searchBuffer.Reset();
+                searchBuffer.WriteString(searchTerm, Encoding.UTF8);
+
+                // Find and mark all matches
+                int currentPos = rangeStart;
+
+                /* Set up separate buffer with the replacement text */
+                if (string.IsNullOrEmpty(replaceText))
+                    replaceText = string.Empty;
+
+                // Marshall replacement text
+                int replaceTextSize = Encoding.UTF8.GetByteCount(replaceText) + 1;
+
+                var replaceTextBuffer = editor.AppDesignerProcess.MemoryManager.GetOrCreateBuffer("replaceBuffer", (uint)replaceTextSize);
+                replaceTextBuffer.Reset();
+                replaceTextBuffer.WriteString(replaceText, Encoding.UTF8);
+
+                try
                 {
-                    editor.SendMessage(SCI_SETTARGETRANGE, currentPos, rangeEnd);
-
-                    int result = (int)editor.SendMessage(SCI_SEARCHINTARGET, searchSize-1, searchBuffer.Address);
-                    if (result == -1)
-                        break;
-
-                    int targetStart = (int)editor.SendMessage(SCI_GETTARGETSTART, IntPtr.Zero, IntPtr.Zero);
-                    int targetEnd = (int)editor.SendMessage(SCI_GETTARGETEND, IntPtr.Zero, IntPtr.Zero);
-
-                    if (targetStart < rangeStart || targetStart >= rangeEnd)
-                        break;
-
-                    var (success, length) = ReplaceRange(editor, targetStart, targetEnd, replaceTextSize, replaceTextBuffer.Address);
-                    if (success)
+                    editor.SendMessage(SCI_BEGINUNDOACTION, 0, 0);
+                    while (true)
                     {
-                        currentPos = targetStart + length;
-                        replaceCount++;
-                    }
-                    else
-                    {
-                        currentPos = targetEnd;
+                        editor.SendMessage(SCI_SETTARGETRANGE, currentPos, rangeEnd);
+
+                        int result = (int)editor.SendMessage(SCI_SEARCHINTARGET, searchSize - 1, searchBuffer.Address);
+                        if (result == -1)
+                            break;
+
+                        int targetStart = (int)editor.SendMessage(SCI_GETTARGETSTART, IntPtr.Zero, IntPtr.Zero);
+                        int targetEnd = (int)editor.SendMessage(SCI_GETTARGETEND, IntPtr.Zero, IntPtr.Zero);
+
+                        if (targetStart < rangeStart || targetStart >= rangeEnd)
+                            break;
+
+                        // Pass the byte length WITHOUT the null terminator — SCI_REPLACETARGET
+                        // copies exactly the given number of bytes, so including the NUL would
+                        // embed a \0 character in the document
+                        var (success, length) = ReplaceRange(editor, targetStart, targetEnd, replaceTextSize - 1, replaceTextBuffer.Address);
+                        if (success)
+                        {
+                            currentPos = targetStart + length;
+                            replaceCount++;
+                        }
+                        else
+                        {
+                            currentPos = targetEnd;
+                        }
                     }
                 }
-            }
-            catch (Exception) { }
-            finally
-            {
-                editor.SendMessage(SCI_ENDUNDOACTION, 0, 0);
+                catch (Exception) { }
+                finally
+                {
+                    editor.SendMessage(SCI_ENDUNDOACTION, 0, 0);
+                }
             }
 
             return replaceCount;
@@ -2688,30 +2832,34 @@ namespace AppRefiner
             // Set search flags
             editor.SendMessage(SCI_SETSEARCHFLAGS, searchFlags, IntPtr.Zero);
 
-            // Marshall search string
-            int searchSize = Encoding.Default.GetByteCount(searchTerm) + 1;
-            var searchBuffer = editor.AppDesignerProcess.MemoryManager.GetOrCreateBuffer("searchBuffer", (uint)searchSize);
-            searchBuffer.Reset();
-            searchBuffer.WriteString(searchTerm, Encoding.UTF8);
-
-            // Count matches
-            int currentPos = rangeStart;
-            while (true)
+            // Shared buffer: hold the lock across the whole loop
+            lock (editor.AppDesignerProcess.MemoryManager.SyncRoot)
             {
-                editor.SendMessage(SCI_SETTARGETRANGE, currentPos, rangeEnd);
+                // Marshall search string
+                int searchSize = Encoding.UTF8.GetByteCount(searchTerm) + 1;
+                var searchBuffer = editor.AppDesignerProcess.MemoryManager.GetOrCreateBuffer("searchBuffer", (uint)searchSize);
+                searchBuffer.Reset();
+                searchBuffer.WriteString(searchTerm, Encoding.UTF8);
 
-                int result = (int)editor.SendMessage(SCI_SEARCHINTARGET, searchSize - 1, searchBuffer.Address);
-                if (result == -1)
-                    break;
+                // Count matches
+                int currentPos = rangeStart;
+                while (true)
+                {
+                    editor.SendMessage(SCI_SETTARGETRANGE, currentPos, rangeEnd);
 
-                int targetStart = (int)editor.SendMessage(SCI_GETTARGETSTART, IntPtr.Zero, IntPtr.Zero);
-                int targetEnd = (int)editor.SendMessage(SCI_GETTARGETEND, IntPtr.Zero, IntPtr.Zero);
+                    int result = (int)editor.SendMessage(SCI_SEARCHINTARGET, searchSize - 1, searchBuffer.Address);
+                    if (result == -1)
+                        break;
 
-                if (targetStart < rangeStart || targetStart >= rangeEnd)
-                    break;
+                    int targetStart = (int)editor.SendMessage(SCI_GETTARGETSTART, IntPtr.Zero, IntPtr.Zero);
+                    int targetEnd = (int)editor.SendMessage(SCI_GETTARGETEND, IntPtr.Zero, IntPtr.Zero);
 
-                matchCount++;
-                currentPos = targetEnd;
+                    if (targetStart < rangeStart || targetStart >= rangeEnd)
+                        break;
+
+                    matchCount++;
+                    currentPos = targetEnd;
+                }
             }
 
             return matchCount;
@@ -2755,42 +2903,46 @@ namespace AppRefiner
             // Set search flags
             editor.SendMessage(SCI_SETSEARCHFLAGS, searchFlags, IntPtr.Zero);
 
-            // Marshall search string
-            int searchSize = Encoding.Default.GetByteCount(searchTerm) + 1;
-
-            var searchBuffer = editor.AppDesignerProcess.MemoryManager.GetOrCreateBuffer("searchBuffer", (uint)searchSize);
-            searchBuffer.Reset();
-            searchBuffer.WriteString(searchTerm, Encoding.UTF8);
-
-            // Find and mark all matches
-            int currentPos = rangeStart;
-            while (true)
+            // Shared buffer: hold the lock across the whole loop
+            lock (editor.AppDesignerProcess.MemoryManager.SyncRoot)
             {
-                editor.SendMessage(SCI_SETTARGETRANGE, currentPos, rangeEnd);
+                // Marshall search string
+                int searchSize = Encoding.UTF8.GetByteCount(searchTerm) + 1;
 
-                int result = (int)editor.SendMessage(SCI_SEARCHINTARGET, searchSize - 1, searchBuffer.Address);
-                if (result == -1)
-                    break;
+                var searchBuffer = editor.AppDesignerProcess.MemoryManager.GetOrCreateBuffer("searchBuffer", (uint)searchSize);
+                searchBuffer.Reset();
+                searchBuffer.WriteString(searchTerm, Encoding.UTF8);
 
-                int targetStart = (int)editor.SendMessage(SCI_GETTARGETSTART, IntPtr.Zero, IntPtr.Zero);
-                int targetEnd = (int)editor.SendMessage(SCI_GETTARGETEND, IntPtr.Zero, IntPtr.Zero);
-
-                if (targetStart < rangeStart || targetStart >= rangeEnd)
-                    break;
-
-                // Add search indicator
-                var indicator = new Indicator()
+                // Find and mark all matches
+                int currentPos = rangeStart;
+                while (true)
                 {
-                    Type = IndicatorType.HIGHLIGHTER,
-                    Color = markColor,
-                    Start = targetStart,
-                    Length = targetEnd - targetStart
-                };
-                AddIndicator(editor, indicator);
-                editor.SearchIndicators.Add(indicator);
+                    editor.SendMessage(SCI_SETTARGETRANGE, currentPos, rangeEnd);
 
-                matchCount++;
-                currentPos = targetEnd;
+                    int result = (int)editor.SendMessage(SCI_SEARCHINTARGET, searchSize - 1, searchBuffer.Address);
+                    if (result == -1)
+                        break;
+
+                    int targetStart = (int)editor.SendMessage(SCI_GETTARGETSTART, IntPtr.Zero, IntPtr.Zero);
+                    int targetEnd = (int)editor.SendMessage(SCI_GETTARGETEND, IntPtr.Zero, IntPtr.Zero);
+
+                    if (targetStart < rangeStart || targetStart >= rangeEnd)
+                        break;
+
+                    // Add search indicator
+                    var indicator = new Indicator()
+                    {
+                        Type = IndicatorType.HIGHLIGHTER,
+                        Color = markColor,
+                        Start = targetStart,
+                        Length = targetEnd - targetStart
+                    };
+                    AddIndicator(editor, indicator);
+                    editor.SearchIndicators.Add(indicator);
+
+                    matchCount++;
+                    currentPos = targetEnd;
+                }
             }
 
             return matchCount;
@@ -2828,72 +2980,77 @@ namespace AppRefiner
             // Set search flags
             editor.SendMessage(SCI_SETSEARCHFLAGS, searchFlags, IntPtr.Zero);
 
-            // Marshall search string
-            int searchSize = Encoding.Default.GetByteCount(searchTerm) + 1;
-
-            var searchBuffer = editor.AppDesignerProcess.MemoryManager.GetOrCreateBuffer("searchBuffer", (uint)searchSize);
-            searchBuffer.Reset();
-            searchBuffer.WriteString(searchTerm, Encoding.UTF8);
-
-            // Count matches
-            int currentPos = rangeStart;
-            while (true)
+            // Shared buffers: hold the lock across both loops — the search buffer address is
+            // used per iteration, and the line buffer is a write → read-back sequence per match
+            lock (editor.AppDesignerProcess.MemoryManager.SyncRoot)
             {
-                editor.SendMessage(SCI_SETTARGETRANGE, currentPos, rangeEnd);
+                // Marshall search string
+                int searchSize = Encoding.UTF8.GetByteCount(searchTerm) + 1;
 
-                int result = (int)editor.SendMessage(SCI_SEARCHINTARGET, searchSize - 1, searchBuffer.Address);
-                if (result == -1)
-                    break;
+                var searchBuffer = editor.AppDesignerProcess.MemoryManager.GetOrCreateBuffer("searchBuffer", (uint)searchSize);
+                searchBuffer.Reset();
+                searchBuffer.WriteString(searchTerm, Encoding.UTF8);
 
-                int targetStart = (int)editor.SendMessage(SCI_GETTARGETSTART, IntPtr.Zero, IntPtr.Zero);
-                int targetEnd = (int)editor.SendMessage(SCI_GETTARGETEND, IntPtr.Zero, IntPtr.Zero);
-
-                if (targetStart < rangeStart || targetStart >= rangeEnd)
-                    break;
-
-                currentPos = targetEnd;
-
-
-                /* Add match */
-                // Get line information
-                int lineNumber = (int)editor.SendMessage(SCI_LINEFROMPOSITION, targetStart, IntPtr.Zero);
-
-                // Create SearchMatch
-                var match = new SearchMatch
+                // Count matches
+                int currentPos = rangeStart;
+                while (true)
                 {
-                    Position = targetStart,
-                    Length = targetEnd - targetStart,
-                    LineNumber = lineNumber
-                };
+                    editor.SendMessage(SCI_SETTARGETRANGE, currentPos, rangeEnd);
 
-                matches.Add(match);
+                    int result = (int)editor.SendMessage(SCI_SEARCHINTARGET, searchSize - 1, searchBuffer.Address);
+                    if (result == -1)
+                        break;
+
+                    int targetStart = (int)editor.SendMessage(SCI_GETTARGETSTART, IntPtr.Zero, IntPtr.Zero);
+                    int targetEnd = (int)editor.SendMessage(SCI_GETTARGETEND, IntPtr.Zero, IntPtr.Zero);
+
+                    if (targetStart < rangeStart || targetStart >= rangeEnd)
+                        break;
+
+                    currentPos = targetEnd;
 
 
-            }
-            var lineBuffer = editor.AppDesignerProcess.MemoryManager.GetOrCreateBuffer("lineBuffer", 1024);
-            /* Now that the process buffer is free to use, retrieve line information (line text) */
-            foreach (var match in matches)
-            {
-                int lineStart = (int)editor.SendMessage(SCI_POSITIONFROMLINE, match.LineNumber, IntPtr.Zero);
-                int lineEnd = (int)editor.SendMessage(SCI_GETLINEENDPOSITION, match.LineNumber, IntPtr.Zero);
+                    /* Add match */
+                    // Get line information
+                    int lineNumber = (int)editor.SendMessage(SCI_LINEFROMPOSITION, targetStart, IntPtr.Zero);
 
-                // Get line text
-                string lineText = string.Empty;
-                if (lineEnd > lineStart)
-                {
-                    editor.SendMessage(SCI_SETTARGETRANGE, lineStart, lineEnd);
-                    int lineLength = lineEnd - lineStart;
-
-                    if (lineLength > 0)
+                    // Create SearchMatch
+                    var match = new SearchMatch
                     {
-                        lineBuffer.Resize((uint)(lineLength + 1)); // Resize buffer for line text
+                        Position = targetStart,
+                        Length = targetEnd - targetStart,
+                        LineNumber = lineNumber
+                    };
+
+                    matches.Add(match);
 
 
-                        int lineResult = (int)editor.SendMessage(SCI_GETTARGETTEXT, IntPtr.Zero, lineBuffer.Address);
-                        if (lineResult > 0)
+                }
+                var lineBuffer = editor.AppDesignerProcess.MemoryManager.GetOrCreateBuffer("lineBuffer", 1024);
+                /* Now that the process buffer is free to use, retrieve line information (line text) */
+                foreach (var match in matches)
+                {
+                    int lineStart = (int)editor.SendMessage(SCI_POSITIONFROMLINE, match.LineNumber, IntPtr.Zero);
+                    int lineEnd = (int)editor.SendMessage(SCI_GETLINEENDPOSITION, match.LineNumber, IntPtr.Zero);
+
+                    // Get line text
+                    string lineText = string.Empty;
+                    if (lineEnd > lineStart)
+                    {
+                        editor.SendMessage(SCI_SETTARGETRANGE, lineStart, lineEnd);
+                        int lineLength = lineEnd - lineStart;
+
+                        if (lineLength > 0)
                         {
-                            lineText = lineBuffer.ReadString(lineLength, Encoding.UTF8) ?? string.Empty;
-                            match.LineText = lineText.TrimEnd('\r', '\n');
+                            lineBuffer.Resize((uint)(lineLength + 1)); // Resize buffer for line text
+
+
+                            int lineResult = (int)editor.SendMessage(SCI_GETTARGETTEXT, IntPtr.Zero, lineBuffer.Address);
+                            if (lineResult > 0)
+                            {
+                                lineText = lineBuffer.ReadString(lineLength, Encoding.UTF8) ?? string.Empty;
+                                match.LineText = lineText.TrimEnd('\r', '\n');
+                            }
                         }
                     }
                 }

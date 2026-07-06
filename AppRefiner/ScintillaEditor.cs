@@ -233,6 +233,30 @@ namespace AppRefiner
         private bool selfHostedParseSuccessful = true;
 
         public string? ContentString = null;
+
+        /// <summary>
+        /// True when the document may have changed since <see cref="ContentString"/> was last
+        /// read. Set by the WM_AR_DOC_MODIFIED handler (the hook posts it on every text
+        /// change, including AppRefiner's own remote edits); cleared when content is re-read.
+        /// Starts true so the first access always reads. Only touched on the UI thread.
+        /// </summary>
+        public bool ContentDirty { get; private set; } = true;
+
+        /// <summary>
+        /// Monotonic counter incremented on every document modification notification.
+        /// Captured by async consumers (styler pass) to detect content changes without
+        /// re-reading the document.
+        /// </summary>
+        public int ContentVersion { get; private set; }
+
+        /// <summary>
+        /// Marks the cached content as stale. Called when the hook reports a text change.
+        /// </summary>
+        public void MarkContentDirty()
+        {
+            ContentDirty = true;
+            unchecked { ContentVersion++; }
+        }
         public bool AnnotationsInitialized { get; set; } = false;
         public bool IsDarkMode { get; set; } = false;
         public IntPtr AnnotationStyleOffset = IntPtr.Zero;
@@ -293,12 +317,6 @@ namespace AppRefiner
         public AutoCompleteContext ActiveAutoCompleteContext { get; set; } = AutoCompleteContext.None;
 
         /// <summary>
-        /// Tracks the number of characters already typed when autocomplete was shown
-        /// Used to delete the typed portion before inserting the selected completion
-        /// </summary>
-        public int AutoCompleteLengthEntered { get; set; } = 0;
-
-        /// <summary>
         /// Stores the search-related indicators created by the "Mark All" feature
         /// </summary>
         public List<Indicator> SearchIndicators { get; set; } = new List<Indicator>();
@@ -329,8 +347,17 @@ namespace AppRefiner
         /// <returns>The parsed program node, or null if parsing failed</returns>
         public ProgramNode? GetParsedProgram(bool forceReparse = false)
         {
+            // Zero-copy fast path: the hook reports every text change via WM_AR_DOC_MODIFIED,
+            // so when the content is not dirty the cached parse is still valid — no need for
+            // a full cross-process document read just to hash-check it
+            if (!forceReparse && !ContentDirty && selfHostedParsedProgram != null && ContentString != null)
+            {
+                return selfHostedParsedProgram;
+            }
+
             // Ensure we have the current content
             ContentString = ScintillaManager.GetScintillaText(this);
+            ContentDirty = false;
 
             // Calculate hash of current content
             int newHash = ContentString?.GetHashCode() ?? 0;
@@ -387,8 +414,15 @@ namespace AppRefiner
         /// <returns>A tuple containing the program node and token stream, or null if parsing failed</returns>
         public (ProgramNode? Program, List<Token>? Tokens) GetParsedProgramWithTokens(bool forceReparse = false)
         {
+            // Zero-copy fast path — see GetParsedProgram
+            if (!forceReparse && !ContentDirty && selfHostedParsedProgram != null && selfHostedTokens != null && ContentString != null)
+            {
+                return (selfHostedParsedProgram, selfHostedTokens);
+            }
+
             // Ensure we have the current content
             ContentString = ScintillaManager.GetScintillaText(this);
+            ContentDirty = false;
 
             // Calculate hash of current content
             int newHash = ContentString?.GetHashCode() ?? 0;
@@ -494,9 +528,10 @@ namespace AppRefiner
         {
             this.hWnd = hWnd;
 
+            // Must be assigned before Caption: the setter's path derivation reads
+            // AppDesignerProcess.DBName
             AppDesignerProcess = appProc;
             Caption = caption;
-            AppDesignerProcess = null;
             ParameterNamesEnabled = Properties.Settings.Default.showParamNames;
         }
 

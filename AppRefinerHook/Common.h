@@ -38,6 +38,34 @@
 // Macro to create WM_SCN_ messages by combining SCN_ notifications with the event mask
 #define WM_SCN(notification) (WM_SCN_EVENT_MASK | (notification))
 
+// Every editor-scoped notification forwarded to AppRefiner carries the source Scintilla
+// HWND in the HIGH 32 bits of one message parameter, so the receiver can route to the
+// correct editor instead of assuming the currently focused one. This relies on x64:
+// HWNDs are 32-bit values on 64-bit Windows, and every non-pointer payload in this
+// protocol (positions, lines, list types, chars, flags) is 32-bit, so both halves fit
+// in a single 64-bit WPARAM/LPARAM. Parameter layout per message:
+//   WM_SCN_DWELL_START          wParam=position               lParam=PACK(hwnd, line)
+//   WM_SCN_DWELL_END            wParam=position               lParam=PACK(hwnd, 0)
+//   WM_SCN_SAVEPOINT_REACHED    wParam=PACK(hwnd, 0)          lParam=0
+//   WM_SCN_USERLIST_SELECTION   wParam=PACK(hwnd, listType)   lParam=text ptr (remote)
+//   WM_SCN_AUTOCSELECTION       wParam=PACK(hwnd, position)   lParam=text ptr (remote)
+//   WM_SCN_AUTOCCOMPLETED       wParam=PACK(hwnd, 0)          lParam=0
+//   WM_AR_BEFORE_DELETE_ALL     wParam=PACK(hwnd, 0)          lParam=docLength
+//   WM_AR_FOLD_MARGIN_CLICK     wParam=position               lParam=PACK(hwnd, 0)
+//   WM_AR_INSERT_CHECK          wParam=struct ptr (remote)    lParam=PACK(hwnd, 0)
+//   WM_AR_APP_PACKAGE_SUGGEST   wParam=position               lParam=PACK(hwnd, triggerChar or 0)
+//   WM_AR_VARIABLE_SUGGEST      wParam=position               lParam=PACK(hwnd, triggerChar or 0)
+//   WM_AR_OBJECT_MEMBERS        wParam=position               lParam=PACK(hwnd, triggerChar or 0)
+//   WM_AR_SYSTEM_VARIABLE_SUGGEST wParam=position             lParam=PACK(hwnd, triggerChar or 0)
+//   WM_AR_FUNCTION_CALL_TIP     wParam=position               lParam=PACK(hwnd, char)
+//   WM_AR_CREATE_SHORTHAND      wParam=PACK(hwnd, autoPair)   lParam=position
+//   WM_AR_MSGBOX_SHORTHAND      wParam=PACK(hwnd, autoPair)   lParam=position
+//   WM_AR_CONCAT_SHORTHAND      wParam=PACK(hwnd, char)       lParam=position
+//   WM_AR_TYPING_PAUSE          wParam=position               lParam=PACK(hwnd, line)
+//   WM_AR_CURSOR_POSITION_CHANGED wParam=PACK(hwnd, firstVisibleLine) lParam=position
+#define AR_PACK_HWND(hwnd, value32) \
+    ((((UINT_PTR)(ULONG_PTR)(hwnd) & 0xFFFFFFFFull) << 32) | ((UINT_PTR)(value32) & 0xFFFFFFFFull))
+
 // Scintilla notification messages
 #define WM_SCN_DWELL_START WM_SCN(SCN_DWELLSTART)
 #define WM_SCN_DWELL_END WM_SCN(SCN_DWELLEND)
@@ -63,6 +91,7 @@
 #define WM_AR_SCINTILLA_NOT_FOUND 2518      // Scintilla DLL file not found at specified path (wParam=(major<<16)|minor, lParam=(build<<16)|revision)
 #define WM_AR_COMBO_BUTTON_CLICKED 2519     // ComboBox button clicked notification
 #define WM_AR_CONTEXT_MENU_OPTION 2520      // Context menu option selected (wParam=option ID, lParam=toggle state for checkboxes or 0)
+#define WM_AR_DOC_MODIFIED 2521             // Document text changed (posted; wParam=PACK(hwnd, 0)) - receiver invalidates content caches
 #define WM_SCN_USERLIST_SELECTION WM_SCN(SCN_USERLISTSELECTION) // User list selection notification
 
 // Context menu option IDs (for WM_AR_CONTEXT_MENU_OPTION wParam)

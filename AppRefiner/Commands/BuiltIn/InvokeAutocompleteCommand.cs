@@ -52,7 +52,10 @@ namespace AppRefiner.Commands.BuiltIn
             var detectedContext = DetectAutocompleteContext(text, position);
 
             int messageId;
-            IntPtr lParam = IntPtr.Zero;
+            // All these messages carry the source editor HWND in lParam's high 32 bits
+            // (matching the hook's AR_PACK_HWND layout); function call tips additionally
+            // carry the trigger character in the low 32 bits.
+            IntPtr lParam = MainForm.PackHwnd(editor.hWnd, 0);
 
             if (!detectedContext.HasValue)
             {
@@ -74,10 +77,10 @@ namespace AppRefiner.Commands.BuiltIn
                     _ => AR_VARIABLE_SUGGEST
                 };
 
-                // For function call tips, pass the trigger character in LParam
+                // For function call tips, pass the trigger character in LParam's low half
                 if (contextType == AutoCompleteContext.FunctionCallTip)
                 {
-                    lParam = new IntPtr(triggerChar);
+                    lParam = MainForm.PackHwnd(editor.hWnd, triggerChar);
                 }
             }
 

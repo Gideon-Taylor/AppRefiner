@@ -1,16 +1,32 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace AppRefiner
 {
     /// <summary>
     /// Manages memory buffers allocated in a remote process.
     /// Tracks all RemoteBuffer instances and provides lifecycle management.
+    ///
+    /// Thread safety: buffer lookup/creation is internally synchronized on <see cref="SyncRoot"/>.
+    /// Named buffers are shared process-wide, so any multi-step sequence against one
+    /// (write → SendMessage → read-back) must hold <c>lock (memoryManager.SyncRoot)</c> for the
+    /// whole sequence — otherwise another thread can overwrite or resize (free!) the buffer
+    /// between steps. Holding the lock across a cross-process SendMessage is safe: a thread
+    /// blocked in SendMessage still services incoming sent messages, so the remote process
+    /// cannot deadlock against us. Buffers from <see cref="CreateTempBuffer"/> are caller-owned
+    /// and need no locking.
     /// </summary>
     public class MemoryManager
     {
         private readonly Dictionary<string, RemoteBuffer> _buffers = new Dictionary<string, RemoteBuffer>();
         private readonly AppDesignerProcess _process;
+
+        /// <summary>
+        /// Synchronizes all use of shared named buffers. Hold this lock for the full
+        /// write → SendMessage → read sequence, not just the individual buffer calls.
+        /// </summary>
+        public object SyncRoot { get; } = new object();
 
         /// <summary>
         /// Creates a new MemoryManager for the specified AppDesigner process
@@ -35,22 +51,25 @@ namespace AppRefiner
                 throw new ArgumentException("Buffer name cannot be null or whitespace", nameof(name));
             }
 
-            if (_buffers.TryGetValue(name, out RemoteBuffer? buffer))
+            lock (SyncRoot)
             {
-                Debug.Log($"MemoryManager: Reusing existing buffer '{name}'");
-                if (initialSize > buffer.Size)
+                if (_buffers.TryGetValue(name, out RemoteBuffer? buffer))
                 {
-                    Debug.Log("Resizing buffer...");
-                    buffer.Resize(initialSize);
+                    Debug.Log($"MemoryManager: Reusing existing buffer '{name}'");
+                    if (initialSize > buffer.Size)
+                    {
+                        Debug.Log("Resizing buffer...");
+                        buffer.Resize(initialSize);
+                    }
+                    return buffer;
                 }
+
+                // Create new buffer
+                buffer = new RemoteBuffer(_process.ProcessHandle, _process.ProcessId, name, initialSize);
+                _buffers[name] = buffer;
+                Debug.Log($"MemoryManager: Created new buffer '{name}' with size {initialSize}");
                 return buffer;
             }
-
-            // Create new buffer
-            buffer = new RemoteBuffer(_process.ProcessHandle, _process.ProcessId, name, initialSize);
-            _buffers[name] = buffer;
-            Debug.Log($"MemoryManager: Created new buffer '{name}' with size {initialSize}");
-            return buffer;
         }
 
         /// <summary>
@@ -65,7 +84,10 @@ namespace AppRefiner
                 throw new ArgumentException("Buffer name cannot be null or whitespace", nameof(name));
             }
 
-            return _buffers.TryGetValue(name, out RemoteBuffer? buffer) ? buffer : null;
+            lock (SyncRoot)
+            {
+                return _buffers.TryGetValue(name, out RemoteBuffer? buffer) ? buffer : null;
+            }
         }
 
         /// <summary>
@@ -93,21 +115,33 @@ namespace AppRefiner
                 return false;
             }
 
-            if (_buffers.TryGetValue(name, out RemoteBuffer? buffer))
+            lock (SyncRoot)
             {
-                buffer.Free();
-                _buffers.Remove(name);
-                Debug.Log($"MemoryManager: Removed buffer '{name}'");
-                return true;
-            }
+                if (_buffers.TryGetValue(name, out RemoteBuffer? buffer))
+                {
+                    buffer.Free();
+                    _buffers.Remove(name);
+                    Debug.Log($"MemoryManager: Removed buffer '{name}'");
+                    return true;
+                }
 
-            return false;
+                return false;
+            }
         }
 
         /// <summary>
         /// Gets the number of buffers currently managed
         /// </summary>
-        public int BufferCount => _buffers.Count;
+        public int BufferCount
+        {
+            get
+            {
+                lock (SyncRoot)
+                {
+                    return _buffers.Count;
+                }
+            }
+        }
 
         /// <summary>
         /// Gets the names of all managed buffers
@@ -115,7 +149,10 @@ namespace AppRefiner
         /// <returns>Collection of buffer names</returns>
         public IEnumerable<string> GetBufferNames()
         {
-            return _buffers.Keys;
+            lock (SyncRoot)
+            {
+                return _buffers.Keys.ToList();
+            }
         }
 
         /// <summary>
@@ -123,30 +160,30 @@ namespace AppRefiner
         /// </summary>
         public void Cleanup()
         {
-            Debug.Log($"MemoryManager: Cleaning up {_buffers.Count} buffers for process {_process.ProcessId}");
-
-            foreach (var kvp in _buffers)
+            lock (SyncRoot)
             {
-                try
+                Debug.Log($"MemoryManager: Cleaning up {_buffers.Count} buffers for process {_process.ProcessId}");
+
+                foreach (var kvp in _buffers)
                 {
-                    kvp.Value.Free();
+                    try
+                    {
+                        kvp.Value.Free();
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.Log($"MemoryManager: Error freeing buffer '{kvp.Key}': {ex.Message}");
+                    }
                 }
-                catch (Exception ex)
-                {
-                    Debug.Log($"MemoryManager: Error freeing buffer '{kvp.Key}': {ex.Message}");
-                }
+
+                _buffers.Clear();
+                Debug.Log($"MemoryManager: Cleanup complete");
             }
-
-            _buffers.Clear();
-            Debug.Log($"MemoryManager: Cleanup complete");
         }
 
-        /// <summary>
-        /// Ensures cleanup happens even if not called explicitly
-        /// </summary>
-        ~MemoryManager()
-        {
-            Cleanup();
-        }
+        // Note: no finalizer, deliberately — Cleanup() is called explicitly from
+        // AppDesignerProcess.Cleanup(). A GC-time VirtualFreeEx could run after the
+        // process handle was closed and its OS handle value recycled, freeing memory
+        // in an unrelated process (see RemoteBuffer for the same reasoning).
     }
 }

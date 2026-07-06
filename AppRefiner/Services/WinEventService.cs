@@ -27,6 +27,13 @@ namespace AppRefiner.Services
         /// </summary>
         public event EventHandler<nint>? WindowShown;
 
+        /// <summary>
+        /// Event raised when a top-level or child window is destroyed. Used to evict
+        /// per-HWND state (tracked editors) before Windows recycles the handle value.
+        /// The event is invoked on the synchronization context captured during Start.
+        /// </summary>
+        public event EventHandler<nint>? WindowDestroyed;
+
         public WinEventService()
         {
             // Capture synchronization context for marshalling events back to the UI thread
@@ -125,6 +132,23 @@ namespace AppRefiner.Services
                     OnWindowShown(hwnd);
                 }
             }
+            else if (eventType == NativeMethods.EVENT_OBJECT_DESTROY)
+            {
+                // Only the window object itself — ignore destroy events for sub-objects
+                if (idObject != NativeMethods.OBJID_WINDOW || idChild != 0)
+                {
+                    return;
+                }
+
+                if (syncContext != null)
+                {
+                    syncContext.Post(_ => OnWindowDestroyed(hwnd), null);
+                }
+                else
+                {
+                    OnWindowDestroyed(hwnd);
+                }
+            }
         }
 
         protected virtual void OnWindowFocused(nint hwnd)
@@ -140,6 +164,11 @@ namespace AppRefiner.Services
         protected virtual void OnWindowShown(nint hwnd)
         {
             WindowShown?.Invoke(this, hwnd);
+        }
+
+        protected virtual void OnWindowDestroyed(nint hwnd)
+        {
+            WindowDestroyed?.Invoke(this, hwnd);
         }
 
         public void Dispose()

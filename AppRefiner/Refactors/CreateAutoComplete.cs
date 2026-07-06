@@ -131,7 +131,8 @@ namespace AppRefiner.Refactors
             Task.Delay(250).ContinueWith((_) =>
             {
                 var newPosition = ScintillaManager.GetCursorPosition(Editor);
-                WinApi.SendMessage(AppDesignerProcess.CallbackWindow, MainForm.AR_FUNCTION_CALL_TIP, newPosition, '(');
+                // Match the hook's layout: source editor HWND in lParam's high 32 bits
+                WinApi.SendMessage(AppDesignerProcess.CallbackWindow, MainForm.AR_FUNCTION_CALL_TIP, newPosition, MainForm.PackHwnd(Editor.hWnd, '('));
             });
         }
 

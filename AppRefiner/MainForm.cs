@@ -131,6 +131,7 @@ namespace AppRefiner
         private const int AR_SCINTILLA_IN_USE = 2517; // Scintilla DLL in use (active windows exist, cannot replace)
         private const int AR_SCINTILLA_NOT_FOUND = 2518; // Scintilla DLL file not found at specified path (wParam=(major<<16)|minor, lParam=(build<<16)|revision)
         private const int AR_CONTEXT_MENU_OPTION = 2520; // Context menu option selected (wParam=option ID, lParam=toggle state for checkboxes or 0)
+        private const int AR_DOC_MODIFIED = 2521; // Document text changed (posted; wParam=PACK(hwnd, 0)) - invalidates content caches
         private const int AR_SUBCLASS_RESULTS_LIST = 1007; // Message to subclass Results list view
         private const int AR_SET_OPEN_TARGET = 1008; // Message to set open target for Results list interception
 
@@ -211,6 +212,7 @@ namespace AppRefiner
             winEventService.WindowFocused += HandleWindowFocusEvent;
             //winEventService.WindowCreated += HandleWindowCreationEvent;
             winEventService.WindowShown += HandleWindowShownEvent;
+            winEventService.WindowDestroyed += HandleWindowDestroyedEvent;
             winEventService.Start();
 
             // Instantiate LinterManager (passing UI elements)
@@ -2035,6 +2037,13 @@ namespace AppRefiner
 
                         activeAppDesigner = activeEditor.AppDesignerProcess;
                         stylerManager.StylerRules.Where(s => s is FunctionParameterNames).First().Active = activeEditor.ParameterNamesEnabled;
+
+                        // Offer the auto-connect prompt now that this App Designer is foreground.
+                        // Self-guarding (already connected / previously declined / not foreground),
+                        // so calling on every activation is safe — this cannot be gated on the
+                        // active App Designer *changing*, because startup enumeration sets
+                        // activeAppDesigner without any real focus having happened.
+                        MaybePromptForDbConnection(activeAppDesigner);
                         return;
                     }
                     else
@@ -2047,6 +2056,7 @@ namespace AppRefiner
                         }
                         AppDesignerProcesses.Add(pid, newProcess);
                         trackedProcessIds.Add(pid);
+                        WatchAppDesignerProcessExit(pid);
                         activeEditor = newProcess.GetOrInitEditor(hwnd);
                         activeEditor.AppDesignerProcess = newProcess;
 
@@ -2181,195 +2191,264 @@ namespace AppRefiner
         }
 
         /* TODO: override WndProc */
+        /// <summary>
+        /// Extracts the source Scintilla HWND that the hook packs into the high 32 bits of a
+        /// message parameter (see AppRefinerHook/Common.h for the per-message layout).
+        /// HWNDs are 32-bit values on 64-bit Windows and must be sign-extended when widened.
+        /// </summary>
+        internal static IntPtr UnpackHwnd(IntPtr param) => new IntPtr(unchecked((int)((long)param >> 32)));
+
+        /// <summary>
+        /// Extracts the 32-bit payload from the low half of a hook message parameter.
+        /// </summary>
+        internal static int UnpackValue(IntPtr param) => unchecked((int)(long)param);
+
+        /// <summary>
+        /// Packs a source editor HWND and a 32-bit payload into one message parameter,
+        /// mirroring the hook's AR_PACK_HWND macro. Used when AppRefiner sends itself a
+        /// hook-protocol message (e.g. re-triggering AR_FUNCTION_CALL_TIP after an insertion).
+        /// </summary>
+        internal static IntPtr PackHwnd(IntPtr hwnd, int value) =>
+            new IntPtr(unchecked((long)(((ulong)(uint)(long)hwnd << 32) | (uint)value)));
+
+        /// <summary>
+        /// Resolves a hook notification's source editor from its Scintilla HWND.
+        /// Returns null if the window is gone or belongs to an untracked process — the
+        /// notification is then dropped rather than misapplied to another editor.
+        /// </summary>
+        private ScintillaEditor? ResolveEditorFromHwnd(IntPtr hwnd)
+        {
+            if (hwnd == IntPtr.Zero || !WinApi.IsWindow(hwnd))
+            {
+                Debug.Log($"ResolveEditorFromHwnd: invalid source window 0x{hwnd.ToInt64():X}");
+                return null;
+            }
+
+            WinApi.GetWindowThreadProcessId(hwnd, out uint pid);
+            if (!AppDesignerProcesses.TryGetValue(pid, out var process))
+            {
+                Debug.Log($"ResolveEditorFromHwnd: window 0x{hwnd.ToInt64():X} belongs to untracked process {pid}");
+                return null;
+            }
+
+            return process.GetOrInitEditor(hwnd);
+        }
+
         protected override void WndProc(ref Message m)
         {
             base.WndProc(ref m);
-            // Need activeEditor for most messages, but check null within specific cases
-            // if (activeEditor == null) return; 
-            // Removed early return, check activeEditor inside cases
 
             /* if message is a WM_SCN_EVENT (check the mask) */
             if ((m.Msg & WM_SCN_EVENT_MASK) == WM_SCN_EVENT_MASK)
             {
-                // Only process if we have an active editor
-                if (activeEditor == null || !activeEditor.IsValid()) return;
-
                 /* remove mask */
                 var eventCode = m.Msg & ~WM_SCN_EVENT_MASK;
 
+                // The hook packs the source Scintilla HWND into the high 32 bits of one message
+                // parameter (see AppRefinerHook/Common.h for the per-message layout), so each
+                // notification is routed to the editor that raised it — not whichever editor
+                // happens to be active, which can lag behind on rapid focus switches and may
+                // even belong to a different App Designer process.
                 switch (eventCode)
                 {
                     case SCN_DWELLSTART:
-                        Debug.Log($"SCN_DWELLSTART: {m.WParam} -- {m.LParam}");
+                        {
+                            var editor = ResolveEditorFromHwnd(UnpackHwnd(m.LParam));
+                            if (editor == null) return;
+                            Debug.Log($"SCN_DWELLSTART: {m.WParam} -- {UnpackValue(m.LParam)}");
 
-                        /* In case a tooltip got stuck? */
-                        TooltipProviders.TooltipManager.HideTooltip(activeEditor);
+                            /* In case a tooltip got stuck? */
+                            TooltipProviders.TooltipManager.HideTooltip(editor);
 
-                        TooltipProviders.TooltipManager.ShowTooltip(activeEditor, m.WParam.ToInt32(), m.LParam.ToInt32());
+                            TooltipProviders.TooltipManager.ShowTooltip(editor, m.WParam.ToInt32(), UnpackValue(m.LParam));
+                        }
                         break;
                     case SCN_DWELLEND:
-                        TooltipProviders.TooltipManager.HideTooltip(activeEditor);
+                        {
+                            var editor = ResolveEditorFromHwnd(UnpackHwnd(m.LParam));
+                            if (editor == null) return;
+                            TooltipProviders.TooltipManager.HideTooltip(editor);
+                        }
                         break;
                     case SCN_SAVEPOINTREACHED:
-                        Debug.Log("SAVEPOINTREACHED...");
-                        // Active editor check already done above
-                        lock (savepointLock)
                         {
-                            // Cancel any pending savepoint timer
-                            savepointDebounceTimer?.Change(Timeout.Infinite, Timeout.Infinite);
+                            var editor = ResolveEditorFromHwnd(UnpackHwnd(m.WParam));
+                            if (editor == null) return;
+                            Debug.Log("SAVEPOINTREACHED...");
+                            lock (savepointLock)
+                            {
+                                // Cancel any pending savepoint timer
+                                savepointDebounceTimer?.Change(Timeout.Infinite, Timeout.Infinite);
 
-                            // Store the editor for later processing
-                            pendingSaveEditor = activeEditor;
+                                // Store the editor for later processing
+                                pendingSaveEditor = editor;
 
-                            // Record the time of this savepoint
-                            lastSavepointTime = DateTime.Now;
+                                // Record the time of this savepoint
+                                lastSavepointTime = DateTime.Now;
 
-                            // Start a new timer to process this savepoint after the debounce period
-                            savepointDebounceTimer = new System.Threading.Timer(
-                                ProcessSavepoint, null, SAVEPOINT_DEBOUNCE_MS, Timeout.Infinite);
+                                // Start a new timer to process this savepoint after the debounce period
+                                savepointDebounceTimer = new System.Threading.Timer(
+                                    ProcessSavepoint, null, SAVEPOINT_DEBOUNCE_MS, Timeout.Infinite);
+                            }
                         }
                         break;
                     case SCN_USERLISTSELECTION:
-                        Debug.Log("User list selection received");
-                        // Active editor check already done above
-                        // wParam is the list type
-                        UserListType listType = (UserListType)m.WParam.ToInt32();
-                        // lParam is a pointer to a UTF8 string in the editor's process memory
-                        if (m.LParam != IntPtr.Zero)
                         {
-                            // Read the UTF8 string from the editor's process memory
-                            string? selectedText = ScintillaManager.ReadUtf8FromMemory(activeEditor, m.LParam, 256);
-
-                            if (!string.IsNullOrEmpty(selectedText))
+                            var editor = ResolveEditorFromHwnd(UnpackHwnd(m.WParam));
+                            if (editor == null) return;
+                            Debug.Log("User list selection received");
+                            UserListType listType = (UserListType)UnpackValue(m.WParam);
+                            // lParam is a pointer to a UTF8 string in the editor's process memory
+                            if (m.LParam != IntPtr.Zero)
                             {
-                                Debug.Log($"User selected: {selectedText} (list type: {listType})");
-                                // Call the AutoCompleteService
-                                var refactor = autoCompleteService?.HandleUserListSelection(activeEditor, selectedText, listType);
-                                if (refactor != null)
+                                // Read the UTF8 string from the editor's process memory
+                                string? selectedText = ScintillaManager.ReadUtf8FromMemory(editor, m.LParam, 256);
+
+                                if (!string.IsNullOrEmpty(selectedText))
                                 {
-                                    Task.Delay(100).ContinueWith(_ =>
+                                    Debug.Log($"User selected: {selectedText} (list type: {listType})");
+                                    // Call the AutoCompleteService
+                                    var refactor = autoCompleteService?.HandleUserListSelection(editor, selectedText, listType);
+                                    if (refactor != null)
                                     {
-                                        // Execute via RefactorManager
-                                        refactorManager?.ExecuteRefactor(refactor, activeEditor);
-                                    }, TaskScheduler.Default); // Use default scheduler
+                                        Task.Delay(100).ContinueWith(_ =>
+                                        {
+                                            // Execute via RefactorManager
+                                            refactorManager?.ExecuteRefactor(refactor, editor);
+                                        }, TaskScheduler.Default); // Use default scheduler
+                                    }
                                 }
                             }
-                        }
 
-                        if (activeEditor.FunctionCallTipActive && activeEditor.FunctionCallNode != null && activeEditor.FunctionCallTipProgram != null)
-                        {
-                            var currentCursorLine = ScintillaManager.GetLineFromPosition(activeEditor, ScintillaManager.GetCursorPosition(activeEditor));
-                            if (currentCursorLine != activeEditor.FunctionCallNode.SourceSpan.Start.Line)
+                            if (editor.FunctionCallTipActive && editor.FunctionCallNode != null && editor.FunctionCallTipProgram != null)
                             {
-                                activeEditor.FunctionCallTipActive = false;
-                                activeEditor.FunctionCallNode = null;
-                                activeEditor.FunctionCallStartPosition = 0;
-                                activeEditor.FunctionCallTipProgram = null;
-                            }
-                            else
-                            {
-                                TooltipManager.ShowFunctionCallTooltip(activeEditor, activeEditor.FunctionCallTipProgram, activeEditor.FunctionCallNode, ScintillaManager.GetCursorPosition(activeEditor));
+                                var currentCursorLine = ScintillaManager.GetLineFromPosition(editor, ScintillaManager.GetCursorPosition(editor));
+                                if (currentCursorLine != editor.FunctionCallNode.SourceSpan.Start.Line)
+                                {
+                                    editor.FunctionCallTipActive = false;
+                                    editor.FunctionCallNode = null;
+                                    editor.FunctionCallStartPosition = 0;
+                                    editor.FunctionCallTipProgram = null;
+                                }
+                                else
+                                {
+                                    TooltipManager.ShowFunctionCallTooltip(editor, editor.FunctionCallTipProgram, editor.FunctionCallNode, ScintillaManager.GetCursorPosition(editor));
+                                }
                             }
                         }
                         break;
                     case SCN_AUTOCSELECTION:
-                        Debug.Log("Autocomplete selection received");
-                        // Active editor check already done above
-
-                        // Read the selected text from lParam (pointer to UTF8 string)
-                        if (m.LParam != IntPtr.Zero)
                         {
-                            string? selectedText = ScintillaManager.ReadUtf8FromMemory(activeEditor, m.LParam, 256);
+                            var editor = ResolveEditorFromHwnd(UnpackHwnd(m.WParam));
+                            if (editor == null) return;
+                            Debug.Log("Autocomplete selection received");
 
-                            if (!string.IsNullOrEmpty(selectedText))
+                            // Read the selected text from lParam (pointer to UTF8 string)
+                            if (m.LParam != IntPtr.Zero)
                             {
-                                // Cancel autocomplete to prevent Scintilla from auto-inserting the full display text
-                                // We'll let our existing handlers insert only the correct portion
-                                ScintillaManager.CancelUserList(activeEditor);
+                                string? selectedText = ScintillaManager.ReadUtf8FromMemory(editor, m.LParam, 256);
 
-                                // Get context from editor
-                                var context = activeEditor.ActiveAutoCompleteContext;
-
-                                // Recalculate lengthEntered based on current cursor position
-                                // This accounts for additional characters typed while autocomplete was open (for filtering)
-                                int currentPos = ScintillaManager.GetCursorPosition(activeEditor);
-                                int lengthEntered = ScintillaManager.CalculateLengthEntered(activeEditor, context, currentPos);
-                                Debug.Log($"Autocomplete selected: {selectedText} (context: {context}, lengthEntered: {lengthEntered})");
-
-                                // Delete the characters the user already typed (lengthEntered)
-                                // This prevents duplication like %%filepath when user typed %file and selected %filepath
-                                if (lengthEntered > 0)
+                                if (!string.IsNullOrEmpty(selectedText))
                                 {
-                                    int deleteStart = currentPos - lengthEntered;
-                                    if (deleteStart >= 0)
+                                    // Cancel autocomplete to prevent Scintilla from auto-inserting the full display text
+                                    // We'll let our existing handlers insert only the correct portion
+                                    ScintillaManager.CancelUserList(editor);
+
+                                    // Get context from editor
+                                    var context = editor.ActiveAutoCompleteContext;
+
+                                    int currentPos = ScintillaManager.GetCursorPosition(editor);
+
+                                    // Low half of wParam carries scn->position from the hook: the authoritative
+                                    // start of the word being completed (covers characters typed while the list
+                                    // was open).
+                                    int completionStart = UnpackValue(m.WParam);
+                                    int lengthEntered = 0;
+                                    if (completionStart >= 0 && completionStart <= currentPos)
                                     {
-                                        ScintillaManager.DeleteRange(activeEditor, deleteStart, lengthEntered);
-                                        Debug.Log($"Deleted {lengthEntered} characters from position {deleteStart}");
-                                    }
-                                }
-
-                                // Convert context to UserListType for routing to existing handlers
-                                UserListType convertedListType = context switch
-                                {
-                                    AutoCompleteContext.AppPackage => UserListType.AppPackage,
-                                    AutoCompleteContext.Variable => UserListType.Variable,
-                                    AutoCompleteContext.ObjectMembers => UserListType.ObjectMembers,
-                                    AutoCompleteContext.SystemVariables => UserListType.SystemVariables,
-                                    _ => UserListType.QuickFix  // Fallback (should never happen)
-                                };
-
-                                // Route to existing handler (which will insert the correct text)
-                                var refactor = autoCompleteService?.HandleUserListSelection(activeEditor, selectedText, convertedListType);
-                                if (refactor != null)
-                                {
-                                    Task.Delay(100).ContinueWith(_ =>
-                                    {
-                                        // Execute via RefactorManager
-                                        refactorManager?.ExecuteRefactor(refactor, activeEditor);
-                                    }, TaskScheduler.Default);
-                                }
-
-                                // Handle function call tips (same as UserListSelection)
-                                if (activeEditor.FunctionCallTipActive && activeEditor.FunctionCallNode != null)
-                                {
-                                    var currentCursorLine = ScintillaManager.GetLineFromPosition(activeEditor,
-                                        ScintillaManager.GetCursorPosition(activeEditor));
-                                    if (currentCursorLine != activeEditor.FunctionCallNode.SourceSpan.Start.Line)
-                                    {
-                                        activeEditor.FunctionCallTipActive = false;
-                                        activeEditor.FunctionCallNode = null;
-                                        activeEditor.FunctionCallStartPosition = 0;
-                                        activeEditor.FunctionCallTipProgram = null;
+                                        lengthEntered = currentPos - completionStart;
                                     }
                                     else
                                     {
-                                        TooltipManager.ShowFunctionCallTooltip(activeEditor,
-                                            activeEditor.FunctionCallTipProgram, activeEditor.FunctionCallNode, ScintillaManager.GetCursorPosition(activeEditor));
+                                        Debug.Log($"Autocomplete selection: invalid completion start {completionStart} (cursor {currentPos}), inserting without prefix removal");
+                                    }
+                                    Debug.Log($"Autocomplete selected: {selectedText} (context: {context}, lengthEntered: {lengthEntered})");
+
+                                    // Delete the characters the user already typed (lengthEntered)
+                                    // This prevents duplication like %%filepath when user typed %file and selected %filepath
+                                    if (lengthEntered > 0)
+                                    {
+                                        int deleteStart = currentPos - lengthEntered;
+                                        if (deleteStart >= 0)
+                                        {
+                                            ScintillaManager.DeleteRange(editor, deleteStart, lengthEntered);
+                                            Debug.Log($"Deleted {lengthEntered} characters from position {deleteStart}");
+                                        }
+                                    }
+
+                                    // Convert context to UserListType for routing to existing handlers
+                                    UserListType convertedListType = context switch
+                                    {
+                                        AutoCompleteContext.AppPackage => UserListType.AppPackage,
+                                        AutoCompleteContext.Variable => UserListType.Variable,
+                                        AutoCompleteContext.ObjectMembers => UserListType.ObjectMembers,
+                                        AutoCompleteContext.SystemVariables => UserListType.SystemVariables,
+                                        _ => UserListType.QuickFix  // Fallback (should never happen)
+                                    };
+
+                                    // Route to existing handler, which inserts the selected text at the
+                                    // cursor (the typed prefix was already removed above).
+                                    var refactor = autoCompleteService?.HandleUserListSelection(editor, selectedText, convertedListType);
+                                    if (refactor != null)
+                                    {
+                                        Task.Delay(100).ContinueWith(_ =>
+                                        {
+                                            // Execute via RefactorManager
+                                            refactorManager?.ExecuteRefactor(refactor, editor);
+                                        }, TaskScheduler.Default);
+                                    }
+
+                                    // Handle function call tips (same as UserListSelection)
+                                    if (editor.FunctionCallTipActive && editor.FunctionCallNode != null)
+                                    {
+                                        var currentCursorLine = ScintillaManager.GetLineFromPosition(editor,
+                                            ScintillaManager.GetCursorPosition(editor));
+                                        if (currentCursorLine != editor.FunctionCallNode.SourceSpan.Start.Line)
+                                        {
+                                            editor.FunctionCallTipActive = false;
+                                            editor.FunctionCallNode = null;
+                                            editor.FunctionCallStartPosition = 0;
+                                            editor.FunctionCallTipProgram = null;
+                                        }
+                                        else
+                                        {
+                                            TooltipManager.ShowFunctionCallTooltip(editor,
+                                                editor.FunctionCallTipProgram, editor.FunctionCallNode, ScintillaManager.GetCursorPosition(editor));
+                                        }
                                     }
                                 }
-                            }
 
-                            // Clear context and lengthEntered after handling
-                            activeEditor.ActiveAutoCompleteContext = AutoCompleteContext.None;
-                            activeEditor.AutoCompleteLengthEntered = 0;
+                                // Clear context after handling
+                                editor.ActiveAutoCompleteContext = AutoCompleteContext.None;
+                            }
                         }
                         break;
 
                     case SCN_AUTOCCOMPLETED:
-                        Debug.Log("Autocomplete completed");
-                        // Clear context and lengthEntered when autocomplete finishes
-                        if (activeEditor != null)
                         {
-                            activeEditor.ActiveAutoCompleteContext = AutoCompleteContext.None;
-                            activeEditor.AutoCompleteLengthEntered = 0;
+                            var editor = ResolveEditorFromHwnd(UnpackHwnd(m.WParam));
+                            if (editor == null) return;
+                            Debug.Log("Autocomplete completed");
+                            // Clear context when autocomplete finishes
+                            editor.ActiveAutoCompleteContext = AutoCompleteContext.None;
                         }
                         break;
                 }
             }
             else if (m.Msg == AR_APP_PACKAGE_SUGGEST)
             {
-                // Only process if we have an active editor and service
-                if (activeEditor == null || !activeEditor.IsValid() || autoCompleteService == null) return;
+                var editor = ResolveEditorFromHwnd(UnpackHwnd(m.LParam));
+                if (editor == null || autoCompleteService == null) return;
 
                 /* Handle app package suggestion request */
                 Debug.Log($"Received app package suggest message. WParam: {m.WParam}, LParam: {m.LParam}");
@@ -2378,12 +2457,12 @@ namespace AppRefiner
                 int position = m.WParam.ToInt32();
 
                 // Call the AutoCompleteService
-                autoCompleteService.ShowAppPackageSuggestions(activeEditor, position);
+                autoCompleteService.ShowAppPackageSuggestions(editor, position);
             }
             else if (m.Msg == AR_VARIABLE_SUGGEST)
             {
-                // Only process if we have an active editor and service
-                if (activeEditor == null || !activeEditor.IsValid() || autoCompleteService == null) return;
+                var editor = ResolveEditorFromHwnd(UnpackHwnd(m.LParam));
+                if (editor == null || autoCompleteService == null) return;
 
                 // Check if variable suggestions are enabled
                 if (!autoSuggestSettings.VariableSuggestions) return;
@@ -2395,136 +2474,159 @@ namespace AppRefiner
                 int position = m.WParam.ToInt32();
 
                 // Call the AutoCompleteService
-                autoCompleteService.ShowVariableSuggestions(activeEditor, position);
+                autoCompleteService.ShowVariableSuggestions(editor, position);
             }
             else if (m.Msg == AR_CREATE_SHORTHAND)
             {
-                // Only process if we have an active editor and service
-                if (activeEditor == null || !activeEditor.IsValid() || autoCompleteService == null) return;
+                var editor = ResolveEditorFromHwnd(UnpackHwnd(m.WParam));
+                if (editor == null || autoCompleteService == null) return;
 
                 /* Handle create shorthand detection */
                 Debug.Log($"Received create shorthand message. WParam: {m.WParam}, LParam: {m.LParam}");
 
-                // WParam contains auto-pairing status (bool)
-                bool autoPairingEnabled = m.WParam.ToInt32() != 0;
+                // Low half of wParam contains auto-pairing status (bool)
+                bool autoPairingEnabled = UnpackValue(m.WParam) != 0;
 
                 // LParam contains the current cursor position
                 int position = m.LParam.ToInt32();
 
                 // Call the AutoCompleteService
-                var refactor = autoCompleteService.PrepareCreateAutoCompleteRefactor(activeEditor, position, autoPairingEnabled);
+                var refactor = autoCompleteService.PrepareCreateAutoCompleteRefactor(editor, position, autoPairingEnabled);
                 if (refactor != null)
                 {
                     // Execute via RefactorManager
-                    refactorManager?.ExecuteRefactor(refactor, activeEditor);
+                    refactorManager?.ExecuteRefactor(refactor, editor);
 
                     /* Move the cursor backwards 1 */
-                    if (activeEditor.AppDesignerProcess.Settings.AutoPair)
+                    if (editor.AppDesignerProcess.Settings.AutoPair)
                     {
-                        ScintillaManager.SetCursorPosition(activeEditor, ScintillaManager.GetCursorPosition(activeEditor) - 1);
+                        ScintillaManager.SetCursorPosition(editor, ScintillaManager.GetCursorPosition(editor) - 1);
                     }
                 }
             }
             else if (m.Msg == AR_MSGBOX_SHORTHAND)
             {
-                // Only process if we have an active editor and service
-                if (activeEditor == null || !activeEditor.IsValid() || autoCompleteService == null) return;
+                var editor = ResolveEditorFromHwnd(UnpackHwnd(m.WParam));
+                if (editor == null || autoCompleteService == null) return;
 
                 /* Handle create shorthand detection */
                 Debug.Log($"Received MsgBox shorthand message. WParam: {m.WParam}, LParam: {m.LParam}");
 
-                // WParam contains auto-pairing status (bool)
-                bool autoPairingEnabled = m.WParam.ToInt32() != 0;
+                // Low half of wParam contains auto-pairing status (bool)
+                bool autoPairingEnabled = UnpackValue(m.WParam) != 0;
 
                 // LParam contains the current cursor position
                 int position = m.LParam.ToInt32();
 
                 // Call the AutoCompleteService
-                var refactor = autoCompleteService.PrepareMsgBoxAutoCompleteRefactor(activeEditor, position, autoPairingEnabled);
+                var refactor = autoCompleteService.PrepareMsgBoxAutoCompleteRefactor(editor, position, autoPairingEnabled);
                 if (refactor != null)
                 {
                     // Execute via RefactorManager
-                    refactorManager?.ExecuteRefactor(refactor, activeEditor);
-                    ScintillaManager.SetCursorPosition(activeEditor, ScintillaManager.GetCursorPosition(activeEditor) - 3);
+                    refactorManager?.ExecuteRefactor(refactor, editor);
+                    ScintillaManager.SetCursorPosition(editor, ScintillaManager.GetCursorPosition(editor) - 3);
                 }
             }
             else if (m.Msg == AR_CONCAT_SHORTHAND)
             {
-                // Only process if we have an active editor and service
-                if (activeEditor == null || !activeEditor.IsValid() || autoCompleteService == null) return;
+                var editor = ResolveEditorFromHwnd(UnpackHwnd(m.WParam));
+                if (editor == null || autoCompleteService == null) return;
 
                 /* Handle create shorthand detection */
                 Debug.Log($"Received concat shorthand message. WParam: {m.WParam}, LParam: {m.LParam}");
 
                 /* Concat expansion is powered by custom PeopleCode parser rules to detect the concat expression and its type (+=, -=, |=) */
                 // Call the AutoCompleteService
-                var refactor = autoCompleteService.PrepareConcatAutoCompleteRefactor(activeEditor);
+                var refactor = autoCompleteService.PrepareConcatAutoCompleteRefactor(editor);
                 if (refactor != null)
                 {
                     // Execute via RefactorManager
                     Task.Delay(250).ContinueWith(_ =>
                     {
                         // Execute via RefactorManager
-                        refactorManager?.ExecuteRefactor(refactor, activeEditor);
+                        refactorManager?.ExecuteRefactor(refactor, editor);
                     }, TaskScheduler.Default); // Use default scheduler
+                }
+            }
+            else if (m.Msg == AR_DOC_MODIFIED)
+            {
+                // High-frequency posted notification (one per text change) — just flip the
+                // dirty flag so content/parse caches know to refresh on next access.
+                // Resolve WITHOUT initializing unknown editors: this can fire for editors
+                // AppRefiner hasn't adopted yet, and initialization here would be wasted work.
+                var hwnd = UnpackHwnd(m.WParam);
+                WinApi.GetWindowThreadProcessId(hwnd, out uint modifiedPid);
+                if (AppDesignerProcesses.TryGetValue(modifiedPid, out var modifiedProcess)
+                    && modifiedProcess.Editors.TryGetValue(hwnd, out var modifiedEditor))
+                {
+                    modifiedEditor.MarkContentDirty();
                 }
             }
             else if (m.Msg == AR_TYPING_PAUSE)
             {
                 /* Handle typing pause detection */
                 int position = m.WParam.ToInt32();
-                int line = m.LParam.ToInt32();
+                int line = UnpackValue(m.LParam);
 
-                Debug.Log($"Received typing pause message. Position: {position}, Line: {line}");
+                // This message is POSTED by the hook (debounced timer), so it can arrive after
+                // focus has moved — resolving the source editor here matters even more than
+                // for the sent notifications.
+                var editor = ResolveEditorFromHwnd(UnpackHwnd(m.LParam));
+                if (editor == null) return;
 
-                // Only process if we have an active editor
-                if (activeEditor != null && activeEditor.IsValid())
-                {
-                    // Log the typing pause event
-                    Debug.Log($"User stopped typing at position {position}, line {line}");
+                Debug.Log($"User stopped typing at position {position}, line {line}");
 
-                    activeEditor.ContentString = ScintillaManager.GetScintillaText(activeEditor);
+                // Note: no content read here — CheckForContentChanges → GetParsedProgram
+                // fetches the document itself, so a read here would be a redundant
+                // full cross-process copy
 
-                    var lastKnownKey = $"{activeEditor.AppDesignerProcess.ProcessId}:{activeEditor.Caption}";
+                var lastKnownKey = $"{editor.AppDesignerProcess.ProcessId}:{editor.Caption}";
 
-                    lastKnownPositions[lastKnownKey] = (ScintillaManager.GetFirstVisibleLine(activeEditor), ScintillaManager.GetCursorPosition(activeEditor));
+                lastKnownPositions[lastKnownKey] = (ScintillaManager.GetFirstVisibleLine(editor), ScintillaManager.GetCursorPosition(editor));
 
-                    // Process the editor content now that typing has paused
-                    // This replaces the periodic scanning from the timer
-                    CheckForContentChanges(activeEditor);
-                }
+                // Process the editor content now that typing has paused
+                // This replaces the periodic scanning from the timer
+                CheckForContentChanges(editor);
             }
             else if (m.Msg == AR_BEFORE_DELETE_ALL)
             {
                 Debug.Log("Received before delete all message");
-                // Only process if we have an active editor
-                if (activeEditor != null && activeEditor.IsValid())
-                {
-                    UpdateSavedFoldsForEditor(activeEditor);
-
-                }
+                var editor = ResolveEditorFromHwnd(UnpackHwnd(m.WParam));
+                if (editor == null) return;
+                UpdateSavedFoldsForEditor(editor);
             }
 
             else if (m.Msg == AR_FOLD_MARGIN_CLICK)
             {
-                UpdateSavedFoldsForEditor(activeEditor);
+                var editor = ResolveEditorFromHwnd(UnpackHwnd(m.LParam));
+                if (editor == null) return;
+                UpdateSavedFoldsForEditor(editor);
             }
             else if (m.Msg == AR_INSERT_CHECK)
             {
-                // Only process if we have an active editor
-                if (activeEditor == null || !activeEditor.IsValid()) return;
-                if (activeEditor.Type == EditorType.PeopleCode)
+                // wParam is a pointer that is only valid in the SENDER's process — resolving the
+                // source editor (rather than using activeEditor) is what guarantees we read it
+                // with the right process handle.
+                var editor = ResolveEditorFromHwnd(UnpackHwnd(m.LParam));
+                if (editor == null) return;
+                if (editor.Type == EditorType.PeopleCode)
                 {
-                    RemoteBuffer insertCheckDataBuffer = RemoteBuffer.FromRemoteAddress(activeEditor.AppDesignerProcess, m.WParam, 24, "InsertCheckData");
-                    byte[] insertCheckData = insertCheckDataBuffer.Read(24);
+                    // Plain read of the hook's 24-byte payload — never wrap hook/Scintilla
+                    // pointers in RemoteBuffer, which owns (and frees) its memory
+                    byte[]? insertCheckData = editor.AppDesignerProcess.ReadMemory(m.WParam, 24);
+                    if (insertCheckData == null)
+                    {
+                        Debug.Log("AR_INSERT_CHECK: failed to read insert check data from sender process");
+                        return;
+                    }
 
                     var pasteStart = (IntPtr)BitConverter.ToInt64(insertCheckData, 0);
                     var length = (IntPtr)BitConverter.ToInt64(insertCheckData, 8);
                     var pasteEnd = pasteStart + length;
                     var textPointer = (IntPtr)BitConverter.ToInt64(insertCheckData, 16);
 
-                    var lineText = ScintillaManager.GetCurrentLineText(activeEditor);
-                    var relativeLinePosition = pasteStart - ScintillaManager.GetLineStartIndex(activeEditor, ScintillaManager.GetCurrentLineNumber(activeEditor));
+                    var lineText = ScintillaManager.GetCurrentLineText(editor);
+                    var relativeLinePosition = pasteStart - ScintillaManager.GetLineStartIndex(editor, ScintillaManager.GetCurrentLineNumber(editor));
 
                     PeopleCodeLexer lexer = new PeopleCodeLexer(lineText);
                     PeopleCodeParser.SelfHosted.PeopleCodeParser parser = new PeopleCodeParser.SelfHosted.PeopleCodeParser(lexer.TokenizeAll());
@@ -2532,8 +2634,12 @@ namespace AppRefiner
                     var literalNode = program.FindDescendants<LiteralNode>().FirstOrDefault(n => n.SourceSpan.ContainsPosition((int)relativeLinePosition));
                     if (literalNode != null && literalNode.LiteralType == LiteralType.String)
                     {
-                        RemoteBuffer textContent = RemoteBuffer.FromRemoteAddress(activeEditor.AppDesignerProcess, textPointer, (uint)length, "InsertTextData");
-                        byte[] textData = textContent.Read((int)length);
+                        byte[]? textData = editor.AppDesignerProcess.ReadMemory(textPointer, (int)length);
+                        if (textData == null)
+                        {
+                            Debug.Log("AR_INSERT_CHECK: failed to read insert text from sender process");
+                            return;
+                        }
                         string originalText = Encoding.UTF8.GetString(textData);
 
                         Debug.Log($"Text insert check at position: {m.WParam}, length: {m.LParam}");
@@ -2580,13 +2686,17 @@ namespace AppRefiner
                         newText = newText.Replace("\r", "\" | Char(13) | \"").Replace("\n", "\" | Char(10) | \"");
                         
 
-                        var replacementBuffer = activeEditor.AppDesignerProcess.MemoryManager.GetOrCreateBuffer("pasteReplaceBuffer", (uint)Encoding.UTF8.GetByteCount(newText) + 1);
-                        replacementBuffer.Reset();
+                        // Shared buffer: hold the lock for the full write → send sequence
+                        lock (editor.AppDesignerProcess.MemoryManager.SyncRoot)
+                        {
+                            var replacementBuffer = editor.AppDesignerProcess.MemoryManager.GetOrCreateBuffer("pasteReplaceBuffer", (uint)Encoding.UTF8.GetByteCount(newText) + 1);
+                            replacementBuffer.Reset();
 
-                        replacementBuffer.WriteString(newText, Encoding.UTF8);
+                            replacementBuffer.WriteString(newText, Encoding.UTF8);
 
-                        int SCI_CHANGEINSERTION = 2672;
-                        activeEditor.SendMessage(SCI_CHANGEINSERTION, (IntPtr)(replacementBuffer.WriteOffset - 1), replacementBuffer.Address);
+                            int SCI_CHANGEINSERTION = 2672;
+                            editor.SendMessage(SCI_CHANGEINSERTION, (IntPtr)(replacementBuffer.WriteOffset - 1), replacementBuffer.Address);
+                        }
                     }
                 }
             }
@@ -2612,43 +2722,44 @@ namespace AppRefiner
             }
             else if (m.Msg == AR_CURSOR_POSITION_CHANGED)
             {
-                // Only process if we have an active editor
-                if (activeEditor == null || !activeEditor.IsValid()) return;
+                // Posted (debounced) by the hook — resolve the source editor
+                var editor = ResolveEditorFromHwnd(UnpackHwnd(m.WParam));
+                if (editor == null) return;
 
-                // Extract first visible line from wParam, cursor position from lParam
-                int firstVisibleLine = m.WParam.ToInt32();
+                // Extract first visible line from wParam's low half, cursor position from lParam
+                int firstVisibleLine = UnpackValue(m.WParam);
                 int cursorPosition = m.LParam.ToInt32();
 
                 // Update last known positions
-                var lastKnownKey = $"{activeEditor.AppDesignerProcess.ProcessId}:{activeEditor.Caption}";
+                var lastKnownKey = $"{editor.AppDesignerProcess.ProcessId}:{editor.Caption}";
                 lastKnownPositions[lastKnownKey] = (firstVisibleLine, cursorPosition);
 
                 Debug.Log($"Cursor position changed: first visible line {firstVisibleLine}, position {cursorPosition}");
 
-                if (activeEditor.Type != EditorType.PeopleCode)
+                if (editor.Type != EditorType.PeopleCode)
                 {
                     return; // Code past here is only for PeopleCode editors
                 }
 
-                if (activeEditor.FunctionCallTipActive)
+                if (editor.FunctionCallTipActive)
                 {
-                    var calltipLine = activeEditor.FunctionCallNode.SourceSpan.Start.Line;
-                    var currentLine = ScintillaManager.GetCurrentLineNumber(activeEditor);
+                    var calltipLine = editor.FunctionCallNode.SourceSpan.Start.Line;
+                    var currentLine = ScintillaManager.GetCurrentLineNumber(editor);
 
-                    if (currentLine != calltipLine || cursorPosition < activeEditor.FunctionCallStartPosition)
+                    if (currentLine != calltipLine || cursorPosition < editor.FunctionCallStartPosition)
                     {
                         /* Cancel out the call tip, user went elsewhere */
-                        activeEditor.FunctionCallTipActive = false;
-                        activeEditor.FunctionCallNode = null;
-                        activeEditor.FunctionCallTipProgram = null;
-                        TooltipManager.HideTooltip(activeEditor);
+                        editor.FunctionCallTipActive = false;
+                        editor.FunctionCallNode = null;
+                        editor.FunctionCallTipProgram = null;
+                        TooltipManager.HideTooltip(editor);
                     }
 
                 }
 
                 // Check if cursor is inside an interpolated string
-                var currentLineText = ScintillaManager.GetCurrentLineText(activeEditor);
-                var relativeLinePosition = cursorPosition - ScintillaManager.GetLineStartIndex(activeEditor, ScintillaManager.GetCurrentLineNumber(activeEditor));
+                var currentLineText = ScintillaManager.GetCurrentLineText(editor);
+                var relativeLinePosition = cursorPosition - ScintillaManager.GetLineStartIndex(editor, ScintillaManager.GetCurrentLineNumber(editor));
 
                 PeopleCodeLexer lexer = new PeopleCodeLexer(currentLineText);
                 PeopleCodeParser.SelfHosted.PeopleCodeParser parser = new PeopleCodeParser.SelfHosted.PeopleCodeParser(lexer.TokenizeAll());
@@ -2659,12 +2770,12 @@ namespace AppRefiner
                 if (!isInsideInterpolatedString)
                 {
                     /* Check if the text has $" anywhere */
-                    var fullText = ScintillaManager.GetScintillaText(activeEditor);
+                    var fullText = ScintillaManager.GetScintillaText(editor);
                     if (fullText != null && fullText.Contains("$\""))
                     {
                         if (refactorManager != null)
                         {
-                            refactorManager.ExecuteRefactor(new ExpandInterpolatedStrings(activeEditor), activeEditor);
+                            refactorManager.ExecuteRefactor(new ExpandInterpolatedStrings(editor), editor);
                         }
                     }
                     /* Execute the ExpandInterpolatedString  refactor */
@@ -2679,16 +2790,16 @@ namespace AppRefiner
                     return;
                 }
 
-                // Only process if we have an active editor
-                if (activeEditor == null || !activeEditor.IsValid()) return;
+                var editor = ResolveEditorFromHwnd(UnpackHwnd(m.LParam));
+                if (editor == null) return;
 
                 // Check if function signatures are enabled
                 if (!autoSuggestSettings.FunctionSignatures) return;
 
                 // wParam contains the cursor position
                 int position = m.WParam.ToInt32();
-                // lParam contains the character ('(', ')', or ',')
-                char character = (char)m.LParam.ToInt32();
+                // Low half of lParam contains the character ('(', ')', or ',')
+                char character = (char)UnpackValue(m.LParam);
 
                 Debug.Log($"Function call tip: character='{character}' at position={position}");
                 if (character == ')')
@@ -2700,7 +2811,7 @@ namespace AppRefiner
                         {
                             // Use unified helper method
                             bool transformed = TryFindAndTransformExtension(
-                                activeEditor,
+                                editor,
                                 position,
                                 LanguageExtensionType.Method
                             );
@@ -2717,17 +2828,17 @@ namespace AppRefiner
                     }
 
                     // Always clear function call tip state (existing behavior)
-                    activeEditor.FunctionCallTipActive = false;
-                    activeEditor.FunctionCallNode = null;
-                    activeEditor.FunctionCallTipProgram = null;
-                    TooltipManager.HideTooltip(activeEditor);
+                    editor.FunctionCallTipActive = false;
+                    editor.FunctionCallNode = null;
+                    editor.FunctionCallTipProgram = null;
+                    TooltipManager.HideTooltip(editor);
                 }
                 else
                 {
                     try
                     {
                         // Get the current document text
-                        string content = ScintillaManager.GetScintillaText(activeEditor) ?? "";
+                        string content = ScintillaManager.GetScintillaText(editor) ?? "";
                         if (string.IsNullOrEmpty(content))
                         {
                             Debug.Log("No content available for variable suggestions.");
@@ -2740,7 +2851,7 @@ namespace AppRefiner
                         var parser = new PeopleCodeParser.SelfHosted.PeopleCodeParser(tokens);
                         var program = parser.ParseProgram();
 
-                        RunTypeInference(activeEditor, program, languageExtensionManager);
+                        RunTypeInference(editor, program, languageExtensionManager);
 
                         var targetFunction = program.FindNodes(n => n is FunctionCallNode && n.SourceSpan.ContainsPosition(position) && n.SourceSpan.Start.ByteIndex < position).OrderBy(n => n.SourceSpan.Length).FirstOrDefault();
                         var targetCreationNode = program.FindNodes(n => n is ObjectCreationNode && n.SourceSpan.ContainsPosition(position) && n.SourceSpan.Start.ByteIndex < position).OrderBy(n => n.SourceSpan.Length).FirstOrDefault();
@@ -2749,11 +2860,11 @@ namespace AppRefiner
 
                         if (targetFunction != null && targetFunction is FunctionCallNode fcn && !isCreateMoreSpecific)
                         {
-                            activeEditor.FunctionCallTipProgram = program;
-                            activeEditor.FunctionCallNode = fcn;
-                            activeEditor.FunctionCallTipActive = true;
-                            activeEditor.FunctionCallStartPosition = ScintillaManager.GetCursorPosition(activeEditor);
-                            TooltipManager.ShowFunctionCallTooltip(activeEditor, program, fcn, position);
+                            editor.FunctionCallTipProgram = program;
+                            editor.FunctionCallNode = fcn;
+                            editor.FunctionCallTipActive = true;
+                            editor.FunctionCallStartPosition = ScintillaManager.GetCursorPosition(editor);
+                            TooltipManager.ShowFunctionCallTooltip(editor, program, fcn, position);
                         }
                         else if (targetCreationNode != null && targetCreationNode is ObjectCreationNode ocn)
                         {
@@ -2764,12 +2875,12 @@ namespace AppRefiner
                             }
                             fakeFCN.FirstToken = ocn.FirstToken;
                             fakeFCN.LastToken = ocn.LastToken;
-                            activeEditor.FunctionCallTipProgram = program;
-                            activeEditor.FunctionCallNode = fakeFCN;
-                            activeEditor.FunctionCallTipActive = true;
-                            activeEditor.FunctionCallStartPosition = ScintillaManager.GetCursorPosition(activeEditor);
+                            editor.FunctionCallTipProgram = program;
+                            editor.FunctionCallNode = fakeFCN;
+                            editor.FunctionCallTipActive = true;
+                            editor.FunctionCallStartPosition = ScintillaManager.GetCursorPosition(editor);
 
-                            TooltipManager.ShowFunctionCallTooltip(activeEditor, program, fakeFCN, position);
+                            TooltipManager.ShowFunctionCallTooltip(editor, program, fakeFCN, position);
                         }
 
                     }
@@ -2778,8 +2889,8 @@ namespace AppRefiner
             }
             else if (m.Msg == AR_OBJECT_MEMBERS)
             {
-                // Only process if we have an active editor and service
-                if (activeEditor == null || !activeEditor.IsValid() || autoCompleteService == null) return;
+                var editor = ResolveEditorFromHwnd(UnpackHwnd(m.LParam));
+                if (editor == null || autoCompleteService == null) return;
 
                 // Check if object member suggestions are enabled
                 if (!autoSuggestSettings.ObjectMembers) return;
@@ -2793,7 +2904,7 @@ namespace AppRefiner
                 try
                 {
                     // Get the current document text
-                    string content = ScintillaManager.GetScintillaText(activeEditor) ?? "";
+                    string content = ScintillaManager.GetScintillaText(editor) ?? "";
                     if (string.IsNullOrEmpty(content))
                     {
                         Debug.Log("No content available for object member suggestions.");
@@ -2806,7 +2917,7 @@ namespace AppRefiner
                     var parser = new PeopleCodeParser.SelfHosted.PeopleCodeParser(tokens);
                     var program = parser.ParseProgram();
 
-                    RunTypeInference(activeEditor, program, languageExtensionManager);
+                    RunTypeInference(editor, program, languageExtensionManager);
 
                     // Find the node just before the '.' character (position - 1)
                     // The position is after the '.', so we need to look at what comes before it
@@ -2823,8 +2934,9 @@ namespace AppRefiner
 
                         if (typeInfo is AppClassTypeInfo act && program.AppClass != null)
                         {
-                            var currentQualifiedName = DetermineQualifiedName(activeEditor);
-                            var activeClassTypeInfo = AppClassTypeInfo.CreateWithInheritanceChain(currentQualifiedName, activeAppDesigner.TypeResolver, activeAppDesigner.TypeResolver.Cache);
+                            var typeResolver = editor.AppDesignerProcess.TypeResolver;
+                            var currentQualifiedName = DetermineQualifiedName(editor);
+                            var activeClassTypeInfo = AppClassTypeInfo.CreateWithInheritanceChain(currentQualifiedName, typeResolver, typeResolver.Cache);
 
                             if (activeClassTypeInfo.InheritanceChain.Any(e => e.QualifiedName == act.QualifiedName))
                             {
@@ -2841,7 +2953,7 @@ namespace AppRefiner
                         {
                             Debug.Log($"Found type {typeInfo.Name} before dot at position {targetPosition}");
 
-                            autoCompleteService.ShowObjectMembers(activeEditor, position, typeInfo, maxVisibility);
+                            autoCompleteService.ShowObjectMembers(editor, position, typeInfo, maxVisibility);
                         }
                         else
                         {
@@ -2860,8 +2972,8 @@ namespace AppRefiner
             }
             else if (m.Msg == AR_SYSTEM_VARIABLE_SUGGEST)
             {
-                // Only process if we have an active editor and service
-                if (activeEditor == null || !activeEditor.IsValid() || autoCompleteService == null) return;
+                var editor = ResolveEditorFromHwnd(UnpackHwnd(m.LParam));
+                if (editor == null || autoCompleteService == null) return;
 
                 // Check if system variable suggestions are enabled
                 if (!autoSuggestSettings.SystemVariables) return;
@@ -2875,7 +2987,7 @@ namespace AppRefiner
                 try
                 {
                     // Get the current document text
-                    string content = ScintillaManager.GetScintillaText(activeEditor) ?? "";
+                    string content = ScintillaManager.GetScintillaText(editor) ?? "";
                     if (string.IsNullOrEmpty(content))
                     {
                         Debug.Log("No content available for system variable suggestions.");
@@ -2888,7 +3000,7 @@ namespace AppRefiner
                     var parser = new PeopleCodeParser.SelfHosted.PeopleCodeParser(tokens);
                     var program = parser.ParseProgram();
 
-                    RunTypeInference(activeEditor, program, languageExtensionManager);
+                    RunTypeInference(editor, program, languageExtensionManager);
 
                     // Try to determine expected type from context
                     // For now, use AnyTypeInfo to show all system variables
@@ -2896,7 +3008,7 @@ namespace AppRefiner
                     var expectedType = PeopleCodeTypeInfo.Types.AnyTypeInfo.Instance;
 
                     Debug.Log($"Showing system variables with expected type: {expectedType.Name}");
-                    autoCompleteService.ShowSystemVariables(activeEditor, program, position, expectedType);
+                    autoCompleteService.ShowSystemVariables(editor, program, position, expectedType);
                 }
                 catch (Exception ex)
                 {
@@ -3849,7 +3961,8 @@ namespace AppRefiner
             /* If promptForDB is set, lets check if we have a datamanger already? if not, prompt for a db connection */
             if (chkPromptForDB.Checked && editor.DataManager == null && editor.AppDesignerProcess.DoNotPromptForDB != true)
             {
-                ConnectToDB();
+                // ConnectToDB assigns the DataManager to every editor of the process on success
+                ConnectToDB(editor.AppDesignerProcess);
             }
             Debug.Log($"Event mapping flags: {chkEventMapping.Checked}, {chkEventMapXrefs.Checked}");
             if (editor.DataManager != null && (chkEventMapping.Checked || chkEventMapXrefs.Checked))
@@ -3861,15 +3974,43 @@ namespace AppRefiner
         }
 
 
-        private void ConnectToDB()
+        /// <summary>
+        /// Prompts the auto-connect DB dialog for the given App Designer process, but only
+        /// when that App Designer is actually the foreground application. The dialog is
+        /// modal and owned by the App Designer main window — prompting while it is in the
+        /// background (e.g. during startup enumeration while AppRefiner itself is
+        /// foreground) opens an invisible dialog the user has to hunt down, and blocks
+        /// AppRefiner's UI thread while they do.
+        /// </summary>
+        /// <param name="process">The App Designer process to offer a connection for</param>
+        private void MaybePromptForDbConnection(AppDesignerProcess process)
         {
-            if (activeAppDesigner == null) return;
+            if (!chkPromptForDB.Checked) return;
+            if (process.DataManager != null || process.DoNotPromptForDB) return;
 
-            var mainHandle = activeAppDesigner.MainWindowHandle;
+            // DBName is captured from the window title shortly after process discovery;
+            // if it isn't known yet, a later activation (or editor focus) will prompt.
+            if (string.IsNullOrEmpty(process.DBName)) return;
+
+            WinApi.GetWindowThreadProcessId(WinApi.GetForegroundWindow(), out uint foregroundPid);
+            if (foregroundPid != process.ProcessId)
+            {
+                Debug.Log($"MaybePromptForDbConnection: process {process.ProcessId} is not foreground, deferring prompt");
+                return;
+            }
+
+            ConnectToDB(process);
+        }
+
+        private void ConnectToDB(AppDesignerProcess process)
+        {
+            if (process == null) return;
+
+            var mainHandle = process.MainWindowHandle;
             var handleWrapper = new WindowWrapper(mainHandle);
 
-            // Pass the editor's DBName to the dialog constructor
-            DBConnectDialog dialog = new(mainHandle, activeAppDesigner.DBName);
+            // Pass the process's DBName to the dialog constructor
+            DBConnectDialog dialog = new(mainHandle, process.DBName);
             dialog.StartPosition = FormStartPosition.CenterParent;
             if (dialog.ShowDialog(handleWrapper) == DialogResult.OK)
             {
@@ -3877,8 +4018,8 @@ namespace AppRefiner
 
                 if (manager != null)
                 {
-                    activeAppDesigner.DataManager = manager;
-                    foreach (var editor in activeAppDesigner.Editors.Values)
+                    process.DataManager = manager;
+                    foreach (var editor in process.Editors.Values)
                     {
                         editor.DataManager = manager;
                     }
@@ -3889,7 +4030,7 @@ namespace AppRefiner
             }
             else
             {
-                activeAppDesigner.DoNotPromptForDB = true;
+                process.DoNotPromptForDB = true;
             }
         }
 
@@ -4273,44 +4414,48 @@ namespace AppRefiner
                         {
                             activeEditor.CaptionChanged += (s, e) =>
                             {
+                                // Operate on the editor that raised the event — NOT the activeEditor
+                                // field, which may point at a different editor by the time this fires
+                                if (s is not ScintillaEditor changedEditor) return;
+
                                 Debug.Log($"CaptionChanged event: Editor reused for different program. " +
                                          $"Old: '{e.OldCaption}', New: '{e.NewCaption}'");
 
-                                var lastKnownKey = $"{activeEditor.AppDesignerProcess.ProcessId}:{activeEditor.Caption}";
+                                var lastKnownKey = $"{changedEditor.AppDesignerProcess.ProcessId}:{changedEditor.Caption}";
                                 if (lastKnownPositions.TryGetValue(lastKnownKey, out var position))
                                 {
-                                    ScintillaManager.SetFirstVisibleLine(activeEditor, position.FirstLine);
-                                    ScintillaManager.SetCursorPosition(activeEditor, position.CursorPosition);
+                                    ScintillaManager.SetFirstVisibleLine(changedEditor, position.FirstLine);
+                                    ScintillaManager.SetCursorPosition(changedEditor, position.CursorPosition);
 
                                 }
 
-                                activeEditor.ContentString = ScintillaManager.GetScintillaText(activeEditor);
-                                activeEditor.CollapsedFoldPaths.Clear();
+                                changedEditor.ContentString = ScintillaManager.GetScintillaText(changedEditor);
+                                changedEditor.CollapsedFoldPaths.Clear();
                                 if (chkRememberFolds.Checked)
                                 {
-                                    activeEditor.CollapsedFoldPaths = FoldingManager.RetrievePersistedFolds(activeEditor);
+                                    changedEditor.CollapsedFoldPaths = FoldingManager.RetrievePersistedFolds(changedEditor);
                                 }
 
-                                if (activeEditor.AppDesignerProcess.PendingSelection is SourceSpan selection)
+                                if (changedEditor.AppDesignerProcess.PendingSelection is SourceSpan selection)
                                 {
-                                    activeEditor.AppDesignerProcess.PendingSelection = null;
-                                    WindowHelper.FocusWindow(activeEditor.hWnd);
-                                    ScintillaManager.SetSelection(activeEditor, selection.Start.ByteIndex, selection.End.ByteIndex);
+                                    changedEditor.AppDesignerProcess.PendingSelection = null;
+                                    WindowHelper.FocusWindow(changedEditor.hWnd);
+                                    ScintillaManager.SetSelection(changedEditor, selection.Start.ByteIndex, selection.End.ByteIndex);
 
                                     // Reposition stack trace dialog if visible to avoid covering selection
                                     if (stackTraceNavigatorDialog != null && !stackTraceNavigatorDialog.IsDisposed && stackTraceNavigatorDialog.Visible)
                                     {
-                                        stackTraceNavigatorDialog.AvoidSelectionOverlap(activeEditor, selection);
+                                        stackTraceNavigatorDialog.AvoidSelectionOverlap(changedEditor, selection);
                                     }
                                 }
 
                                 // Clear the styler processing debounce for this editor since it's a new program
                                 // This ensures stylers will run immediately even if they ran recently for the previous program
-                                lastStylerProcessingTime.Remove(activeEditor);
+                                lastStylerProcessingTime.Remove(changedEditor);
                                 Debug.Log($"CaptionChanged event: Cleared styler debounce timer for reused editor");
 
                                 Debug.Log($"CaptionChanged event: Calling CheckForContentChanges to process new program content");
-                                CheckForContentChanges(activeEditor);
+                                CheckForContentChanges(changedEditor);
 
                             };
                         }
@@ -4381,6 +4526,12 @@ namespace AppRefiner
                             stylerManager?.ClearMemberCache(); // Clear styler member cache when switching AppDesigner processes
                             Debug.Log($"Active AppDesigner changed to process ID: {focusedProcessId}");
                         }
+
+                        // Offer the auto-connect prompt now that this App Designer is foreground.
+                        // Not gated on the active App Designer changing: startup enumeration sets
+                        // activeAppDesigner without real focus, and the method self-guards against
+                        // re-prompting (connected / declined / not foreground).
+                        MaybePromptForDbConnection(appDesignerProcess);
                     }
                     else
                     {
@@ -4453,6 +4604,146 @@ namespace AppRefiner
         /// <summary>
         /// Handles window shown events to detect and center modal dialogs.
         /// </summary>
+        /// <summary>
+        /// Evicts tracked editor state when its window is destroyed. Windows recycles HWND
+        /// values, so without eviction a new editor landing on a recycled handle would
+        /// resurrect a stale ScintillaEditor (old caption, type, autocomplete context,
+        /// cached parse state).
+        /// </summary>
+        private void HandleWindowDestroyedEvent(object? sender, IntPtr hwnd)
+        {
+            try
+            {
+                foreach (var process in AppDesignerProcesses.Values)
+                {
+                    if (process.Editors.TryGetValue(hwnd, out var editor))
+                    {
+                        Debug.Log($"Editor window 0x{hwnd.ToInt64():X} destroyed — evicting tracked editor (was '{editor.Caption}')");
+
+                        process.Editors.Remove(hwnd);
+                        lastStylerProcessingTime.Remove(editor);
+
+                        if (activeEditor == editor)
+                        {
+                            activeEditor = null;
+                        }
+
+                        lock (savepointLock)
+                        {
+                            if (pendingSaveEditor == editor)
+                            {
+                                pendingSaveEditor = null;
+                            }
+                        }
+
+                        editor.Cleanup();
+                        return;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.Log($"Error in HandleWindowDestroyedEvent: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Watches an App Designer process so its tracking state is torn down when it exits.
+        /// Windows recycles PIDs; without eviction, a new pside.exe landing on a recycled
+        /// PID would be treated as already-tracked and get a dead AppDesignerProcess with a
+        /// closed process handle — hooks never installed, memory operations silently failing.
+        /// </summary>
+        private void WatchAppDesignerProcessExit(uint processId)
+        {
+            try
+            {
+                var process = Process.GetProcessById((int)processId);
+                process.EnableRaisingEvents = true;
+                process.Exited += (_, _) =>
+                {
+                    try
+                    {
+                        BeginInvoke(() => HandleAppDesignerProcessExit(processId));
+                    }
+                    catch (InvalidOperationException)
+                    {
+                        // Form handle gone (AppRefiner shutting down) — nothing to clean up for
+                    }
+                };
+
+                // Guard the race where the process exited between registration and event wire-up
+                if (process.HasExited)
+                {
+                    HandleAppDesignerProcessExit(processId);
+                }
+            }
+            catch (ArgumentException)
+            {
+                // Process already gone
+                HandleAppDesignerProcessExit(processId);
+            }
+            catch (Exception ex)
+            {
+                Debug.Log($"WatchAppDesignerProcessExit: failed for process {processId}: {ex.Message}");
+            }
+        }
+
+        private void HandleAppDesignerProcessExit(uint processId)
+        {
+            if (!AppDesignerProcesses.TryGetValue(processId, out var process))
+            {
+                trackedProcessIds.Remove(processId);
+                return;
+            }
+
+            Debug.Log($"App Designer process {processId} exited — cleaning up tracking state");
+
+            AppDesignerProcesses.Remove(processId);
+            trackedProcessIds.Remove(processId);
+
+            if (activeAppDesigner == process)
+            {
+                activeAppDesigner = null;
+            }
+
+            if (activeEditor?.AppDesignerProcess == process)
+            {
+                activeEditor = null;
+            }
+
+            foreach (var editor in process.Editors.Values)
+            {
+                lastStylerProcessingTime.Remove(editor);
+            }
+
+            lock (savepointLock)
+            {
+                if (pendingSaveEditor?.AppDesignerProcess == process)
+                {
+                    pendingSaveEditor = null;
+                }
+            }
+
+            // Drop saved per-program positions for this process (keyed "pid:caption")
+            var stalePositionKeys = lastKnownPositions.Keys
+                .Where(k => k.StartsWith($"{processId}:", StringComparison.Ordinal))
+                .ToList();
+            foreach (var key in stalePositionKeys)
+            {
+                lastKnownPositions.Remove(key);
+            }
+
+            try
+            {
+                // Frees tracked buffers (no-ops against the dead process) and closes the handle
+                process.Cleanup();
+            }
+            catch (Exception ex)
+            {
+                Debug.Log($"HandleAppDesignerProcessExit: cleanup error for process {processId}: {ex.Message}");
+            }
+        }
+
         private void HandleWindowShownEvent(object? sender, IntPtr hwnd)
         {
             /* Testing out "Window shown" for pside detect */
@@ -4598,6 +4889,7 @@ namespace AppRefiner
 
                 AppDesignerProcesses.Add(processId, newProcess);
                 trackedProcessIds.Add(processId);
+                WatchAppDesignerProcessExit(processId);
                 activeAppDesigner = newProcess;
 
                 // Apply current theme to newly created process
@@ -4623,10 +4915,14 @@ namespace AppRefiner
                     {
                         newProcess.DBName = "";
                     }
-                    if (newProcess.DBName != "" && chkPromptForDB.Checked)
-                    {
-                        this.Invoke(() => ConnectToDB());
-                    }
+
+                    // Do NOT prompt unconditionally here: at startup AppRefiner enumerates every
+                    // running App Designer while AppRefiner itself is foreground, and the modal
+                    // dialogs (owned by background App Designer windows) would open invisibly.
+                    // MaybePromptForDbConnection only prompts if this App Designer is the
+                    // foreground app right now; otherwise the prompt happens on its first
+                    // activation (focus) instead.
+                    this.Invoke(() => MaybePromptForDbConnection(newProcess));
                 });
                 return true;
             }

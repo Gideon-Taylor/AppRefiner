@@ -38,6 +38,16 @@ void HandleScintillaNotification(HWND hwnd, SCNotification* scn, HWND callbackWi
         if (scn->nmhdr.code == SCN_MODIFIED) {
             MinimapOverlay::InvalidateCache();
 
+            // Notify AppRefiner that document content changed so it can invalidate its
+            // per-editor content/parse caches. Posted (async, tiny) — the receiver just
+            // flips a dirty flag. Covers both user typing and AppRefiner's own remote
+            // edits, since the subclassed parent sees every WM_NOTIFY.
+            if (scn->modificationType & (SC_MOD_INSERTTEXT | SC_MOD_DELETETEXT)) {
+                if (callbackWindow && IsWindow(callbackWindow)) {
+                    PostMessage(callbackWindow, WM_AR_DOC_MODIFIED, (WPARAM)AR_PACK_HWND(hwnd, 0), 0);
+                }
+            }
+
             if (scn->modificationType == (SC_MOD_BEFOREDELETE | SC_PERFORMED_USER)) {
 				sprintf_s(debugMsg, "SCN_MODIFIED: SC_MOD_BEFOREDELETE detected\n");
 				OutputDebugStringA(debugMsg);
@@ -52,7 +62,7 @@ void HandleScintillaNotification(HWND hwnd, SCNotification* scn, HWND callbackWi
                 if (scn->position == 0 && scn->length == docLength) {
                     // Notify the callback window about the deletion
 					sprintf_s(debugMsg, "Sending WM_AR_BEFORE_DELETE_ALL message to callback window: %p\n", callbackWindow);
-                    SendMessage(callbackWindow, WM_AR_BEFORE_DELETE_ALL, (WPARAM)0, (LPARAM)docLength);
+                    SendMessage(callbackWindow, WM_AR_BEFORE_DELETE_ALL, (WPARAM)AR_PACK_HWND(hwnd, 0), (LPARAM)docLength);
                 }
             }
 
@@ -64,7 +74,7 @@ void HandleScintillaNotification(HWND hwnd, SCNotification* scn, HWND callbackWi
 			if (scn->margin == 2) {
 				// Notify EditorManager about the margin click event
                 // Send the app package suggest message with current position as wParam
-                SendMessage(callbackWindow, WM_AR_FOLD_MARGIN_CLICK, scn->position , 0);
+                SendMessage(callbackWindow, WM_AR_FOLD_MARGIN_CLICK, scn->position, (LPARAM)AR_PACK_HWND(hwnd, 0));
 			}
         }
 
@@ -88,7 +98,7 @@ void HandleScintillaNotification(HWND hwnd, SCNotification* scn, HWND callbackWi
                     /* allocate size_t[3] on the stack */
 					size_t insertCheckData[3] = { scn->position, scn->length, (size_t)scn->text }; // wParam = position, lParam = length, reserved for future use
 
-                    SendMessage(callbackWindow, WM_AR_INSERT_CHECK, (WPARAM) &insertCheckData, 0);
+                    SendMessage(callbackWindow, WM_AR_INSERT_CHECK, (WPARAM) &insertCheckData, (LPARAM)AR_PACK_HWND(hwnd, 0));
 				} 
                 
         }
@@ -137,7 +147,7 @@ void HandleScintillaNotification(HWND hwnd, SCNotification* scn, HWND callbackWi
                 OutputDebugStringA(debugMsg);
 
                 // Send the app package suggest message with current position as wParam
-                SendMessage(callbackWindow, WM_AR_APP_PACKAGE_SUGGEST, (WPARAM)currentPos, 0);
+                SendMessage(callbackWindow, WM_AR_APP_PACKAGE_SUGGEST, (WPARAM)currentPos, (LPARAM)AR_PACK_HWND(hwnd, 0));
             }
 
             // Check for ampersand character to trigger variable auto-suggest
@@ -183,7 +193,7 @@ void HandleScintillaNotification(HWND hwnd, SCNotification* scn, HWND callbackWi
                     OutputDebugStringA(debugMsg);
 
                     // Send the variable suggest message with current position as wParam
-                    SendMessage(callbackWindow, WM_AR_VARIABLE_SUGGEST, (WPARAM)currentPos, 0);
+                    SendMessage(callbackWindow, WM_AR_VARIABLE_SUGGEST, (WPARAM)currentPos, (LPARAM)AR_PACK_HWND(hwnd, 0));
                 } else {
                     // User is adding & to an existing identifier, don't trigger autocomplete
                     char debugMsg[256];
@@ -245,7 +255,7 @@ void HandleScintillaNotification(HWND hwnd, SCNotification* scn, HWND callbackWi
 
                         // Send the create shorthand message with auto-pairing status as wParam
                         // and current position as lParam
-                        SendMessage(callbackWindow, WM_AR_CREATE_SHORTHAND, (WPARAM)g_enableAutoPairing, (LPARAM)currentPos);
+                        SendMessage(callbackWindow, WM_AR_CREATE_SHORTHAND, (WPARAM)AR_PACK_HWND(hwnd, g_enableAutoPairing), (LPARAM)currentPos);
                         isShorthand = true;
                     }
                 }
@@ -287,7 +297,7 @@ void HandleScintillaNotification(HWND hwnd, SCNotification* scn, HWND callbackWi
 
                             // Send the MsgBox shorthand message with auto-pairing status as wParam
                             // and current position as lParam
-                            SendMessage(callbackWindow, WM_AR_MSGBOX_SHORTHAND, (WPARAM)g_enableAutoPairing, (LPARAM)currentPos);
+                            SendMessage(callbackWindow, WM_AR_MSGBOX_SHORTHAND, (WPARAM)AR_PACK_HWND(hwnd, g_enableAutoPairing), (LPARAM)currentPos);
                             isShorthand = true;
                         }
                     }
@@ -295,20 +305,20 @@ void HandleScintillaNotification(HWND hwnd, SCNotification* scn, HWND callbackWi
 
                 // If not a shorthand, send function call tip message
                 if (!isShorthand) {
-                    SendMessage(callbackWindow, WM_AR_FUNCTION_CALL_TIP, (WPARAM)currentPos, (LPARAM)'(');
+                    SendMessage(callbackWindow, WM_AR_FUNCTION_CALL_TIP, (WPARAM)currentPos, (LPARAM)AR_PACK_HWND(hwnd, '('));
                 }
             }
 
             // Check for closing parenthesis for function call tips
             if (scn->ch == ')' && callbackWindow && IsWindow(callbackWindow)) {
                 int currentPos = SendMessage(hwnd, SCI_GETCURRENTPOS, 0, 0);
-                SendMessage(callbackWindow, WM_AR_FUNCTION_CALL_TIP, (WPARAM)currentPos, (LPARAM)')');
+                SendMessage(callbackWindow, WM_AR_FUNCTION_CALL_TIP, (WPARAM)currentPos, (LPARAM)AR_PACK_HWND(hwnd, ')'));
             }
 
             // Check for comma for function call tips (parameter navigation)
             if (scn->ch == ',' && callbackWindow && IsWindow(callbackWindow)) {
                 int currentPos = SendMessage(hwnd, SCI_GETCURRENTPOS, 0, 0);
-                SendMessage(callbackWindow, WM_AR_FUNCTION_CALL_TIP, (WPARAM)currentPos, (LPARAM)',');
+                SendMessage(callbackWindow, WM_AR_FUNCTION_CALL_TIP, (WPARAM)currentPos, (LPARAM)AR_PACK_HWND(hwnd, ','));
             }
 
             // Check for dot character to trigger object member suggestions
@@ -339,7 +349,7 @@ void HandleScintillaNotification(HWND hwnd, SCNotification* scn, HWND callbackWi
 
                 if (shouldTriggerAutocomplete) {
                     // Send the object members message with current position as wParam
-                    SendMessage(callbackWindow, WM_AR_OBJECT_MEMBERS, (WPARAM)currentPos, 0);
+                    SendMessage(callbackWindow, WM_AR_OBJECT_MEMBERS, (WPARAM)currentPos, (LPARAM)AR_PACK_HWND(hwnd, 0));
                 }
             }
 
@@ -369,7 +379,7 @@ void HandleScintillaNotification(HWND hwnd, SCNotification* scn, HWND callbackWi
 
                 if (shouldTriggerAutocomplete) {
                     // Send the system variable suggest message with current position as wParam
-                    SendMessage(callbackWindow, WM_AR_SYSTEM_VARIABLE_SUGGEST, (WPARAM)currentPos, 0);
+                    SendMessage(callbackWindow, WM_AR_SYSTEM_VARIABLE_SUGGEST, (WPARAM)currentPos, (LPARAM)AR_PACK_HWND(hwnd, 0));
                 }
             }
 
@@ -391,7 +401,7 @@ void HandleScintillaNotification(HWND hwnd, SCNotification* scn, HWND callbackWi
 
                         // Send the concat shorthand message
                         // WM_AR_CONCAT_SHORTHAND would need to be defined in Common.h or similar
-                        SendMessage(callbackWindow, WM_AR_CONCAT_SHORTHAND, (WPARAM)charBeforeEquals, (LPARAM)currentPos);
+                        SendMessage(callbackWindow, WM_AR_CONCAT_SHORTHAND, (WPARAM)AR_PACK_HWND(hwnd, charBeforeEquals), (LPARAM)currentPos);
                     }
                 }
             }
@@ -412,17 +422,17 @@ void HandleScintillaNotification(HWND hwnd, SCNotification* scn, HWND callbackWi
                 }
                 
                 // Send message with position as wParam and line number as lParam
-                SendMessage(callbackWindow, WM_SCN_DWELL_START, (WPARAM)scn->position, (LPARAM)line);
+                SendMessage(callbackWindow, WM_SCN_DWELL_START, (WPARAM)scn->position, (LPARAM)AR_PACK_HWND(hwnd, line));
             }
         } 
         else if (scn->nmhdr.code == SCN_DWELLEND) {
             if (callbackWindow && IsWindow(callbackWindow)) {
-                SendMessage(callbackWindow, WM_SCN_DWELL_END, (WPARAM)scn->position, (LPARAM)0);
+                SendMessage(callbackWindow, WM_SCN_DWELL_END, (WPARAM)scn->position, (LPARAM)AR_PACK_HWND(hwnd, 0));
             }
         }
         else if (scn->nmhdr.code == SCN_SAVEPOINTREACHED) {
             if (callbackWindow && IsWindow(callbackWindow)) {
-                SendMessage(callbackWindow, WM_SCN_SAVEPOINT_REACHED, (WPARAM)0, (LPARAM)0);
+                SendMessage(callbackWindow, WM_SCN_SAVEPOINT_REACHED, (WPARAM)AR_PACK_HWND(hwnd, 0), (LPARAM)0);
             }
         }
         else if (scn->nmhdr.code == SCN_USERLISTSELECTION) {
@@ -452,7 +462,7 @@ void HandleScintillaNotification(HWND hwnd, SCNotification* scn, HWND callbackWi
                 }
 
                 // Forward the user list selection to the callback window
-                SendMessage(callbackWindow, WM_SCN_USERLIST_SELECTION, (WPARAM)scn->listType, (LPARAM)scn->text);
+                SendMessage(callbackWindow, WM_SCN_USERLIST_SELECTION, (WPARAM)AR_PACK_HWND(hwnd, scn->listType), (LPARAM)scn->text);
             }
         }
         else if (scn->nmhdr.code == SCN_AUTOCSELECTION) {
@@ -464,7 +474,9 @@ void HandleScintillaNotification(HWND hwnd, SCNotification* scn, HWND callbackWi
 
                 // Forward the autocomplete selection to the callback window
                 // Note: scn->text contains the selected item text
-                SendMessage(callbackWindow, WM_SCN_AUTOCSELECTION, (WPARAM)0, (LPARAM)scn->text);
+                // scn->position is the start position of the word being completed;
+                // the callback uses it to remove the typed prefix without rescanning the document
+                SendMessage(callbackWindow, WM_SCN_AUTOCSELECTION, (WPARAM)AR_PACK_HWND(hwnd, scn->position), (LPARAM)scn->text);
             }
         }
         else if (scn->nmhdr.code == SCN_AUTOCCOMPLETED) {
@@ -473,7 +485,7 @@ void HandleScintillaNotification(HWND hwnd, SCNotification* scn, HWND callbackWi
                 OutputDebugStringA("Autocomplete completed\n");
 
                 // Forward the autocomplete completed notification to the callback window
-                SendMessage(callbackWindow, WM_SCN_AUTOCCOMPLETED, (WPARAM)0, (LPARAM)0);
+                SendMessage(callbackWindow, WM_SCN_AUTOCCOMPLETED, (WPARAM)AR_PACK_HWND(hwnd, 0), (LPARAM)0);
             }
         }
 

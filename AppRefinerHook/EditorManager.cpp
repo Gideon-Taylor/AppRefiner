@@ -30,8 +30,8 @@ VOID CALLBACK EditorManager::TypingTimerProc(HWND hwnd, UINT uMsg, UINT_PTR idEv
                 // Get line number from position
                 int currentLine = SendMessage(hwnd, SCI_LINEFROMPOSITION, currentPos, 0);
                 
-                // Send message to callback window with position as wParam and line as lParam
-                PostMessage(info.callbackWindow, WM_AR_TYPING_PAUSE, (WPARAM)currentPos, (LPARAM)currentLine);
+                // Send message to callback window with position as wParam and hwnd+line as lParam
+                PostMessage(info.callbackWindow, WM_AR_TYPING_PAUSE, (WPARAM)currentPos, (LPARAM)AR_PACK_HWND(hwnd, currentLine));
                 
                 // Debug output
                 char debugMsg[256];
@@ -156,8 +156,8 @@ VOID CALLBACK EditorManager::CursorPositionTimerProc(HWND hwnd, UINT uMsg, UINT_
                     info.lastCursorPosition = currentPos;
                     info.lastFirstVisibleLine = firstVisibleLine;
 
-                    // Send message to callback window with firstVisibleLine as wParam and cursorPos as lParam
-                    PostMessage(info.callbackWindow, WM_AR_CURSOR_POSITION_CHANGED, (WPARAM)firstVisibleLine, (LPARAM)currentPos);
+                    // Send message to callback window with hwnd+firstVisibleLine as wParam and cursorPos as lParam
+                    PostMessage(info.callbackWindow, WM_AR_CURSOR_POSITION_CHANGED, (WPARAM)AR_PACK_HWND(hwnd, firstVisibleLine), (LPARAM)currentPos);
 
                     // Debug output
                     char debugMsg[256];
@@ -254,8 +254,8 @@ VOID CALLBACK EditorManager::BackspaceTimerProc(HWND hwnd, UINT uMsg, UINT_PTR i
                         return;
                 }
 
-                // Send autocomplete message with current position
-                SendMessage(info.callbackWindow, autocompleteMessage, (WPARAM)currentPos, (LPARAM)triggerChar);
+                // Send autocomplete message with current position; hwnd rides in lParam's high bits
+                SendMessage(info.callbackWindow, autocompleteMessage, (WPARAM)currentPos, (LPARAM)AR_PACK_HWND(hwnd, triggerChar));
 
                 char debugMsg[256];
                 sprintf_s(debugMsg, "Backspace revealed trigger char '%c' at position %d - triggering autocomplete (msg: %u)\n",

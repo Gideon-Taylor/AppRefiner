@@ -44,19 +44,11 @@ namespace AppRefiner
         /// </summary>
         public uint ProcessId { get; private set; }
 
-        private RemoteBuffer() { }
-
-        public static RemoteBuffer FromRemoteAddress(AppDesignerProcess process, IntPtr address, uint size, string name)
-        {
-            return new RemoteBuffer
-            {
-                ProcessHandle = process.ProcessHandle,
-                ProcessId = process.ProcessId,
-                Address = address,
-                Size = size,
-                Name = name
-            };
-        }
+        // Note: there is deliberately no way to construct a RemoteBuffer around memory
+        // AppRefiner did not allocate. RemoteBuffer owns its allocation and Free()
+        // releases it — wrapping a hook or Scintilla pointer here would eventually
+        // VirtualFreeEx memory the remote process still uses. For plain reads of
+        // remote pointers, use AppDesignerProcess.ReadMemory instead.
 
         /// <summary>
         /// Creates a new RemoteBuffer by allocating memory in the target process
@@ -420,12 +412,12 @@ namespace AppRefiner
             return encoding.GetString(Read(length));
         }
 
-        /// <summary>
-        /// Ensures the buffer is freed when garbage collected
-        /// </summary>
-        ~RemoteBuffer()
-        {
-            Free();
-        }
+        // Note: no finalizer, deliberately. A GC-time VirtualFreeEx is dangerous: the
+        // stored ProcessHandle may have been closed (and the OS handle value recycled to
+        // an unrelated process) by the time the finalizer runs, and a buffer that is
+        // still referenced by an in-flight operation must not be freed underneath it.
+        // Named buffers are freed by MemoryManager.Cleanup(); temp buffers are freed
+        // explicitly by their creators. A missed Free() is a bounded leak in the target
+        // process — corruption-free, unlike the finalizer it replaces.
     }
 }

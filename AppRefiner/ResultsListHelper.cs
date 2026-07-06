@@ -181,78 +181,82 @@ namespace AppRefiner
                 // Get the current item count to determine the insertion index
                 int itemCount = (int)WinApi.SendMessage(listViewHandle, WinApi.LVM_GETITEMCOUNT, IntPtr.Zero, IntPtr.Zero);
 
-                // Get or create shared text buffer (starts at 1024 bytes, grows as needed)
-                var textBuffer = process.MemoryManager.GetOrCreateBuffer("results_text", 1024);
-
-                // Write the ANSI string to the shared buffer
-                IntPtr? remoteTextAddress = textBuffer.WriteString(text, System.Text.Encoding.Default, offset: 0);
-                if (!remoteTextAddress.HasValue)
+                // Shared buffers: hold the lock for the full write → send sequence
+                lock (process.MemoryManager.SyncRoot)
                 {
-                    // Buffer too small, resize and retry
-                    uint requiredSize = (uint)(System.Text.Encoding.Default.GetByteCount(text) + 1);
-                    textBuffer.Resize(requiredSize);
-                    remoteTextAddress = textBuffer.WriteString(text, System.Text.Encoding.Default, offset: 0);
+                    // Get or create shared text buffer (starts at 1024 bytes, grows as needed)
+                    var textBuffer = process.MemoryManager.GetOrCreateBuffer("results_text", 1024);
 
+                    // Write the ANSI string to the shared buffer
+                    IntPtr? remoteTextAddress = textBuffer.WriteString(text, System.Text.Encoding.Default, offset: 0);
                     if (!remoteTextAddress.HasValue)
                     {
-                        Debug.Log($"Failed to write text '{text}' to shared buffer even after resize");
+                        // Buffer too small, resize and retry
+                        uint requiredSize = (uint)(System.Text.Encoding.Default.GetByteCount(text) + 1);
+                        textBuffer.Resize(requiredSize);
+                        remoteTextAddress = textBuffer.WriteString(text, System.Text.Encoding.Default, offset: 0);
+
+                        if (!remoteTextAddress.HasValue)
+                        {
+                            Debug.Log($"Failed to write text '{text}' to shared buffer even after resize");
+                            return false;
+                        }
+                    }
+
+                    // Get or create shared LVITEM structure buffer
+                    uint lvItemSize = (uint)Marshal.SizeOf<WinApi.LVITEM>();
+                    var itemBuffer = process.MemoryManager.GetOrCreateBuffer("results_item", lvItemSize);
+
+                    // Create LVITEM structure with pointer to text in shared buffer
+                    var lvItem = new WinApi.LVITEM
+                    {
+                        mask = WinApi.LVIF_TEXT,
+                        iItem = itemCount, // Insert at the end
+                        iSubItem = 0,
+                        pszText = remoteTextAddress.Value, // Point to text in shared buffer
+                        cchTextMax = text.Length
+                    };
+
+                    // Marshal LVITEM structure to byte array
+                    byte[] lvItemBytes = new byte[lvItemSize];
+                    IntPtr lvItemPtr = Marshal.AllocHGlobal((int)lvItemSize);
+
+                    try
+                    {
+                        Marshal.StructureToPtr(lvItem, lvItemPtr, false);
+                        Marshal.Copy(lvItemPtr, lvItemBytes, 0, (int)lvItemSize);
+                    }
+                    finally
+                    {
+                        Marshal.FreeHGlobal(lvItemPtr);
+                    }
+
+                    // Write LVITEM structure to shared buffer
+                    IntPtr? remoteLvItemAddress = itemBuffer.Write(lvItemBytes, offset: 0);
+                    if (!remoteLvItemAddress.HasValue)
+                    {
+                        Debug.Log($"Failed to write LVITEM structure to shared buffer");
                         return false;
                     }
+
+                    // Insert the item using shared LVITEM buffer
+                    int result = (int)WinApi.SendMessage(listViewHandle, WinApi.LVM_INSERTITEM, 0, remoteLvItemAddress.Value);
+
+                    // Note: No cleanup needed! Buffers are reused for the next message.
+                    // This fixes the memory leak that existed when cleanup was commented out.
+
+                    bool success = result != -1;
+                    if (success)
+                    {
+                        Debug.Log($"Successfully added '{text}' to Results ListView (item index: {result})");
+                    }
+                    else
+                    {
+                        Debug.Log($"Failed to add '{text}' to Results ListView");
+                    }
+
+                    return success;
                 }
-
-                // Get or create shared LVITEM structure buffer
-                uint lvItemSize = (uint)Marshal.SizeOf<WinApi.LVITEM>();
-                var itemBuffer = process.MemoryManager.GetOrCreateBuffer("results_item", lvItemSize);
-
-                // Create LVITEM structure with pointer to text in shared buffer
-                var lvItem = new WinApi.LVITEM
-                {
-                    mask = WinApi.LVIF_TEXT,
-                    iItem = itemCount, // Insert at the end
-                    iSubItem = 0,
-                    pszText = remoteTextAddress.Value, // Point to text in shared buffer
-                    cchTextMax = text.Length
-                };
-
-                // Marshal LVITEM structure to byte array
-                byte[] lvItemBytes = new byte[lvItemSize];
-                IntPtr lvItemPtr = Marshal.AllocHGlobal((int)lvItemSize);
-
-                try
-                {
-                    Marshal.StructureToPtr(lvItem, lvItemPtr, false);
-                    Marshal.Copy(lvItemPtr, lvItemBytes, 0, (int)lvItemSize);
-                }
-                finally
-                {
-                    Marshal.FreeHGlobal(lvItemPtr);
-                }
-
-                // Write LVITEM structure to shared buffer
-                IntPtr? remoteLvItemAddress = itemBuffer.Write(lvItemBytes, offset: 0);
-                if (!remoteLvItemAddress.HasValue)
-                {
-                    Debug.Log($"Failed to write LVITEM structure to shared buffer");
-                    return false;
-                }
-
-                // Insert the item using shared LVITEM buffer
-                int result = (int)WinApi.SendMessage(listViewHandle, WinApi.LVM_INSERTITEM, 0, remoteLvItemAddress.Value);
-
-                // Note: No cleanup needed! Buffers are reused for the next message.
-                // This fixes the memory leak that existed when cleanup was commented out.
-
-                bool success = result != -1;
-                if (success)
-                {
-                    Debug.Log($"Successfully added '{text}' to Results ListView (item index: {result})");
-                }
-                else
-                {
-                    Debug.Log($"Failed to add '{text}' to Results ListView");
-                }
-
-                return success;
             }
             catch (Exception ex)
             {
