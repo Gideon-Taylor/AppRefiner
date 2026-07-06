@@ -58,6 +58,10 @@ NEW FEATURES
   turns any additional outputs into "out" parameters, then replaces the
   selection with a call to the new routine. It refuses selections it can't move
   safely, such as those containing a Return.
+• Statement Number Margin - Optionally repurpose Application Designer's
+  line-number margin to display PeopleCode statement numbers instead. Locate the
+  statement from a stack trace by scrolling to it, rather than using App
+  Designer's Goto-by-statement dialog. Turn it on in General Settings.
 • Unified Compiler Error Check - The fourteen separate checks that flagged code
   that won't compile now live under a single "Compiler errors" toggle, on by
   default — so you see everything that's wrong at once instead of enabling each
@@ -139,6 +143,19 @@ BUG FIXES
 • Signature Updates - Added undocumented Json* methods, corrected SQLExec and
   Hash.SetValue() types, handled "@" references in built-in signatures, and
   capitalized all system variables.
+• "Out" on Function Parameters - Marking a plain Function parameter with "Out"
+  is now flagged as an error — Function parameters are always passed by
+  reference, so "Out" only applies to App Class method parameters. This matches
+  what the PeopleCode compiler rejects.
+• Parameters on Declare Function ... PeopleCode - A "Declare Function ...
+  PeopleCode" declaration that carries a parameter list is now flagged, since
+  its parameters are implicit to the referenced record field event and aren't
+  allowed here. Library (DLL) declarations with Ref/Value parameters are
+  unaffected.
+• New Class Members Recognized Immediately - Methods and properties you add to
+  the class you're editing — via Extract Function/Method or by hand — are no
+  longer flagged as unknown until you save and edit a second time. The member
+  access check now sees the live, unsaved class.
 
 
 PERFORMANCE
