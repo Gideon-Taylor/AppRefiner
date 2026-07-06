@@ -15,8 +15,7 @@ NEW FEATURES
 • Instances Tab - See every Application Designer session AppRefiner is
   tracking — database, Tools version, open editors — and connect, disconnect,
   or bring one to the front. No more guessing which window a button acts on.
-• Oracle LDAP Connections - Connect to Oracle via LDAP with the service
-  descriptor resolved automatically — no ldap.ora setup needed.
+• Oracle LDAP - Connect to Oracle via LDAP (contributed by NoodleSploder)
 • tnsnames.ora IFILE Support - Aliases defined in IFILE-included files now
   appear in the connection list.
 • Faster Connect Dialog - Connection lists load in the background, so the
@@ -39,6 +38,37 @@ NEW FEATURES
   and explain text. Ctrl+Space inside the arguments opens a searchable browser
   that fills in the numbers and text for you — and helps you pick a valid free
   number when planning a new message.
+• Extract Local Variable - Select any expression and pull it out into a new,
+  correctly typed local declared just above the statement. The type is inferred
+  even without a database connection, and when the expression appears more than
+  once you can replace every occurrence at the same time.
+• Inline Variable - Place the cursor on a local variable to fold its value back
+  into each place it's used and remove the declaration. AppRefiner refuses when
+  inlining would change behavior — a side-effecting initializer read more than
+  once, or a value that changes before it's used — so the result always means
+  the same thing.
+• Convert If ↔ Evaluate - Turn an If/Else-If chain into an Evaluate statement,
+  or an Evaluate back into an If, with one command that picks the direction from
+  where your cursor sits. Break semantics, When-Other, and stacked-When "Or"
+  conditions are all handled, and it refuses the cases that can't convert
+  cleanly rather than changing your logic.
+• Extract Function/Method - Select a run of statements and pull them into a new
+  function — or a private method when you're in an App Class. AppRefiner figures
+  out which variables need to be passed in, lets you pick one to return, and
+  turns any additional outputs into "out" parameters, then replaces the
+  selection with a call to the new routine. It refuses selections it can't move
+  safely, such as those containing a Return.
+• Unified Compiler Error Check - The fourteen separate checks that flagged code
+  that won't compile now live under a single "Compiler errors" toggle, on by
+  default — so you see everything that's wrong at once instead of enabling each
+  one by hand. It covers syntax errors, type errors, missing semicolons,
+  redeclared variables, undefined variables (in App Classes), class name
+  mismatches, invalid application classes, unimported classes, ambiguous class
+  references, invalid member access, undeclared functions, missing method
+  implementations, missing constructors, and unimplemented abstract members.
+  All of their quick fixes are preserved, and everything now runs in a single
+  pass over your code. (Undefined-variable flagging outside App Classes remains
+  its own optional style, where it's a code smell rather than a compile error.)
 
 
 PARSER ENGINE OVERHAUL

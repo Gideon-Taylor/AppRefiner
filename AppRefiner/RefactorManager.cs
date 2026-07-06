@@ -361,8 +361,25 @@ namespace AppRefiner.Refactors
                 {
                     if (!refactorClass.ShowRefactorDialog()) // Pass owner Removed owner
                     {
-                        Debug.Log("Refactoring cancelled by user (post-dialog).");
-                        return; // User cancelled
+                        // A post-dialog guard may have called SetFailure (e.g. a combined-
+                        // declaration or rename-collision refusal). Distinguish that from a
+                        // plain user cancel so the reason is surfaced instead of failing silently.
+                        var dialogResult = refactorClass.GetResult();
+                        if (!dialogResult.Success)
+                        {
+                            Debug.Log($"Refactoring failed (post-dialog): {dialogResult.Message}");
+                            Task.Delay(100).ContinueWith(_ =>
+                            {
+                                var mainHandle = activeEditor.AppDesignerProcess.MainWindowHandle;
+                                var handleWrapper = new WindowWrapper(mainHandle);
+                                new MessageBoxDialog(dialogResult.Message ?? "Refactoring failed", "Refactoring Failed", MessageBoxButtons.OK, mainHandle).ShowDialog(handleWrapper);
+                            });
+                        }
+                        else
+                        {
+                            Debug.Log("Refactoring cancelled by user (post-dialog).");
+                        }
+                        return;
                     }
                 }
 
