@@ -64,6 +64,8 @@ namespace AppRefiner
             chkDocMinimap = new CheckBox();
             chkInlineParameterHints = new CheckBox();
             chkLineSelectionFix = new CheckBox();
+            grpMargins = new GroupBox();
+            chkShowStatementNumbers = new CheckBox();
             groupBox3 = new GroupBox();
             chkVariableSuggestions = new CheckBox();
             chkObjectMembers = new CheckBox();
@@ -144,6 +146,7 @@ namespace AppRefiner
             tabPage1.SuspendLayout();
             grpCodeFolding.SuspendLayout();
             grpEditorFeatures.SuspendLayout();
+            grpMargins.SuspendLayout();
             groupBox3.SuspendLayout();
             grpAppearance.SuspendLayout();
             grpFeatureOverrides.SuspendLayout();
@@ -347,6 +350,7 @@ namespace AppRefiner
             //
             tabPage1.Controls.Add(grpCodeFolding);
             tabPage1.Controls.Add(grpEditorFeatures);
+            tabPage1.Controls.Add(grpMargins);
             tabPage1.Controls.Add(groupBox3);
             tabPage1.Controls.Add(grpAppearance);
             tabPage1.Controls.Add(grpFeatureOverrides);
@@ -468,7 +472,27 @@ namespace AppRefiner
             chkLineSelectionFix.TabIndex = 4;
             chkLineSelectionFix.Text = "Line Selection Fix";
             chkLineSelectionFix.UseVisualStyleBackColor = true;
-            // 
+            //
+            // grpMargins
+            //
+            grpMargins.Controls.Add(chkShowStatementNumbers);
+            grpMargins.Location = new Point(284, 340);
+            grpMargins.Name = "grpMargins";
+            grpMargins.Size = new Size(270, 65);
+            grpMargins.TabIndex = 7;
+            grpMargins.TabStop = false;
+            grpMargins.Text = "Editor Margin";
+            //
+            // chkShowStatementNumbers
+            //
+            chkShowStatementNumbers.AutoSize = true;
+            chkShowStatementNumbers.Location = new Point(10, 22);
+            chkShowStatementNumbers.Name = "chkShowStatementNumbers";
+            chkShowStatementNumbers.Size = new Size(160, 19);
+            chkShowStatementNumbers.TabIndex = 0;
+            chkShowStatementNumbers.Text = "Show Statement Numbers";
+            chkShowStatementNumbers.UseVisualStyleBackColor = true;
+            //
             // groupBox3
             // 
             groupBox3.Controls.Add(chkVariableSuggestions);
@@ -1215,6 +1239,8 @@ namespace AppRefiner
             grpCodeFolding.PerformLayout();
             grpEditorFeatures.ResumeLayout(false);
             grpEditorFeatures.PerformLayout();
+            grpMargins.ResumeLayout(false);
+            grpMargins.PerformLayout();
             groupBox3.ResumeLayout(false);
             groupBox3.PerformLayout();
             grpAppearance.ResumeLayout(false);
@@ -1276,6 +1302,9 @@ namespace AppRefiner
         private CheckBox chkDocMinimap;
         private CheckBox chkInlineParameterHints;
         private CheckBox chkLineSelectionFix;
+        // Editor Margin controls
+        private GroupBox grpMargins;
+        private CheckBox chkShowStatementNumbers;
         // Appearance controls
         private CheckBox chkAutoDark;
         private CheckBox chkAutoCenterDialogs;

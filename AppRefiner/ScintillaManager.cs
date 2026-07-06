@@ -2,6 +2,7 @@ using AppRefiner.Dialogs;
 using AppRefiner.Stylers;
 using DiffPlex.Model;
 using PeopleCodeParser.SelfHosted;
+using PeopleCodeParser.SelfHosted.Nodes;
 using PeopleCodeTypeInfo.Database;
 using SQL.Formatter;
 using SQL.Formatter.Core;
@@ -63,11 +64,19 @@ namespace AppRefiner
         private const int SC_FOLDLEVELNUMBERMASK = 0x0FFF;
         private const int SCI_SETMOUSEDWELLTIME = 2264;
         private const int SCI_SETMARGINTYPEN = 2240;
+        private const int SCI_GETMARGINTYPEN = 2241;
         private const int SCI_SETMARGINWIDTHN = 2242;
+        private const int SCI_GETMARGINWIDTHN = 2243;
         private const int SCI_SETFOLDFLAGS = 2233;
         private const int SCI_SETMARGINMASKN = 2244;
         private const int SCI_SETMARGINSENSITIVEN = 2246;
         private const int SC_MARGIN_SYMBOL = 0;
+        private const int SC_MARGIN_NUMBER = 1;
+        private const int SC_MARGIN_RTEXT = 5;
+        private const int SCI_MARGINSETTEXT = 2530;
+        private const int SCI_MARGINSETSTYLEOFFSET = 2537;
+        private const int STYLE_LINENUMBER = 33;
+        private const int SC_MAX_MARGIN = 4;
         private const uint SC_MASK_FOLDERS = 0xFE000000;
         private const int SCI_MARKERDEFINE = 2040;
         private const int SCI_CALLTIPSHOW = 2200;
@@ -1296,6 +1305,137 @@ namespace AppRefiner
             {
                 Debug.LogError($"Error setting annotation: {ex.Message}");
             }
+        }
+
+        /// <summary>
+        /// Finds the margin index currently configured as <c>SC_MARGIN_NUMBER</c> (App Designer's
+        /// own line-number margin), or -1 if none of the margins are configured that way.
+        /// </summary>
+        private static int FindLineNumberMarginIndex(ScintillaEditor editor)
+        {
+            for (int i = 0; i <= SC_MAX_MARGIN; i++)
+            {
+                int type = (int)editor.SendMessage(SCI_GETMARGINTYPEN, i, IntPtr.Zero);
+                if (type == SC_MARGIN_NUMBER)
+                {
+                    return i;
+                }
+            }
+            return -1;
+        }
+
+        /// <summary>
+        /// Repurposes App Designer's line-number margin to display PeopleCode statement numbers
+        /// instead of line numbers, styled identically to the line-number margin (same margin,
+        /// same width/colors — only the displayed content changes). Blank for lines with no
+        /// statement number. No-ops if the line-number margin isn't visible (user hasn't toggled
+        /// it on in App Designer) or the program failed to parse.
+        /// </summary>
+        public static void ApplyStatementNumberMargin(ScintillaEditor editor, ProgramNode? program)
+        {
+            if (program == null) return;
+
+            int marginIndex = editor.StatementNumberMarginIndex >= 0
+                ? editor.StatementNumberMarginIndex
+                : FindLineNumberMarginIndex(editor);
+
+            if (marginIndex < 0) return;
+
+            int width = (int)editor.SendMessage(SCI_GETMARGINWIDTHN, marginIndex, IntPtr.Zero);
+            if (width <= 0)
+            {
+                // Margin not visible - leave it as-is; RestoreLineNumberMargin will run if the
+                // tweak is toggled off, but there's nothing useful to draw while width is 0.
+                return;
+            }
+
+            try
+            {
+                // Statement numbers in StatementNumberMap are keyed 0-based (matching
+                // ProgramNode.GetLineForStatement / StackTraceParser's "-1" convention) while
+                // App Designer's stack traces and Goto dialog are 1-based - add 1 for display.
+                // Map values already line up directly with Scintilla's 0-based line index
+                // (verified empirically - subtracting 1 here places numbers one row too high).
+                var lineToStatement = new Dictionary<int, int>();
+                foreach (var kvp in program.StatementNumberMap)
+                {
+                    int scintillaLine = kvp.Value;
+                    int displayNumber = kvp.Key + 1;
+                    if (!lineToStatement.ContainsKey(scintillaLine))
+                    {
+                        lineToStatement[scintillaLine] = displayNumber;
+                    }
+                }
+
+                // SC_MARGIN_RTEXT right-justifies, matching the conventional look of line numbers
+                // (SC_MARGIN_TEXT would left-justify, which would look visually different).
+                editor.SendMessage(SCI_SETMARGINTYPEN, marginIndex, SC_MARGIN_RTEXT);
+                editor.StatementNumberMarginIndex = marginIndex;
+
+                // Text/RText margins draw their text (and the per-line background fill) using the
+                // margin text styles, NOT STYLE_LINENUMBER like a number margin does. Without this
+                // the numbers render on STYLE_DEFAULT (white), unlike App Designer's gray line-number
+                // margin. Point the margin style offset at STYLE_LINENUMBER so the default per-line
+                // style byte (0) resolves to style 33 - reusing App Designer's own line-number style
+                // means we match its colors in any theme (light or AppRefiner dark) for free.
+                editor.SendMessage(SCI_MARGINSETSTYLEOFFSET, STYLE_LINENUMBER, IntPtr.Zero);
+
+                int lineCount = GetLineCount(editor);
+
+                lock (editor.AppDesignerProcess.MemoryManager.SyncRoot)
+                {
+                    var buffer = editor.AppDesignerProcess.MemoryManager.GetOrCreateBuffer("statementNumberMargin", 16384);
+                    buffer.Reset();
+
+                    // A single space (not string.Empty) for unnumbered lines: Scintilla only paints
+                    // a text-margin line's background when the line has non-empty text, so an empty
+                    // string would leave those rows white while numbered rows are gray. The space is
+                    // invisible but makes the whole margin fill uniformly with the line-number color.
+                    IntPtr? blankAddress = buffer.WriteString(" ", Encoding.ASCII);
+
+                    for (int line = 0; line < lineCount; line++)
+                    {
+                        IntPtr? address;
+                        if (lineToStatement.TryGetValue(line, out var statementNumber))
+                        {
+                            address = buffer.WriteString(statementNumber.ToString(), Encoding.ASCII);
+                            if (!address.HasValue)
+                            {
+                                buffer.Resize((uint)(buffer.Size * 2));
+                                buffer.Reset();
+                                blankAddress = buffer.WriteString(" ", Encoding.ASCII);
+                                address = buffer.WriteString(statementNumber.ToString(), Encoding.ASCII);
+                            }
+                        }
+                        else
+                        {
+                            address = blankAddress;
+                        }
+
+                        if (address.HasValue)
+                        {
+                            editor.SendMessage(SCI_MARGINSETTEXT, line, address.Value);
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError($"Error applying statement number margin: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Restores App Designer's line-number margin back to displaying line numbers after
+        /// <see cref="ApplyStatementNumberMargin"/> repurposed it. No-op if the margin was never
+        /// repurposed for this editor.
+        /// </summary>
+        public static void RestoreLineNumberMargin(ScintillaEditor editor)
+        {
+            if (editor.StatementNumberMarginIndex < 0) return;
+
+            editor.SendMessage(SCI_SETMARGINTYPEN, editor.StatementNumberMarginIndex, SC_MARGIN_NUMBER);
+            editor.StatementNumberMarginIndex = -1;
         }
 
         /// <summary>

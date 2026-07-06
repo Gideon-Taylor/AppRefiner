@@ -253,6 +253,7 @@ namespace AppRefiner
             chkLineSelectionFix.Checked = generalSettings.LineSelectionFix;
             chkInlineParameterHints.Checked = generalSettings.ShowParamNames;
             chkDocMinimap.Checked = generalSettings.MiniMapOpen;
+            chkShowStatementNumbers.Checked = generalSettings.ShowStatementNumbers;
             chkUseEnhancedEditor.Checked = generalSettings.UseEnhancedEditor;
             chkInlineParameterHints.Enabled = chkUseEnhancedEditor.Checked;
             txtLintReportDir.Text = generalSettings.LintReportPath;
@@ -573,6 +574,7 @@ namespace AppRefiner
             chkLineSelectionFix.CheckedChanged += GeneralSetting_Changed;
             chkInlineParameterHints.CheckedChanged += GeneralSetting_Changed;
             chkDocMinimap.CheckedChanged += GeneralSetting_Changed;
+            chkShowStatementNumbers.CheckedChanged += GeneralSetting_Changed;
             chkUseEnhancedEditor.CheckedChanged += GeneralSetting_Changed;
 
             // Theme controls
@@ -634,6 +636,23 @@ namespace AppRefiner
             if (sender == chkOverrideOpen)
             {
                 btnConfigSmartOpen.Enabled = chkOverrideOpen.Checked;
+            }
+
+            // Statement-number margin: apply/restore immediately on the active editor so the
+            // toggle takes effect at once instead of waiting for the next content-change reparse.
+            // Both calls self-guard (Apply no-ops on a null/non-PeopleCode program, Restore no-ops
+            // when the margin was never repurposed), and other open editors self-heal on their
+            // next CheckForContentChanges pass.
+            if (sender == chkShowStatementNumbers && activeEditor != null)
+            {
+                if (chkShowStatementNumbers.Checked)
+                {
+                    ScintillaManager.ApplyStatementNumberMargin(activeEditor, activeEditor.GetParsedProgram());
+                }
+                else if (activeEditor.StatementNumberMarginIndex >= 0)
+                {
+                    ScintillaManager.RestoreLineNumberMargin(activeEditor);
+                }
             }
 
             SaveSettings(); // Call the consolidated SaveSettings method
@@ -929,7 +948,8 @@ namespace AppRefiner
                 ThemeFilled = chkFilled.Checked,
                 ShowParamNames = chkInlineParameterHints.Checked,
                 MiniMapOpen = chkDocMinimap.Checked,
-                UseEnhancedEditor = chkUseEnhancedEditor.Checked
+                UseEnhancedEditor = chkUseEnhancedEditor.Checked,
+                ShowStatementNumbers = chkShowStatementNumbers.Checked
             };
         }
 
@@ -2152,6 +2172,17 @@ namespace AppRefiner
 
                     lastStylerProcessingTime[editor] = now;
                     stylerManager?.ProcessStylersForEditor(editor);
+
+                    // Statement-number margin tweak: swap App Designer's line-number margin to
+                    // show PeopleCode statement numbers instead, refreshed on every reparse.
+                    if (chkShowStatementNumbers.Checked)
+                    {
+                        ScintillaManager.ApplyStatementNumberMargin(editor, editor.GetParsedProgram());
+                    }
+                    else if (editor.StatementNumberMarginIndex >= 0)
+                    {
+                        ScintillaManager.RestoreLineNumberMargin(editor);
+                    }
                 }
                 else
                 {
@@ -2169,6 +2200,13 @@ namespace AppRefiner
                 if (chkAutoDark.Checked)
                 {
                     ScintillaManager.SetDarkMode(editor);
+                }
+
+                // Not a PeopleCode editor - no statement numbers to show, restore line numbers
+                // in case this window was previously showing a PeopleCode program's margin.
+                if (editor.StatementNumberMarginIndex >= 0)
+                {
+                    ScintillaManager.RestoreLineNumberMargin(editor);
                 }
             }
 

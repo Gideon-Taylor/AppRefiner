@@ -527,6 +527,18 @@ namespace AppRefiner.Properties {
 
         [global::System.Configuration.UserScopedSettingAttribute()]
         [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("False")]
+        public bool showStatementNumbers {
+            get {
+                return ((bool)(this["showStatementNumbers"]));
+            }
+            set {
+                this["showStatementNumbers"] = value;
+            }
+        }
+
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
         [global::System.Configuration.DefaultSettingValueAttribute("0")]
         public int SnapshotDiffViewMode {
             get {

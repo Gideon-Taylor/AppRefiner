@@ -33,6 +33,7 @@ namespace AppRefiner
         public bool ShowParamNames { get; set; }
         public bool MiniMapOpen { get; set; }
         public bool UseEnhancedEditor { get; set; }
+        public bool ShowStatementNumbers { get; set; }
     }
 
     public class SettingsService
@@ -75,6 +76,7 @@ namespace AppRefiner
                 settings.ShowParamNames = Properties.Settings.Default.showParamNames;
                 settings.MiniMapOpen = Properties.Settings.Default.miniMapOpen;
                 settings.UseEnhancedEditor = Properties.Settings.Default.useEnhancedEditor;
+                settings.ShowStatementNumbers = Properties.Settings.Default.showStatementNumbers;
             }
             catch (Exception ex)
             {
@@ -112,6 +114,7 @@ namespace AppRefiner
             Properties.Settings.Default.showParamNames = settings.ShowParamNames;
             Properties.Settings.Default.miniMapOpen = settings.MiniMapOpen;
             Properties.Settings.Default.useEnhancedEditor = settings.UseEnhancedEditor;
+            Properties.Settings.Default.showStatementNumbers = settings.ShowStatementNumbers;
         }
 
         public void SaveChanges()

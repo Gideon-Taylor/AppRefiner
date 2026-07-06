@@ -277,6 +277,13 @@ namespace AppRefiner
         public IDataManager? DataManager = null;
 
         /// <summary>
+        /// Index of the margin currently repurposed to display statement numbers in place of
+        /// line numbers (-1 if not currently repurposed). Needed so the margin can be switched
+        /// back to <c>SC_MARGIN_NUMBER</c> when the "show statement numbers" tweak is turned off.
+        /// </summary>
+        public int StatementNumberMarginIndex { get; set; } = -1;
+
+        /// <summary>
         /// Gets whether the last parse operation was successful (no syntax errors)
         /// </summary>
         public bool IsParseSuccessful => selfHostedParseSuccessful;
