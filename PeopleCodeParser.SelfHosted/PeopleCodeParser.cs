@@ -2950,9 +2950,11 @@ public class PeopleCodeParser
                         ReportError("Expected record event after Record.Field in PEOPLECODE declaration");
                     }
 
-                    // Optional parameter list
+                    // Optional parameter list — real PeopleCode does not allow one
+                    // here at all; parameters are implicit to the referenced field.
                     if (Match(TokenType.LeftParen))
                     {
+                        var leftParenToken = Previous;
                         if (!Check(TokenType.RightParen))
                         {
                             do
@@ -2967,6 +2969,9 @@ public class PeopleCodeParser
                             } while (Match(TokenType.Comma));
                         }
                         Consume(TokenType.RightParen, "Expected ')' after parameters");
+                        ReportError(
+                            "'DECLARE FUNCTION ... PEOPLECODE' declarations cannot have a parameter list; parameters are not allowed here.",
+                            leftParenToken, Previous);
                     }
 
                     if (Match(TokenType.Returns))
@@ -3100,6 +3105,12 @@ public class PeopleCodeParser
                         if (param != null)
                         {
                             functionNode.AddParameter(param);
+                            if (param.IsOut)
+                            {
+                                ReportError(
+                                    "Function parameters cannot be marked OUT — function parameters are always passed by reference.",
+                                    Previous);
+                            }
                         }
                         else
                         {
