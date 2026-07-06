@@ -41,13 +41,8 @@ internal static class CompileDiagnosticQuickFixMap
                 {
                     new(typeof(Refactors.QuickFixes.ImplementMissingMethod), "Implement missing method")
                 };
-            case DiagnosticCode.UnimplementedAbstractMember:
-                // Static fix: ImplementAbstractMembers re-derives the missing members
-                // from the editor's AST/DB, so no FixContext is needed.
-                return new List<QuickFixEntry>
-                {
-                    new(typeof(Refactors.QuickFixes.ImplementAbstractMembers), "Implement missing abstract members")
-                };
+            // UnimplementedAbstractMember is no longer a compile diagnostic — it is surfaced
+            // by the UnimplementedAbstractMembers styler, which attaches its own quick fix.
             case DiagnosticCode.MissingConstructor:
                 // Static fix: GenerateBaseConstructor re-derives the target class and
                 // base constructor from the AST/DB, so no FixContext is needed.

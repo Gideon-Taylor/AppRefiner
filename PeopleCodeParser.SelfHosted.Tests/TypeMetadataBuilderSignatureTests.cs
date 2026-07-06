@@ -6,10 +6,10 @@ using static PeopleCodeParser.SelfHosted.Tests.ParseTestHelper;
 namespace PeopleCodeParser.SelfHosted.Tests;
 
 /// <summary>
-/// Covers the abstract/concrete member signature sets added to TypeMetadata for the
-/// UnimplementedAbstractMember compile check. Signature scheme is owned by
+/// Covers the abstract/concrete member signature sets added to TypeMetadata, consumed by
+/// AppRefiner's UnimplementedAbstractMembers styler. Signature scheme is owned by
 /// TypeMetadata.MethodSignature / TypeMetadata.PropertySignature so the builder and
-/// the check cannot drift.
+/// the styler cannot drift.
 /// </summary>
 public class TypeMetadataBuilderSignatureTests
 {

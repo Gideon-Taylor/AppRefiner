@@ -21,6 +21,11 @@ BUG FIXES
 • Instance Variables via %This - Reading an instance variable through %This
   (for example %This.MyVar, without the &) is no longer wrongly flagged as an
   unknown property of the class.
+• Missing Abstract Members No Longer a Compiler Error - Unimplemented abstract or
+  interface members no longer trip the "Compiler errors" indicator, since they
+  don't actually stop a program from compiling. They now have their own opt-in
+  "Missing abstract implementations" styler you can enable when you want the
+  reminder (with the same "implement missing members" quick fix).
 
 
 VERSION 1.3.0
