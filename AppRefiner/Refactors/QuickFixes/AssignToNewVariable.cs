@@ -5,7 +5,7 @@ using PeopleCodeParser.SelfHosted.Visitors.Models;
 namespace AppRefiner.Refactors.QuickFixes
 {
     /// <summary>
-    /// Context payload attached by TypeErrorStyler for the assign-result quick fix.
+    /// Context payload attached by CompilerErrorsStyler for the assign-result quick fix.
     /// The declared type is rendered at styler time because the refactor's fresh
     /// re-parse does not re-run type inference.
     /// </summary>

@@ -4639,7 +4639,6 @@ namespace AppRefiner
                         {
                             Debug.Log("Previous active editor lost focus or became invalid.");
                             activeEditor = null;
-                            Stylers.InvalidAppClass.ClearValidAppClassPathsCache(); // Example cleanup
                         }
 
                         // Use SetActiveEditor to properly handle the newly focused window

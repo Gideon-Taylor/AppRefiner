@@ -6,8 +6,9 @@ using AppRefiner.Refactors.QuickFixes;
 namespace AppRefiner.Stylers;
 
 /// <summary>
-/// Highlights variables that are referenced but not defined in any accessible scope.
-/// This is a self-hosted equivalent to the ANTLR-based UndefinedVariableStyler.
+/// Highlights variables that are referenced but not defined in any accessible scope,
+/// for NON-class programs only (a code smell there). App Class programs are covered by
+/// the compile checker's UndefinedVariableCheck, where this is a hard compile error.
 /// </summary>
 public class UndefinedVariables : BaseStyler
 {
@@ -19,7 +20,7 @@ public class UndefinedVariables : BaseStyler
     {
     }
 
-    public override string Description => "Undefined variables";
+    public override string Description => "Undefined variables (non-class code)";
 
     #region AST Visitor Overrides
 
@@ -29,6 +30,14 @@ public class UndefinedVariables : BaseStyler
     public override void VisitProgram(ProgramNode node)
     {
         Reset();
+
+        // Class programs are handled by the compile checker's UndefinedVariableCheck
+        // (undefined variables are a compile error there, not just a code smell).
+        // This styler only covers non-class code.
+        if (node.AppClass != null)
+        {
+            return;
+        }
 
         // Process the program first to collect all declarations
         base.VisitProgram(node);

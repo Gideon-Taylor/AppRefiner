@@ -5,7 +5,7 @@ namespace AppRefiner.Refactors.QuickFixes
     /// <summary>
     /// QuickFix wrapper that declares a specific function chosen from the cache.
     /// The full FunctionSearchResult rides in editor.QuickFixContext (attached by
-    /// UndeclaredFunctionStyler's resolver), so no re-query or parsing happens here.
+    /// CompileDiagnosticQuickFixMap's resolver), so no re-query or parsing happens here.
     /// </summary>
     public class DeclareFunctionQuickFix : BaseRefactor
     {

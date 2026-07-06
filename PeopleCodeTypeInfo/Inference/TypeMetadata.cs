@@ -71,10 +71,45 @@ public class TypeMetadata
         new Dictionary<string, PropertyInfo>(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
-    /// Constructor declaration in this class (PeopleCode allows at most 1 explicit constructor)
-    /// Null indicates an implicit/default constructor
+    /// Constructor declaration in this class (PeopleCode allows at most 1 explicit constructor).
+    /// For any class resolved through <c>TypeMetadataBuilder</c> this is never null: the
+    /// builder synthesizes a zero-parameter default constructor when the class declares
+    /// none. It is only null if a TypeMetadata is constructed directly, bypassing the
+    /// builder.
     /// </summary>
     public FunctionInfo? Constructor { get; init; }
+
+    /// <summary>
+    /// Signatures of members a deriving class is required to implement: every
+    /// method/property of an interface, and only the abstract methods/properties of a
+    /// class. Constructors and instance variables are never included. Signature scheme
+    /// is "M:{name}({paramCount})" for methods and "P:{name}" for properties — always
+    /// built via <see cref="MethodSignature"/> / <see cref="PropertySignature"/>.
+    /// Populated at runtime by TypeMetadataBuilder; not part of the serialized
+    /// builtin type database.
+    /// </summary>
+    public IReadOnlyCollection<string> AbstractMemberSignatures { get; init; } = Array.Empty<string>();
+
+    /// <summary>
+    /// Signatures of members this type concretely implements (non-abstract methods and
+    /// properties of a class; always empty for interfaces). Used to stop abstract
+    /// requirements from bases higher up the hierarchy from propagating past a class
+    /// that already implements them. Same scheme and exclusions as
+    /// <see cref="AbstractMemberSignatures"/>.
+    /// </summary>
+    public IReadOnlyCollection<string> ConcreteMemberSignatures { get; init; } = Array.Empty<string>();
+
+    /// <summary>
+    /// Canonical method signature used by AbstractMemberSignatures/ConcreteMemberSignatures.
+    /// Both TypeMetadataBuilder and the compile checks must use this helper so the
+    /// scheme cannot drift.
+    /// </summary>
+    public static string MethodSignature(string name, int paramCount) => $"M:{name}({paramCount})";
+
+    /// <summary>
+    /// Canonical property signature used by AbstractMemberSignatures/ConcreteMemberSignatures.
+    /// </summary>
+    public static string PropertySignature(string name) => $"P:{name}";
 }
 
 /// <summary>

@@ -6,7 +6,7 @@ namespace PeopleCodeParser.SelfHosted;
 /// Indexes a program's top-level functions and answers PeopleCode's single-pass
 /// visibility rule: a Declare Function is visible everywhere in the program, while a
 /// function implementation is only visible at positions textually below its start.
-/// Shared by UndeclaredFunctionStyler (per-call-site checks) and function-name
+/// Shared by UndeclaredFunctionCheck (per-call-site checks) and function-name
 /// autocomplete (enumeration at the cursor).
 /// </summary>
 public sealed class FunctionVisibilityIndex

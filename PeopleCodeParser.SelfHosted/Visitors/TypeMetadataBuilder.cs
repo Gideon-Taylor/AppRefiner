@@ -23,6 +23,8 @@ public class TypeMetadataBuilder : AstVisitorBase
     private readonly Dictionary<string, FunctionInfo> _methods = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, PropertyInfo> _properties = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, PropertyInfo> _instanceVariables = new(StringComparer.OrdinalIgnoreCase);
+    private readonly List<string> _abstractMemberSignatures = new();
+    private readonly List<string> _concreteMemberSignatures = new();
     private FunctionInfo? _constructor;
     private string _qualifiedName = string.Empty;
     private string _name = string.Empty;
@@ -66,7 +68,9 @@ public class TypeMetadataBuilder : AstVisitorBase
             Methods = builder._methods,
             Properties = builder._properties,
             InstanceVariables = builder._instanceVariables,
-            Constructor = builder._constructor
+            Constructor = builder._constructor,
+            AbstractMemberSignatures = builder._abstractMemberSignatures,
+            ConcreteMemberSignatures = builder._concreteMemberSignatures
         };
     }
 
@@ -162,6 +166,18 @@ public class TypeMetadataBuilder : AstVisitorBase
                 VisibilityModifier.Private => MemberVisibility.Private,
                 _ => MemberVisibility.Public,
             };
+
+            // Abstract/concrete signature classification (constructors excluded from
+            // both sets; name comparison is case-insensitive like PeopleCode itself).
+            if (!method.IsConstructor &&
+                !string.Equals(method.Name, node.Name, StringComparison.OrdinalIgnoreCase))
+            {
+                var signature = TypeMetadata.MethodSignature(method.Name, method.Parameters.Count);
+                if (node.IsInterface || method.IsAbstract)
+                    _abstractMemberSignatures.Add(signature);
+                else
+                    _concreteMemberSignatures.Add(signature);
+            }
         }
 
         // Visit property declarations
@@ -177,6 +193,15 @@ public class TypeMetadataBuilder : AstVisitorBase
                 VisibilityModifier.Private => MemberVisibility.Private,
                 _ => MemberVisibility.Public,
             };
+
+            // Abstract/concrete signature classification: every interface property is a
+            // requirement, only abstract class properties are. Instance variables are
+            // intentionally never part of either set.
+            var propertySignature = TypeMetadata.PropertySignature(property.Name);
+            if (node.IsInterface || property.IsAbstract)
+                _abstractMemberSignatures.Add(propertySignature);
+            else
+                _concreteMemberSignatures.Add(propertySignature);
         }
 
         // Visit instance variables (classes only - interfaces won't have any)

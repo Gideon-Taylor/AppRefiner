@@ -92,25 +92,19 @@ namespace AppRefiner.Stylers
             settingsService.LoadStylerStates(stylers, stylerGrid);
         }
 
+        // NOTE: The InvalidMemberAccess styler (and its derived member-existence cache)
+        // has been replaced by the library-side InvalidMemberAccessCheck, which keeps no
+        // cache of its own. Type metadata is cached by the per-process TypeResolver,
+        // which is invalidated on save by MainForm.InvalidateTypeCacheForEditor and is
+        // per-AppDesignerProcess on process switch — so there is no styler-side cache
+        // left to clear. Both methods are intentionally no-ops; signatures are kept so
+        // existing MainForm call sites still compile (dead calls to be removed later).
         public void ClearMemberCache()
         {
-            foreach (var styler in stylers)
-            {
-                if (styler is InvalidMemberAccess invalidMemberAccessStyler)
-                {
-                    invalidMemberAccessStyler.ClearMemberCache();
-                }
-            }
         }
 
-        public void ClearMemberCacheForClass(string appClassPath)         {
-            foreach (var styler in stylers)
-            {
-                if (styler is InvalidMemberAccess invalidMemberAccessStyler)
-                {
-                    invalidMemberAccessStyler.ClearMemberCacheForClass(appClassPath);
-                }
-            }
+        public void ClearMemberCacheForClass(string appClassPath)
+        {
         }
 
         /// <summary>
