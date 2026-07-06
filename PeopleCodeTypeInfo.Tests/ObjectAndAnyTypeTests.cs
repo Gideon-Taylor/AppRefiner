@@ -127,6 +127,63 @@ public class ObjectAndAnyTypeTests
         Assert.True(anyType.IsAssignableFrom(booleanType), "any should accept boolean primitive");
     }
 
+    [Fact]
+    public void PrimitiveType_AcceptsAnyType()
+    {
+        // The reverse direction of AnyType_AcceptsPrimitives: a concrete primitive
+        // variable must also accept an "any" value being assigned into it (e.g. a
+        // record field whose data type couldn't be resolved). This is what
+        // PrimitiveTypeInfo.IsAssignableFrom's `other.Kind == TypeKind.Any` check exists for.
+        var anyType = AnyTypeInfo.Instance;
+
+        Assert.True(PrimitiveTypeInfo.Number.IsAssignableFrom(anyType), "number should accept any");
+        Assert.True(PrimitiveTypeInfo.String.IsAssignableFrom(anyType), "string should accept any");
+        Assert.True(PrimitiveTypeInfo.Date.IsAssignableFrom(anyType), "date should accept any");
+        Assert.True(PrimitiveTypeInfo.Boolean.IsAssignableFrom(anyType), "boolean should accept any");
+    }
+
+    [Fact]
+    public void FieldWithUnresolvedDataType_IsAssignableInBothDirections()
+    {
+        // Regression test: a record field whose data type can't be resolved (e.g. the
+        // metadata resolver has no schema for it) must resolve to the canonical
+        // AnyTypeInfo, not a PrimitiveTypeInfo merely tagged with PeopleCodeType.Any.
+        // PrimitiveTypeInfo.Kind is always TypeKind.Primitive regardless of which
+        // PeopleCodeType it wraps, so a "PrimitiveTypeInfo(Any)" fails every
+        // `is AnyTypeInfo` / `Kind == TypeKind.Any` compatibility check used by the
+        // type checker - breaking assignment in both directions:
+        //   &subtotal = &order.SOME_FIELD.Value        (Any value -> number variable)
+        //   &order.SOME_FIELD.Value = &subtotal         (number value -> Any field)
+        var resolver = new UnresolvedFieldTypeResolver();
+        var field = new FieldTypeInfo("ORDER_HDR", "SOME_FIELD", resolver);
+        var fieldValueType = field.GetFieldDataType();
+
+        Assert.IsType<AnyTypeInfo>(fieldValueType);
+        Assert.True(PrimitiveTypeInfo.Number.IsAssignableFrom(fieldValueType), "number should accept an unresolved field's value");
+        Assert.True(fieldValueType.IsAssignableFrom(PrimitiveTypeInfo.Number), "an unresolved field's value should accept a number");
+    }
+
+    /// <summary>
+    /// Mimics a connected-but-unknown-field resolver: correctly returns the canonical
+    /// AnyTypeInfo (via TypeInfo.FromPeopleCodeType) rather than hand-rolling a
+    /// PrimitiveTypeInfo, matching the fixed AppRefiner.Database.DatabaseTypeMetadataResolver.
+    /// </summary>
+    private sealed class UnresolvedFieldTypeResolver : PeopleCodeTypeInfo.Contracts.ITypeMetadataResolver
+    {
+        protected override PeopleCodeTypeInfo.Inference.TypeMetadata? GetTypeMetadataCore(string qualifiedName) => null;
+
+        protected override Task<PeopleCodeTypeInfo.Inference.TypeMetadata?> GetTypeMetadataCoreAsync(string qualifiedName)
+            => Task.FromResult<PeopleCodeTypeInfo.Inference.TypeMetadata?>(null);
+
+        protected override TypeInfo GetFieldTypeCore(string fieldName)
+            => TypeInfo.FromPeopleCodeType(PeopleCodeType.Any);
+
+        protected override Task<TypeInfo> GetFieldTypeCoreAsync(string fieldName)
+            => Task.FromResult(TypeInfo.FromPeopleCodeType(PeopleCodeType.Any));
+
+        protected override List<string> GetClassesInPackageCore(string packagePath) => new();
+    }
+
     #endregion
 
     #region Common Type Tests

@@ -113,7 +113,7 @@ namespace AppRefiner.Database
                 var fieldType = _dataManager.GetFieldType(fieldName);
                 if (fieldType == PeopleCodeType.Unknown) fieldType = PeopleCodeType.Any;
 
-                return new PrimitiveTypeInfo(fieldType.ToString(), fieldType) { IsAssignable = true};
+                return TypeInfo.FromPeopleCodeType(fieldType).WithAssignable(true);
             }
             catch (Exception ex)
             {
