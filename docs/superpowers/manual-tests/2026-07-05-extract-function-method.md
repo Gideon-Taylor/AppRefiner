@@ -233,7 +233,53 @@ Select the two assignment lines. In the dialog, set Return to **"(none)"** (so b
 
 ---
 
-## E. Things to eyeball (known cosmetic items, not blockers)
+## E. New-function placement (main-flow extraction)  *(regression guard for the insertion-point fix)*
+
+All of these extract from the program's top-level main flow (no enclosing `Function`), so `FunctionInsertionIndex` must pick where the section walk (Imports → Functions → ComponentAndGlobalVariables → LocalVariables → Constants → MainBlock) says the Functions section belongs — not just drop the new function immediately above the first executable statement.
+
+### E1 — Existing functions present → new one goes ABOVE them, not below
+```
+Function Helper()
+   MessageBox(0, "", 0, 0, "existing");
+End-Function;
+
+Local number &a = 1;
+Local number &b = 2;
+MessageBox(0, "", 0, 0, "sum=" | (&a + &b));
+```
+Select the last `MessageBox(...)` line. **Expected:** the new `Function ExtractedFunction(...)` is inserted **above** `Function Helper()`, not between `Helper` and the `Local` declarations.
+
+### E2 — No functions, but Component/Global/Local/Constant declarations exist → goes above the first one
+```
+import PACKAGE:*;
+
+Local number &a = 1;
+Local number &b = 2;
+MessageBox(0, "", 0, 0, "sum=" | (&a + &b));
+```
+Select the `MessageBox(...)` line. **Expected:** the new function is inserted right after the `import` line and right **above** `Local number &a = 1;` — not immediately above the `MessageBox` line.
+
+### E3 — Only Imports exist (no functions/globals/locals/constants) → goes right after the last import
+```
+import PACKAGE:*;
+import PACKAGE:OtherClass;
+
+MessageBox(0, "", 0, 0, "hello");
+```
+Select the `MessageBox(...)` line. **Expected:** the new function lands directly after `import PACKAGE:OtherClass;`, before the `MessageBox` call.
+
+### E4 — Nothing but a flowerbox header → goes below the comment, not above it
+```
+/*******************************************************
+ * Change tracking: ...
+ *******************************************************/
+MessageBox(0, "", 0, 0, "hello");
+```
+Select the `MessageBox(...)` line. **Expected:** the new function is inserted **below** the flowerbox comment (the comment must stay at the very top of the file, not get sandwiched between it and the new function).
+
+---
+
+## F. Things to eyeball (known cosmetic items, not blockers)
 
 - **Blank line between methods (App Class):** the new method implementation is inserted right after the previous `end-method;` — check spacing looks acceptable on a **CRLF** file (there's a known risk of tight spacing / a stray line-ending between the two methods on CRLF documents; verify it's not visibly broken).
 - **Preview vs. generated order:** with 2+ `out` params, glance that the dialog's signature preview lists params in the same order as the finally-generated signature.

@@ -664,9 +664,20 @@ namespace AppRefiner.Refactors
             return appClass.SourceSpan.End.ByteIndex + 1;
         }
 
-        // Byte index of the line where the new Function block should be inserted:
-        // the start line (incl. leading comments) of the enclosing function
-        // implementation, or the start of the main block otherwise.
+        // Byte index of the line where the new Function block should be inserted.
+        //
+        // If the selection sits inside an existing function's body, the new function
+        // goes right above that enclosing function (grouped with it).
+        //
+        // Otherwise (selection is in the program's main flow) a non-class program's
+        // declarations always appear in a fixed order before the executable main
+        // block: Imports, Functions, ComponentAndGlobalVariables, LocalVariables,
+        // Constants, MainBlock. Walk that order from the bottom up, starting at
+        // MainBlock and letting each non-empty section override the candidate with
+        // its own first member — so the new function lands at the top of the
+        // Functions section if one exists, else right above whichever declaration
+        // section comes first, else (nothing at all) right after the last Import,
+        // else at the very top of the file.
         private int FunctionInsertionIndex()
         {
             var program = selectedStatements[0].GetRoot() as ProgramNode;
@@ -674,24 +685,36 @@ namespace AppRefiner.Refactors
                 && f.SourceSpan.Start.ByteIndex <= RangeStart
                 && f.SourceSpan.End.ByteIndex >= RangeEnd);
 
-            int line;
             if (enclosingFunc != null)
-            {
-                var firstComment = enclosingFunc.GetLeadingComments().FirstOrDefault();
-                line = firstComment != null
-                    ? Math.Min(firstComment.SourceSpan.Start.Line, enclosingFunc.SourceSpan.Start.Line)
-                    : enclosingFunc.SourceSpan.Start.Line;
-            }
-            else if (program?.MainBlock != null)
-            {
-                line = program.MainBlock.SourceSpan.Start.Line;
-            }
-            else
-            {
-                line = selectedStatements[0].SourceSpan.Start.Line;
-            }
+                return InsertionIndexBefore(enclosingFunc);
+
+            if (program == null || program.MainBlock == null)
+                return ScintillaManager.GetLineStartIndex(Editor, selectedStatements[0].SourceSpan.Start.Line);
+
+            AstNode anchor = program.MainBlock;
+            if (program.Constants.Count > 0) anchor = FirstByPosition(program.Constants);
+            if (program.LocalVariables.Count > 0) anchor = FirstByPosition(program.LocalVariables);
+            if (program.ComponentAndGlobalVariables.Count > 0) anchor = FirstByPosition(program.ComponentAndGlobalVariables);
+            if (program.Functions.Count > 0) anchor = FirstByPosition(program.Functions);
+
+            return InsertionIndexBefore(anchor);
+        }
+
+        // Byte index of `node`'s own line, pulled back to cover any comment block
+        // directly attached above it (e.g. a flowerbox change-tracking header) so the
+        // new insertion doesn't get sandwiched between the comment and the node it
+        // documents.
+        private int InsertionIndexBefore(AstNode node)
+        {
+            var firstComment = node.GetLeadingComments().FirstOrDefault();
+            int line = firstComment != null
+                ? Math.Min(firstComment.SourceSpan.Start.Line, node.SourceSpan.Start.Line)
+                : node.SourceSpan.Start.Line;
             return ScintillaManager.GetLineStartIndex(Editor, line);
         }
+
+        private static T FirstByPosition<T>(IEnumerable<T> nodes) where T : AstNode
+            => nodes.OrderBy(n => n.SourceSpan.Start.ByteIndex).First();
 
         private void LocateStatementRange(ProgramNode program)
         {
