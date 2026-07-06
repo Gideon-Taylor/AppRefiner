@@ -294,6 +294,23 @@ namespace AppRefiner.Refactors
                     return;
                 }
 
+                // Run type inference when the refactor needs it. Best-effort: with no DB
+                // connection we substitute NullTypeMetadataResolver so builtins/literals
+                // still resolve; failures are non-fatal (refactor sees Unknown/Any types).
+                if (refactorClass.RequiresTypeInference)
+                {
+                    try
+                    {
+                        var resolver = activeEditor.AppDesignerProcess?.TypeResolver
+                            ?? (PeopleCodeTypeInfo.Contracts.ITypeMetadataResolver)new NullTypeMetadataResolver();
+                        Services.TypeInferenceRunner.Run(program, activeEditor, resolver, mainForm.TypeExtensionManager);
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.LogException(ex, "RefactorManager: type inference failed; proceeding with best-effort types");
+                    }
+                }
+
                 // Initialize the refactor
                 refactorClass.Initialize(activeEditor.ContentString, currentCursorPosition);
 

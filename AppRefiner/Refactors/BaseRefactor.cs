@@ -2,6 +2,7 @@ using DiffPlex.Model;
 using PeopleCodeParser.SelfHosted;
 using PeopleCodeParser.SelfHosted.Visitors;
 using System.Diagnostics;
+using System.Text;
 
 namespace AppRefiner.Refactors
 {
@@ -71,6 +72,14 @@ namespace AppRefiner.Refactors
         public virtual bool RunOnIncompleteParse => true;
 
         /// <summary>
+        /// Gets whether type inference should be run on the freshly parsed program
+        /// before this refactor's visitor executes. Inference is best-effort: without
+        /// a database connection, builtins and literals still resolve but app class
+        /// and record metadata lookups return null.
+        /// </summary>
+        public virtual bool RequiresTypeInference => false;
+
+        /// <summary>
         /// Gets the ScintillaEditor instance
         /// </summary>
         public ScintillaEditor Editor { get; }
@@ -90,11 +99,27 @@ namespace AppRefiner.Refactors
         /// </summary>
         protected int CurrentCursorPosition => CurrentPosition;
 
+        /// <summary>
+        /// Gets the selection start byte position captured when the refactor was created
+        /// </summary>
+        public int SelectionStart { get; }
+
+        /// <summary>
+        /// Gets the selection end byte position (exclusive) captured when the refactor was created
+        /// </summary>
+        public int SelectionEnd { get; }
+
+        /// <summary>
+        /// Gets whether a non-empty selection existed when the refactor was created
+        /// </summary>
+        public bool HasSelection => SelectionEnd > SelectionStart;
+
         #endregion
 
         #region Private Fields
 
         protected string? originalSource;
+        private byte[]? sourceBytes;
         private int cursorPosition = -1;
         private bool failed;
         private string? failureMessage;
@@ -110,6 +135,7 @@ namespace AppRefiner.Refactors
             Editor = editor;
             CurrentPosition = ScintillaManager.GetCursorPosition(editor);
             LineNumber = ScintillaManager.GetCurrentLineNumber(editor);
+            (SelectionStart, SelectionEnd) = ScintillaManager.GetSelectionRange(editor);
         }
 
         #region Refactor Implementation
@@ -128,6 +154,7 @@ namespace AppRefiner.Refactors
         public virtual void Initialize(string source, int cursorPosition)
         {
             this.originalSource = source;
+            sourceBytes = Encoding.UTF8.GetBytes(source);
             this.cursorPosition = cursorPosition;
             failed = false;
             failureMessage = null;
@@ -186,6 +213,48 @@ namespace AppRefiner.Refactors
         #endregion
 
         #region Text Editing Methods
+
+        /// <summary>
+        /// UTF-8 bytes of the original source. Spans and Scintilla positions are byte
+        /// offsets, so all source slicing must go through this array, never string indexes.
+        /// </summary>
+        protected byte[] SourceBytes => sourceBytes ?? throw new InvalidOperationException("Initialize has not been called");
+
+        /// <summary>
+        /// Extracts source text for a byte range (end exclusive)
+        /// </summary>
+        protected string GetSourceText(int startByteIndex, int endByteIndex)
+        {
+            int start = Math.Max(0, startByteIndex);
+            int end = Math.Min(SourceBytes.Length, endByteIndex);
+            if (end <= start) return string.Empty;
+            return Encoding.UTF8.GetString(SourceBytes, start, end - start);
+        }
+
+        /// <summary>
+        /// Extracts source text for a source span
+        /// </summary>
+        protected string GetSourceText(SourceSpan span)
+            => GetSourceText(span.Start.ByteIndex, span.End.ByteIndex);
+
+        /// <summary>
+        /// Gets the document's line-ending convention
+        /// </summary>
+        protected string NewLine => (originalSource ?? "").Contains("\r\n") ? "\r\n" : "\n";
+
+        /// <summary>
+        /// Gets the leading whitespace of the line containing the given byte position
+        /// </summary>
+        protected string GetLineIndent(int byteIndex)
+        {
+            int lineStart = Math.Min(byteIndex, SourceBytes.Length);
+            while (lineStart > 0 && SourceBytes[lineStart - 1] != (byte)'\n')
+                lineStart--;
+            int i = lineStart;
+            while (i < SourceBytes.Length && (SourceBytes[i] == (byte)' ' || SourceBytes[i] == (byte)'\t'))
+                i++;
+            return GetSourceText(lineStart, i);
+        }
 
         /// <summary>
         /// Applies the collected edits to the document

@@ -1369,6 +1369,16 @@ namespace AppRefiner
         }
 
         /// <summary>
+        /// Gets the current selection range as byte positions without fetching the text.
+        /// </summary>
+        public static (int Start, int End) GetSelectionRange(ScintillaEditor editor)
+        {
+            var start = (int)editor.SendMessage(SCI_GETSELECTIONSTART, IntPtr.Zero, IntPtr.Zero);
+            var end = (int)editor.SendMessage(SCI_GETSELECTIONEND, IntPtr.Zero, IntPtr.Zero);
+            return (start, end);
+        }
+
+        /// <summary>
         /// Sets the selection range in the Scintilla editor
         /// </summary>
         /// <param name="editor">The editor to set the selection in</param>

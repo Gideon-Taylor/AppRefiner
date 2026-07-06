@@ -120,16 +120,5 @@ public class TypeErrorStyler : BaseStyler
     /// (e.g. "Dynamic Reference") conservatively declares as "any".
     /// </summary>
     private static string RenderDeclaredType(PeopleCodeTypeInfo.Types.TypeInfo? typeInfo)
-    {
-        var name = typeInfo?.Name;
-        if (string.IsNullOrEmpty(name))
-        {
-            return "any";
-        }
-
-        return System.Text.RegularExpressions.Regex.IsMatch(
-            name, @"^(array of )*[A-Za-z][A-Za-z0-9_]*(:[A-Za-z0-9_]+)*$", System.Text.RegularExpressions.RegexOptions.IgnoreCase)
-            ? name
-            : "any";
-    }
+        => Services.TypeInferenceRunner.RenderDeclaredType(typeInfo);
 }

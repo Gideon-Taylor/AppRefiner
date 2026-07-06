@@ -1,7 +1,6 @@
 using AppRefiner.Database;
 using AppRefiner.Plugins;
-using PeopleCodeParser.SelfHosted.Visitors; // For settings serialization and TypeInferenceVisitor
-using PeopleCodeTypeInfo.Inference; // For TypeMetadataBuilder
+using PeopleCodeParser.SelfHosted.Visitors; // For IAstVisitor
 using System.Collections.Concurrent;
 using System.Reflection; // Added for Assembly.GetExecutingAssembly
 using PeopleCodeParser.SelfHosted.Nodes; // For ProgramNode
@@ -361,7 +360,6 @@ namespace AppRefiner.Stylers
         {
             try
             {
-                // Get the AppDesigner process and TypeResolver
                 var appDesignerProcess = editor?.AppDesignerProcess;
                 if (appDesignerProcess == null)
                 {
@@ -376,91 +374,12 @@ namespace AppRefiner.Stylers
                     return;
                 }
 
-                // Determine qualified name for the program
-                string qualifiedName = DetermineQualifiedName(program, editor);
-
-                // Extract metadata from the program
-                var programMetadata = TypeMetadataBuilder.ExtractMetadata(program, qualifiedName);
-
-                // Determine default record/field for record PeopleCode
-                string? defaultRecord = null;
-                string? defaultField = null;
-                if (editor.Caption?.EndsWith("(Record PeopleCode)") == true)
-                {
-                    var parts = qualifiedName.Split('.');
-                    if (parts.Length >= 2)
-                    {
-                        defaultRecord = parts[0];
-                        defaultField = parts[1];
-                    }
-                }
-
-                // Run type inference - this populates node.Attributes["TypeInfo"] throughout the AST
-                TypeInferenceVisitor.Run(
-                    program,
-                    programMetadata,
-                    typeResolver,
-                    defaultRecord,
-                    defaultField,
-                    inferAutoDeclaredTypes: false,
-                    onUndefinedVariable: mainForm.TypeExtensionManager != null ? mainForm.TypeExtensionManager.HandleUndefinedVariable : null);
-
-                Debug.Log($"StylerManager: Type inference completed for '{qualifiedName}'");
+                Services.TypeInferenceRunner.Run(program, editor!, typeResolver, mainForm.TypeExtensionManager);
+                Debug.Log("StylerManager: Type inference completed");
             }
             catch (Exception ex)
             {
                 Debug.LogException(ex, "StylerManager: Error during type inference");
-                // Don't fail the entire styler pipeline if type inference fails
-            }
-        }
-
-        /// <summary>
-        /// Determines the qualified name for the current program.
-        /// Extracted from TypeErrorStyler for reuse.
-        /// </summary>
-        /// <param name="node">The program AST node</param>
-        /// <param name="editor">The editor containing the program</param>
-        /// <returns>The qualified name of the program</returns>
-        private string DetermineQualifiedName(ProgramNode node, ScintillaEditor editor)
-        {
-            // Try to extract from AST structure first
-            if (node.AppClass != null)
-            {
-                var className = node.AppClass.Name;
-
-                if (editor?.Caption != null && !string.IsNullOrWhiteSpace(editor.Caption))
-                {
-                    var openTarget = OpenTargetBuilder.CreateFromCaption(editor.Caption);
-                    if (openTarget != null)
-                    {
-                        var methodIndex = Array.IndexOf(openTarget.ObjectIDs, PSCLASSID.METHOD);
-                        openTarget.ObjectIDs[methodIndex] = PSCLASSID.NONE;
-                        openTarget.ObjectValues[methodIndex] = null;
-                        return openTarget.Path;
-                    }
-                    else
-                    {
-                        return className;
-                    }
-                }
-                else
-                {
-                    return className;
-                }
-            }
-            else
-            {
-                // For function libraries or other programs
-                if (editor?.Caption != null && !string.IsNullOrWhiteSpace(editor.Caption))
-                {
-                    var openTarget = OpenTargetBuilder.CreateFromCaption(editor.Caption);
-                    if (openTarget != null)
-                    {
-                        return string.Join(".", openTarget.ObjectValues);
-                    }
-                }
-
-                return "Program";
             }
         }
     }
