@@ -341,4 +341,28 @@ end-method;
             d.Message.Contains("Nope") &&
             d.Message.Contains("method"));
     }
+
+    [Fact]
+    public void Does_not_report_instance_variable_accessed_as_property_on_self()
+    {
+        // Instance variables are declared with a leading '&' but are validly accessed as a
+        // property via %This.Name (without the '&'). The check must recognize CVProduct even
+        // though its metadata key is "&CVProduct" (this is the mismatch that was fixed).
+        const string src = @"
+class Foo
+   method FooBar();
+private
+   instance IS_CO:Product &CVProduct;
+end-class;
+
+method FooBar
+   %This.CVProduct.DoAThing();
+end-method;
+";
+        var diags = RunClass(src, "PKG:Foo", new FakeTypeMetadataResolver());
+
+        Assert.DoesNotContain(diags, d =>
+            d.Code == DiagnosticCode.InvalidMemberAccess &&
+            d.Message.Contains("CVProduct"));
+    }
 }

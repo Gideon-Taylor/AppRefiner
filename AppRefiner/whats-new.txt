@@ -18,6 +18,9 @@ BUG FIXES
   grouped at the top of your existing functions, instead of being dropped just
   above the first line of main code (below existing functions, variables, and
   constants).
+• Instance Variables via %This - Reading an instance variable through %This
+  (for example %This.MyVar, without the &) is no longer wrongly flagged as an
+  unknown property of the class.
 
 
 VERSION 1.3.0

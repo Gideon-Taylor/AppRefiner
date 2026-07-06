@@ -142,7 +142,11 @@ public sealed class InvalidMemberAccessCheck : CompileCheckBase
             else
             {
                 if (metadata.Properties.ContainsKey(memberName)) return true;
-                if (metadata.InstanceVariables.ContainsKey(memberName)) return true;
+                // Instance variables are keyed by their declared name, which includes the
+                // leading '&' (e.g. "&CVProduct"), but they are accessed as a property via
+                // %This.CVProduct without it. Prepend '&' to match — this mirrors how
+                // TypeInferenceVisitor resolves the same access (it looks up $"&{name}").
+                if (metadata.InstanceVariables.ContainsKey("&" + memberName)) return true;
             }
 
             // Chain terminates at a builtin base — delegate to builtin lookup
