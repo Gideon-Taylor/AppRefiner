@@ -1,3 +1,358 @@
+# Snapshot History Dialog Rework Implementation Plan
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+
+**Goal:** Replace the click-and-inspect Snapshot History dialog with a split-view dialog: snapshot list with change stats on the left, live diff preview on the right, plus Copy Original / Copy Diff / Apply actions.
+
+**Architecture:** A new static `UnifiedDiffBuilder` helper (over DiffPlex) produces line diffs, collapsed hunks, per-snapshot stats, and unified-diff text. `SnapshotHistoryDialog` is rewritten around a `SplitContainer` with a docked, edge-resizable borderless form. Two new persisted user settings hold the diff view mode and direction.
+
+**Tech Stack:** .NET 8 WinForms, DiffPlex 1.9.0 (already referenced), `Properties.Settings` for persistence.
+
+**Spec:** `docs/superpowers/specs/2026-07-03-snapshot-dialog-rework-design.md`
+
+## Global Constraints
+
+- **NO commits.** Tim has parallel uncommitted work on main; he will commit this feature himself later. Every "commit" step normally found in plans is intentionally absent.
+- **Do NOT touch the "what's new" document** (`AppRefiner/Resources/whatsnew*` or similar) — it overlaps with Tim's other in-flight work.
+- **Only touch these files:** `AppRefiner/Snapshots/UnifiedDiffBuilder.cs` (new), `AppRefiner/Dialogs/SnapshotHistoryDialog.cs`, `AppRefiner/Properties/Settings.settings`, `AppRefiner/Properties/Settings.Designer.cs`. Tim's parallel work is in stylers, refactors, and the declare-function dialog — do not modify anything else.
+- **Builds:** verification is `dotnet build AppRefiner/AppRefiner.csproj` (~5 s). Tim normally runs builds himself — get his OK once at the start of the session before running builds, or stop at each build checkpoint and ask.
+- **No automated tests:** AppRefiner has no test project (the xunit project only covers `PeopleCodeTypeInfo`). Verification is compile + the manual checklist in Task 4, per project norms.
+- The custom `Debug.Log()` is AppRefiner's own class — do not add `using System.Diagnostics` debug calls.
+- Never use `MessageBox.Show` — use the `MessageBoxDialog` pattern (see Task 3 code).
+
+---
+
+### Task 1: New persisted settings
+
+**Files:**
+- Modify: `AppRefiner/Properties/Settings.settings` (add two `<Setting>` elements before `</Settings>`)
+- Modify: `AppRefiner/Properties/Settings.Designer.cs` (add two properties at the end of the `Settings` class, after `useEnhancedEditor`)
+
+**Interfaces:**
+- Produces: `Properties.Settings.Default.SnapshotDiffViewMode` (`int`: 0 = Changes only, 1 = Full file, 2 = Snapshot content; default 0) and `Properties.Settings.Default.SnapshotDiffDirectionCurrentFirst` (`bool`: `false` = snapshot → current; default `false`). Task 3 reads and writes both.
+
+- [ ] **Step 1: Add settings to Settings.settings**
+
+In `AppRefiner/Properties/Settings.settings`, add before the closing `</Settings>` tag (after the `useEnhancedEditor` setting):
+
+```xml
+    <Setting Name="SnapshotDiffViewMode" Type="System.Int32" Scope="User">
+      <Value Profile="(Default)">0</Value>
+    </Setting>
+    <Setting Name="SnapshotDiffDirectionCurrentFirst" Type="System.Boolean" Scope="User">
+      <Value Profile="(Default)">False</Value>
+    </Setting>
+```
+
+- [ ] **Step 2: Add matching properties to Settings.Designer.cs**
+
+In `AppRefiner/Properties/Settings.Designer.cs`, add inside the `Settings` class, after the last existing property (`useEnhancedEditor`), following the file's exact generated style:
+
+```csharp
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("0")]
+        public int SnapshotDiffViewMode {
+            get {
+                return ((int)(this["SnapshotDiffViewMode"]));
+            }
+            set {
+                this["SnapshotDiffViewMode"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("False")]
+        public bool SnapshotDiffDirectionCurrentFirst {
+            get {
+                return ((bool)(this["SnapshotDiffDirectionCurrentFirst"]));
+            }
+            set {
+                this["SnapshotDiffDirectionCurrentFirst"] = value;
+            }
+        }
+```
+
+- [ ] **Step 3: Build to verify**
+
+Run: `dotnet build AppRefiner/AppRefiner.csproj`
+Expected: Build succeeded, 0 errors.
+
+---
+
+### Task 2: UnifiedDiffBuilder helper
+
+**Files:**
+- Create: `AppRefiner/Snapshots/UnifiedDiffBuilder.cs`
+
+**Interfaces:**
+- Consumes: DiffPlex (`DiffPlex.Differ.CreateLineDiffs(string, string, bool)` → `DiffPlex.Model.DiffResult` with `DiffBlocks` / `PiecesForA` / `PiecesForB`).
+- Produces (all in namespace `AppRefiner.Snapshots`, used by Task 3):
+  - `enum DiffLineKind { Context, Added, Removed }`
+  - `class DiffLine { DiffLineKind Kind; string Text; }`
+  - `class DiffHunk { int OldStart, OldCount, NewStart, NewCount; List<DiffLine> Lines; string Header; }`
+  - `class DiffStats { int Added; int Removed; }`
+  - `static class UnifiedDiffBuilder`:
+    - `DiffStats ComputeStats(string oldText, string newText)`
+    - `List<DiffLine> BuildLines(string oldText, string newText)` — full-file interleaved line list
+    - `List<DiffHunk> BuildHunks(string oldText, string newText, int context = 3)` — collapsed hunks, nearby hunks merged
+    - `string FormatUnifiedDiff(string oldLabel, string newLabel, List<DiffHunk> hunks)` — `---`/`+++` headers + `@@` hunks
+
+- [ ] **Step 1: Create the file with the complete implementation**
+
+Create `AppRefiner/Snapshots/UnifiedDiffBuilder.cs`:
+
+```csharp
+using DiffPlex;
+using DiffPlex.Model;
+using System.Text;
+
+namespace AppRefiner.Snapshots
+{
+    /// <summary>
+    /// Kind of a line within a diff result
+    /// </summary>
+    public enum DiffLineKind
+    {
+        Context,
+        Added,
+        Removed
+    }
+
+    /// <summary>
+    /// A single line in a diff result
+    /// </summary>
+    public class DiffLine
+    {
+        public DiffLineKind Kind { get; }
+        public string Text { get; }
+
+        public DiffLine(DiffLineKind kind, string text)
+        {
+            Kind = kind;
+            Text = text;
+        }
+    }
+
+    /// <summary>
+    /// A contiguous group of changed lines with surrounding context lines
+    /// </summary>
+    public class DiffHunk
+    {
+        public int OldStart { get; set; }
+        public int OldCount { get; set; }
+        public int NewStart { get; set; }
+        public int NewCount { get; set; }
+        public List<DiffLine> Lines { get; } = new();
+
+        /// <summary>
+        /// Unified diff hunk header, e.g. "@@ -45,7 +45,8 @@". Follows the git
+        /// convention of referencing the line before the hunk when one side
+        /// contributes no lines.
+        /// </summary>
+        public string Header
+        {
+            get
+            {
+                int oldStart = OldCount == 0 ? OldStart - 1 : OldStart;
+                int newStart = NewCount == 0 ? NewStart - 1 : NewStart;
+                return $"@@ -{oldStart},{OldCount} +{newStart},{NewCount} @@";
+            }
+        }
+    }
+
+    /// <summary>
+    /// Added/removed line counts between two versions of a text
+    /// </summary>
+    public class DiffStats
+    {
+        public int Added { get; set; }
+        public int Removed { get; set; }
+    }
+
+    /// <summary>
+    /// Builds line diffs, collapsed hunks and unified diff text from two
+    /// versions of a text. Shared by the snapshot history dialog's preview
+    /// pane, its per-snapshot change stats, and its Copy Diff action.
+    /// </summary>
+    public static class UnifiedDiffBuilder
+    {
+        private static readonly IDiffer differ = new Differ();
+
+        /// <summary>
+        /// Counts lines added and removed going from oldText to newText
+        /// </summary>
+        public static DiffStats ComputeStats(string oldText, string newText)
+        {
+            var result = differ.CreateLineDiffs(oldText ?? string.Empty, newText ?? string.Empty, false);
+            var stats = new DiffStats();
+
+            foreach (var block in result.DiffBlocks)
+            {
+                stats.Removed += block.DeleteCountA;
+                stats.Added += block.InsertCountB;
+            }
+
+            return stats;
+        }
+
+        /// <summary>
+        /// Produces the full interleaved line list: context lines from the old
+        /// text with removed lines followed by their replacement added lines.
+        /// </summary>
+        public static List<DiffLine> BuildLines(string oldText, string newText)
+        {
+            var result = differ.CreateLineDiffs(oldText ?? string.Empty, newText ?? string.Empty, false);
+            var lines = new List<DiffLine>();
+            int aIndex = 0;
+
+            foreach (var block in result.DiffBlocks)
+            {
+                while (aIndex < block.DeleteStartA)
+                {
+                    lines.Add(new DiffLine(DiffLineKind.Context, result.PiecesForA[aIndex]));
+                    aIndex++;
+                }
+
+                for (int i = 0; i < block.DeleteCountA; i++)
+                {
+                    lines.Add(new DiffLine(DiffLineKind.Removed, result.PiecesForA[block.DeleteStartA + i]));
+                }
+
+                for (int i = 0; i < block.InsertCountB; i++)
+                {
+                    lines.Add(new DiffLine(DiffLineKind.Added, result.PiecesForB[block.InsertStartB + i]));
+                }
+
+                aIndex = block.DeleteStartA + block.DeleteCountA;
+            }
+
+            while (aIndex < result.PiecesForA.Length)
+            {
+                lines.Add(new DiffLine(DiffLineKind.Context, result.PiecesForA[aIndex]));
+                aIndex++;
+            }
+
+            return lines;
+        }
+
+        /// <summary>
+        /// Groups changes into hunks with the given number of context lines.
+        /// Changes whose context regions touch or overlap share a hunk.
+        /// </summary>
+        public static List<DiffHunk> BuildHunks(string oldText, string newText, int context = 3)
+        {
+            var lines = BuildLines(oldText, newText);
+            var hunks = new List<DiffHunk>();
+
+            // 1-based old/new line numbers at each position in the line list
+            var oldNums = new int[lines.Count];
+            var newNums = new int[lines.Count];
+            int oldNum = 1, newNum = 1;
+            for (int i = 0; i < lines.Count; i++)
+            {
+                oldNums[i] = oldNum;
+                newNums[i] = newNum;
+                if (lines[i].Kind != DiffLineKind.Added) oldNum++;
+                if (lines[i].Kind != DiffLineKind.Removed) newNum++;
+            }
+
+            int pos = 0;
+            while (pos < lines.Count)
+            {
+                if (lines[pos].Kind == DiffLineKind.Context)
+                {
+                    pos++;
+                    continue;
+                }
+
+                int start = Math.Max(pos - context, 0);
+                int lastChange = pos;
+                int scan = pos + 1;
+                while (scan < lines.Count && scan - lastChange <= context * 2)
+                {
+                    if (lines[scan].Kind != DiffLineKind.Context)
+                    {
+                        lastChange = scan;
+                    }
+                    scan++;
+                }
+                int end = Math.Min(lastChange + context, lines.Count - 1);
+
+                var hunk = new DiffHunk { OldStart = oldNums[start], NewStart = newNums[start] };
+                for (int i = start; i <= end; i++)
+                {
+                    hunk.Lines.Add(lines[i]);
+                    if (lines[i].Kind != DiffLineKind.Added) hunk.OldCount++;
+                    if (lines[i].Kind != DiffLineKind.Removed) hunk.NewCount++;
+                }
+                hunks.Add(hunk);
+
+                pos = end + 1;
+            }
+
+            return hunks;
+        }
+
+        /// <summary>
+        /// Formats hunks as unified diff text with ---/+++ header lines.
+        /// Always emits the header lines, even when there are no hunks.
+        /// </summary>
+        public static string FormatUnifiedDiff(string oldLabel, string newLabel, List<DiffHunk> hunks)
+        {
+            var sb = new StringBuilder();
+            sb.AppendLine($"--- {oldLabel}");
+            sb.AppendLine($"+++ {newLabel}");
+
+            foreach (var hunk in hunks)
+            {
+                sb.AppendLine(hunk.Header);
+                foreach (var line in hunk.Lines)
+                {
+                    char prefix = line.Kind switch
+                    {
+                        DiffLineKind.Added => '+',
+                        DiffLineKind.Removed => '-',
+                        _ => ' '
+                    };
+                    sb.AppendLine($"{prefix}{line.Text}");
+                }
+            }
+
+            return sb.ToString();
+        }
+    }
+}
+```
+
+Note: if `DiffPlex.Model.DiffResult`'s piece collections are not named `PiecesForA`/`PiecesForB` in DiffPlex 1.9.0 the build will say so — check the actual property names with IntelliSense/metadata and adjust (they are the old-text and new-text line arrays; `DiffBlocks` entries carry `DeleteStartA`, `DeleteCountA`, `InsertStartB`, `InsertCountB`).
+
+- [ ] **Step 2: Build to verify**
+
+Run: `dotnet build AppRefiner/AppRefiner.csproj`
+Expected: Build succeeded, 0 errors.
+
+---
+
+### Task 3: Rewrite SnapshotHistoryDialog
+
+**Files:**
+- Modify: `AppRefiner/Dialogs/SnapshotHistoryDialog.cs` (full rewrite — replace the entire file)
+
+**Interfaces:**
+- Consumes:
+  - Task 1 settings, Task 2 `UnifiedDiffBuilder` API.
+  - `SnapshotManager.GetFileHistory(string relativePath, string? dbName)`, `.SaveEditorSnapshot(ScintillaEditor, string)`, `.ApplySnapshotToEditor(ScintillaEditor, int)`.
+  - `ScintillaManager.GetScintillaText(editor)`, `ScintillaManager.IsEditorClean(editor)` (`ScintillaManager.cs:930`).
+  - Existing dialog plumbing: `DialogHelper.ModalDialogMouseHandler`, `WindowHelper.CenterFormOnWindow`, `WindowWrapper`, `MessageBoxDialog`.
+- Produces: same public surface as today — `SnapshotHistoryDialog(SnapshotManager, ScintillaEditor, IntPtr owner = default)` and `Snapshot? SelectedSnapshot` — so `SnapshotRevertCommand.cs:46` keeps working unmodified.
+
+- [ ] **Step 1: Replace the file contents**
+
+Replace `AppRefiner/Dialogs/SnapshotHistoryDialog.cs` entirely with:
+
+```csharp
 using AppRefiner.Database.Models;
 using AppRefiner.Snapshots;
 
@@ -120,9 +475,7 @@ namespace AppRefiner.Dialogs
             this.MinimizeBox = false;
             this.ShowInTaskbar = false;
             this.BackColor = Color.FromArgb(240, 240, 245);
-            // Wide enough padding that the form (not a docked child) receives
-            // WM_NCHITTEST near the edges, enabling the resize grips
-            this.Padding = new Padding(ResizeGripSize);
+            this.Padding = new Padding(1);
 
             // headerPanel
             this.headerPanel.BackColor = Color.FromArgb(50, 50, 60);
@@ -259,6 +612,8 @@ namespace AppRefiner.Dialogs
             this.splitContainer.Dock = DockStyle.Fill;
             this.splitContainer.Orientation = Orientation.Vertical;
             this.splitContainer.FixedPanel = FixedPanel.Panel1;
+            this.splitContainer.Panel1MinSize = 200;
+            this.splitContainer.Panel2MinSize = 400;
             this.splitContainer.Panel1.Controls.Add(this.historyListView);
             this.splitContainer.Panel2.Controls.Add(this.diffTextBox);
             this.splitContainer.Panel2.Controls.Add(this.diffHeaderPanel);
@@ -267,6 +622,8 @@ namespace AppRefiner.Dialogs
             this.Controls.Add(this.splitContainer);
             this.Controls.Add(this.buttonPanel);
             this.Controls.Add(this.headerPanel);
+
+            this.splitContainer.SplitterDistance = 260;
 
             // Restore persisted view mode without triggering renders
             this.suppressViewModeEvents = true;
@@ -289,21 +646,6 @@ namespace AppRefiner.Dialogs
             this.headerPanel.ResumeLayout(false);
             this.ResumeLayout(false);
             this.PerformLayout();
-
-            // Min sizes and splitter distance must be set after layout has
-            // resumed: while layout is suspended the SplitContainer is still
-            // its default 150px wide and Panel2MinSize = 400 throws an
-            // InvalidOperationException from its internal splitter clamp.
-            this.splitContainer.Panel1MinSize = 200;
-            this.splitContainer.Panel2MinSize = 400;
-            this.splitContainer.SplitterDistance = 260;
-
-            // The right-anchored buttons were placed while buttonPanel still
-            // had its default width, so their anchor offsets captured wrong
-            // and they land past the right edge. Re-position against the real
-            // width so the anchors recapture correctly.
-            this.applyButton.Location = new Point(this.buttonPanel.ClientSize.Width - 230, 10);
-            this.closeButton.Location = new Point(this.buttonPanel.ClientSize.Width - 110, 10);
         }
 
         private static void StyleAccentButton(Button button)
@@ -563,12 +905,10 @@ namespace AppRefiner.Dialogs
             }
 
             // Safety net: back up unsaved work before overwriting it. A clean
-            // editor already has its content in the latest savepoint snapshot,
-            // and an empty buffer has no work to protect (SnapshotManager
-            // rejects empty content, which would otherwise block the restore).
-            var latestContent = ScintillaManager.GetScintillaText(editor) ?? currentContent;
-            if (!ScintillaManager.IsEditorClean(editor) && !string.IsNullOrEmpty(latestContent))
+            // editor already has its content in the latest savepoint snapshot.
+            if (!ScintillaManager.IsEditorClean(editor))
             {
+                var latestContent = ScintillaManager.GetScintillaText(editor) ?? currentContent;
                 if (!snapshotManager.SaveEditorSnapshot(editor, latestContent))
                 {
                     ShowError("Failed to back up the current editor content, so the revert was cancelled. See debug log for details.");
@@ -668,3 +1008,57 @@ namespace AppRefiner.Dialogs
         }
     }
 }
+```
+
+Implementation notes for the engineer:
+
+- `MessageBoxDialog` lives in `AppRefiner.Dialogs`; check its constructor signature in `Dialogs/MessageBoxDialog.cs` if the call doesn't compile — the pattern above comes from CLAUDE.md's "MessageBox Dialog Pattern" section.
+- `MinimumSize` on a `FormBorderStyle.None` form is respected by the interactive resize the `WM_NCHITTEST` codes enable — no extra code needed.
+- The old file's `GenerateUnifiedDiff` method and its `using AppRefiner.Database.Models;`-only imports are gone; `DiffViewDialog`/`TextViewDialog` are intentionally no longer referenced (leave those files untouched).
+- `SplitterDistance` is set after the `SplitContainer` is added to the form and `ClientSize` is set, so the 260px distance is valid against the real width.
+
+- [ ] **Step 2: Build to verify**
+
+Run: `dotnet build AppRefiner/AppRefiner.csproj`
+Expected: Build succeeded, 0 errors. If `MessageBoxDialog`'s constructor differs, read `AppRefiner/Dialogs/MessageBoxDialog.cs` and match its real signature.
+
+- [ ] **Step 3: Confirm no other files reference removed members**
+
+Run: `grep -rn "GenerateUnifiedDiff" AppRefiner/` (or the Grep tool)
+Expected: no matches outside the rewritten file (the method was private; this is a sanity check).
+
+---
+
+### Task 4: Manual verification (with Tim)
+
+**Files:** none — verification only. Requires PeopleSoft Application Designer.
+
+- [ ] **Step 1: Basic flow**
+
+Open a PeopleCode program that has several snapshots, run the "Snapshot: Revert to Previous Version" command (command palette). Verify:
+- Dialog opens ~1000×650 centered on App Designer; header drags the window; Esc closes.
+- List shows Date (`HH:mm:ss (N min ago)` for today; date-prefixed otherwise) and Changes (`+a −r`, `±0` for identical).
+- First row auto-selected with diff rendered immediately; switching rows re-renders with no clicks.
+
+- [ ] **Step 2: View modes and direction**
+
+- Toggle Changes only / Full file / Snapshot content — pane re-renders correctly in each; hunk headers only in Changes only mode.
+- Click ⇄ — direction label flips, +/− colors invert, list stats swap.
+- Close and reopen the dialog — last-used view mode and direction are restored. Restart AppRefiner — still restored.
+
+- [ ] **Step 3: Clipboard actions**
+
+- Copy Original → paste in Notepad → exact snapshot text.
+- Copy Diff → paste → `---`/`+++` labels with file path + timestamp, `@@` hunk headers with plausible line numbers, 3 context lines. Button flashes "Copied!" and restores after ~1.5 s.
+- Copy Diff on a `±0` snapshot → just the two header lines, no hunks.
+
+- [ ] **Step 4: Apply paths**
+
+- Apply with a **clean** editor (just saved): content replaced, dialog closes, reopening shows **no** new snapshot beyond what existed.
+- Make an edit **without saving**, Apply: content replaced, and reopening the dialog shows a new snapshot at the top containing the unsaved pre-revert text.
+
+- [ ] **Step 5: Edge cases**
+
+- Open the dialog on a program with no snapshots: "No snapshots recorded for this program." shown, Copy/Apply disabled, Close works.
+- Resize from all four edges and corners; verify 800×500 minimum and splitter behavior (left panel fixed on resize).
+- Empty-ish program (few lines) and a large program (500+ lines) render acceptably fast when switching rows.

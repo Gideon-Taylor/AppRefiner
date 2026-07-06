@@ -38,6 +38,15 @@ NEW FEATURES
   to a variable" type errors now offer a Ctrl+. fix that captures the value
   in a new local variable — typed from what AppRefiner inferred, named &_
   (or the next free underscore name in that scope).
+• Redesigned Snapshot History - Restoring a previous version is now a
+  side-by-side experience: pick a snapshot on the left and its diff against
+  your current code renders instantly on the right — no more opening and
+  closing View Diff for each guess. Rows show at-a-glance change counts
+  (+12 −3), the preview offers Changes-only, Full-file, and Snapshot-content
+  views plus a comparison-direction toggle (all remembered between sessions),
+  and Copy Original / Copy Diff buttons put the old code or a unified diff on
+  the clipboard. Applying a revert automatically snapshots any unsaved edits
+  first so nothing is ever lost, and the dialog is resizable.
 
 
 RELIABILITY & MULTI-INSTANCE FIXES

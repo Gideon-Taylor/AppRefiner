@@ -524,5 +524,29 @@ namespace AppRefiner.Properties {
                 this["useEnhancedEditor"] = value;
             }
         }
+
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("0")]
+        public int SnapshotDiffViewMode {
+            get {
+                return ((int)(this["SnapshotDiffViewMode"]));
+            }
+            set {
+                this["SnapshotDiffViewMode"] = value;
+            }
+        }
+
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("False")]
+        public bool SnapshotDiffDirectionCurrentFirst {
+            get {
+                return ((bool)(this["SnapshotDiffDirectionCurrentFirst"]));
+            }
+            set {
+                this["SnapshotDiffDirectionCurrentFirst"] = value;
+            }
+        }
     }
 }
