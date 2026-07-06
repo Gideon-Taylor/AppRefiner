@@ -1315,9 +1315,6 @@ namespace AppRefiner
             {
                 btnClearLint.Enabled = true;
                 btnApplyTemplate.Text = "Apply Template";
-
-                btnConnectDB.Text = activeEditor?.DataManager == null ? "Connect DB..." : "Disconnect DB";
-
             });
 
         }
@@ -1358,47 +1355,6 @@ namespace AppRefiner
         private void btnClearLint_Click(object sender, EventArgs e)
         {
             linterManager?.ClearLintResults(activeEditor);
-        }
-
-
-        private void btnConnectDB_Click(object sender, EventArgs e)
-        {
-            if (activeAppDesigner == null || activeEditor == null) return;
-            if (activeAppDesigner.DataManager != null)
-            {
-                activeAppDesigner.DataManager.Disconnect();
-                foreach (var editor in activeAppDesigner.Editors.Values)
-                {
-                    editor.DataManager = null;
-                }
-
-
-                btnConnectDB.Text = "Connect DB...";
-                return;
-            }
-
-            var mainHandle = activeAppDesigner.MainWindowHandle;
-            var handleWrapper = new WindowWrapper(mainHandle);
-            DBConnectDialog dialog = new(mainHandle, activeAppDesigner.DBName);
-            dialog.StartPosition = FormStartPosition.CenterParent;
-
-            if (dialog.ShowDialog(handleWrapper) == DialogResult.OK)
-            {
-                IDataManager? manager = dialog.DataManager;
-                if (manager != null)
-                {
-                    activeAppDesigner.DataManager = manager;
-                    foreach (var editor in activeAppDesigner.Editors.Values)
-                    {
-                        editor.DataManager = manager;
-                    }
-                    activeEditor.DataManager = manager;
-                    btnConnectDB.Text = "Disconnect DB";
-
-                    // Force refresh all editors to allow DB-dependent stylers to run
-                    RefreshAllEditorsAfterDatabaseConnection();
-                }
-            }
         }
 
         private void CmbTemplates_SelectedIndexChanged(object? sender, EventArgs e)
@@ -2030,13 +1986,19 @@ namespace AppRefiner
                     {
                         activeEditor = process.GetOrInitEditor(hwnd);
 
-                        if (activeAppDesigner != activeEditor.AppDesignerProcess)
+                        bool activeChanged = activeAppDesigner != activeEditor.AppDesignerProcess;
+                        if (activeChanged)
                         {
                             stylerManager?.ClearMemberCache();
                         }
 
                         activeAppDesigner = activeEditor.AppDesignerProcess;
                         stylerManager.StylerRules.Where(s => s is FunctionParameterNames).First().Active = activeEditor.ParameterNamesEnabled;
+
+                        if (activeChanged)
+                        {
+                            RefreshInstancesGrid(); // Active dot moved
+                        }
 
                         // Offer the auto-connect prompt now that this App Designer is foreground.
                         // Self-guarding (already connected / previously declined / not foreground),
@@ -2070,6 +2032,7 @@ namespace AppRefiner
 
                         activeAppDesigner = activeEditor.AppDesignerProcess;
                         stylerManager.StylerRules.Where(s => s is FunctionParameterNames).First().Active = activeEditor.ParameterNamesEnabled;
+                        RefreshInstancesGrid(); // New instance + active dot
                         return;
                     }
                 }
@@ -4014,24 +3977,206 @@ namespace AppRefiner
             dialog.StartPosition = FormStartPosition.CenterParent;
             if (dialog.ShowDialog(handleWrapper) == DialogResult.OK)
             {
-                IDataManager? manager = dialog.DataManager;
-
-                if (manager != null)
+                if (dialog.DataManager != null)
                 {
-                    process.DataManager = manager;
-                    foreach (var editor in process.Editors.Values)
-                    {
-                        editor.DataManager = manager;
-                    }
-
-                    // Force refresh all editors to allow DB-dependent stylers to run
-                    RefreshAllEditorsAfterDatabaseConnection();
+                    ApplyDatabaseConnection(process, dialog.DataManager, dialog.ConnectionDescription, dialog.ToolsVersion);
                 }
             }
             else
             {
                 process.DoNotPromptForDB = true;
             }
+        }
+
+        /// <summary>
+        /// Assigns a successful DB connection to a process and all its editors, stamps the
+        /// connection metadata for the Instances grid, refreshes DB-dependent features, and
+        /// updates the grid. Shared by every connect path (Instances tab, auto-prompt,
+        /// command palette).
+        /// </summary>
+        public void ApplyDatabaseConnection(AppDesignerProcess process, IDataManager manager, string? connectionDescription, string? toolsVersion)
+        {
+            if (process == null || manager == null) return;
+
+            process.DataManager = manager;
+            process.ConnectionDescription = connectionDescription;
+            process.ToolsVersion = toolsVersion;
+
+            foreach (var editor in process.Editors.Values)
+            {
+                editor.DataManager = manager;
+            }
+
+            // Force refresh all editors to allow DB-dependent stylers to run
+            RefreshAllEditorsAfterDatabaseConnection();
+            RefreshInstancesGrid();
+        }
+
+        /// <summary>
+        /// Disconnects a process's DB connection, clears it from the process and its editors,
+        /// clears connection metadata, and refreshes the grid.
+        /// </summary>
+        public void DisconnectDatabase(AppDesignerProcess process)
+        {
+            if (process == null || process.DataManager == null) return;
+
+            try
+            {
+                process.DataManager.Disconnect();
+                process.DataManager.Dispose();
+            }
+            catch (Exception ex)
+            {
+                Debug.Log($"DisconnectDatabase: error disconnecting process {process.ProcessId}: {ex.Message}");
+            }
+
+            process.DataManager = null;
+            process.ConnectionDescription = null;
+            process.ToolsVersion = null;
+
+            foreach (var editor in process.Editors.Values)
+            {
+                editor.DataManager = null;
+            }
+
+            RefreshInstancesGrid();
+        }
+
+        // --- Instances tab ---------------------------------------------------------------
+
+        /// <summary>
+        /// Returns the AppDesignerProcess for the currently selected Instances-grid row,
+        /// or null if no row is selected. Rows carry their process in Tag.
+        /// </summary>
+        private AppDesignerProcess? GetSelectedInstance()
+        {
+            if (dgvInstances.SelectedRows.Count == 0)
+                return null;
+            return dgvInstances.SelectedRows[0].Tag as AppDesignerProcess;
+        }
+
+        /// <summary>
+        /// Rebuilds the Instances grid from the tracked processes. Event-driven (no polling):
+        /// called on process register/exit, editor add/remove, DB connect/disconnect, active
+        /// instance change, and Instances-tab selection. Preserves the selected row by PID.
+        /// </summary>
+        public void RefreshInstancesGrid()
+        {
+            if (dgvInstances == null) return;
+
+            // Always marshal to the UI thread — lifecycle events arrive from various contexts
+            if (InvokeRequired)
+            {
+                BeginInvoke((Action)RefreshInstancesGrid);
+                return;
+            }
+
+            uint? selectedPid = (GetSelectedInstance())?.ProcessId;
+
+            dgvInstances.SuspendLayout();
+            dgvInstances.Rows.Clear();
+
+            foreach (var process in AppDesignerProcesses.Values)
+            {
+                bool isActive = ReferenceEquals(process, activeAppDesigner);
+                bool connected = process.DataManager != null;
+
+                // Editors count after pruning dead HWNDs (self-healing backstop)
+                var deadHwnds = process.Editors
+                    .Where(kvp => !WinApi.IsWindow(kvp.Key))
+                    .Select(kvp => kvp.Key)
+                    .ToList();
+                foreach (var dead in deadHwnds)
+                {
+                    process.Editors.Remove(dead);
+                }
+
+                string connectionText = connected
+                    ? (process.ConnectionDescription ?? "Connected")
+                    : "Not connected";
+                string toolsText = connected ? (process.ToolsVersion ?? "—") : "Needs DB";
+
+                int rowIndex = dgvInstances.Rows.Add(
+                    isActive ? "●" : "",
+                    process.ProcessId.ToString(),
+                    string.IsNullOrEmpty(process.DBName) ? "—" : process.DBName,
+                    connectionText,
+                    toolsText,
+                    process.Editors.Count.ToString(),
+                    process.HasLexilla ? "Yes" : "No");
+
+                var row = dgvInstances.Rows[rowIndex];
+                row.Tag = process;
+
+                if (selectedPid.HasValue && process.ProcessId == selectedPid.Value)
+                {
+                    row.Selected = true;
+                }
+            }
+
+            dgvInstances.ResumeLayout();
+
+            bool anyInstances = dgvInstances.Rows.Count > 0;
+            lblNoInstances.Visible = !anyInstances;
+            dgvInstances.Visible = anyInstances;
+
+            UpdateInstanceButtonStates();
+        }
+
+        /// <summary>
+        /// Enables/disables the per-instance action buttons based on the current selection
+        /// and its connection state.
+        /// </summary>
+        private void UpdateInstanceButtonStates()
+        {
+            var selected = GetSelectedInstance();
+            bool hasSelection = selected != null;
+            bool connected = selected?.DataManager != null;
+
+            btnInstanceConnect.Enabled = hasSelection && !connected;
+            btnInstanceDisconnect.Enabled = hasSelection && connected;
+            btnInstanceBringToFront.Enabled = hasSelection;
+        }
+
+        private void dgvInstances_SelectionChanged(object? sender, EventArgs e)
+        {
+            UpdateInstanceButtonStates();
+        }
+
+        private void tabControl1_SelectedIndexChanged(object? sender, EventArgs e)
+        {
+            if (tabControl1.SelectedTab == tabPageInstances)
+            {
+                RefreshInstancesGrid();
+            }
+        }
+
+        private void btnInstanceConnect_Click(object? sender, EventArgs e)
+        {
+            var process = GetSelectedInstance();
+            if (process == null || process.DataManager != null) return;
+
+            var handleWrapper = new WindowWrapper(process.MainWindowHandle);
+            DBConnectDialog dialog = new(process.MainWindowHandle, process.DBName);
+            dialog.StartPosition = FormStartPosition.CenterParent;
+            if (dialog.ShowDialog(handleWrapper) == DialogResult.OK && dialog.DataManager != null)
+            {
+                ApplyDatabaseConnection(process, dialog.DataManager, dialog.ConnectionDescription, dialog.ToolsVersion);
+            }
+        }
+
+        private void btnInstanceDisconnect_Click(object? sender, EventArgs e)
+        {
+            var process = GetSelectedInstance();
+            if (process == null || process.DataManager == null) return;
+            DisconnectDatabase(process);
+        }
+
+        private void btnInstanceBringToFront_Click(object? sender, EventArgs e)
+        {
+            var process = GetSelectedInstance();
+            if (process == null || process.MainWindowHandle == IntPtr.Zero) return;
+            WinApi.SetForegroundWindow(process.MainWindowHandle); // best-effort; focus-stealing rules may block
         }
 
         /// <summary>
@@ -4525,6 +4670,7 @@ namespace AppRefiner
                             activeAppDesigner = appDesignerProcess;
                             stylerManager?.ClearMemberCache(); // Clear styler member cache when switching AppDesigner processes
                             Debug.Log($"Active AppDesigner changed to process ID: {focusedProcessId}");
+                            RefreshInstancesGrid(); // Active dot moved
                         }
 
                         // Offer the auto-connect prompt now that this App Designer is foreground.
@@ -4637,6 +4783,7 @@ namespace AppRefiner
                         }
 
                         editor.Cleanup();
+                        RefreshInstancesGrid();
                         return;
                     }
                 }
@@ -4733,6 +4880,23 @@ namespace AppRefiner
                 lastKnownPositions.Remove(key);
             }
 
+            // Tear down the DB connection owned by this instance (spec §2)
+            if (process.DataManager != null)
+            {
+                try
+                {
+                    process.DataManager.Disconnect();
+                    process.DataManager.Dispose();
+                }
+                catch (Exception ex)
+                {
+                    Debug.Log($"HandleAppDesignerProcessExit: error disposing DataManager for process {processId}: {ex.Message}");
+                }
+                process.DataManager = null;
+                process.ConnectionDescription = null;
+                process.ToolsVersion = null;
+            }
+
             try
             {
                 // Frees tracked buffers (no-ops against the dead process) and closes the handle
@@ -4742,6 +4906,8 @@ namespace AppRefiner
             {
                 Debug.Log($"HandleAppDesignerProcessExit: cleanup error for process {processId}: {ex.Message}");
             }
+
+            RefreshInstancesGrid();
         }
 
         private void HandleWindowShownEvent(object? sender, IntPtr hwnd)
@@ -4891,6 +5057,7 @@ namespace AppRefiner
                 trackedProcessIds.Add(processId);
                 WatchAppDesignerProcessExit(processId);
                 activeAppDesigner = newProcess;
+                RefreshInstancesGrid();
 
                 // Apply current theme to newly created process
                 ApplyCurrentThemeToProcess(newProcess);

@@ -112,6 +112,18 @@ namespace AppRefiner
         public bool DoNotPromptForDB { get; set; }
         public string DBName { get; internal set; }
 
+        /// <summary>
+        /// Human-readable description of the active DB connection (e.g. "Bootstrap as SYSADM").
+        /// Stamped on successful connect, cleared on disconnect. Null when not connected.
+        /// </summary>
+        public string? ConnectionDescription { get; set; }
+
+        /// <summary>
+        /// PeopleTools version captured once at connect time (never re-queried). Null when
+        /// not connected.
+        /// </summary>
+        public string? ToolsVersion { get; set; }
+
         public SourceSpan? PendingSelection { get; set; }
 
         /// <summary>

@@ -57,9 +57,40 @@ namespace AppRefiner.Database
             if (!string.IsNullOrEmpty(Properties.Settings.Default.TNS_ADMIN))
             {
                 string TNS_ADMIN = Properties.Settings.Default.TNS_ADMIN;
-                OracleConfiguration.TnsAdmin = TNS_ADMIN;
-                _connection.TnsAdmin = TNS_ADMIN;
-                Debug.Log($"TNS_ADMIN set to: {_connection.TnsAdmin} via settings");
+
+                // OracleConfiguration.TnsAdmin is a PROCESS-GLOBAL setting that becomes
+                // immutable once ANY Oracle connection has been opened in the process —
+                // re-assigning it after that throws ORA-50099 ("cannot be set after a
+                // connection has been opened"). It only needs to be set once and its value
+                // persists for the process lifetime, so skip the assignment when it is already
+                // the desired value (the case on every reconnect after the first connect).
+                // This is what actually points the driver at tnsnames.ora for plain-alias
+                // resolution, so the persisted value keeps working.
+                try
+                {
+                    if (!string.Equals(OracleConfiguration.TnsAdmin, TNS_ADMIN, StringComparison.Ordinal))
+                    {
+                        OracleConfiguration.TnsAdmin = TNS_ADMIN;
+                        Debug.Log($"OracleConfiguration.TnsAdmin set to: {TNS_ADMIN}");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    // Already locked by a prior open connection — the existing global value
+                    // (set on the first connect) remains in effect, so resolution still works.
+                    Debug.Log($"OracleConfiguration.TnsAdmin already locked, keeping existing value: {ex.Message}");
+                }
+
+                // The per-connection TnsAdmin has the same immutability (pool-level) — best-effort.
+                try
+                {
+                    _connection.TnsAdmin = TNS_ADMIN;
+                    Debug.Log($"Per-connection TnsAdmin set to: {_connection.TnsAdmin}");
+                }
+                catch (Exception ex)
+                {
+                    Debug.Log($"Per-connection TnsAdmin not set (using global OracleConfiguration.TnsAdmin instead): {ex.Message}");
+                }
             }
 
         }

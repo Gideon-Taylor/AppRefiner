@@ -30,17 +30,16 @@ namespace AppRefiner.Commands.BuiltIn
                     IDataManager? manager = dialog.DataManager;
                     if (manager != null)
                     {
-                        context.ActiveAppDesigner.DataManager = manager;
-                        foreach (var editor in context.ActiveAppDesigner.Editors.Values)
-                        {
-                            editor.DataManager = manager;
-                        }
-
-                        // Force refresh all editors to allow DB-dependent stylers to run
+                        // Centralized path stamps connection metadata + refreshes the grid
                         var mainForm = context.MainForm as MainForm;
-                        mainForm?.RefreshAllEditorsAfterDatabaseConnection();
+                        mainForm?.ApplyDatabaseConnection(
+                            context.ActiveAppDesigner, manager, dialog.ConnectionDescription, dialog.ToolsVersion);
                     }
                 }
+            }
+            else
+            {
+                Debug.Log("Database Connect command: no Application Designer session detected; dialog not shown.");
             }
         }
     }

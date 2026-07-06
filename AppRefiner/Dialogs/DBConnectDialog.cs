@@ -16,6 +16,17 @@ namespace AppRefiner.Dialogs
         // Data manager that will be created when connection is successful
         public IDataManager? DataManager { get; private set; }
 
+        /// <summary>
+        /// Human-readable description of the successful connection (e.g. "Bootstrap as SYSADM"
+        /// or "Read-only as PSRO"), set on DialogResult.OK. Null until a connection succeeds.
+        /// </summary>
+        public string? ConnectionDescription { get; private set; }
+
+        /// <summary>
+        /// PeopleTools version string stamped from GetToolsVersion() on successful connect.
+        /// </summary>
+        public string? ToolsVersion { get; private set; }
+
         // Class to store database connection settings
         private class DbConnectionSettings
         {
@@ -96,6 +107,8 @@ namespace AppRefiner.Dialogs
         private readonly ProgressBar loadingProgressBar;
         private bool isConnecting = false;
         private bool isInitialLoad = true;
+        // Default DB selection is deferred until the async connection-list load completes
+        private readonly string? pendingDefaultDbName;
 
         /// <summary>
         /// Initializes a new instance of the DBConnectDialog class
@@ -140,11 +153,8 @@ namespace AppRefiner.Dialogs
 
             InitializeComponent();
 
-            // Set default DB name if provided
-            if (!string.IsNullOrEmpty(defaultDbName))
-            {
-                SelectDatabaseByName(defaultDbName);
-            }
+            // Default DB selection happens after the async connection load completes
+            pendingDefaultDbName = defaultDbName;
         }
 
         private void InitializeComponent()
@@ -199,7 +209,7 @@ namespace AppRefiner.Dialogs
             this.dbNameComboBox.SelectedIndexChanged += DbNameComboBox_SelectedIndexChanged;
 
             // dbNameHintLabel
-            this.dbNameHintLabel.Text = "For LDAP, set TNS_ADMIN and enter an LDAP service name or full connect descriptor.";
+            this.dbNameHintLabel.Text = string.Empty;
             this.dbNameHintLabel.Location = new Point(130, 105);
             this.dbNameHintLabel.Size = new Size(260, 30);
             this.dbNameHintLabel.TabIndex = 5;
@@ -426,19 +436,9 @@ namespace AppRefiner.Dialogs
             this.ResumeLayout(false);
             this.PerformLayout();
 
-            // Load all database connections for smart detection
-            LoadAllDatabaseConnections();
-
-            // Load database names based on initially selected type
-            string? dbType = this.dbTypeComboBox.SelectedItem?.ToString();
-            if (dbType == "Oracle")
-            {
-                LoadOracleTnsNames();
-            }
-            else if (dbType == "SQL Server")
-            {
-                LoadSqlServerDsns();
-            }
+            // Load database connections asynchronously so an unreachable network
+            // tnsnames.ora (or IFILE target) cannot freeze the dialog
+            BeginLoadDatabaseConnections();
 
             // Update UI based on initial radio button selection
             UpdateUIForConnectionType();
@@ -942,6 +942,72 @@ namespace AppRefiner.Dialogs
         }
 
         /// <summary>
+        /// Starts loading TNS names and DSNs on a background task so file reads on
+        /// unreachable network paths cannot block the UI thread. The dropdown is
+        /// disabled until the load completes.
+        /// </summary>
+        private void BeginLoadDatabaseConnections()
+        {
+            dbNameComboBox.Enabled = false;
+            dbNameComboBox.Text = "Loading...";
+            connectButton.Enabled = false;
+
+            // The constructor runs on the thread that will pump this dialog's messages,
+            // so its synchronization context marshals the continuation back correctly
+            var uiScheduler = SynchronizationContext.Current != null
+                ? TaskScheduler.FromCurrentSynchronizationContext()
+                : TaskScheduler.Current;
+
+            Task.Run(() => LoadAllDatabaseConnections())
+                .ContinueWith(_ => OnDatabaseConnectionsLoaded(), uiScheduler);
+        }
+
+        private void OnDatabaseConnectionsLoaded()
+        {
+            if (IsDisposed || Disposing)
+            {
+                return;
+            }
+
+            // Defense-in-depth: if the continuation landed on a thread other than
+            // the one that owns this dialog's handle (possible when the dialog is
+            // constructed off the main UI thread, e.g. via the command palette),
+            // marshal back before touching any controls.
+            if (InvokeRequired)
+            {
+                try
+                {
+                    BeginInvoke(new Action(OnDatabaseConnectionsLoaded));
+                }
+                catch (ObjectDisposedException) { }
+                catch (InvalidOperationException) { }
+                return;
+            }
+
+            dbNameComboBox.Enabled = true;
+            dbNameComboBox.Text = string.Empty;
+            connectButton.Enabled = true;
+
+            string? dbType = dbTypeComboBox.SelectedItem?.ToString();
+            if (dbType == "Oracle")
+            {
+                LoadOracleTnsNames();
+            }
+            else if (dbType == "SQL Server")
+            {
+                LoadSqlServerDsns();
+            }
+
+            if (!string.IsNullOrEmpty(pendingDefaultDbName))
+            {
+                SelectDatabaseByName(pendingDefaultDbName);
+            }
+
+            // Re-evaluate the include-failure hint now that load results are known
+            UpdateUIForConnectionType();
+        }
+
+        /// <summary>
         /// Updates namespace behavior for SQL Server read-only connections
         /// </summary>
         private void UpdateNamespaceForSqlServer()
@@ -983,11 +1049,31 @@ namespace AppRefiner.Dialogs
                         return;
                     if (connectionTypeComboBox.SelectedItem?.ToString() == "LDAP" && (string.IsNullOrEmpty(ldapServerTextBox.Text) || string.IsNullOrEmpty(contextTextBox.Text)))
                         return;
+
+                    // Only attempt the auto-connect once — clear the flag now so re-entrant
+                    // SelectedIndexChanged events during load can't schedule it again
+                    isInitialLoad = false;
+
+                    // Let the UI settle, then trigger the connect on the UI thread. The
+                    // continuation runs on a thread-pool thread, so marshal via BeginInvoke.
                     Task.Delay(1000).ContinueWith(_ =>
                     {
-                        // Invoke the ConnectButton_Click method on the UI thread    
-                        //this.BeginInvoke(new Action(() => ConnectButton_Click(null, EventArgs.Empty)));
-                        isInitialLoad = false;
+                        try
+                        {
+                            if (IsDisposed || !IsHandleCreated)
+                                return;
+
+                            BeginInvoke(new Action(() =>
+                            {
+                                // Skip if the user already started connecting or closed the dialog
+                                if (!isConnecting && !IsDisposed)
+                                {
+                                    ConnectButton_Click(null, EventArgs.Empty);
+                                }
+                            }));
+                        }
+                        catch (ObjectDisposedException) { }
+                        catch (InvalidOperationException) { }
                     });
                 }
             }
@@ -1181,8 +1267,16 @@ namespace AppRefiner.Dialogs
                             : detailedError);
                     }
 
-                    PeopleCodeParser.SelfHosted.PeopleCodeParser.ToolsRelease = new ToolsVersion(DataManager.GetToolsVersion());
+                    var toolsVersionString = DataManager.GetToolsVersion();
+                    PeopleCodeParser.SelfHosted.PeopleCodeParser.ToolsRelease = new ToolsVersion(toolsVersionString);
+                    ToolsVersion = toolsVersionString;
                 });
+
+                // Capture connection metadata for the Instances grid (no extra DB round-trips)
+                string mode = isReadOnly ? "Read-only" : "Bootstrap";
+                ConnectionDescription = string.IsNullOrWhiteSpace(username)
+                    ? mode
+                    : $"{mode} as {username.ToUpperInvariant()}";
 
                 string? encryptedPassword = savePasswordCheckBox.Checked ? EncryptPassword(password, saveKey) : null;
                 SaveSettingsForDatabase(

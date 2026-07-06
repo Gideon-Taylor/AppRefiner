@@ -39,6 +39,20 @@ namespace AppRefiner
             System.ComponentModel.ComponentResourceManager resources = new System.ComponentModel.ComponentResourceManager(typeof(MainForm));
             splitContainer1 = new SplitContainer();
             tabControl1 = new TabControl();
+            tabPageInstances = new TabPage();
+            dgvInstances = new DataGridView();
+            colInstActive = new DataGridViewTextBoxColumn();
+            colInstPid = new DataGridViewTextBoxColumn();
+            colInstDbName = new DataGridViewTextBoxColumn();
+            colInstConnection = new DataGridViewTextBoxColumn();
+            colInstToolsVer = new DataGridViewTextBoxColumn();
+            colInstEditors = new DataGridViewTextBoxColumn();
+            colInstEnhanced = new DataGridViewTextBoxColumn();
+            pnlInstanceButtons = new Panel();
+            btnInstanceConnect = new Button();
+            btnInstanceDisconnect = new Button();
+            btnInstanceBringToFront = new Button();
+            lblNoInstances = new Label();
             tabPage1 = new TabPage();
             grpCodeFolding = new GroupBox();
             chkCodeFolding = new CheckBox();
@@ -91,7 +105,6 @@ namespace AppRefiner
             dataGridViewTextBoxColumn1 = new DataGridViewTextBoxColumn();
             tabPage3 = new TabPage();
             splitContainer4 = new SplitContainer();
-            btnConnectDB = new Button();
             btnClearLint = new Button();
             dataGridView1 = new DataGridView();
             colActive = new DataGridViewCheckBoxColumn();
@@ -124,6 +137,9 @@ namespace AppRefiner
             splitContainer1.Panel2.SuspendLayout();
             splitContainer1.SuspendLayout();
             tabControl1.SuspendLayout();
+            tabPageInstances.SuspendLayout();
+            ((System.ComponentModel.ISupportInitialize)dgvInstances).BeginInit();
+            pnlInstanceButtons.SuspendLayout();
             tabPage1.SuspendLayout();
             grpCodeFolding.SuspendLayout();
             grpEditorFeatures.SuspendLayout();
@@ -175,6 +191,7 @@ namespace AppRefiner
             // 
             // tabControl1
             // 
+            tabControl1.Controls.Add(tabPageInstances);
             tabControl1.Controls.Add(tabPage1);
             tabControl1.Controls.Add(tabPage4);
             tabControl1.Controls.Add(tabPage3);
@@ -185,12 +202,148 @@ namespace AppRefiner
             tabControl1.Dock = DockStyle.Fill;
             tabControl1.Location = new Point(0, 0);
             tabControl1.Name = "tabControl1";
-            tabControl1.SelectedIndex = 0;
+            // Instances is first in the tab order but the startup-selected tab is unchanged
+            // (Editor Tweaks, now at index 1)
+            tabControl1.SelectedIndex = 1;
             tabControl1.Size = new Size(570, 591);
             tabControl1.TabIndex = 3;
-            // 
+            tabControl1.SelectedIndexChanged += tabControl1_SelectedIndexChanged;
+            //
+            // tabPageInstances
+            //
+            tabPageInstances.Controls.Add(dgvInstances);
+            tabPageInstances.Controls.Add(lblNoInstances);
+            tabPageInstances.Controls.Add(pnlInstanceButtons);
+            tabPageInstances.Location = new Point(4, 24);
+            tabPageInstances.Name = "tabPageInstances";
+            tabPageInstances.Padding = new Padding(3);
+            tabPageInstances.Size = new Size(562, 563);
+            tabPageInstances.TabIndex = 8;
+            tabPageInstances.Text = "Instances";
+            tabPageInstances.UseVisualStyleBackColor = true;
+            //
+            // dgvInstances
+            //
+            dgvInstances.AllowUserToAddRows = false;
+            dgvInstances.AllowUserToDeleteRows = false;
+            dgvInstances.AllowUserToResizeRows = false;
+            dgvInstances.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.AutoSize;
+            dgvInstances.Columns.AddRange(new DataGridViewColumn[] { colInstActive, colInstPid, colInstDbName, colInstConnection, colInstToolsVer, colInstEditors, colInstEnhanced });
+            dgvInstances.Dock = DockStyle.Fill;
+            dgvInstances.EditMode = DataGridViewEditMode.EditProgrammatically;
+            dgvInstances.Location = new Point(3, 3);
+            dgvInstances.MultiSelect = false;
+            dgvInstances.Name = "dgvInstances";
+            dgvInstances.ReadOnly = true;
+            dgvInstances.RowHeadersVisible = false;
+            dgvInstances.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
+            dgvInstances.Size = new Size(556, 505);
+            dgvInstances.TabIndex = 0;
+            dgvInstances.SelectionChanged += dgvInstances_SelectionChanged;
+            //
+            // colInstActive
+            //
+            colInstActive.HeaderText = "Active";
+            colInstActive.Name = "colInstActive";
+            colInstActive.ReadOnly = true;
+            colInstActive.Width = 50;
+            //
+            // colInstPid
+            //
+            colInstPid.HeaderText = "PID";
+            colInstPid.Name = "colInstPid";
+            colInstPid.ReadOnly = true;
+            colInstPid.Width = 60;
+            //
+            // colInstDbName
+            //
+            colInstDbName.HeaderText = "DB Name";
+            colInstDbName.Name = "colInstDbName";
+            colInstDbName.ReadOnly = true;
+            colInstDbName.Width = 100;
+            //
+            // colInstConnection
+            //
+            colInstConnection.AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill;
+            colInstConnection.HeaderText = "DB Connection";
+            colInstConnection.Name = "colInstConnection";
+            colInstConnection.ReadOnly = true;
+            //
+            // colInstToolsVer
+            //
+            colInstToolsVer.HeaderText = "Tools Ver";
+            colInstToolsVer.Name = "colInstToolsVer";
+            colInstToolsVer.ReadOnly = true;
+            colInstToolsVer.Width = 90;
+            //
+            // colInstEditors
+            //
+            colInstEditors.HeaderText = "Editors";
+            colInstEditors.Name = "colInstEditors";
+            colInstEditors.ReadOnly = true;
+            colInstEditors.Width = 55;
+            //
+            // colInstEnhanced
+            //
+            colInstEnhanced.HeaderText = "Enhanced";
+            colInstEnhanced.Name = "colInstEnhanced";
+            colInstEnhanced.ReadOnly = true;
+            colInstEnhanced.Width = 70;
+            //
+            // lblNoInstances
+            //
+            lblNoInstances.Dock = DockStyle.Fill;
+            lblNoInstances.Name = "lblNoInstances";
+            lblNoInstances.Text = "No Application Designer sessions detected.";
+            lblNoInstances.TextAlign = ContentAlignment.MiddleCenter;
+            lblNoInstances.Visible = false;
+            //
+            // pnlInstanceButtons
+            //
+            pnlInstanceButtons.Controls.Add(btnInstanceBringToFront);
+            pnlInstanceButtons.Controls.Add(btnInstanceDisconnect);
+            pnlInstanceButtons.Controls.Add(btnInstanceConnect);
+            pnlInstanceButtons.Dock = DockStyle.Bottom;
+            pnlInstanceButtons.Location = new Point(3, 508);
+            pnlInstanceButtons.Name = "pnlInstanceButtons";
+            pnlInstanceButtons.Size = new Size(556, 52);
+            pnlInstanceButtons.TabIndex = 1;
+            //
+            // btnInstanceConnect
+            //
+            btnInstanceConnect.Enabled = false;
+            btnInstanceConnect.Location = new Point(8, 12);
+            btnInstanceConnect.Name = "btnInstanceConnect";
+            btnInstanceConnect.Size = new Size(120, 30);
+            btnInstanceConnect.TabIndex = 0;
+            btnInstanceConnect.Text = "Connect DB...";
+            btnInstanceConnect.UseVisualStyleBackColor = true;
+            btnInstanceConnect.Click += btnInstanceConnect_Click;
+            //
+            // btnInstanceDisconnect
+            //
+            btnInstanceDisconnect.Enabled = false;
+            btnInstanceDisconnect.Location = new Point(134, 12);
+            btnInstanceDisconnect.Name = "btnInstanceDisconnect";
+            btnInstanceDisconnect.Size = new Size(120, 30);
+            btnInstanceDisconnect.TabIndex = 1;
+            btnInstanceDisconnect.Text = "Disconnect";
+            btnInstanceDisconnect.UseVisualStyleBackColor = true;
+            btnInstanceDisconnect.Click += btnInstanceDisconnect_Click;
+            //
+            // btnInstanceBringToFront
+            //
+            btnInstanceBringToFront.Enabled = false;
+            btnInstanceBringToFront.Location = new Point(260, 12);
+            btnInstanceBringToFront.Name = "btnInstanceBringToFront";
+            btnInstanceBringToFront.Size = new Size(120, 30);
+            btnInstanceBringToFront.TabIndex = 2;
+            btnInstanceBringToFront.Text = "Bring to Front";
+            btnInstanceBringToFront.UseVisualStyleBackColor = true;
+            btnInstanceBringToFront.Click += btnInstanceBringToFront_Click;
+            //
             // tabPage1
-            // 
+            //
             tabPage1.Controls.Add(grpCodeFolding);
             tabPage1.Controls.Add(grpEditorFeatures);
             tabPage1.Controls.Add(groupBox3);
@@ -744,7 +897,6 @@ namespace AppRefiner
             // 
             // splitContainer4.Panel1
             // 
-            splitContainer4.Panel1.Controls.Add(btnConnectDB);
             splitContainer4.Panel1.Controls.Add(btnClearLint);
             // 
             // splitContainer4.Panel2
@@ -753,17 +905,6 @@ namespace AppRefiner
             splitContainer4.Size = new Size(556, 557);
             splitContainer4.SplitterDistance = 58;
             splitContainer4.TabIndex = 0;
-            // 
-            // btnConnectDB
-            // 
-            btnConnectDB.Dock = DockStyle.Right;
-            btnConnectDB.Location = new Point(449, 0);
-            btnConnectDB.Name = "btnConnectDB";
-            btnConnectDB.Size = new Size(107, 58);
-            btnConnectDB.TabIndex = 14;
-            btnConnectDB.Text = "Connect DB...";
-            btnConnectDB.UseVisualStyleBackColor = true;
-            btnConnectDB.Click += btnConnectDB_Click;
             // 
             // btnClearLint
             // 
@@ -1057,6 +1198,9 @@ namespace AppRefiner
             ((System.ComponentModel.ISupportInitialize)splitContainer1).EndInit();
             splitContainer1.ResumeLayout(false);
             tabControl1.ResumeLayout(false);
+            tabPageInstances.ResumeLayout(false);
+            ((System.ComponentModel.ISupportInitialize)dgvInstances).EndInit();
+            pnlInstanceButtons.ResumeLayout(false);
             tabPage1.ResumeLayout(false);
             tabPage1.PerformLayout();
             grpCodeFolding.ResumeLayout(false);
@@ -1169,7 +1313,6 @@ namespace AppRefiner
         private DataGridViewTextBoxColumn dataGridViewTextBoxColumn1;
         private TabPage tabPage3;
         private SplitContainer splitContainer4;
-        private Button btnConnectDB;
         private Button btnClearLint;
         private DataGridView dataGridView1;
         private DataGridViewCheckBoxColumn colActive;
@@ -1197,5 +1340,19 @@ namespace AppRefiner
         private DataGridViewTextBoxColumn colExtContents;
         private DataGridViewButtonColumn colExtConfigure;
         private CheckBox chkUseEnhancedEditor;
+        private TabPage tabPageInstances;
+        private DataGridView dgvInstances;
+        private DataGridViewTextBoxColumn colInstActive;
+        private DataGridViewTextBoxColumn colInstPid;
+        private DataGridViewTextBoxColumn colInstDbName;
+        private DataGridViewTextBoxColumn colInstConnection;
+        private DataGridViewTextBoxColumn colInstToolsVer;
+        private DataGridViewTextBoxColumn colInstEditors;
+        private DataGridViewTextBoxColumn colInstEnhanced;
+        private Panel pnlInstanceButtons;
+        private Button btnInstanceConnect;
+        private Button btnInstanceDisconnect;
+        private Button btnInstanceBringToFront;
+        private Label lblNoInstances;
     }
 }
