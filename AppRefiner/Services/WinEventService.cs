@@ -108,6 +108,14 @@ namespace AppRefiner.Services
             }
             else if (eventType == NativeMethods.EVENT_OBJECT_CREATE)
             {
+                // Only the window object itself — CREATE also fires for sub-objects
+                // (scrollbars, caret, ...) with the same hwnd, which would raise
+                // duplicate creation events for one window
+                if (idObject != NativeMethods.OBJID_WINDOW || idChild != 0)
+                {
+                    return;
+                }
+
                 // Raise the window creation event, marshalling to the captured context (usually UI thread)
                 if (syncContext != null)
                 {

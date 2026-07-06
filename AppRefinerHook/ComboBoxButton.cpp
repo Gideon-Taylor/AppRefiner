@@ -522,35 +522,53 @@ void ComboBoxButton::LayoutDialog(HWND dialogHwnd, HWND callbackWindow)
 }
 
 // Setup the button for a given Scintilla editor
-void ComboBoxButton::Setup(HWND scintillaHwnd, HWND callbackWindow)
+DWORD ComboBoxButton::Setup(HWND scintillaHwnd, HWND callbackWindow)
 {
+    DWORD flags = 0;
+
     if (!scintillaHwnd || !IsWindow(scintillaHwnd)) {
         OutputDebugStringA("ComboBoxButton::Setup - Invalid Scintilla HWND");
-        return;
+        return flags;
     }
 
     if (!callbackWindow || !IsWindow(callbackWindow)) {
         OutputDebugStringA("ComboBoxButton::Setup - Invalid callback window");
-        return;
+        return flags;
     }
 
     // Find the dialog window
     HWND dialogHwnd = FindDialogWindow(scintillaHwnd);
     if (!dialogHwnd) {
         OutputDebugStringA("ComboBoxButton::Setup - Dialog window not found");
-        return;
+        return flags;
     }
+    flags |= AR_SUB_ACK_DIALOG_FOUND;
 
-    // Check if already subclassed
+    // Check if already subclassed (dialog reused across editors, or duplicate setup call)
     DWORD_PTR existingData = 0;
     if (GetWindowSubclass(dialogHwnd, DialogSubclassProc, COMBO_DIALOG_SUBCLASS_ID, &existingData)) {
         OutputDebugStringA("ComboBoxButton::Setup - Dialog already subclassed");
-        return;
+        flags |= AR_SUB_ACK_DIALOG_ALREADY_SUB;
+
+        // The dialog may have been reused for a new editor: the button can be gone
+        // and the stored Scintilla HWND stale. Recreate/refresh instead of bailing.
+        HWND buttonHwnd = (HWND)GetPropW(dialogHwnd, COMBO_BUTTON_PROP);
+        if (!buttonHwnd || !IsWindow(buttonHwnd)) {
+            OutputDebugStringA("ComboBoxButton::Setup - Button missing on subclassed dialog, recreating via layout");
+            LayoutDialog(dialogHwnd, callbackWindow);
+            buttonHwnd = (HWND)GetPropW(dialogHwnd, COMBO_BUTTON_PROP);
+        }
+        if (buttonHwnd && IsWindow(buttonHwnd)) {
+            SetPropW(buttonHwnd, BUTTON_SCINTILLA_PROP, scintillaHwnd);
+            flags |= AR_SUB_ACK_BUTTON_PRESENT;
+        }
+        return flags;
     }
 
     // Subclass the dialog to handle WM_SIZE
     if (SetWindowSubclass(dialogHwnd, DialogSubclassProc, COMBO_DIALOG_SUBCLASS_ID, (DWORD_PTR)callbackWindow)) {
         OutputDebugStringA("ComboBoxButton::Setup - Subclassed dialog window");
+        flags |= AR_SUB_ACK_DIALOG_SUBCLASSED;
 
         // Perform initial layout
         LayoutDialog(dialogHwnd, callbackWindow);
@@ -559,6 +577,7 @@ void ComboBoxButton::Setup(HWND scintillaHwnd, HWND callbackWindow)
         HWND buttonHwnd = (HWND)GetPropW(dialogHwnd, COMBO_BUTTON_PROP);
         if (buttonHwnd && IsWindow(buttonHwnd)) {
             SetPropW(buttonHwnd, BUTTON_SCINTILLA_PROP, scintillaHwnd);
+            flags |= AR_SUB_ACK_BUTTON_PRESENT;
 
             char debugMsg[256];
             sprintf_s(debugMsg, "Stored Scintilla HWND 0x%p in button for minimap toggle\n", scintillaHwnd);
@@ -567,6 +586,8 @@ void ComboBoxButton::Setup(HWND scintillaHwnd, HWND callbackWindow)
     } else {
         OutputDebugStringA("ComboBoxButton::Setup - Failed to subclass dialog");
     }
+
+    return flags;
 }
 
 // Sync a checkbox state on the combo button for the given Scintilla editor.

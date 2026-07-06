@@ -60,9 +60,21 @@ namespace AppRefiner.Stylers
         int currentLineNumber = -1;
         List<DesiredInlayHint> desiredHints = new();
         ScintillaEditor? lastEditor;
-        bool stylesConfigured;
         int previousHintHash;
+        int lastSyncedDocumentReset = -1;
         HashCode runningHash;
+        /// <summary>
+        /// Forgets the last-sent hint state so the next pass re-sends unconditionally.
+        /// Call whenever the displayed hints are cleared outside this styler's knowledge
+        /// (e.g. the param-names toggle clearing via SCI_INLAYHINTCLEARALL) — otherwise
+        /// the skip-if-unchanged hash suppresses the re-send and the hints stay gone.
+        /// </summary>
+        public void InvalidateDisplayedHints()
+        {
+            previousHintHash = 0;
+            lastSyncedDocumentReset = -1;
+        }
+
         public override void VisitProgram(ProgramNode node)
         {
             // Check if inlay hints are supported by this version of Scintilla
@@ -78,8 +90,8 @@ namespace AppRefiner.Stylers
             if (editorChanged)
             {
                 paramNameAddresses.Clear();
-                stylesConfigured = false;
                 previousHintHash = 0;
+                lastSyncedDocumentReset = -1;
                 lastEditor = Editor;
             }
 
@@ -87,15 +99,15 @@ namespace AppRefiner.Stylers
             desiredHints.Clear();
             runningHash = new HashCode();
 
-            // Configure inlay hint style (only once per editor)
-            if (!stylesConfigured)
-            {
-                Editor?.SendMessage(SCI_STYLESETFORE, STYLE_INLAY_HINT, 0x808080);  // Gray
-                Editor?.SendMessage(SCI_STYLESETITALIC, STYLE_INLAY_HINT, 1);
-                Editor?.SendMessage(SCI_STYLESETBOLD, STYLE_INLAY_HINT, 1);
-                Editor?.SendMessage(SCI_STYLESETSIZE, STYLE_INLAY_HINT, 8);  // Smaller font to reduce horizontal space
-                stylesConfigured = true;
-            }
+            // Configure inlay hint style on EVERY pass: App Designer re-initializes its
+            // styling when it rewrites the editor on save (and dark-mode application does
+            // SCI_STYLECLEARALL), either of which resets STYLE_INLAY_HINT to defaults.
+            // Four SendMessages is cheap; caching this once per editor left hints
+            // rendering unstyled after a save.
+            Editor?.SendMessage(SCI_STYLESETFORE, STYLE_INLAY_HINT, 0x808080);  // Gray
+            Editor?.SendMessage(SCI_STYLESETITALIC, STYLE_INLAY_HINT, 1);
+            Editor?.SendMessage(SCI_STYLESETBOLD, STYLE_INLAY_HINT, 1);
+            Editor?.SendMessage(SCI_STYLESETSIZE, STYLE_INLAY_HINT, 8);  // Smaller font to reduce horizontal space
 
             // Get or create string buffer (persists across runs — only new unique strings get written).
             // No MemoryManager.SyncRoot lock is held across this styler's buffer use: the
@@ -118,13 +130,23 @@ namespace AppRefiner.Stylers
             // Traverse AST to collect desired hints
             base.VisitProgram(node);
 
-            // Skip synchronization if the hint set is identical to the previous run
+            // Skip synchronization only if the hint set is identical AND the document has
+            // not been wholesale-replaced since the last send. The hash alone is not
+            // enough: App Designer saves by replacing the entire editor text, which
+            // destroys the displayed hints while the re-computed desired set stays
+            // identical — the hash matched and the re-send was skipped forever. Normal
+            // edits don't bump DocumentResetCount, so the skip still avoids redundant
+            // sends (and any repaint they cause) while typing.
             var currentHash = runningHash.ToHashCode();
-            if (currentHash == previousHintHash && desiredHints.Count > 0)
+            var documentReset = Editor!.DocumentResetCount;
+            if (currentHash == previousHintHash &&
+                desiredHints.Count > 0 &&
+                documentReset == lastSyncedDocumentReset)
             {
                 return;
             }
             previousHintHash = currentHash;
+            lastSyncedDocumentReset = documentReset;
 
             // Synchronize desired hints with current Scintilla state
             SynchronizeInlayHints();

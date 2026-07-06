@@ -92,6 +92,19 @@
 #define WM_AR_COMBO_BUTTON_CLICKED 2519     // ComboBox button clicked notification
 #define WM_AR_CONTEXT_MENU_OPTION 2520      // Context menu option selected (wParam=option ID, lParam=toggle state for checkboxes or 0)
 #define WM_AR_DOC_MODIFIED 2521             // Document text changed (posted; wParam=PACK(hwnd, 0)) - receiver invalidates content caches
+#define WM_AR_SUBCLASS_ACK 2522             // Result of WM_SUBCLASS_SCINTILLA_PARENT_WINDOW (wParam=PACK(scintillaHwnd, statusFlags), lParam=parentHwnd)
+#define WM_AR_EDITOR_DESTROYED 2523         // Subclassed Scintilla editor received WM_NCDESTROY (posted; wParam=PACK(hwnd, 0)) - receiver evicts tracked editor state
+
+// Status flags for WM_AR_SUBCLASS_ACK (low 32 bits of wParam)
+#define AR_SUB_ACK_PARENT_SUBCLASSED   0x0001  // SetWindowSubclass on the parent succeeded
+#define AR_SUB_ACK_SCI_FOUND_DIRECT    0x0002  // Scintilla child found as direct child
+#define AR_SUB_ACK_SCI_FOUND_RECURSIVE 0x0004  // Scintilla child found via recursive enumeration
+#define AR_SUB_ACK_SCI_SUBCLASSED      0x0008  // SetWindowSubclass on the Scintilla child succeeded
+#define AR_SUB_ACK_DIALOG_FOUND        0x0010  // ComboBox dialog (#32770 sibling) located
+#define AR_SUB_ACK_DIALOG_ALREADY_SUB  0x0020  // Dialog was already subclassed (reused window)
+#define AR_SUB_ACK_DIALOG_SUBCLASSED   0x0040  // Dialog newly subclassed this call
+#define AR_SUB_ACK_BUTTON_PRESENT      0x0080  // AppRefiner combo button exists after this call
+#define AR_SUB_ACK_INVALID_PARENT      0x0100  // Requested parent HWND was invalid
 #define WM_SCN_USERLIST_SELECTION WM_SCN(SCN_USERLISTSELECTION) // User list selection notification
 
 // Context menu option IDs (for WM_AR_CONTEXT_MENU_OPTION wParam)

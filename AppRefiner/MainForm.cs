@@ -132,6 +132,8 @@ namespace AppRefiner
         private const int AR_SCINTILLA_NOT_FOUND = 2518; // Scintilla DLL file not found at specified path (wParam=(major<<16)|minor, lParam=(build<<16)|revision)
         private const int AR_CONTEXT_MENU_OPTION = 2520; // Context menu option selected (wParam=option ID, lParam=toggle state for checkboxes or 0)
         private const int AR_DOC_MODIFIED = 2521; // Document text changed (posted; wParam=PACK(hwnd, 0)) - invalidates content caches
+        private const int AR_SUBCLASS_ACK = 2522; // Subclass request result (wParam=PACK(scintillaHwnd, SubclassAckFlags), lParam=parentHwnd)
+        private const int AR_EDITOR_DESTROYED = 2523; // Subclassed editor received WM_NCDESTROY (posted; wParam=PACK(hwnd, 0)) - evicts tracked editor state
         private const int AR_SUBCLASS_RESULTS_LIST = 1007; // Message to subclass Results list view
         private const int AR_SET_OPEN_TARGET = 1008; // Message to set open target for Results list interception
 
@@ -208,9 +210,14 @@ namespace AppRefiner
             settingsService = new SettingsService(); // Instantiate SettingsService first
             dialogCenteringService = new DialogCenteringService(settingsService);
             applicationKeyboardService = new ApplicationKeyboardService();
+
+            // Hooks must always be installed from this (persistent) thread — see
+            // EventHookInstaller.HookInstallContext
+            EventHookInstaller.HookInstallContext = SynchronizationContext.Current;
+
             winEventService = new WinEventService();
             winEventService.WindowFocused += HandleWindowFocusEvent;
-            //winEventService.WindowCreated += HandleWindowCreationEvent;
+            winEventService.WindowCreated += HandleScintillaWindowCreated;
             winEventService.WindowShown += HandleWindowShownEvent;
             winEventService.WindowDestroyed += HandleWindowDestroyedEvent;
             winEventService.Start();
@@ -1153,11 +1160,14 @@ namespace AppRefiner
         private void HandleParamNamesToggle(bool enabled)
         {
             Debug.Log($"HandleParamNamesToggle called with enabled={enabled}");
-            var paramStyler = stylerManager.StylerRules.Where(r => r is FunctionParameterNames).First();
-                
+            var paramStyler = (FunctionParameterNames)stylerManager.StylerRules.First(r => r is FunctionParameterNames);
+
             paramStyler.Active = enabled;
             if (enabled)
             {
+                // The OFF toggle cleared the displayed hints behind the styler's back —
+                // drop its skip-if-unchanged state or the re-send would be suppressed
+                paramStyler.InvalidateDisplayedHints();
                 stylerManager.ProcessStylersForEditor(activeEditor);
             } else
             {
@@ -2011,16 +2021,18 @@ namespace AppRefiner
                     else
                     {
                         var newProcess = new AppDesignerProcess(pid, IntPtr.Zero, GetGeneralSettingsObject(), currentShortcutFlags);
-                        string testPath = Path.Combine(Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location)!, "scintilla_mods");
                         if (Settings.Default.useEnhancedEditor)
                         {
-                            newProcess.LoadScintillaDll(testPath);
+                            newProcess.LoadScintillaDll(AppDesignerProcess.ScintillaModsDirectory);
                         }
                         AppDesignerProcesses.Add(pid, newProcess);
                         trackedProcessIds.Add(pid);
                         WatchAppDesignerProcessExit(pid);
                         activeEditor = newProcess.GetOrInitEditor(hwnd);
                         activeEditor.AppDesignerProcess = newProcess;
+
+                        // Initialize any other editors that were already open in this process
+                        newProcess.InitExistingEditors();
 
                         // Apply current theme to newly created process
                         ApplyCurrentThemeToProcess(newProcess);
@@ -2194,7 +2206,19 @@ namespace AppRefiner
                 return null;
             }
 
-            return process.GetOrInitEditor(hwnd);
+            bool isNewEditor = !process.Editors.ContainsKey(hwnd);
+            var resolved = process.GetOrInitEditor(hwnd);
+
+            // A brand-new editor resolved from a hook notification (e.g. the cursor-position
+            // message fired when it opens) hasn't had a styler pass yet — without this,
+            // inlay hints and indicators only appear once the user clicks into the editor
+            // (the focus event) or pauses typing.
+            if (isNewEditor)
+            {
+                CheckForContentChanges(resolved);
+            }
+
+            return resolved;
         }
 
         protected override void WndProc(ref Message m)
@@ -2556,6 +2580,9 @@ namespace AppRefiner
                 Debug.Log("Received before delete all message");
                 var editor = ResolveEditorFromHwnd(UnpackHwnd(m.WParam));
                 if (editor == null) return;
+                // Full-document replace destroys display-side artifacts (inlay hints) —
+                // bump the reset counter so cached "already sent" state is invalidated
+                editor.MarkDocumentReset();
                 UpdateSavedFoldsForEditor(editor);
             }
 
@@ -2982,11 +3009,13 @@ namespace AppRefiner
             {
                 IntPtr moduleHandle = m.WParam;
                 Debug.Log($"Callback: Scintilla.dll is already loaded from the requested location (handle: 0x{moduleHandle:X}) - no replacement needed");
+                RefreshInstancesGrid(); // Enhanced column re-evaluates module paths
             }
             else if (m.Msg == AR_SCINTILLA_LOAD_SUCCESS)
             {
                 IntPtr moduleHandle = m.WParam;
                 Debug.Log($"Callback: Scintilla.dll loaded successfully at 0x{moduleHandle:X}");
+                RefreshInstancesGrid(); // Enhanced column re-evaluates module paths
             }
             else if (m.Msg == AR_SCINTILLA_LOAD_FAILED)
             {
@@ -3007,6 +3036,19 @@ namespace AppRefiner
                 string version = $"{major}.{minor}.{build}.{revision}";
 
                 Debug.Log($"Callback: Target Scintilla.dll file not found (version {version})");
+            }
+            else if (m.Msg == AR_SUBCLASS_ACK)
+            {
+                HandleSubclassAck(UnpackHwnd(m.WParam), (EventHookInstaller.SubclassAckFlags)(uint)UnpackValue(m.WParam), m.LParam);
+            }
+            else if (m.Msg == AR_EDITOR_DESTROYED)
+            {
+                // In-process destroy signal from the hook's editor subclass — the WinEvent
+                // destroy notification is not reliably delivered for editor closes, so this
+                // is the authoritative eviction (and enhanced-swap retry) trigger.
+                var destroyedHwnd = UnpackHwnd(m.WParam);
+                Debug.Log($"Hook reported editor window 0x{destroyedHwnd.ToInt64():X} destroyed");
+                HandleWindowDestroyedEvent(null, destroyedHwnd);
             }
 
             const int WM_AR_COMBO_BUTTON_CLICKED = 2519;
@@ -4103,7 +4145,7 @@ namespace AppRefiner
                     connectionText,
                     toolsText,
                     process.Editors.Count.ToString(),
-                    process.HasLexilla ? "Yes" : "No");
+                    process.IsEnhancedEditorLoaded() ? "Yes" : "No");
 
                 var row = dgvInstances.Rows[rowIndex];
                 row.Tag = process;
@@ -4248,19 +4290,32 @@ namespace AppRefiner
 
 
                         Debug.Log($"Processing debounced SAVEPOINTREACHED for {editorToSave.RelativePath}");
+                        bool selfInflictedSave = false;
                         lock (editorToSave)
                         {
                             if (editorToSave.ExpectingSavePoint)
                             {
                                 // Remove the editor from the list of expecting save points
                                 editorToSave.ExpectingSavePoint = false;
-                                return;
+                                selfInflictedSave = true;
                             }
                         }
 
-                        // Note: We no longer unconditionally clear stylers on save
-                        // Stylers remain active since saving doesn't change code structure
-                        // Only clear if content actually changed, which will be handled by CheckForContentChanges
+                        // App Designer saves by wholesale-replacing the editor text (its own
+                        // reformat/compile output), which destroys every document-attached
+                        // artifact: inlay hints, indicators, annotations. No keystroke or
+                        // focus event follows, so nothing else re-runs the stylers — do it
+                        // here. Clear the styler debounce first so a save right after a
+                        // typing pause isn't skipped.
+                        lastStylerProcessingTime.Remove(editorToSave);
+                        CheckForContentChanges(editorToSave);
+
+                        if (selfInflictedSave)
+                        {
+                            // AppRefiner-initiated save: restore visuals (above) but skip
+                            // snapshotting/event-mapping/cache work
+                            return;
+                        }
 
                         // Save content to Snapshot database
                         if (!string.IsNullOrEmpty(editorToSave.RelativePath))
@@ -4748,6 +4803,166 @@ namespace AppRefiner
         }
 
         /// <summary>
+        /// Requests hook subclassing as soon as a Scintilla window is created in a tracked
+        /// App Designer process, instead of waiting for the editor to first receive focus.
+        /// The combo-box dialog may not exist yet at creation time — the subclass ACK's
+        /// retry path covers that. Runs for every window creation in the system, so the
+        /// tracked-process check comes first and everything else is skipped cheaply.
+        /// The minimap is unaffected: it uses its own window class (AppRefinerMinimap).
+        /// </summary>
+        private void HandleScintillaWindowCreated(object? sender, IntPtr hwnd)
+        {
+            try
+            {
+                uint threadId = WinApi.GetWindowThreadProcessId(hwnd, out uint pid);
+                if (!AppDesignerProcesses.TryGetValue(pid, out var process))
+                {
+                    return;
+                }
+
+                StringBuilder className = new(256);
+                WinApi.GetClassName(hwnd, className, className.Capacity);
+                if (!className.ToString().Contains("Scintilla"))
+                {
+                    return;
+                }
+
+                IntPtr parent = WindowHelper.GetParentWindow(hwnd);
+                if (parent == IntPtr.Zero || !WinApi.IsWindow(parent))
+                {
+                    return;
+                }
+
+                Debug.Log($"Scintilla window created: 0x{hwnd.ToInt64():X} (parent 0x{parent.ToInt64():X}) — requesting subclass proactively");
+                EventHookInstaller.SubclassScintillaParentWindow(threadId, parent, AppDesignerProcess.CallbackWindow, process.MainWindowHandle, process.Settings.AutoPair);
+            }
+            catch (Exception ex)
+            {
+                Debug.Log($"Error in HandleScintillaWindowCreated: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Per-parent-HWND retry counts for incomplete editor subclass setups. Entries are
+        /// removed on success or abandonment; keyed by the subclassed parent window.
+        /// </summary>
+        private readonly Dictionary<IntPtr, int> subclassRetryCounts = new();
+        private const int MAX_SUBCLASS_RETRIES = 3;
+        private const int SUBCLASS_RETRY_DELAY_MS = 500;
+
+        /// <summary>
+        /// Handles WM_AR_SUBCLASS_ACK from the hook: logs how far editor subclassing got and,
+        /// when a step failed (dialog not created yet, Scintilla child not found, etc.),
+        /// schedules a delayed retry. Setup can race App Designer building the editor's
+        /// window hierarchy — a silent partial failure here is what kills autocomplete,
+        /// the combo button, and the minimap for that editor.
+        /// </summary>
+        private void HandleSubclassAck(IntPtr scintillaHwnd, EventHookInstaller.SubclassAckFlags flags, IntPtr parentHwnd)
+        {
+            // The AppRefiner combo button lives in the ComboBox toolbar dialog, which only
+            // PeopleCode editors have — HTML/SQL/StyleSheet editors have no such dialog, so
+            // requiring ButtonPresent for them would retry forever until the cap. Derive the
+            // expectation from the window caption rather than the tracked editor: the
+            // create-time ACK can arrive before the editor is initialized on focus.
+            bool expectsButton = EditorExpectsComboButton(scintillaHwnd);
+
+            bool complete =
+                flags.HasFlag(EventHookInstaller.SubclassAckFlags.ParentSubclassed) &&
+                flags.HasFlag(EventHookInstaller.SubclassAckFlags.ScintillaSubclassed) &&
+                (!expectsButton || flags.HasFlag(EventHookInstaller.SubclassAckFlags.ButtonPresent));
+
+            Debug.Log($"Subclass ACK: parent=0x{parentHwnd.ToInt64():X} scintilla=0x{scintillaHwnd.ToInt64():X} flags=[{flags}] expectsButton={expectsButton} — {(complete ? "complete" : "INCOMPLETE")}");
+
+            if (complete)
+            {
+                subclassRetryCounts.Remove(parentHwnd);
+                return;
+            }
+
+            int attempts = subclassRetryCounts.TryGetValue(parentHwnd, out var n) ? n : 0;
+            if (attempts >= MAX_SUBCLASS_RETRIES)
+            {
+                Debug.Log($"Subclass ACK: giving up on parent 0x{parentHwnd.ToInt64():X} after {attempts} retries");
+                subclassRetryCounts.Remove(parentHwnd);
+                return;
+            }
+            subclassRetryCounts[parentHwnd] = attempts + 1;
+            Debug.Log($"Subclass ACK: scheduling retry {attempts + 1}/{MAX_SUBCLASS_RETRIES} for parent 0x{parentHwnd.ToInt64():X} in {SUBCLASS_RETRY_DELAY_MS}ms");
+
+            Task.Delay(SUBCLASS_RETRY_DELAY_MS).ContinueWith(_ =>
+            {
+                try
+                {
+                    BeginInvoke((Action)(() => RetrySubclass(parentHwnd, scintillaHwnd)));
+                }
+                catch (Exception ex)
+                {
+                    Debug.Log($"Subclass retry: failed to marshal to UI thread: {ex.Message}");
+                }
+            });
+        }
+
+        /// <summary>
+        /// Whether this editor should have the AppRefiner combo button — true only for
+        /// PeopleCode editors, which are the only type App Designer gives the ComboBox
+        /// toolbar dialog the button attaches to. Classified from the window caption so it
+        /// works before the editor is tracked (the create-time ACK can precede init).
+        /// Unknown/unavailable caption defaults to true so a genuinely racing PeopleCode
+        /// editor still retries.
+        /// </summary>
+        private bool EditorExpectsComboButton(IntPtr scintillaHwnd)
+        {
+            if (scintillaHwnd != IntPtr.Zero)
+            {
+                WinApi.GetWindowThreadProcessId(scintillaHwnd, out uint pid);
+                if (AppDesignerProcesses.TryGetValue(pid, out var process) &&
+                    process.Editors.TryGetValue(scintillaHwnd, out var editor))
+                {
+                    return editor.Type == EditorType.PeopleCode;
+                }
+            }
+
+            var caption = WindowHelper.GetGrandparentWindowCaption(scintillaHwnd);
+            if (string.IsNullOrEmpty(caption) || caption == "Suppress")
+            {
+                return true; // Can't classify yet — assume it may still need the button
+            }
+            return caption.Contains("PeopleCode");
+        }
+
+        /// <summary>
+        /// Re-posts the subclass request for an editor whose previous setup was incomplete,
+        /// then re-syncs the minimap/param-names state that would have no-opped while the
+        /// combo button or dialog was missing.
+        /// </summary>
+        private void RetrySubclass(IntPtr parentHwnd, IntPtr scintillaHwnd)
+        {
+            if (!WinApi.IsWindow(parentHwnd))
+            {
+                Debug.Log($"Subclass retry: parent 0x{parentHwnd.ToInt64():X} is gone, abandoning");
+                subclassRetryCounts.Remove(parentHwnd);
+                return;
+            }
+
+            uint threadId = WinApi.GetWindowThreadProcessId(parentHwnd, out uint pid);
+            if (!AppDesignerProcesses.TryGetValue(pid, out var process))
+            {
+                Debug.Log($"Subclass retry: process {pid} no longer tracked, abandoning");
+                subclassRetryCounts.Remove(parentHwnd);
+                return;
+            }
+
+            Debug.Log($"Subclass retry: re-posting subclass request for parent 0x{parentHwnd.ToInt64():X}");
+            EventHookInstaller.SubclassScintillaParentWindow(threadId, parentHwnd, AppDesignerProcess.CallbackWindow, process.MainWindowHandle, process.Settings.AutoPair);
+
+            if (scintillaHwnd != IntPtr.Zero && process.Editors.TryGetValue(scintillaHwnd, out var editor))
+            {
+                EventHookInstaller.SetMinimap(editor, Properties.Settings.Default.miniMapOpen);
+                EventHookInstaller.SetParamNames(editor, Properties.Settings.Default.showParamNames);
+            }
+        }
+
+        /// <summary>
         /// Handles window shown events to detect and center modal dialogs.
         /// </summary>
         /// <summary>
@@ -4783,6 +4998,23 @@ namespace AppRefiner
                         }
 
                         editor.Cleanup();
+
+                        // The enhanced Scintilla swap fails (AR_SCINTILLA_IN_USE) while any
+                        // editor window exists — e.g. when AppRefiner attached to an App
+                        // Designer that already had editors open. Now that the last tracked
+                        // editor is gone, retry the swap: closing all editors upgrades the
+                        // process instead of requiring a pside restart. The request is
+                        // posted, so pside processes it after the destroy cascade finishes;
+                        // if untracked Scintilla windows still exist it fails IN_USE again
+                        // and is retried on the next editor close.
+                        if (process.Editors.Count == 0 &&
+                            Settings.Default.useEnhancedEditor &&
+                            !process.IsEnhancedEditorLoaded())
+                        {
+                            Debug.Log($"Last editor closed in process {process.ProcessId} — retrying enhanced Scintilla DLL swap");
+                            process.LoadScintillaDll(AppDesignerProcess.ScintillaModsDirectory);
+                        }
+
                         RefreshInstancesGrid();
                         return;
                     }
@@ -5049,14 +5281,18 @@ namespace AppRefiner
                 var newProcess = new AppDesignerProcess(processId, resultsListView, GetGeneralSettingsObject(), currentShortcutFlags);
                 if (Settings.Default.useEnhancedEditor)
                 {
-                    string testPath = Path.Combine(Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location)!, "scintilla_mods");
-                    newProcess.LoadScintillaDll(testPath);
+                    newProcess.LoadScintillaDll(AppDesignerProcess.ScintillaModsDirectory);
                 }
 
                 AppDesignerProcesses.Add(processId, newProcess);
                 trackedProcessIds.Add(processId);
                 WatchAppDesignerProcessExit(processId);
                 activeAppDesigner = newProcess;
+
+                // App Designer may have been running (with editors open) before AppRefiner
+                // started — subclass and initialize any editors that already exist
+                newProcess.InitExistingEditors();
+
                 RefreshInstancesGrid();
 
                 // Apply current theme to newly created process
@@ -5156,8 +5392,15 @@ namespace AppRefiner
 
             try
             {
-                // Try validation again
-                if (ValidateAndCreateAppDesignerProcessInternal(processId, hwnd, attemptNumber))
+                // Try validation again — on the UI thread, NOT this timer's thread-pool
+                // thread. AppDesignerProcess creation installs SetWindowsHookEx hooks
+                // (which Windows removes when the installing thread exits — a retired
+                // idle pool thread would silently kill them minutes later) and mutates
+                // UI-owned collections.
+                bool success = false;
+                Invoke((Action)(() => success = ValidateAndCreateAppDesignerProcessInternal(processId, hwnd, attemptNumber)));
+
+                if (success)
                 {
                     Debug.Log($"Validation retry #{attemptNumber} succeeded for process {processId}");
                     CleanupValidationRetry(processId);

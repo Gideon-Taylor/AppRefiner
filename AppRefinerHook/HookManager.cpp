@@ -671,6 +671,16 @@ LRESULT CALLBACK ScintillaSubclassProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPAR
         // Handle WM_NCDESTROY message to remove subclassing
         if (uMsg == WM_NCDESTROY) {
             RemoveWindowSubclass(hWnd, ScintillaSubclassProc, SCINTILLA_SUBCLASS_ID);
+
+            // Tell AppRefiner this editor is gone. The out-of-process WinEvent destroy
+            // notification is not reliably delivered for editor closes, so this in-process
+            // signal is the authoritative eviction trigger. Posted (not sent) so window
+            // destruction is never blocked on the receiver.
+            HWND callbackWindow = (HWND)dwRefData;
+            if (callbackWindow && IsWindow(callbackWindow)) {
+                PostMessage(callbackWindow, WM_AR_EDITOR_DESTROYED, (WPARAM)AR_PACK_HWND(hWnd, 0), 0);
+            }
+
             return DefSubclassProc(hWnd, uMsg, wParam, lParam);
         }
 
@@ -1154,26 +1164,50 @@ LRESULT CALLBACK GetMsgHook(int nCode, WPARAM wParam, LPARAM lParam) {
             return CallNextHookEx(g_getMsgHook, nCode, wParam, lParam);
         }
 
+        // Diagnostic: log every sighting of one of our custom thread messages, peek or
+        // removal, BEFORE the PM_REMOVE gate. If a request is posted but this line never
+        // appears, the message was never retrieved by this thread's message loop at all;
+        // if it appears only with PM_NOREMOVE, something peeks but never removes it.
+        if (msg->message >= WM_TOGGLE_AUTO_PAIRING && msg->message <= WM_AR_SET_PARAM_NAMES) {
+            char sightingMsg[160];
+            sprintf_s(sightingMsg, "GetMsgHook: saw msg 0x%X (WM_USER+%u) wParam=0x%p lParam=0x%p mode=%s\n",
+                      msg->message, msg->message - WM_USER,
+                      (void*)msg->wParam, (void*)msg->lParam,
+                      wParam == PM_REMOVE ? "PM_REMOVE" : "PM_NOREMOVE");
+            OutputDebugStringA(sightingMsg);
+        }
+
+        // WH_GETMESSAGE fires for PM_NOREMOVE peeks as well as actual removals. Only act
+        // on removal: on a peek the queued message is untouched (setting msg->message =
+        // WM_NULL only edits the caller's copy), so every one-shot request below would
+        // otherwise be processed a second time when the message is finally removed.
+        if (wParam != PM_REMOVE) {
+            return CallNextHookEx(g_getMsgHook, nCode, wParam, lParam);
+        }
+
         // Check if this is our message to subclass a window
         if (msg->message == WM_SUBCLASS_SCINTILLA_PARENT_WINDOW) {
             HWND hWndToSubclass = (HWND)msg->wParam;
             HWND callbackWindow = (HWND)msg->lParam;
-            
+            DWORD ackFlags = 0;
+            HWND scintillaChild = NULL;
+
             if (hWndToSubclass && IsWindow(hWndToSubclass)) {
                 // Subclass the parent window, passing callbackWindow as dwRefData
-                SetWindowSubclass(hWndToSubclass, SubclassProc, SUBCLASS_ID, (DWORD_PTR)callbackWindow);
+                if (SetWindowSubclass(hWndToSubclass, SubclassProc, SUBCLASS_ID, (DWORD_PTR)callbackWindow)) {
+                    ackFlags |= AR_SUB_ACK_PARENT_SUBCLASSED;
+                }
 
-                // Now find and subclass the child Scintilla editor window
-                HWND scintillaChild = FindWindowExA(hWndToSubclass, NULL, "Scintilla", NULL);
-                ComboBoxButton::Setup(scintillaChild, callbackWindow);
+                // Now find the child Scintilla editor window
+                scintillaChild = FindWindowExA(hWndToSubclass, NULL, "Scintilla", NULL);
                 if (scintillaChild && IsWindow(scintillaChild)) {
-                    SetWindowSubclass(scintillaChild, ScintillaSubclassProc, SCINTILLA_SUBCLASS_ID, (DWORD_PTR)callbackWindow);
+                    ackFlags |= AR_SUB_ACK_SCI_FOUND_DIRECT;
                 } else {
                     // If direct child search fails, try recursive search
                     struct FindScintillaData {
                         HWND scintillaHwnd;
                     } findData = { NULL };
-                    
+
                     // Enumerate child windows to find Scintilla editor
                     EnumChildWindows(hWndToSubclass, [](HWND hWnd, LPARAM lParam) -> BOOL {
                         FindScintillaData* data = (FindScintillaData*)lParam;
@@ -1186,15 +1220,37 @@ LRESULT CALLBACK GetMsgHook(int nCode, WPARAM wParam, LPARAM lParam) {
                         }
                         return TRUE; // Continue enumeration
                     }, (LPARAM)&findData);
-                    
-                    if (findData.scintillaHwnd && IsWindow(findData.scintillaHwnd)) {
-                        SetWindowSubclass(findData.scintillaHwnd, ScintillaSubclassProc, SCINTILLA_SUBCLASS_ID, (DWORD_PTR)callbackWindow);
+
+                    scintillaChild = findData.scintillaHwnd;
+                    if (scintillaChild && IsWindow(scintillaChild)) {
+                        ackFlags |= AR_SUB_ACK_SCI_FOUND_RECURSIVE;
+                    } else {
+                        scintillaChild = NULL;
+                    }
+                }
+
+                if (scintillaChild) {
+                    ackFlags |= ComboBoxButton::Setup(scintillaChild, callbackWindow);
+                    if (SetWindowSubclass(scintillaChild, ScintillaSubclassProc, SCINTILLA_SUBCLASS_ID, (DWORD_PTR)callbackWindow)) {
+                        ackFlags |= AR_SUB_ACK_SCI_SUBCLASSED;
                     }
                 }
 
                 // Note: Minimap is not automatically enabled - user must click the button to enable it
             } else {
+                ackFlags |= AR_SUB_ACK_INVALID_PARENT;
                 OutputDebugStringA("Invalid window handle for subclassing");
+            }
+
+            // Report what happened back to AppRefiner so incomplete setups are visible
+            // (and retryable) instead of failing silently
+            if (callbackWindow && IsWindow(callbackWindow)) {
+                char ackDebug[128];
+                sprintf_s(ackDebug, "WM_SUBCLASS_SCINTILLA_PARENT_WINDOW: parent=0x%p scintilla=0x%p flags=0x%04X\n",
+                          hWndToSubclass, scintillaChild, ackFlags);
+                OutputDebugStringA(ackDebug);
+                SendMessage(callbackWindow, WM_AR_SUBCLASS_ACK,
+                            (WPARAM)AR_PACK_HWND(scintillaChild, ackFlags), (LPARAM)hWndToSubclass);
             }
 
             // Mark the message as handled

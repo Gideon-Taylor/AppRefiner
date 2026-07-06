@@ -54,6 +54,46 @@ namespace AppRefiner
         public uint ProcessId = 0;
         public IntPtr ProcessHandle = IntPtr.Zero;
         public bool HasLexilla { get; set; }
+
+        /// <summary>
+        /// Directory the enhanced Scintilla builds are deployed to. Trailing separator so
+        /// prefix checks can't match sibling directories that merely start with the name.
+        /// </summary>
+        public static readonly string ScintillaModsDirectory = System.IO.Path.Combine(
+            System.IO.Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location)!,
+            "scintilla_mods") + System.IO.Path.DirectorySeparatorChar;
+
+        /// <summary>
+        /// True when the Scintilla DLL loaded in this process (Scintilla.dll on Tools 8.61+,
+        /// SciLexer.dll on 8.60 and earlier) came from AppRefiner's scintilla_mods directory —
+        /// i.e. the enhanced editor replacement actually took. Note HasLexilla is NOT this:
+        /// Lexilla.dll only exists on Scintilla 5.x installs, so it indicates the Tools era,
+        /// not the mod. Re-evaluated per call because the hook swaps the DLL asynchronously
+        /// after process registration.
+        /// </summary>
+        public bool IsEnhancedEditorLoaded()
+        {
+            try
+            {
+                using var process = Process.GetProcessById((int)ProcessId);
+                foreach (ProcessModule module in process.Modules)
+                {
+                    if (string.Equals(module.ModuleName, "Scintilla.dll", StringComparison.OrdinalIgnoreCase) ||
+                        string.Equals(module.ModuleName, "SciLexer.dll", StringComparison.OrdinalIgnoreCase))
+                    {
+                        if (module.FileName.StartsWith(ScintillaModsDirectory, StringComparison.OrdinalIgnoreCase))
+                        {
+                            return true;
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.Log($"IsEnhancedEditorLoaded: could not inspect modules for process {ProcessId}: {ex.Message}");
+            }
+            return false;
+        }
         public uint MainThreadId { get; private set; }
         public IntPtr MainWindowHandle { get; set; }
         public Dictionary<string, RemoteBuffer> iconBuffers = new();
@@ -235,10 +275,57 @@ namespace AppRefiner
         }
 
 
+        /// <summary>
+        /// Finds Scintilla editor windows that already exist in this process and runs the
+        /// normal editor initialization for each. Covers App Designer instances that were
+        /// already running (with editors open) before AppRefiner started — those editors
+        /// never produce a creation event, and would otherwise stay un-subclassed until
+        /// first focused. Matches by exact window-class prefix so the hook's minimap
+        /// windows (class AppRefinerMinimap) are not picked up.
+        /// </summary>
+        public void InitExistingEditors()
+        {
+            if (MainWindowHandle == IntPtr.Zero)
+            {
+                return;
+            }
+
+            var found = new List<IntPtr>();
+            WinApi.EnumChildWindows(MainWindowHandle, (hwnd, _) =>
+            {
+                StringBuilder className = new(256);
+                WinApi.GetClassName(hwnd, className, className.Capacity);
+                if (className.ToString().StartsWith("Scintilla", StringComparison.Ordinal))
+                {
+                    found.Add(hwnd);
+                }
+                return true; // Continue enumeration
+            }, IntPtr.Zero);
+
+            int initialized = 0;
+            foreach (var hwnd in found)
+            {
+                if (Editors.ContainsKey(hwnd))
+                {
+                    continue; // Already tracked (e.g. the focused editor that triggered registration)
+                }
+
+                Debug.Log($"InitExistingEditors: found pre-existing Scintilla editor 0x{hwnd.ToInt64():X}");
+                InitEditor(hwnd);
+                initialized++;
+            }
+
+            if (initialized > 0)
+            {
+                Debug.Log($"InitExistingEditors: initialized {initialized} pre-existing editor(s) in process {ProcessId}");
+            }
+        }
+
         public ScintillaEditor GetOrInitEditor(IntPtr hwnd)
         {
             if (Editors.TryGetValue(hwnd, out ScintillaEditor? editor))
             {
+                Debug.Log($"GetOrInitEditor: cache hit for hwnd 0x{hwnd.ToInt64():X} (caption '{editor.Caption}', Initialized={editor.Initialized}) — skipping init");
                 return editor;
             }
             else
@@ -263,11 +350,14 @@ namespace AppRefiner
             editor.AppDesignerProcess = this;
             Editors.Add(hWnd, editor);
 
+            Debug.Log($"InitEditor: full init for hwnd 0x{hWnd.ToInt64():X} (caption '{caption}', type {editor.Type}, thread {threadId}, parent 0x{WindowHelper.GetParentWindow(hWnd).ToInt64():X})");
+
             ScintillaManager.SetAutoCompleteIcons(editor);
             ScintillaManager.FixEditorTabs(editor);
             if (Settings.OnlyPPC && editor.Type != EditorType.PeopleCode)
             {
                 /* Skip the rest of the editor initialization */
+                Debug.Log($"InitEditor: OnlyPPC set and editor type is {editor.Type} — skipping subclass/minimap/param-names init for hwnd 0x{hWnd.ToInt64():X}");
                 return editor;
             }
 

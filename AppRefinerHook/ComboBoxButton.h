@@ -11,7 +11,8 @@ class ComboBoxButton
 public:
     // Setup the button for a given Scintilla editor
     // Navigates: Scintilla -> Parent -> Sibling Dialog (#32770) -> ComboBoxes
-    static void Setup(HWND scintillaHwnd, HWND callbackWindow);
+    // Returns AR_SUB_ACK_* flags describing what was found/created (see Common.h)
+    static DWORD Setup(HWND scintillaHwnd, HWND callbackWindow);
 
     // Remove the button and cleanup
     static void Cleanup(HWND scintillaHwnd);

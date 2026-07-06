@@ -17,6 +17,25 @@ namespace AppRefiner.Events
         private const uint WM_AR_SET_MINIMAP = WM_USER + 1010;
         private const uint WM_AR_SET_PARAM_NAMES = WM_USER + 1011;
 
+        /// <summary>
+        /// Status flags reported by the hook in WM_AR_SUBCLASS_ACK (mirrors AR_SUB_ACK_* in
+        /// AppRefinerHook/Common.h) describing how far editor subclassing got.
+        /// </summary>
+        [Flags]
+        public enum SubclassAckFlags : uint
+        {
+            None = 0,
+            ParentSubclassed = 0x0001,
+            ScintillaFoundDirect = 0x0002,
+            ScintillaFoundRecursive = 0x0004,
+            ScintillaSubclassed = 0x0008,
+            DialogFound = 0x0010,
+            DialogAlreadySubclassed = 0x0020,
+            DialogSubclassed = 0x0040,
+            ButtonPresent = 0x0080,
+            InvalidParent = 0x0100,
+        }
+
         // Bit field for shortcut types
         [Flags]
         public enum ShortcutType : uint
@@ -33,7 +52,7 @@ namespace AppRefiner.Events
         private static Dictionary<uint, IntPtr> _activeKeyboardHooks = new();
 
         // Win32 API imports
-        [DllImport("user32.dll")]
+        [DllImport("user32.dll", SetLastError = true)]
         public static extern bool PostThreadMessage(uint threadId, uint msg, IntPtr wParam, IntPtr lParam);
 
         // DLL imports
@@ -53,12 +72,41 @@ namespace AppRefiner.Events
         public static extern bool UnsubclassWindow(IntPtr hWnd);
 
         /// <summary>
-        /// Installs hooks for the specified thread ID. This should be called proactively when 
+        /// Synchronization context of a persistent thread (the UI thread), set once at
+        /// startup. SetWindowsHookEx hooks are removed by Windows when their installing
+        /// thread exits, so installation must never run on a thread-pool thread (e.g. a
+        /// retry timer callback) — the pool retiring that idle thread minutes later would
+        /// silently tear the hooks down and kill every posted-message feature.
+        /// </summary>
+        public static SynchronizationContext? HookInstallContext { get; set; }
+
+        /// <summary>
+        /// Installs hooks for the specified thread ID. This should be called proactively when
         /// an AppDesigner process is detected to ensure hooks are available for all operations.
+        /// Marshals to <see cref="HookInstallContext"/> so the hooks are always owned by a
+        /// persistent thread regardless of the caller.
         /// </summary>
         /// <param name="threadId">The thread ID to install hooks for</param>
         /// <returns>True if hooks are successfully installed or already exist</returns>
         public static bool InstallHook(uint threadId)
+        {
+            if (HookInstallContext != null)
+            {
+                if (Thread.CurrentThread.IsThreadPoolThread)
+                {
+                    Debug.Log($"InstallHook: called from a thread-pool thread for thread {threadId} — marshalling to the UI thread so the hooks survive");
+                }
+
+                bool result = false;
+                // Send executes inline when already on the target thread
+                HookInstallContext.Send(_ => result = InstallHookCore(threadId), null);
+                return result;
+            }
+
+            return InstallHookCore(threadId);
+        }
+
+        private static bool InstallHookCore(uint threadId)
         {
             bool success = true;
 
@@ -109,6 +157,11 @@ namespace AppRefiner.Events
 
             // Send the thread message to subclass the window
             bool result = PostThreadMessage(threadId, WM_SUBCLASS_SCINTILLA_PARENT_WINDOW, windowToSubclass, callbackWindow);
+            if (!result)
+            {
+                int error = Marshal.GetLastWin32Error();
+                Debug.Log($"SubclassScintillaParentWindow: PostThreadMessage to thread {threadId} FAILED, Win32 error {error}");
+            }
 
             // Set auto-pairing if subclassing was successful - now synchronous
             if (result && mainWindowHandle != IntPtr.Zero)

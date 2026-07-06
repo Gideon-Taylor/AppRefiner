@@ -37,6 +37,22 @@ This release includes a large overhaul of how AppRefiner communicates with
 Application Designer, resolving a class of intermittent issues — especially
 when more than one Application Designer is open.
 
+• Editor Features No Longer Fade Away - Fixed a long-standing timing issue
+  where, if Application Designer was started while AppRefiner was already
+  running, editors opened a few minutes into the session could silently lose
+  autocomplete, the AppRefiner button, and the minimap until both programs
+  were restarted. Editors now stay fully functional for the life of the
+  session.
+• Instant Editor Setup - Editors are now wired up the moment they are created
+  instead of waiting for you to click into them, and the setup is verified and
+  automatically retried if Application Designer wasn't ready yet. Code analysis
+  visuals (inlay hints, error highlights) also appear as the editor opens
+  rather than on first click. When AppRefiner starts while Application Designer
+  already has editors open, those editors are initialized immediately.
+• Enhanced Editor Without Restarting - If AppRefiner attaches to an Application
+  Designer that already has editors open, the enhanced editor previously
+  required a full Application Designer restart. Now it loads automatically as
+  soon as you close all open editors — no restart, no losing your place.
 • Correct Instance Routing - Autocomplete, tooltips, call tips, paste handling,
   and save tracking are now always applied to the editor that triggered them.
   Previously, switching quickly between editors or running several Application
@@ -57,6 +73,12 @@ when more than one Application Designer is open.
 BUG FIXES
 ---------
 
+• Inlay Hints Survive Saving - Parameter name hints (and error highlights) no
+  longer disappear when you save. Application Designer rewrites the editor
+  contents during a save; AppRefiner now restores its visuals right after.
+• Accurate Enhanced Editor Status - The Instances tab's "Enhanced" column now
+  reflects whether the enhanced editor is actually loaded. Previously it always
+  showed "No" on Tools 8.60 and always "Yes" on 8.61+, regardless of reality.
 • Autocomplete Doubling - Accepting a suggestion after typing part of a name no
   longer duplicates the text (e.g. "&varvariable"), including in files that
   contain non-ASCII characters.

@@ -257,6 +257,20 @@ namespace AppRefiner
             ContentDirty = true;
             unchecked { ContentVersion++; }
         }
+
+        /// <summary>
+        /// Number of times the entire document content has been replaced (full-document
+        /// delete detected by the hook, e.g. App Designer rewriting the editor during a
+        /// save). Display-side artifacts like inlay hints are destroyed by such a
+        /// replacement even when their recomputed values are identical — consumers that
+        /// cache "already sent" state must invalidate on this counter.
+        /// </summary>
+        public int DocumentResetCount { get; private set; }
+
+        public void MarkDocumentReset()
+        {
+            unchecked { DocumentResetCount++; }
+        }
         public bool AnnotationsInitialized { get; set; } = false;
         public bool IsDarkMode { get; set; } = false;
         public IntPtr AnnotationStyleOffset = IntPtr.Zero;
