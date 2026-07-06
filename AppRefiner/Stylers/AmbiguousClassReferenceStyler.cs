@@ -209,7 +209,7 @@ namespace AppRefiner.Stylers
         /// Deferred resolver: Generates quick fix options for each conflicting import path.
         /// Invoked only when user presses Ctrl+. on the indicator.
         /// </summary>
-        private List<(Type RefactorClass, string Description)> ResolveQualificationOptions(
+        private List<QuickFixEntry> ResolveQualificationOptions(
             ScintillaEditor editor,
             int position,
             object? context)
@@ -220,7 +220,7 @@ namespace AppRefiner.Stylers
                 return new();
             }
 
-            var quickFixes = new List<(Type, string)>();
+            var quickFixes = new List<QuickFixEntry>();
 
             // Create one quick fix option per conflicting path
             foreach (var fullPath in ambiguityContext.ConflictingPaths)

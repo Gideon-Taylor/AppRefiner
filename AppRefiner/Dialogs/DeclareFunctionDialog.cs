@@ -69,8 +69,9 @@ namespace AppRefiner.Dialogs
         /// <param name="functionCacheManager">Function cache manager instance</param>
         /// <param name="appDesignerProcess">AppDesignerProcess for database context</param>
         /// <param name="owner">Owner window handle</param>
-        public DeclareFunctionDialog(FunctionCacheManager functionCacheManager, 
-            AppDesignerProcess appDesignerProcess, IntPtr owner)
+        /// <param name="initialSearchTerm">Optional search term to pre-fill the search box with</param>
+        public DeclareFunctionDialog(FunctionCacheManager functionCacheManager,
+            AppDesignerProcess appDesignerProcess, IntPtr owner, string? initialSearchTerm = null)
         {
             this.functionCacheManager = functionCacheManager ?? throw new ArgumentNullException(nameof(functionCacheManager));
             this.appDesignerProcess = appDesignerProcess ?? throw new ArgumentNullException(nameof(appDesignerProcess));
@@ -92,6 +93,13 @@ namespace AppRefiner.Dialogs
 
             InitializeComponent();
             PositionInParent();
+
+            if (!string.IsNullOrEmpty(initialSearchTerm))
+            {
+                // Fires TextChanged -> searchTimer; the cache-loaded handler re-runs the
+                // search if the cache wasn't ready yet, so seeding here is sufficient
+                searchBox.Text = initialSearchTerm;
+            }
         }
 
         #endregion

@@ -40,7 +40,7 @@ namespace AppRefiner.Stylers
                     declaringCatch != currentCatch)
                 {
                     string tooltip = $"Using exception variable '{node.Name}' from different catch block. Use the one declared in this catch.";
-                    var quickFixes = new List<(Type RefactorClass, string Description)>
+                    var quickFixes = new List<QuickFixEntry>
                     {
                         (typeof(FixExceptionVariable), "Rename to correct exception variable")
                     };

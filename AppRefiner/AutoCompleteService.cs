@@ -1184,10 +1184,19 @@ namespace AppRefiner
                         return null;
                     }
 
-                    // Store the selected description in editor state for QuickFixes that need it
-                    // Extract context from description (format: "Import APP_PACKAGE:ClassName" or "Use APP_PACKAGE:ClassName")
-                    string context = ExtractQuickFixContext(selection);
-                    editor.QuickFixContext = context;
+                    // "Search for function..." opens the pre-filled Declare Function dialog
+                    // instead of executing a refactor
+                    if (refactorType == typeof(Refactors.QuickFixes.OpenDeclareFunctionDialogQuickFix))
+                    {
+                        string functionName = quickFix.Context as string ?? string.Empty;
+                        mainForm.BeginInvoke((Action)(() =>
+                            mainForm.ShowDeclareFunctionDialog(functionName, insertExampleCall: false)));
+                        return null;
+                    }
+
+                    // Rich payload attached by the resolver wins; description parsing is the
+                    // legacy fallback for entries that carry no context object
+                    editor.QuickFixContext = quickFix.Context ?? ExtractQuickFixContext(selection);
 
                     var instance = Activator.CreateInstance(refactorType, [editor]);
 

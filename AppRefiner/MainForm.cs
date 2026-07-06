@@ -71,6 +71,12 @@ namespace AppRefiner
         private RefactorManager? refactorManager; // Added RefactorManager
         private SettingsService? settingsService; // Added SettingsService
         private FunctionCacheManager? functionCacheManager;
+
+        /// <summary>
+        /// Static access to the function cache for quick-fix resolvers. The cache is local
+        /// SQLite keyed by DBName — usable without a live database connection.
+        /// </summary>
+        public static FunctionCacheManager? FunctionCache { get; private set; }
         private CommandManager? commandManager; // Added CommandManager for plugin commands
         private TypeExtensionManager? languageExtensionManager; // Added LanguageExtensionManager
         private AutoSuggestSettings autoSuggestSettings = AutoSuggestSettings.GetDefault(); // Auto suggest configuration 
@@ -350,7 +356,7 @@ namespace AppRefiner
             snapshotManager = SnapshotManager.CreateFromSettings();
 
             // Instantiate FunctionCacheManager
-            functionCacheManager = FunctionCacheManager.CreateFromSettings();
+            FunctionCache = functionCacheManager = FunctionCacheManager.CreateFromSettings();
 
             // Attach event handlers for immediate save
             AttachEventHandlersForImmediateSave();
@@ -1572,7 +1578,7 @@ namespace AppRefiner
             templateManager.ApplyActiveTemplateToEditor(activeEditor);
         }
 
-        internal void ShowDeclareFunctionDialog()
+        internal void ShowDeclareFunctionDialog(string? initialSearchTerm = null, bool insertExampleCall = true)
         {
             if (activeAppDesigner?.DataManager == null)
             {
@@ -1608,7 +1614,7 @@ namespace AppRefiner
 
             var dataManager = activeAppDesigner.DataManager;
             var dialog = new DeclareFunctionDialog(functionCacheManager, activeAppDesigner,
-                activeAppDesigner?.MainWindowHandle ?? IntPtr.Zero);
+                activeAppDesigner?.MainWindowHandle ?? IntPtr.Zero, initialSearchTerm);
 
             try
             {
@@ -1620,7 +1626,7 @@ namespace AppRefiner
                     var selectedFunction = dialog.SelectedFunction;
                     if (selectedFunction != null && activeAppDesigner != null)
                     {
-                        var refactorClass = new DeclareFunction(activeEditor, selectedFunction);
+                        var refactorClass = new DeclareFunction(activeEditor, selectedFunction, insertExampleCall);
                         refactorManager.ExecuteRefactor(refactorClass, activeEditor, false);
                     }
 

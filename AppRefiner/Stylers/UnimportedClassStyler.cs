@@ -134,7 +134,7 @@ namespace AppRefiner.Stylers
         /// Deferred resolver: Queries database for all packages containing this class.
         /// Invoked only when user presses Ctrl+.
         /// </summary>
-        private List<(Type RefactorClass, string Description)> GetImportOptionsResolver(
+        private List<QuickFixEntry> GetImportOptionsResolver(
             ScintillaEditor editor,
             int position,
             object? context)
@@ -163,7 +163,7 @@ namespace AppRefiner.Stylers
             var prioritized = PrioritizeByExistingImports(packagePaths);
             Debug.Log($"Found {prioritized.Count} packages for class {className}");
             // Generate QuickFix options - one per package
-            var quickFixes = new List<(Type, string)>();
+            var quickFixes = new List<QuickFixEntry>();
             foreach (var packagePath in prioritized)
             {
                 // Description shows the full path: "Import APP_PACKAGE:SUBPKG:CriteriaUI"

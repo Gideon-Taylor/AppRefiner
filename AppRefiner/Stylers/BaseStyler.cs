@@ -12,6 +12,31 @@ namespace AppRefiner.Stylers
         // Future indicator types can be added here
     }
 
+    /// <summary>
+    /// One quick-fix option attached to an indicator. Context, when set, is handed to the
+    /// refactor via editor.QuickFixContext verbatim — richer than the description-string
+    /// parsing fallback and avoids re-querying data the resolver already had in hand.
+    /// </summary>
+    public readonly struct QuickFixEntry
+    {
+        public Type RefactorClass { get; }
+        public string Description { get; }
+        public object? Context { get; }
+
+        public QuickFixEntry(Type refactorClass, string description, object? context = null)
+        {
+            RefactorClass = refactorClass;
+            Description = description;
+            Context = context;
+        }
+
+        public static implicit operator QuickFixEntry((Type RefactorClass, string Description) t)
+            => new(t.RefactorClass, t.Description);
+
+        public static implicit operator QuickFixEntry((Type RefactorClass, string Description, object? Context) t)
+            => new(t.RefactorClass, t.Description, t.Context);
+    }
+
     public struct Indicator
     {
         public int Start { get; set; }
@@ -19,14 +44,14 @@ namespace AppRefiner.Stylers
         public uint Color { get; set; }
         public string? Tooltip { get; set; }
         public IndicatorType Type { get; set; }
-        public List<(Type RefactorClass, string Description)> QuickFixes = new();
+        public List<QuickFixEntry> QuickFixes = new();
 
         /// <summary>
         /// Deferred QuickFix resolver with context.
         /// Invoked only when the user presses Ctrl+. on this indicator.
-        /// Signature: (editor, position, context) => List<(Type, Description)>
+        /// Signature: (editor, position, context) => List<QuickFixEntry>
         /// </summary>
-        public Func<ScintillaEditor, int, object?, List<(Type RefactorClass, string Description)>>? DeferredQuickFixResolver { get; set; }
+        public Func<ScintillaEditor, int, object?, List<QuickFixEntry>>? DeferredQuickFixResolver { get; set; }
 
         /// <summary>
         /// Context data to pass to the deferred resolver (e.g., unimported class name).
@@ -97,12 +122,12 @@ namespace AppRefiner.Stylers
         /// </summary>
         public ScintillaEditor? Editor { get; set; }
 
-        public void AddIndicator(SourceSpan span, IndicatorType type, uint color, string? tooltip = null, List<(Type RefactorClass, string Description)>? quickFixes = null)
+        public void AddIndicator(SourceSpan span, IndicatorType type, uint color, string? tooltip = null, List<QuickFixEntry>? quickFixes = null)
         {
             AddIndicator((span.Start.ByteIndex, span.End.ByteIndex), type, color, tooltip, quickFixes);
         }
 
-        public void AddIndicator((int Start, int Stop) span, IndicatorType type, uint color, string? tooltip = null, List<(Type RefactorClass, string Description)>? quickFixes = null)
+        public void AddIndicator((int Start, int Stop) span, IndicatorType type, uint color, string? tooltip = null, List<QuickFixEntry>? quickFixes = null)
         {
             if (span.Start >= 0 && span.Stop >= span.Start)
             {
@@ -133,7 +158,7 @@ namespace AppRefiner.Stylers
             IndicatorType type,
             uint color,
             string? tooltip,
-            Func<ScintillaEditor, int, object?, List<(Type RefactorClass, string Description)>> deferredResolver,
+            Func<ScintillaEditor, int, object?, List<QuickFixEntry>> deferredResolver,
             object? context = null)
         {
             if (span.Start.ByteIndex >= 0 && span.End.ByteIndex >= span.Start.ByteIndex)

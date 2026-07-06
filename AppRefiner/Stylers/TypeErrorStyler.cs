@@ -65,11 +65,29 @@ public class TypeErrorStyler : BaseStyler
             // Add squiggle indicators for each type error
             foreach (var error in typeErrors)
             {
+                // "Return/Expression values must be assigned to a variable" errors are the
+                // only ones recorded on an ExpressionStatementNode — offer to capture the
+                // value in a new local. The declared type is rendered here because the
+                // quick fix's fresh re-parse won't re-run type inference.
+                List<QuickFixEntry>? quickFixes = null;
+                if (error.Node is ExpressionStatementNode stmt)
+                {
+                    quickFixes = new List<QuickFixEntry>
+                    {
+                        new(typeof(Refactors.QuickFixes.AssignToNewVariable),
+                            "Assign result to a new local variable",
+                            new Refactors.QuickFixes.AssignToVariableContext(
+                                stmt.SourceSpan.Start.ByteIndex,
+                                RenderDeclaredType(stmt.Expression.GetInferredType())))
+                    };
+                }
+
                 AddIndicator(
                     error.Node.SourceSpan,
                     IndicatorType.SQUIGGLE,
                     ERROR_COLOR,
-                    error.Message
+                    error.Message,
+                    quickFixes
                 );
             }
 
@@ -93,5 +111,25 @@ public class TypeErrorStyler : BaseStyler
         {
             Debug.LogException(ex, "TypeErrorStyler: Error during type checking");
         }
+    }
+
+    /// <summary>
+    /// Renders an inferred type as a PeopleCode declared-type token. TypeInfo.Name is
+    /// already source-legal for primitives, builtin objects, app classes (PKG:CLS) and
+    /// arrays ("array of string"); anything that doesn't look like a legal type token
+    /// (e.g. "Dynamic Reference") conservatively declares as "any".
+    /// </summary>
+    private static string RenderDeclaredType(PeopleCodeTypeInfo.Types.TypeInfo? typeInfo)
+    {
+        var name = typeInfo?.Name;
+        if (string.IsNullOrEmpty(name))
+        {
+            return "any";
+        }
+
+        return System.Text.RegularExpressions.Regex.IsMatch(
+            name, @"^(array of )*[A-Za-z][A-Za-z0-9_]*(:[A-Za-z0-9_]+)*$", System.Text.RegularExpressions.RegexOptions.IgnoreCase)
+            ? name
+            : "any";
     }
 }

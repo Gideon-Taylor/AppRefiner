@@ -123,7 +123,7 @@ public class MissingConstructor : BaseStyler
             if (baseClassConstructor?.Parameters.Count > 0)
             {
                 string tooltip = $"Class '{classNode.Name}' is missing a constructor required by '{classNode.BaseType.TypeName}'.";
-                var quickFixes = new List<(Type RefactorClass, string Description)>
+                var quickFixes = new List<QuickFixEntry>
                 {
                     (typeof(GenerateBaseConstructor), "Generate missing constructor")
                 };

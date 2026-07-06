@@ -115,7 +115,7 @@ public class UndefinedVariables : BaseStyler
         foreach (var (name, location) in forLoopIterators)
         {
             string tooltip = $"Undefined for loop iterator: {name}";
-            var quickFixes = new List<(Type RefactorClass, string Description)>
+            var quickFixes = new List<QuickFixEntry>
             {
                 (typeof(DeclareForLoopIterator), "Declare iterator")
             };

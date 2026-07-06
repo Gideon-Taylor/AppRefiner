@@ -25,18 +25,23 @@ namespace AppRefiner.Refactors
 
         private readonly FunctionSearchResult _functionToDeclare;
         private ProgramNode? _programNode;
+        private readonly bool _insertExampleCall;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="DeclareFunction"/> class with a specific function to declare.
         /// </summary>
         /// <param name="editor">The Scintilla editor instance.</param>
         /// <param name="functionToDeclare">The function search result to declare.</param>
-        public DeclareFunction(AppRefiner.ScintillaEditor editor, FunctionSearchResult functionToDeclare) : base(editor)
+        /// <param name="insertExampleCall">Whether to also insert an example call at the cursor. Quick fixes
+        /// suppress this since the triggering call already exists.</param>
+        public DeclareFunction(AppRefiner.ScintillaEditor editor, FunctionSearchResult functionToDeclare,
+            bool insertExampleCall = true) : base(editor)
         {
             if (functionToDeclare == null)
                 throw new ArgumentException("Function to declare cannot be null", nameof(functionToDeclare));
 
             _functionToDeclare = functionToDeclare;
+            _insertExampleCall = insertExampleCall;
         }
 
         public override void VisitProgram(ProgramNode node)
@@ -91,6 +96,17 @@ namespace AppRefiner.Refactors
 
                 if (insertIndex >= 0)
                 {
+                    if (!_insertExampleCall)
+                    {
+                        // Quick-fix path: the call that triggered the fix already exists —
+                        // only the declaration line is inserted
+                        if (!string.IsNullOrEmpty(declarationString))
+                        {
+                            InsertText(insertIndex, declarationString, "Insert function declaration");
+                        }
+                        return;
+                    }
+
                     var funcCallIndex = CurrentPosition;
                     var currentLineText = ScintillaManager.GetLineText(Editor, LineNumber);
                     var exampleCall = string.IsNullOrWhiteSpace(currentLineText)

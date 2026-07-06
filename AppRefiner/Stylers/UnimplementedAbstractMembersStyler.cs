@@ -70,7 +70,7 @@ namespace AppRefiner.Stylers
                         tooltipBuilder.Append($"\n - Property: {prop.Name}");
                     }
 
-                    var quickFixes = new List<(Type RefactorClass, string Description)>
+                    var quickFixes = new List<QuickFixEntry>
                     {
                         (typeof(ImplementAbstractMembers), "Implement missing abstract members")
                     };

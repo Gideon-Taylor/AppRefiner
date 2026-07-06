@@ -42,7 +42,7 @@ namespace AppRefiner.Stylers
         private void FlagMissingImplementation(MethodNode methodDeclaration)
         {
             string tooltip = $"Method '{methodDeclaration.Name}' is declared but not implemented.";
-            var quickFixes = new List<(Type RefactorClass, string Description)>
+            var quickFixes = new List<QuickFixEntry>
             {
                 (typeof(ImplementMissingMethod), "Implement missing method")
             };
