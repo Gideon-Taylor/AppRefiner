@@ -298,6 +298,29 @@ namespace AppRefiner.Database
         /// <returns>List of full package paths sorted by priority (e.g., ["APP_PACKAGE:CriteriaUI", "UTIL:UI:CriteriaUI"])</returns>
         List<string> GetPackagesForClass(string className);
 
+        /// <summary>
+        /// Gets all Message Catalog sets (PSMSGSETDEFN), ordered by set number.
+        /// </summary>
+        List<MessageSetInfo> GetMessageSets();
+
+        /// <summary>
+        /// Gets all messages in one catalog set (PSMSGCATDEFN), ordered by message number.
+        /// </summary>
+        List<MessageCatalogEntry> GetMessagesForSet(int setNumber);
+
+        /// <summary>
+        /// Gets a single Message Catalog entry, or null when it does not exist.
+        /// </summary>
+        MessageCatalogEntry? GetMessageCatalogEntry(int setNumber, int messageNumber);
+
+        /// <summary>
+        /// Case-insensitive search of MESSAGE_TEXT and explain text across the catalog,
+        /// optionally scoped to a collection of set numbers (null or empty = all sets),
+        /// capped at <paramref name="limit"/> rows. DESCRLONG is a CLOB; only its first
+        /// 4000 characters are matched (DBMS_LOB.SUBSTR bound).
+        /// </summary>
+        List<MessageCatalogEntry> SearchMessageCatalog(string searchTerm, IReadOnlyCollection<int>? setNumbers, int limit);
+
 
         public static bool TryMapStringToTargetType(string typeName, out OpenTargetType targetType)
         {

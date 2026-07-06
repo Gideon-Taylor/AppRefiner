@@ -1,6 +1,7 @@
 using System;
 using System.Runtime.InteropServices;
 using System.Windows.Forms;
+using AppRefiner.Dialogs;
 using static AppRefiner.ScintillaEditor;
 
 namespace AppRefiner.Commands.BuiltIn
@@ -48,6 +49,28 @@ namespace AppRefiner.Commands.BuiltIn
             // Get document text
             string? text = ScintillaManager.GetScintillaText(editor);
             if (string.IsNullOrEmpty(text)) return;
+
+            // Message Catalog: Ctrl+Space in the message_set/message_num argument of a
+            // MsgGet-family call opens the catalog dialog in insert mode instead of a popup.
+            var dataManager = editor.DataManager;
+            if (dataManager != null)
+            {
+                var catalogContext = MessageCatalogCallContext.TryDetect(editor, position);
+                if (catalogContext != null)
+                {
+                    var mainHandle = editor.AppDesignerProcess.MainWindowHandle;
+                    mainForm.Invoke(() =>
+                    {
+                        using var dialog = new MessageCatalogDialog(dataManager, catalogContext, mainHandle);
+                        if (dialog.ShowDialog(new WindowWrapper(mainHandle)) == DialogResult.OK
+                            && !string.IsNullOrEmpty(dialog.TextToInsert))
+                        {
+                            ScintillaManager.InsertTextAtCursor(editor, dialog.TextToInsert);
+                        }
+                    });
+                    return;
+                }
+            }
 
             // Detect context by scanning backward
             var detectedContext = DetectAutocompleteContext(text, position);

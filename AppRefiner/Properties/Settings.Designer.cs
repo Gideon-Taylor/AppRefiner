@@ -548,5 +548,17 @@ namespace AppRefiner.Properties {
                 this["SnapshotDiffDirectionCurrentFirst"] = value;
             }
         }
+
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("MsgGetText")]
+        public string MessageCatalogInsertFunction {
+            get {
+                return ((string)(this["MessageCatalogInsertFunction"]));
+            }
+            set {
+                this["MessageCatalogInsertFunction"] = value;
+            }
+        }
     }
 }

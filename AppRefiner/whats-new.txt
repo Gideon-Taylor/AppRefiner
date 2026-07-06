@@ -52,6 +52,15 @@ NEW FEATURES
   and Copy Original / Copy Diff buttons put the old code or a unified diff on
   the clipboard. Applying a revert automatically snapshots any unsaved edits
   first so nothing is ever lost, and the dialog is resizable.
+• Message Catalog - Browse and search the Message Catalog without leaving
+  Application Designer. Hover any MsgGet, MsgGetText, MsgGetExplainText,
+  CreateException, MessageBox, or MsgBoxButtonOverride call to see the catalog
+  message, severity, and explain text. Press Ctrl+Space inside the message set
+  or number argument to pick a message from a searchable browser — it fills in
+  the numbers and default text for you. Planning a new message? The dialog
+  shows each set's free number ranges and validates the number you pick, with
+  your intended text carried into the inserted code. Open it any time from the
+  command palette: "Browse Message Catalog".
 
 
 RELIABILITY & MULTI-INSTANCE FIXES

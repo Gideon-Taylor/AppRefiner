@@ -836,6 +836,178 @@ namespace AppRefiner.Database
             return fields;
         }
 
+        public List<MessageSetInfo> GetMessageSets()
+        {
+            if (!IsConnected)
+            {
+                throw new InvalidOperationException("Database connection is not open");
+            }
+
+            string sql = @"
+                SELECT MESSAGE_SET_NBR, DESCR
+                FROM PSMSGSETDEFN
+                ORDER BY MESSAGE_SET_NBR";
+
+            List<MessageSetInfo> sets = new();
+            try
+            {
+                DataTable result = _connection.ExecuteQuery(sql, new Dictionary<string, object>());
+                foreach (DataRow row in result.Rows)
+                {
+                    sets.Add(new MessageSetInfo(
+                        Convert.ToInt32(row["MESSAGE_SET_NBR"]),
+                        row["DESCR"].ToString() ?? string.Empty));
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.Log($"GetMessageSets failed: {ex.Message}");
+            }
+            return sets;
+        }
+
+        public List<MessageCatalogEntry> GetMessagesForSet(int setNumber)
+        {
+            if (!IsConnected)
+            {
+                throw new InvalidOperationException("Database connection is not open");
+            }
+
+            string sql = @"
+                SELECT MESSAGE_NBR, MSG_SEVERITY, MESSAGE_TEXT, DESCRLONG
+                FROM PSMSGCATDEFN
+                WHERE MESSAGE_SET_NBR = ?
+                ORDER BY MESSAGE_NBR";
+
+            Dictionary<string, object> parameters = new()
+            {
+                { "setNumber", setNumber }
+            };
+
+            List<MessageCatalogEntry> messages = new();
+            try
+            {
+                DataTable result = _connection.ExecuteQuery(sql, parameters);
+                foreach (DataRow row in result.Rows)
+                {
+                    messages.Add(new MessageCatalogEntry(
+                        setNumber,
+                        Convert.ToInt32(row["MESSAGE_NBR"]),
+                        row["MSG_SEVERITY"].ToString() ?? string.Empty,
+                        row["MESSAGE_TEXT"].ToString() ?? string.Empty,
+                        row["DESCRLONG"] == DBNull.Value ? string.Empty : row["DESCRLONG"].ToString() ?? string.Empty));
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.Log($"GetMessagesForSet({setNumber}) failed: {ex.Message}");
+            }
+            return messages;
+        }
+
+        public MessageCatalogEntry? GetMessageCatalogEntry(int setNumber, int messageNumber)
+        {
+            if (!IsConnected)
+            {
+                throw new InvalidOperationException("Database connection is not open");
+            }
+
+            string sql = @"
+                SELECT MSG_SEVERITY, MESSAGE_TEXT, DESCRLONG
+                FROM PSMSGCATDEFN
+                WHERE MESSAGE_SET_NBR = ?
+                AND MESSAGE_NBR = ?";
+
+            Dictionary<string, object> parameters = new()
+            {
+                { "setNumber", setNumber },
+                { "messageNumber", messageNumber }
+            };
+
+            try
+            {
+                DataTable result = _connection.ExecuteQuery(sql, parameters);
+                if (result.Rows.Count == 0)
+                {
+                    return null;
+                }
+                DataRow row = result.Rows[0];
+                return new MessageCatalogEntry(
+                    setNumber,
+                    messageNumber,
+                    row["MSG_SEVERITY"].ToString() ?? string.Empty,
+                    row["MESSAGE_TEXT"].ToString() ?? string.Empty,
+                    row["DESCRLONG"] == DBNull.Value ? string.Empty : row["DESCRLONG"].ToString() ?? string.Empty);
+            }
+            catch (Exception ex)
+            {
+                Debug.Log($"GetMessageCatalogEntry({setNumber}, {messageNumber}) failed: {ex.Message}");
+                return null;
+            }
+        }
+
+        public List<MessageCatalogEntry> SearchMessageCatalog(string searchTerm, IReadOnlyCollection<int>? setNumbers, int limit)
+        {
+            if (!IsConnected)
+            {
+                throw new InvalidOperationException("Database connection is not open");
+            }
+
+            // Positional ? placeholders: the search term must be added TWICE, in order.
+            // PeopleSoft SQL Server DBs use binary collation, so explicit UPPER is required.
+            // The set filter interpolates int values directly, so it adds no placeholders.
+            string sql = $@"
+                SELECT TOP ({limit}) MESSAGE_SET_NBR, MESSAGE_NBR, MSG_SEVERITY, MESSAGE_TEXT, DESCRLONG
+                FROM PSMSGCATDEFN
+                WHERE (UPPER(MESSAGE_TEXT) LIKE ?
+                       OR UPPER(CAST(DESCRLONG AS NVARCHAR(MAX))) LIKE ?)
+                {BuildMessageSetFilter(setNumbers)}
+                ORDER BY MESSAGE_SET_NBR, MESSAGE_NBR";
+
+            Dictionary<string, object> parameters = new()
+            {
+                { "searchTerm1", $"%{searchTerm.ToUpperInvariant()}%" },
+                { "searchTerm2", $"%{searchTerm.ToUpperInvariant()}%" }
+            };
+
+            List<MessageCatalogEntry> messages = new();
+            try
+            {
+                DataTable result = _connection.ExecuteQuery(sql, parameters);
+                foreach (DataRow row in result.Rows)
+                {
+                    messages.Add(new MessageCatalogEntry(
+                        Convert.ToInt32(row["MESSAGE_SET_NBR"]),
+                        Convert.ToInt32(row["MESSAGE_NBR"]),
+                        row["MSG_SEVERITY"].ToString() ?? string.Empty,
+                        row["MESSAGE_TEXT"].ToString() ?? string.Empty,
+                        row["DESCRLONG"] == DBNull.Value ? string.Empty : row["DESCRLONG"].ToString() ?? string.Empty));
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.Log($"SearchMessageCatalog failed: {ex.Message}");
+            }
+            return messages;
+        }
+
+        /// <summary>
+        /// Builds an AND predicate scoping PSMSGCATDEFN rows to the given set numbers,
+        /// or an empty string for null/empty (all sets). Values are ints, interpolated
+        /// directly; chunked by 900 to match the Oracle manager's IN-list handling.
+        /// </summary>
+        private static string BuildMessageSetFilter(IReadOnlyCollection<int>? setNumbers)
+        {
+            if (setNumbers == null || setNumbers.Count == 0)
+            {
+                return string.Empty;
+            }
+
+            var chunks = setNumbers.Distinct().Chunk(900)
+                .Select(chunk => $"MESSAGE_SET_NBR IN ({string.Join(",", chunk)})");
+            return $"AND ({string.Join(" OR ", chunks)})";
+        }
+
         /// <summary>
         /// Gets the VERSION field value from PSRECDEFN for a specific record.
         /// </summary>
