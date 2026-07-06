@@ -1,6 +1,5 @@
 using Oracle.ManagedDataAccess.Client;
 using System.Data;
-using System.Text.RegularExpressions;
 
 namespace AppRefiner.Database
 {
@@ -150,41 +149,40 @@ namespace AppRefiner.Database
         }
 
         /// <summary>
-        /// Gets all TNS names from the tnsnames.ora file
+        /// Gets all TNS entries from the tnsnames.ora file, following IFILE includes.
+        /// The managed ODP.NET driver does not resolve IFILE itself, so include
+        /// failures and warnings are logged here for diagnosis.
+        /// </summary>
+        /// <returns>The parse result (empty if no tnsnames.ora could be located)</returns>
+        public static TnsParseResult GetTnsEntries()
+        {
+            string? tnsNamesPath = GetTnsNamesPath();
+            if (string.IsNullOrEmpty(tnsNamesPath))
+            {
+                return new TnsParseResult();
+            }
+
+            TnsParseResult result = TnsNamesParser.Parse(tnsNamesPath);
+
+            foreach (string failure in result.FailedIncludes)
+            {
+                Debug.Log($"tnsnames.ora include could not be read: {failure}");
+            }
+            foreach (string warning in result.Warnings)
+            {
+                Debug.Log($"tnsnames.ora parse warning: {warning}");
+            }
+
+            return result;
+        }
+
+        /// <summary>
+        /// Gets all TNS names from the tnsnames.ora file (including IFILE includes)
         /// </summary>
         /// <returns>A list of TNS names</returns>
         public static List<string> GetAllTnsNames()
         {
-            List<string> tnsNames = new();
-            string? tnsNamesPath = GetTnsNamesPath();
-
-            if (string.IsNullOrEmpty(tnsNamesPath) || !File.Exists(tnsNamesPath))
-            {
-                return tnsNames;
-            }
-
-            try
-            {
-                string content = File.ReadAllText(tnsNamesPath);
-
-                // Regular expression to find TNS entries
-                Regex regex = new(@"^\s*([a-zA-Z0-9_\-]+)\s*=", RegexOptions.Multiline);
-                MatchCollection matches = regex.Matches(content);
-
-                foreach (Match match in matches)
-                {
-                    if (match.Groups.Count > 1)
-                    {
-                        tnsNames.Add(match.Groups[1].Value.Trim());
-                    }
-                }
-            }
-            catch (Exception)
-            {
-                // Ignore any errors reading the file
-            }
-
-            return tnsNames;
+            return GetTnsEntries().Entries.Select(e => e.Alias).ToList();
         }
 
         /// <summary>

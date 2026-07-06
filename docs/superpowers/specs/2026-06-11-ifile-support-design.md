@@ -82,7 +82,7 @@ Parsing rules:
 
 ## Testing
 
-- **New `AppRefiner.Tests` xunit project** (conventions copied from `PeopleCodeTypeInfo.Tests`: xunit 2.6.x, net8.0; references AppRefiner). Unit tests for `TnsNamesParser`: comments, multi-alias entries, nested parens in descriptors, IFILE absolute / relative / quoted / forward-slash paths, depth limit, cycle detection, missing include, zero-width-character cleanup, unbalanced EOF, empty file.
+- **No test project is added to the repo** (project decision). `TnsNamesParser` is verified during development with a throwaway console harness outside the repo (`C:\temp\tnsparse-check`, references AppRefiner.csproj) covering: comments, multi-alias entries, nested parens in descriptors, IFILE absolute / relative / quoted / forward-slash paths, depth limit, cycle detection, missing include, zero-width-character cleanup, unbalanced EOF, duplicate-alias resolution. The harness is not committed.
 - **Manual verification:** replicate the customer setup — `C:\temp\TNS_ADMIN_TEST\tnsnames.ora` containing only `IFILE=\\ad.company.com\NETLOGON\tnsnames.ora`, AppRefiner TNS_ADMIN setting pointed at that folder. Expect: full alias list in dropdown, no literal "IFILE" entry, successful connect via descriptor, hint label when the include path is made unreachable.
 - The standalone harness at `C:\temp\ifiletest\` can confirm descriptor-as-DataSource reaches the network layer (expect ORA-50201 against a fake listener, not ORA-12154).
 

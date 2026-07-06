@@ -55,6 +55,11 @@ namespace AppRefiner.Dialogs
         private List<string> oracleNames = new();
         private List<string> sqlServerDsns = new();
         private readonly Dictionary<string, string> ldapServiceDescriptors = new(StringComparer.OrdinalIgnoreCase);
+        // Descriptors for aliases that came from a tnsnames.ora IFILE include — the
+        // managed ODP.NET driver cannot resolve those aliases itself, so we connect
+        // with the full descriptor instead (mirrors ldapServiceDescriptors)
+        private readonly Dictionary<string, string> tnsServiceDescriptors = new(StringComparer.OrdinalIgnoreCase);
+        private int tnsFailedIncludeCount;
 
         // UI Controls
         // UI Controls
@@ -196,7 +201,7 @@ namespace AppRefiner.Dialogs
             // dbNameHintLabel
             this.dbNameHintLabel.Text = "For LDAP, set TNS_ADMIN and enter an LDAP service name or full connect descriptor.";
             this.dbNameHintLabel.Location = new Point(130, 105);
-            this.dbNameHintLabel.Size = new Size(250, 20);
+            this.dbNameHintLabel.Size = new Size(260, 30);
             this.dbNameHintLabel.TabIndex = 5;
             this.dbNameHintLabel.ForeColor = Color.Gray;
             this.dbNameHintLabel.Font = new Font("Segoe UI", 8F, FontStyle.Italic, GraphicsUnit.Point);
@@ -707,7 +712,15 @@ namespace AppRefiner.Dialogs
             string? connectionType = connectionTypeComboBox.SelectedItem?.ToString();
             bool isLdap = isOracle && connectionType == "LDAP";
 
-            dbNameHintLabel.Visible = false;
+            bool showTnsWarning = isOracle && !isLdap && tnsFailedIncludeCount > 0;
+            if (showTnsWarning)
+            {
+                dbNameHintLabel.Text = tnsFailedIncludeCount == 1
+                    ? "1 tnsnames include file could not be read — see Debug Log"
+                    : $"{tnsFailedIncludeCount} tnsnames include files could not be read — see Debug Log";
+                dbNameHintLabel.ForeColor = Color.DarkOrange;
+            }
+            dbNameHintLabel.Visible = showTnsWarning;
 
             // DB Name is replaced by the DB Service combo in LDAP mode
             dbNameLabel.Visible = !isLdap;
@@ -754,6 +767,12 @@ namespace AppRefiner.Dialogs
                 dbNameLabel.Location = new Point(labelX, nextRowY);
                 dbNameComboBox.Location = new Point(fieldX, nextRowY);
                 nextRowY += rowHeight;
+
+                if (dbNameHintLabel.Visible)
+                {
+                    dbNameHintLabel.Location = new Point(fieldX, nextRowY - 6);
+                    nextRowY += 30;
+                }
             }
 
             bootstrapRadioButton.Location = new Point(fieldX + 8, nextRowY);
@@ -891,8 +910,21 @@ namespace AppRefiner.Dialogs
         {
             try
             {
-                // Load Oracle TNS names
-                oracleNames = OracleDbConnection.GetAllTnsNames();
+                // Load Oracle TNS entries (follows IFILE includes; the managed driver does not)
+                var tnsResult = OracleDbConnection.GetTnsEntries();
+                oracleNames = tnsResult.Entries.Select(e => e.Alias).ToList();
+
+                tnsServiceDescriptors.Clear();
+                foreach (var entry in tnsResult.Entries)
+                {
+                    // Only aliases from IFILE includes need descriptor-based connection;
+                    // aliases in the main tnsnames.ora resolve through the driver as before
+                    if (entry.FromInclude)
+                    {
+                        tnsServiceDescriptors.TryAdd(entry.Alias, entry.Descriptor);
+                    }
+                }
+                tnsFailedIncludeCount = tnsResult.FailedIncludes.Count;
 
                 // Load SQL Server DSNs (both System and User)
                 sqlServerDsns = SqlServerDbConnection.GetAvailableDsns();
@@ -904,6 +936,8 @@ namespace AppRefiner.Dialogs
                 // Fallback to empty lists
                 oracleNames = new List<string>();
                 sqlServerDsns = new List<string>();
+                tnsServiceDescriptors.Clear();
+                tnsFailedIncludeCount = 0;
             }
         }
 
@@ -988,6 +1022,23 @@ namespace AppRefiner.Dialogs
             this.Update();
         }
 
+        /// <summary>
+        /// Returns the Data Source to hand to ODP.NET: the full connect descriptor for
+        /// aliases that came from a tnsnames.ora IFILE include (the managed driver
+        /// cannot resolve those), otherwise the alias unchanged.
+        /// </summary>
+        private string ResolveOracleDataSource()
+        {
+            string alias = dbNameComboBox.Text;
+            if (tnsServiceDescriptors.TryGetValue(alias, out string? descriptor) && !string.IsNullOrWhiteSpace(descriptor))
+            {
+                Debug.Log($"Oracle connection for '{alias}' using descriptor resolved from a tnsnames.ora include.");
+                return descriptor;
+            }
+            Debug.Log($"Oracle connection for '{alias}' using alias data source.");
+            return alias;
+        }
+
         private async void ConnectButton_Click(object? sender, EventArgs e)
         {
             if (isConnecting)
@@ -1063,7 +1114,7 @@ namespace AppRefiner.Dialogs
 
                     if (dbType == "Oracle")
                     {
-                        connectionString = $"Data Source={dbNameComboBox.Text};User Id={username};Password={password};";
+                        connectionString = $"Data Source={ResolveOracleDataSource()};User Id={username};Password={password};";
                         namespaceForConnection = @namespace;
                     }
                     else if (dbType == "SQL Server")
@@ -1083,7 +1134,7 @@ namespace AppRefiner.Dialogs
 
                     if (dbType == "Oracle")
                     {
-                        connectionString = $"Data Source={dbNameComboBox.Text};User Id={username};Password={password};";
+                        connectionString = $"Data Source={ResolveOracleDataSource()};User Id={username};Password={password};";
                     }
                     else if (dbType == "SQL Server")
                     {
