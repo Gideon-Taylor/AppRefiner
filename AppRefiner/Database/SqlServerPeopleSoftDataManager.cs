@@ -1799,7 +1799,7 @@ ORDER BY DEFN_TYPE ASC, ID ASC, CASE WHEN @sort_by_date = 'Y' THEN LASTUPDDTTM E
 
         public string GetToolsVersion()
         {
-            string sql = @"SELECT TOOLSREL || '.' || PTPATCHREL FROM PSSTATUS";
+            string sql = @"SELECT TOOLSREL + '.' + CAST(PTPATCHREL AS VARCHAR) FROM PSSTATUS";
 
             try
             {
