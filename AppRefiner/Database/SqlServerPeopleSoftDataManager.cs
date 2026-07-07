@@ -1445,8 +1445,18 @@ namespace AppRefiner.Database
                 return string.Empty;
             }
 
-            // Build the complete query with CTE and ranking
+            // Build the complete query with CTE and ranking.
+            // ODBC only supports positional '?' placeholders (named @params are sent to
+            // SQL Server verbatim and fail as undeclared variables). The search terms are
+            // referenced many times across the dynamically-assembled UNION clauses, so we
+            // bind them once into real T-SQL variables via a DECLARE preamble. The four '?'
+            // markers below must be bound in this exact order: id_search, descr_search,
+            // max_rows_per_type, sort_by_date (see the parameter dictionary in GetOpenTargets).
             var query = $@"
+DECLARE @id_search NVARCHAR(4000) = ?;
+DECLARE @descr_search NVARCHAR(4000) = ?;
+DECLARE @max_rows_per_type INT = ?;
+DECLARE @sort_by_date CHAR(1) = ?;
 WITH U AS (
 {string.Join("\n\nUNION ALL\n\n", unionClauses)}
 )
@@ -1970,13 +1980,13 @@ WHERE (OBJECTID1 = 60 OR OBJECTID1 = 87)
                 SELECT OBJECTID1, OBJECTID2, OBJECTID3, OBJECTID4, OBJECTID5, OBJECTID6, OBJECTID7,
                        OBJECTVALUE1, OBJECTVALUE2, OBJECTVALUE3, OBJECTVALUE4, OBJECTVALUE5, OBJECTVALUE6, OBJECTVALUE7
                 FROM PSPCMPROG 
-                WHERE OBJECTVALUE1 = @val1 
-                  AND OBJECTVALUE2 = @val2 
-                  AND OBJECTVALUE3 = @val3 
-                  AND OBJECTVALUE4 = @val4 
-                  AND OBJECTVALUE5 = @val5 
-                  AND OBJECTVALUE6 = @val6 
-                  AND OBJECTVALUE7 = @val7";
+                WHERE OBJECTVALUE1 = ?
+                  AND OBJECTVALUE2 = ?
+                  AND OBJECTVALUE3 = ?
+                  AND OBJECTVALUE4 = ?
+                  AND OBJECTVALUE5 = ?
+                  AND OBJECTVALUE6 = ?
+                  AND OBJECTVALUE7 = ?";
 
             var results = new List<(PSCLASSID[] ObjectIds, string[] ObjectValues)>();
 
@@ -2020,7 +2030,7 @@ WHERE (OBJECTID1 = 60 OR OBJECTID1 = 87)
         public PeopleCodeType GetFieldType(string fieldName)
         {
             string sql = @"
-                SELECT FIELDTYPE FROM PSDBFIELD WHERE FIELDNAME = @fieldName";
+                SELECT FIELDTYPE FROM PSDBFIELD WHERE FIELDNAME = ?";
 
             var results = new List<(PSCLASSID[] ObjectIds, string[] ObjectValues)>();
 
@@ -2093,7 +2103,7 @@ WHERE (OBJECTID1 = 60 OR OBJECTID1 = 87)
                                                                                ELSE A.QUALIFYPATH
                                                                                END
                     WHERE
-                        A.APPCLASSID = @className
+                        A.APPCLASSID = ?
                     ORDER BY
                         CASE WHEN B.LASTUPDDTTM IS NULL THEN 1 ELSE 0 END,
                         CAST(B.LASTUPDDTTM AS DATE) DESC,
@@ -2141,7 +2151,7 @@ WHERE (OBJECTID1 = 60 OR OBJECTID1 = 87)
 
         public List<string> GetAllClassesForPackage(string packagePath)
         {
-            string sql = @"SELECT APPCLASSID FROM PSAPPCLASSDEFN WHERE PACKAGEROOT = @packageRoot AND QUALIFYPATH = @qualifyPath";
+            string sql = @"SELECT APPCLASSID FROM PSAPPCLASSDEFN WHERE PACKAGEROOT = ? AND QUALIFYPATH = ?";
             var parts = packagePath.Split(':');
             if (parts.Length == 0)
             {
