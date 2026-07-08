@@ -1016,7 +1016,16 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
                 // If not found and has no prefix, assume it's a Field identifier with unknown record context
                 // Pattern: [recordname.]fieldname where recordname is inferred at runtime
                 // Example: START_DT (no & or %) → Field type with empty record name
-                else if (!node.Name.StartsWith("&") && !node.Name.StartsWith("%"))
+                //
+                // Special reference keywords (Field, Record, Scroll, Page, SQL, ...) are excluded:
+                // they never stand alone as a field/record — they are always the left half of a
+                // definition reference like Field.OPRID, which VisitMemberAccess types as a whole
+                // (see the IsSpecialReferenceKeyword branch there). Typing the bare keyword as a
+                // field on the default record would poison the member-access target type and make
+                // InvalidMemberAccessCheck falsely report "'OPRID' is not a property of 'Field(REC.Field)'"
+                // in record-field PeopleCode. Leaving it Unknown lets that check skip it correctly.
+                else if (!node.Name.StartsWith("&") && !node.Name.StartsWith("%")
+                    && !ReferenceTypeInfo.IsSpecialReferenceKeyword(node.Name))
                 {
                     if (_defaultRecordName != null)
                     {

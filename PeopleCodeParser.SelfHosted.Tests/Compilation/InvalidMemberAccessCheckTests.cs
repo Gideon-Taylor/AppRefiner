@@ -42,6 +42,21 @@ public class InvalidMemberAccessCheckTests
             new CompileCheckContextInput(null, provideSelfMetadata ? programMetadata : null));
     }
 
+    /// <summary>
+    /// Mirrors <see cref="Run"/> but supplies a default record name, reproducing a
+    /// record-field PeopleCode program (e.g. WEBLIB_TS_TEST.ISCRIPT2). This is the
+    /// context in which a bare identifier is inferred as a field on the default record.
+    /// </summary>
+    private static IReadOnlyList<CompileDiagnostic> RunInRecordField(
+        string source, string defaultRecordName, FakeTypeMetadataResolver? resolver = null)
+    {
+        var (program, errors) = ParseTestHelper.Parse(source);
+        resolver ??= new FakeTypeMetadataResolver();
+        var programMetadata = TypeMetadataBuilder.ExtractMetadata(program);
+        TypeInferenceVisitor.Run(program, programMetadata, resolver, defaultRecordName);
+        return CompileChecker.Check(program, errors, resolver, new CompileCheckContextInput(null));
+    }
+
     private static FakeTypeMetadataResolver ResolverWithKnownClass()
     {
         var fake = new FakeTypeMetadataResolver();
@@ -340,6 +355,45 @@ end-method;
             d.Code == DiagnosticCode.InvalidMemberAccess &&
             d.Message.Contains("Nope") &&
             d.Message.Contains("method"));
+    }
+
+    // ------------------------------------------------------------------
+    // Definition reference keywords (Field.X, Record.X, ...) in record-field
+    // PeopleCode. The keyword half must NOT be inferred as a field on the default
+    // record, or the member-access target type is poisoned and the reference is
+    // falsely flagged (e.g. "'OPRID' is not a property of 'Field(REC.Field)'").
+    // ------------------------------------------------------------------
+
+    [Fact]
+    public void Does_not_report_field_definition_reference_in_record_field_program()
+    {
+        // Faithful reproduction of the reported bug: Field.OPRID inside a record-field
+        // PeopleCode (WEBLIB_TS_TEST.ISCRIPT2). Field is a definition-reference keyword,
+        // not a field named "Field" on WEBLIB_TS_TEST.
+        var diags = RunInRecordField(@"
+Function StrangeWhen()
+   Local string &fieldName;
+   If (&fieldName = Field.OPRID) Then
+   End-If;
+End-Function;", "WEBLIB_TS_TEST");
+
+        Assert.DoesNotContain(diags, d =>
+            d.Code == DiagnosticCode.InvalidMemberAccess &&
+            d.Message.Contains("OPRID"));
+    }
+
+    [Fact]
+    public void Does_not_report_record_definition_reference_in_record_field_program()
+    {
+        // The whole keyword family is affected; Record.X must be immune too.
+        var diags = RunInRecordField(@"
+Function StrangeWhen()
+   Local Record &rec = GetRecord(Record.DERIVED);
+End-Function;", "WEBLIB_TS_TEST");
+
+        Assert.DoesNotContain(diags, d =>
+            d.Code == DiagnosticCode.InvalidMemberAccess &&
+            d.Message.Contains("DERIVED"));
     }
 
     [Fact]
