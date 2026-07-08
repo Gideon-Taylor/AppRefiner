@@ -32,6 +32,9 @@
 // wParam = Scintilla editor HWND, lParam = 1 (enable) or 0 (disable)
 #define WM_AR_SET_MINIMAP (WM_USER + 1010)
 #define WM_AR_SET_PARAM_NAMES (WM_USER + 1011)
+// Message to tear down all subclasses/child windows and release the DLL self-reference
+// so the hook DLL can be unloaded from this App Designer process (sent on AppRefiner close).
+#define WM_AR_DETACH (WM_USER + 1012)
 
 /* TODO define messages with a mask to indicate "this is a scintilla event message" */
 #define WM_SCN_EVENT_MASK 0x7000

@@ -69,6 +69,36 @@ std::vector<HWND> GetRegisteredScintillaEditors() {
     return editors;
 }
 
+void TearDownAndUnload() {
+    OutputDebugStringA("TearDownAndUnload: beginning hook DLL teardown\n");
+
+    // 1. Destroy DLL-created child windows keyed per Scintilla editor.
+    std::vector<HWND> editors = GetRegisteredScintillaEditors();
+    for (HWND sci : editors) {
+        if (sci && IsWindow(sci)) {
+            MinimapManager::DisableMinimap(sci);   // no-op if not enabled
+            ComboBoxButton::Cleanup(sci);          // removes dialog subclass + destroys button
+        }
+    }
+
+    // 2. Unregister the minimap window class now that no minimap windows remain.
+    MinimapManager::UnregisterWindowClass();
+
+    // 3. Remove every subclass this DLL installed (includes the main window subclass
+    //    currently executing; removing a subclass from within its own proc is allowed).
+    RemoveAllSubclasses();
+
+    // 4. Release the self-reference pin taken in DllMain so the module refcount can
+    //    reach zero once the WH_GETMESSAGE/WH_KEYBOARD hooks are removed by AppRefiner.
+    if (g_dllSelfReference != NULL) {
+        FreeLibrary(g_dllSelfReference);
+        g_dllSelfReference = NULL;
+        OutputDebugStringA("TearDownAndUnload: released DLL self-reference\n");
+    }
+
+    OutputDebugStringA("TearDownAndUnload: complete\n");
+}
+
 static void InvalidateMinimapForScintilla(HWND scintillaHwnd);
 
 // Function to handle Scintilla notifications
@@ -823,6 +853,13 @@ LRESULT CALLBACK MainWindowSubclassProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPA
             UnregisterSubclass(hWnd, MAIN_WINDOW_SUBCLASS_ID);
             RemoveWindowSubclass(hWnd, MainWindowSubclassProc, MAIN_WINDOW_SUBCLASS_ID);
             return DefSubclassProc(hWnd, uMsg, wParam, lParam);
+        }
+
+        // Handle detach/unload request from AppRefiner (sent on AppRefiner close)
+        if (uMsg == WM_AR_DETACH) {
+            OutputDebugStringA("MainWindowSubclassProc: WM_AR_DETACH received\n");
+            TearDownAndUnload();
+            return 1; // handled; do not call DefSubclassProc (this proc was just removed)
         }
 
         // Get the callback window from dwRefData
@@ -1689,8 +1726,9 @@ extern "C" {
     
     __declspec(dllexport) BOOL UnsubclassWindow(HWND hWnd) {
         if (!hWnd || !IsWindow(hWnd)) return FALSE;
-        
-        BOOL result = RemoveWindowSubclass(hWnd, SubclassProc, SUBCLASS_ID);        
+
+        UnregisterSubclass(hWnd, SUBCLASS_ID);
+        BOOL result = RemoveWindowSubclass(hWnd, SubclassProc, SUBCLASS_ID);
         return result;
     }
 }

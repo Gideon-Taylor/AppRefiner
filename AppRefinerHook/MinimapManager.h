@@ -25,6 +25,10 @@ public:
     // Get the minimap window handle for a given Scintilla editor (if exists)
     static HWND GetMinimapWindow(HWND scintillaHwnd);
 
+    // Unregister the minimap window class (call during DLL teardown, after all
+    // minimap windows have been destroyed).
+    static void UnregisterWindowClass();
+
 private:
     // Create the minimap window for a given Scintilla editor
     static HWND CreateMinimapWindow(HWND parentHwnd, HWND scintillaHwnd);

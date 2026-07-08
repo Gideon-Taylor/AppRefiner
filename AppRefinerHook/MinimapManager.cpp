@@ -36,6 +36,12 @@ HWND MinimapManager::GetMinimapWindow(HWND scintillaHwnd)
     return (HWND)GetPropW(scintillaHwnd, MINIMAP_WINDOW_PROP);
 }
 
+void MinimapManager::UnregisterWindowClass()
+{
+    // No-op if never registered or already gone; UnregisterClassW fails harmlessly then.
+    UnregisterClassW(MINIMAP_WINDOW_CLASS, g_hModule);
+}
+
 HWND MinimapManager::CreateMinimapWindow(HWND parentHwnd, HWND scintillaHwnd)
 {
     if (!parentHwnd || !scintillaHwnd) {
