@@ -26,6 +26,23 @@ LRESULT CALLBACK GetMsgHook(int nCode, WPARAM wParam, LPARAM lParam);
 // Keyboard hook procedure - for intercepting keyboard messages before MFC processing
 LRESULT CALLBACK KeyboardHook(int nCode, WPARAM wParam, LPARAM lParam);
 
+// --- Subclass registry -------------------------------------------------------
+// Records every window this DLL subclasses so teardown can remove them all before
+// the DLL is unloaded from the App Designer process. Single-threaded: only touched
+// on the remote UI thread that installs/removes subclasses.
+#include <vector>
+
+struct SubclassEntry {
+    HWND hwnd;
+    SUBCLASSPROC proc;
+    UINT_PTR id;
+};
+
+void RegisterSubclass(HWND hwnd, SUBCLASSPROC proc, UINT_PTR id);
+void UnregisterSubclass(HWND hwnd, UINT_PTR id);
+void RemoveAllSubclasses();
+std::vector<HWND> GetRegisteredScintillaEditors();
+
 // Export functions
 extern "C" {
     __declspec(dllexport) HHOOK SetHook(DWORD threadId);

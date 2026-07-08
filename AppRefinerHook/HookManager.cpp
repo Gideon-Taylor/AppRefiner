@@ -25,6 +25,50 @@ bool g_hasUnprocessedCopy = false;      // Track if there's an unprocessed copy 
 const int OPEN_TARGET_BUFFER_SIZE = 0x100;  // 256 characters max
 thread_local wchar_t g_openTargetBuffer[OPEN_TARGET_BUFFER_SIZE] = { 0 };
 
+// Registry of subclasses installed by this DLL (see HookManager.h). Per-process,
+// single-threaded (remote UI thread), so no locking is required.
+static std::vector<SubclassEntry> g_installedSubclasses;
+
+void RegisterSubclass(HWND hwnd, SUBCLASSPROC proc, UINT_PTR id) {
+    for (const auto& e : g_installedSubclasses) {
+        if (e.hwnd == hwnd && e.id == id) {
+            return; // already recorded
+        }
+    }
+    g_installedSubclasses.push_back({ hwnd, proc, id });
+}
+
+void UnregisterSubclass(HWND hwnd, UINT_PTR id) {
+    for (auto it = g_installedSubclasses.begin(); it != g_installedSubclasses.end(); ++it) {
+        if (it->hwnd == hwnd && it->id == id) {
+            g_installedSubclasses.erase(it);
+            return;
+        }
+    }
+}
+
+void RemoveAllSubclasses() {
+    // Copy first: RemoveWindowSubclass triggers no reentrancy here, but a subclass
+    // proc's WM_NCDESTROY path could call UnregisterSubclass; iterate a snapshot.
+    std::vector<SubclassEntry> snapshot = g_installedSubclasses;
+    for (const auto& e : snapshot) {
+        if (e.hwnd && IsWindow(e.hwnd)) {
+            RemoveWindowSubclass(e.hwnd, e.proc, e.id);
+        }
+    }
+    g_installedSubclasses.clear();
+}
+
+std::vector<HWND> GetRegisteredScintillaEditors() {
+    std::vector<HWND> editors;
+    for (const auto& e : g_installedSubclasses) {
+        if (e.id == SCINTILLA_SUBCLASS_ID) {
+            editors.push_back(e.hwnd);
+        }
+    }
+    return editors;
+}
+
 static void InvalidateMinimapForScintilla(HWND scintillaHwnd);
 
 // Function to handle Scintilla notifications
@@ -615,7 +659,8 @@ LRESULT CALLBACK SubclassProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam
         // Handle WM_NCDESTROY message to remove subclassing and release references
         if (uMsg == WM_NCDESTROY) {
             OutputDebugStringA("Window being destroyed, removing subclass");
-            RemoveWindowSubclass(hWnd, SubclassProc, SUBCLASS_ID);            
+            UnregisterSubclass(hWnd, SUBCLASS_ID);
+            RemoveWindowSubclass(hWnd, SubclassProc, SUBCLASS_ID);
             return DefSubclassProc(hWnd, uMsg, wParam, lParam);
         }
         
@@ -670,6 +715,7 @@ LRESULT CALLBACK ScintillaSubclassProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPAR
     try {
         // Handle WM_NCDESTROY message to remove subclassing
         if (uMsg == WM_NCDESTROY) {
+            UnregisterSubclass(hWnd, SCINTILLA_SUBCLASS_ID);
             RemoveWindowSubclass(hWnd, ScintillaSubclassProc, SCINTILLA_SUBCLASS_ID);
 
             // Tell AppRefiner this editor is gone. The out-of-process WinEvent destroy
@@ -774,6 +820,7 @@ LRESULT CALLBACK MainWindowSubclassProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPA
     try {
         // Handle WM_NCDESTROY message to remove subclassing
         if (uMsg == WM_NCDESTROY) {
+            UnregisterSubclass(hWnd, MAIN_WINDOW_SUBCLASS_ID);
             RemoveWindowSubclass(hWnd, MainWindowSubclassProc, MAIN_WINDOW_SUBCLASS_ID);
             return DefSubclassProc(hWnd, uMsg, wParam, lParam);
         }
@@ -960,6 +1007,7 @@ LRESULT CALLBACK ResultsListSubclassProc(HWND hWnd, UINT uMsg, WPARAM wParam, LP
     try {
         // Handle WM_NCDESTROY message to remove subclassing
         if (uMsg == WM_NCDESTROY) {
+            UnregisterSubclass(hWnd, RESULTS_LIST_SUBCLASS_ID);
             RemoveWindowSubclass(hWnd, ResultsListSubclassProc, RESULTS_LIST_SUBCLASS_ID);
             return DefSubclassProc(hWnd, uMsg, wParam, lParam);
         }
@@ -1196,6 +1244,7 @@ LRESULT CALLBACK GetMsgHook(int nCode, WPARAM wParam, LPARAM lParam) {
                 // Subclass the parent window, passing callbackWindow as dwRefData
                 if (SetWindowSubclass(hWndToSubclass, SubclassProc, SUBCLASS_ID, (DWORD_PTR)callbackWindow)) {
                     ackFlags |= AR_SUB_ACK_PARENT_SUBCLASSED;
+                    RegisterSubclass(hWndToSubclass, SubclassProc, SUBCLASS_ID);
                 }
 
                 // Now find the child Scintilla editor window
@@ -1233,6 +1282,7 @@ LRESULT CALLBACK GetMsgHook(int nCode, WPARAM wParam, LPARAM lParam) {
                     ackFlags |= ComboBoxButton::Setup(scintillaChild, callbackWindow);
                     if (SetWindowSubclass(scintillaChild, ScintillaSubclassProc, SCINTILLA_SUBCLASS_ID, (DWORD_PTR)callbackWindow)) {
                         ackFlags |= AR_SUB_ACK_SCI_SUBCLASSED;
+                        RegisterSubclass(scintillaChild, ScintillaSubclassProc, SCINTILLA_SUBCLASS_ID);
                     }
                 }
 
@@ -1266,8 +1316,10 @@ LRESULT CALLBACK GetMsgHook(int nCode, WPARAM wParam, LPARAM lParam) {
                 g_callbackWindow = callbackWindow;
                 
                 // Subclass the main window, passing callbackWindow as dwRefData
-                SetWindowSubclass(hMainWindow, MainWindowSubclassProc, MAIN_WINDOW_SUBCLASS_ID, (DWORD_PTR)callbackWindow);
-                
+                if (SetWindowSubclass(hMainWindow, MainWindowSubclassProc, MAIN_WINDOW_SUBCLASS_ID, (DWORD_PTR)callbackWindow)) {
+                    RegisterSubclass(hMainWindow, MainWindowSubclassProc, MAIN_WINDOW_SUBCLASS_ID);
+                }
+
                 char debugMsg[100];
                 sprintf_s(debugMsg, "Main window subclassed: HWND=%p, Callback=%p\n", hMainWindow, callbackWindow);
                 OutputDebugStringA(debugMsg);
@@ -1285,8 +1337,10 @@ LRESULT CALLBACK GetMsgHook(int nCode, WPARAM wParam, LPARAM lParam) {
             
             if (hResultsListView && IsWindow(hResultsListView)) {
                 // Subclass the Results list view
-                SetWindowSubclass(hResultsListView, ResultsListSubclassProc, RESULTS_LIST_SUBCLASS_ID, (DWORD_PTR)callbackWindow);
-                
+                if (SetWindowSubclass(hResultsListView, ResultsListSubclassProc, RESULTS_LIST_SUBCLASS_ID, (DWORD_PTR)callbackWindow)) {
+                    RegisterSubclass(hResultsListView, ResultsListSubclassProc, RESULTS_LIST_SUBCLASS_ID);
+                }
+
                 char debugMsg[200];
                 sprintf_s(debugMsg, "Results list view subclassed: HWND=%p, Callback=%p\n", hResultsListView, callbackWindow);
                 OutputDebugStringA(debugMsg);

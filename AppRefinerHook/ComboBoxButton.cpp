@@ -2,6 +2,7 @@
 #include "Common.h"
 #include "Resource.h"
 #include "MinimapManager.h"
+#include "HookManager.h"
 #include <vector>
 #include <algorithm>
 #include <commctrl.h>
@@ -290,6 +291,7 @@ LRESULT CALLBACK ComboBoxButton::DialogSubclassProc(HWND hWnd, UINT uMsg, WPARAM
             DestroyWindow(buttonHwnd);
         }
         RemovePropW(hWnd, COMBO_BUTTON_PROP);
+        UnregisterSubclass(hWnd, COMBO_DIALOG_SUBCLASS_ID);
         RemoveWindowSubclass(hWnd, DialogSubclassProc, COMBO_DIALOG_SUBCLASS_ID);
         OutputDebugStringA("ComboBox dialog destroyed - cleaned up button");
         return DefSubclassProc(hWnd, uMsg, wParam, lParam);
@@ -569,6 +571,7 @@ DWORD ComboBoxButton::Setup(HWND scintillaHwnd, HWND callbackWindow)
     if (SetWindowSubclass(dialogHwnd, DialogSubclassProc, COMBO_DIALOG_SUBCLASS_ID, (DWORD_PTR)callbackWindow)) {
         OutputDebugStringA("ComboBoxButton::Setup - Subclassed dialog window");
         flags |= AR_SUB_ACK_DIALOG_SUBCLASSED;
+        RegisterSubclass(dialogHwnd, DialogSubclassProc, COMBO_DIALOG_SUBCLASS_ID);
 
         // Perform initial layout
         LayoutDialog(dialogHwnd, callbackWindow);
@@ -636,6 +639,7 @@ void ComboBoxButton::Cleanup(HWND scintillaHwnd)
     }
 
     // Remove subclass (this will trigger cleanup in WM_NCDESTROY equivalent)
+    UnregisterSubclass(dialogHwnd, COMBO_DIALOG_SUBCLASS_ID);
     RemoveWindowSubclass(dialogHwnd, DialogSubclassProc, COMBO_DIALOG_SUBCLASS_ID);
 
     // Manual cleanup in case subclass wasn't active
