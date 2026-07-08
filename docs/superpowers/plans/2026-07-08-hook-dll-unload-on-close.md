@@ -510,10 +510,11 @@ Ensure the freshly built `AppRefinerHook.dll` (from Task 2) and AppRefiner (Task
 3. Close AppRefiner (normal exit).
 4. Confirm via Process Explorer / `tasklist /m AppRefinerHook.dll` that the DLL is **no longer** loaded in the still-running App Designer process. (It unmaps on the remote thread's next message pump — clicking around App Designer forces this.)
 5. Confirm App Designer remains fully responsive: type in the editor, open/close dialogs, open another object — no crash.
-6. Confirm the AppRefiner install directory (including `AppRefinerHook.dll`) can now be deleted/replaced while App Designer stays open.
-7. Repeat steps 1-5 with **two** App Designer instances attached to confirm per-process teardown (both should release the DLL).
+6. Confirm `AppRefiner.exe` and `AppRefinerHook.dll` can now be deleted/replaced while App Designer stays open. **Caveat:** if the enhanced editor was used this session, the swapped Scintilla DLL under `scintilla_mods\` (`AppDesignerProcess.ScintillaModsDirectory`, which lives inside the install) stays mapped in that App Designer instance while editors are open and remains locked until the instance closes — this teardown only unloads `AppRefinerHook.dll`. Run this check once with the enhanced editor off (whole install replaceable) and once with it on (all but the `scintilla_mods` DLL replaceable) so the limitation is observed, not discovered as a failure.
+7. Repeat steps 1-6 with **two** App Designer instances attached to confirm per-process teardown (both should release `AppRefinerHook.dll`).
+8. Reattach test (the feature's real payoff): after closing AppRefiner and replacing the install, launch the **new** AppRefiner against the **same still-running** App Designer, open a combo dialog and toggle the minimap. A stale combo-button/minimap window class left behind by the previous teardown would crash here; a clean run confirms the class-unregister teardown worked.
 
-Expected: DLL is gone from every App Designer process after AppRefiner closes; App Designer stays responsive; files are replaceable.
+Expected: `AppRefinerHook.dll` is gone from every App Designer process after AppRefiner closes; App Designer stays responsive; AppRefiner + its hook DLL are replaceable (with the `scintilla_mods` caveat above); reattach works without a crash.
 
 - [ ] **Step 4: Commit**
 

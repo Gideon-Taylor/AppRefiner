@@ -159,6 +159,17 @@ verify manually (no automated harness for cross-process injection):
 3. Close AppRefiner. Confirm the DLL is **no longer** listed in the still-running
    App Designer process, and that App Designer remains responsive (type in the
    editor, open dialogs).
-4. Confirm the AppRefiner install directory (including the hook DLL) can now be
-   deleted/replaced while App Designer stays open.
+4. Confirm `AppRefiner.exe` and `AppRefinerHook.dll` can now be deleted/replaced
+   while App Designer stays open. **Caveat:** if the enhanced editor was used, the
+   swapped Scintilla DLL under the install's `scintilla_mods\` directory
+   (`AppDesignerProcess.ScintillaModsDirectory`) stays mapped in that App Designer
+   instance and cannot be unloaded while editors are open — that one file remains
+   locked until the instance closes. This teardown only unloads `AppRefinerHook.dll`;
+   the primary goal (replace AppRefiner + its hook without closing App Designer) holds.
 5. Repeat with two App Designer instances attached to confirm per-process teardown.
+6. Reattach test (the real payoff): after closing AppRefiner and replacing the
+   install, start the **new** AppRefiner against the **same still-running** App
+   Designer, open a combo dialog and toggle the minimap. This exercises the combo
+   button / minimap window-class re-registration paths — a stale class left behind by
+   a previous teardown would crash here, so a clean run confirms the class-unregister
+   teardown worked.
