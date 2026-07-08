@@ -85,18 +85,27 @@ void RemoveAllSubclasses();                                         // teardown:
 - Because hook globals are per-process, each App Designer process has its own
   registry and cleans up exactly its own subclasses.
 
-Minimap windows are DLL-created child windows, not subclasses, so they are handled
-separately: add `MinimapManager::DisableAll()` that iterates its tracked
-scintilla→minimap map and calls the existing `DisableMinimap` for each (destroying
-the minimap windows).
+The ComboBox button is a DLL-created child window (not a subclass), and minimaps are
+DLL-created child windows too. Both are keyed per Scintilla editor via window
+properties, and the registry already records every subclassed Scintilla editor
+(`SCINTILLA_SUBCLASS_ID`). So teardown derives the Scintilla set from those registry
+entries and, for each, calls the existing `MinimapManager::DisableMinimap(scintilla)`
+(no-op if not enabled) and `ComboBoxButton::Cleanup(scintilla)` (removes the dialog
+subclass and destroys the button). The minimap window *class* (`AppRefinerMinimap`,
+registered against the DLL's `hInstance`) is then unregistered via a small new
+`MinimapManager::UnregisterWindowClass()` so no class references DLL code after unload.
 
 ### Teardown order (inside the remote process, on `WM_AR_DETACH`)
 
-1. `MinimapManager::DisableAll()` — destroy all minimap child windows.
-2. `RemoveAllSubclasses()` — `RemoveWindowSubclass` for every registered subclass
+1. For each registered Scintilla editor HWND: `MinimapManager::DisableMinimap(hwnd)`
+   then `ComboBoxButton::Cleanup(hwnd)` — destroy minimap and combo-button child
+   windows.
+2. `MinimapManager::UnregisterWindowClass()` — unregister the `AppRefinerMinimap`
+   class now that no minimap windows remain.
+3. `RemoveAllSubclasses()` — `RemoveWindowSubclass` for every registered subclass
    (including the main window subclass currently executing; removing a subclass from
    within its own proc is permitted and the send still returns cleanly).
-3. `FreeLibrary(g_dllSelfReference); g_dllSelfReference = NULL;` — release the pin.
+4. `FreeLibrary(g_dllSelfReference); g_dllSelfReference = NULL;` — release the pin.
 
 Throughout teardown the DLL remains mapped because the active `WH_GETMESSAGE` /
 `WH_KEYBOARD` hooks still reference it, so no proc is unmapped mid-execution.
@@ -121,8 +130,8 @@ references; on the remote thread's next message pump Windows unmaps the DLL.
   `WM_NCDESTROY`; handle `WM_AR_DETACH` in `MainWindowSubclassProc` with the teardown
   sequence; free `g_dllSelfReference`.
 - `HookManager.h` — declarations for the registry helpers as needed.
-- `ComboBoxButton.cpp` — register/unregister its button and dialog subclasses.
-- `MinimapManager.cpp` / `.h` — add `DisableAll()`.
+- `ComboBoxButton.cpp` — register/unregister its dialog subclass in the registry.
+- `MinimapManager.cpp` / `.h` — add `UnregisterWindowClass()`.
 
 **C# (`AppRefiner`):**
 - `Events/EventHookInstaller.cs` — `WM_AR_DETACH` constant; `SendMessageTimeout`
