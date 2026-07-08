@@ -1230,6 +1230,15 @@ namespace AppRefiner
 
         protected override void OnFormClosing(FormClosingEventArgs e)
         {
+            // Ask the hook DLL in each attached App Designer process to tear itself down
+            // (remove subclasses/child windows, release its self-reference) BEFORE we
+            // unhook. This lets the DLL be unloaded from those processes so AppRefiner
+            // (and the hook DLL) can be replaced without closing App Designer.
+            foreach (var appDesigner in AppDesignerProcesses.Values)
+            {
+                AppRefiner.Events.EventHookInstaller.DetachFromProcess(appDesigner.MainWindowHandle);
+            }
+
             // Clean up all hooks to ensure they're properly removed
             AppRefiner.Events.EventHookInstaller.CleanupAllHooks();
 
