@@ -29,6 +29,11 @@ thread_local wchar_t g_openTargetBuffer[OPEN_TARGET_BUFFER_SIZE] = { 0 };
 // single-threaded (remote UI thread), so no locking is required.
 static std::vector<SubclassEntry> g_installedSubclasses;
 
+// Set once TearDownAndUnload has run in this process. After this, GetMsgHook drops
+// every AR control message so a late subclass request cannot re-install a subclass
+// after the self-reference has been freed.
+static bool g_detached = false;
+
 void RegisterSubclass(HWND hwnd, SUBCLASSPROC proc, UINT_PTR id) {
     for (const auto& e : g_installedSubclasses) {
         if (e.hwnd == hwnd && e.id == id) {
@@ -59,37 +64,40 @@ void RemoveAllSubclasses() {
     g_installedSubclasses.clear();
 }
 
-std::vector<HWND> GetRegisteredScintillaEditors() {
-    std::vector<HWND> editors;
+std::vector<HWND> GetRegisteredSubclassWindows(UINT_PTR id) {
+    std::vector<HWND> windows;
     for (const auto& e : g_installedSubclasses) {
-        if (e.id == SCINTILLA_SUBCLASS_ID) {
-            editors.push_back(e.hwnd);
+        if (e.id == id) {
+            windows.push_back(e.hwnd);
         }
     }
-    return editors;
+    return windows;
+}
+
+std::vector<HWND> GetRegisteredScintillaEditors() {
+    return GetRegisteredSubclassWindows(SCINTILLA_SUBCLASS_ID);
 }
 
 void TearDownAndUnload() {
+    g_detached = true;
     OutputDebugStringA("TearDownAndUnload: beginning hook DLL teardown\n");
 
-    // 1. Destroy DLL-created child windows keyed per Scintilla editor.
-    std::vector<HWND> editors = GetRegisteredScintillaEditors();
-    for (HWND sci : editors) {
+    // 1. Disable minimaps on every registered Scintilla editor (destroys minimap child windows).
+    for (HWND sci : GetRegisteredScintillaEditors()) {
         if (sci && IsWindow(sci)) {
-            MinimapManager::DisableMinimap(sci);   // no-op if not enabled
-            ComboBoxButton::Cleanup(sci);          // removes dialog subclass + destroys button
+            MinimapManager::DisableMinimap(sci);
         }
     }
-
-    // 2. Unregister the minimap window class now that no minimap windows remain.
     MinimapManager::UnregisterWindowClass();
+
+    // 2. Destroy all combo buttons and unregister the combo-button window class.
+    ComboBoxButton::CleanupAll();
 
     // 3. Remove every subclass this DLL installed (includes the main window subclass
     //    currently executing; removing a subclass from within its own proc is allowed).
     RemoveAllSubclasses();
 
-    // 4. Release the self-reference pin taken in DllMain so the module refcount can
-    //    reach zero once the WH_GETMESSAGE/WH_KEYBOARD hooks are removed by AppRefiner.
+    // 4. Release the self-reference pin taken in DllMain.
     if (g_dllSelfReference != NULL) {
         FreeLibrary(g_dllSelfReference);
         g_dllSelfReference = NULL;
@@ -1267,6 +1275,14 @@ LRESULT CALLBACK GetMsgHook(int nCode, WPARAM wParam, LPARAM lParam) {
         // WM_NULL only edits the caller's copy), so every one-shot request below would
         // otherwise be processed a second time when the message is finally removed.
         if (wParam != PM_REMOVE) {
+            return CallNextHookEx(g_getMsgHook, nCode, wParam, lParam);
+        }
+
+        // Once this process has been detached (TearDownAndUnload ran), refuse every AR
+        // control message so a late/queued subclass request cannot re-install a subclass
+        // after the DLL self-reference was freed.
+        if (g_detached && msg->message >= WM_TOGGLE_AUTO_PAIRING && msg->message <= WM_AR_DETACH) {
+            msg->message = WM_NULL;
             return CallNextHookEx(g_getMsgHook, nCode, wParam, lParam);
         }
 

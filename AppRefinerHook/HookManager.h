@@ -42,6 +42,7 @@ void RegisterSubclass(HWND hwnd, SUBCLASSPROC proc, UINT_PTR id);
 void UnregisterSubclass(HWND hwnd, UINT_PTR id);
 void RemoveAllSubclasses();
 std::vector<HWND> GetRegisteredScintillaEditors();
+std::vector<HWND> GetRegisteredSubclassWindows(UINT_PTR id);
 
 // Full teardown for the current process: destroys DLL-created child windows,
 // removes every subclass, and releases the DLL self-reference so the hook DLL can

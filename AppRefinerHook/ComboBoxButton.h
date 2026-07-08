@@ -17,6 +17,10 @@ public:
     // Remove the button and cleanup
     static void Cleanup(HWND scintillaHwnd);
 
+    // Destroy the combo button on every registered combo dialog and unregister the
+    // button window class. Call during DLL teardown, before the class can be unloaded.
+    static void CleanupAll();
+
     // Sync a checkbox state on the combo button for the given Scintilla editor.
     // menuId: IDM_MINIMAP or IDM_PARAM_NAMES.  state: true = checked, false = unchecked.
     static void SyncCheckboxState(HWND scintillaHwnd, int menuId, bool state);

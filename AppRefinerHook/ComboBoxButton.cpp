@@ -655,3 +655,28 @@ void ComboBoxButton::Cleanup(HWND scintillaHwnd)
 
     OutputDebugStringA("ComboBoxButton::Cleanup - Button removed");
 }
+
+void ComboBoxButton::CleanupAll()
+{
+    // Destroy the button child window on every registered combo dialog. Driven from
+    // the dialog registry (not from Scintilla editors) so buttons on dialogs whose
+    // editor subclass failed are still cleaned up. RemoveAllSubclasses() will remove
+    // the dialog subclasses themselves later in teardown.
+    for (HWND dialogHwnd : GetRegisteredSubclassWindows(COMBO_DIALOG_SUBCLASS_ID)) {
+        if (!dialogHwnd || !IsWindow(dialogHwnd)) {
+            continue;
+        }
+        HWND buttonHwnd = (HWND)GetPropW(dialogHwnd, COMBO_BUTTON_PROP);
+        if (buttonHwnd && IsWindow(buttonHwnd)) {
+            RemovePropW(buttonHwnd, BUTTON_PRESSED_PROP);
+            RemovePropW(buttonHwnd, MINIMAP_STATE_PROP);
+            RemovePropW(buttonHwnd, PARAM_NAMES_STATE_PROP);
+            DestroyWindow(buttonHwnd);
+        }
+        RemovePropW(dialogHwnd, COMBO_BUTTON_PROP);
+    }
+
+    // Now that no windows of the class remain, unregister it so nothing references
+    // ButtonWndProc (DLL code) after the DLL unloads.
+    UnregisterClassW(COMBO_BUTTON_CLASS, g_hModule);
+}
