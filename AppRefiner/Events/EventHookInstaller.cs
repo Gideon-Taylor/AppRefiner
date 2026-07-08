@@ -8,7 +8,6 @@ namespace AppRefiner.Events
         private const uint WM_USER = 0x400;
         private const uint WM_TOGGLE_AUTO_PAIRING = WM_USER + 1002;
         private const uint WM_SUBCLASS_SCINTILLA_PARENT_WINDOW = WM_USER + 1003;
-        private const uint WM_REMOVE_HOOK = WM_USER + 1004;
         private const uint WM_SUBCLASS_MAIN_WINDOW = WM_USER + 1005;
         private const uint WM_SET_MAIN_WINDOW_SHORTCUTS = WM_USER + 1006;
         private const uint WM_AR_SUBCLASS_RESULTS_LIST = WM_USER + 1007;
@@ -16,6 +15,7 @@ namespace AppRefiner.Events
         private const uint WM_LOAD_SCINTILLA_DLL = WM_USER + 1009;
         private const uint WM_AR_SET_MINIMAP = WM_USER + 1010;
         private const uint WM_AR_SET_PARAM_NAMES = WM_USER + 1011;
+        private const uint WM_AR_DETACH = WM_USER + 1012;
 
         /// <summary>
         /// Status flags reported by the hook in WM_AR_SUBCLASS_ACK (mirrors AR_SUB_ACK_* in
@@ -54,6 +54,12 @@ namespace AppRefiner.Events
         // Win32 API imports
         [DllImport("user32.dll", SetLastError = true)]
         public static extern bool PostThreadMessage(uint threadId, uint msg, IntPtr wParam, IntPtr lParam);
+
+        private const uint SMTO_ABORTIFHUNG = 0x0002;
+
+        [DllImport("user32.dll", SetLastError = true, CharSet = CharSet.Auto)]
+        private static extern IntPtr SendMessageTimeout(IntPtr hWnd, uint Msg, IntPtr wParam,
+            IntPtr lParam, uint fuFlags, uint uTimeout, out IntPtr lpdwResult);
 
         // DLL imports
         [DllImport("AppRefinerHook.dll", CallingConvention = CallingConvention.Cdecl)]
@@ -174,12 +180,6 @@ namespace AppRefiner.Events
             return result;
         }
 
-        // Method to remove the hook
-        public static bool RemoveHook(uint threadId)
-        {
-            return PostThreadMessage(threadId, WM_REMOVE_HOOK, IntPtr.Zero, IntPtr.Zero);
-        }
-
         // Method to unhook all active hooks (call this when closing the application)
         public static void CleanupAllHooks()
         {
@@ -195,6 +195,34 @@ namespace AppRefiner.Events
 
             _activeHooks.Clear();
             _activeKeyboardHooks.Clear();
+        }
+
+        /// <summary>
+        /// Asks the hook DLL inside the given App Designer process to tear down all
+        /// subclasses/child windows and release its self-reference, so the DLL can be
+        /// unloaded once the hooks are removed. Sent to the main window synchronously
+        /// with a timeout so an unresponsive App Designer cannot block AppRefiner's close.
+        /// Best-effort: on timeout/no-response the DLL simply stays loaded in that instance.
+        /// </summary>
+        public static void DetachFromProcess(IntPtr mainWindowHandle)
+        {
+            if (mainWindowHandle == IntPtr.Zero)
+            {
+                return;
+            }
+
+            IntPtr ret = SendMessageTimeout(mainWindowHandle, WM_AR_DETACH, IntPtr.Zero,
+                IntPtr.Zero, SMTO_ABORTIFHUNG, 2000, out _);
+
+            if (ret == IntPtr.Zero)
+            {
+                Debug.Log($"DetachFromProcess: no response from main window {mainWindowHandle} " +
+                          "(timeout or hung); continuing shutdown");
+            }
+            else
+            {
+                Debug.Log($"DetachFromProcess: teardown acknowledged by main window {mainWindowHandle}");
+            }
         }
 
         // Method to send auto-pairing toggle to a specific main window (deprecated - use SetAutoPairing instead)
