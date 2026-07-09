@@ -135,4 +135,67 @@ End-Function;
 ");
         Assert.NotEmpty(PathDiags(diags));
     }
+
+    [Fact]
+    public void Reports_primary_and_secondary_for_incomplete_if_branch()
+    {
+        var diags = Check(@"
+Function F(&b As boolean) Returns string
+   If &b Then
+      Return ""a"";
+   Else
+      Local string &s;
+      &s = ""x"";
+   End-If;
+End-Function;
+").Where(d => d.Code == DiagnosticCode.NotAllPathsReturn).ToList();
+
+        Assert.True(diags.Count >= 2, "expected primary signature + secondary block");
+        Assert.Contains(diags, d => d.Message.Contains("Not all paths return"));
+        Assert.Contains(diags, d => d.Message.Contains("This block can complete"));
+    }
+
+    [Fact]
+    public void Secondary_prefers_innermost_incomplete_block()
+    {
+        var diags = Check(@"
+Function F(&b As boolean, &c As boolean) Returns number
+   If &b Then
+      If &c Then
+         Return 1;
+      Else
+         Local number &n;
+         &n = 2;
+      End-If;
+   Else
+      Return 0;
+   End-If;
+End-Function;
+").Where(d => d.Code == DiagnosticCode.NotAllPathsReturn).ToList();
+
+        Assert.Contains(diags, d => d.Message.Contains("This block can complete"));
+        var secondary = diags.First(d => d.Message.Contains("This block can complete"));
+        Assert.True(secondary.Span.Start.Line >= 4);
+    }
+
+    [Fact]
+    public void Method_primary_span_is_valid()
+    {
+        var diags = Check(@"
+class Sample
+   method GetX() Returns number;
+end-class;
+
+method GetX
+   Local number &x;
+   &x = 1;
+end-method;
+").Where(d => d.Code == DiagnosticCode.NotAllPathsReturn).ToList();
+
+        var primary = diags.First(d => d.Message.Contains("Not all paths return"));
+        Assert.True(primary.Span.IsValid);
+        Assert.True(primary.Span.End.ByteIndex >= primary.Span.Start.ByteIndex);
+        // Primary should be in the class header area for declaration (HeaderSpan), not inverted
+        Assert.True(primary.Span.Start.Line < 5, "method primary should be near class method declaration");
+    }
 }

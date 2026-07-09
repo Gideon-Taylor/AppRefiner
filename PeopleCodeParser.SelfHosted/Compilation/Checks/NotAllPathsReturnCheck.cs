@@ -27,10 +27,9 @@ public sealed class NotAllPathsReturnCheck : CompileCheckBase
 
             case MethodImplNode mi when mi.Body != null:
             {
-                var returnType = mi.Declaration?.ReturnType ?? mi.ReturnTypeAnnotation;
-                if (returnType == null)
+                if (mi.Declaration?.ReturnType == null && mi.ReturnTypeAnnotation == null)
                     break;
-                CheckBody(mi.Body, mi.Name, "method", SignatureSpan(mi.NameToken, returnType), sink);
+                CheckBody(mi.Body, mi.Name, "method", MethodSignatureSpan(mi), sink);
                 break;
             }
 
@@ -163,4 +162,25 @@ public sealed class NotAllPathsReturnCheck : CompileCheckBase
 
     private static SourceSpan SignatureSpan(Token nameToken, TypeNode returnType) =>
         new SourceSpan(nameToken.SourceSpan.Start, returnType.SourceSpan.End);
+
+    /// <summary>
+    /// Primary span for a method with a return type. Prefer the declaration header
+    /// (class body) over combining impl name with declaration return type, which
+    /// would invert Start/End because the return type appears earlier in the file.
+    /// </summary>
+    private static SourceSpan MethodSignatureSpan(MethodImplNode mi)
+    {
+        if (mi.Declaration?.ReturnType != null)
+        {
+            var decl = mi.Declaration;
+            if (decl.HeaderSpan.IsValid)
+                return decl.HeaderSpan;
+            return SignatureSpan(decl.NameToken, decl.ReturnType);
+        }
+
+        if (mi.ReturnTypeAnnotation != null)
+            return SignatureSpan(mi.NameToken, mi.ReturnTypeAnnotation);
+
+        return mi.NameToken.SourceSpan;
+    }
 }
