@@ -1480,7 +1480,7 @@ FROM (
                     ID
          ) AS RN
   FROM U
-)
+) AS Ranked
 WHERE RN <= @max_rows_per_type
 ORDER BY DEFN_TYPE ASC, ID ASC, CASE WHEN @sort_by_date = 'Y' THEN LASTUPDDTTM END DESC";
 
@@ -1516,8 +1516,8 @@ ORDER BY DEFN_TYPE ASC, ID ASC, CASE WHEN @sort_by_date = 'Y' THEN LASTUPDDTTM E
 
                 OpenTargetType.ApplicationClass => @"
   SELECT 'Application Class' AS DEFN_TYPE, 
-         PACKAGEROOT + CASE WHEN QUALIFYPATH = ':' THEN '' ELSE ':' + QUALIFYPATH END + ':' + APPCLASSID AS ID, 
-         DESCR AS DESCR, LASTUPDDTTM
+         PACKAGEROOT + CASE WHEN QUALIFYPATH = ':' THEN '' ELSE ':' + QUALIFYPATH END + ':' + APPCLASSID AS ID,
+         DESCR AS DESCR, GETDATE() AS LASTUPDDTTM
   FROM PSAPPCLASSDEFN
   WHERE  (LEN(@id_search) = 0 OR UPPER(APPCLASSID) LIKE UPPER(@id_search + '%') ESCAPE '\')
      AND (LEN(@descr_search) = 0 OR UPPER(DESCR) LIKE UPPER('%' + @descr_search + '%') ESCAPE '\')
@@ -2047,7 +2047,7 @@ WHERE (OBJECTID1 = 60 OR OBJECTID1 = 87)
                     return PeopleCodeType.Unknown;
                 }
 
-                var fieldType = (int)result.Rows[0][0];
+                var fieldType = Convert.ToInt32(result.Rows[0][0]);
 
                 return fieldType switch
                 {
