@@ -204,10 +204,12 @@ public class TypeMetadataBuilder : AstVisitorBase
                 _concreteMemberSignatures.Add(propertySignature);
         }
 
-        // Visit instance variables (classes only - interfaces won't have any)
+        // Visit instance variables (classes only - interfaces won't have any).
+        // Instance variables are only legal in the private section — always Private.
         foreach(var instanceVar in node.InstanceVariables)
         {
             var propertyInfo = BuildPropertyInfo(instanceVar);
+            propertyInfo.Visibility = MemberVisibility.Private;
             // Handle all variable names in multi-variable declarations
             foreach (var nameInfo in instanceVar.NameInfos)
             {

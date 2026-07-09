@@ -47,6 +47,7 @@ public static class CompileChecker
         new Checks.UndeclaredFunctionCheck(),
         new Checks.MissingMethodImplementationCheck(),
         new Checks.MissingConstructorCheck(),
+        new Checks.MissingSuperCallCheck(),
         new Checks.InvalidBreakContinueCheck(),
         new Checks.NotAllPathsReturnCheck(),
         new Checks.MissingReturnValueCheck(),

@@ -49,15 +49,17 @@ undeclared function, missing method implementation, missing constructor,
 invalid break/continue, not-all-paths-return, missing return value (bare
 `Return;` in value routine), unexpected return value (procedure/setter),
 duplicate class/interface members, missing property get/set body, assignment to
-constant, `%This` outside app class.
+constant, `%This` outside app class, missing `%Super` in subclass constructor,
+inaccessible private/protected member.
 
 ### Type checker (`TypeCheckerVisitor` + inference)
 
 Assignment compatibility, local declaration-with-init, function / `Create` arg
 validation (`FunctionCallValidator`), discarded non-optional return values,
-return-expression vs declared return type. Inference records binary arithmetic /
-logical operator errors, array subscript on non-array, non-numeric array index,
-and unary `Not` / negate operand type errors on the node.
+return-expression vs declared return type, logical expression required on
+If/While/Repeat-Until. Inference records binary arithmetic / logical operator
+errors, array subscript on non-array, non-numeric array index, and unary `Not` /
+negate operand type errors on the node.
 
 ### Parse-level (not `ICompileCheck`)
 
@@ -178,31 +180,54 @@ one/both; abstract OK; fully implemented OK; readonly OK.
 
 ---
 
-### C4 — Constructor missing base (`%Super` / super) call
+### C4 — Constructor missing base (`%Super`) assignment
 
 | Field | Value |
 |---|---|
-| **Status** | `Needs design` |
+| **Status** | `Done` |
 | **Priority** | P2 |
-| **Diagnostic** | New code, e.g. `MissingSuperCall` |
-| **Requirement** | Likely `Optional` (base ctor arity from resolver) |
+| **Diagnostic** | `MissingSuperCall` (= 23) |
+| **Requirement** | `NotRequired` for the body walk (AST only); base presence is pure AST (`BaseType != null`). No resolver needed for *this* check. |
 
-**Behavior (intent):** When a subclass constructor is required to invoke a
-parameterized base constructor (same situations `MissingConstructorCheck`
-cares about), ensure the constructor **body** actually invokes the base
-(`%Super(...)` / equivalent form used in PeopleCode). Complements
-`MissingConstructorCheck` (which only requires the subclass to *have* a ctor).
+**PeopleCode rules (product owner, 2026-07-09):**
 
-**Open questions (resolve before coding):**
+1. **If base has a parameterized constructor → subclass must declare a
+   constructor.** Already implemented as `MissingConstructorCheck`
+   (`Optional`, uses resolver + `Parameters.Count > 0`).
+2. **If subclass defines a constructor and has a base class → constructor body
+   must set `%Super`.** Independent of whether the base ctor is parameterized.
+   Rationale: the compiler’s auto-generated constructor (which would set
+   `%Super`) is suppressed once you write your own; you own the chain.
+3. **Presence only:** `%Super` must be assigned **somewhere** in the constructor
+   body (whole-body walk). Not path-sensitive; not required to be first
+   statement. (Most app class ctors are small; all-paths would be nice later
+   but is out of scope for v1.)
 
-1. Exact call form(s) accepted by the real compiler (`%Super`, `Super`, name of
-   base class, etc.) — confirm against App Designer / corpus.
-2. Must the call be the first statement, or anywhere in the body?
-3. Is a missing super call an error only when base ctor has parameters, or also
-   for parameterless explicit base ctors?
-4. Interaction with synthesized default constructors in `TypeMetadata`.
+**Call form:** Assignment, not a call:
 
-**Notes / decisions:** _(empty)_
+```peoplecode
+%Super = create BaseClass(...);
+```
+
+Detect: `AssignmentNode` whose target is identifier `%Super`
+(`IdentifierType.Super` or name equals `%Super`, case-insensitive). Prefer also
+seeing RHS as `ObjectCreationNode` (`create …`) for a clean match; if product
+later confirms other RHS shapes are legal, loosen then.
+
+**When to run:**
+
+- Class has `BaseType` (extends something)
+- Class has a constructor method (method name equals class name) with a body
+- Body does **not** contain a `%Super = …` assignment → error
+
+**Do not require:** base parameterized, resolver, or create-arg validation (Create
+arg typing stays with existing type checker).
+
+**Span:** Constructor method name / header (declaration and/or implementation).
+**Message sketch:** `Constructor for '{Class}' must set %Super to initialize the base class.`
+
+**Notes / decisions:** Locked 2026-07-09. Complements MissingConstructorCheck;
+does not replace it. No all-paths analysis in v1.
 
 ---
 
@@ -315,21 +340,28 @@ date/time).
 
 | Field | Value |
 |---|---|
-| **Status** | `Needs design` |
+| **Status** | `Deferred` |
 | **Priority** | P2 |
 
 **Behavior (intent):** Assignment target must be a writable location (variable,
 property, field value, array element, etc.). Reject assigning into non-lvalues
 (e.g. bare function call result, literal) when the real compiler does.
 
-**Open questions:**
+**Notes / decisions:** Deferred 2026-07-09 (product owner: skip for now).
 
-1. Exhaustive list of legal LHS shapes in PeopleCode AST.
-2. Overlap with `IsAssignable` / out-parameter rules — reuse, don’t fork.
-3. Whether read-only properties / Get-only properties are in scope here or a
-   separate rule.
+**Design survey (for when resumed):**
 
-**Notes / decisions:** _(empty)_
+- **Structural** invalid LHS is already enforced at parse time via
+  `ExpressionNode.IsLValue` → `"Invalid assignment target"` (including
+  shorthand `+=`/`-=`/`|=`).
+- **Constants** already covered by **C5** (`AssignmentToConstantCheck`).
+- **OUT / MustBeVariable** already uses `TypeInfo.IsAssignable` in
+  `FunctionCallValidator` — do not fork a second lattice.
+- Remaining value if revived: **semantic** writability only (Option B) —
+  e.g. assign to get-only / `readonly` property; not dual structural re-check
+  (avoids double diagnostics with parse).
+- Open if resumed: get-only property writes; SelfMetadata-only vs Optional
+  resolver; bare Super as LHS; message text.
 
 ---
 
@@ -337,25 +369,35 @@ property, field value, array element, etc.). Reject assigning into non-lvalues
 
 | Field | Value |
 |---|---|
-| **Status** | `Needs design` |
+| **Status** | `Done` |
 | **Priority** | P2 |
 
-**Behavior:** Per compiler: **“logical expression required”** for condition
-positions. At minimum:
+**Behavior:** Per compiler: **“Logical expression required”** for condition
+positions:
 
 - `If` condition
 - `While` condition
-- `Repeat` until/while condition (confirm grammar)
-- Possibly `For` bounds/step if the compiler uses the same diagnostic (verify)
+- `Repeat` … `Until` condition
 
 Known non-logical types should error; `Any`/`Unknown` stay silent. Align
-“logical-capable” with binary `And`/`Or` and unary `Not` helpers (T3).
+“logical-capable” with binary `And`/`Or` and unary `Not` (`CanPerformLogical` /
+Boolean only — no number/string truthiness). Comparisons already infer as
+Boolean and pass.
 
-**Open questions:** Exact set of statement forms; whether comparison results are
-the only accepted path vs. any type the runtime treats as boolean; message text
-parity with App Designer.
+**Out of scope for T5:**
 
-**Notes / decisions:** _(empty)_
+- `For` bounds/step (numeric, not logical)
+- `Evaluate` / `When` — **not** boolean conditions. Forms are `When <value>`
+  (implied `=`) or `When <op> <value>`; the AST’s `WhenClause.Condition` is the
+  RHS match value against the Evaluate subject, not an If-style logical expr.
+  A future check might validate subject/RHS comparability; that is separate.
+
+**Home:** `TypeCheckerVisitor` (`VisitIf` / `VisitWhile` / `VisitRepeat`);
+message on the condition span; surface as existing `DiagnosticCode.TypeError`.
+
+**Notes / decisions:** Locked 2026-07-09 with product owner: Evaluate/When
+clarified; still excluded from T5. Everything else (forms, strict boolean,
+message, TypeCheckerVisitor home) approved.
 
 ---
 
@@ -363,22 +405,31 @@ parity with App Designer.
 
 | Field | Value |
 |---|---|
-| **Status** | `Needs design` |
+| **Status** | `Done` |
 | **Priority** | P3 |
+| **Diagnostic** | `InaccessibleMember` (= 24) |
+| **Requirement** | `Optional` (same as InvalidMemberAccessCheck) |
 
-**Behavior (intent):** Extend beyond existence-only `InvalidMemberAccessCheck`
-(or type-checker equivalent) so private/protected members are not reachable from
-disallowed callers.
+**Behavior:** After existence succeeds in `InvalidMemberAccessCheck`, enforce:
 
-**Open questions:**
+| Visibility | Accessible from |
+|---|---|
+| Public | Anyone |
+| Protected | Declaring class + subclasses (caller inherits from declarer) |
+| Private | Declaring class only |
 
-1. PeopleCode visibility rules for instance vars, methods, properties across
-   same class, subclass, external code.
-2. Whether this lives in `InvalidMemberAccessCheck` (compile) vs type checker.
-3. Self / `%This` / same-class method bodies must remain clean.
-4. Metadata must carry visibility; confirm `TypeMetadata` already does.
+- **Sibling classes** cannot access each other's protected members.
+- **Instance variables** are always private (builder must stamp `Private`;
+  only legal in private section).
+- Caller class = SelfMetadata / current app class program; non-class → public only.
+- Private blocked even via `%Super`.
+- Soft-skip when metadata/type unresolved (no false positives).
+- Builtin members: all public (no visibility check).
 
-**Notes / decisions:** _(empty)_
+**Home:** Same class as existence — `InvalidMemberAccessCheck`.
+
+**Notes / decisions:** Locked 2026-07-09: (1) new InaccessibleMember (2) no
+sibling protected (3) instance vars always private (4) same check class.
 
 ---
 
@@ -441,6 +492,7 @@ Copy into the PR / commit notes:
 | Date | ID | Commit | Notes |
 |---|---|---|---|
 | 2026-07-09 | C1, C2, C3, C5, C6, T1, T2, T3 | `5cad58b` | All Ready items from order 1–7. Diagnostics 18–22. Tests green (290 SelfHosted + type suite). |
+| 2026-07-09 | T5, C4, T6 | _(pending commit)_ | Logical expr; MissingSuperCall; InaccessibleMember (+ instance vars Private). |
 
 ## 11. Deferred / discovered (append freely)
 
@@ -449,7 +501,9 @@ Use this section for ideas found while implementing accepted items.
 | Date | Note |
 |---|---|
 | 2026-07-09 | Initial backlog from gap analysis + product-owner feedback (R1–R3 rejected; C1–C6, T1–T6, A1 accepted). |
-| 2026-07-09 | Ready wave shipped: C1/C2/C3/C5/C6 compile checks + T1/T2/T3 inference validation. Remaining need design: C4, T4, T5, T6; deferred A1. |
+| 2026-07-09 | Ready wave shipped: C1/C2/C3/C5/C6 compile checks + T1/T2/T3 inference validation. |
+| 2026-07-09 | T5 Ready (If/While/Repeat-Until logical expr). T4 Deferred (structural L-value already at parse; semantic later). C4 Ready: any subclass ctor with base must set `%Super` somewhere (not only parameterized base). Remaining design: T6; deferred A1. |
+| 2026-07-09 | T5+C4+T6 implemented. Open deferred: T4, A1. |
 
 ---
 

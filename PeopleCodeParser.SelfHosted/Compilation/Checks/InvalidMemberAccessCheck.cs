@@ -1,6 +1,7 @@
 using PeopleCodeParser.SelfHosted.Nodes;
 using PeopleCodeTypeInfo.Contracts;
 using PeopleCodeTypeInfo.Database;
+using PeopleCodeTypeInfo.Functions;
 using PeopleCodeTypeInfo.Inference;
 using PeopleCodeTypeInfo.Types;
 
@@ -8,7 +9,8 @@ namespace PeopleCodeParser.SelfHosted.Compilation.Checks;
 
 /// <summary>
 /// Validates that method calls and property accesses target members that actually exist
-/// on the resolved type. Works for builtin object types (via PeopleCodeTypeDatabase)
+/// on the resolved type, and that private/protected members are only accessed from
+/// allowed callers (T6). Works for builtin object types (via PeopleCodeTypeDatabase)
 /// and application classes / interfaces (walking the inheritance chain via the resolver).
 ///
 /// Ported from AppRefiner's InvalidMemberAccess styler. Type inference is a documented
@@ -63,106 +65,222 @@ public sealed class InvalidMemberAccessCheck : CompileCheckBase
         if (targetType.PeopleCodeType is PeopleCodeType.Record or PeopleCodeType.Row or PeopleCodeType.Grid && !isMethodCall)
             return;
 
-        if (!MemberExists(targetType, m.MemberName, isMethodCall, ctx))
+        var resolution = ResolveMember(targetType, m.MemberName, isMethodCall, ctx);
+        switch (resolution.Kind)
         {
-            string kind = isMethodCall ? "method" : "property";
-            sink.Report(new CompileDiagnostic(
-                DiagnosticCode.InvalidMemberAccess,
-                DiagnosticSeverity.Error,
-                m.MemberNameSpan,
-                $"'{m.MemberName}' is not a known {kind} on '{DisplayName(targetType)}'"));
+            case ResolutionKind.Skip:
+                return;
+
+            case ResolutionKind.NotFound:
+            {
+                string kind = isMethodCall ? "method" : "property";
+                sink.Report(new CompileDiagnostic(
+                    DiagnosticCode.InvalidMemberAccess,
+                    DiagnosticSeverity.Error,
+                    m.MemberNameSpan,
+                    $"'{m.MemberName}' is not a known {kind} on '{DisplayName(targetType)}'"));
+                return;
+            }
+
+            case ResolutionKind.Found:
+                if (!IsAccessible(resolution.Visibility, resolution.DeclaringTypeName, ctx))
+                {
+                    var visWord = resolution.Visibility switch
+                    {
+                        MemberVisibility.Private => "private",
+                        MemberVisibility.Protected => "protected",
+                        _ => "inaccessible",
+                    };
+                    var from = GetCallerClassName(ctx) ?? "this program";
+                    sink.Report(new CompileDiagnostic(
+                        DiagnosticCode.InaccessibleMember,
+                        DiagnosticSeverity.Error,
+                        m.MemberNameSpan,
+                        $"'{m.MemberName}' is {visWord} and not accessible from '{from}'"));
+                }
+                return;
         }
     }
 
-    #region Member existence checks
+    #region Member resolution
 
-    private static bool MemberExists(TypeInfo type, string name, bool isMethodCall, CompileCheckContext ctx)
+    private enum ResolutionKind { Skip, NotFound, Found }
+
+    private readonly struct MemberResolution
+    {
+        public ResolutionKind Kind { get; init; }
+        public MemberVisibility Visibility { get; init; }
+        public string? DeclaringTypeName { get; init; }
+
+        public static MemberResolution Skip => new() { Kind = ResolutionKind.Skip };
+        public static MemberResolution NotFound => new() { Kind = ResolutionKind.NotFound };
+        public static MemberResolution Found(MemberVisibility visibility, string? declaringType) =>
+            new() { Kind = ResolutionKind.Found, Visibility = visibility, DeclaringTypeName = declaringType };
+    }
+
+    private static MemberResolution ResolveMember(TypeInfo type, string name, bool isMethodCall, CompileCheckContext ctx)
     {
         return type.Kind switch
         {
-            TypeKind.BuiltinObject => BuiltinHasMember(type.PeopleCodeType?.GetTypeName(), name, isMethodCall),
-            TypeKind.Array => BuiltinHasMember("array", name, isMethodCall),
-            TypeKind.AppClass or TypeKind.Interface => AppClassHasMember(type as AppClassTypeInfo, name, isMethodCall, ctx),
-            _ => true   // Unhandled kinds assumed valid
+            TypeKind.BuiltinObject => ResolveBuiltin(type.PeopleCodeType?.GetTypeName(), name, isMethodCall),
+            TypeKind.Array => ResolveBuiltin("array", name, isMethodCall),
+            TypeKind.AppClass or TypeKind.Interface =>
+                ResolveAppClassMember(type as AppClassTypeInfo, name, isMethodCall, ctx),
+            // Unhandled kinds assumed valid (public)
+            _ => MemberResolution.Found(MemberVisibility.Public, null),
         };
     }
 
-    private static bool BuiltinHasMember(string? typeName, string memberName, bool isMethodCall)
+    private static MemberResolution ResolveBuiltin(string? typeName, string memberName, bool isMethodCall)
     {
-        if (string.IsNullOrEmpty(typeName)) return true;
+        if (string.IsNullOrEmpty(typeName))
+            return MemberResolution.Skip;
 
-        return isMethodCall
+        bool exists = isMethodCall
             ? PeopleCodeTypeDatabase.GetMethod(typeName, memberName) != null
             : PeopleCodeTypeDatabase.GetProperty(typeName, memberName) != null;
+
+        return exists
+            ? MemberResolution.Found(MemberVisibility.Public, typeName)
+            : MemberResolution.NotFound;
     }
 
     /// <summary>
-    /// Walks the inheritance chain for an AppClass / Interface, checking Methods,
-    /// Properties, and InstanceVariables at each level.  Falls through to a builtin
-    /// member lookup when the chain terminates at a builtin base type.
-    ///
-    /// The "self" level (the class currently open in the editor) resolves from the live
-    /// in-editor metadata (<see cref="CompileCheckContext.SelfMetadata"/>) when available,
-    /// so members added but not yet saved are recognized; every other level comes from the
-    /// DB-backed resolver. This mirrors the self special-case in
-    /// TypeInferenceVisitor.LookupMethodInInheritanceChain and keeps this check in agreement
-    /// with the inferred types it consumes.
-    ///
-    /// Returns <c>true</c> (assume valid) whenever metadata cannot be resolved,
-    /// to avoid false positives against classes that are simply not yet loaded or
-    /// are defined in another module.
+    /// Walks the inheritance chain for an AppClass / Interface. Returns the first matching
+    /// member with its visibility and declaring type name. Soft-skips (assume valid) when
+    /// metadata cannot be resolved.
     /// </summary>
-    private static bool AppClassHasMember(AppClassTypeInfo? appClass, string memberName, bool isMethodCall, CompileCheckContext ctx)
+    private static MemberResolution ResolveAppClassMember(
+        AppClassTypeInfo? appClass, string memberName, bool isMethodCall, CompileCheckContext ctx)
     {
-        if (appClass == null) return true;
+        if (appClass == null) return MemberResolution.Skip;
 
         var resolver = ctx.Resolver;
         var selfMetadata = ctx.SelfMetadata;
 
-        // Nothing to validate against: no DB resolver and no live self metadata.
-        if (resolver == null && selfMetadata == null) return true;
+        if (resolver == null && selfMetadata == null) return MemberResolution.Skip;
 
         var visited = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         string? current = appClass.QualifiedName;
 
         while (!string.IsNullOrEmpty(current))
         {
-            if (!visited.Add(current)) break;   // Circular inheritance guard
+            if (!visited.Add(current)) break;
 
-            // Self level → live in-editor metadata (recognizes unsaved members); every
-            // other level → DB-backed resolver. Only the source of each level's metadata
-            // changes; the chain walk below is identical for both.
             TypeMetadata? metadata =
                 selfMetadata != null && current.Equals(selfMetadata.QualifiedName, StringComparison.OrdinalIgnoreCase)
                     ? selfMetadata
                     : resolver?.GetTypeMetadata(current);
-            if (metadata == null) return true;  // Unresolvable class — assume valid
+            if (metadata == null) return MemberResolution.Skip;
 
             if (isMethodCall)
             {
-                if (metadata.Methods.ContainsKey(memberName)) return true;
+                if (metadata.Methods.TryGetValue(memberName, out var method))
+                    return MemberResolution.Found(method.Visibility, current);
             }
             else
             {
-                if (metadata.Properties.ContainsKey(memberName)) return true;
-                // Instance variables are keyed by their declared name, which includes the
-                // leading '&' (e.g. "&CVProduct"), but they are accessed as a property via
-                // %This.CVProduct without it. Prepend '&' to match — this mirrors how
-                // TypeInferenceVisitor resolves the same access (it looks up $"&{name}").
-                if (metadata.InstanceVariables.ContainsKey("&" + memberName)) return true;
+                if (metadata.Properties.TryGetValue(memberName, out var property))
+                    return MemberResolution.Found(property.Visibility, current);
+
+                // Instance variables: keyed with leading '&'; access is %This.Name without it.
+                if (metadata.InstanceVariables.TryGetValue("&" + memberName, out var instanceVar))
+                    return MemberResolution.Found(instanceVar.Visibility, current);
             }
 
-            // Chain terminates at a builtin base — delegate to builtin lookup
             if (metadata.IsBaseClassBuiltin && metadata.BuiltinBaseType.HasValue)
-                return BuiltinHasMember(metadata.BuiltinBaseType.Value.GetTypeName(), memberName, isMethodCall);
+                return ResolveBuiltin(metadata.BuiltinBaseType.Value.GetTypeName(), memberName, isMethodCall);
 
-            // Advance: base class takes priority, fall back to implemented interface
             current = !string.IsNullOrEmpty(metadata.BaseClassName)
                 ? metadata.BaseClassName
                 : metadata.InterfaceName;
         }
 
-        return false;   // Member not found anywhere in the chain
+        return MemberResolution.NotFound;
+    }
+
+    #endregion
+
+    #region Visibility
+
+    /// <summary>
+    /// Public: anyone. Private: declaring class only. Protected: declaring class + subclasses
+    /// of the declarer (siblings cannot access each other's protected members).
+    /// </summary>
+    private static bool IsAccessible(MemberVisibility visibility, string? declaringTypeName, CompileCheckContext ctx)
+    {
+        if (visibility == MemberVisibility.Public)
+            return true;
+
+        var caller = GetCallerClassName(ctx);
+        if (caller == null)
+            return false; // non-class program: only public
+
+        if (string.IsNullOrEmpty(declaringTypeName))
+            return true; // unknown declarer — don't false-positive
+
+        if (caller.Equals(declaringTypeName, StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        if (visibility == MemberVisibility.Private)
+            return false;
+
+        // Protected: caller must inherit from declaring type
+        return CallerInheritsFrom(caller, declaringTypeName, ctx);
+    }
+
+    private static string? GetCallerClassName(CompileCheckContext ctx)
+    {
+        if (ctx.SelfMetadata != null && !string.IsNullOrEmpty(ctx.SelfMetadata.QualifiedName))
+            return ctx.SelfMetadata.QualifiedName;
+
+        // Fall back to live program class name when SelfMetadata was not supplied
+        // (unqualified; inheritance walks may fail — prefer SelfMetadata in production).
+        if (ctx.Program.AppClass != null)
+            return ctx.Program.AppClass.Name;
+
+        return null;
+    }
+
+    private static bool CallerInheritsFrom(string callerQualifiedName, string ancestorQualifiedName, CompileCheckContext ctx)
+    {
+        var resolver = ctx.Resolver;
+        var selfMetadata = ctx.SelfMetadata;
+        if (resolver == null && selfMetadata == null)
+            return false;
+
+        var visited = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        string? current = callerQualifiedName;
+
+        while (!string.IsNullOrEmpty(current))
+        {
+            if (!visited.Add(current)) break;
+
+            TypeMetadata? metadata =
+                selfMetadata != null && current.Equals(selfMetadata.QualifiedName, StringComparison.OrdinalIgnoreCase)
+                    ? selfMetadata
+                    : resolver?.GetTypeMetadata(current);
+            if (metadata == null)
+                return false;
+
+            var baseName = !string.IsNullOrEmpty(metadata.BaseClassName)
+                ? metadata.BaseClassName
+                : metadata.InterfaceName;
+
+            if (string.IsNullOrEmpty(baseName))
+                return false;
+
+            if (baseName.Equals(ancestorQualifiedName, StringComparison.OrdinalIgnoreCase))
+                return true;
+
+            // Builtin base is not an app-class ancestor for protected visibility
+            if (metadata.IsBaseClassBuiltin)
+                return false;
+
+            current = baseName;
+        }
+
+        return false;
     }
 
     #endregion

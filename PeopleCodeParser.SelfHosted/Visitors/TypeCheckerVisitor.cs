@@ -212,6 +212,48 @@ namespace PeopleCodeParser.SelfHosted.Visitors
 
             return null;
         }
+        /// <summary>
+        /// If / While / Repeat-Until conditions require a logical expression (Boolean).
+        /// Aligns with unary Not / binary And-Or rules in TypeInferenceVisitor.
+        /// </summary>
+        public override void VisitIf(IfStatementNode node)
+        {
+            base.VisitIf(node);
+            CheckLogicalCondition(node.Condition);
+        }
+
+        public override void VisitWhile(WhileStatementNode node)
+        {
+            base.VisitWhile(node);
+            CheckLogicalCondition(node.Condition);
+        }
+
+        public override void VisitRepeat(RepeatStatementNode node)
+        {
+            base.VisitRepeat(node);
+            CheckLogicalCondition(node.Condition);
+        }
+
+        private void CheckLogicalCondition(ExpressionNode condition)
+        {
+            var type = condition.GetInferredType();
+            if (type == null)
+                return;
+
+            if (!IsLogicalCapable(type))
+            {
+                RecordTypeError("Logical expression required", condition);
+            }
+        }
+
+        /// <summary>
+        /// Boolean / Any / Unknown only — no number or string truthiness.
+        /// </summary>
+        private static bool IsLogicalCapable(TypeInfo type) =>
+            type is PrimitiveTypeInfo { PeopleCodeType: PeopleCodeType.Boolean } ||
+            type is AnyTypeInfo ||
+            type is UnknownTypeInfo;
+
         public override void VisitFunctionCall(FunctionCallNode node)
         {
             base.VisitFunctionCall(node);

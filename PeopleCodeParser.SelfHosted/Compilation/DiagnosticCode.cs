@@ -34,4 +34,6 @@ public enum DiagnosticCode
     MissingPropertyAccessor = 20,
     AssignmentToConstant = 21,
     ThisOutsideClass = 22,
+    MissingSuperCall = 23,
+    InaccessibleMember = 24,
 }
