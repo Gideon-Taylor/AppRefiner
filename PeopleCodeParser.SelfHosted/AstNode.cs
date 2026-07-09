@@ -105,6 +105,11 @@ public abstract class AstNode
     public const string TypeWarningAttributeKey = "TypeWarning";
 
     /// <summary>
+    /// Attribute key for storing completion analysis results (ExitMode)
+    /// </summary>
+    public const string ExitModeAttributeKey = "ExitMode";
+
+    /// <summary>
     /// Accept method for visitor pattern
     /// </summary>
     public abstract void Accept(IAstVisitor visitor);

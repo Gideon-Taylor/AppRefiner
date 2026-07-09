@@ -1,3 +1,4 @@
+using PeopleCodeParser.SelfHosted.Analysis;
 using PeopleCodeParser.SelfHosted.Visitors;
 using PeopleCodeTypeInfo.Functions;
 using PeopleCodeTypeInfo.Types;
@@ -204,6 +205,32 @@ public static class AstNodeExtensions
                 yield return childError;
             }
         }
+    }
+
+    #endregion
+
+    #region ExitMode Extensions
+
+    /// <summary>
+    /// Gets the completion analysis result for this node, if
+    /// <see cref="Analysis.CompletionAnalyzer"/> has been run over it.
+    /// </summary>
+    /// <returns>The ExitMode set, or null if completion analysis has not been performed.</returns>
+    public static ExitMode? GetExitMode(this AstNode node)
+    {
+        if (node.Attributes.TryGetValue(AstNode.ExitModeAttributeKey, out var mode))
+        {
+            return (ExitMode)mode;
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// Stores the completion analysis result for this node.
+    /// </summary>
+    public static void SetExitMode(this AstNode node, ExitMode mode)
+    {
+        node.Attributes[AstNode.ExitModeAttributeKey] = mode;
     }
 
     #endregion
