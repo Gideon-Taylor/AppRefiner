@@ -80,6 +80,36 @@ End-Function;
         Assert.NotEmpty(PathDiags(diags));
     }
 
+    // A1: Repeat body always runs; body that only Returns means the function returns.
+    [Fact]
+    public void Function_return_only_inside_repeat_is_clean()
+    {
+        var diags = Check(@"
+Function F() Returns number
+   Local boolean &done;
+   Repeat
+      Return 1;
+   Until &done;
+End-Function;
+");
+        Assert.Empty(PathDiags(diags));
+    }
+
+    [Fact]
+    public void Function_repeat_with_fallthrough_body_reports()
+    {
+        var diags = Check(@"
+Function F() Returns number
+   Local boolean &done;
+   Local number &x;
+   Repeat
+      &x = 1;
+   Until &done;
+End-Function;
+");
+        Assert.NotEmpty(PathDiags(diags));
+    }
+
     [Fact]
     public void Procedure_without_return_type_is_not_checked()
     {

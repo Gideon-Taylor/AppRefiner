@@ -127,6 +127,48 @@ public class CompletionAnalyzerTests
         Assert.True(mode.HasFlag(ExitMode.Normal)); // loop may run zero times
     }
 
+    // A1: Repeat always runs the body once — no forced Normal when body is only Return.
+    [Fact]
+    public void Repeat_BodyAlwaysReturns_NoNormalOnLoop()
+    {
+        var mode = AnalyzeBody("Repeat\nReturn;\nUntil &done;");
+        Assert.Equal(ExitMode.Return, mode);
+        Assert.False(mode.HasFlag(ExitMode.Normal));
+    }
+
+    [Fact]
+    public void Repeat_BodyFallsThrough_KeepsNormal()
+    {
+        var mode = AnalyzeBody("Repeat\n&x = &x + 1;\nUntil &x > 5;");
+        Assert.True(mode.HasFlag(ExitMode.Normal));
+        Assert.False(mode.HasFlag(ExitMode.Return));
+    }
+
+    [Fact]
+    public void Repeat_Break_AbsorbedToNormal()
+    {
+        var mode = AnalyzeBody("Repeat\nBreak;\nUntil False;");
+        Assert.False(mode.HasFlag(ExitMode.Break));
+        Assert.True(mode.HasFlag(ExitMode.Normal));
+    }
+
+    [Fact]
+    public void Repeat_MixedReturnAndFallthrough_KeepsBoth()
+    {
+        var mode = AnalyzeBody("Repeat\nIf &ready Then\nReturn 1;\nEnd-If;\nUntil &ready;");
+        Assert.True(mode.HasFlag(ExitMode.Return));
+        Assert.True(mode.HasFlag(ExitMode.Normal));
+    }
+
+    // Contrast: While with only Return still has Normal (zero iterations).
+    [Fact]
+    public void While_BodyAlwaysReturns_StillHasNormal()
+    {
+        var mode = AnalyzeBody("While True\nReturn;\nEnd-While;");
+        Assert.True(mode.HasFlag(ExitMode.Return));
+        Assert.True(mode.HasFlag(ExitMode.Normal));
+    }
+
     [Fact]
     public void TryCatch_UnionsBothPaths()
     {

@@ -439,18 +439,19 @@ sibling protected (3) instance vars always private (4) same check class.
 
 | Field | Value |
 |---|---|
-| **Status** | `Deferred` (do when touching exit modes) |
+| **Status** | `Done` |
 | **Priority** | P3 |
 
 **Intent:** Tighten `Normal` precision for Repeat loops so return-path /
 exit-mode consumers get more accurate results.
 
-**Constraint (from product owner):** Only if it **improves accuracy** without
-introducing false positives or false negatives on existing
-`NotAllPathsReturn` / completion tests. Re-run full analyzer + return-path
-suites; no behavior change for green cases without a clear correctness fix.
+**Behavior:** For/While still force `Normal` (zero iterations). Repeat does
+**not** force `Normal` after absorbing Break/Continue — body always runs once.
+If body is only abrupt (Return/Throw/Exit/Error), Repeat has no `Normal`.
 
-**Notes / decisions:** _(empty)_
+**Notes / decisions:** Implemented 2026-07-09. `AnalyzeForOrWhile` vs
+`AnalyzeRepeat`. Tests: CompletionAnalyzer Repeat cases + NotAllPathsReturn
+return-only-inside-repeat clean / fallthrough-body reports.
 
 ---
 
@@ -493,6 +494,7 @@ Copy into the PR / commit notes:
 |---|---|---|---|
 | 2026-07-09 | C1, C2, C3, C5, C6, T1, T2, T3 | `5cad58b` | All Ready items from order 1–7. Diagnostics 18–22. Tests green (290 SelfHosted + type suite). |
 | 2026-07-09 | T5, C4, T6 | `0ebf00a` | Logical expr; MissingSuperCall; InaccessibleMember (+ instance vars Private). |
+| 2026-07-09 | A1 | _(pending)_ | Repeat no longer forces Normal when body is fully abrupt. |
 
 ## 11. Deferred / discovered (append freely)
 

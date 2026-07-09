@@ -10,6 +10,12 @@ namespace PeopleCodeParser.SelfHosted.Analysis;
 ///
 /// Soundness: the analysis only ever OVER-approximates <see cref="ExitMode.Normal"/>,
 /// so a consumer keying off Normal is never wrong in the dangerous direction.
+/// <para>
+/// <b>Loops:</b> For/While always include <see cref="ExitMode.Normal"/> (zero iterations
+/// possible). Repeat always runs the body at least once, so it does <i>not</i> force
+/// Normal — if every path through the body is abrupt (Return/Throw/Exit/Error) and there
+/// is no Break/Continue-to-absorb, the Repeat itself has no Normal either.
+/// </para>
 /// </summary>
 public static class CompletionAnalyzer
 {
@@ -57,9 +63,9 @@ public static class CompletionAnalyzer
             IfStatementNode ifNode => AnalyzeIf(ifNode),
             EvaluateStatementNode evalNode => AnalyzeEvaluate(evalNode),
             TryStatementNode tryNode => AnalyzeTry(tryNode),
-            ForStatementNode forNode => AnalyzeLoop(forNode.Body),
-            WhileStatementNode whileNode => AnalyzeLoop(whileNode.Body),
-            RepeatStatementNode repeatNode => AnalyzeLoop(repeatNode.Body),
+            ForStatementNode forNode => AnalyzeForOrWhile(forNode.Body),
+            WhileStatementNode whileNode => AnalyzeForOrWhile(whileNode.Body),
+            RepeatStatementNode repeatNode => AnalyzeRepeat(repeatNode.Body),
             BlockNode block => AnalyzeBlock(block),
             _ => ExitMode.Normal, // plain statements fall through
         };
@@ -104,12 +110,26 @@ public static class CompletionAnalyzer
         return union;
     }
 
-    private static ExitMode AnalyzeLoop(BlockNode body)
+    /// <summary>
+    /// For / While: body may run zero times, so the loop always contributes Normal.
+    /// Break/Continue bind to the loop and are absorbed into Normal.
+    /// </summary>
+    private static ExitMode AnalyzeForOrWhile(BlockNode body)
     {
         ExitMode inner = AnalyzeBlock(body);
-        // Break/Continue bind to the loop (absorbed); the loop can always complete
-        // normally (may run zero times or exit via its condition).
         return Absorb(inner, ExitMode.Break | ExitMode.Continue) | ExitMode.Normal;
+    }
+
+    /// <summary>
+    /// Repeat-Until: body always runs at least once. Do not force Normal.
+    /// If the body can fall through to Until (or Break leaves the loop), Normal
+    /// remains after Absorb; if every path is abrupt (Return/Throw/Exit/Error)
+    /// with no Break, the Repeat has no Normal either.
+    /// </summary>
+    private static ExitMode AnalyzeRepeat(BlockNode body)
+    {
+        ExitMode inner = AnalyzeBlock(body);
+        return Absorb(inner, ExitMode.Break | ExitMode.Continue);
     }
 
     /// <summary>
