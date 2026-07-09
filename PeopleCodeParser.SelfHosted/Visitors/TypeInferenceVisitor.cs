@@ -1092,6 +1092,18 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
                 return;
             }
 
+            // Each index expression must be numeric (Number/Integer). Any/Unknown stay silent.
+            foreach (var index in node.Indices)
+            {
+                var indexType = GetInferredType(index);
+                if (indexType != null && !CanBeArrayIndex(indexType))
+                {
+                    var invalid = new InvalidTypeInfo(
+                        $"Array index must be numeric; cannot use type '{indexType}'");
+                    index.SetTypeError(new TypeError(invalid.Reason, index));
+                }
+            }
+
             // Each index reduces dimensionality by 1
             var elementType = arrayType;
             for (int i = 0; i < node.Indices.Count; i++)
@@ -1205,6 +1217,32 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
         {
             SetInferredType(node, UnknownTypeInfo.Instance);
             return;
+        }
+
+        // Validate operand types (mirrors binary And/Or and arithmetic checks).
+        // If invalid, record error on THIS node and propagate Unknown (not Invalid).
+        if (node.Operator == UnaryOperator.Not)
+        {
+            if (!CanPerformLogical(operandType))
+            {
+                var invalid = new InvalidTypeInfo(
+                    $"Cannot apply logical operator 'Not' to type '{operandType}'");
+                node.SetTypeError(new TypeError(invalid.Reason, node));
+                SetInferredType(node, UnknownTypeInfo.Instance);
+                return;
+            }
+        }
+        else if (node.Operator == UnaryOperator.Negate)
+        {
+            // Unary negate is Number/Integer only; date/time arithmetic uses binary ops.
+            if (!CanPerformUnaryNegate(operandType))
+            {
+                var invalid = new InvalidTypeInfo(
+                    $"Cannot apply unary negate to type '{operandType}'");
+                node.SetTypeError(new TypeError(invalid.Reason, node));
+                SetInferredType(node, UnknownTypeInfo.Instance);
+                return;
+            }
         }
 
         TypeInfo resultType = node.Operator switch
@@ -1462,6 +1500,27 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
         type is PrimitiveTypeInfo { PeopleCodeType: PeopleCodeType.Boolean } ||
         type is AnyTypeInfo ||
         type is UnknownTypeInfo;
+
+    /// <summary>
+    /// Check if a type can be used as an array index (Number/Integer, or Any/Unknown).
+    /// Date/Time are not valid index types.
+    /// </summary>
+    private bool CanBeArrayIndex(TypeInfo type) =>
+        type is PrimitiveTypeInfo { PeopleCodeType: PeopleCodeType.Number or PeopleCodeType.Integer } ||
+        type is AnyTypeInfo ||
+        type is UnknownTypeInfo ||
+        type is FieldTypeInfo fti && CanBeArrayIndex(fti.GetFieldDataType()) ||
+        type is ReferenceTypeInfo rti && rti.ReferenceCategory == PeopleCodeType.Any;
+
+    /// <summary>
+    /// Check if a type can be used with unary negate (Number/Integer only — not date/time).
+    /// </summary>
+    private bool CanPerformUnaryNegate(TypeInfo type) =>
+        type is PrimitiveTypeInfo { PeopleCodeType: PeopleCodeType.Number or PeopleCodeType.Integer } ||
+        type is AnyTypeInfo ||
+        type is UnknownTypeInfo ||
+        type is FieldTypeInfo fti && CanPerformUnaryNegate(fti.GetFieldDataType()) ||
+        type is ReferenceTypeInfo rti && rti.ReferenceCategory == PeopleCodeType.Any;
 
     /// <summary>
     /// Infer the result type for date/time arithmetic operations

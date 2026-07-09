@@ -29,4 +29,9 @@ public enum DiagnosticCode
     NotAllPathsReturn = 15,
     InvalidBreakContinue = 16,
     MissingReturnValue = 17,
+    UnexpectedReturnValue = 18,
+    DuplicateMember = 19,
+    MissingPropertyAccessor = 20,
+    AssignmentToConstant = 21,
+    ThisOutsideClass = 22,
 }
