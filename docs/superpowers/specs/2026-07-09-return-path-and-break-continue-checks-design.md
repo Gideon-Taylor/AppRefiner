@@ -1,7 +1,7 @@
 # Design: Not-All-Paths-Return & Invalid Break/Continue Compile Checks
 
 **Date:** 2026-07-09  
-**Status:** Approved (brainstorm) — pending implementation plan  
+**Status:** Implemented  
 **Depends on:** `CompletionAnalyzer` / `ExitMode` (`docs/superpowers/specs/2026-07-09-completion-analysis-exit-modes-design.md`)
 
 ## 1. Goal
