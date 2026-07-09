@@ -179,7 +179,7 @@ End-Function;
     }
 
     [Fact]
-    public void Method_primary_span_is_valid()
+    public void Method_styles_both_declaration_and_implementation_headers()
     {
         var diags = Check(@"
 class Sample
@@ -190,12 +190,33 @@ method GetX
    Local number &x;
    &x = 1;
 end-method;
+").Where(d => d.Code == DiagnosticCode.NotAllPathsReturn
+            && d.Message.Contains("Not all paths return")).ToList();
+
+        Assert.True(diags.Count >= 2, "expected primary on declaration and implementation headers");
+        Assert.All(diags, d => Assert.True(d.Span.IsValid));
+        // One near class header, one near method impl (order not guaranteed by sort alone —
+        // assert we cover both regions by line).
+        Assert.Contains(diags, d => d.Span.Start.Line < 4);
+        Assert.Contains(diags, d => d.Span.Start.Line >= 4);
+    }
+
+    [Fact]
+    public void Empty_else_secondary_styles_else_keyword()
+    {
+        var diags = Check(@"
+Function F(&b As boolean) Returns string
+   If &b Then
+      Return ""a"";
+   Else
+   End-If;
+End-Function;
 ").Where(d => d.Code == DiagnosticCode.NotAllPathsReturn).ToList();
 
-        var primary = diags.First(d => d.Message.Contains("Not all paths return"));
-        Assert.True(primary.Span.IsValid);
-        Assert.True(primary.Span.End.ByteIndex >= primary.Span.Start.ByteIndex);
-        // Primary should be in the class header area for declaration (HeaderSpan), not inverted
-        Assert.True(primary.Span.Start.Line < 5, "method primary should be near class method declaration");
+        Assert.Contains(diags, d => d.Message.Contains("Not all paths return"));
+        var secondary = diags.First(d => d.Message.Contains("This block can complete"));
+        // Else keyword sits after the Then branch's Return line.
+        Assert.True(secondary.Span.IsValid);
+        Assert.True(secondary.Span.Start.Line >= 3);
     }
 }

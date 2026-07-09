@@ -7,8 +7,8 @@ namespace PeopleCodeParser.SelfHosted.Compilation.Checks;
 /// <summary>
 /// For functions/methods/property getters with a return type, requires every path to
 /// exit via Return, Throw, Exit, or Error (no Normal / Break / Continue on the body).
-/// Emits a primary diagnostic on the signature and one secondary on the innermost
-/// incomplete block.
+/// Emits primary diagnostic(s) on the signature (declaration + implementation for methods)
+/// and one secondary on the innermost incomplete region (keyword introducer when empty).
 /// </summary>
 public sealed class NotAllPathsReturnCheck : CompileCheckBase
 {
@@ -22,24 +22,32 @@ public sealed class NotAllPathsReturnCheck : CompileCheckBase
         switch (node)
         {
             case FunctionNode fn when fn.ReturnType != null && fn.Body != null:
-                CheckBody(fn.Body, fn.Name, "function", SignatureSpan(fn.NameToken, fn.ReturnType), sink);
+                CheckBody(
+                    fn.Body,
+                    fn.Name,
+                    "function",
+                    new[] { SignatureSpan(fn.NameToken, fn.ReturnType) },
+                    sink);
                 break;
 
             case MethodImplNode mi when mi.Body != null:
             {
                 if (mi.Declaration?.ReturnType == null && mi.ReturnTypeAnnotation == null)
                     break;
-                CheckBody(mi.Body, mi.Name, "method", MethodSignatureSpan(mi), sink);
+                CheckBody(mi.Body, mi.Name, "method", MethodPrimarySpans(mi), sink);
                 break;
             }
 
             case PropertyImplNode pi when pi.IsGetter && pi.Body != null:
             {
-                // Getter always returns the property type.
                 var prop = pi.Parent as PropertyNode ?? pi.FindAncestor<PropertyNode>();
                 if (prop == null)
                     break;
-                CheckBody(pi.Body, pi.Name, "property getter", pi.NameToken.SourceSpan, sink);
+                // Property type lives on the declaration; impl "get Name" is closest to the body.
+                var primaries = new List<SourceSpan> { pi.NameToken.SourceSpan };
+                if (prop.NameToken.SourceSpan.Start.ByteIndex != pi.NameToken.SourceSpan.Start.ByteIndex)
+                    primaries.Insert(0, prop.NameToken.SourceSpan);
+                CheckBody(pi.Body, pi.Name, "property getter", primaries, sink);
                 break;
             }
         }
@@ -49,30 +57,41 @@ public sealed class NotAllPathsReturnCheck : CompileCheckBase
         BlockNode body,
         string name,
         string kind,
-        SourceSpan signatureSpan,
+        IReadOnlyList<SourceSpan> primarySpans,
         IDiagnosticSink sink)
     {
         ExitMode modes = CompletionAnalyzer.Analyze(body);
         if (IsComplete(modes))
             return;
 
-        sink.Report(new CompileDiagnostic(
-            DiagnosticCode.NotAllPathsReturn,
-            DiagnosticSeverity.Error,
-            signatureSpan,
-            $"Not all paths return a value in {kind} '{name}'."));
-
-        var secondarySpan = FindBestIncompleteSpan(body) ?? body.SourceSpan;
-        // Avoid duplicate identical span noise when secondary collapses to signature span.
-        if (secondarySpan.Start.ByteIndex != signatureSpan.Start.ByteIndex
-            || secondarySpan.End.ByteIndex != signatureSpan.End.ByteIndex)
+        var message = $"Not all paths return a value in {kind} '{name}'.";
+        foreach (var span in primarySpans)
         {
+            if (!span.IsValid)
+                continue;
             sink.Report(new CompileDiagnostic(
                 DiagnosticCode.NotAllPathsReturn,
                 DiagnosticSeverity.Error,
-                secondarySpan,
-                "This block can complete without returning a value."));
+                span,
+                message));
         }
+
+        var secondarySpan = ResolveSecondarySpan(body);
+        if (secondarySpan is null || !secondarySpan.Value.IsValid)
+            return;
+
+        // Skip secondary only if it exactly duplicates every primary (unlikely).
+        bool duplicatesPrimary = primarySpans.Any(p =>
+            p.Start.ByteIndex == secondarySpan.Value.Start.ByteIndex
+            && p.End.ByteIndex == secondarySpan.Value.End.ByteIndex);
+        if (duplicatesPrimary)
+            return;
+
+        sink.Report(new CompileDiagnostic(
+            DiagnosticCode.NotAllPathsReturn,
+            DiagnosticSeverity.Error,
+            secondarySpan.Value,
+            "This block can complete without returning a value."));
     }
 
     private static bool IsComplete(ExitMode modes) =>
@@ -82,10 +101,27 @@ public sealed class NotAllPathsReturnCheck : CompileCheckBase
         modes is null || !IsComplete(modes.Value);
 
     /// <summary>
-    /// Innermost block that still has Normal or an invalid mode; tie-break earliest start.
-    /// Falls back to last statement span of the root body.
+    /// Innermost incomplete block, then a displayable span (keyword when the block is empty).
     /// </summary>
-    private static SourceSpan? FindBestIncompleteSpan(BlockNode root)
+    private static SourceSpan? ResolveSecondarySpan(BlockNode root)
+    {
+        var best = FindBestIncompleteBlock(root);
+        if (best == null)
+            return null;
+
+        // Straight-line body with statements: last statement is easiest to see.
+        if (ReferenceEquals(best, root) && root.Statements.Count > 0)
+            return root.Statements[^1].SourceSpan;
+
+        if (best.Statements.Count > 0)
+            return best.SourceSpan;
+
+        // Empty incomplete block — no statements to underline. Point at the keyword
+        // or clause that introduces the empty path (Else, When-Other, When condition, …).
+        return SpanForEmptyIncompleteBlock(best) ?? best.SourceSpan;
+    }
+
+    private static BlockNode? FindBestIncompleteBlock(BlockNode root)
     {
         BlockNode? best = null;
         var bestDepth = -1;
@@ -149,38 +185,86 @@ public sealed class NotAllPathsReturnCheck : CompileCheckBase
         }
 
         Walk(root, 0);
+        return best;
+    }
 
-        if (best == null)
-            return null;
+    /// <summary>
+    /// For an empty incomplete block, style the introducer the user can see
+    /// (Else / When-Other / When condition / catch header / parent statement).
+    /// </summary>
+    private static SourceSpan? SpanForEmptyIncompleteBlock(BlockNode empty)
+    {
+        switch (empty.Parent)
+        {
+            case IfStatementNode ifn:
+                if (ifn.ElseBlock == empty && ifn.ElseToken != null)
+                    return ifn.ElseToken.SourceSpan;
+                // Empty Then: no dedicated Then token on the node — use the condition.
+                if (ifn.ThenBlock == empty)
+                    return ifn.Condition.SourceSpan;
+                break;
 
-        // Straight-line body: prefer last statement for a visible in-body marker.
-        if (ReferenceEquals(best, root) && root.Statements.Count > 0)
-            return root.Statements[^1].SourceSpan;
+            case EvaluateStatementNode ev:
+                if (ev.WhenOtherBlock == empty && ev.WhenOtherToken != null)
+                    return ev.WhenOtherToken.SourceSpan;
+                foreach (var when in ev.WhenClauses)
+                {
+                    if (when.Body == empty)
+                        return when.Condition.SourceSpan;
+                }
+                break;
 
-        return best.SourceSpan;
+            case CatchStatementNode catchNode:
+                if (catchNode.ExceptionVariable != null)
+                    return catchNode.ExceptionVariable.SourceSpan;
+                if (catchNode.ExceptionType != null)
+                    return catchNode.ExceptionType.SourceSpan;
+                return catchNode.SourceSpan;
+
+            case ForStatementNode or WhileStatementNode or RepeatStatementNode:
+                return empty.Parent.SourceSpan;
+
+            case MethodImplNode mi:
+                // Empty method body: style the implementation name (near the code).
+                return mi.NameToken.SourceSpan;
+
+            case FunctionNode fn:
+                return fn.NameToken.SourceSpan;
+
+            case PropertyImplNode pi:
+                return pi.NameToken.SourceSpan;
+        }
+
+        return empty.Parent?.SourceSpan;
     }
 
     private static SourceSpan SignatureSpan(Token nameToken, TypeNode returnType) =>
         new SourceSpan(nameToken.SourceSpan.Start, returnType.SourceSpan.End);
 
     /// <summary>
-    /// Primary span for a method with a return type. Prefer the declaration header
-    /// (class body) over combining impl name with declaration return type, which
-    /// would invert Start/End because the return type appears earlier in the file.
+    /// Primary spans for a method: class-header declaration (if present) and the
+    /// implementation header closest to the body.
     /// </summary>
-    private static SourceSpan MethodSignatureSpan(MethodImplNode mi)
+    private static IReadOnlyList<SourceSpan> MethodPrimarySpans(MethodImplNode mi)
     {
+        var spans = new List<SourceSpan>();
+
+        // Declaration in class header (e.g. method GetX() Returns number;)
         if (mi.Declaration?.ReturnType != null)
         {
             var decl = mi.Declaration;
             if (decl.HeaderSpan.IsValid)
-                return decl.HeaderSpan;
-            return SignatureSpan(decl.NameToken, decl.ReturnType);
+                spans.Add(decl.HeaderSpan);
+            else
+                spans.Add(SignatureSpan(decl.NameToken, decl.ReturnType));
         }
 
+        // Implementation header (method Name … / annotations) — nearest the code.
         if (mi.ReturnTypeAnnotation != null)
-            return SignatureSpan(mi.NameToken, mi.ReturnTypeAnnotation);
+            spans.Add(SignatureSpan(mi.NameToken, mi.ReturnTypeAnnotation));
+        else
+            spans.Add(mi.NameToken.SourceSpan);
 
-        return mi.NameToken.SourceSpan;
+        return spans;
     }
 }
