@@ -47,6 +47,7 @@ public static class CompileChecker
         new Checks.UndeclaredFunctionCheck(),
         new Checks.MissingMethodImplementationCheck(),
         new Checks.MissingConstructorCheck(),
+        new Checks.InvalidBreakContinueCheck(),
         // NOTE: unimplemented abstract members are intentionally NOT a compile check.
         // They are an advisory code smell (they do not stop compilation) and are surfaced
         // separately by AppRefiner's UnimplementedAbstractMembers styler, so they never trip
