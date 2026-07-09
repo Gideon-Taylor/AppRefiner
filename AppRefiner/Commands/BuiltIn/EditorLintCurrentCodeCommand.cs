@@ -13,13 +13,14 @@ namespace AppRefiner.Commands.BuiltIn
 
         public override void InitializeShortcuts(IShortcutRegistrar registrar, string commandId)
         {
+            // Ctrl+Alt+L collides with App Designer / editor behavior that deletes lines.
             if (registrar.TryRegisterShortcut(commandId,
-                ModifierKeys.Control | ModifierKeys.Alt,
+                ModifierKeys.Control | ModifierKeys.Alt | ModifierKeys.Shift,
                 Keys.L,
                 this))
             {
                 SetRegisteredShortcut(registrar.GetShortcutDisplayText(
-                    ModifierKeys.Control | ModifierKeys.Alt, Keys.L));
+                    ModifierKeys.Control | ModifierKeys.Alt | ModifierKeys.Shift, Keys.L));
             }
         }
 

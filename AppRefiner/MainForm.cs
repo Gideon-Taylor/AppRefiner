@@ -1884,6 +1884,9 @@ namespace AppRefiner
                 {
                     // Capture the linter instance for the lambda
                     BaseLintRule currentLinter = linter;
+                    // Enabled when there is an editor, and either the rule does not need a DB
+                    // or one is connected. (Previously this was inverted: DataManager == null,
+                    // which disabled every per-linter palette entry whenever a DB was connected.)
                     AvailableCommands.Add(new Command(
                             $"Lint: {currentLinter.Description}",
                             $"Run {currentLinter.Description} linting rule",
@@ -1892,10 +1895,12 @@ namespace AppRefiner
                             if (activeEditor != null)
                             {
                                 // Need to pass current DataManager
-                                linterManager?.ProcessSingleLinter(currentLinter, activeEditor, activeEditor.AppDesignerProcess.DataManager);
+                                linterManager?.ProcessSingleLinter(currentLinter, activeEditor, activeEditor.DataManager);
                             }
                         },
-                        () => activeEditor != null && activeEditor.DataManager == null
+                        () => activeEditor != null
+                            && (currentLinter.DatabaseRequirement != DataManagerRequirement.Required
+                                || activeEditor.DataManager != null)
                         ));
                 }
             }
