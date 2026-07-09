@@ -1022,31 +1022,40 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
                 {
                     SetInferredType(node, ConvertPropertyInfoToTypeInfo(systemVar));
                 }
-                // If not found and has no prefix, assume it's a Field identifier with unknown record context
-                // Pattern: [recordname.]fieldname where recordname is inferred at runtime
-                // Example: START_DT (no & or %) → Field type with empty record name
+                // Bare identifiers (no & / %) — PeopleCode rules:
+                //
+                //   NAME.something  → NAME is always a *record* (DirectRecordAccess).
+                //   NAME alone + default record (Record PeopleCode)
+                //                   → field on the default record.
+                //   NAME alone, no default record
+                //                   → invalid / Unknown (full record.field required).
                 //
                 // Special reference keywords (Field, Record, Scroll, Page, SQL, ...) are excluded:
                 // they never stand alone as a field/record — they are always the left half of a
                 // definition reference like Field.OPRID, which VisitMemberAccess types as a whole
-                // (see the IsSpecialReferenceKeyword branch there). Typing the bare keyword as a
-                // field on the default record would poison the member-access target type and make
-                // InvalidMemberAccessCheck falsely report "'OPRID' is not a property of 'Field(REC.Field)'"
-                // in record-field PeopleCode. Leaving it Unknown lets that check skip it correctly.
+                // (see the IsSpecialReferenceKeyword branch there).
                 else if (!node.Name.StartsWith("&") && !node.Name.StartsWith("%")
                     && !ReferenceTypeInfo.IsSpecialReferenceKeyword(node.Name))
                 {
-                    if (_defaultRecordName != null)
+                    bool isMemberAccessTarget =
+                        node.Parent is MemberAccessNode ma && ReferenceEquals(ma.Target, node);
+
+                    if (isMemberAccessTarget)
                     {
-                        /* We're in a record field PPC and have a default record name */
+                        // NAME.x → NAME is a record name
+                        var recordType = new RecordTypeInfo(node.Name, _typeResolver) { DirectRecordAccess = true };
+                        SetInferredType(node, recordType);
+                    }
+                    else if (_defaultRecordName != null)
+                    {
+                        // Bare field reference in record PeopleCode
                         var fieldType = new FieldTypeInfo(_defaultRecordName, node.Name, _typeResolver);
                         SetInferredType(node, fieldType);
                     }
                     else
                     {
-                        // Create RecordTypeInfo
-                        var recordType = new RecordTypeInfo(node.Name, _typeResolver) { DirectRecordAccess = true };
-                        SetInferredType(node, recordType);
+                        // Outside record context a bare name is not a valid field or record ref
+                        SetInferredType(node, UnknownTypeInfo.Instance);
                     }
                 }
                 else
@@ -1282,18 +1291,49 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
         var objectType = GetInferredType(node.Target);
         if (objectType != null)
         {
-            // Special case: Field with empty record name in member access position
-            // This means RECORD.FIELD pattern where RECORD was inferred as Field with empty record
-            // Treat the field name as the record name for this access
-            if (objectType is FieldTypeInfo fieldWithEmptyRecord &&
-                string.IsNullOrEmpty(fieldWithEmptyRecord.RecordName) &&
-                node.Target is IdentifierNode targetIdentifier)
+            // Further member access on a definition reference promotes it to an instance:
+            //   Record.REC.<member> → record(REC) then property or field
+            //   Field.FLD.<member>  → field(<defaultRecord>.FLD) then Field members / .Value
+            // First hop alone (Record.REC / Field.FLD) stays ReferenceTypeInfo for APIs like CreateRecord.
+            if (objectType is ReferenceTypeInfo refType)
             {
-                // Create FieldTypeInfo with record context: RECORD.FIELD
-                // This is assignable (can be used for out parameters)
-                var memberType = new FieldTypeInfo(targetIdentifier.Name, node.MemberName, _typeResolver).WithAssignable(true);
-                SetInferredType(node, memberType);
-                return;
+                if (refType.ReferenceCategory == PeopleCodeType.Record ||
+                    refType.ReferenceCategory == PeopleCodeType.Scroll)
+                {
+                    var promotedRecord = new RecordTypeInfo(refType.ReferencedName, _typeResolver);
+                    // Re-stamp target so hover on the middle of Record.REC.IsChanged shows record
+                    SetInferredType(node.Target, promotedRecord);
+                    objectType = promotedRecord;
+                }
+                else if (refType.ReferenceCategory == PeopleCodeType.Field)
+                {
+                    var promotedField = new FieldTypeInfo(
+                        _defaultRecordName ?? string.Empty,
+                        refType.ReferencedName,
+                        _typeResolver).WithAssignable(true);
+                    SetInferredType(node.Target, promotedField);
+                    objectType = promotedField;
+                }
+            }
+
+            // Safety net: if a bare identifier was still typed as Field (e.g. parent not wired yet)
+            // but is used as NAME.member, reinterpret NAME as a record.
+            if (objectType is FieldTypeInfo &&
+                node.Target is IdentifierNode bareTarget &&
+                !bareTarget.Name.StartsWith("&") &&
+                !bareTarget.Name.StartsWith("%") &&
+                !ReferenceTypeInfo.IsSpecialReferenceKeyword(bareTarget.Name))
+            {
+                // Only reinterpret when the member is NOT a known Field property (Value, Name, ...)
+                // so standalone-field.Value after a mis-parent still works if it was correctly a field.
+                // For NAME.member where NAME was wrongly a field, members like ISCRIPT1 are not Field props.
+                var fieldProp = PeopleCodeTypeDatabase.GetProperty("field", node.MemberName);
+                if (fieldProp == null)
+                {
+                    var asRecord = new RecordTypeInfo(bareTarget.Name, _typeResolver) { DirectRecordAccess = true };
+                    SetInferredType(bareTarget, asRecord);
+                    objectType = asRecord;
+                }
             }
 
             if (objectType is FieldTypeInfo fieldType && node.MemberName == "Value")
@@ -1305,9 +1345,10 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
                 return;
             }
 
-            /* It seems that if we have a literal record: record(RECORD_NAME) then the next member is always a field. 
-             * You cannot do MY_RECORD.Delete() for example. So we can treat it as a field access.
-             * You cannot do DERIVED_BC_ROW.GetField("F");
+            /* Literal / named record access:
+             * DirectRecordAccess (bare REC.x): members are always fields — no REC.Delete().
+             * Full record (e.g. Record.REC.x or &rec.x as RecordTypeInfo): try real Record
+             * properties first (IsChanged), then fall back to field names.
              */
 
             TypeInfo? rightHandType = null;
@@ -1315,7 +1356,28 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
             if (objectType is RecordTypeInfo recordType &&
                 recordType.RecordName != null)
             {
-                rightHandType = new FieldTypeInfo(recordType.RecordName, node.MemberName, _typeResolver).WithAssignable(true);
+                if (!recordType.DirectRecordAccess)
+                {
+                    // Full Record object — prefer known properties over field names.
+                    // ResolveMemberAccessReturnType falls back to Field for unknown Record members;
+                    // only treat as a property when it is a real builtin property.
+                    var realProp = PeopleCodeTypeDatabase.GetProperty("record", node.MemberName);
+                    if (realProp != null)
+                    {
+                        rightHandType = ConvertPropertyInfoToTypeInfo(realProp).WithAssignable(true);
+                    }
+                    else
+                    {
+                        rightHandType = new FieldTypeInfo(recordType.RecordName, node.MemberName, _typeResolver)
+                            .WithAssignable(true);
+                    }
+                }
+                else
+                {
+                    // Direct bare REC.FIELD — always a field
+                    rightHandType = new FieldTypeInfo(recordType.RecordName, node.MemberName, _typeResolver)
+                        .WithAssignable(true);
+                }
             }
             else
             {
@@ -1324,13 +1386,13 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
                 rightHandType = rightHandType.WithAssignable(true);
             }
 
-            // If result is Field type and target is Record, create FieldTypeInfo for implicit .Value support
+            // If result is bare Field type and target is a Record instance (not RecordTypeInfo path above),
+            // create FieldTypeInfo for implicit .Value support when we have a record identifier name.
             if (rightHandType.PeopleCodeType == PeopleCodeType.Field &&
+                rightHandType is not FieldTypeInfo &&
                 objectType.PeopleCodeType == PeopleCodeType.Record &&
                 node.Target is IdentifierNode recordIdentifier)
             {
-                // Create FieldTypeInfo with record/field context for data type resolution
-                // This is assignable (can be used for out parameters)
                 rightHandType = new FieldTypeInfo(recordIdentifier.Name, node.MemberName, _typeResolver).WithAssignable(true);
             }
 
@@ -1339,7 +1401,6 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
             {
                 // Record/Row/Field can be used for out parameters
                 rightHandType = new RecordTypeInfo(node.MemberName, _typeResolver);
-                //rightHandType = new BuiltinObjectTypeInfo("Record", PeopleCodeType.Record).WithAssignable(true);
             }
 
             SetInferredType(node, rightHandType);

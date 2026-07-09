@@ -712,10 +712,10 @@ end-method;
         var identType = visitor.GetInferredType(depositControlIdent);
         Console.WriteLine($"DEPOSIT_CONTROL type: {identType?.GetType().Name} - {identType?.Name}");
 
-        // Should be FieldTypeInfo (field reference with empty record name)
+        // Left of a dot is always a record (DEPOSIT_CONTROL.DEPOSIT_BU)
         Assert.IsType<RecordTypeInfo>(identType);
-        var fieldType = (RecordTypeInfo)identType;
-        Assert.Equal("DEPOSIT_CONTROL", fieldType.RecordName);
+        var recordType = (RecordTypeInfo)identType;
+        Assert.Equal("DEPOSIT_CONTROL", recordType.RecordName);
     }
 
     [Fact]

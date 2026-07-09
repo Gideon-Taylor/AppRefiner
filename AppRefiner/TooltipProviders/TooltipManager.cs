@@ -1,9 +1,11 @@
 using AppRefiner.Database;
 using AppRefiner.LanguageExtensions;
+using AppRefiner.Services;
 using DiffPlex.Model;
 using PeopleCodeParser.SelfHosted;
 using PeopleCodeParser.SelfHosted.Nodes;
 using PeopleCodeParser.SelfHosted.Visitors;
+using PeopleCodeTypeInfo.Contracts;
 using PeopleCodeTypeInfo.Functions;
 using PeopleCodeTypeInfo.Inference;
 using PeopleCodeTypeInfo.Types;
@@ -542,29 +544,18 @@ namespace AppRefiner.TooltipProviders
 
         /// <summary>
         /// Runs type inference on the program to populate type information on AST nodes.
-        /// Works with or without database - with database can resolve custom app classes,
-        /// without database still resolves builtins, literals, and local types.
+        /// Shares default-record extraction with stylers via <see cref="TypeInferenceRunner"/>
+        /// so hover and compile checks agree in Record PeopleCode.
         /// </summary>
         private static void RunTypeInference(ScintillaEditor editor, ProgramNode program)
         {
             try
             {
-                // Extract metadata from current program
-                string qualifiedName = DetermineQualifiedName(editor, program);
-                var metadata = TypeMetadataBuilder.ExtractMetadata(program, qualifiedName);
+                ITypeMetadataResolver typeResolver =
+                    editor.AppDesignerProcess?.TypeResolver
+                    ?? PeopleCodeTypeInfo.Contracts.NullTypeMetadataResolver.Instance;
 
-                // Get type resolver (may be null if no database)
-                var typeResolver = editor.AppDesignerProcess?.TypeResolver;
-
-                // Run type inference (works even with null resolver)
-                TypeInferenceVisitor.Run(
-                    program,
-                    metadata,
-                    typeResolver,
-                    defaultRecordName: null,
-                    defaultFieldName: null,
-                    inferAutoDeclaredTypes: false,
-                    onUndefinedVariable: ExtensionManager != null ? ExtensionManager.HandleUndefinedVariable : null);
+                TypeInferenceRunner.Run(program, editor, typeResolver, ExtensionManager);
             }
             catch (Exception ex)
             {

@@ -417,6 +417,38 @@ End-Function;", "WEBLIB_TS_TEST");
     }
 
     [Fact]
+    public void Does_not_report_qualified_record_field_value_in_record_field_program()
+    {
+        // WEBLIB_TS_TEST.ISCRIPT1.Value — left of the first dot is a record name, not a field
+        // on the default record. Previously default-record context typed WEBLIB_TS_TEST as
+        // Field(WEBLIB_TS_TEST.WEBLIB_TS_TEST) and flagged ISCRIPT1 as an invalid Field property.
+        var diags = RunInRecordField(@"
+Function Test()
+   WEBLIB_TS_TEST.ISCRIPT1.Value = """";
+End-Function;", "WEBLIB_TS_TEST");
+
+        Assert.DoesNotContain(diags, d =>
+            d.Code == DiagnosticCode.InvalidMemberAccess &&
+            d.Message.Contains("ISCRIPT1"));
+        Assert.DoesNotContain(diags, d =>
+            d.Code == DiagnosticCode.InvalidMemberAccess &&
+            d.Message.Contains("Value"));
+    }
+
+    [Fact]
+    public void Does_not_report_record_keyword_IsChanged_in_record_field_program()
+    {
+        var diags = RunInRecordField(@"
+Function Test()
+   Local boolean &changed = Record.WEBLIB_TS_TEST.IsChanged;
+End-Function;", "WEBLIB_TS_TEST");
+
+        Assert.DoesNotContain(diags, d =>
+            d.Code == DiagnosticCode.InvalidMemberAccess &&
+            d.Message.Contains("IsChanged"));
+    }
+
+    [Fact]
     public void Does_not_report_instance_variable_accessed_as_property_on_self()
     {
         // Instance variables are declared with a leading '&' but are validly accessed as a

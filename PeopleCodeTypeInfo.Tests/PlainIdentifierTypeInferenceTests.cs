@@ -10,17 +10,33 @@ using Xunit;
 namespace PeopleCodeTypeInfo.Tests;
 
 /// <summary>
-/// Tests for plain identifier type inference.
-/// Plain identifiers (without & or % prefix) should be inferred as Field type with empty record context.
+/// Tests for plain identifier type inference under compiler-aligned rules:
+/// - NAME.x  → NAME is always a record
+/// - NAME alone + default record → FieldTypeInfo(default, NAME)
+/// - NAME alone without default → Unknown
 /// </summary>
 public class PlainIdentifierTypeInferenceTests
 {
+    private static (ProgramNode program, TypeInferenceVisitor visitor) Infer(
+        string source, string? defaultRecordName = null)
+    {
+        var lexer = new PeopleCodeLexer(source);
+        var tokens = lexer.TokenizeAll();
+        var parser = new PeopleCodeParser.SelfHosted.PeopleCodeParser(tokens);
+        var program = parser.ParseProgram();
+        Assert.Empty(parser.Errors);
+
+        var metadata = TypeMetadataBuilder.ExtractMetadata(program, "TestProgram");
+        var visitor = TypeInferenceVisitor.Run(
+            program, metadata, NullTypeMetadataResolver.Instance, defaultRecordName);
+        return (program, visitor);
+    }
+
     /// <summary>
-    /// Test: Plain identifier "A" should be inferred as Field (not Record)
-    /// with empty record name to indicate runtime context dependency.
+    /// Bare identifier outside record PeopleCode is not a valid field/record by itself.
     /// </summary>
     [Fact]
-    public void PlainIdentifier_ShouldBeInferredAsRecord()
+    public void PlainIdentifier_WithoutDefaultRecord_IsUnknown()
     {
         var source = @"
 function test();
@@ -28,47 +44,45 @@ function test();
    &result = A;
 end-function;
 ";
+        var (program, visitor) = Infer(source);
 
-        // Parse the source
-        var lexer = new PeopleCodeLexer(source);
-        var tokens = lexer.TokenizeAll();
-        var parser = new PeopleCodeParser.SelfHosted.PeopleCodeParser(tokens);
-        var program = parser.ParseProgram();
-
-        Assert.Empty(parser.Errors);
-
-        // Extract metadata
-        var metadata = TypeMetadataBuilder.ExtractMetadata(program, "TestProgram");
-
-        // Run type inference
-        var cache = new TypeCache();
-        var visitor = TypeInferenceVisitor.Run(program, metadata, NullTypeMetadataResolver.Instance);
-
-        // Find the assignment: &result = A
-        var function = program.Functions[0];
-        var assignment = FindFirstAssignment(function);
+        var assignment = FindFirstAssignment(program.Functions[0]);
         Assert.NotNull(assignment);
-
-        // The value expression should be identifier "A"
-        var identifier = assignment.Value as IdentifierNode;
-        Assert.NotNull(identifier);
+        var identifier = Assert.IsType<IdentifierNode>(assignment.Value);
         Assert.Equal("A", identifier.Name);
 
-        // Get the inferred type
         var inferredType = visitor.GetInferredType(identifier);
         Assert.NotNull(inferredType);
-
-        // Should be FieldTypeInfo (not Record, not Unknown)
-        Assert.IsType<RecordTypeInfo>(inferredType);
-        var recordType = (RecordTypeInfo)inferredType;
-
-        // Record name should be empty (runtime context)
-        Assert.Equal("A", recordType.RecordName);
+        Assert.Equal(TypeKind.Unknown, inferredType.Kind);
     }
 
     /// <summary>
-    /// Test: RECORD.FIELD pattern should still work correctly
-    /// with explicit record name.
+    /// Bare identifier in record PeopleCode is a field on the default record.
+    /// </summary>
+    [Fact]
+    public void PlainIdentifier_WithDefaultRecord_IsFieldOnDefault()
+    {
+        var source = @"
+function test();
+   local any &result;
+   &result = START_DT;
+end-function;
+";
+        var (program, visitor) = Infer(source, defaultRecordName: "AAP_YEAR");
+
+        var assignment = FindFirstAssignment(program.Functions[0]);
+        Assert.NotNull(assignment);
+        var identifier = Assert.IsType<IdentifierNode>(assignment.Value);
+
+        var inferredType = visitor.GetInferredType(identifier);
+        Assert.IsType<FieldTypeInfo>(inferredType);
+        var fieldType = (FieldTypeInfo)inferredType!;
+        Assert.Equal("AAP_YEAR", fieldType.RecordName);
+        Assert.Equal("START_DT", fieldType.FieldName);
+    }
+
+    /// <summary>
+    /// RECORD.FIELD works without a default record (qualified form).
     /// </summary>
     [Fact]
     public void QualifiedFieldAccess_ShouldHaveRecordName()
@@ -79,49 +93,59 @@ function test();
    &result = MY_RECORD.MY_FIELD;
 end-function;
 ";
+        var (program, visitor) = Infer(source);
 
-        // Parse the source
-        var lexer = new PeopleCodeLexer(source);
-        var tokens = lexer.TokenizeAll();
-        var parser = new PeopleCodeParser.SelfHosted.PeopleCodeParser(tokens);
-        var program = parser.ParseProgram();
-
-        Assert.Empty(parser.Errors);
-
-        // Extract metadata
-        var metadata = TypeMetadataBuilder.ExtractMetadata(program, "TestProgram");
-
-        // Run type inference
-        var cache = new TypeCache();
-        var visitor = TypeInferenceVisitor.Run(program, metadata, NullTypeMetadataResolver.Instance);
-
-        // Find the assignment: &result = MY_RECORD.MY_FIELD
-        var function = program.Functions[0];
-        var assignment = FindFirstAssignment(function);
+        var assignment = FindFirstAssignment(program.Functions[0]);
         Assert.NotNull(assignment);
+        var memberAccess = Assert.IsType<MemberAccessNode>(assignment.Value);
 
-        // The value expression should be member access
-        var memberAccess = assignment.Value as MemberAccessNode;
-        Assert.NotNull(memberAccess);
+        // Left side is a record
+        var leftType = visitor.GetInferredType(memberAccess.Target);
+        Assert.IsType<RecordTypeInfo>(leftType);
+        Assert.Equal("MY_RECORD", ((RecordTypeInfo)leftType!).RecordName);
+        Assert.True(((RecordTypeInfo)leftType).DirectRecordAccess);
 
-        // Get the inferred type
+        // Whole access is a field
         var inferredType = visitor.GetInferredType(memberAccess);
-        Assert.NotNull(inferredType);
-
-        // Should be FieldTypeInfo with explicit record name
         Assert.IsType<FieldTypeInfo>(inferredType);
-        var fieldType = (FieldTypeInfo)inferredType;
-
-        // Record name should be "MY_RECORD" (not empty)
+        var fieldType = (FieldTypeInfo)inferredType!;
         Assert.Equal("MY_RECORD", fieldType.RecordName);
         Assert.Equal("MY_FIELD", fieldType.FieldName);
     }
 
     /// <summary>
-    /// Test: Multiple plain identifiers should all be inferred as Fields
+    /// Under default record, NAME left of a dot is still a record (not a field on default).
+    /// This is the WEBLIB_TS_TEST.ISCRIPT1 case.
     /// </summary>
     [Fact]
-    public void MultiplePlainIdentifiers_ShouldAllBeRecords()
+    public void QualifiedFieldAccess_WithDefaultRecord_LeftSideIsRecordNotField()
+    {
+        var source = @"
+function test();
+   local any &result;
+   &result = WEBLIB_TS_TEST.ISCRIPT1;
+end-function;
+";
+        var (program, visitor) = Infer(source, defaultRecordName: "WEBLIB_TS_TEST");
+
+        var assignment = FindFirstAssignment(program.Functions[0]);
+        Assert.NotNull(assignment);
+        var memberAccess = Assert.IsType<MemberAccessNode>(assignment.Value);
+
+        var leftType = visitor.GetInferredType(memberAccess.Target);
+        Assert.IsType<RecordTypeInfo>(leftType);
+        Assert.Equal("WEBLIB_TS_TEST", ((RecordTypeInfo)leftType!).RecordName);
+
+        var fieldType = Assert.IsType<FieldTypeInfo>(visitor.GetInferredType(memberAccess));
+        Assert.Equal("WEBLIB_TS_TEST", fieldType.RecordName);
+        Assert.Equal("ISCRIPT1", fieldType.FieldName);
+    }
+
+    /// <summary>
+    /// Multiple bare fields under default record are all fields on that record.
+    /// </summary>
+    [Fact]
+    public void MultiplePlainIdentifiers_WithDefaultRecord_AreAllFields()
     {
         var source = @"
 function test();
@@ -131,44 +155,23 @@ function test();
    &result = AMOUNT;
 end-function;
 ";
+        var (program, visitor) = Infer(source, defaultRecordName: "AAP_YEAR");
 
-        // Parse the source
-        var lexer = new PeopleCodeLexer(source);
-        var tokens = lexer.TokenizeAll();
-        var parser = new PeopleCodeParser.SelfHosted.PeopleCodeParser(tokens);
-        var program = parser.ParseProgram();
-
-        Assert.Empty(parser.Errors);
-
-        // Extract metadata
-        var metadata = TypeMetadataBuilder.ExtractMetadata(program, "TestProgram");
-
-        // Run type inference
-        var cache = new TypeCache();
-        var visitor = TypeInferenceVisitor.Run(program, metadata, NullTypeMetadataResolver.Instance);
-
-        // Find all assignments
-        var function = program.Functions[0];
-        var assignments = FindAllAssignments(function);
+        var assignments = FindAllAssignments(program.Functions[0]);
         Assert.Equal(3, assignments.Count);
 
-        // Verify each identifier is inferred as Field
         var expectedFieldNames = new[] { "START_DT", "END_DT", "AMOUNT" };
         for (int i = 0; i < 3; i++)
         {
-            var identifier = assignments[i].Value as IdentifierNode;
-            Assert.NotNull(identifier);
-
-            var inferredType = visitor.GetInferredType(identifier);
-            Assert.IsType<RecordTypeInfo>(inferredType);
-
-            var recordType = (RecordTypeInfo)inferredType;
-            Assert.Equal(expectedFieldNames[i], recordType.RecordName);
+            var identifier = Assert.IsType<IdentifierNode>(assignments[i].Value);
+            var fieldType = Assert.IsType<FieldTypeInfo>(visitor.GetInferredType(identifier));
+            Assert.Equal("AAP_YEAR", fieldType.RecordName);
+            Assert.Equal(expectedFieldNames[i], fieldType.FieldName);
         }
     }
 
     /// <summary>
-    /// Test: Variables with & prefix should not be affected by this change
+    /// Variables with & prefix should not be affected.
     /// </summary>
     [Fact]
     public void LocalVariable_ShouldNotBeField()
@@ -180,37 +183,150 @@ function test();
    &result = &myVar;
 end-function;
 ";
+        var (program, visitor) = Infer(source);
 
-        // Parse the source
-        var lexer = new PeopleCodeLexer(source);
-        var tokens = lexer.TokenizeAll();
-        var parser = new PeopleCodeParser.SelfHosted.PeopleCodeParser(tokens);
-        var program = parser.ParseProgram();
-
-        Assert.Empty(parser.Errors);
-
-        // Extract metadata
-        var metadata = TypeMetadataBuilder.ExtractMetadata(program, "TestProgram");
-
-        // Run type inference
-        var cache = new TypeCache();
-        var visitor = TypeInferenceVisitor.Run(program, metadata, NullTypeMetadataResolver.Instance);
-
-        // Find the assignment: &result = &myVar
-        var function = program.Functions[0];
-        var assignment = FindFirstAssignment(function);
+        var assignment = FindFirstAssignment(program.Functions[0]);
         Assert.NotNull(assignment);
-
-        var identifier = assignment.Value as IdentifierNode;
-        Assert.NotNull(identifier);
+        var identifier = Assert.IsType<IdentifierNode>(assignment.Value);
         Assert.Equal("&myVar", identifier.Name);
 
-        // Should be inferred as string (the variable type), NOT Field
         var inferredType = visitor.GetInferredType(identifier);
         Assert.NotNull(inferredType);
-        // StringTypeInfo is a specific implementation of string type
         Assert.Equal(PeopleCodeType.String, inferredType.PeopleCodeType);
-        Assert.IsNotType<FieldTypeInfo>(inferredType); // Ensure it's not a Field type
+        Assert.IsNotType<FieldTypeInfo>(inferredType);
+    }
+
+    /// <summary>
+    /// Record.REC alone is a definition reference (@RECORD).
+    /// </summary>
+    [Fact]
+    public void RecordKeyword_Alone_IsReference()
+    {
+        var source = @"
+function test();
+   local any &result;
+   &result = Record.MY_REC;
+end-function;
+";
+        var (program, visitor) = Infer(source);
+
+        var assignment = FindFirstAssignment(program.Functions[0]);
+        Assert.NotNull(assignment);
+        var memberAccess = Assert.IsType<MemberAccessNode>(assignment.Value);
+
+        var inferredType = visitor.GetInferredType(memberAccess);
+        Assert.IsType<ReferenceTypeInfo>(inferredType);
+        var refType = (ReferenceTypeInfo)inferredType!;
+        Assert.Equal(PeopleCodeType.Record, refType.ReferenceCategory);
+        Assert.Equal("MY_REC", refType.ReferencedName);
+    }
+
+    /// <summary>
+    /// Record.REC.IsChanged promotes @RECORD to a record instance and uses the property.
+    /// </summary>
+    [Fact]
+    public void RecordKeyword_IsChanged_IsRecordProperty()
+    {
+        var source = @"
+function test();
+   local boolean &changed;
+   &changed = Record.MY_REC.IsChanged;
+end-function;
+";
+        var (program, visitor) = Infer(source);
+
+        var assignment = FindFirstAssignment(program.Functions[0]);
+        Assert.NotNull(assignment);
+        // Record.MY_REC.IsChanged → outer member access is IsChanged
+        var isChangedAccess = Assert.IsType<MemberAccessNode>(assignment.Value);
+        Assert.Equal("IsChanged", isChangedAccess.MemberName);
+
+        var inferredType = visitor.GetInferredType(isChangedAccess);
+        Assert.NotNull(inferredType);
+        Assert.Equal(PeopleCodeType.Boolean, inferredType.PeopleCodeType);
+        Assert.IsNotType<FieldTypeInfo>(inferredType);
+
+        // Middle (Record.MY_REC) should have been re-stamped as record instance
+        var midType = visitor.GetInferredType(isChangedAccess.Target);
+        Assert.IsType<RecordTypeInfo>(midType);
+        Assert.Equal("MY_REC", ((RecordTypeInfo)midType!).RecordName);
+        Assert.False(((RecordTypeInfo)midType).DirectRecordAccess);
+    }
+
+    /// <summary>
+    /// Record.REC.FIELD promotes to a field instance.
+    /// </summary>
+    [Fact]
+    public void RecordKeyword_FieldMember_IsFieldTypeInfo()
+    {
+        var source = @"
+function test();
+   local any &result;
+   &result = Record.MY_REC.MY_FIELD;
+end-function;
+";
+        var (program, visitor) = Infer(source);
+
+        var assignment = FindFirstAssignment(program.Functions[0]);
+        Assert.NotNull(assignment);
+        var fieldAccess = Assert.IsType<MemberAccessNode>(assignment.Value);
+        Assert.Equal("MY_FIELD", fieldAccess.MemberName);
+
+        var fieldType = Assert.IsType<FieldTypeInfo>(visitor.GetInferredType(fieldAccess));
+        Assert.Equal("MY_REC", fieldType.RecordName);
+        Assert.Equal("MY_FIELD", fieldType.FieldName);
+    }
+
+    /// <summary>
+    /// Field.FLD alone is a definition reference (@FIELD).
+    /// </summary>
+    [Fact]
+    public void FieldKeyword_Alone_IsReference()
+    {
+        var source = @"
+function test();
+   local any &result;
+   &result = Field.MY_FIELD;
+end-function;
+";
+        var (program, visitor) = Infer(source);
+
+        var assignment = FindFirstAssignment(program.Functions[0]);
+        Assert.NotNull(assignment);
+        var memberAccess = Assert.IsType<MemberAccessNode>(assignment.Value);
+
+        var inferredType = visitor.GetInferredType(memberAccess);
+        Assert.IsType<ReferenceTypeInfo>(inferredType);
+        var refType = (ReferenceTypeInfo)inferredType!;
+        Assert.Equal(PeopleCodeType.Field, refType.ReferenceCategory);
+        Assert.Equal("MY_FIELD", refType.ReferencedName);
+    }
+
+    /// <summary>
+    /// Field.FLD.Value promotes to a field instance using the default record.
+    /// </summary>
+    [Fact]
+    public void FieldKeyword_Value_UsesDefaultRecord()
+    {
+        var source = @"
+function test();
+   local any &result;
+   &result = Field.MY_FIELD.Value;
+end-function;
+";
+        var (program, visitor) = Infer(source, defaultRecordName: "AAP_YEAR");
+
+        var assignment = FindFirstAssignment(program.Functions[0]);
+        Assert.NotNull(assignment);
+        var valueAccess = Assert.IsType<MemberAccessNode>(assignment.Value);
+        Assert.Equal("Value", valueAccess.MemberName);
+
+        // Target of .Value should be FieldTypeInfo(AAP_YEAR, MY_FIELD)
+        var midType = visitor.GetInferredType(valueAccess.Target);
+        Assert.IsType<FieldTypeInfo>(midType);
+        var fieldType = (FieldTypeInfo)midType!;
+        Assert.Equal("AAP_YEAR", fieldType.RecordName);
+        Assert.Equal("MY_FIELD", fieldType.FieldName);
     }
 
     // Helper method to find first assignment in a function
@@ -248,7 +364,6 @@ method LoadDistribs
 end-method;
 ";
 
-        // Parse the source
         var lexer = new PeopleCodeLexer(source);
         var tokens = lexer.TokenizeAll();
         var parser = new PeopleCodeParser.SelfHosted.PeopleCodeParser(tokens);
@@ -256,35 +371,26 @@ end-method;
 
         Assert.Empty(parser.Errors);
 
-        // Extract metadata
         var metadata = TypeMetadataBuilder.ExtractMetadata(program, "LoadDistribs");
 
-        // Verify all three instance variables are registered
         Assert.Equal(3, metadata.InstanceVariables.Count);
-
         Assert.True(metadata.InstanceVariables.ContainsKey("&SPH_RST"));
         Assert.True(metadata.InstanceVariables.ContainsKey("&SPD_RST"));
         Assert.True(metadata.InstanceVariables.ContainsKey("&rowset_distrib"));
-
-        // Verify they all have the correct type
         Assert.Equal(PeopleCodeType.Rowset, metadata.InstanceVariables["&SPH_RST"].Type);
         Assert.Equal(PeopleCodeType.Rowset, metadata.InstanceVariables["&SPD_RST"].Type);
         Assert.Equal(PeopleCodeType.Rowset, metadata.InstanceVariables["&rowset_distrib"].Type);
 
-        // Run type inference
         var visitor = TypeInferenceVisitor.Run(program, metadata, NullTypeMetadataResolver.Instance);
 
-        // Find the member access expression %This.rowset_distrib
         var memberAccess = FindMemberAccess(program, "rowset_distrib");
         Assert.NotNull(memberAccess);
 
-        // Get the inferred type - should be Rowset, not 'any'
         var inferredType = visitor.GetInferredType(memberAccess);
         Assert.NotNull(inferredType);
         Assert.Equal(PeopleCodeType.Rowset, inferredType.PeopleCodeType);
     }
 
-    // Helper method to find a member access expression by member name
     private static MemberAccessNode? FindMemberAccess(ProgramNode program, string memberName)
     {
         var collector = new MemberAccessCollector(memberName);
@@ -292,7 +398,6 @@ end-method;
         return collector.FoundNode;
     }
 
-    // Helper visitor to find member access expressions
     private class MemberAccessCollector : AstVisitorBase
     {
         private readonly string _memberName;
@@ -313,7 +418,6 @@ end-method;
         }
     }
 
-    // Helper visitor to collect all assignment nodes
     private class AssignmentCollector : AstVisitorBase
     {
         public List<AssignmentNode> Assignments { get; } = new();
