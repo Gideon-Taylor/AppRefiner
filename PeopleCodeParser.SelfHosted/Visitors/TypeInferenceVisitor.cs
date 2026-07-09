@@ -241,23 +241,299 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
     private TypeInfo ConvertFunctionInfoToTypeInfo(
         FunctionInfo func,
         TypeInfo? objectType,
-        TypeInfo[]? parameterTypes)
+        TypeInfo[]? parameterTypes,
+        IReadOnlyList<ExpressionNode>? argumentNodes = null)
     {
+        TypeInfo returnType;
         if (func.IsUnionReturn)
         {
             // Return union of all possible types
-            return UnionReturnTypeInfo.FromTypeWithDimensionality(func.ReturnUnionTypes!);
+            returnType = UnionReturnTypeInfo.FromTypeWithDimensionality(func.ReturnUnionTypes!);
         }
         else if (func.IsPolymorphicReturn)
         {
             // Resolve polymorphic type using context
             var resolved = func.ResolveReturnType(objectType, parameterTypes);
-            return ConvertTypeWithDimensionalityToTypeInfo(resolved);
+            returnType = ConvertTypeWithDimensionalityToTypeInfo(resolved);
         }
         else
         {
             // Simple type
-            return ConvertTypeWithDimensionalityToTypeInfo(func.ReturnType);
+            returnType = ConvertTypeWithDimensionalityToTypeInfo(func.ReturnType);
+        }
+
+        // Specialize Record/Field returns from @RECORD / @FIELD arguments (and receiver context)
+        // e.g. CreateRecord(Record.FOO) → record(FOO), &rec.GetField(Field.BAR) → field(REC.BAR)
+        // Also: GetField("OPRID"), CreateRecord(@("Record.NAME"))
+        return SpecializeNamedInstanceReturn(returnType, objectType, parameterTypes, argumentNodes);
+    }
+
+    /// <summary>
+    /// When a function/method returns a bare Record or Field instance, attach definition identity
+    /// from reference arguments and/or the receiver so callers get RecordTypeInfo / FieldTypeInfo.
+    /// </summary>
+    private TypeInfo SpecializeNamedInstanceReturn(
+        TypeInfo returnType,
+        TypeInfo? objectType,
+        TypeInfo[]? parameterTypes,
+        IReadOnlyList<ExpressionNode>? argumentNodes = null)
+    {
+        // Already specialized — keep it
+        if (returnType is RecordTypeInfo or FieldTypeInfo)
+            return returnType;
+
+        parameterTypes ??= Array.Empty<TypeInfo>();
+
+        if (returnType.PeopleCodeType == PeopleCodeType.Record)
+        {
+            var recordName = FindRecordNameFromArgs(parameterTypes, argumentNodes)
+                ?? (objectType is RecordTypeInfo ort ? ort.RecordName : null);
+
+            // GetRecord() with no args in record PeopleCode → current default record
+            if (string.IsNullOrEmpty(recordName) && parameterTypes.Length == 0 && _defaultRecordName != null)
+                recordName = _defaultRecordName;
+
+            if (!string.IsNullOrEmpty(recordName))
+                return new RecordTypeInfo(recordName, _typeResolver);
+
+            return returnType;
+        }
+
+        if (returnType.PeopleCodeType == PeopleCodeType.Field)
+        {
+            var fieldName = FindFieldNameFromArgs(parameterTypes, argumentNodes);
+            if (string.IsNullOrEmpty(fieldName))
+                return returnType;
+
+            var recordName = FindRecordNameFromArgs(parameterTypes, argumentNodes)
+                ?? (objectType is RecordTypeInfo ort ? ort.RecordName : null)
+                ?? _defaultRecordName
+                ?? string.Empty;
+
+            return new FieldTypeInfo(recordName, fieldName, _typeResolver).WithAssignable(true);
+        }
+
+        return returnType;
+    }
+
+    private static string? FindRecordNameFromArgs(
+        TypeInfo[] parameterTypes,
+        IReadOnlyList<ExpressionNode>? argumentNodes = null)
+    {
+        foreach (var p in parameterTypes)
+        {
+            if (p is ReferenceTypeInfo r
+                && (r.ReferenceCategory == PeopleCodeType.Record || r.ReferenceCategory == PeopleCodeType.Scroll)
+                && !string.IsNullOrEmpty(r.ReferencedName)
+                && !IsUnresolvedDynamicReference(r))
+            {
+                return r.ReferencedName;
+            }
+
+            // Already a named record instance passed through
+            if (p is RecordTypeInfo rt && !string.IsNullOrEmpty(rt.RecordName))
+                return rt.RecordName;
+        }
+
+        // Fallback: parse string literals / @("Record.NAME") from AST when type path missed them
+        if (argumentNodes != null)
+        {
+            foreach (var arg in argumentNodes)
+            {
+                if (TryGetDefinitionReferenceFromExpression(arg, out var category, out var name)
+                    && (category == PeopleCodeType.Record || category == PeopleCodeType.Scroll))
+                {
+                    return name;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    private static string? FindFieldNameFromArgs(
+        TypeInfo[] parameterTypes,
+        IReadOnlyList<ExpressionNode>? argumentNodes = null)
+    {
+        foreach (var p in parameterTypes)
+        {
+            if (p is ReferenceTypeInfo r
+                && r.ReferenceCategory == PeopleCodeType.Field
+                && !string.IsNullOrEmpty(r.ReferencedName)
+                && !IsUnresolvedDynamicReference(r))
+            {
+                return r.ReferencedName;
+            }
+
+            if (p is FieldTypeInfo ft && !string.IsNullOrEmpty(ft.FieldName))
+                return ft.FieldName;
+        }
+
+        // GetField accepts a string field name: GetField("OPRID")
+        if (argumentNodes != null)
+        {
+            foreach (var arg in argumentNodes)
+            {
+                if (TryGetDefinitionReferenceFromExpression(arg, out var category, out var name)
+                    && category == PeopleCodeType.Field)
+                {
+                    return name;
+                }
+
+                // Plain string literal field name (not CATEGORY.NAME form)
+                if (TryGetStringLiteral(arg, out var lit)
+                    && !string.IsNullOrWhiteSpace(lit)
+                    && lit.IndexOf('.') < 0)
+                {
+                    return lit;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// True for the catch-all dynamic @ reference produced when the target cannot be resolved statically.
+    /// </summary>
+    private static bool IsUnresolvedDynamicReference(ReferenceTypeInfo r) =>
+        r.ReferenceCategory == PeopleCodeType.Any
+        || string.Equals(r.ReferencedName, "Dynamic Reference", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Strip parenthesized wrappers so @("Record.X") sees the inner literal.
+    /// </summary>
+    private static ExpressionNode UnwrapParentheses(ExpressionNode expr)
+    {
+        while (expr is ParenthesizedExpressionNode paren)
+            expr = paren.Expression;
+        return expr;
+    }
+
+    /// <summary>
+    /// Extract a pure string literal value from an expression (no concatenation).
+    /// Parentheses are ignored: @("Record.X") and @"Record.X" both work.
+    /// </summary>
+    private static bool TryGetStringLiteral(ExpressionNode expr, out string value)
+    {
+        expr = UnwrapParentheses(expr);
+
+        if (expr is LiteralNode lit && lit.LiteralType == LiteralType.String && lit.Value != null)
+        {
+            value = lit.Value.ToString() ?? string.Empty;
+            return value.Length > 0;
+        }
+
+        value = string.Empty;
+        return false;
+    }
+
+    /// <summary>
+    /// Parse a definition-reference string like "Record.MY_REC" or "Field.OPRID".
+    /// Category must be a known special-reference keyword.
+    /// </summary>
+    private static bool TryParseDefinitionReferenceString(
+        string text,
+        out PeopleCodeType category,
+        out string referencedName)
+    {
+        category = PeopleCodeType.Any;
+        referencedName = string.Empty;
+
+        if (string.IsNullOrWhiteSpace(text))
+            return false;
+
+        text = text.Trim();
+        var dot = text.IndexOf('.');
+        if (dot <= 0 || dot >= text.Length - 1)
+            return false;
+
+        var categoryName = text.Substring(0, dot).Trim();
+        var name = text.Substring(dot + 1).Trim();
+        if (string.IsNullOrEmpty(categoryName) || string.IsNullOrEmpty(name))
+            return false;
+
+        // Reject multi-segment or concatenated leftovers
+        if (name.IndexOf('.') >= 0)
+            return false;
+
+        if (!ReferenceTypeInfo.IsSpecialReferenceKeyword(categoryName))
+            return false;
+
+        category = ReferenceTypeInfo.GetReferenceCategoryType(categoryName);
+        referencedName = name;
+        return true;
+    }
+
+    /// <summary>
+    /// Resolve a static definition reference from:
+    /// - @("Record.NAME") / @"Field.OPRID" (unary @ on a pure string literal)
+    /// - plain "Record.NAME" string (rare, but same parse)
+    /// Dynamic forms like @("Record." | &var) intentionally fail.
+    /// </summary>
+    private static bool TryGetDefinitionReferenceFromExpression(
+        ExpressionNode expr,
+        out PeopleCodeType category,
+        out string referencedName)
+    {
+        category = PeopleCodeType.Any;
+        referencedName = string.Empty;
+
+        // @("Record.NAME") or @"Record.NAME"
+        if (expr is UnaryOperationNode unary && unary.Operator == UnaryOperator.Reference)
+        {
+            if (TryGetStringLiteral(unary.Operand, out var refText)
+                && TryParseDefinitionReferenceString(refText, out category, out referencedName))
+            {
+                return true;
+            }
+
+            return false;
+        }
+
+        // Bare string "Record.NAME" (or plain field name handled by caller)
+        if (TryGetStringLiteral(expr, out var lit)
+            && TryParseDefinitionReferenceString(lit, out category, out referencedName))
+        {
+            return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// If RHS is a named Record/Field instance and the variable is declared as a compatible
+    /// generic type (Record, Field, or any), store the specialized type on the variable so
+    /// later uses of &amp;r / &amp;f retain record/field identity.
+    /// </summary>
+    private void TryRefineVariableFromExpression(string variableName, ExpressionNode? expression)
+    {
+        if (expression == null) return;
+
+        var rhsType = GetInferredType(expression);
+        if (rhsType is not (RecordTypeInfo or FieldTypeInfo))
+            return;
+
+        var variable = FindVariable(variableName);
+        if (variable == null) return;
+
+        var declared = variable.InferredType ?? ConvertTypeNameToTypeInfo(variable.Type);
+        bool declaredIsAny = declared.Kind == TypeKind.Any
+            || variable.Type.Equals("any", StringComparison.OrdinalIgnoreCase);
+
+        if (rhsType is RecordTypeInfo
+            && (declaredIsAny
+                || declared.PeopleCodeType == PeopleCodeType.Record
+                || declared is RecordTypeInfo))
+        {
+            variable.SetInferredType(rhsType.WithAssignable(true));
+        }
+        else if (rhsType is FieldTypeInfo
+            && (declaredIsAny
+                || declared.PeopleCodeType == PeopleCodeType.Field
+                || declared is FieldTypeInfo))
+        {
+            variable.SetInferredType(rhsType.WithAssignable(true));
         }
     }
 
@@ -770,8 +1046,11 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
             node.Type.SetInferredType(resolvedType);
         }
 
-        // NOW: Let base class register the variable
+        // NOW: Let base class register the variable and visit the initializer
         base.VisitLocalVariableDeclarationWithAssignment(node);
+
+        // Refine Local Record &r = CreateRecord(Record.NAME) → RecordTypeInfo(NAME)
+        TryRefineVariableFromExpression(node.VariableNameInfo.Name, node.InitialValue);
     }
 
     /// <summary>
@@ -836,7 +1115,7 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
     #region Statement Visitors
 
     /// <summary>
-    /// Visit assignment and update auto-declared variable types on first assignment
+    /// Visit assignment and update auto-declared / specialized Record-Field variable types
     /// </summary>
     public override void VisitAssignment(AssignmentNode node)
     {
@@ -865,6 +1144,9 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
                     variable.SetInferredType(rightHandType);
                 }
             }
+
+            // &r = CreateRecord(Record.NAME) / &f = &rec.GetField(Field.X) — keep named identity
+            TryRefineVariableFromExpression(identifier.Name, node.Value);
         }
     }
 
@@ -1258,11 +1540,27 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
         {
             UnaryOperator.Not => PrimitiveTypeInfo.Boolean,
             UnaryOperator.Negate => operandType,  // Preserve numeric type
-            UnaryOperator.Reference => new ReferenceTypeInfo(PeopleCodeType.Any, "Dynamic Reference", "Dynamic Reference"), 
+            UnaryOperator.Reference => ResolveReferenceOperatorType(node),
             _ => operandType
         };
 
         SetInferredType(node, resultType);
+    }
+
+    /// <summary>
+    /// @expr — if expr is a pure string literal "Record.NAME" / "Field.X", produce a typed
+    /// ReferenceTypeInfo. Concatenation and other dynamic forms stay @ANY (Dynamic Reference).
+    /// </summary>
+    private static TypeInfo ResolveReferenceOperatorType(UnaryOperationNode node)
+    {
+        if (TryGetStringLiteral(node.Operand, out var text)
+            && TryParseDefinitionReferenceString(text, out var category, out var name))
+        {
+            var fullReference = $"{category.GetTypeName()}.{name}";
+            return new ReferenceTypeInfo(category, name, fullReference);
+        }
+
+        return new ReferenceTypeInfo(PeopleCodeType.Any, "Dynamic Reference", "Dynamic Reference");
     }
 
     /// <summary>
@@ -1429,22 +1727,21 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
         {
             node.SetFunctionInfo(functionInfo);
 
-            TypeInfo returnType;
+            TypeInfo? objectType = null;
             if (node.Function is MemberAccessNode memberAccess)
             {
-                var objectType = GetInferredType(memberAccess.Target);
-                returnType = ConvertFunctionInfoToTypeInfo(functionInfo, objectType, parameterTypes);
+                objectType = GetInferredType(memberAccess.Target);
             }
-            else
+            else if (node.Function is IdentifierNode ident
+                && ident.Name.Equals("createarray", StringComparison.OrdinalIgnoreCase)
+                && parameterTypes.Length == 0)
             {
-                /* Special case to support CreateArray() with no args */
-                if (node.Function is IdentifierNode ident && ident.Name.ToLower().Equals("createarray") && parameterTypes.Length == 0)
-                {
-                    /* Artificially put in an "any" as the parameter type */
-                    parameterTypes = [AnyTypeInfo.Instance];
-                }
-                returnType = ConvertFunctionInfoToTypeInfo(functionInfo, null, parameterTypes);
+                /* Artificially put in an "any" as the parameter type */
+                parameterTypes = [AnyTypeInfo.Instance];
             }
+
+            var returnType = ConvertFunctionInfoToTypeInfo(
+                functionInfo, objectType, parameterTypes, node.Arguments);
             SetInferredType(node, returnType);
         }
         else
