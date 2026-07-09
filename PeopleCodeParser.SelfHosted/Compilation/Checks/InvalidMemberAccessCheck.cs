@@ -57,7 +57,10 @@ public sealed class InvalidMemberAccessCheck : CompileCheckBase
         // Record property access is a dynamic field lookup — only validate method calls on Records
         if (targetType is RecordTypeInfo && !isMethodCall) return;
 
-        if (targetType.PeopleCodeType is PeopleCodeType.Record or PeopleCodeType.Row && !isMethodCall)
+        // Property access on Record/Row/Grid is a dynamic lookup (field name / record name /
+        // column name), resolved at runtime — Grid.COLUMNNAME acts as GetColumn("COLUMNNAME").
+        // Only method calls on these types are validated against their builtin members.
+        if (targetType.PeopleCodeType is PeopleCodeType.Record or PeopleCodeType.Row or PeopleCodeType.Grid && !isMethodCall)
             return;
 
         if (!MemberExists(targetType, m.MemberName, isMethodCall, ctx))

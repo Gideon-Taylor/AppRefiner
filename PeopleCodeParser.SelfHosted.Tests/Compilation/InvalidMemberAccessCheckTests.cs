@@ -238,6 +238,26 @@ Local any &v = &r.SOME_RANDOM_FIELD;
             d.Message.Contains("BogusRecordMethod"));
     }
 
+    [Fact]
+    public void Skips_grid_column_property_access_but_validates_grid_method_calls()
+    {
+        // &grid.COLUMNNAME is a dynamic GetColumn("COLUMNNAME") lookup — the column name is
+        // not a builtin Grid property and must never be flagged. Method calls still validate.
+        var diags = Run(@"
+Local Grid &g;
+Local any &c = &g.CHECKLIST_ITEMCODE;
+&g.BogusGridMethod();");
+
+        // Column (property) access on a Grid — never flagged.
+        Assert.DoesNotContain(diags, d =>
+            d.Code == DiagnosticCode.InvalidMemberAccess &&
+            d.Message.Contains("CHECKLIST_ITEMCODE"));
+        // Method calls on a Grid ARE validated against the builtin.
+        Assert.Contains(diags, d =>
+            d.Code == DiagnosticCode.InvalidMemberAccess &&
+            d.Message.Contains("BogusGridMethod"));
+    }
+
     // ------------------------------------------------------------------
     // Self ("current class") member resolution from the live in-editor
     // program — recognizes members added but not yet saved to the DB.

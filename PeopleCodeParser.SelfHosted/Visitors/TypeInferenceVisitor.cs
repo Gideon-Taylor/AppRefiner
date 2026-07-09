@@ -1,4 +1,4 @@
-using PeopleCodeParser.SelfHosted.Nodes;
+﻿using PeopleCodeParser.SelfHosted.Nodes;
 using PeopleCodeParser.SelfHosted.Visitors.Models;
 using PeopleCodeTypeInfo.Contracts;
 using PeopleCodeTypeInfo.Database;
@@ -419,21 +419,21 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
             if (objectType.PeopleCodeType.HasValue)
             {
                 // Row property access acts as GetRecord()
-                // Example: &row.PSADSRELATION acts as &row.GetRecord(Record.PSADSRELATION) → returns Record
+                // Example: &row.PSADSRELATION acts as &row.GetRecord(Record.PSADSRELATION) ΓåÆ returns Record
                 if (objectType.PeopleCodeType.Value == PeopleCodeType.Row && !isMethodCall)
                 {
                     return TypeInfo.FromPeopleCodeType(PeopleCodeType.Record);
                 }
 
                 // Record property access acts as GetField()
-                // Example: &rec.FIELDNAME acts as &rec.GetField(Field.FIELDNAME) → returns Field
+                // Example: &rec.FIELDNAME acts as &rec.GetField(Field.FIELDNAME) ΓåÆ returns Field
                 if (objectType.PeopleCodeType.Value == PeopleCodeType.Record && !isMethodCall)
                 {
                     return TypeInfo.FromPeopleCodeType(PeopleCodeType.Field);
                 }
 
                 // Row method call to non-existent method acts as GetRowset().GetRow()
-                // Example: &row.TEST(3) acts as &row.GetRowset(Scroll.TEST).GetRow(3) → returns Row
+                // Example: &row.TEST(3) acts as &row.GetRowset(Scroll.TEST).GetRow(3) ΓåÆ returns Row
                 if (objectType.PeopleCodeType.Value == PeopleCodeType.Row && isMethodCall)
                 {
                     return TypeInfo.FromPeopleCodeType(PeopleCodeType.Row);
@@ -1015,10 +1015,10 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
                 }
                 // If not found and has no prefix, assume it's a Field identifier with unknown record context
                 // Pattern: [recordname.]fieldname where recordname is inferred at runtime
-                // Example: START_DT (no & or %) → Field type with empty record name
+                // Example: START_DT (no & or %) ΓåÆ Field type with empty record name
                 //
                 // Special reference keywords (Field, Record, Scroll, Page, SQL, ...) are excluded:
-                // they never stand alone as a field/record — they are always the left half of a
+                // they never stand alone as a field/record ΓÇö they are always the left half of a
                 // definition reference like Field.OPRID, which VisitMemberAccess types as a whole
                 // (see the IsSpecialReferenceKeyword branch there). Typing the bare keyword as a
                 // field on the default record would poison the member-access target type and make
