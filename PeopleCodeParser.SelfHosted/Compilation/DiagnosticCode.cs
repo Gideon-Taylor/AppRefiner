@@ -26,4 +26,6 @@ public enum DiagnosticCode
     MissingMethodImplementation = 12,
     UnimplementedAbstractMember = 13,
     UndeclaredFunction = 14,
+    NotAllPathsReturn = 15,
+    InvalidBreakContinue = 16,
 }
