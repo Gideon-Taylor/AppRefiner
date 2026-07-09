@@ -245,17 +245,6 @@ public sealed class NotAllPathsReturnCheck : CompileCheckBase
         return false;
     }
 
-    /// <summary>
-    /// Single token/statement locus — never a multi-statement range.
-    /// Prefer LastToken (End-If, trailing statement) when present.
-    /// </summary>
-    private static SourceSpan SingleLocusSpan(AstNode node)
-    {
-        if (node.LastToken != null)
-            return node.LastToken.SourceSpan;
-        return node.SourceSpan;
-    }
-
     private static SourceSpan? SpanForEmptyIncompleteBlock(BlockNode empty)
     {
         switch (empty.Parent)
@@ -311,6 +300,7 @@ public sealed class NotAllPathsReturnCheck : CompileCheckBase
     {
         var spans = new List<SourceSpan>();
 
+        // Class-header declaration: method Name(...) Returns T;
         if (mi.Declaration?.ReturnType != null)
         {
             var decl = mi.Declaration;
@@ -320,11 +310,48 @@ public sealed class NotAllPathsReturnCheck : CompileCheckBase
                 spans.Add(SignatureSpan(decl.NameToken, decl.ReturnType));
         }
 
-        if (mi.ReturnTypeAnnotation != null)
-            spans.Add(SignatureSpan(mi.NameToken, mi.ReturnTypeAnnotation));
-        else
-            spans.Add(mi.NameToken.SourceSpan);
+        // Implementation header closest to the body: "method Name" only.
+        // Never span through /+ Returns ... +/ annotations — those look like noise
+        // and are not part of the callable header the user edits as code.
+        spans.Add(MethodImplHeaderSpan(mi));
 
         return spans;
+    }
+
+    /// <summary>
+    /// Span covering METHOD keyword through the method name (excludes annotations).
+    /// </summary>
+    private static SourceSpan MethodImplHeaderSpan(MethodImplNode mi)
+    {
+        if (mi.FirstToken != null)
+            return new SourceSpan(mi.FirstToken.SourceSpan.Start, mi.NameToken.SourceSpan.End);
+        return mi.NameToken.SourceSpan;
+    }
+
+    /// <summary>
+    /// Single-token or short locus. Prefer keyword end tokens (End-If) over ';' .
+    /// </summary>
+    private static SourceSpan SingleLocusSpan(AstNode node)
+    {
+        var last = node.LastToken;
+        if (last != null && last.Type != TokenType.Semicolon)
+            return last.SourceSpan;
+
+        // Trailing ';' alone is nearly invisible — use FirstToken..LastToken of the
+        // node without preferring semicolon, or the penultimate token if available.
+        if (last != null && last.Type == TokenType.Semicolon && node.FirstToken != null
+            && node.FirstToken != last)
+        {
+            // For simple statements like &z = 4; the whole statement is fine (short).
+            // Prefer the full statement span over ';' alone when ByteLength of name is small.
+            var full = node.SourceSpan;
+            if (full.IsValid && full.ByteLength <= 80)
+                return full;
+        }
+
+        if (last != null)
+            return last.SourceSpan;
+
+        return node.SourceSpan;
     }
 }

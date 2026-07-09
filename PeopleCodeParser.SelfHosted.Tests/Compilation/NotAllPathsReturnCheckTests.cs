@@ -187,6 +187,7 @@ class Sample
 end-class;
 
 method GetX
+   /+ Returns number +/
    Local number &x;
    &x = 1;
 end-method;
@@ -195,10 +196,14 @@ end-method;
 
         Assert.True(diags.Count >= 2, "expected primary on declaration and implementation headers");
         Assert.All(diags, d => Assert.True(d.Span.IsValid));
-        // One near class header, one near method impl (order not guaranteed by sort alone —
-        // assert we cover both regions by line).
         Assert.Contains(diags, d => d.Span.Start.Line < 4);
         Assert.Contains(diags, d => d.Span.Start.Line >= 4);
+        // Impl primary must be method Name only — not the /+ Returns +/ annotation line.
+        var implPrimary = diags.Where(d => d.Span.Start.Line >= 4).OrderBy(d => d.Span.Start.Line).First();
+        Assert.True(implPrimary.Span.Start.Line == 5 || implPrimary.Span.Start.Line == 4,
+            "impl primary should be on method header line, not deep in annotations/body");
+        Assert.True(implPrimary.Span.ByteLength < 40,
+            "impl primary must not span through /+ annotations");
     }
 
     [Fact]
@@ -224,7 +229,7 @@ End-Function;
     public void Secondary_is_single_locus_not_whole_nested_block()
     {
         // Nested fall-through inside Else; complete Then sibling means secondary targets
-        // the Else path's end (last statement end token), not a multi-line paint of Else.
+        // the Else path's end (nested End-If keyword), not a multi-line paint of Else.
         var diags = Check(@"
 Function F(&b As boolean) Returns string
    If &b Then
@@ -244,9 +249,10 @@ End-Function;
         Assert.NotEmpty(diags);
         var secondary = diags[0];
         Assert.True(secondary.Span.IsValid);
-        // Single locus: End-If of nested if (or last stmt end) — not the whole Else body.
-        // Byte length of a multi-line paint would be large; a token/last-stmt end is short.
         Assert.True(secondary.Span.ByteLength < 40,
             $"secondary span too large ({secondary.Span.ByteLength} bytes); expected single locus");
+        // Prefer End-If text, not a lone ';'
+        Assert.False(secondary.Span.ByteLength <= 1,
+            "secondary should be End-If keyword, not a single semicolon");
     }
 }

@@ -3679,14 +3679,24 @@ public class PeopleCodeParser
             }
 
             // Use custom logic instead of Consume to highlight IF token for missing END-IF
-            if (!Match(TokenType.EndIf))
+            Token? endIfToken = null;
+            if (Match(TokenType.EndIf))
+            {
+                endIfToken = Previous;
+            }
+            else
             {
                 ReportError("IF statement is missing 'END-IF'", ifToken);
                 // Use smart recovery to find next statement boundary, not just END-IF
                 SmartStatementRecover();
             }
 
-            var ifNode = new IfStatementNode(condition, thenStatements);
+            var ifNode = new IfStatementNode(condition, thenStatements)
+            {
+                FirstToken = ifToken,
+                // Prefer End-If keyword so diagnostics can target it (not a trailing ';')
+                LastToken = endIfToken ?? elseToken ?? condition.LastToken ?? ifToken
+            };
             if (elseToken != null && elseStatements != null)
             {
                 ifNode.SetElseBlock(elseToken, elseStatements);
