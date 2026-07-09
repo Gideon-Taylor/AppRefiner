@@ -205,12 +205,18 @@ No AppRefiner integration tests required for v1.
 
 ## 7. Future work (explicitly out of this plan)
 
-Tracked for **after** this plan ships:
+Tracked for **after** this plan ships. Ownership decided 2026-07-09:
 
-1. **Return expression type matches declared return type** — type-checker / compile-check
-   that each `Return <expr>` is assignment-compatible with the routine’s return type.  
-2. **Return must carry an expression** — value-returning function/method/getter must not
-   use bare `Return;` if PeopleCode requires a value.  
+1. **Return expression type matches declared return type** — **type checker**
+   (`TypeCheckerVisitor` / type-error pipeline). Each `Return <expr>` must be
+   assignment-compatible with the enclosing function/method/getter’s declared return
+   type. Not a separate compile-check unit; fits existing type-error reporting.
+
+2. **Return must carry an expression** — **compile check** (new `ICompileCheck`).
+   Value-returning function/method/property getter must not use bare `Return;`
+   (PeopleCode requires a value). Pure AST + return-type metadata on the enclosing
+   routine; no type inference required for “expression present vs absent.”
+
 3. Optional: tighten `CompletionAnalyzer` Repeat-loop `Normal` precision.  
 4. Optional: quick fix “add `Return` stub” on incomplete paths.
 
