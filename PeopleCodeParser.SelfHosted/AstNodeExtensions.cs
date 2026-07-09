@@ -218,9 +218,10 @@ public static class AstNodeExtensions
     /// <returns>The ExitMode set, or null if completion analysis has not been performed.</returns>
     public static ExitMode? GetExitMode(this AstNode node)
     {
-        if (node.Attributes.TryGetValue(AstNode.ExitModeAttributeKey, out var mode))
+        if (node.Attributes.TryGetValue(AstNode.ExitModeAttributeKey, out var mode)
+            && mode is ExitMode exitMode)
         {
-            return (ExitMode)mode;
+            return exitMode;
         }
         return null;
     }
