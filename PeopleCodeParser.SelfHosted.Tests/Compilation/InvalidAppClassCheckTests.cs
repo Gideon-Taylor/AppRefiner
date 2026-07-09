@@ -1,4 +1,5 @@
 using PeopleCodeParser.SelfHosted.Compilation;
+using PeopleCodeTypeInfo.Contracts;
 using Xunit;
 
 namespace PeopleCodeParser.SelfHosted.Tests.Compilation;
@@ -35,6 +36,19 @@ public class InvalidAppClassCheckTests
         var (program, errors) = ParseTestHelper.Parse("Local PKG:Missing &x;");
 
         var diags = CompileChecker.Check(program, errors, resolver: null, new CompileCheckContextInput(null));
+
+        Assert.DoesNotContain(diags, d => d.Code == DiagnosticCode.InvalidAppClass);
+    }
+
+    [Fact]
+    public void Does_not_report_with_NullTypeMetadataResolver()
+    {
+        // Stand-in used when no DB is connected: every GetTypeMetadata returns null.
+        // Must not flood the editor with "does not exist in the database" errors.
+        var (program, errors) = ParseTestHelper.Parse("Local PKG:Missing &x;");
+
+        var diags = CompileChecker.Check(
+            program, errors, NullTypeMetadataResolver.Instance, new CompileCheckContextInput(null));
 
         Assert.DoesNotContain(diags, d => d.Code == DiagnosticCode.InvalidAppClass);
     }

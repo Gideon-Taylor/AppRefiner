@@ -8,6 +8,10 @@ namespace PeopleCodeParser.SelfHosted.Compilation.Checks;
 /// <see cref="PeopleCodeTypeInfo.Contracts.ITypeMetadataResolver"/>: "class exists" =
 /// <c>GetTypeMetadata(path) != null</c>.
 ///
+/// Requirement is <see cref="CheckRequirement.Required"/>: without a live (DB-backed)
+/// resolver every path would look missing. <see cref="CompileChecker"/> also treats
+/// <c>NullTypeMetadataResolver</c> as no resolver for the same reason.
+///
 /// Divergences from the styler:
 /// - The DB-backed resolver returns null both when the class does not exist (the old
 ///   <c>CheckAppClassExists == false</c>) AND when the class exists but its source is
@@ -19,7 +23,7 @@ namespace PeopleCodeParser.SelfHosted.Compilation.Checks;
 /// </summary>
 public sealed class InvalidAppClassCheck : CompileCheckBase
 {
-    public override CheckRequirement Requirement => CheckRequirement.Optional;
+    public override CheckRequirement Requirement => CheckRequirement.Required;
 
     public override void OnNode(AstNode node, CompileCheckContext ctx, IDiagnosticSink sink)
     {

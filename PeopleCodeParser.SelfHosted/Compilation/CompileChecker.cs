@@ -61,6 +61,12 @@ public static class CompileChecker
     {
         var sink = new ListDiagnosticSink();
 
+        // NullTypeMetadataResolver is the stand-in used when no DB is connected — every
+        // GetTypeMetadata returns null. Treating it as "no resolver" prevents
+        // existence checks (InvalidAppClass, etc.) from flagging every app class path.
+        if (resolver is NullTypeMetadataResolver)
+            resolver = null;
+
         // 1. Parse-level diagnostics.
         foreach (var err in parserErrors)
             sink.Report(new CompileDiagnostic(

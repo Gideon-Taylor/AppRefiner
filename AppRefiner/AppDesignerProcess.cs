@@ -136,9 +136,13 @@ namespace AppRefiner
                 }
                 else
                 {
-                    if (_typeResolver is not NullTypeMetadataResolver)
+                    // Use the shared Contracts null resolver (always-misses) so compile
+                    // checks that require a live DB can detect "no connection" via
+                    // CompileChecker's NullTypeMetadataResolver normalization. Do not
+                    // invent a local null-resolver type that would bypass that guard.
+                    if (_typeResolver is not PeopleCodeTypeInfo.Contracts.NullTypeMetadataResolver)
                     {
-                        _typeResolver = new NullTypeMetadataResolver();
+                        _typeResolver = PeopleCodeTypeInfo.Contracts.NullTypeMetadataResolver.Instance;
                         _typeResolverDataManager = null;
                     }
                 }
