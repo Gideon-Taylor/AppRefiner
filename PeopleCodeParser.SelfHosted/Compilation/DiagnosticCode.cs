@@ -28,4 +28,5 @@ public enum DiagnosticCode
     UndeclaredFunction = 14,
     NotAllPathsReturn = 15,
     InvalidBreakContinue = 16,
+    MissingReturnValue = 17,
 }

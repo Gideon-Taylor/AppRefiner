@@ -49,6 +49,7 @@ public static class CompileChecker
         new Checks.MissingConstructorCheck(),
         new Checks.InvalidBreakContinueCheck(),
         new Checks.NotAllPathsReturnCheck(),
+        new Checks.MissingReturnValueCheck(),
         // NOTE: unimplemented abstract members are intentionally NOT a compile check.
         // They are an advisory code smell (they do not stop compilation) and are surfaced
         // separately by AppRefiner's UnimplementedAbstractMembers styler, so they never trip

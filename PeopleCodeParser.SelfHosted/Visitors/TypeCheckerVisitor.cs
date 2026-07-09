@@ -144,6 +144,74 @@ namespace PeopleCodeParser.SelfHosted.Visitors
             }
 
         }
+
+        /// <summary>
+        /// When a function/method/getter declares a return type, each <c>Return &lt;expr&gt;</c>
+        /// must be assignment-compatible with that type. Bare <c>Return;</c> (missing value)
+        /// is handled by the compile-check pipeline, not here.
+        /// </summary>
+        public override void VisitReturn(ReturnStatementNode node)
+        {
+            base.VisitReturn(node);
+
+            if (node.Value == null)
+                return;
+
+            var expectedType = GetEnclosingDeclaredReturnType(node);
+            if (expectedType == null)
+                return; // procedure / no declared return type
+
+            var actualType = node.Value.GetInferredType();
+            if (actualType == null)
+                return;
+
+            if (!AreTypesCompatible(expectedType, actualType))
+            {
+                RecordTypeError(
+                    $"Cannot return type '{actualType}' from a routine that returns '{expectedType}'",
+                    node.Value);
+            }
+        }
+
+        /// <summary>
+        /// Declared return type of the enclosing value-returning routine, or null for procedures.
+        /// </summary>
+        private TypeInfo? GetEnclosingDeclaredReturnType(AstNode node)
+        {
+            var function = node.FindAncestor<FunctionNode>();
+            if (function != null)
+            {
+                if (function.ReturnType == null)
+                    return null;
+                return ConvertTypeNodeToTypeInfo(function.ReturnType);
+            }
+
+            var methodImpl = node.FindAncestor<MethodImplNode>();
+            if (methodImpl != null)
+            {
+                var returnType = methodImpl.Declaration?.ReturnType ?? methodImpl.ReturnTypeAnnotation;
+                if (returnType == null)
+                    return null;
+                return ConvertTypeNodeToTypeInfo(returnType);
+            }
+
+            // Method body may also be visited under MethodNode without MethodImpl ancestor
+            // when linked via VisitMethod — still find MethodImpl via MethodNode.Implementation.
+            var method = node.FindAncestor<MethodNode>();
+            if (method?.ReturnType != null)
+                return ConvertTypeNodeToTypeInfo(method.ReturnType);
+
+            var propertyImpl = node.FindAncestor<PropertyImplNode>();
+            if (propertyImpl is { IsGetter: true })
+            {
+                var prop = propertyImpl.Parent as PropertyNode
+                    ?? propertyImpl.FindAncestor<PropertyNode>();
+                if (prop?.Type != null)
+                    return ConvertTypeNodeToTypeInfo(prop.Type);
+            }
+
+            return null;
+        }
         public override void VisitFunctionCall(FunctionCallNode node)
         {
             base.VisitFunctionCall(node);
