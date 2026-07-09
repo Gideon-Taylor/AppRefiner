@@ -494,7 +494,7 @@ Copy into the PR / commit notes:
 |---|---|---|---|
 | 2026-07-09 | C1, C2, C3, C5, C6, T1, T2, T3 | `5cad58b` | All Ready items from order 1–7. Diagnostics 18–22. Tests green (290 SelfHosted + type suite). |
 | 2026-07-09 | T5, C4, T6 | `0ebf00a` | Logical expr; MissingSuperCall; InaccessibleMember (+ instance vars Private). |
-| 2026-07-09 | A1 | _(pending)_ | Repeat no longer forces Normal when body is fully abrupt. |
+| 2026-07-09 | A1 | `4b71322` | Repeat no longer forces Normal when body is fully abrupt. |
 
 ## 11. Deferred / discovered (append freely)
 
