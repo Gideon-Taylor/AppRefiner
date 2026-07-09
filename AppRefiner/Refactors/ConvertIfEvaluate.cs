@@ -1,5 +1,6 @@
 using System.Text;
 using PeopleCodeParser.SelfHosted;
+using PeopleCodeParser.SelfHosted.Analysis;
 using PeopleCodeParser.SelfHosted.Nodes;
 using PeopleCodeParser.SelfHosted.Visitors.Models;
 
@@ -7,9 +8,11 @@ namespace AppRefiner.Refactors
 {
     /// <summary>
     /// Converts between an If/Else-If chain and an Evaluate statement, whichever
-    /// direction applies at the cursor. Semantics note: PeopleCode Evaluate falls
-    /// through after a matching When unless Break, so generated When bodies always
-    /// end with Break; and only Break-terminated Evaluates convert back to If.
+    /// direction applies at the cursor. Convertibility uses CompletionAnalyzer:
+    /// PeopleCode Evaluate falls through after a matching When unless control leaves
+    /// the clause, so a generated When body gets a trailing Break only when its body
+    /// can reach its end, and an Evaluate converts back to If only when no When body
+    /// can complete normally.
     /// </summary>
     public class ConvertIfEvaluate : BaseRefactor
     {
@@ -237,11 +240,16 @@ namespace AppRefiner.Refactors
             sb.Append($"Evaluate {ScrutineeText}{NewLine}");
             for (int i = 0; i < links.Count; i++)
             {
+                var thenBlock = links[i].ThenBlock;
                 sb.Append($"{indent}When {whens[i].OpSymbol} {GetSourceText(whens[i].Value.SourceSpan)}{NewLine}");
-                sb.Append(RenderBody(links[i].ThenBlock, indent + unit, dropTrailingBreak: false));
-                // Evaluate falls through: every When body must Break to preserve
-                // if/else-if semantics (even an empty body)
-                sb.Append($"{indent + unit}Break;{NewLine}");
+                sb.Append(RenderBody(thenBlock, indent + unit, dropTrailingBreak: false));
+                // Evaluate falls through: add a trailing Break only when the body can
+                // reach its end. A body that already always terminates (Return/Throw/
+                // etc.) needs none — an added Break would be unreachable, and omitting
+                // it keeps If<->Evaluate round-trips a fixpoint. Empty bodies fall
+                // through, so they still get one.
+                if (CompletionAnalyzer.Analyze(thenBlock).HasFlag(ExitMode.Normal))
+                    sb.Append($"{indent + unit}Break;{NewLine}");
             }
             if (finalElse != null)
             {
@@ -362,9 +370,12 @@ namespace AppRefiner.Refactors
                 if (whenClause.Body.Statements.Count == 0)
                     continue;
 
-                if (whenClause.Body.Statements[^1] is not BreakStatementNode)
+                // Fall-through = control can reach the end of the body. A trailing
+                // Return/Throw/Exit/Error/Break/Continue (or an If whose every branch
+                // does so) prevents it; a plain trailing statement does not.
+                if (CompletionAnalyzer.Analyze(whenClause.Body).HasFlag(ExitMode.Normal))
                 {
-                    SetFailure("A When clause falls through (its body does not end with Break) — intentional fall-through cannot be expressed as If/Else and will not be converted.");
+                    SetFailure("A When clause falls through (control can reach the end of its body) — intentional fall-through cannot be expressed as If/Else and will not be converted.");
                     return;
                 }
                 if (ContainsEvaluateBoundBreak(whenClause.Body, ignoreTrailing: true))
