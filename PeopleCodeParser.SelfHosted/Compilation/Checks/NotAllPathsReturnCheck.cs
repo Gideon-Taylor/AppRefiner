@@ -8,7 +8,8 @@ namespace PeopleCodeParser.SelfHosted.Compilation.Checks;
 /// For functions/methods/property getters with a return type, requires every path to
 /// exit via Return, Throw, Exit, or Error (no Normal / Break / Continue on the body).
 /// Emits primary diagnostic(s) on the signature (declaration + implementation for methods)
-/// and one secondary on the innermost incomplete region (keyword introducer when empty).
+/// and one secondary at a single locus on the incomplete path (never a whole multi-statement
+/// block span — that would mask other squiggles and mis-point at nested fall-through).
 /// </summary>
 public sealed class NotAllPathsReturnCheck : CompileCheckBase
 {
@@ -43,7 +44,6 @@ public sealed class NotAllPathsReturnCheck : CompileCheckBase
                 var prop = pi.Parent as PropertyNode ?? pi.FindAncestor<PropertyNode>();
                 if (prop == null)
                     break;
-                // Property type lives on the declaration; impl "get Name" is closest to the body.
                 var primaries = new List<SourceSpan> { pi.NameToken.SourceSpan };
                 if (prop.NameToken.SourceSpan.Start.ByteIndex != pi.NameToken.SourceSpan.Start.ByteIndex)
                     primaries.Insert(0, prop.NameToken.SourceSpan);
@@ -80,7 +80,6 @@ public sealed class NotAllPathsReturnCheck : CompileCheckBase
         if (secondarySpan is null || !secondarySpan.Value.IsValid)
             return;
 
-        // Skip secondary only if it exactly duplicates every primary (unlikely).
         bool duplicatesPrimary = primarySpans.Any(p =>
             p.Start.ByteIndex == secondarySpan.Value.Start.ByteIndex
             && p.End.ByteIndex == secondarySpan.Value.End.ByteIndex);
@@ -91,7 +90,7 @@ public sealed class NotAllPathsReturnCheck : CompileCheckBase
             DiagnosticCode.NotAllPathsReturn,
             DiagnosticSeverity.Error,
             secondarySpan.Value,
-            "This block can complete without returning a value."));
+            "This path can complete without returning a value."));
     }
 
     private static bool IsComplete(ExitMode modes) =>
@@ -101,7 +100,9 @@ public sealed class NotAllPathsReturnCheck : CompileCheckBase
         modes is null || !IsComplete(modes.Value);
 
     /// <summary>
-    /// Innermost incomplete block, then a displayable span (keyword when the block is empty).
+    /// Single-locus secondary: introducer keyword for empty incomplete arms, otherwise
+    /// the last statement's last token (e.g. End-If) of the chosen incomplete region —
+    /// never the full multi-statement block span.
     /// </summary>
     private static SourceSpan? ResolveSecondarySpan(BlockNode root)
     {
@@ -109,22 +110,27 @@ public sealed class NotAllPathsReturnCheck : CompileCheckBase
         if (best == null)
             return null;
 
-        // Straight-line body with statements: last statement is easiest to see.
+        // Straight-line routine body: point at the last statement's end token.
         if (ReferenceEquals(best, root) && root.Statements.Count > 0)
-            return root.Statements[^1].SourceSpan;
+            return SingleLocusSpan(root.Statements[^1]);
 
-        if (best.Statements.Count > 0)
-            return best.SourceSpan;
+        if (best.Statements.Count == 0)
+            return SpanForEmptyIncompleteBlock(best) ?? SingleLocusSpan(best);
 
-        // Empty incomplete block — no statements to underline. Point at the keyword
-        // or clause that introduces the empty path (Else, When-Other, When condition, …).
-        return SpanForEmptyIncompleteBlock(best) ?? best.SourceSpan;
+        // Non-empty incomplete region: last statement end (not the whole block).
+        return SingleLocusSpan(best.Statements[^1]);
     }
 
+    /// <summary>
+    /// Prefer incomplete branch arms that have a complete sibling (the classic
+    /// "this arm is the missing return") over nested fall-through inside that arm.
+    /// Among equals, prefer deeper; then earlier start.
+    /// </summary>
     private static BlockNode? FindBestIncompleteBlock(BlockNode root)
     {
         BlockNode? best = null;
         var bestDepth = -1;
+        var bestHasSibling = false;
 
         void Consider(BlockNode block, int depth)
         {
@@ -132,13 +138,17 @@ public sealed class NotAllPathsReturnCheck : CompileCheckBase
             if (!IsIncomplete(mode))
                 return;
 
+            var hasSibling = HasCompleteSiblingArm(block);
+
             if (best == null
-                || depth > bestDepth
-                || (depth == bestDepth
+                || (hasSibling && !bestHasSibling)
+                || (hasSibling == bestHasSibling && depth > bestDepth)
+                || (hasSibling == bestHasSibling && depth == bestDepth
                     && block.SourceSpan.Start.ByteIndex < best.SourceSpan.Start.ByteIndex))
             {
                 best = block;
                 bestDepth = depth;
+                bestHasSibling = hasSibling;
             }
         }
 
@@ -189,9 +199,63 @@ public sealed class NotAllPathsReturnCheck : CompileCheckBase
     }
 
     /// <summary>
-    /// For an empty incomplete block, style the introducer the user can see
-    /// (Else / When-Other / When condition / catch header / parent statement).
+    /// True when this block is one arm of a multi-way construct and a sibling arm is complete
+    /// (e.g. Then returns, Else falls through — the Else is the interesting incomplete path).
     /// </summary>
+    private static bool HasCompleteSiblingArm(BlockNode block)
+    {
+        if (block.Parent is IfStatementNode ifn)
+        {
+            if (ifn.ElseBlock == block)
+                return IsComplete(ifn.ThenBlock.GetExitMode() ?? ExitMode.None);
+            if (ifn.ThenBlock == block && ifn.ElseBlock != null)
+                return IsComplete(ifn.ElseBlock.GetExitMode() ?? ExitMode.None);
+            return false;
+        }
+
+        if (block.Parent is EvaluateStatementNode ev)
+        {
+            // When-Other incomplete while some When is complete, or vice versa.
+            if (ev.WhenOtherBlock == block)
+                return ev.WhenClauses.Any(w => IsComplete(w.Body.GetExitMode() ?? ExitMode.None));
+
+            foreach (var when in ev.WhenClauses)
+            {
+                if (when.Body != block)
+                    continue;
+                bool siblingComplete = ev.WhenClauses.Any(w =>
+                    w.Body != block && IsComplete(w.Body.GetExitMode() ?? ExitMode.None));
+                if (ev.WhenOtherBlock != null
+                    && IsComplete(ev.WhenOtherBlock.GetExitMode() ?? ExitMode.None))
+                    siblingComplete = true;
+                return siblingComplete;
+            }
+        }
+
+        if (block.Parent is TryStatementNode tryNode)
+        {
+            if (tryNode.TryBlock == block)
+                return tryNode.CatchClauses.Any(c => IsComplete(c.Body.GetExitMode() ?? ExitMode.None));
+            // Catch incomplete while try (or another catch) is complete.
+            return IsComplete(tryNode.TryBlock.GetExitMode() ?? ExitMode.None)
+                || tryNode.CatchClauses.Any(c =>
+                    c.Body != block && IsComplete(c.Body.GetExitMode() ?? ExitMode.None));
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Single token/statement locus — never a multi-statement range.
+    /// Prefer LastToken (End-If, trailing statement) when present.
+    /// </summary>
+    private static SourceSpan SingleLocusSpan(AstNode node)
+    {
+        if (node.LastToken != null)
+            return node.LastToken.SourceSpan;
+        return node.SourceSpan;
+    }
+
     private static SourceSpan? SpanForEmptyIncompleteBlock(BlockNode empty)
     {
         switch (empty.Parent)
@@ -199,7 +263,6 @@ public sealed class NotAllPathsReturnCheck : CompileCheckBase
             case IfStatementNode ifn:
                 if (ifn.ElseBlock == empty && ifn.ElseToken != null)
                     return ifn.ElseToken.SourceSpan;
-                // Empty Then: no dedicated Then token on the node — use the condition.
                 if (ifn.ThenBlock == empty)
                     return ifn.Condition.SourceSpan;
                 break;
@@ -219,13 +282,16 @@ public sealed class NotAllPathsReturnCheck : CompileCheckBase
                     return catchNode.ExceptionVariable.SourceSpan;
                 if (catchNode.ExceptionType != null)
                     return catchNode.ExceptionType.SourceSpan;
-                return catchNode.SourceSpan;
+                return SingleLocusSpan(catchNode);
 
-            case ForStatementNode or WhileStatementNode or RepeatStatementNode:
-                return empty.Parent.SourceSpan;
+            case ForStatementNode forNode:
+                return SingleLocusSpan(forNode);
+            case WhileStatementNode whileNode:
+                return SingleLocusSpan(whileNode);
+            case RepeatStatementNode repeatNode:
+                return SingleLocusSpan(repeatNode);
 
             case MethodImplNode mi:
-                // Empty method body: style the implementation name (near the code).
                 return mi.NameToken.SourceSpan;
 
             case FunctionNode fn:
@@ -235,21 +301,16 @@ public sealed class NotAllPathsReturnCheck : CompileCheckBase
                 return pi.NameToken.SourceSpan;
         }
 
-        return empty.Parent?.SourceSpan;
+        return empty.Parent != null ? SingleLocusSpan(empty.Parent) : null;
     }
 
     private static SourceSpan SignatureSpan(Token nameToken, TypeNode returnType) =>
         new SourceSpan(nameToken.SourceSpan.Start, returnType.SourceSpan.End);
 
-    /// <summary>
-    /// Primary spans for a method: class-header declaration (if present) and the
-    /// implementation header closest to the body.
-    /// </summary>
     private static IReadOnlyList<SourceSpan> MethodPrimarySpans(MethodImplNode mi)
     {
         var spans = new List<SourceSpan>();
 
-        // Declaration in class header (e.g. method GetX() Returns number;)
         if (mi.Declaration?.ReturnType != null)
         {
             var decl = mi.Declaration;
@@ -259,7 +320,6 @@ public sealed class NotAllPathsReturnCheck : CompileCheckBase
                 spans.Add(SignatureSpan(decl.NameToken, decl.ReturnType));
         }
 
-        // Implementation header (method Name … / annotations) — nearest the code.
         if (mi.ReturnTypeAnnotation != null)
             spans.Add(SignatureSpan(mi.NameToken, mi.ReturnTypeAnnotation));
         else

@@ -152,7 +152,7 @@ End-Function;
 
         Assert.True(diags.Count >= 2, "expected primary signature + secondary block");
         Assert.Contains(diags, d => d.Message.Contains("Not all paths return"));
-        Assert.Contains(diags, d => d.Message.Contains("This block can complete"));
+        Assert.Contains(diags, d => d.Message.Contains("without returning a value"));
     }
 
     [Fact]
@@ -173,8 +173,8 @@ Function F(&b As boolean, &c As boolean) Returns number
 End-Function;
 ").Where(d => d.Code == DiagnosticCode.NotAllPathsReturn).ToList();
 
-        Assert.Contains(diags, d => d.Message.Contains("This block can complete"));
-        var secondary = diags.First(d => d.Message.Contains("This block can complete"));
+        Assert.Contains(diags, d => d.Message.Contains("without returning a value"));
+        var secondary = diags.First(d => d.Message.Contains("without returning a value"));
         Assert.True(secondary.Span.Start.Line >= 4);
     }
 
@@ -214,9 +214,39 @@ End-Function;
 ").Where(d => d.Code == DiagnosticCode.NotAllPathsReturn).ToList();
 
         Assert.Contains(diags, d => d.Message.Contains("Not all paths return"));
-        var secondary = diags.First(d => d.Message.Contains("This block can complete"));
+        var secondary = diags.First(d => d.Message.Contains("without returning a value"));
         // Else keyword sits after the Then branch's Return line.
         Assert.True(secondary.Span.IsValid);
         Assert.True(secondary.Span.Start.Line >= 3);
+    }
+
+    [Fact]
+    public void Secondary_is_single_locus_not_whole_nested_block()
+    {
+        // Nested fall-through inside Else; complete Then sibling means secondary targets
+        // the Else path's end (last statement end token), not a multi-line paint of Else.
+        var diags = Check(@"
+Function F(&b As boolean) Returns string
+   If &b Then
+      Return ""a"";
+   Else
+      Local number &x;
+      &x = 1;
+      If &x > 2 Then
+         Local number &z;
+         &z = 4;
+      End-If;
+   End-If;
+End-Function;
+").Where(d => d.Code == DiagnosticCode.NotAllPathsReturn
+            && d.Message.Contains("without returning a value")).ToList();
+
+        Assert.NotEmpty(diags);
+        var secondary = diags[0];
+        Assert.True(secondary.Span.IsValid);
+        // Single locus: End-If of nested if (or last stmt end) — not the whole Else body.
+        // Byte length of a multi-line paint would be large; a token/last-stmt end is short.
+        Assert.True(secondary.Span.ByteLength < 40,
+            $"secondary span too large ({secondary.Span.ByteLength} bytes); expected single locus");
     }
 }
