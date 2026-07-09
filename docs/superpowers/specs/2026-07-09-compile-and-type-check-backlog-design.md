@@ -440,7 +440,7 @@ Copy into the PR / commit notes:
 
 | Date | ID | Commit | Notes |
 |---|---|---|---|
-| 2026-07-09 | C1, C2, C3, C5, C6, T1, T2, T3 | _(pending commit)_ | All Ready items from order 1–7. Diagnostics 18–22. Tests green (290 SelfHosted + type suite). |
+| 2026-07-09 | C1, C2, C3, C5, C6, T1, T2, T3 | `5cad58b` | All Ready items from order 1–7. Diagnostics 18–22. Tests green (290 SelfHosted + type suite). |
 
 ## 11. Deferred / discovered (append freely)
 
