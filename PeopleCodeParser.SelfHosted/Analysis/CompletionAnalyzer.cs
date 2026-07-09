@@ -96,7 +96,11 @@ public static class CompletionAnalyzer
     {
         ExitMode union = AnalyzeBlock(node.TryBlock);
         foreach (var catchClause in node.CatchClauses)
-            union |= AnalyzeBlock(catchClause.Body);
+        {
+            ExitMode catchModes = AnalyzeBlock(catchClause.Body);
+            catchClause.SetExitMode(catchModes);
+            union |= catchModes;
+        }
         return union;
     }
 

@@ -36,6 +36,14 @@ public class CompletionAnalyzerTests
         => Assert.Equal(ExitMode.Throw, AnalyzeBody("Throw &e;"));
 
     [Fact]
+    public void Exit_ExitsViaExit()
+        => Assert.Equal(ExitMode.Exit, AnalyzeBody("Exit;"));
+
+    [Fact]
+    public void Error_ExitsViaError()
+        => Assert.Equal(ExitMode.Error, AnalyzeBody("Error \"boom\";"));
+
+    [Fact]
     public void PlainStatement_FallsThrough()
         => Assert.Equal(ExitMode.Normal, AnalyzeBody("&x = 1;"));
 
@@ -126,6 +134,17 @@ public class CompletionAnalyzerTests
             "try\nReturn;\ncatch Exception &e\n&x = 1;\nend-try;");
         Assert.True(mode.HasFlag(ExitMode.Return)); // try path returns
         Assert.True(mode.HasFlag(ExitMode.Normal)); // catch path falls through
+    }
+
+    [Fact]
+    public void TryCatch_AnnotatesCatchClauseWithItsBodyExit()
+    {
+        var (program, errors) = Parse("Function F()\ntry\nReturn;\ncatch Exception &e\nReturn;\nend-try;\nEnd-Function;");
+        Assert.Empty(errors);
+        var body = program.Functions.Single().Body!;
+        CompletionAnalyzer.Analyze(body);
+        var catchNode = program.FindDescendants<CatchStatementNode>().Single();
+        Assert.Equal(ExitMode.Return, catchNode.GetExitMode());
     }
 
     // The reported bug: every When returns, so no When body falls through.
