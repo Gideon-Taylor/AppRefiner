@@ -4,9 +4,11 @@ using PeopleCodeTypeEnum = PeopleCodeTypeInfo.Types.PeopleCodeType;
 namespace PeopleCodeTypeInfo.Types;
 
 /// <summary>
-/// Represents a Field builtin type with knowledge of which record/field it refers to,
-/// enabling resolution of the underlying field data type for type compatibility checking.
-/// This allows implicit .Value access - a Field can be used where its data type is expected.
+/// Represents a Field object with knowledge of which record/field it refers to.
+/// Field objects are not scalar-compatible; use explicit .Value for the data type.
+/// Buffer access bare REC.FIELD is collapsed to the data type at inference time
+/// (implicit .Value when terminal); this type is used for Field objects
+/// (&amp;rec.FIELD, Record.REC.FIELD, GetField, intermediate REC.FIELD.Member targets).
 /// </summary>
 public class FieldTypeInfo : BuiltinObjectTypeInfo
 {

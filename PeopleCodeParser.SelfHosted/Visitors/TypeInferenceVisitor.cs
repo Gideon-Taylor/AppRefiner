@@ -1330,9 +1330,11 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
                     }
                     else if (_defaultRecordName != null)
                     {
-                        // Bare field reference in record PeopleCode
+                        // Bare field reference in record PeopleCode (terminal buffer access).
+                        // Compiler treats this like REC.FIELD with implicit .Value — the
+                        // expression type is the field's data type, not Field.
                         var fieldType = new FieldTypeInfo(_defaultRecordName, node.Name, _typeResolver);
-                        SetInferredType(node, fieldType);
+                        SetInferredType(node, fieldType.GetFieldDataType().WithAssignable(true));
                     }
                     else
                     {
@@ -1656,9 +1658,9 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
             {
                 if (!recordType.DirectRecordAccess)
                 {
-                    // Full Record object — prefer known properties over field names.
-                    // ResolveMemberAccessReturnType falls back to Field for unknown Record members;
-                    // only treat as a property when it is a real builtin property.
+                    // Full Record object (&rec / Record.REC / GetRecord) — prefer known
+                    // properties over field names. Field members stay Field objects
+                    // (no implicit .Value); scalar use requires explicit .Value.
                     var realProp = PeopleCodeTypeDatabase.GetProperty("record", node.MemberName);
                     if (realProp != null)
                     {
@@ -1672,9 +1674,17 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
                 }
                 else
                 {
-                    // Direct bare REC.FIELD — always a field
-                    rightHandType = new FieldTypeInfo(recordType.RecordName, node.MemberName, _typeResolver)
+                    // Bare REC.FIELD (DirectRecordAccess):
+                    //   REC.FIELD.Member  → intermediate Field (so .AriaAttributes / .Value work)
+                    //   REC.FIELD         → terminal value (implicit .Value / field data type)
+                    // Record.REC.FIELD is NOT DirectRecordAccess and stays Field (above).
+                    var bufferField = (FieldTypeInfo)new FieldTypeInfo(recordType.RecordName, node.MemberName, _typeResolver)
                         .WithAssignable(true);
+                    bool isIntermediateFieldAccess =
+                        node.Parent is MemberAccessNode parentMa && ReferenceEquals(parentMa.Target, node);
+                    rightHandType = isIntermediateFieldAccess
+                        ? bufferField
+                        : bufferField.GetFieldDataType().WithAssignable(true);
                 }
             }
             else
@@ -1839,6 +1849,8 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
     /// Check if a type can be used in arithmetic operations
     /// Includes numeric types (Number, Integer) and date/time types (Date, Time, DateTime)
     /// </summary>
+    // Field objects are not numeric operands (compiler: "invalid numeric operand").
+    // Buffer REC.FIELD is already collapsed to its data type at inference time.
     private bool CanPerformArithmetic(TypeInfo type) =>
         type is PrimitiveTypeInfo { PeopleCodeType:
             PeopleCodeType.Number or
@@ -1847,8 +1859,7 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
             PeopleCodeType.Time or
             PeopleCodeType.DateTime } ||
         type is AnyTypeInfo ||
-        type is UnknownTypeInfo || 
-        type is FieldTypeInfo fti && CanPerformArithmetic(fti.GetFieldDataType()) ||
+        type is UnknownTypeInfo ||
         type is ReferenceTypeInfo rti && rti.ReferenceCategory == PeopleCodeType.Any;
 
     /// <summary>
@@ -1867,7 +1878,6 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
         type is PrimitiveTypeInfo { PeopleCodeType: PeopleCodeType.Number or PeopleCodeType.Integer } ||
         type is AnyTypeInfo ||
         type is UnknownTypeInfo ||
-        type is FieldTypeInfo fti && CanBeArrayIndex(fti.GetFieldDataType()) ||
         type is ReferenceTypeInfo rti && rti.ReferenceCategory == PeopleCodeType.Any;
 
     /// <summary>
@@ -1877,7 +1887,6 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
         type is PrimitiveTypeInfo { PeopleCodeType: PeopleCodeType.Number or PeopleCodeType.Integer } ||
         type is AnyTypeInfo ||
         type is UnknownTypeInfo ||
-        type is FieldTypeInfo fti && CanPerformUnaryNegate(fti.GetFieldDataType()) ||
         type is ReferenceTypeInfo rti && rti.ReferenceCategory == PeopleCodeType.Any;
 
     /// <summary>
@@ -1886,17 +1895,10 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
     /// </summary>
     private TypeInfo InferDateTimeArithmetic(BinaryOperationNode node, TypeInfo leftType, TypeInfo rightType)
     {
-        // Unwrap FieldTypeInfo to get the actual field data type
+        // Field objects do not participate in date/time arithmetic; buffer REC.FIELD
+        // is already typed as the field data type when terminal.
         var actualLeftType = leftType;
         var actualRightType = rightType;
-        if (leftType is FieldTypeInfo leftFieldType)
-        {
-            actualLeftType = leftFieldType.GetFieldDataType();
-        }
-        if (rightType is FieldTypeInfo rightFieldType)
-        {
-            actualRightType = rightFieldType.GetFieldDataType();
-        }
 
         // Early return for Any/Unknown/Ref-Any types - bypass date/time validation
         // If any operand is Unknown, return Unknown (Unknown takes precedence)

@@ -700,14 +700,8 @@ public class PrimitiveTypeInfo : TypeInfo
         // Null safety - should never happen, but protect against edge cases
         if (other == null) return false;
 
-        // Check if other is a FieldTypeInfo - resolve its data type for implicit .Value access
-        // This allows Field objects to be used where their data type is expected
-        // Example: AddToDate(AAP_YEAR.START_DT, ...) where START_DT is a Date field
-        if (other is FieldTypeInfo fieldType)
-        {
-            var actualFieldType = fieldType.GetFieldDataType();
-            return IsAssignableFrom(actualFieldType);
-        }
+        // Field objects are not scalar-compatible (need explicit .Value).
+        // Buffer REC.FIELD is collapsed to its data type at inference time.
 
         // Any can be assigned to any primitive
         if (other.Kind == TypeKind.Any) return true;
@@ -809,14 +803,8 @@ public class BuiltinObjectTypeInfo : TypeInfo
         // Null safety - should never happen, but protect against edge cases
         if (other == null) return false;
 
-        // Check if other is a FieldTypeInfo - resolve its data type for implicit .Value access
-        // This allows Field objects to be used where their data type is expected
-        if (other is FieldTypeInfo fieldType)
-        {
-            if (this.PeopleCodeType == Types.PeopleCodeType.Field) return true;
-            var actualFieldType = fieldType.GetFieldDataType();
-            return IsAssignableFrom(actualFieldType);
-        }
+        // Field objects only assign to Field (and Any/Object paths below), not to
+        // other builtins via implicit .Value. Buffer REC.FIELD is already a data type.
 
         // Any can be assigned to any builtin object
         if (other.Kind == TypeKind.Any) return true;
@@ -1482,7 +1470,8 @@ public class ReferenceTypeInfo : TypeInfo
             return true;
         }
 
-        /* Support the ability to do @() = RECORD.FIELD */
+        // Buffer REC.FIELD is typed as its data type (primitive); Field objects can
+        // also be stored through @Any at runtime.
         if (ReferenceCategory == Types.PeopleCodeType.Any && other is FieldTypeInfo)
         {
             return true;
@@ -1581,14 +1570,8 @@ public class StringTypeInfo : PrimitiveTypeInfo
         // Null safety - should never happen, but protect against edge cases
         if (other == null) return false;
 
-        // Check if other is a FieldTypeInfo - resolve its data type for implicit .Value access
-        // This allows Field objects to be used where their data type is expected
-        // Example: Substitute(REC.FIELD, " ", "") where FIELD is a String field
-        if (other is FieldTypeInfo fieldType)
-        {
-            var actualFieldType = fieldType.GetFieldDataType();
-            return IsAssignableFrom(actualFieldType);
-        }
+        // Field objects need explicit .Value for string contexts.
+        // Buffer REC.FIELD is collapsed to its data type at inference time.
 
         // Any can be assigned to string
         if (other.Kind == TypeKind.Any) return true;
@@ -1632,14 +1615,8 @@ public class NumberTypeInfo : PrimitiveTypeInfo
         // Null safety - should never happen, but protect against edge cases
         if (other == null) return false;
 
-        // Check if other is a FieldTypeInfo - resolve its data type for implicit .Value access
-        // This allows Field objects to be used where their data type is expected
-        // Example: Multiply(REC.QUANTITY, 2) where QUANTITY is a Number field
-        if (other is FieldTypeInfo fieldType)
-        {
-            var actualFieldType = fieldType.GetFieldDataType();
-            return IsAssignableFrom(actualFieldType);
-        }
+        // Field objects need explicit .Value for number contexts.
+        // Buffer REC.FIELD is collapsed to its data type at inference time.
 
         // Any can be assigned to number
         if (other.Kind == TypeKind.Any) return true;
@@ -1803,11 +1780,7 @@ public class SameAsFirstParameterTypeInfo : PolymorphicTypeInfo
         if (parameterTypes == null || parameterTypes.Length == 0)
             throw new InvalidOperationException("SameAsFirstParameter polymorphic type requires parameter context");
 
-        if (parameterTypes[0] is FieldTypeInfo fti)
-        {
-            return fti.GetFieldDataType();
-        }
-
+        // Field objects stay Field; buffer REC.FIELD is already a data type on the arg node.
         return parameterTypes[0];
     }
 
@@ -1846,13 +1819,7 @@ public class ArrayOfFirstParameterTypeInfo : PolymorphicTypeInfo
             return new ArrayTypeInfo(ati.Dimensions + 1, ati.ElementType);
         }
 
-        if (firstParamType is FieldTypeInfo fieldType)
-        {
-            var resolvedType = fieldType.GetFieldDataType();
-            return new ArrayTypeInfo(1, resolvedType);
-        }
-
-        // Create an array of the first parameter's type
+        // Create an array of the first parameter's type (Field stays Field)
         return new ArrayTypeInfo(1, firstParamType);
     }
 

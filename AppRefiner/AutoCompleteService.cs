@@ -635,13 +635,18 @@ namespace AppRefiner
 
                     foreach (var field in fields.OrderBy(f => f.FieldName))
                     {
-                        suggestions.Insert(0, $"{field.FieldName} -> {field.FieldTypeName}?{(int)AutoCompleteIcons.Field}");
+                        // Field object surface with known data type: Field(Number), Field(Char), …
+                        suggestions.Insert(0, $"{field.FieldName} -> Field({field.FieldTypeName})?{(int)AutoCompleteIcons.Field}");
                     }
                 }
 
                 if (typeInfo is FieldTypeInfo fi)
                 {
-                    suggestions.Insert(0, $"Value -> {fi.GetFieldDataType()}?{(int)AutoCompleteIcons.Property}");
+                    var valueType = fi.GetFieldDataType();
+                    string valueTypeName = valueType.Name;
+                    // Replace catalog Field.Value (typed as any) with the resolved data type
+                    suggestions.RemoveAll(s => s.StartsWith("Value ->", StringComparison.OrdinalIgnoreCase));
+                    suggestions.Insert(0, $"Value -> {valueTypeName} (Property)?{(int)AutoCompleteIcons.Property}");
                 }
 
                 // Add language extension suggestions

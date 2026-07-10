@@ -6,16 +6,21 @@ namespace PeopleCodeTypeInfo.Types;
 
 
 /// <summary>
-/// Represents a Field builtin type with knowledge of which record/field it refers to,
-/// enabling resolution of the underlying field data type for type compatibility checking.
-/// This allows implicit .Value access - a Field can be used where its data type is expected.
+/// Represents a named Record instance (e.g. from CreateRecord / GetRecord) or a bare
+/// buffer record name used as DirectRecordAccess (PSOPRDEFN in PSOPRDEFN.ACCTLOCK).
 /// </summary>
 public class RecordTypeInfo : BuiltinObjectTypeInfo
 {
     /// <summary>
-    /// The record name this field belongs to (e.g., "AAP_YEAR")
+    /// The record definition name (e.g., "PSOPRDEFN")
     /// </summary>
     public string RecordName { get; }
+
+    /// <summary>
+    /// True when this is a bare buffer record name (REC in REC.FIELD), not a Record object.
+    /// Direct access: members are always fields; terminal REC.FIELD is the field data type.
+    /// False for &amp;rec, Record.REC after promotion, GetRecord results, etc. (Field objects).
+    /// </summary>
     public bool DirectRecordAccess { get; set; } = false;
 
     private readonly ITypeMetadataResolver? _resolver;

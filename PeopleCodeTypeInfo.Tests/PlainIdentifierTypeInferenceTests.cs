@@ -12,7 +12,7 @@ namespace PeopleCodeTypeInfo.Tests;
 /// <summary>
 /// Tests for plain identifier type inference under compiler-aligned rules:
 /// - NAME.x  → NAME is always a record
-/// - NAME alone + default record → FieldTypeInfo(default, NAME)
+/// - NAME alone + default record → field data type (implicit .Value)
 /// - NAME alone without default → Unknown
 /// </summary>
 public class PlainIdentifierTypeInferenceTests
@@ -57,10 +57,11 @@ end-function;
     }
 
     /// <summary>
-    /// Bare identifier in record PeopleCode is a field on the default record.
+    /// Bare identifier in record PeopleCode is a buffer field — terminal access is the
+    /// field data type (implicit .Value), not a Field object.
     /// </summary>
     [Fact]
-    public void PlainIdentifier_WithDefaultRecord_IsFieldOnDefault()
+    public void PlainIdentifier_WithDefaultRecord_IsFieldValueOnDefault()
     {
         var source = @"
 function test();
@@ -75,17 +76,17 @@ end-function;
         var identifier = Assert.IsType<IdentifierNode>(assignment.Value);
 
         var inferredType = visitor.GetInferredType(identifier);
-        Assert.IsType<FieldTypeInfo>(inferredType);
-        var fieldType = (FieldTypeInfo)inferredType!;
-        Assert.Equal("AAP_YEAR", fieldType.RecordName);
-        Assert.Equal("START_DT", fieldType.FieldName);
+        // Null resolver → Any data type; must not stay as FieldTypeInfo
+        Assert.NotNull(inferredType);
+        Assert.IsNotType<FieldTypeInfo>(inferredType);
+        Assert.True(inferredType is AnyTypeInfo || inferredType.Kind == TypeKind.Any || inferredType.Kind == TypeKind.Primitive);
     }
 
     /// <summary>
-    /// RECORD.FIELD works without a default record (qualified form).
+    /// Terminal REC.FIELD (DirectRecordAccess) is the field data type, not a Field object.
     /// </summary>
     [Fact]
-    public void QualifiedFieldAccess_ShouldHaveRecordName()
+    public void QualifiedFieldAccess_Terminal_IsFieldDataType()
     {
         var source = @"
 function test();
@@ -99,23 +100,50 @@ end-function;
         Assert.NotNull(assignment);
         var memberAccess = Assert.IsType<MemberAccessNode>(assignment.Value);
 
-        // Left side is a record
+        // Left side is a direct buffer record
         var leftType = visitor.GetInferredType(memberAccess.Target);
         Assert.IsType<RecordTypeInfo>(leftType);
         Assert.Equal("MY_RECORD", ((RecordTypeInfo)leftType!).RecordName);
         Assert.True(((RecordTypeInfo)leftType).DirectRecordAccess);
 
-        // Whole access is a field
+        // Terminal REC.FIELD → value (implicit .Value); null resolver → Any
         var inferredType = visitor.GetInferredType(memberAccess);
-        Assert.IsType<FieldTypeInfo>(inferredType);
-        var fieldType = (FieldTypeInfo)inferredType!;
+        Assert.NotNull(inferredType);
+        Assert.IsNotType<FieldTypeInfo>(inferredType);
+    }
+
+    /// <summary>
+    /// Intermediate REC.FIELD in REC.FIELD.Member stays Field so Field properties resolve.
+    /// </summary>
+    [Fact]
+    public void QualifiedFieldAccess_Intermediate_IsFieldTypeInfo()
+    {
+        var source = @"
+function test();
+   local any &result;
+   &result = MY_RECORD.MY_FIELD.Value;
+end-function;
+";
+        var (program, visitor) = Infer(source);
+
+        var assignment = FindFirstAssignment(program.Functions[0]);
+        Assert.NotNull(assignment);
+        var valueAccess = Assert.IsType<MemberAccessNode>(assignment.Value);
+        Assert.Equal("Value", valueAccess.MemberName);
+
+        var fieldAccess = Assert.IsType<MemberAccessNode>(valueAccess.Target);
+        Assert.Equal("MY_FIELD", fieldAccess.MemberName);
+
+        var midType = visitor.GetInferredType(fieldAccess);
+        Assert.IsType<FieldTypeInfo>(midType);
+        var fieldType = (FieldTypeInfo)midType!;
         Assert.Equal("MY_RECORD", fieldType.RecordName);
         Assert.Equal("MY_FIELD", fieldType.FieldName);
     }
 
     /// <summary>
     /// Under default record, NAME left of a dot is still a record (not a field on default).
-    /// This is the WEBLIB_TS_TEST.ISCRIPT1 case.
+    /// Terminal REC.FIELD is the buffer value type, not Field.
     /// </summary>
     [Fact]
     public void QualifiedFieldAccess_WithDefaultRecord_LeftSideIsRecordNotField()
@@ -135,17 +163,17 @@ end-function;
         var leftType = visitor.GetInferredType(memberAccess.Target);
         Assert.IsType<RecordTypeInfo>(leftType);
         Assert.Equal("WEBLIB_TS_TEST", ((RecordTypeInfo)leftType!).RecordName);
+        Assert.True(((RecordTypeInfo)leftType).DirectRecordAccess);
 
-        var fieldType = Assert.IsType<FieldTypeInfo>(visitor.GetInferredType(memberAccess));
-        Assert.Equal("WEBLIB_TS_TEST", fieldType.RecordName);
-        Assert.Equal("ISCRIPT1", fieldType.FieldName);
+        // Terminal buffer field → data type (not Field object)
+        Assert.IsNotType<FieldTypeInfo>(visitor.GetInferredType(memberAccess));
     }
 
     /// <summary>
-    /// Multiple bare fields under default record are all fields on that record.
+    /// Multiple bare fields under default record are all buffer values (not Field objects).
     /// </summary>
     [Fact]
-    public void MultiplePlainIdentifiers_WithDefaultRecord_AreAllFields()
+    public void MultiplePlainIdentifiers_WithDefaultRecord_AreAllFieldValues()
     {
         var source = @"
 function test();
@@ -160,13 +188,12 @@ end-function;
         var assignments = FindAllAssignments(program.Functions[0]);
         Assert.Equal(3, assignments.Count);
 
-        var expectedFieldNames = new[] { "START_DT", "END_DT", "AMOUNT" };
         for (int i = 0; i < 3; i++)
         {
             var identifier = Assert.IsType<IdentifierNode>(assignments[i].Value);
-            var fieldType = Assert.IsType<FieldTypeInfo>(visitor.GetInferredType(identifier));
-            Assert.Equal("AAP_YEAR", fieldType.RecordName);
-            Assert.Equal(expectedFieldNames[i], fieldType.FieldName);
+            var inferredType = visitor.GetInferredType(identifier);
+            Assert.NotNull(inferredType);
+            Assert.IsNotType<FieldTypeInfo>(inferredType);
         }
     }
 
@@ -254,7 +281,7 @@ end-function;
     }
 
     /// <summary>
-    /// Record.REC.FIELD promotes to a field instance.
+    /// Record.REC.FIELD is a Field object (not buffer value) — no implicit .Value.
     /// </summary>
     [Fact]
     public void RecordKeyword_FieldMember_IsFieldTypeInfo()
