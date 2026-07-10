@@ -23,6 +23,11 @@ namespace AppRefiner.Database
     public class DatabaseTypeMetadataResolver : ITypeMetadataResolver
     {
         private readonly IDataManager _dataManager;
+        /// <summary>
+        /// Per-record field name sets. null value means "record metadata unavailable".
+        /// </summary>
+        private readonly Dictionary<string, HashSet<string>?> _recordFieldCache =
+            new(StringComparer.OrdinalIgnoreCase);
 
         /// <summary>
         /// Creates a new DatabaseTypeMetadataResolver
@@ -157,6 +162,46 @@ namespace AppRefiner.Database
             {
                 Debug.Log($"DatabaseTypeMetadataResolver: Error getting classes for package '{packagePath}': {ex.Message}");
                 return new List<string>();
+            }
+        }
+
+        /// <summary>
+        /// Whether the field is on the record definition (via GetRecordFields).
+        /// </summary>
+        protected override bool? RecordHasFieldCore(string recordName, string fieldName)
+        {
+            if (!_dataManager.IsConnected)
+                return null;
+
+            try
+            {
+                if (!_recordFieldCache.TryGetValue(recordName, out var fields))
+                {
+                    var list = _dataManager.GetRecordFields(recordName);
+                    if (list == null)
+                    {
+                        // Record missing or error — do not false-positive
+                        _recordFieldCache[recordName] = null;
+                        fields = null;
+                    }
+                    else
+                    {
+                        fields = new HashSet<string>(
+                            list.Select(f => f.FieldName),
+                            StringComparer.OrdinalIgnoreCase);
+                        _recordFieldCache[recordName] = fields;
+                    }
+                }
+
+                if (fields == null)
+                    return null;
+
+                return fields.Contains(fieldName);
+            }
+            catch (Exception ex)
+            {
+                Debug.Log($"DatabaseTypeMetadataResolver: Error checking field '{recordName}.{fieldName}': {ex.Message}");
+                return null;
             }
         }
 

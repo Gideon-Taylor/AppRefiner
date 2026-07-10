@@ -14,6 +14,7 @@ internal sealed class FakeTypeMetadataResolver : ITypeMetadataResolver
 {
     private readonly Dictionary<string, TypeMetadata> _types = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, List<string>> _packages = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, HashSet<string>> _recordFields = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
     /// Registers a class the resolver knows about. When no metadata is supplied, a
@@ -36,6 +37,15 @@ internal sealed class FakeTypeMetadataResolver : ITypeMetadataResolver
         _packages[packagePath] = classNames.ToList();
     }
 
+    /// <summary>
+    /// Registers the field list for a record definition (RecordHasField answers from this).
+    /// Records with no registration return null (unknown) from RecordHasField.
+    /// </summary>
+    public void AddRecordFields(string recordName, params string[] fieldNames)
+    {
+        _recordFields[recordName] = new HashSet<string>(fieldNames, StringComparer.OrdinalIgnoreCase);
+    }
+
     protected override TypeMetadata? GetTypeMetadataCore(string qualifiedName)
         => _types.TryGetValue(qualifiedName, out var metadata) ? metadata : null;
 
@@ -50,4 +60,11 @@ internal sealed class FakeTypeMetadataResolver : ITypeMetadataResolver
 
     protected override List<string> GetClassesInPackageCore(string packagePath)
         => _packages.TryGetValue(packagePath, out var classes) ? classes : new List<string>();
+
+    protected override bool? RecordHasFieldCore(string recordName, string fieldName)
+    {
+        if (!_recordFields.TryGetValue(recordName, out var fields))
+            return null;
+        return fields.Contains(fieldName);
+    }
 }

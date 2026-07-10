@@ -163,6 +163,21 @@ public abstract class ITypeMetadataResolver
     }
 
     /// <summary>
+    /// Whether <paramref name="fieldName"/> is a field on the given record definition.
+    /// </summary>
+    /// <returns>
+    /// <c>true</c> / <c>false</c> when the record's field list is known;
+    /// <c>null</c> when metadata is unavailable (no DB, unknown record, error) so
+    /// callers can skip validation instead of false-positiving.
+    /// </returns>
+    public bool? RecordHasField(string recordName, string fieldName)
+    {
+        if (string.IsNullOrWhiteSpace(recordName) || string.IsNullOrWhiteSpace(fieldName))
+            return null;
+        return RecordHasFieldCore(recordName, fieldName);
+    }
+
+    /// <summary>
     /// Subclasses implement this method to perform the actual type metadata resolution.
     /// The base class handles caching automatically.
     /// </summary>
@@ -201,6 +216,11 @@ public abstract class ITypeMetadataResolver
     /// <param name="packagePath">The package path (e.g., "PKG" or "PKG:SUBPKG")</param>
     /// <returns>List of class names in the package</returns>
     protected abstract List<string> GetClassesInPackageCore(string packagePath);
+
+    /// <summary>
+    /// Subclasses implement record field membership. Default is unknown (null).
+    /// </summary>
+    protected virtual bool? RecordHasFieldCore(string recordName, string fieldName) => null;
 
     public TypeCache Cache
     {

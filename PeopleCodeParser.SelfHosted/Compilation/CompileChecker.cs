@@ -19,9 +19,14 @@ namespace PeopleCodeParser.SelfHosted.Compilation;
 /// DB-backed resolver, so members added but not yet saved are recognized. Must carry the
 /// FULL qualified class path so it matches the QualifiedName inference stamps onto %This.
 /// </param>
+/// <param name="DefaultRecordName">
+/// Record definition for record-field PeopleCode (bare buffer field context). Null outside
+/// that context.
+/// </param>
 public readonly record struct CompileCheckContextInput(
     string? ExpectedClassName,
-    TypeMetadata? SelfMetadata = null);
+    TypeMetadata? SelfMetadata = null,
+    string? DefaultRecordName = null);
 
 /// <summary>
 /// Public entry point for the compile checker pipeline. Collects parser errors, runs the
@@ -44,6 +49,7 @@ public static class CompileChecker
         new Checks.UnimportedClassCheck(),
         new Checks.AmbiguousClassReferenceCheck(),
         new Checks.InvalidMemberAccessCheck(),
+        new Checks.UnknownRecordFieldCheck(),
         new Checks.UndeclaredFunctionCheck(),
         new Checks.MissingMethodImplementationCheck(),
         new Checks.MissingConstructorCheck(),
@@ -113,7 +119,9 @@ public static class CompileChecker
         if (active.Count > 0)
         {
             var driver = new CompileCheckDriver(active, sink);
-            driver.Context = new CompileCheckContext(program, resolver, context.ExpectedClassName, driver, context.SelfMetadata);
+            driver.Context = new CompileCheckContext(
+                program, resolver, context.ExpectedClassName, driver,
+                context.SelfMetadata, context.DefaultRecordName);
             driver.Run(program);
         }
 

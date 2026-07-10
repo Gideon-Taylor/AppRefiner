@@ -51,18 +51,27 @@ public class CompilerErrorsStyler : BaseStyler
         // as TypeInferenceRunner does, so it matches the QualifiedName inference stamps onto
         // %This — that name equality is what lets the check pick the live metadata for the
         // self level of the inheritance walk. Only class/interface programs have a self type.
+        var qualifiedName = TypeInferenceRunner.DetermineQualifiedName(node, Editor);
         TypeMetadata? selfMetadata = null;
         if (node.AppClass != null)
         {
-            var qualifiedName = TypeInferenceRunner.DetermineQualifiedName(node, Editor);
             selfMetadata = TypeMetadataBuilder.ExtractMetadata(node, qualifiedName);
+        }
+
+        // Record PeopleCode: bare fields are on this default record (same as type inference).
+        string? defaultRecord = null;
+        if (Editor.Caption?.EndsWith("(Record PeopleCode)") == true)
+        {
+            var parts = qualifiedName.Split('.');
+            if (parts.Length >= 2)
+                defaultRecord = parts[0];
         }
 
         var diagnostics = CompileChecker.Check(
             node,
             Editor.ParserErrors,
             resolver,
-            new CompileCheckContextInput(expectedClassName, selfMetadata));
+            new CompileCheckContextInput(expectedClassName, selfMetadata, defaultRecord));
 
         // CompileChecker returns diagnostics carrying only spans (no AST nodes) and does
         // not attach the assign-to-var FixContext in Phase 1. Re-derive it here to

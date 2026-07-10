@@ -36,4 +36,9 @@ public enum DiagnosticCode
     ThisOutsideClass = 22,
     MissingSuperCall = 23,
     InaccessibleMember = 24,
+    /// <summary>
+    /// Bare or qualified buffer field is not defined on the referenced record
+    /// (e.g. ACCTLOCK in record PeopleCode whose default record has no such field).
+    /// </summary>
+    UnknownRecordField = 25,
 }

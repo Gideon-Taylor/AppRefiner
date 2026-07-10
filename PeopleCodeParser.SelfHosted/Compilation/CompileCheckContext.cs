@@ -26,17 +26,26 @@ public sealed class CompileCheckContext
     /// </summary>
     public TypeMetadata? SelfMetadata { get; }
 
+    /// <summary>
+    /// Record definition name for record-field PeopleCode (e.g. WEBLIB_TS_TEST when editing
+    /// WEBLIB_TS_TEST.ISCRIPT1 FieldChange). Bare identifiers are buffer fields on this
+    /// record. Null outside record PeopleCode.
+    /// </summary>
+    public string? DefaultRecordName { get; }
+
     public CompileCheckContext(
         ProgramNode program,
         ITypeMetadataResolver? resolver,
         string? expectedClassName,
         ScopedAstVisitor<object> scopeData,
-        TypeMetadata? selfMetadata = null)
+        TypeMetadata? selfMetadata = null,
+        string? defaultRecordName = null)
     {
         Program = program;
         Resolver = resolver;
         ExpectedClassName = expectedClassName;
         ScopeData = scopeData;
         SelfMetadata = selfMetadata;
+        DefaultRecordName = defaultRecordName;
     }
 }
