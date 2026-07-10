@@ -1,3 +1,61 @@
+VERSION 1.3.2
+=============
+
+*** PLEASE READ: RESTART APPLICATION DESIGNER ***
+-------------------------------------------------
+
+This release updates the AppRefiner integration running inside Application
+Designer. Close and reopen any Application Designer that was already open —
+until you do, the hook-unload and related fixes below aren't active.
+
+
+NEW FEATURES
+------------
+
+• Stronger Compiler Errors - The unified "Compiler errors" check (on by
+  default) now also flags code Application Designer won't compile: functions
+  and methods that don't return a value on every path, Break/Continue outside
+  a loop, bare Return in a value-returning routine, a return value where none
+  is allowed, return expressions of the wrong type, duplicate class members,
+  missing property get/set bodies, assignment to a constant, %This outside an
+  App Class, subclass constructors that never assign %Super, private/protected
+  member access, and non-Boolean conditions on If/While/Repeat-Until. Still
+  one toggle, one pass, no extra setup.
+• Unload Hook on Close - Closing AppRefiner detaches and unloads the hook DLL
+  from every attached Application Designer process, so you can replace or
+  delete the install without first closing every App Designer window.
+• Smarter Record/Field Return Types - CreateRecord, GetRecord, and GetField
+  now carry the identity of the definition you pass in, so later member access
+  is checked against the right record or field shape.
+• Grid Column Types - Accessing a grid column (including dynamic names) is
+  treated as a GridColumn for type checking and autocomplete, instead of
+  looking like an unknown property.
+
+
+BUG FIXES
+---------
+
+• SQL Server Connectivity - Tools Release lookup, open-target queries, field-
+  type casts, and several queries that needed bound parameters or properly
+  declared variables now work correctly against SQL Server databases.
+• Offline App Class Checks - Invalid application-class existence checks that
+  need a live database connection no longer report false errors when you're
+  editing without one.
+• RECORD.FIELD Under Default Record - Field inference for RECORD.FIELD under
+  default-record PeopleCode no longer goes wrong.
+• Definition Keywords as Fields - Keywords that refer to definitions are no
+  longer mis-inferred as record fields.
+• Convert If ↔ Evaluate Fall-Through - Conversion now uses the same exit-mode
+  analysis as the new return-path checks, so Break fall-through is detected
+  more reliably.
+• Hook Detach Cleanup - Combo-box buttons and subclasses are cleaned up when
+  the hook unloads, so Application Designer isn't left with orphan UI from
+  the previous AppRefiner session.
+• Fold State After Expand - Expanding all folds now clears the remembered
+  collapsed paths, so a save no longer re-collapses regions you just expanded
+  (issue #76).
+
+
 VERSION 1.3.1
 =============
 
