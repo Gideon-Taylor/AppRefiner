@@ -19,8 +19,10 @@ NEW FEATURES
   is allowed, return expressions of the wrong type, duplicate class members,
   missing property get/set bodies, assignment to a constant, %This outside an
   App Class, subclass constructors that never assign %Super, private/protected
-  member access, and non-Boolean conditions on If/While/Repeat-Until. Still
-  one toggle, one pass, no extra setup.
+  member access, non-Boolean conditions on If/While/Repeat-Until, and unknown
+  fields on the current or referenced record (including bare field names in
+  record PeopleCode before App Designer expands them to REC.FIELD). Still one
+  toggle, one pass, no extra setup.
 • Unload Hook on Close - Closing AppRefiner detaches and unloads the hook DLL
   from every attached Application Designer process, so you can replace or
   delete the install without first closing every App Designer window.
@@ -41,6 +43,12 @@ BUG FIXES
 • Offline App Class Checks - Invalid application-class existence checks that
   need a live database connection no longer report false errors when you're
   editing without one.
+• Buffer REC.FIELD vs Field Objects - Bare buffer REC.FIELD is treated as the
+  field's value (implicit .Value) when used as a scalar, matching the compiler,
+  while Field objects from &rec.FIELD, Record.REC.FIELD, and GetField stay
+  Field and require .Value for numbers and similar. Intermediate REC.FIELD
+  chains (e.g. REC.FIELD.AriaAttributes) still resolve as Field. Autocomplete
+  shows Field(Number) for record members.
 • RECORD.FIELD Under Default Record - Field inference for RECORD.FIELD under
   default-record PeopleCode no longer goes wrong.
 • Definition Keywords as Fields - Keywords that refer to definitions are no
