@@ -4365,6 +4365,8 @@ public class PeopleCodeParser
 
                 if (Match(TokenType.When))
                 {
+                    var whenToken = Previous;
+
                     /* You are allowed to have any number of "Not" operators before the BinaryOperator */
                     int notCount = 0;
                     var notStartPosition = _position;
@@ -4427,7 +4429,7 @@ public class PeopleCodeParser
 
                     // Optional statementBlock? until WHEN/WHEN_OTHER/END_EVALUATE
                     var body = ParseStatementList(TokenType.When, TokenType.WhenOther, TokenType.EndEvaluate);
-                    evalNode.AddWhenClause(new WhenClause(condition, body, op));
+                    evalNode.AddWhenClause(new WhenClause(condition, body, op, whenToken));
                 }
                 else if (Match(TokenType.WhenOther))
                 {

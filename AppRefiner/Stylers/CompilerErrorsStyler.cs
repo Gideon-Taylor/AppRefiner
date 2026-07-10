@@ -17,6 +17,11 @@ public class CompilerErrorsStyler : BaseStyler
 {
     private const uint ERROR_COLOR = 0x0000FFA0;   // red squiggle (matches old stylers)
     private const uint WARNING_COLOR = 0x32FF32FF; // light green (matches TypeErrorStyler)
+    /// <summary>
+    /// Soft red full-box for secondary path loci (e.g. NotAllPathsReturn incomplete branch).
+    /// Distinct from the primary squiggle so it doesn't read as a syntax error on a token.
+    /// </summary>
+    private const uint SECONDARY_HIGHLIGHT_COLOR = 0x6666FF70;
 
     public CompilerErrorsStyler()
     {
@@ -90,14 +95,24 @@ public class CompilerErrorsStyler : BaseStyler
                 };
             }
 
-            var color = d.Severity == DiagnosticSeverity.Warning ? WARNING_COLOR : ERROR_COLOR;
+            // Secondary path loci (NotAllPathsReturn incomplete branch, etc.) use a line
+            // highlight instead of a red squiggle so they don't look like a syntax error on
+            // whatever token happens to sit under the span.
+            var isSecondary = d.IsSecondary;
+            var color = d.Severity == DiagnosticSeverity.Warning
+                ? WARNING_COLOR
+                : isSecondary
+                    ? SECONDARY_HIGHLIGHT_COLOR
+                    : ERROR_COLOR;
+            var indicatorType = isSecondary ? IndicatorType.HIGHLIGHTER : IndicatorType.SQUIGGLE;
+
             if (CompileDiagnosticQuickFixMap.HasDeferredResolver(d))
             {
                 // Quick fixes for this diagnostic need a DB/cache query — resolve them
                 // lazily at Ctrl+. time, handing the resolver the diagnostic's FixContext.
                 AddIndicatorWithDeferredQuickFix(
                     d.Span,
-                    IndicatorType.SQUIGGLE,
+                    indicatorType,
                     color,
                     d.Message,
                     CompileDiagnosticQuickFixMap.GetDeferredResolver(d),
@@ -106,7 +121,7 @@ public class CompilerErrorsStyler : BaseStyler
             else
             {
                 var quickFixes = CompileDiagnosticQuickFixMap.GetQuickFixes(d);
-                AddIndicator(d.Span, IndicatorType.SQUIGGLE, color, d.Message, quickFixes);
+                AddIndicator(d.Span, indicatorType, color, d.Message, quickFixes);
             }
         }
 

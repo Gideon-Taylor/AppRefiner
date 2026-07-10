@@ -237,7 +237,7 @@ end-method;
     }
 
     [Fact]
-    public void Empty_else_secondary_styles_else_keyword()
+    public void Empty_else_secondary_styles_else_token_not_indent()
     {
         var diags = Check(@"
 Function F(&b As boolean) Returns string
@@ -250,16 +250,45 @@ End-Function;
 
         Assert.Contains(diags, d => d.Message.Contains("Not all paths return"));
         var secondary = diags.First(d => d.Message.Contains("without returning a value"));
-        // Else keyword sits after the Then branch's Return line.
+        Assert.True(secondary.IsSecondary);
         Assert.True(secondary.Span.IsValid);
         Assert.True(secondary.Span.Start.Line >= 3);
+        // Content only — Else keyword, not leading indentation (column 0).
+        Assert.True(secondary.Span.Start.Column > 0,
+            "secondary must not paint leading indent");
     }
 
     [Fact]
-    public void Secondary_is_single_locus_not_whole_nested_block()
+    public void Empty_when_secondary_styles_when_through_condition_not_indent()
+    {
+        var diags = Check(@"
+Function F(&f As Field) Returns string
+   Evaluate &f.Name
+   When ""A""
+      Return ""a"";
+   When Field.LASTUPDDTTM
+   When-Other
+      Return """";
+   End-Evaluate;
+End-Function;
+").Where(d => d.Code == DiagnosticCode.NotAllPathsReturn
+            && d.Message.Contains("without returning a value")).ToList();
+
+        Assert.NotEmpty(diags);
+        var secondary = diags[0];
+        Assert.True(secondary.IsSecondary);
+        // When keyword through condition — not just Field.LASTUPDDTTM, not indent.
+        Assert.True(secondary.Span.ByteLength > "Field.LASTUPDDTTM".Length,
+            $"expected When through condition, got {secondary.Span.ByteLength} bytes");
+        Assert.True(secondary.Span.Start.Column > 0,
+            "secondary must not paint leading indent");
+    }
+
+    [Fact]
+    public void Secondary_is_last_token_of_last_statement_not_whole_block()
     {
         // Nested fall-through inside Else; complete Then sibling means secondary targets
-        // the Else path's end (nested End-If keyword), not a multi-line paint of Else.
+        // the Else path's last statement's last token (End-If), not a multi-line paint of Else.
         var diags = Check(@"
 Function F(&b As boolean) Returns string
    If &b Then
@@ -278,11 +307,164 @@ End-Function;
 
         Assert.NotEmpty(diags);
         var secondary = diags[0];
+        Assert.True(secondary.IsSecondary);
         Assert.True(secondary.Span.IsValid);
-        Assert.True(secondary.Span.ByteLength < 40,
-            $"secondary span too large ({secondary.Span.ByteLength} bytes); expected single locus");
-        // Prefer End-If text, not a lone ';'
-        Assert.False(secondary.Span.ByteLength <= 1,
-            "secondary should be End-If keyword, not a single semicolon");
+        // Single line only — not the whole Else multi-statement body.
+        Assert.Equal(secondary.Span.Start.Line, secondary.Span.End.Line);
+        // Last statement of Else is the nested If; last token is End-If.
+        Assert.True(secondary.Span.End.Line >= 8,
+            "secondary should sit on the nested End-If line at the end of the Else path");
+        Assert.True(secondary.Span.Start.Column > 0,
+            "secondary must not paint leading indent");
+    }
+
+    [Fact]
+    public void Secondary_last_statement_is_content_span_not_indent()
+    {
+        var diags = Check(@"
+Function F() Returns number
+   Local number &x;
+   &x = 1;
+End-Function;
+").Where(d => d.Code == DiagnosticCode.NotAllPathsReturn
+            && d.Message.Contains("without returning a value")).ToList();
+
+        Assert.NotEmpty(diags);
+        var secondary = diags[0];
+        Assert.True(secondary.IsSecondary);
+        Assert.Equal(secondary.Span.Start.Line, secondary.Span.End.Line);
+        // Statement content (&x = 1;), not a single token and not indent.
+        Assert.True(secondary.Span.ByteLength >= 6);
+        Assert.True(secondary.Span.Start.Column > 0,
+            "secondary must not paint leading indent");
+    }
+
+    [Fact]
+    public void Secondary_after_evaluate_break_points_at_trailing_statement_not_break()
+    {
+        // Break is valid Evaluate control flow (absorbed to Normal). The real bug is
+        // falling off the function after End-Evaluate — tip at the trailing Local, not Break.
+        var diags = Check(@"
+Function Foo(&b As string) Returns string
+   Evaluate &b
+   When = Field.OPRID
+      Return ""a"";
+   When = Field.LASTUPDDTTM
+      Local integer &x;
+      Break;
+   When-Other
+      Return """";
+   End-Evaluate;
+   Local integer &y;
+End-Function;
+").Where(d => d.Code == DiagnosticCode.NotAllPathsReturn
+            && d.Message.Contains("without returning a value")).ToList();
+
+        Assert.NotEmpty(diags);
+        var secondary = diags[0];
+        Assert.True(secondary.IsSecondary);
+        Assert.Equal(secondary.Span.Start.Line, secondary.Span.End.Line);
+        // Trailing Local integer &y; is the last body statement (after End-Evaluate).
+        Assert.True(secondary.Span.End.Line >= 10,
+            $"expected secondary on trailing Local &y (late line), got line {secondary.Span.End.Line}");
+        Assert.True(secondary.Span.ByteLength >= "Local integer &y".Length);
+        Assert.True(secondary.Span.Start.Column > 0,
+            "secondary must not paint leading indent");
+    }
+
+    [Fact]
+    public void Secondary_after_incomplete_if_points_at_trailing_statement()
+    {
+        var diags = Check(@"
+Function F(&b As boolean) Returns string
+   If &b Then
+      Return ""a"";
+   End-If;
+   Local string &s;
+End-Function;
+").Where(d => d.Code == DiagnosticCode.NotAllPathsReturn
+            && d.Message.Contains("without returning a value")).ToList();
+
+        Assert.NotEmpty(diags);
+        var secondary = diags[0];
+        Assert.True(secondary.IsSecondary);
+        // Last body statement is Local string &s;, not the one-armed If.
+        Assert.True(secondary.Span.End.Line >= 4,
+            $"expected secondary on trailing Local, got line {secondary.Span.End.Line}");
+        Assert.True(secondary.Span.ByteLength >= "Local string &s".Length);
+        Assert.True(secondary.Span.Start.Column > 0,
+            "secondary must not paint leading indent");
+    }
+
+    [Fact]
+    public void Secondary_evaluate_only_empty_when_still_points_at_when()
+    {
+        // When Evaluate is the last body statement, arm-pick still tips at the empty When.
+        var diags = Check(@"
+Function F(&f As Field) Returns string
+   Evaluate &f.Name
+   When ""A""
+      Return ""a"";
+   When Field.LASTUPDDTTM
+   When-Other
+      Return """";
+   End-Evaluate;
+End-Function;
+").Where(d => d.Code == DiagnosticCode.NotAllPathsReturn
+            && d.Message.Contains("without returning a value")).ToList();
+
+        Assert.NotEmpty(diags);
+        var secondary = diags[0];
+        Assert.True(secondary.IsSecondary);
+        Assert.True(secondary.Span.ByteLength > "Field.LASTUPDDTTM".Length,
+            $"expected When through condition, got {secondary.Span.ByteLength} bytes");
+        Assert.True(secondary.Span.Start.Column > 0,
+            "secondary must not paint leading indent");
+        // Should not sit on End-Evaluate (last line of the Evaluate statement).
+        Assert.True(secondary.Span.End.Line < 8,
+            $"empty When tip should be before End-Evaluate, got line {secondary.Span.End.Line}");
+    }
+
+    [Fact]
+    public void Primary_function_span_includes_function_keyword()
+    {
+        var diags = Check(@"
+Function Foo(&b As string) Returns string
+   Local string &s;
+End-Function;
+").Where(d => d.Code == DiagnosticCode.NotAllPathsReturn
+            && d.Message.Contains("Not all paths return")).ToList();
+
+        Assert.NotEmpty(diags);
+        var primary = diags[0];
+        Assert.False(primary.IsSecondary);
+        // "Function Foo(&b As string) Returns string" — longer than name+params+returns alone.
+        Assert.True(primary.Span.ByteLength >= "Function Foo".Length,
+            $"expected Function keyword included, got byte length {primary.Span.ByteLength}");
+        Assert.True(primary.Span.Start.Column <= 1,
+            "Function keyword is at the start of the header line");
+    }
+
+    [Fact]
+    public void Primary_method_declaration_span_includes_method_keyword()
+    {
+        var diags = Check(@"
+class Sample
+   method GetX() Returns number;
+end-class;
+
+method GetX
+   Local number &x;
+end-method;
+").Where(d => d.Code == DiagnosticCode.NotAllPathsReturn
+            && d.Message.Contains("Not all paths return")).ToList();
+
+        var declPrimary = diags.Where(d => d.Span.Start.Line < 4).OrderBy(d => d.Span.Start.Line).First();
+        Assert.True(declPrimary.Span.ByteLength >= "method GetX".Length,
+            $"expected method keyword included, got byte length {declPrimary.Span.ByteLength}");
+
+        var implPrimary = diags.Where(d => d.Span.Start.Line >= 4).OrderBy(d => d.Span.Start.Line).First();
+        Assert.True(implPrimary.Span.ByteLength >= "method GetX".Length,
+            $"impl primary should include method keyword, got {implPrimary.Span.ByteLength}");
     }
 }

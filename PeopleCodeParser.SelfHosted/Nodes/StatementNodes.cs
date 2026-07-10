@@ -518,6 +518,11 @@ public class EvaluateStatementNode : StatementNode
 public class WhenClause
 {
     /// <summary>
+    /// The WHEN keyword token that introduced this clause (for diagnostics spans).
+    /// </summary>
+    public Token? WhenToken { get; }
+
+    /// <summary>
     /// Comparison operator (optional, defaults to equality)
     /// </summary>
     public BinaryOperator? Operator { get; }
@@ -532,11 +537,12 @@ public class WhenClause
     /// </summary>
     public BlockNode Body { get; }
 
-    public WhenClause(ExpressionNode condition, BlockNode body, BinaryOperator? op = null)
+    public WhenClause(ExpressionNode condition, BlockNode body, BinaryOperator? op = null, Token? whenToken = null)
     {
         Condition = condition ?? throw new ArgumentNullException(nameof(condition));
         Body = body ?? throw new ArgumentNullException(nameof(body));
         Operator = op;
+        WhenToken = whenToken;
     }
 
     public override string ToString()
