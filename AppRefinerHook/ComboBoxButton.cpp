@@ -523,6 +523,75 @@ void ComboBoxButton::LayoutDialog(HWND dialogHwnd, HWND callbackWindow)
     isLayoutInProgress = false;
 }
 
+// Restore ComboBoxes to full width after the button is removed.
+// Mirrors LayoutDialog but without reserving space for the 24px button:
+//   [2px][COMBO1][4px][COMBO2][2px]
+void ComboBoxButton::RestoreLayout(HWND dialogHwnd)
+{
+    if (!dialogHwnd || !IsWindow(dialogHwnd)) {
+        return;
+    }
+
+    RECT dialogRect;
+    GetClientRect(dialogHwnd, &dialogRect);
+    int dialogWidth = dialogRect.right;
+
+    std::vector<HWND> comboBoxes;
+    EnumChildWindows(dialogHwnd, [](HWND hWnd, LPARAM lParam) -> BOOL {
+        auto* combos = (std::vector<HWND>*)lParam;
+        char className[256] = { 0 };
+        if (GetClassNameA(hWnd, className, sizeof(className)) > 0) {
+            if (strcmp(className, "ComboBox") == 0) {
+                combos->push_back(hWnd);
+            }
+        }
+        return TRUE;
+    }, (LPARAM)&comboBoxes);
+
+    if (comboBoxes.size() < 2) {
+        return;
+    }
+
+    std::sort(comboBoxes.begin(), comboBoxes.end(), [](HWND a, HWND b) {
+        RECT rectA, rectB;
+        GetWindowRect(a, &rectA);
+        GetWindowRect(b, &rectB);
+        return rectA.left < rectB.left;
+    });
+
+    const int EDGE_PADDING = 2;
+    const int CONTROL_SPACING = 4;
+
+    // No button: only edge padding and the gap between the two combos
+    int totalReserved = (EDGE_PADDING * 2) + CONTROL_SPACING;
+    int availableWidth = dialogWidth - totalReserved;
+    int comboWidth = availableWidth / 2;
+
+    RECT comboRect;
+    GetWindowRect(comboBoxes[0], &comboRect);
+    int comboHeight = comboRect.bottom - comboRect.top;
+
+    POINT comboPos = { comboRect.left, comboRect.top };
+    ScreenToClient(dialogHwnd, &comboPos);
+    int comboY = comboPos.y;
+
+    int combo1X = EDGE_PADDING;
+    int combo2X = combo1X + comboWidth + CONTROL_SPACING;
+
+    SetWindowPos(comboBoxes[0], NULL,
+        combo1X, comboY, comboWidth, comboHeight,
+        SWP_NOZORDER | SWP_NOACTIVATE);
+
+    SetWindowPos(comboBoxes[1], NULL,
+        combo2X, comboY, comboWidth, comboHeight,
+        SWP_NOZORDER | SWP_NOACTIVATE);
+
+    char debugMsg[256];
+    sprintf_s(debugMsg, "RestoreLayout - Dialog width: %d, Combo width: %d each",
+        dialogWidth, comboWidth);
+    OutputDebugStringA(debugMsg);
+}
+
 // Setup the button for a given Scintilla editor
 DWORD ComboBoxButton::Setup(HWND scintillaHwnd, HWND callbackWindow)
 {
@@ -638,6 +707,9 @@ void ComboBoxButton::Cleanup(HWND scintillaHwnd)
         return;
     }
 
+    // Cancel any pending delayed layout so it can't re-create the button
+    KillTimer(dialogHwnd, LAYOUT_TIMER_ID);
+
     // Remove subclass (this will trigger cleanup in WM_NCDESTROY equivalent)
     UnregisterSubclass(dialogHwnd, COMBO_DIALOG_SUBCLASS_ID);
     RemoveWindowSubclass(dialogHwnd, DialogSubclassProc, COMBO_DIALOG_SUBCLASS_ID);
@@ -653,7 +725,10 @@ void ComboBoxButton::Cleanup(HWND scintillaHwnd)
     }
     RemovePropW(dialogHwnd, COMBO_BUTTON_PROP);
 
-    OutputDebugStringA("ComboBoxButton::Cleanup - Button removed");
+    // Give the combo boxes back the width that was reserved for the button
+    RestoreLayout(dialogHwnd);
+
+    OutputDebugStringA("ComboBoxButton::Cleanup - Button removed, combo boxes restored");
 }
 
 void ComboBoxButton::CleanupAll()
@@ -666,6 +741,11 @@ void ComboBoxButton::CleanupAll()
         if (!dialogHwnd || !IsWindow(dialogHwnd)) {
             continue;
         }
+
+        // Cancel any pending delayed layout so it can't re-create the button
+        // before RemoveAllSubclasses() runs later in TearDownAndUnload.
+        KillTimer(dialogHwnd, LAYOUT_TIMER_ID);
+
         HWND buttonHwnd = (HWND)GetPropW(dialogHwnd, COMBO_BUTTON_PROP);
         if (buttonHwnd && IsWindow(buttonHwnd)) {
             RemovePropW(buttonHwnd, BUTTON_PRESSED_PROP);
@@ -674,6 +754,9 @@ void ComboBoxButton::CleanupAll()
             DestroyWindow(buttonHwnd);
         }
         RemovePropW(dialogHwnd, COMBO_BUTTON_PROP);
+
+        // Give the combo boxes back the width that was reserved for the button
+        RestoreLayout(dialogHwnd);
     }
 
     // Now that no windows of the class remain, unregister it so nothing references

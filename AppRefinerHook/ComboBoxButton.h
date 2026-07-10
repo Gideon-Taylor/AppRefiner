@@ -29,6 +29,10 @@ private:
     // Layout the ComboBoxes and button in the dialog
     static void LayoutDialog(HWND dialogHwnd, HWND callbackWindow);
 
+    // Restore ComboBoxes to full width after the button is removed
+    // Layout: [2px][COMBO1][4px][COMBO2][2px]
+    static void RestoreLayout(HWND dialogHwnd);
+
     // Find the dialog window from Scintilla HWND
     static HWND FindDialogWindow(HWND scintillaHwnd);
 
