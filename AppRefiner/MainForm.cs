@@ -3353,20 +3353,20 @@ namespace AppRefiner
 
         private void UpdateSavedFoldsForEditor(ScintillaEditor? editor)
         {
-            if (editor == null) return;
+            if (editor == null || !editor.IsValid()) return;
 
-            if (editor != null && editor.IsValid())
+            // Always replace in-memory paths — including with an empty list when the user
+            // has expanded everything. Previously we only wrote when Count > 0, so expanding
+            // all folds left stale collapsed paths that were re-applied after save (issue #76).
+            var collapsedFoldPaths = FoldingManager.GetCollapsedFoldPathsDirectly(editor);
+            editor.CollapsedFoldPaths = collapsedFoldPaths;
+            FoldingManager.PrintCollapsedFoldPathsDebug(collapsedFoldPaths);
+
+            // SQLite persistence is optional; in-session restore across App Designer's
+            // wholesale text replace on save always uses CollapsedFoldPaths.
+            if (chkRememberFolds.Checked)
             {
-                var collapsedFoldPaths = FoldingManager.GetCollapsedFoldPathsDirectly(editor);
-                if (collapsedFoldPaths.Count > 0)
-                {
-                    editor.CollapsedFoldPaths = collapsedFoldPaths;
-                    FoldingManager.PrintCollapsedFoldPathsDebug(collapsedFoldPaths);
-                    if (chkRememberFolds.Checked)
-                    {
-                        FoldingManager.UpdatePersistedFolds(editor);
-                    }
-                }
+                FoldingManager.UpdatePersistedFolds(editor);
             }
         }
 
