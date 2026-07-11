@@ -150,6 +150,80 @@ namespace AppRefiner
         [DllImport("kernel32.dll", SetLastError = true)]
         public static extern bool WriteProcessMemory(IntPtr hProcess, IntPtr lpBaseAddress, byte[] lpBuffer, int nSize, out int lpNumberOfBytesWritten);
 
+        [DllImport("kernel32.dll", SetLastError = true)]
+        public static extern IntPtr GetCurrentProcess();
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        public static extern bool CreatePipe(
+            out IntPtr hReadPipe,
+            out IntPtr hWritePipe,
+            IntPtr lpPipeAttributes,
+            uint nSize);
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        public static extern bool DuplicateHandle(
+            IntPtr hSourceProcessHandle,
+            IntPtr hSourceHandle,
+            IntPtr hTargetProcessHandle,
+            out IntPtr lpTargetHandle,
+            uint dwDesiredAccess,
+            [MarshalAs(UnmanagedType.Bool)] bool bInheritHandle,
+            uint dwOptions);
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        public static extern bool WriteFile(
+            IntPtr hFile,
+            byte[] lpBuffer,
+            int nNumberOfBytesToWrite,
+            out int lpNumberOfBytesWritten,
+            IntPtr lpOverlapped);
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        public static extern bool ReadFile(
+            IntPtr hFile,
+            byte[] lpBuffer,
+            int nNumberOfBytesToRead,
+            out int lpNumberOfBytesRead,
+            IntPtr lpOverlapped);
+
+        /// <summary>
+        /// WriteFile with offset into buffer (manual slice).
+        /// </summary>
+        public static bool WriteFile(IntPtr hFile, byte[] buffer, int offset, int count, out int written)
+        {
+            if (offset == 0 && count == buffer.Length)
+            {
+                return WriteFile(hFile, buffer, count, out written, IntPtr.Zero);
+            }
+
+            byte[] slice = new byte[count];
+            Buffer.BlockCopy(buffer, offset, slice, 0, count);
+            return WriteFile(hFile, slice, count, out written, IntPtr.Zero);
+        }
+
+        /// <summary>
+        /// ReadFile into buffer at offset.
+        /// </summary>
+        public static bool ReadFile(IntPtr hFile, byte[] buffer, int offset, int count, out int read)
+        {
+            byte[] temp = new byte[count];
+            if (!ReadFile(hFile, temp, count, out read, IntPtr.Zero))
+            {
+                return false;
+            }
+
+            if (read > 0)
+            {
+                Buffer.BlockCopy(temp, 0, buffer, offset, read);
+            }
+
+            return true;
+        }
+
         #endregion
 
         #region Constants
@@ -158,6 +232,10 @@ namespace AppRefiner
         public const uint PROCESS_VM_READ = 0x0010;
         public const uint PROCESS_VM_WRITE = 0x0020;
         public const uint PROCESS_VM_OPERATION = 0x0008;
+        public const uint PROCESS_DUP_HANDLE = 0x0040;
+
+        public const uint DUPLICATE_CLOSE_SOURCE = 0x00000001;
+        public const uint DUPLICATE_SAME_ACCESS = 0x00000002;
 
         // Memory allocation constants
         public const uint MEM_COMMIT = 0x1000;

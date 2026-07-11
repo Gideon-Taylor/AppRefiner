@@ -2,6 +2,7 @@ using AppRefiner.Commands;
 using AppRefiner.Commands.BuiltIn;
 using AppRefiner.Database;
 using AppRefiner.Database.Models;
+using AppRefiner.Database.SqlProxy;
 using AppRefiner.Dialogs;
 using AppRefiner.Events;
 using AppRefiner.LanguageExtensions;
@@ -5382,9 +5383,30 @@ namespace AppRefiner
                 WatchAppDesignerProcessExit(processId);
                 activeAppDesigner = newProcess;
 
-                // App Designer may have been running (with editors open) before AppRefiner
-                // started — subclass and initialize any editors that already exist
-                newProcess.InitExistingEditors();
+                /* TEST SQLProxy */
+
+                using var conn = new SqlProxyDbConnection(newProcess);
+                conn.Open();
+                var dt = conn.ExecuteQuery(
+                    "SELECT MESSAGE_SET_NBR, DESCR FROM PSMSGSETDEFN WHERE MESSAGE_SET_NBR = :setNumber",
+                    new Dictionary<string, object> { [":setNumber"] = 1 }
+                );
+
+            // Create the header row
+            var headers = dt.Columns.Cast<DataColumn>().Select(column => column.ColumnName);
+            var headerLine = string.Join(",", headers);
+
+            // Create the data rows
+            var rows = dt.AsEnumerable().Select(row => string.Join(",", row.ItemArray));
+
+            // Combine headers and data, then write to text file
+            var textLines = new[] { headerLine }.Concat(rows);
+            
+
+
+        // App Designer may have been running (with editors open) before AppRefiner
+        // started — subclass and initialize any editors that already exist
+        newProcess.InitExistingEditors();
 
                 RefreshInstancesGrid();
 

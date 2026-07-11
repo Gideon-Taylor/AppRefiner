@@ -35,6 +35,10 @@
 // Message to tear down all subclasses/child windows and release the DLL self-reference
 // so the hook DLL can be unloaded from this App Designer process (sent on AppRefiner close).
 #define WM_AR_DETACH (WM_USER + 1012)
+// SQL proxy: bootstrap pipe handles (wParam = remote ArSqlProxyAttach*, lParam = cb)
+#define WM_AR_SQLPROXY_ATTACH (WM_USER + 1013)
+// SQL proxy: UI-thread pump — dequeue in-process work only (never carries SQL)
+#define WM_AR_SQLPROXY_PUMP (WM_USER + 1014)
 
 /* TODO define messages with a mask to indicate "this is a scintilla event message" */
 #define WM_SCN_EVENT_MASK 0x7000

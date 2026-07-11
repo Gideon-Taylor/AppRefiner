@@ -219,7 +219,11 @@ namespace AppRefiner
             ProcessId = pid;
             ResultsListView = resultsListView;
             Settings = settings;
-            ProcessHandle = WinApi.OpenProcess(WinApi.PROCESS_VM_READ | WinApi.PROCESS_VM_WRITE | WinApi.PROCESS_VM_OPERATION, false, ProcessId);
+            // PROCESS_DUP_HANDLE required for SqlProxy anonymous-pipe DuplicateHandle into this process.
+            ProcessHandle = WinApi.OpenProcess(
+                WinApi.PROCESS_VM_READ | WinApi.PROCESS_VM_WRITE | WinApi.PROCESS_VM_OPERATION | WinApi.PROCESS_DUP_HANDLE,
+                false,
+                ProcessId);
 
             // Initialize memory manager for this process
             MemoryManager = new MemoryManager(this);

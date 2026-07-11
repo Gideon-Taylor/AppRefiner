@@ -554,6 +554,109 @@ Internal calls from `SamExecFetch` may pass extra pointers in `RDX`/`R8` — not
 
 ---
 
+## 5A. Result-set metadata (column count & types)
+
+App Designer **almost never** calls these for definition SQL: managers already know the PeopleTools record/field shape and pre-register `SamBuf*` / `SamBufTbl`. For a **generic SQL proxy**, these exports are the right tools — even if the IDE leaves them unused.
+
+Xref scans in a live `pside` session showed **0 call sites** into `SamNumResultCols` / `SamDescribeCol` / `SamBufferType` / `SamOpnDescribeAll` from loaded modules (exports still present for COBOL/AE/other tools / public API completeness).
+
+### When metadata becomes available
+
+Column count lives on the cursor object at **`+0x78`** (word), filled via a **`PS_sqlnsi`**-style helper (“NSI #cols=” in traces). That implies the statement must be **prepared / described** on the network backend — typically after `SamSetSqlProc` and whatever open/compile path runs before or during first execute. Practical proxy approach:
+
+1. `SamCreate` + `SamSetSqlProc` (+ binds if needed)  
+2. **`SamNumResultCols`** (or `SamOpnDescribeAll`) — if it fails with `8`, try `SamCompileNow` then retry, or exec once and describe (validate on live DB)  
+3. **`SamDescribeCol`** per column (1-based index — confirm live)  
+4. Register matching `SamBuf*`  
+5. `SamExecFetch` / `SamFetch`  
+
+### `SamNumResultCols` — **disasm confirmed**
+
+```c
+// returns 0 success, 8 failure
+int SamNumResultCols(
+    HSAMTRAN  hTran,     // RCX
+    int*      pNumCols   // RDX  OUT
+);
+```
+
+Looks up cursor; on success writes column count from cursor `+0x78` into `*pNumCols`.
+
+### `SamDescribeCol` — **disasm confirmed** (many optional OUT pointers)
+
+```c
+// returns 0 success, 8 failure
+// Column index in DX (16-bit); name buffer is wchar_t[]
+int SamDescribeCol(
+    HSAMTRAN     hTran,          // RCX
+    unsigned short colIndex,     // RDX  (low 16 bits used)
+    wchar_t*     nameBuf,        // R8   OUT column name (nullable?)
+    unsigned short nameCch,      // R9   capacity in wchars
+    unsigned short* pNameLen,    // [rsp+0x28] OUT name length (optional)
+    int*         pSamType,       // [rsp+0x30] OUT SAM type enum (optional)
+    int*         pPrecision,     // [rsp+0x38] OUT length/precision (optional)
+    unsigned short* pScale,      // [rsp+0x40] OUT scale (optional)
+    unsigned short* pNullable    // [rsp+0x48] OUT nullable flag (optional)
+);
+```
+
+Maps network/SQL types into the same **SAM type ids** used by `SamBuf*` / `SamFldDesc` (examples from type switch: `1` string, `3` date, `7` decimal, `8` long text, `9` long raw, `0x0A` time, `0x0B` datetime).
+
+### `SamOpnDescribeAll` — **disasm confirmed** (bulk describe)
+
+```c
+// returns 0 success, 8 failure
+// Allocates an array of per-column records, size 0x130 bytes each (*ppArray).
+// Caller must free with the matching allocator (same heap as pssam — typically the CRT used by Tools).
+int SamOpnDescribeAll(
+    HSAMTRAN  hTran,           // RCX
+    short*    pStatusOrErr,    // RDX  on OOM sets *p = -1 (0xFFFF)
+    int*      pNumCols,        // R8   OUT
+    int*      pTotalSize,      // R9   OUT sum of column storage sizes (packing hint)
+    void**    ppColArray       // [rsp+0x28] OUT array; stride 0x130
+);
+```
+
+Builds names + type/size info for all columns in one shot (internally walks backend column info with stride `0x308`, emits records of `0x130`). Convenient for a proxy “describe then bind buffers” path.
+
+### `SamBufferType` — **not result-set describe**
+
+```c
+// RCX = pointer to an existing bind/buffer descriptor entry (internal BBT node),
+// RDX = OUT struct receiving mapped type (+ size fields for some types)
+void SamBufferType(void* pBufDesc, /* out */ int* pInfo /* + more fields */);
+```
+
+Uses `pBufDesc+0x10` as an internal type code and maps it to SAM type enums in `*pInfo`. This introspects **buffers you already registered**, not the SQL result metadata. **Not** a substitute for `SamDescribeCol` after ad-hoc SQL.
+
+### `SamSQLType` — statement category
+
+```c
+// Returns a coarse statement kind (select vs non-select, etc.) from cursor byte +0x7A
+// after a network type probe. Useful to reject DML in a SELECT-only proxy.
+int SamSQLType(HSAMTRAN hTran /*, ... */);
+```
+
+### `SamGetRow`
+
+Returns row-related count/status from cursor (`+0x74` path) — fetch progress, not column metadata.
+
+### Proxy recommendation
+
+```text
+SamCreate → SamSetSqlProc → [SamBind*]
+  → SamNumResultCols(h, &n)
+  → for i in 1..n:
+        SamDescribeCol(h, i, name, cch, &nameLen, &type, &prec, &scale, &nulls)
+  → allocate OUT buffers; SamBufStr / SamBufInt / … by type
+  → SamExecFetch / SamFetch loop
+  → SamDestroy
+```
+
+If `SamNumResultCols` returns `8` before any exec, try `SamCompileNow(h)` (or a no-fetch prepare path) once on a live cursor and re-test — document the exact order after a single debugger experiment on Oracle and SQL Server.
+
+---
+
 ## 6. Field type IDs (descriptor / desc+0x04)
 
 Used by `SamBufTbl` / `SamBindTbl` and mirrored in individual `SamBuf*` / `SamBind*`:

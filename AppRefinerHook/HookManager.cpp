@@ -2,6 +2,7 @@
 #include "MinimapOverlay.h"
 #include "MinimapManager.h"
 #include "ComboBoxButton.h"
+#include "SqlProxyIpc.h"
 #include <winver.h>  // For version info APIs (GetFileVersionInfo, etc.)
 
 #pragma comment(lib, "version.lib")  // Link version.lib for file version APIs
@@ -81,6 +82,9 @@ std::vector<HWND> GetRegisteredScintillaEditors() {
 void TearDownAndUnload() {
     g_detached = true;
     OutputDebugStringA("TearDownAndUnload: beginning hook DLL teardown\n");
+
+    // 0. Stop SQL proxy session (closes pipe handles, fails pending work) before UI teardown.
+    ArSqlProxy::Shutdown();
 
     // 1. Disable minimaps on every registered Scintilla editor (destroys minimap child windows).
     for (HWND sci : GetRegisteredScintillaEditors()) {
@@ -870,6 +874,16 @@ LRESULT CALLBACK MainWindowSubclassProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPA
             return 1; // handled; do not call DefSubclassProc (this proc was just removed)
         }
 
+        // SQL proxy attach: synchronous so AppRefiner can use SendMessage and get a return value.
+        // wParam = AttachInfo* in this process, lParam = byte size.
+        if (uMsg == WM_AR_SQLPROXY_ATTACH) {
+            const ArSqlProxy::AttachInfo* attach =
+                reinterpret_cast<const ArSqlProxy::AttachInfo*>(wParam);
+            const uint32_t cb = static_cast<uint32_t>(lParam);
+            const BOOL ok = ArSqlProxy::HandleAttach(attach, cb);
+            return ok ? 1 : 0;
+        }
+
         // Get the callback window from dwRefData
         HWND callbackWindow = (HWND)dwRefData;
 
@@ -1261,7 +1275,7 @@ LRESULT CALLBACK GetMsgHook(int nCode, WPARAM wParam, LPARAM lParam) {
         // removal, BEFORE the PM_REMOVE gate. If a request is posted but this line never
         // appears, the message was never retrieved by this thread's message loop at all;
         // if it appears only with PM_NOREMOVE, something peeks but never removes it.
-        if (msg->message >= WM_TOGGLE_AUTO_PAIRING && msg->message <= WM_AR_SET_PARAM_NAMES) {
+        if (msg->message >= WM_TOGGLE_AUTO_PAIRING && msg->message <= WM_AR_SQLPROXY_PUMP) {
             char sightingMsg[160];
             sprintf_s(sightingMsg, "GetMsgHook: saw msg 0x%X (WM_USER+%u) wParam=0x%p lParam=0x%p mode=%s\n",
                       msg->message, msg->message - WM_USER,
@@ -1281,7 +1295,24 @@ LRESULT CALLBACK GetMsgHook(int nCode, WPARAM wParam, LPARAM lParam) {
         // Once this process has been detached (TearDownAndUnload ran), refuse every AR
         // control message so a late/queued subclass request cannot re-install a subclass
         // after the DLL self-reference was freed.
-        if (g_detached && msg->message >= WM_TOGGLE_AUTO_PAIRING && msg->message <= WM_AR_DETACH) {
+        if (g_detached && msg->message >= WM_TOGGLE_AUTO_PAIRING && msg->message <= WM_AR_SQLPROXY_PUMP) {
+            msg->message = WM_NULL;
+            return CallNextHookEx(g_getMsgHook, nCode, wParam, lParam);
+        }
+
+        // SQL proxy: attach via PostThreadMessage (SendMessage path is MainWindowSubclassProc).
+        if (msg->message == WM_AR_SQLPROXY_ATTACH) {
+            const ArSqlProxy::AttachInfo* attach =
+                reinterpret_cast<const ArSqlProxy::AttachInfo*>(msg->wParam);
+            const uint32_t cb = static_cast<uint32_t>(msg->lParam);
+            ArSqlProxy::HandleAttach(attach, cb);
+            msg->message = WM_NULL;
+            return CallNextHookEx(g_getMsgHook, nCode, wParam, lParam);
+        }
+
+        // SQL proxy: drain private work queue only — never trust wParam/lParam for SQL.
+        if (msg->message == WM_AR_SQLPROXY_PUMP) {
+            ArSqlProxy::HandlePump();
             msg->message = WM_NULL;
             return CallNextHookEx(g_getMsgHook, nCode, wParam, lParam);
         }

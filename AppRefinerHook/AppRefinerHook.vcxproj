@@ -157,6 +157,9 @@
     <ClInclude Include="Scintilla.h" />
     <ClInclude Include="Sci_position.h" />
     <ClInclude Include="ScintillaUtils.h" />
+    <ClInclude Include="SqlProxyProtocol.h" />
+    <ClInclude Include="SqlProxyIpc.h" />
+    <ClInclude Include="SqlProxySam.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="AutoIndent.cpp" />
@@ -168,6 +171,8 @@
     <ClCompile Include="MinimapManager.cpp" />
     <ClCompile Include="MinimapOverlay.cpp" />
     <ClCompile Include="ScintillaUtils.cpp" />
+    <ClCompile Include="SqlProxyIpc.cpp" />
+    <ClCompile Include="SqlProxySam.cpp" />
   </ItemGroup>
   <ItemGroup>
     <Text Include="License.txt" />

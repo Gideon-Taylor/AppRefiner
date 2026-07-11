@@ -16,6 +16,9 @@ namespace AppRefiner.Events
         private const uint WM_AR_SET_MINIMAP = WM_USER + 1010;
         private const uint WM_AR_SET_PARAM_NAMES = WM_USER + 1011;
         private const uint WM_AR_DETACH = WM_USER + 1012;
+        // SQL proxy (see AppRefiner.Database.SqlProxy.SqlProxyProtocol)
+        private const uint WM_AR_SQLPROXY_ATTACH = WM_USER + 1013;
+        private const uint WM_AR_SQLPROXY_PUMP = WM_USER + 1014;
 
         /// <summary>
         /// Status flags reported by the hook in WM_AR_SUBCLASS_ACK (mirrors AR_SUB_ACK_* in
