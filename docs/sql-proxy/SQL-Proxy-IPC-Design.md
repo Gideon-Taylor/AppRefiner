@@ -98,6 +98,33 @@ Earlier concept docs suggested a discoverable HWND + named shared memory. That i
 
 Anonymous pipes + private work queue address both discovery and false authorization.
 
+### 4.3 Reentrancy / deadlock rule (mandatory)
+
+`ExecSql` completion requires App Designer’s **UI thread** to process `WM_AR_SQLPROXY_PUMP` (dequeue + `Sam*`).
+
+Therefore AppRefiner must **never** call the SQL proxy while App Designer’s UI thread is blocked waiting on AppRefiner.
+
+Classic deadlock:
+
+1. AD UI handles `SCN_DWELLSTART` (or package/member suggest, etc.)
+2. Hook **`SendMessage`**s into AppRefiner’s callback window
+3. AppRefiner runs tooltip/type-resolution SQL via the proxy
+4. Proxy IO thread posts `WM_AR_SQLPROXY_PUMP` and waits on the work-item event
+5. AD UI never pumps → hang
+
+**Mitigation (hook):** fire-and-forget notifications that can cause catalog SQL use **`PostMessage`**, not `SendMessage`, for at least:
+
+- `WM_SCN_DWELL_START` / `WM_SCN_DWELL_END`
+- `WM_AR_APP_PACKAGE_SUGGEST`
+- `WM_AR_VARIABLE_SUGGEST`
+- `WM_AR_FUNCTION_CALL_TIP`
+- `WM_AR_OBJECT_MEMBERS`
+- `WM_AR_SYSTEM_VARIABLE_SUGGEST`
+
+Paths that must stay synchronous (`SendMessage`) must not invoke the SQL proxy on the AppRefiner side while AD is still inside that send (or must complete SQL only after AD’s UI is free).
+
+**Pump delivery:** `WM_AR_SQLPROXY_PUMP` must be deliverable while the UI thread is nested in a `SendMessage` wait (e.g. waiting for AppRefiner). **`PostThreadMessage` is not dispatched in that state.** The IO thread therefore **`SendMessage`s `WM_AR_SQLPROXY_PUMP` to the subclassed App Designer main window** (handled in `MainWindowSubclassProc`). Same-thread follow-up pumps use `PostMessage` to that window to avoid re-entering `HandlePump` under `g_inPump`.
+
 ---
 
 ## 5. Transport: anonymous pipes

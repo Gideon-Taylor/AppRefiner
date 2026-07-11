@@ -28,6 +28,7 @@ HANDLE g_requestRead = nullptr;
 HANDLE g_responseWrite = nullptr;
 HANDLE g_ioThread = nullptr;
 DWORD g_uiThreadId = 0;
+HWND g_uiPumpHwnd = nullptr;
 volatile LONG g_running = 0;
 volatile LONG g_inPump = 0;
 std::deque<std::shared_ptr<WorkItem>> g_queue;
@@ -36,6 +37,33 @@ void EnsureCs() {
     if (!g_csInit) {
         InitializeCriticalSection(&g_cs);
         g_csInit = true;
+    }
+}
+
+// Wake the UI thread to drain the SAM work queue.
+// Cross-thread: prefer SendMessage to the subclassed main window so the pump runs even
+// when that thread is blocked inside SendMessage to AppRefiner (posted thread messages
+// are NOT dispatched during a SendMessage wait — see Raymond Chen / MSDN).
+// Same-thread: PostMessage only (SendMessage would re-enter HandlePump while g_inPump is set).
+void SchedulePump() {
+    HWND hwnd = nullptr;
+    DWORD tid = 0;
+    EnterCriticalSection(&g_cs);
+    hwnd = g_uiPumpHwnd;
+    tid = g_uiThreadId;
+    LeaveCriticalSection(&g_cs);
+
+    if (hwnd && IsWindow(hwnd)) {
+        if (GetCurrentThreadId() != tid) {
+            SendMessageW(hwnd, WM_AR_SQLPROXY_PUMP, 0, 0);
+            return;
+        }
+        PostMessageW(hwnd, WM_AR_SQLPROXY_PUMP, 0, 0);
+        return;
+    }
+
+    if (tid != 0) {
+        PostThreadMessageW(tid, WM_AR_SQLPROXY_PUMP, 0, 0);
     }
 }
 
@@ -410,9 +438,7 @@ DWORD WINAPI IoThreadProc(LPVOID) {
         g_queue.push_back(item);
         LeaveCriticalSection(&g_cs);
 
-        if (g_uiThreadId != 0) {
-            PostThreadMessageW(g_uiThreadId, WM_AR_SQLPROXY_PUMP, 0, 0);
-        }
+        SchedulePump();
 
         WaitForSingleObject(item->doneEvent, INFINITE);
 
@@ -471,6 +497,7 @@ BOOL HandleAttach(const AttachInfo* attach, uint32_t cb) {
     g_requestRead = reinterpret_cast<HANDLE>(static_cast<uintptr_t>(info.requestReadHandle));
     g_responseWrite = reinterpret_cast<HANDLE>(static_cast<uintptr_t>(info.responseWriteHandle));
     g_uiThreadId = GetCurrentThreadId();
+    // g_uiPumpHwnd is set by SetUiPumpWindow from MainWindowSubclassProc (preferred).
 
     InterlockedExchange(&g_running, 1);
     g_ioThread = CreateThread(nullptr, 0, IoThreadProc, nullptr, 0, nullptr);
@@ -522,11 +549,18 @@ void HandlePump() {
 
     EnterCriticalSection(&g_cs);
     const bool more = !g_queue.empty();
-    const DWORD tid = g_uiThreadId;
     LeaveCriticalSection(&g_cs);
-    if (more && tid != 0) {
-        PostThreadMessageW(tid, WM_AR_SQLPROXY_PUMP, 0, 0);
+    if (more) {
+        // Same-thread PostMessage path inside SchedulePump (we are on the UI thread).
+        SchedulePump();
     }
+}
+
+void SetUiPumpWindow(HWND hwnd) {
+    EnsureCs();
+    EnterCriticalSection(&g_cs);
+    g_uiPumpHwnd = hwnd;
+    LeaveCriticalSection(&g_cs);
 }
 
 void Shutdown() {
@@ -546,6 +580,8 @@ void Shutdown() {
     }
     HANDLE thread = g_ioThread;
     g_ioThread = nullptr;
+    g_uiThreadId = 0;
+    // Keep g_uiPumpHwnd — main window subclass may outlive a single attach session.
     LeaveCriticalSection(&g_cs);
 
     FailAllPending(Status::Disconnected, L"SQL proxy shut down");

@@ -232,8 +232,9 @@ void HandleScintillaNotification(HWND hwnd, SCNotification* scn, HWND callbackWi
                           autoHide ? "true" : "false", (char)separator, separator);
                 OutputDebugStringA(debugMsg);
 
-                // Send the app package suggest message with current position as wParam
-                SendMessage(callbackWindow, WM_AR_APP_PACKAGE_SUGGEST, (WPARAM)currentPos, (LPARAM)AR_PACK_HWND(hwnd, 0));
+                // Post (not Send): may run SQL via AppRefiner's SAM proxy, which needs this
+                // UI thread free to process WM_AR_SQLPROXY_PUMP. SendMessage would deadlock.
+                PostMessage(callbackWindow, WM_AR_APP_PACKAGE_SUGGEST, (WPARAM)currentPos, (LPARAM)AR_PACK_HWND(hwnd, 0));
             }
 
             // Check for ampersand character to trigger variable auto-suggest
@@ -278,8 +279,8 @@ void HandleScintillaNotification(HWND hwnd, SCNotification* scn, HWND callbackWi
                              currentPos, nextCharValue);
                     OutputDebugStringA(debugMsg);
 
-                    // Send the variable suggest message with current position as wParam
-                    SendMessage(callbackWindow, WM_AR_VARIABLE_SUGGEST, (WPARAM)currentPos, (LPARAM)AR_PACK_HWND(hwnd, 0));
+                    // Post (not Send): handler may hit type resolution / SQL proxy.
+                    PostMessage(callbackWindow, WM_AR_VARIABLE_SUGGEST, (WPARAM)currentPos, (LPARAM)AR_PACK_HWND(hwnd, 0));
                 } else {
                     // User is adding & to an existing identifier, don't trigger autocomplete
                     char debugMsg[256];
@@ -389,22 +390,22 @@ void HandleScintillaNotification(HWND hwnd, SCNotification* scn, HWND callbackWi
                     }
                 }
 
-                // If not a shorthand, send function call tip message
+                // If not a shorthand, post function call tip (may resolve types via SQL proxy).
                 if (!isShorthand) {
-                    SendMessage(callbackWindow, WM_AR_FUNCTION_CALL_TIP, (WPARAM)currentPos, (LPARAM)AR_PACK_HWND(hwnd, '('));
+                    PostMessage(callbackWindow, WM_AR_FUNCTION_CALL_TIP, (WPARAM)currentPos, (LPARAM)AR_PACK_HWND(hwnd, '('));
                 }
             }
 
             // Check for closing parenthesis for function call tips
             if (scn->ch == ')' && callbackWindow && IsWindow(callbackWindow)) {
                 int currentPos = SendMessage(hwnd, SCI_GETCURRENTPOS, 0, 0);
-                SendMessage(callbackWindow, WM_AR_FUNCTION_CALL_TIP, (WPARAM)currentPos, (LPARAM)AR_PACK_HWND(hwnd, ')'));
+                PostMessage(callbackWindow, WM_AR_FUNCTION_CALL_TIP, (WPARAM)currentPos, (LPARAM)AR_PACK_HWND(hwnd, ')'));
             }
 
             // Check for comma for function call tips (parameter navigation)
             if (scn->ch == ',' && callbackWindow && IsWindow(callbackWindow)) {
                 int currentPos = SendMessage(hwnd, SCI_GETCURRENTPOS, 0, 0);
-                SendMessage(callbackWindow, WM_AR_FUNCTION_CALL_TIP, (WPARAM)currentPos, (LPARAM)AR_PACK_HWND(hwnd, ','));
+                PostMessage(callbackWindow, WM_AR_FUNCTION_CALL_TIP, (WPARAM)currentPos, (LPARAM)AR_PACK_HWND(hwnd, ','));
             }
 
             // Check for dot character to trigger object member suggestions
@@ -434,8 +435,8 @@ void HandleScintillaNotification(HWND hwnd, SCNotification* scn, HWND callbackWi
                     nextCharValue == '%';     // Percent
 
                 if (shouldTriggerAutocomplete) {
-                    // Send the object members message with current position as wParam
-                    SendMessage(callbackWindow, WM_AR_OBJECT_MEMBERS, (WPARAM)currentPos, (LPARAM)AR_PACK_HWND(hwnd, 0));
+                    // Post (not Send): member resolve often hits the SQL proxy.
+                    PostMessage(callbackWindow, WM_AR_OBJECT_MEMBERS, (WPARAM)currentPos, (LPARAM)AR_PACK_HWND(hwnd, 0));
                 }
             }
 
@@ -464,8 +465,7 @@ void HandleScintillaNotification(HWND hwnd, SCNotification* scn, HWND callbackWi
                     nextCharValue == '%';     // Percent
 
                 if (shouldTriggerAutocomplete) {
-                    // Send the system variable suggest message with current position as wParam
-                    SendMessage(callbackWindow, WM_AR_SYSTEM_VARIABLE_SUGGEST, (WPARAM)currentPos, (LPARAM)AR_PACK_HWND(hwnd, 0));
+                    PostMessage(callbackWindow, WM_AR_SYSTEM_VARIABLE_SUGGEST, (WPARAM)currentPos, (LPARAM)AR_PACK_HWND(hwnd, 0));
                 }
             }
 
@@ -507,13 +507,14 @@ void HandleScintillaNotification(HWND hwnd, SCNotification* scn, HWND callbackWi
                     line++;
                 }
                 
-                // Send message with position as wParam and line number as lParam
-                SendMessage(callbackWindow, WM_SCN_DWELL_START, (WPARAM)scn->position, (LPARAM)AR_PACK_HWND(hwnd, line));
+                // Post (not Send): tooltip path often queries catalog SQL via the SAM proxy.
+                // SendMessage would hold this UI thread while the proxy waits for PUMP → deadlock.
+                PostMessage(callbackWindow, WM_SCN_DWELL_START, (WPARAM)scn->position, (LPARAM)AR_PACK_HWND(hwnd, line));
             }
         } 
         else if (scn->nmhdr.code == SCN_DWELLEND) {
             if (callbackWindow && IsWindow(callbackWindow)) {
-                SendMessage(callbackWindow, WM_SCN_DWELL_END, (WPARAM)scn->position, (LPARAM)AR_PACK_HWND(hwnd, 0));
+                PostMessage(callbackWindow, WM_SCN_DWELL_END, (WPARAM)scn->position, (LPARAM)AR_PACK_HWND(hwnd, 0));
             }
         }
         else if (scn->nmhdr.code == SCN_SAVEPOINTREACHED) {
@@ -877,11 +878,20 @@ LRESULT CALLBACK MainWindowSubclassProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPA
         // SQL proxy attach: synchronous so AppRefiner can use SendMessage and get a return value.
         // wParam = AttachInfo* in this process, lParam = byte size.
         if (uMsg == WM_AR_SQLPROXY_ATTACH) {
+            // Pump window must be this HWND so IO-thread SendMessage(PUMP) can nest while
+            // the UI thread is blocked in SendMessage to AppRefiner.
+            ArSqlProxy::SetUiPumpWindow(hWnd);
             const ArSqlProxy::AttachInfo* attach =
                 reinterpret_cast<const ArSqlProxy::AttachInfo*>(wParam);
             const uint32_t cb = static_cast<uint32_t>(lParam);
             const BOOL ok = ArSqlProxy::HandleAttach(attach, cb);
             return ok ? 1 : 0;
+        }
+
+        // SQL proxy pump: delivered via SendMessage from the pipe IO thread (see SchedulePump).
+        if (uMsg == WM_AR_SQLPROXY_PUMP) {
+            ArSqlProxy::HandlePump();
+            return 0;
         }
 
         // Get the callback window from dwRefData
@@ -1402,6 +1412,8 @@ LRESULT CALLBACK GetMsgHook(int nCode, WPARAM wParam, LPARAM lParam) {
                 // Subclass the main window, passing callbackWindow as dwRefData
                 if (SetWindowSubclass(hMainWindow, MainWindowSubclassProc, MAIN_WINDOW_SUBCLASS_ID, (DWORD_PTR)callbackWindow)) {
                     RegisterSubclass(hMainWindow, MainWindowSubclassProc, MAIN_WINDOW_SUBCLASS_ID);
+                    // SQL proxy IO thread SendMessage(PUMP) targets this HWND.
+                    ArSqlProxy::SetUiPumpWindow(hMainWindow);
                 }
 
                 char debugMsg[100];

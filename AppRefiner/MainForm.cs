@@ -2079,6 +2079,9 @@ namespace AppRefiner
                         // Initialize any other editors that were already open in this process
                         newProcess.InitExistingEditors();
 
+                        // SAM proxy when ready (may no-op until signed on; activation retries)
+                        TryAttachSqlProxyDataManager(newProcess);
+
                         // Apply current theme to newly created process
                         ApplyCurrentThemeToProcess(newProcess);
 
@@ -2090,6 +2093,8 @@ namespace AppRefiner
                         activeAppDesigner = activeEditor.AppDesignerProcess;
                         stylerManager.StylerRules.Where(s => s is FunctionParameterNames).First().Active = activeEditor.ParameterNamesEnabled;
                         RefreshInstancesGrid(); // New instance + active dot
+
+                        MaybePromptForDbConnection(newProcess);
                         return;
                     }
                 }
@@ -4080,11 +4085,20 @@ namespace AppRefiner
         /// <param name="process">The App Designer process to offer a connection for</param>
         private void MaybePromptForDbConnection(AppDesignerProcess process)
         {
-            if (!chkPromptForDB.Checked) return;
-            if (process.DataManager != null || process.DoNotPromptForDB) return;
+            if (process == null || process.DataManager != null || process.DoNotPromptForDB) return;
 
-            // DBName is captured from the window title shortly after process discovery;
-            // if it isn't known yet, a later activation (or editor focus) will prompt.
+            // Caption (and therefore DB name / signed-on state) can change after discovery —
+            // e.g. App Designer opened after AppRefiner, then the user signs on.
+            RefreshDbNameFromCaption(process);
+
+            // Prefer SAM proxy over a separate Oracle/ODBC connection whenever possible.
+            TryAttachSqlProxyDataManager(process);
+            if (process.DataManager != null) return;
+
+            if (!chkPromptForDB.Checked) return;
+
+            // DBName is captured from the window title once signed on;
+            // if it isn't known yet, a later activation will prompt.
             if (string.IsNullOrEmpty(process.DBName)) return;
 
             WinApi.GetWindowThreadProcessId(WinApi.GetForegroundWindow(), out uint foregroundPid);
@@ -4095,6 +4109,29 @@ namespace AppRefiner
             }
 
             ConnectToDB(process);
+        }
+
+        /// <summary>
+        /// Updates <see cref="AppDesignerProcess.DBName"/> from the main window caption
+        /// ("Application Designer - &lt;DB&gt; - ...").
+        /// </summary>
+        private static void RefreshDbNameFromCaption(AppDesignerProcess process)
+        {
+            if (process == null || process.MainWindowHandle == IntPtr.Zero) return;
+
+            try
+            {
+                var caption = WindowHelper.GetWindowText(process.MainWindowHandle);
+                string[] parts = caption.Split(new[] { " - " }, StringSplitOptions.None);
+                if (parts.Length >= 2)
+                {
+                    process.DBName = parts[1].Trim();
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.Log($"RefreshDbNameFromCaption: {ex.Message}");
+            }
         }
 
         private void ConnectToDB(AppDesignerProcess process)
@@ -4142,6 +4179,47 @@ namespace AppRefiner
             // Force refresh all editors to allow DB-dependent stylers to run
             RefreshAllEditorsAfterDatabaseConnection();
             RefreshInstancesGrid();
+        }
+
+        /// <summary>
+        /// Builds an <see cref="OraclePeopleSoftDataManager"/> over the App Designer process's
+        /// signed-on SAM session (proxy connection constructed inside the manager).
+        /// Safe to call repeatedly; no-ops when already connected or attach is not ready yet.
+        /// </summary>
+        private void TryAttachSqlProxyDataManager(AppDesignerProcess process)
+        {
+            if (process == null || process.DataManager != null)
+            {
+                return;
+            }
+
+            try
+            {
+                var manager = new OraclePeopleSoftDataManager(process, SqlProxyDialect.Oracle);
+                if (!manager.Connect())
+                {
+                    Debug.Log($"TryAttachSqlProxyDataManager: connect failed for pid {process.ProcessId}: {manager.LastConnectionError}");
+                    manager.Dispose();
+                    return;
+                }
+
+                string? toolsVersion = null;
+                try
+                {
+                    toolsVersion = manager.GetToolsVersion();
+                }
+                catch (Exception ex)
+                {
+                    Debug.Log($"TryAttachSqlProxyDataManager: GetToolsVersion skipped: {ex.Message}");
+                }
+
+                ApplyDatabaseConnection(process, manager, "App Designer SAM proxy", toolsVersion);
+                Debug.Log($"TryAttachSqlProxyDataManager: attached OraclePeopleSoftDataManager via SQL proxy for pid {process.ProcessId}");
+            }
+            catch (Exception ex)
+            {
+                Debug.Log($"TryAttachSqlProxyDataManager: failed for pid {process.ProcessId}: {ex.Message}");
+            }
         }
 
         /// <summary>
@@ -5383,30 +5461,13 @@ namespace AppRefiner
                 WatchAppDesignerProcessExit(processId);
                 activeAppDesigner = newProcess;
 
-                /* TEST SQLProxy */
+                // Prefer App Designer SAM session via SQL proxy when hooks can attach;
+                // falls back to no DataManager (user can still connect via DB dialog).
+                TryAttachSqlProxyDataManager(newProcess);
 
-                using var conn = new SqlProxyDbConnection(newProcess);
-                conn.Open();
-                var dt = conn.ExecuteQuery(
-                    "SELECT MESSAGE_SET_NBR, DESCR FROM PSMSGSETDEFN WHERE MESSAGE_SET_NBR = :setNumber",
-                    new Dictionary<string, object> { [":setNumber"] = 1 }
-                );
-
-            // Create the header row
-            var headers = dt.Columns.Cast<DataColumn>().Select(column => column.ColumnName);
-            var headerLine = string.Join(",", headers);
-
-            // Create the data rows
-            var rows = dt.AsEnumerable().Select(row => string.Join(",", row.ItemArray));
-
-            // Combine headers and data, then write to text file
-            var textLines = new[] { headerLine }.Concat(rows);
-            
-
-
-        // App Designer may have been running (with editors open) before AppRefiner
-        // started — subclass and initialize any editors that already exist
-        newProcess.InitExistingEditors();
+                // App Designer may have been running (with editors open) before AppRefiner
+                // started — subclass and initialize any editors that already exist
+                newProcess.InitExistingEditors();
 
                 RefreshInstancesGrid();
 
@@ -5420,27 +5481,24 @@ namespace AppRefiner
 
                 /* Set the DB name */
 
+                // Caption / signed-on state may lag process discovery. Retry DB name + SAM
+                // proxy attach after a short delay (and again on activation via MaybePrompt).
                 Task.Delay(1000).ContinueWith(_ =>
                 {
-                    // Split the title by " - " and get the second part (DB name)
-                    var caption = WindowHelper.GetWindowText(process.MainWindowHandle);
-                    string[] parts = caption.Split(new[] { " - " }, StringSplitOptions.None);
-                    if (parts.Length >= 2)
+                    this.Invoke(() =>
                     {
-                        newProcess.DBName = parts[1].Trim();
-                    }
-                    else
-                    {
-                        newProcess.DBName = "";
-                    }
+                        RefreshDbNameFromCaption(newProcess);
+                        // Immediate discovery often runs before sign-on; retry proxy here.
+                        TryAttachSqlProxyDataManager(newProcess);
 
-                    // Do NOT prompt unconditionally here: at startup AppRefiner enumerates every
-                    // running App Designer while AppRefiner itself is foreground, and the modal
-                    // dialogs (owned by background App Designer windows) would open invisibly.
-                    // MaybePromptForDbConnection only prompts if this App Designer is the
-                    // foreground app right now; otherwise the prompt happens on its first
-                    // activation (focus) instead.
-                    this.Invoke(() => MaybePromptForDbConnection(newProcess));
+                        // Do NOT prompt unconditionally here: at startup AppRefiner enumerates every
+                        // running App Designer while AppRefiner itself is foreground, and the modal
+                        // dialogs (owned by background App Designer windows) would open invisibly.
+                        // MaybePromptForDbConnection only prompts if this App Designer is the
+                        // foreground app right now; otherwise the prompt happens on its first
+                        // activation (focus) instead.
+                        MaybePromptForDbConnection(newProcess);
+                    });
                 });
                 return true;
             }

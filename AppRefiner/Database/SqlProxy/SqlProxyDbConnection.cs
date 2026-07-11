@@ -1,4 +1,6 @@
 using System.Data;
+using System.Diagnostics;
+using System.Text;
 
 namespace AppRefiner.Database.SqlProxy
 {
@@ -185,7 +187,9 @@ namespace AppRefiner.Database.SqlProxy
                 {
                     SqlProxyValueType.Int32 => typeof(int),
                     SqlProxyValueType.LongRaw => typeof(byte[]),
-                    _ => typeof(string),
+                    SqlProxyValueType.String => typeof(string),
+                    SqlProxyValueType.Null => typeof(Object),
+                    SqlProxyValueType.LongText => typeof(string),
                 };
                 table.Columns.Add(unique, clrType);
             }
@@ -197,6 +201,7 @@ namespace AppRefiner.Database.SqlProxy
 
             for (int row = 0; row < result.RowCount; row++)
             {
+
                 var dataRow = table.NewRow();
                 for (int c = 0; c < width; c++)
                 {
@@ -206,28 +211,45 @@ namespace AppRefiner.Database.SqlProxy
                         dataRow[c] = DBNull.Value;
                         continue;
                     }
-
                     object? val = result.Cells[idx].ToObject();
                     if (val == null || val is DBNull)
                     {
-                        dataRow[c] = DBNull.Value;
+                        dataRow[c] = DBNull.Value;   
                     }
                     else if (table.Columns[c].DataType == typeof(string) && val is int iv)
                     {
-                        dataRow[c] = iv.ToString();
+                        dataRow[c] = iv.ToString();   
                     }
                     else if (table.Columns[c].DataType == typeof(int) && val is string s && int.TryParse(s, out int parsed))
                     {
-                        dataRow[c] = parsed;
+                        dataRow[c] = parsed;   
                     }
                     else if (table.Columns[c].DataType.IsInstanceOfType(val))
                     {
-                        dataRow[c] = val;
+                        dataRow[c] = val;   
+                    }
+                    else if (val is byte[] b)
+                    {
+                        if (columns[c].Type == SqlProxyValueType.LongRaw)
+                        {
+                            dataRow[c] = val;
+                        }
+                        if (columns[c].Type == SqlProxyValueType.LongText)
+                        {
+                            dataRow[c] = Encoding.UTF8.GetString(b);
+                        }
                     }
                     else
                     {
-                        dataRow[c] = Convert.ChangeType(val, table.Columns[c].DataType);
-                    }
+                        try
+                        {
+                            dataRow[c] = Convert.ChangeType(val, table.Columns[c].DataType);
+                        }
+                        catch (Exception ex)
+                        {
+                            int i = 3;
+                        }
+                    }   
                 }
                 table.Rows.Add(dataRow);
             }

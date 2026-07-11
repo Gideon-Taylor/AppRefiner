@@ -1,4 +1,5 @@
 using AppRefiner.Database.Models;
+using AppRefiner.Database.SqlProxy;
 using PeopleCodeTypeInfo.Types;
 using System.Data;
 using System.Text;
@@ -23,6 +24,12 @@ namespace AppRefiner.Database
         public IDbConnection Connection => _connection;
 
         /// <summary>
+        /// True when this manager uses App Designer's signed-on SAM session via
+        /// <see cref="SqlProxyDbConnection"/> rather than a direct Oracle connection string.
+        /// </summary>
+        public bool UsesSqlProxy => _connection is SqlProxyDbConnection;
+
+        /// <summary>
         /// Gets whether the manager is connected
         /// </summary>
         public bool IsConnected => _connection?.State == ConnectionState.Open;
@@ -41,6 +48,25 @@ namespace AppRefiner.Database
         }
 
         /// <summary>
+        /// Creates a data manager over App Designer's signed-on SAM session
+        /// (<see cref="SqlProxyDbConnection"/> built for <paramref name="process"/>).
+        /// </summary>
+        /// <remarks>
+        /// Schema comes from the App Designer session — no
+        /// <c>ALTER SESSION SET CURRENT_SCHEMA</c> is issued (SELECT-only proxy).
+        /// Call <see cref="Connect"/> to attach the proxy and open the channel.
+        /// </remarks>
+        /// <param name="process">App Designer process that owns the SAM session</param>
+        /// <param name="dialect">SQL flavor for parameter placeholder rewriting only</param>
+        public OraclePeopleSoftDataManager(AppDesignerProcess process, SqlProxyDialect dialect = SqlProxyDialect.Oracle)
+        {
+            ArgumentNullException.ThrowIfNull(process);
+            _connection = new SqlProxyDbConnection(process, dialect);
+            _connectionString = _connection.ConnectionString ?? "SqlProxy";
+            _namespace = null;
+        }
+
+        /// <summary>
         /// Connect to the database
         /// </summary>
         /// <returns>True if connection was successful</returns>
@@ -54,7 +80,8 @@ namespace AppRefiner.Database
                 {
                     _connection.Open();
 
-                    // Set namespace if provided
+                    // Set namespace if provided (Oracle connection-string path only;
+                    // proxy sessions already run as the App Designer signed-on schema)
                     if (!string.IsNullOrEmpty(_namespace))
                     {
                         string sql = $"ALTER SESSION SET CURRENT_SCHEMA={_namespace}";
@@ -1710,11 +1737,9 @@ ORDER BY DEFN_TYPE ASC, ID ASC, CASE WHEN :sort_by_date = 'Y' THEN LASTUPDDTTM E
                     AND OBJECTID2 = 2
                     AND OBJECTID3 = 12 AND OBJECTVALUE3 = 'FieldFormula'";
 
-                using var command = _connection.CreateCommand();
-                command.CommandText = sql;
+                DataTable result = _connection.ExecuteQuery(sql);
 
-                using var reader = command.ExecuteReader();
-                while (reader.Read())
+                foreach (DataRow row in result.Rows)
                 {
                     var objectPairs = new List<(PSCLASSID ObjectID, string ObjectValue)>();
 
@@ -1724,11 +1749,11 @@ ORDER BY DEFN_TYPE ASC, ID ASC, CASE WHEN :sort_by_date = 'Y' THEN LASTUPDDTTM E
                         int objIdIndex = i * 2;
                         int objValueIndex = objIdIndex + 1;
 
-                        if (!reader.IsDBNull(objIdIndex) && !reader.IsDBNull(objValueIndex))
+                        if (!row.IsNull(objIdIndex) && !row.IsNull(objValueIndex))
                         {
-                            var objectId = (PSCLASSID)reader.GetInt32(objIdIndex);
-                            var objectValue = reader.GetString(objValueIndex);
-                            
+                            var objectId = (PSCLASSID)Convert.ToInt32(row[objIdIndex]);
+                            var objectValue = row[objValueIndex].ToString() ?? string.Empty;
+
                             if (objectId != PSCLASSID.NONE && !string.IsNullOrEmpty(objectValue))
                             {
                                 objectPairs.Add((objectId, objectValue));

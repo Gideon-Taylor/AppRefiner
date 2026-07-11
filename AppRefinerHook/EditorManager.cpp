@@ -254,8 +254,9 @@ VOID CALLBACK EditorManager::BackspaceTimerProc(HWND hwnd, UINT uMsg, UINT_PTR i
                         return;
                 }
 
-                // Send autocomplete message with current position; hwnd rides in lParam's high bits
-                SendMessage(info.callbackWindow, autocompleteMessage, (WPARAM)currentPos, (LPARAM)AR_PACK_HWND(hwnd, triggerChar));
+                // Post (not Send): autocomplete handlers may hit the SQL proxy, which needs
+                // this UI thread free (or able to nest via window SendMessage pump).
+                PostMessage(info.callbackWindow, autocompleteMessage, (WPARAM)currentPos, (LPARAM)AR_PACK_HWND(hwnd, triggerChar));
 
                 char debugMsg[256];
                 sprintf_s(debugMsg, "Backspace revealed trigger char '%c' at position %d - triggering autocomplete (msg: %u)\n",

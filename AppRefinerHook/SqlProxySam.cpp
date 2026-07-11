@@ -151,11 +151,14 @@ ValueType MapSamType(int samType) {
     }
 }
 
+// Data character capacity from SamDescribeCol precision (or override/default).
+// Caller allocates dataCch + 1 wchars so SamBufStr can null-terminate within the buffer.
 uint32_t StringCapacityFromPrecision(int precision, uint32_t defaultCch) {
     if (precision <= 0) {
         return defaultCch;
     }
-    // precision for strings is often wchar capacity already; clamp
+    // Describe precision is the column data width in characters (e.g. CHAR(18) → 18),
+    // not the SamBufStr cchMax (which is buffer size including NUL).
     uint32_t cch = static_cast<uint32_t>(precision);
     if (cch < 8) {
         cch = 8;
@@ -228,7 +231,11 @@ bool RegisterBuffers(HSAMTRAN h, std::vector<ColumnScratch>& cols, std::wstring&
     for (auto& c : cols) {
         switch (c.type) {
         case ValueType::String:
-            g_sam.SamBufStr(h, c.strBuf.data(), static_cast<int>(c.strBuf.size() > 0 ? c.strBuf.size() - 1 : 0));
+            // cchMax is the full buffer capacity in wchars (including room for the
+            // terminating null), matching live pside call sites:
+            //   wchar_t owner[0x81]; SamBufStr(h, owner, 0x81);
+            // Passing size-1 truncated CHAR(N) values to N-1 (e.g. 18-char field names → 17).
+            g_sam.SamBufStr(h, c.strBuf.data(), static_cast<int>(c.strBuf.size()));
             break;
         case ValueType::Int32:
             if (c.useShort) {
