@@ -153,6 +153,39 @@ Local any &x;
     }
 
     [Fact]
+    public void Builtin_function_call_is_not_treated_as_field()
+    {
+        var resolver = new FakeTypeMetadataResolver();
+        resolver.AddRecordFields("ICS_DMS_WRK", "ISCRIPT1");
+
+        var diags = RunInRecordField(@"
+Local number &iFind;
+Local string &input;
+&iFind = Find(""InternalName"", &input) + Len(""InternalName"") + 3;
+", "ICS_DMS_WRK", resolver);
+
+        Assert.DoesNotContain(diags, d => d.Code == DiagnosticCode.UnknownRecordField);
+    }
+
+    [Fact]
+    public void Program_function_call_is_not_treated_as_field()
+    {
+        var resolver = new FakeTypeMetadataResolver();
+        resolver.AddRecordFields("ICS_DMS_WRK", "ISCRIPT1");
+
+        var diags = RunInRecordField(@"
+Function CalcTotal(&n as number) Returns number;
+   Return &n + 1;
+End-Function;
+
+Local number &total;
+&total = CalcTotal(1);
+", "ICS_DMS_WRK", resolver);
+
+        Assert.DoesNotContain(diags, d => d.Code == DiagnosticCode.UnknownRecordField);
+    }
+
+    [Fact]
     public void Left_of_dot_is_record_name_not_field_check()
     {
         var resolver = new FakeTypeMetadataResolver();

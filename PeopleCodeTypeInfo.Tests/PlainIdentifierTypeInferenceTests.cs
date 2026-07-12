@@ -356,6 +356,40 @@ end-function;
         Assert.Equal("MY_FIELD", fieldType.FieldName);
     }
 
+    /// <summary>
+    /// A builtin call in record PeopleCode is a function call — the callee identifier must not
+    /// be typed as a buffer field on the default record (regression: builtins were flagged as
+    /// undefined fields).
+    /// </summary>
+    [Fact]
+    public void BuiltinCall_WithDefaultRecord_CalleeIsNotAField()
+    {
+        var source = @"
+function test();
+   local number &len;
+   &len = Len(""abc"");
+end-function;
+";
+        var (program, visitor) = Infer(source, defaultRecordName: "ICS_DMS_WRK");
+
+        var assignment = FindFirstAssignment(program.Functions[0]);
+        Assert.NotNull(assignment);
+        var call = Assert.IsType<FunctionCallNode>(assignment.Value);
+        var callee = Assert.IsType<IdentifierNode>(call.Function);
+        Assert.Equal("Len", callee.Name);
+
+        // The callee names a function, not a value — it is not a buffer field
+        var calleeType = visitor.GetInferredType(callee);
+        Assert.IsNotType<FieldTypeInfo>(calleeType);
+        Assert.NotNull(calleeType);
+        Assert.Equal(TypeKind.Unknown, calleeType.Kind);
+
+        // The call itself still resolves to the builtin's return type
+        var callType = visitor.GetInferredType(call);
+        Assert.NotNull(callType);
+        Assert.Equal(PeopleCodeType.Number, callType.PeopleCodeType);
+    }
+
     // Helper method to find first assignment in a function
     private static AssignmentNode FindFirstAssignment(FunctionNode function)
     {

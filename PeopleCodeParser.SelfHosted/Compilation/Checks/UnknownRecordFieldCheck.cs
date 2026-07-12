@@ -46,6 +46,7 @@ public sealed class UnknownRecordFieldCheck : CompileCheckBase
     /// <summary>
     /// Bare NAME in default-record PeopleCode → field on default record.
     /// NAME in NAME.x is a record name (not a field) and is skipped.
+    /// NAME in NAME(...) is a function name (not a field) and is skipped.
     /// </summary>
     private static void CheckBareBufferField(IdentifierNode id, CompileCheckContext ctx, IDiagnosticSink sink)
     {
@@ -64,6 +65,10 @@ public sealed class UnknownRecordFieldCheck : CompileCheckBase
 
         // NAME.something → NAME is a record, not a field on the default record
         if (id.Parent is MemberAccessNode ma && ReferenceEquals(ma.Target, id))
+            return;
+
+        // NAME(...) → NAME is a builtin or declared function, not a field
+        if (id.Parent is FunctionCallNode call && ReferenceEquals(call.Function, id))
             return;
 
         // Declared variables / constants with this bare name should not occur for Generic

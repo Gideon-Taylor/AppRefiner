@@ -1322,7 +1322,16 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
                     bool isMemberAccessTarget =
                         node.Parent is MemberAccessNode ma && ReferenceEquals(ma.Target, node);
 
-                    if (isMemberAccessTarget)
+                    // NAME(...) → NAME is a function (builtin or declared), never a buffer field.
+                    // The call's type comes from VisitFunctionCall; the callee itself has no value type.
+                    bool isCallee =
+                        node.Parent is FunctionCallNode call && ReferenceEquals(call.Function, node);
+
+                    if (isCallee)
+                    {
+                        SetInferredType(node, UnknownTypeInfo.Instance);
+                    }
+                    else if (isMemberAccessTarget)
                     {
                         // NAME.x → NAME is a record name
                         var recordType = new RecordTypeInfo(node.Name, _typeResolver) { DirectRecordAccess = true };
