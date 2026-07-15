@@ -1,27 +1,40 @@
 using PeopleCodeParser.SelfHosted.Nodes;
+using PeopleCodeTypeInfo.Inference;
 
 namespace PeopleCodeParser.SelfHosted.Compilation.Checks;
 
 /// <summary>
-/// Flags a derived application class that defines no constructor of its own while its
-/// base class has an explicit parameterized constructor (which the subclass must call,
-/// so it needs a constructor to do it from). Ported from AppRefiner's MissingConstructor
-/// styler.
+/// PeopleBooks (Application Classes — constructors):
+/// <list type="bullet">
+/// <item>
+/// A class that does not extend some other class does not need any constructor.
+/// </item>
+/// <item>
+/// A class that extends another <em>class</em> must have a constructor (to initialize
+/// the super class). This is relaxed when the super class constructor takes no
+/// parameters and would only assign <c>%Super</c>: the runtime creates the super
+/// object automatically, so no constructor is required at design time.
+/// </item>
+/// <item>
+/// Interface parents never require a constructor for super initialization — the system
+/// creates the super reference automatically (see also <see cref="MissingSuperCallCheck"/>).
+/// </item>
+/// <item>
+/// <c>implements</c> vs <c>extends</c> is not authoritative; the parent is resolved via
+/// the type metadata resolver and inspected by <see cref="TypeMetadata.Kind"/>.
+/// </item>
+/// </list>
 ///
-/// Resolver re-expression: the styler fetched the base class SOURCE via the DataManager
-/// and re-parsed it to locate the base constructor. This check instead reads
-/// <see cref="PeopleCodeTypeInfo.Inference.TypeMetadata.Constructor"/> from the
-/// <see cref="PeopleCodeTypeInfo.Contracts.ITypeMetadataResolver"/>. Note that
+/// This check flags a derived class that defines no constructor of its own while its
+/// base <em>class</em> has a parameterized constructor (which the subclass must call
+/// from its own constructor). Ported from AppRefiner's MissingConstructor styler.
+///
 /// TypeMetadataBuilder always synthesizes a zero-parameter default constructor when a
 /// class/interface has no explicit one, so <c>Constructor</c> is never null for a
-/// resolvable class — the operative condition is <c>Parameters.Count &gt; 0</c>, which
-/// is faithful to the styler's <c>baseClassConstructor?.Parameters.Count &gt; 0</c>
-/// (a synthetic or explicit parameterless base constructor is not flagged).
+/// resolvable type — the operative condition is <c>Parameters.Count &gt; 0</c>.
 ///
-/// Requirement is Optional: without a resolver, or when the base class cannot be
-/// resolved (e.g. it lives in an unloaded module), the check reports nothing rather
-/// than risk a false positive — matching the old styler's silent skip when the base
-/// source was unavailable.
+/// Requirement is Optional: without a resolver, or when the base cannot be resolved,
+/// the check reports nothing rather than risk a false positive.
 /// </summary>
 public sealed class MissingConstructorCheck : CompileCheckBase
 {
@@ -42,7 +55,17 @@ public sealed class MissingConstructorCheck : CompileCheckBase
             return;
 
         var baseMeta = ctx.Resolver.GetTypeMetadata(appClass.BaseType.TypeName);
-        if (baseMeta?.Constructor is { } ctor && ctor.Parameters.Count > 0)
+        if (baseMeta == null)
+            return;
+
+        // Interfaces: system creates the super reference automatically — no constructor
+        // required. Kind is authoritative (extends/implements keywords are interchangeable).
+        if (baseMeta.Kind == ProgramKind.Interface)
+            return;
+
+        // Parameterless base ctor: runtime auto-creates super; constructor optional.
+        // Parameterized base ctor: subclass must declare a constructor to pass args.
+        if (baseMeta.Constructor is { } ctor && ctor.Parameters.Count > 0)
         {
             sink.Report(new CompileDiagnostic(
                 DiagnosticCode.MissingConstructor,

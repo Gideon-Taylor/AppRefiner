@@ -135,4 +135,62 @@ end-method;
 
         Assert.DoesNotContain(diags, d => d.Code == DiagnosticCode.MissingConstructor);
     }
+
+    [Fact]
+    public void Does_not_report_when_parent_is_interface_via_implements()
+    {
+        // PeopleBooks: interface parents do not require a constructor; system binds super.
+        const string src = @"
+import PKG:IBase;
+
+class Sub implements PKG:IBase
+   method DoWork();
+end-class;
+
+method DoWork
+end-method;
+";
+        var fake = new FakeTypeMetadataResolver();
+        fake.AddClass("PKG:IBase", new TypeMetadata
+        {
+            QualifiedName = "PKG:IBase",
+            Name = "IBase",
+            Kind = ProgramKind.Interface,
+            Constructor = ParameterizedConstructor(), // even if metadata were weird, Kind wins
+        });
+
+        var (program, errors) = ParseTestHelper.Parse(src);
+        var diags = CompileChecker.Check(program, errors, fake, new CompileCheckContextInput(null));
+
+        Assert.DoesNotContain(diags, d => d.Code == DiagnosticCode.MissingConstructor);
+    }
+
+    [Fact]
+    public void Does_not_report_when_parent_is_interface_via_extends()
+    {
+        // PeopleBooks: implements vs extends is interchangeable — Kind is what matters.
+        const string src = @"
+import PKG:IBase;
+
+class Sub extends PKG:IBase
+   method DoWork();
+end-class;
+
+method DoWork
+end-method;
+";
+        var fake = new FakeTypeMetadataResolver();
+        fake.AddClass("PKG:IBase", new TypeMetadata
+        {
+            QualifiedName = "PKG:IBase",
+            Name = "IBase",
+            Kind = ProgramKind.Interface,
+            Constructor = ParameterizedConstructor(),
+        });
+
+        var (program, errors) = ParseTestHelper.Parse(src);
+        var diags = CompileChecker.Check(program, errors, fake, new CompileCheckContextInput(null));
+
+        Assert.DoesNotContain(diags, d => d.Code == DiagnosticCode.MissingConstructor);
+    }
 }
