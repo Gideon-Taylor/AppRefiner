@@ -4182,8 +4182,8 @@ namespace AppRefiner
         }
 
         /// <summary>
-        /// Builds an <see cref="OraclePeopleSoftDataManager"/> over the App Designer process's
-        /// signed-on SAM session (proxy connection constructed inside the manager).
+        /// Builds a <see cref="SqlProxyDataManager"/> over the App Designer process's
+        /// signed-on SAM session via <see cref="SqlProxyDbConnection"/>.
         /// Safe to call repeatedly; no-ops when already connected or attach is not ready yet.
         /// </summary>
         private void TryAttachSqlProxyDataManager(AppDesignerProcess process)
@@ -4195,7 +4195,8 @@ namespace AppRefiner
 
             try
             {
-                var manager = new OraclePeopleSoftDataManager(process, SqlProxyDialect.Oracle);
+                var connection = new SqlProxyDbConnection(process);
+                var manager = new SqlProxyDataManager(connection);
                 if (!manager.Connect())
                 {
                     Debug.Log($"TryAttachSqlProxyDataManager: connect failed for pid {process.ProcessId}: {manager.LastConnectionError}");
@@ -4214,7 +4215,7 @@ namespace AppRefiner
                 }
 
                 ApplyDatabaseConnection(process, manager, "App Designer SAM proxy", toolsVersion);
-                Debug.Log($"TryAttachSqlProxyDataManager: attached OraclePeopleSoftDataManager via SQL proxy for pid {process.ProcessId}");
+                Debug.Log($"TryAttachSqlProxyDataManager: attached SqlProxyDataManager via SQL proxy for pid {process.ProcessId}");
             }
             catch (Exception ex)
             {
