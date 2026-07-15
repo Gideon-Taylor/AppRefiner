@@ -75,7 +75,7 @@ public sealed class SqlProxyDataManager : IDataManager
 
     public bool Connect();      // connection.Open(); clear caches
     public void Disconnect();   // connection.Close(); clear caches
-    public void Dispose();      // Disconnect / dispose connection ownership policy TBD
+    public void Dispose();      // Disconnect and dispose owned connection
 }
 ```
 
@@ -87,7 +87,8 @@ public sealed class SqlProxyDataManager : IDataManager
 
 **Connection ownership**
 
-- Manager owns the provided connection for Dispose/Disconnect (same practical pattern as Oracle holding its `IDbConnection`). Document that callers must not share one connection across managers.
+- Manager **owns** the `SqlProxyDbConnection` passed to the constructor: `Disconnect` closes it; `Dispose` closes and disposes it.
+- Callers must not share one connection instance across managers.
 
 **Dialect flag**
 
