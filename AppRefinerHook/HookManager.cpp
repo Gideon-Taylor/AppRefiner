@@ -877,21 +877,13 @@ LRESULT CALLBACK MainWindowSubclassProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPA
 
         // SQL proxy attach: synchronous so AppRefiner can use SendMessage and get a return value.
         // wParam = AttachInfo* in this process, lParam = byte size.
+        // SAM work is scheduled later via PostThreadMessage(WM_AR_SQLPROXY_PUMP) → GetMsgHook.
         if (uMsg == WM_AR_SQLPROXY_ATTACH) {
-            // Pump window must be this HWND so IO-thread SendMessage(PUMP) can nest while
-            // the UI thread is blocked in SendMessage to AppRefiner.
-            ArSqlProxy::SetUiPumpWindow(hWnd);
             const ArSqlProxy::AttachInfo* attach =
                 reinterpret_cast<const ArSqlProxy::AttachInfo*>(wParam);
             const uint32_t cb = static_cast<uint32_t>(lParam);
             const BOOL ok = ArSqlProxy::HandleAttach(attach, cb);
             return ok ? 1 : 0;
-        }
-
-        // SQL proxy pump: delivered via SendMessage from the pipe IO thread (see SchedulePump).
-        if (uMsg == WM_AR_SQLPROXY_PUMP) {
-            ArSqlProxy::HandlePump();
-            return 0;
         }
 
         // Get the callback window from dwRefData
@@ -1320,7 +1312,8 @@ LRESULT CALLBACK GetMsgHook(int nCode, WPARAM wParam, LPARAM lParam) {
             return CallNextHookEx(g_getMsgHook, nCode, wParam, lParam);
         }
 
-        // SQL proxy: drain private work queue only — never trust wParam/lParam for SQL.
+        // SQL proxy: PostThreadMessage wake-up — drain private work queue only.
+        // Never trust wParam/lParam for SQL (pipe is the only request ingress).
         if (msg->message == WM_AR_SQLPROXY_PUMP) {
             ArSqlProxy::HandlePump();
             msg->message = WM_NULL;
@@ -1412,8 +1405,6 @@ LRESULT CALLBACK GetMsgHook(int nCode, WPARAM wParam, LPARAM lParam) {
                 // Subclass the main window, passing callbackWindow as dwRefData
                 if (SetWindowSubclass(hMainWindow, MainWindowSubclassProc, MAIN_WINDOW_SUBCLASS_ID, (DWORD_PTR)callbackWindow)) {
                     RegisterSubclass(hMainWindow, MainWindowSubclassProc, MAIN_WINDOW_SUBCLASS_ID);
-                    // SQL proxy IO thread SendMessage(PUMP) targets this HWND.
-                    ArSqlProxy::SetUiPumpWindow(hMainWindow);
                 }
 
                 char debugMsg[100];

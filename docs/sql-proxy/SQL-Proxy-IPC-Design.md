@@ -123,7 +123,7 @@ Classic deadlock:
 
 Paths that must stay synchronous (`SendMessage`) must not invoke the SQL proxy on the AppRefiner side while AD is still inside that send (or must complete SQL only after AD’s UI is free).
 
-**Pump delivery:** `WM_AR_SQLPROXY_PUMP` must be deliverable while the UI thread is nested in a `SendMessage` wait (e.g. waiting for AppRefiner). **`PostThreadMessage` is not dispatched in that state.** The IO thread therefore **`SendMessage`s `WM_AR_SQLPROXY_PUMP` to the subclassed App Designer main window** (handled in `MainWindowSubclassProc`). Same-thread follow-up pumps use `PostMessage` to that window to avoid re-entering `HandlePump` under `g_inPump`.
+**Pump delivery:** the pipe IO thread wakes the UI with **`PostThreadMessage(WM_AR_SQLPROXY_PUMP)`** only (never `SendMessage`). `GetMsgHook` drains the private work queue and runs `Sam*` on the UI thread. `PostThreadMessage` is async — it avoids nested-message cursor jitter from cross-thread `SendMessage` into the main window — but it is **not** dispatched while the UI thread is blocked inside a `SendMessage` wait. That is why the mitigation above (catalog-SQL notifications use `PostMessage`) is mandatory: do not reintroduce `SendMessage` pump delivery just to nest during a blocked send.
 
 ---
 
