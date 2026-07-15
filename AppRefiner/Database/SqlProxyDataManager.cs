@@ -620,13 +620,416 @@ namespace AppRefiner.Database
             return results;
         }
 
-        // --- Remaining IDataManager members: stubs for later tasks ---
-
         public List<RecordFieldInfo>? GetRecordFields(string recordName)
-            => throw new NotImplementedException(PendingMessage);
+        {
+            EnsureConnected();
+
+            recordName = recordName.ToUpper();
+
+            int recordVersion = GetRecordVersion(recordName);
+            if (recordVersion < 0)
+            {
+                return null;
+            }
+
+            if (recordFieldCache.TryGetValue(recordName, out RecordFieldCache? cache))
+            {
+                if (cache.Version == recordVersion)
+                {
+                    return cache.Fields;
+                }
+                recordFieldCache.Remove(recordName);
+            }
+
+            List<RecordFieldInfo>? fields = FetchRecordFieldsFromDb(recordName);
+            if (fields != null && fields.Count > 0)
+            {
+                recordFieldCache[recordName] = new RecordFieldCache(recordName, recordVersion, fields);
+            }
+
+            return fields;
+        }
+
+        /// <summary>
+        /// Gets the VERSION field value from PSRECDEFN for a specific record.
+        /// </summary>
+        /// <returns>Version number or -1 if record doesn't exist</returns>
+        private int GetRecordVersion(string recordName)
+        {
+            try
+            {
+                DataTable result = Query(
+                    SqlProxyQueryCatalog.GetRecordFieldsRecExists,
+                    new[] { S(recordName) },
+                    maxRows: 1);
+
+                if (result.Rows.Count == 0)
+                {
+                    return -1;
+                }
+
+                return Convert.ToInt32(result.Rows[0]["VERSION"]);
+            }
+            catch (Exception)
+            {
+                return -1;
+            }
+        }
+
+        /// <summary>
+        /// Fetches record field information directly from the database.
+        /// </summary>
+        private List<RecordFieldInfo>? FetchRecordFieldsFromDb(string recordName)
+        {
+            try
+            {
+                DataTable result = Query(
+                    SqlProxyQueryCatalog.GetRecordFields,
+                    new[] { S(recordName) });
+
+                if (result.Rows.Count == 0)
+                {
+                    return null;
+                }
+
+                List<RecordFieldInfo> fields = new();
+                foreach (DataRow row in result.Rows)
+                {
+                    fields.Add(new RecordFieldInfo(
+                        row["FIELDNAME"].ToString() ?? string.Empty,
+                        Convert.ToInt32(row["FIELDNUM"]),
+                        Convert.ToInt32(row["FIELDTYPE"]),
+                        Convert.ToInt32(row["LENGTH"]),
+                        Convert.ToInt32(row["DECIMALPOS"]),
+                        Convert.ToInt32(row["USEEDIT"])
+                    ));
+                }
+                return fields;
+            }
+            catch (Exception)
+            {
+                return null;
+            }
+        }
 
         public PackageItems GetAppPackageItems(string packagePath)
-            => throw new NotImplementedException(PendingMessage);
+        {
+            EnsureConnected();
+
+            List<string> subpackages = new();
+            List<string> classes = new();
+
+            string[] parts = packagePath.Split(':');
+            string rootPackage = parts.Length > 0 ? parts[0] : string.Empty;
+
+            int packageLevel = parts.Length - 1;
+            if (packageLevel < 0) packageLevel = 0;
+
+            string qualifyPath = ":";
+            if (packageLevel > 0)
+            {
+                qualifyPath = string.Join(":", parts.Skip(1));
+            }
+
+            // Only root and first subpackage level can have subpackages (max depth 3).
+            if (packageLevel < 2)
+            {
+                if (packageLevel == 0)
+                {
+                    DataTable subpackageResults = Query(
+                        SqlProxyQueryCatalog.GetAppPackageItemsSubpackagesRoot,
+                        new[] { S(rootPackage) });
+
+                    foreach (DataRow row in subpackageResults.Rows)
+                    {
+                        string? subpackageName = row["PACKAGEID"].ToString();
+                        if (!string.IsNullOrEmpty(subpackageName))
+                        {
+                            subpackages.Add(subpackageName);
+                        }
+                    }
+                }
+                else if (packageLevel == 1)
+                {
+                    DataTable subpackageResults = Query(
+                        SqlProxyQueryCatalog.GetAppPackageItemsSubpackagesNested,
+                        new[] { S(rootPackage), S(qualifyPath) });
+
+                    foreach (DataRow row in subpackageResults.Rows)
+                    {
+                        string? subpackageName = row["PACKAGEID"].ToString();
+                        if (!string.IsNullOrEmpty(subpackageName))
+                        {
+                            subpackages.Add(subpackageName);
+                        }
+                    }
+                }
+            }
+
+            DataTable classResults = Query(
+                SqlProxyQueryCatalog.GetAppPackageItemsClasses,
+                new[] { S(rootPackage), S(qualifyPath) });
+
+            foreach (DataRow row in classResults.Rows)
+            {
+                string? className = row["APPCLASSID"].ToString();
+                if (!string.IsNullOrEmpty(className))
+                {
+                    classes.Add(className);
+                }
+            }
+
+            return new PackageItems(packagePath, subpackages, classes);
+        }
+
+        public List<string> GetAllClassesForPackage(string packagePath)
+        {
+            var parts = packagePath.Split(':');
+            if (parts.Length == 0)
+            {
+                return new();
+            }
+
+            var packageRoot = parts[0];
+            var qualifyPath = parts.Length > 1 ? string.Join(":", parts.Skip(1)) : ":";
+
+            try
+            {
+                DataTable result = Query(
+                    SqlProxyQueryCatalog.GetAllClassesForPackage,
+                    new[] { S(packageRoot), S(qualifyPath) });
+
+                var classNames = new List<string>();
+                foreach (DataRow row in result.Rows)
+                {
+                    classNames.Add(row["APPCLASSID"].ToString()!);
+                }
+                return classNames;
+            }
+            catch (Exception ex)
+            {
+                Debug.Log($"Error querying PSAPPCLASSDEFN for classes: {ex.Message}");
+                return new();
+            }
+        }
+
+        public List<string> GetPackagesForClass(string className)
+        {
+            var results = new List<string>();
+
+            if (!IsConnected)
+            {
+                Debug.Log("Cannot query packages - database not connected");
+                return results;
+            }
+
+            try
+            {
+                DataTable result = Query(
+                    SqlProxyQueryCatalog.GetPackagesForClass,
+                    new[] { S(className) });
+
+                foreach (DataRow row in result.Rows)
+                {
+                    string packageRoot = row[0].ToString() ?? string.Empty;
+                    string qualifyPath = row[1].ToString() ?? string.Empty;
+
+                    if (string.IsNullOrEmpty(packageRoot))
+                        continue;
+
+                    string fullPath;
+                    if (qualifyPath == ":")
+                    {
+                        fullPath = $"{packageRoot}:{className}";
+                    }
+                    else
+                    {
+                        fullPath = $"{packageRoot}:{qualifyPath}:{className}";
+                    }
+
+                    results.Add(fullPath);
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError($"Error querying packages for class {className}: {ex.Message}");
+            }
+
+            return results;
+        }
+
+        public PeopleCodeType GetFieldType(string fieldName)
+        {
+            try
+            {
+                DataTable result = Query(
+                    SqlProxyQueryCatalog.GetFieldType,
+                    new[] { S(fieldName) },
+                    maxRows: 1);
+
+                if (result.Rows.Count == 0)
+                {
+                    return PeopleCodeType.Unknown;
+                }
+
+                int fieldType = Convert.ToInt32(result.Rows[0][0]);
+
+                return fieldType switch
+                {
+                    0 => PeopleCodeType.String,
+                    1 => PeopleCodeType.String,
+                    2 => PeopleCodeType.Number,
+                    3 => PeopleCodeType.Number,
+                    4 => PeopleCodeType.Date,
+                    5 => PeopleCodeType.Time,
+                    6 => PeopleCodeType.DateTime,
+                    8 => PeopleCodeType.Any,
+                    9 => PeopleCodeType.Any,
+                    _ => PeopleCodeType.Unknown,
+                };
+            }
+            catch (Exception ex)
+            {
+                Debug.Log($"Error querying PSDBFIELD for field type: {ex.Message}");
+            }
+
+            return PeopleCodeType.Unknown;
+        }
+
+        public List<MessageSetInfo> GetMessageSets()
+        {
+            EnsureConnected();
+
+            List<MessageSetInfo> sets = new();
+            try
+            {
+                DataTable result = Query(SqlProxyQueryCatalog.GetMessageSets);
+                foreach (DataRow row in result.Rows)
+                {
+                    sets.Add(new MessageSetInfo(
+                        Convert.ToInt32(row["MESSAGE_SET_NBR"]),
+                        row["DESCR"].ToString() ?? string.Empty));
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.Log($"GetMessageSets failed: {ex.Message}");
+            }
+            return sets;
+        }
+
+        public List<MessageCatalogEntry> GetMessagesForSet(int setNumber)
+        {
+            EnsureConnected();
+
+            List<MessageCatalogEntry> messages = new();
+            try
+            {
+                DataTable result = Query(
+                    SqlProxyQueryCatalog.GetMessagesForSet,
+                    new[] { I(setNumber) });
+
+                foreach (DataRow row in result.Rows)
+                {
+                    messages.Add(new MessageCatalogEntry(
+                        setNumber,
+                        Convert.ToInt32(row["MESSAGE_NBR"]),
+                        row["MSG_SEVERITY"].ToString() ?? string.Empty,
+                        row["MESSAGE_TEXT"].ToString() ?? string.Empty,
+                        row["DESCRLONG"] == DBNull.Value ? string.Empty : row["DESCRLONG"].ToString() ?? string.Empty));
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.Log($"GetMessagesForSet({setNumber}) failed: {ex.Message}");
+            }
+            return messages;
+        }
+
+        public MessageCatalogEntry? GetMessageCatalogEntry(int setNumber, int messageNumber)
+        {
+            EnsureConnected();
+
+            try
+            {
+                DataTable result = Query(
+                    SqlProxyQueryCatalog.GetMessageCatalogEntry,
+                    new[] { I(setNumber), I(messageNumber) },
+                    maxRows: 1);
+
+                if (result.Rows.Count == 0)
+                {
+                    return null;
+                }
+
+                DataRow row = result.Rows[0];
+                return new MessageCatalogEntry(
+                    setNumber,
+                    messageNumber,
+                    row["MSG_SEVERITY"].ToString() ?? string.Empty,
+                    row["MESSAGE_TEXT"].ToString() ?? string.Empty,
+                    row["DESCRLONG"] == DBNull.Value ? string.Empty : row["DESCRLONG"].ToString() ?? string.Empty);
+            }
+            catch (Exception ex)
+            {
+                Debug.Log($"GetMessageCatalogEntry({setNumber}, {messageNumber}) failed: {ex.Message}");
+                return null;
+            }
+        }
+
+        public List<MessageCatalogEntry> SearchMessageCatalog(
+            string searchTerm, IReadOnlyCollection<int>? setNumbers, int limit)
+        {
+            EnsureConnected();
+
+            // Static SQL only — no BuildMessageSetFilter injection.
+            // :1 and :2 bind the same uppercased %term% pattern (SAM positional).
+            string pattern = $"%{searchTerm.ToUpperInvariant()}%";
+
+            int fetchCap = limit;
+            if (setNumbers != null && setNumbers.Count > 0)
+            {
+                // Over-fetch then filter; cap to avoid unbounded reads
+                fetchCap = Math.Max(limit * 20, 500);
+            }
+
+            List<MessageCatalogEntry> messages = new();
+            try
+            {
+                DataTable result = Query(
+                    SqlProxyQueryCatalog.SearchMessageCatalog,
+                    new[] { S(pattern), S(pattern) },
+                    maxRows: fetchCap);
+
+                var setFilter = setNumbers != null && setNumbers.Count > 0
+                    ? new HashSet<int>(setNumbers)
+                    : null;
+
+                foreach (DataRow row in result.Rows)
+                {
+                    int setNbr = Convert.ToInt32(row["MESSAGE_SET_NBR"]);
+                    if (setFilter != null && !setFilter.Contains(setNbr))
+                        continue;
+
+                    messages.Add(new MessageCatalogEntry(
+                        setNbr,
+                        Convert.ToInt32(row["MESSAGE_NBR"]),
+                        row["MSG_SEVERITY"].ToString() ?? string.Empty,
+                        row["MESSAGE_TEXT"].ToString() ?? string.Empty,
+                        row["DESCRLONG"] == DBNull.Value ? string.Empty : row["DESCRLONG"].ToString() ?? string.Empty));
+
+                    if (messages.Count >= limit)
+                        break;
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.Log($"SearchMessageCatalog failed: {ex.Message}");
+            }
+            return messages;
+        }
+
+        // --- Remaining IDataManager members: stubs for later tasks ---
 
         public List<EventMapItem> GetEventMapItems(EventMapInfo eventMapInfo)
             => throw new NotImplementedException(PendingMessage);
@@ -635,27 +1038,6 @@ namespace AppRefiner.Database
             => throw new NotImplementedException(PendingMessage);
 
         public List<OpenTarget> GetOpenTargets(OpenTargetSearchOptions options)
-            => throw new NotImplementedException(PendingMessage);
-
-        public List<string> GetAllClassesForPackage(string packagePath)
-            => throw new NotImplementedException(PendingMessage);
-
-        public PeopleCodeType GetFieldType(string fieldName)
-            => throw new NotImplementedException(PendingMessage);
-
-        public List<string> GetPackagesForClass(string className)
-            => throw new NotImplementedException(PendingMessage);
-
-        public List<MessageSetInfo> GetMessageSets()
-            => throw new NotImplementedException(PendingMessage);
-
-        public List<MessageCatalogEntry> GetMessagesForSet(int setNumber)
-            => throw new NotImplementedException(PendingMessage);
-
-        public MessageCatalogEntry? GetMessageCatalogEntry(int setNumber, int messageNumber)
-            => throw new NotImplementedException(PendingMessage);
-
-        public List<MessageCatalogEntry> SearchMessageCatalog(string searchTerm, IReadOnlyCollection<int>? setNumbers, int limit)
             => throw new NotImplementedException(PendingMessage);
     }
 }
