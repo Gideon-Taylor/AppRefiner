@@ -13,8 +13,23 @@ namespace AppRefiner.Database
     /// </summary>
     public sealed class SqlProxyDataManager : IDataManager
     {
-        private const string PendingMessage = "SqlProxyDataManager: pending Task 8+";
         private const int MultiChunkMaxRows = 10000;
+
+        /// <summary>
+        /// PeopleCode flavors covered by OpenTargetType.NonClassPeopleCode in Oracle's combined query.
+        /// </summary>
+        private static readonly OpenTargetType[] NonClassPeopleCodeFlavors =
+        {
+            OpenTargetType.PagePeopleCode,
+            OpenTargetType.ComponentPeopleCode,
+            OpenTargetType.ComponentRecordPeopleCode,
+            OpenTargetType.ComponentRecFieldPeopleCode,
+            OpenTargetType.RecordFieldPeopleCode,
+            OpenTargetType.MenuPeopleCode,
+            OpenTargetType.AppEnginePeopleCode,
+            OpenTargetType.ComponentInterfacePeopleCode,
+            OpenTargetType.MessagePeopleCode,
+        };
 
         private readonly SqlProxyDbConnection connection;
         private Dictionary<string, RecordFieldCache> recordFieldCache = new();
@@ -1029,15 +1044,298 @@ namespace AppRefiner.Database
             return messages;
         }
 
-        // --- Remaining IDataManager members: stubs for later tasks ---
+        public List<EventMapInfo> GetEventMapXrefs(string classPath)
+        {
+            EnsureConnected();
+
+            var parts = classPath.Split(':');
+            var root = parts[0];
+            var className = parts[parts.Length - 1];
+            var path = string.Join(":", parts.Skip(1).SkipLast(1));
+            if (path == "")
+            {
+                path = ":";
+            }
+
+            // :1 root, :2 path, :3 class (SqlProxyQueryCatalog.GetEventMapXrefs)
+            DataTable result = Query(
+                SqlProxyQueryCatalog.GetEventMapXrefs,
+                new[] { S(root), S(path), S(className) });
+
+            List<EventMapInfo> infos = new();
+            foreach (DataRow row in result.Rows)
+            {
+                var info = new EventMapInfo();
+                info.ContentReference = row["PORTAL_OBJNAME"].ToString()!.Trim() ?? string.Empty;
+                info.Component = row["COMPONENT"].ToString()!.Trim() ?? string.Empty;
+                info.Segment = row["SEGMENT"].ToString()!.Trim() ?? string.Empty;
+                info.Record = row["RECORD"].ToString()!.Trim() ?? string.Empty;
+                info.Field = row["FIELD"].ToString()!.Trim() ?? string.Empty;
+                info.Page = row["PNLNAME"].ToString()!.Trim() ?? string.Empty;
+                info.ComponentEvent = row["ptcs_cmpevent"].ToString()!.Trim() ?? string.Empty;
+                info.ComponentRecordEvent = row["ptcs_cmprecevent"].ToString()!.Trim() ?? string.Empty;
+                info.SequenceNumber = Convert.ToInt32(row["SEQNUM"]);
+
+                var eventSeq = row["ptcs_procseq"].ToString() ?? string.Empty;
+                switch (eventSeq)
+                {
+                    case "PRE":
+                        info.Sequence = EventMapSequence.Pre;
+                        break;
+                    case "OVER":
+                        info.Sequence = EventMapSequence.Replace;
+                        break;
+                    case "POST":
+                        info.Sequence = EventMapSequence.Post;
+                        break;
+                    default:
+                        break;
+                }
+
+                /* Determine the "type" */
+                if (info.Component != string.Empty && info.Segment != string.Empty)
+                {
+                    info.Type = EventMapType.Component;
+                }
+                if (info.Component != string.Empty && info.Segment != string.Empty && info.Record != string.Empty)
+                {
+                    info.Type = EventMapType.ComponentRecord;
+                }
+                if (info.Component != string.Empty && info.Segment != string.Empty && info.Record != string.Empty && info.Field != string.Empty)
+                {
+                    info.Type = EventMapType.ComponentRecordField;
+                }
+                if (info.Page != string.Empty)
+                {
+                    info.Type = EventMapType.Page;
+                }
+
+                infos.Add(info);
+            }
+
+            return infos;
+        }
 
         public List<EventMapItem> GetEventMapItems(EventMapInfo eventMapInfo)
-            => throw new NotImplementedException(PendingMessage);
+        {
+            EnsureConnected();
 
-        public List<EventMapInfo> GetEventMapXrefs(string classPath)
-            => throw new NotImplementedException(PendingMessage);
+            string sql;
+            List<SqlProxyBind> binds;
+            List<EventMapItem> results = new();
+
+            switch (eventMapInfo.Type)
+            {
+                case EventMapType.Component:
+                    sql = SqlProxyQueryCatalog.GetEventMapItemsComponent;
+                    binds = new List<SqlProxyBind>
+                    {
+                        S(eventMapInfo.Component),
+                        S(eventMapInfo.Segment),
+                        S(eventMapInfo.ComponentEvent),
+                    };
+                    break;
+
+                case EventMapType.ComponentRecord:
+                    sql = SqlProxyQueryCatalog.GetEventMapItemsComponentRecord;
+                    binds = new List<SqlProxyBind>
+                    {
+                        S(eventMapInfo.Component),
+                        S(eventMapInfo.Segment),
+                        S(eventMapInfo.Record),
+                        S(eventMapInfo.ComponentRecordEvent),
+                    };
+                    break;
+
+                case EventMapType.ComponentRecordField:
+                    sql = SqlProxyQueryCatalog.GetEventMapItemsComponentRecordField;
+                    binds = new List<SqlProxyBind>
+                    {
+                        S(eventMapInfo.Component),
+                        S(eventMapInfo.Segment),
+                        S(eventMapInfo.Record),
+                        S(eventMapInfo.Field),
+                        S(eventMapInfo.ComponentRecordEvent),
+                    };
+                    break;
+
+                case EventMapType.Page:
+                    sql = SqlProxyQueryCatalog.GetEventMapItemsPage;
+                    binds = new List<SqlProxyBind>
+                    {
+                        S(eventMapInfo.Page),
+                        S(eventMapInfo.ComponentRecordEvent),
+                    };
+                    break;
+
+                default:
+                    return results;
+            }
+
+            try
+            {
+                DataTable result = Query(sql, binds);
+
+                foreach (DataRow row in result.Rows)
+                {
+                    EventMapSequence sequence;
+                    string procSeq = row["ptcs_procseq"].ToString() ?? string.Empty;
+
+                    if (procSeq.Equals("PRE", StringComparison.OrdinalIgnoreCase))
+                        sequence = EventMapSequence.Pre;
+                    else if (procSeq.Equals("OVER", StringComparison.OrdinalIgnoreCase))
+                        sequence = EventMapSequence.Replace;
+                    else // "POST" or any other value
+                        sequence = EventMapSequence.Post;
+
+                    string cref = row["PORTAL_OBJNAME"].ToString() ?? string.Empty;
+
+                    string component = string.Empty;
+                    string segment = string.Empty;
+
+                    if (eventMapInfo.Type == EventMapType.Page)
+                    {
+                        component = row["PORTAL_URI_SEG2"].ToString() ?? string.Empty;
+                        segment = row["PORTAL_URI_SEG3"].ToString() ?? string.Empty;
+                    }
+                    else
+                    {
+                        component = eventMapInfo.Component ?? string.Empty;
+                        segment = eventMapInfo.Segment ?? string.Empty;
+                    }
+
+                    results.Add(new EventMapItem
+                    {
+                        ContentReference = cref,
+                        Sequence = sequence,
+                        SeqNumber = Convert.ToInt32(row["SEQNUM"]),
+                        Component = component,
+                        Segment = segment,
+                        PackageRoot = row["packageroot"].ToString() ?? string.Empty,
+                        PackagePath = row["qualifypath"].ToString() ?? string.Empty,
+                        ClassName = row["appclassid"].ToString() ?? string.Empty
+                    });
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.Log($"GetEventMapItems failed: {ex.Message}");
+            }
+
+            return results;
+        }
 
         public List<OpenTarget> GetOpenTargets(OpenTargetSearchOptions options)
-            => throw new NotImplementedException(PendingMessage);
+        {
+            EnsureConnected();
+
+            var results = new List<OpenTarget>();
+
+            string idRaw = options.IDSearchTerm?.Trim() ?? string.Empty;
+            string descrRaw = options.DescriptionSearchTerm?.Trim() ?? string.Empty;
+
+            // Oracle required at least one non-empty search term (LENGTH > 0 guards).
+            if (idRaw.Length == 0 && descrRaw.Length == 0)
+            {
+                return results;
+            }
+
+            bool idEmpty = idRaw.Length == 0;
+            bool descrEmpty = descrRaw.Length == 0;
+
+            string escapedId = EscapeLike(idRaw);
+            string escapedDescr = EscapeLike(descrRaw);
+
+            // Default ID pattern: prefix-style term% (ApplicationClass uses contains — built per type).
+            string idPrefixPattern = idEmpty ? "%" : escapedId + "%";
+            string idContainsPattern = idEmpty ? "%" : "%" + escapedId + "%";
+            string descrPattern = descrEmpty ? "%" : "%" + escapedDescr + "%";
+
+            string idEmptyFlag = idEmpty ? "Y" : "N";
+            string descrEmptyFlag = descrEmpty ? "Y" : "N";
+
+            int maxPerType = options.MaxRowsPerType > 0 ? options.MaxRowsPerType : 50;
+
+            // Expand NonClassPeopleCode parent flag to concrete flavors; dedupe with any explicit flavors.
+            var typesToQuery = new HashSet<OpenTargetType>();
+            foreach (OpenTargetType type in options.EnabledTypes)
+            {
+                if (type == OpenTargetType.NonClassPeopleCode)
+                {
+                    foreach (OpenTargetType flavor in NonClassPeopleCodeFlavors)
+                    {
+                        typesToQuery.Add(flavor);
+                    }
+                }
+                else if (type != OpenTargetType.UNKNOWN)
+                {
+                    typesToQuery.Add(type);
+                }
+            }
+
+            try
+            {
+                foreach (OpenTargetType type in typesToQuery)
+                {
+                    string? sql = SqlProxyOpenTargetQueries.ForType(type);
+                    if (sql == null)
+                    {
+                        continue;
+                    }
+
+                    // ApplicationClass: contains on ID; all others: prefix on ID (per meta docs).
+                    string idPattern = type == OpenTargetType.ApplicationClass
+                        ? idContainsPattern
+                        : idPrefixPattern;
+
+                    SqlProxyBind[] binds =
+                    {
+                        S(idEmptyFlag),
+                        S(idPattern),
+                        S(descrEmptyFlag),
+                        S(descrPattern),
+                    };
+
+                    DataTable data = Query(sql, binds, maxRows: maxPerType);
+
+                    foreach (DataRow row in data.Rows)
+                    {
+                        string defnType = row["DEFN_TYPE"]?.ToString() ?? string.Empty;
+                        string id = row["ID"]?.ToString() ?? string.Empty;
+                        string description = row["DESCR"]?.ToString() ?? string.Empty;
+
+                        if (IDataManager.TryMapStringToTargetType(defnType, out OpenTargetType targetType))
+                        {
+                            var objectPairs = IDataManager.CreateObjectPairs(targetType, id, description);
+
+                            var target = new OpenTarget(
+                                targetType,
+                                id,
+                                description,
+                                objectPairs);
+
+                            if (targetType is OpenTargetType.NonClassPeopleCode)
+                            {
+                                target.DisplayTargetType = defnType;
+                            }
+
+                            results.Add(target);
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.Log($"Error retrieving open targets: {ex.Message}");
+            }
+
+            return results;
+        }
+
+        /// <summary>
+        /// Escapes LIKE wildcards the same way Oracle GetOpenTargets did (underscore only).
+        /// </summary>
+        private static string EscapeLike(string value)
+            => value.Replace("_", "\\_");
     }
 }
