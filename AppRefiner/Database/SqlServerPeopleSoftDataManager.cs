@@ -16,6 +16,7 @@ namespace AppRefiner.Database
         private readonly string? _namespace;
         // Cache for record field information
         private Dictionary<string, RecordFieldCache> _recordFieldCache = new();
+        private readonly AppClassCatalogCache _appClassCache = new();
 
         /// <summary>
         /// Gets the underlying database connection
@@ -63,6 +64,7 @@ namespace AppRefiner.Database
 
                     // Clear the record field cache when connecting
                     ClearRecordFieldCache();
+                    _appClassCache.Clear();
                 }
                 return true;
             }
@@ -87,7 +89,11 @@ namespace AppRefiner.Database
 
             // Clear the record field cache when disconnecting
             ClearRecordFieldCache();
+            _appClassCache.Clear();
         }
+
+        public void InvalidateAppClassCache(string? appClassPath = null) =>
+            _appClassCache.Invalidate(appClassPath);
 
         /// <summary>
         /// Retrieves the SQL definition for a given object name
@@ -638,6 +644,23 @@ namespace AppRefiner.Database
                 throw new InvalidOperationException("Database connection is not open");
             }
 
+            if (_appClassCache.TryGetExists(appClassPath, out bool cachedExists))
+            {
+                return cachedExists;
+            }
+
+            if (_appClassCache.TryGetSource(appClassPath, out string? cachedSource))
+            {
+                return cachedSource != null;
+            }
+
+            bool exists = CheckAppClassExistsUncached(appClassPath);
+            _appClassCache.SetExists(appClassPath, exists);
+            return exists;
+        }
+
+        private bool CheckAppClassExistsUncached(string appClassPath)
+        {
             // Split the appClassPath by colons
             string[] parts = appClassPath.Split(':');
 
@@ -717,14 +740,29 @@ namespace AppRefiner.Database
                 throw new InvalidOperationException("Database connection is not open");
             }
 
-            // First check if the class exists
-            if (!CheckAppClassExists(appClassPath))
+            if (_appClassCache.TryGetSource(appClassPath, out string? cachedSource))
+            {
+                return cachedSource;
+            }
+
+            if (_appClassCache.TryGetExists(appClassPath, out bool exists) && !exists)
             {
                 return null;
             }
 
+            string? source = LoadAppClassSourceUncached(appClassPath);
+            _appClassCache.SetSource(appClassPath, source);
+            return source;
+        }
+
+        private string? LoadAppClassSourceUncached(string appClassPath)
+        {
             // Split the appClassPath by colons
             string[] parts = appClassPath.Split(':');
+            if (parts.Length < 2)
+            {
+                return null;
+            }
 
             // Create a PeopleCodeItem for the class
             List<Tuple<int, string>> programFields = new();
@@ -781,8 +819,8 @@ namespace AppRefiner.Database
             // Load the program text
             if (LoadPeopleCodeItemContent(item))
             {
-                // Convert the binary program text to a string
-                return item.GetProgramTextAsString();
+                string text = item.GetProgramTextAsString();
+                return string.IsNullOrEmpty(text) ? null : text;
             }
 
             return null;

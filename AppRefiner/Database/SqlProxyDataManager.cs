@@ -32,6 +32,7 @@ namespace AppRefiner.Database
         };
 
         private readonly SqlProxyDbConnection connection;
+        private readonly AppClassCatalogCache appClassCache = new();
         private Dictionary<string, RecordFieldCache> recordFieldCache = new();
 
         /// <summary>
@@ -66,6 +67,7 @@ namespace AppRefiner.Database
                 {
                     connection.Open();
                     ClearRecordFieldCache();
+                    appClassCache.Clear();
                 }
                 return true;
             }
@@ -87,6 +89,7 @@ namespace AppRefiner.Database
                 connection.Close();
             }
             ClearRecordFieldCache();
+            appClassCache.Clear();
         }
 
         public void Dispose()
@@ -96,6 +99,9 @@ namespace AppRefiner.Database
         }
 
         public void ClearRecordFieldCache() => recordFieldCache.Clear();
+
+        public void InvalidateAppClassCache(string? appClassPath = null) =>
+            appClassCache.Invalidate(appClassPath);
 
         private void EnsureConnected()
         {
@@ -387,6 +393,24 @@ namespace AppRefiner.Database
 
         public bool CheckAppClassExists(string appClassPath)
         {
+            if (appClassCache.TryGetExists(appClassPath, out bool cachedExists))
+            {
+                return cachedExists;
+            }
+
+            // Source already resolved implies existence.
+            if (appClassCache.TryGetSource(appClassPath, out string? cachedSource))
+            {
+                return cachedSource != null;
+            }
+
+            bool exists = CheckAppClassExistsUncached(appClassPath);
+            appClassCache.SetExists(appClassPath, exists);
+            return exists;
+        }
+
+        private bool CheckAppClassExistsUncached(string appClassPath)
+        {
             string[] parts = appClassPath.Split(':');
 
             if (parts.Length < 2)
@@ -442,12 +466,33 @@ namespace AppRefiner.Database
 
         public string? GetAppClassSourceByPath(string appClassPath)
         {
-            if (!CheckAppClassExists(appClassPath))
+            if (appClassCache.TryGetSource(appClassPath, out string? cachedSource))
+            {
+                return cachedSource;
+            }
+
+            // Known missing — skip the load.
+            if (appClassCache.TryGetExists(appClassPath, out bool exists) && !exists)
             {
                 return null;
             }
 
+            string? source = LoadAppClassSourceUncached(appClassPath);
+            appClassCache.SetSource(appClassPath, source);
+            return source;
+        }
+
+        /// <summary>
+        /// Loads and decodes app class source without a separate existence query.
+        /// Empty/missing program yields null (caller caches the miss).
+        /// </summary>
+        private string? LoadAppClassSourceUncached(string appClassPath)
+        {
             string[] parts = appClassPath.Split(':');
+            if (parts.Length < 2)
+            {
+                return null;
+            }
 
             List<Tuple<int, string>> programFields = new();
 
@@ -496,7 +541,8 @@ namespace AppRefiner.Database
 
             if (LoadPeopleCodeItemContent(item))
             {
-                return item.GetProgramTextAsString();
+                string text = item.GetProgramTextAsString();
+                return string.IsNullOrEmpty(text) ? null : text;
             }
 
             return null;

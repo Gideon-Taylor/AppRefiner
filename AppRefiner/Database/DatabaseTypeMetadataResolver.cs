@@ -212,17 +212,11 @@ namespace AppRefiner.Database
         {
             try
             {
-                // Check if the app class exists in the database
-                if (!_dataManager.CheckAppClassExists(qualifiedName))
-                {
-                    return null;
-                }
-
-                // Get the source code
+                // Single path: GetAppClassSourceByPath caches existence+source and avoids a
+                // separate CheckAppClassExists round-trip (each was a full SAM ExecSql).
                 var sourceCode = _dataManager.GetAppClassSourceByPath(qualifiedName);
                 if (string.IsNullOrEmpty(sourceCode))
                 {
-                    Debug.Log($"DatabaseTypeMetadataResolver: App class '{qualifiedName}' exists but has no source code");
                     return null;
                 }
 

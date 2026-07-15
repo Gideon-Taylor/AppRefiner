@@ -245,6 +245,13 @@ namespace AppRefiner.Database
         /// <returns>The source code of the application class if found, otherwise null</returns>
         string? GetAppClassSourceByPath(string appClassPath);
 
+        /// <summary>
+        /// Evicts cached Application Class existence/source for <paramref name="appClassPath"/>,
+        /// or the entire app-class catalog cache when null/empty.
+        /// Call after that program is saved in App Designer so subsequent resolves re-read the DB.
+        /// </summary>
+        void InvalidateAppClassCache(string? appClassPath = null);
+
         string? GetPeopleCodeProgram(OpenTarget openTarget);
 
         /// <summary>

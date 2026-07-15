@@ -4653,28 +4653,29 @@ namespace AppRefiner
 
                 var qualifiedName = DetermineQualifiedName(editor);
 
-                // Invalidate in TypeCache (shared cache for TypeMetadata)
+                // Evict type metadata for this program only (do not Clear() the whole resolver —
+                // other classes are still valid after one save).
                 if (appDesignerProcess.TypeResolver != null)
                 {
                     bool removed = appDesignerProcess.TypeResolver.Cache.Remove(qualifiedName);
-                    if (removed)
-                    {
-                        Debug.Log($"InvalidateTypeCacheForEditor: Removed '{qualifiedName}' from TypeCache");
-                    }
-                }
-
-                // Invalidate in DatabaseTypeMetadataResolver (resolver's internal cache)
-                if (appDesignerProcess.TypeResolver != null)
-                {
-                    if (appDesignerProcess.TypeResolver is DatabaseTypeMetadataResolver dbResolver)
-                    {
-                        dbResolver.Clear();
-                    }
-                    Debug.Log($"InvalidateTypeCacheForEditor: Invalidated DatabaseTypeMetadataResolver cache for '{qualifiedName}'");
+                    Debug.Log(removed
+                        ? $"InvalidateTypeCacheForEditor: Removed '{qualifiedName}' from TypeCache"
+                        : $"InvalidateTypeCacheForEditor: '{qualifiedName}' was not in TypeCache");
                 }
                 else
                 {
                     Debug.Log("InvalidateTypeCacheForEditor: TypeResolver is null (database not connected?)");
+                }
+
+                // Evict DB source/exists catalog cache so the next resolve re-reads SAM/DB.
+                try
+                {
+                    appDesignerProcess.DataManager?.InvalidateAppClassCache(qualifiedName);
+                    Debug.Log($"InvalidateTypeCacheForEditor: AppClass catalog cache invalidated for '{qualifiedName}'");
+                }
+                catch (Exception invEx)
+                {
+                    Debug.Log($"InvalidateTypeCacheForEditor: AppClass cache invalidate failed: {invEx.Message}");
                 }
             }
             catch (Exception ex)
