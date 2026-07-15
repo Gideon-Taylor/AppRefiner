@@ -15,8 +15,8 @@ SELECT 'Activity' AS DEFN_TYPE,
        DESCR60 AS DESCR,
        LASTUPDDTTM
   FROM %Table(PSACTIVITYDEFN)
- WHERE (:1 = 'Y' OR %Upper(ACTIVITYNAME) LIKE %Upper(:2))
-   AND (:3 = 'Y' OR %Upper(DESCR60) LIKE %Upper(:4))
+ WHERE (:1 = 'Y' OR %Upper(ACTIVITYNAME) LIKE %Upper(:2) ESCAPE '\')
+   AND (:3 = 'Y' OR %Upper(DESCR60) LIKE %Upper(:4) ESCAPE '\')
  ORDER BY ACTIVITYNAME
 ```
 

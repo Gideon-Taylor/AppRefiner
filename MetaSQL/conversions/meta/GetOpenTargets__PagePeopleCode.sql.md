@@ -16,8 +16,8 @@ SELECT 'Page PeopleCode' AS DEFN_TYPE,
        LASTUPDDTTM
   FROM %Table(PSPCMPROG)
  WHERE OBJECTID1 = 9 AND OBJECTID2 = 12
-   AND (:1 = 'Y' OR %Upper(OBJECTVALUE1) LIKE %Upper(:2))
-   AND (:3 = 'Y' OR %Upper(OBJECTVALUE1 %Concat '.Activate') LIKE %Upper(:4))
+   AND (:1 = 'Y' OR %Upper(OBJECTVALUE1) LIKE %Upper(:2) ESCAPE '\')
+   AND (:3 = 'Y' OR %Upper(OBJECTVALUE1 %Concat '.Activate') LIKE %Upper(:4) ESCAPE '\')
  ORDER BY OBJECTVALUE1
 ```
 

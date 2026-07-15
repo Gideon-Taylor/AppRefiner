@@ -15,8 +15,8 @@ SELECT 'Application Class' AS DEFN_TYPE,
        DESCR AS DESCR,
        %CurrentDateTimeIn AS LASTUPDDTTM
   FROM %Table(PSAPPCLASSDEFN)
- WHERE (:1 = 'Y' OR %Upper(PACKAGEROOT %Concat CASE WHEN QUALIFYPATH = ':' THEN '' ELSE ':' %Concat QUALIFYPATH END %Concat ':' %Concat APPCLASSID) LIKE %Upper(:2))
-   AND (:3 = 'Y' OR %Upper(DESCR) LIKE %Upper(:4))
+ WHERE (:1 = 'Y' OR %Upper(PACKAGEROOT %Concat CASE WHEN QUALIFYPATH = ':' THEN '' ELSE ':' %Concat QUALIFYPATH END %Concat ':' %Concat APPCLASSID) LIKE %Upper(:2) ESCAPE '\')
+   AND (:3 = 'Y' OR %Upper(DESCR) LIKE %Upper(:4) ESCAPE '\')
 ```
 
 ## maxRows

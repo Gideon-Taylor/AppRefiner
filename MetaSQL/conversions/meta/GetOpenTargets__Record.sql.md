@@ -15,8 +15,8 @@ SELECT 'Record' AS DEFN_TYPE,
        RECDESCR AS DESCR,
        LASTUPDDTTM
   FROM %Table(PSRECDEFN)
- WHERE (:1 = 'Y' OR %Upper(RECNAME) LIKE %Upper(:2))
-   AND (:3 = 'Y' OR %Upper(RECDESCR) LIKE %Upper(:4))
+ WHERE (:1 = 'Y' OR %Upper(RECNAME) LIKE %Upper(:2) ESCAPE '\')
+   AND (:3 = 'Y' OR %Upper(RECDESCR) LIKE %Upper(:4) ESCAPE '\')
  ORDER BY RECNAME
 ```
 

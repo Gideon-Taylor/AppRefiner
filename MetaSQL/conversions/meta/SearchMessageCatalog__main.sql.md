@@ -16,14 +16,12 @@ SELECT MESSAGE_SET_NBR, MESSAGE_NBR, MSG_SEVERITY, MESSAGE_TEXT, DESCRLONG
 ```
 
 ## maxRows
-C#-side (optional set filter + limit); SQL itself unlimited
+C#-side limit via maxRows; SQL itself unlimited
 
 ## Notes / residual risks
 - Oracle used a single named :searchTerm twice; Meta-SQL splits to :1 and :2 — C# must bind the same search term value for both.
 - Oracle DBMS_LOB.SUBSTR(DESCRLONG, 4000, 1) converted to %Substring(DESCRLONG, 1, 4000) (start then length).
-- **C#-side dynamic pieces remain out of SQL:**
-  - Optional set filter via BuildMessageSetFilter(setNumbers): AND (MESSAGE_SET_NBR IN (...)).
-  - FETCH FIRST {limit} ROWS ONLY / maxRows applied in C#.
+- Global search only (setNumbers null/empty). Set-scoped search uses SearchMessageCatalogInSet with MESSAGE_SET_NBR = :3.
 - DESCRLONG is CLOB; substring bounds match to first 4000 chars.
 
 ## Checklist

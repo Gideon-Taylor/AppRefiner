@@ -14,8 +14,8 @@ SELECT 'Activity' AS DEFN_TYPE,
        DESCR60 AS DESCR,
        LASTUPDDTTM
   FROM %Table(PSACTIVITYDEFN)
- WHERE (:1 = 'Y' OR %Upper(ACTIVITYNAME) LIKE %Upper(:2))
-   AND (:3 = 'Y' OR %Upper(DESCR60) LIKE %Upper(:4))
+ WHERE (:1 = 'Y' OR %Upper(ACTIVITYNAME) LIKE %Upper(:2) ESCAPE '\')
+   AND (:3 = 'Y' OR %Upper(DESCR60) LIKE %Upper(:4) ESCAPE '\')
  ORDER BY ACTIVITYNAME
 ";
 
@@ -25,8 +25,8 @@ SELECT 'Analytic Model' AS DEFN_TYPE,
        DESCR AS DESCR,
        LASTUPDDTTM
   FROM %Table(PSACEMDLDEFN)
- WHERE (:1 = 'Y' OR %Upper(ACEMODELID) LIKE %Upper(:2))
-   AND (:3 = 'Y' OR %Upper(DESCR) LIKE %Upper(:4))
+ WHERE (:1 = 'Y' OR %Upper(ACEMODELID) LIKE %Upper(:2) ESCAPE '\')
+   AND (:3 = 'Y' OR %Upper(DESCR) LIKE %Upper(:4) ESCAPE '\')
  ORDER BY ACEMODELID
 ";
 
@@ -36,8 +36,8 @@ SELECT 'Analytic Type' AS DEFN_TYPE,
        DESCR AS DESCR,
        LASTUPDDTTM
   FROM %Table(PSOPTPRBTYPE)
- WHERE (:1 = 'Y' OR %Upper(PROBTYPE) LIKE %Upper(:2))
-   AND (:3 = 'Y' OR %Upper(DESCR) LIKE %Upper(:4))
+ WHERE (:1 = 'Y' OR %Upper(PROBTYPE) LIKE %Upper(:2) ESCAPE '\')
+   AND (:3 = 'Y' OR %Upper(DESCR) LIKE %Upper(:4) ESCAPE '\')
  ORDER BY PROBTYPE
 ";
 
@@ -48,8 +48,8 @@ SELECT 'App Engine PeopleCode' AS DEFN_TYPE,
        LASTUPDDTTM
   FROM %Table(PSPCMPROG)
  WHERE OBJECTID1 = 66 AND OBJECTID2 = 77 AND OBJECTID3 = 39 AND OBJECTID4 = 20 AND OBJECTID5 = 21 AND OBJECTID6 = 78 AND OBJECTID7 = 12
-   AND (:1 = 'Y' OR %Upper(OBJECTVALUE1 %Concat '.' %Concat OBJECTVALUE2 %Concat '.' %Concat OBJECTVALUE6) LIKE %Upper(:2))
-   AND (:3 = 'Y' OR %Upper(OBJECTVALUE1 %Concat '.' %Concat OBJECTVALUE2 %Concat '.' %Concat OBJECTVALUE3 %Concat '.' %Concat OBJECTVALUE4 %Concat '.' %Concat OBJECTVALUE5 %Concat '.' %Concat OBJECTVALUE6 %Concat '.' %Concat OBJECTVALUE7) LIKE %Upper(:4))
+   AND (:1 = 'Y' OR %Upper(OBJECTVALUE1 %Concat '.' %Concat OBJECTVALUE2 %Concat '.' %Concat OBJECTVALUE6) LIKE %Upper(:2) ESCAPE '\')
+   AND (:3 = 'Y' OR %Upper(OBJECTVALUE1 %Concat '.' %Concat OBJECTVALUE2 %Concat '.' %Concat OBJECTVALUE3 %Concat '.' %Concat OBJECTVALUE4 %Concat '.' %Concat OBJECTVALUE5 %Concat '.' %Concat OBJECTVALUE6 %Concat '.' %Concat OBJECTVALUE7) LIKE %Upper(:4) ESCAPE '\')
 ";
 
         public const string AppEngineProgram = @"
@@ -58,8 +58,8 @@ SELECT 'App Engine Program' AS DEFN_TYPE,
        DESCR AS DESCR,
        LASTUPDDTTM
   FROM %Table(PSAEAPPLDEFN)
- WHERE (:1 = 'Y' OR %Upper(AE_APPLID) LIKE %Upper(:2))
-   AND (:3 = 'Y' OR %Upper(DESCR) LIKE %Upper(:4))
+ WHERE (:1 = 'Y' OR %Upper(AE_APPLID) LIKE %Upper(:2) ESCAPE '\')
+   AND (:3 = 'Y' OR %Upper(DESCR) LIKE %Upper(:4) ESCAPE '\')
  ORDER BY AE_APPLID
 ";
 
@@ -69,8 +69,8 @@ SELECT 'Application Class' AS DEFN_TYPE,
        DESCR AS DESCR,
        %CurrentDateTimeIn AS LASTUPDDTTM
   FROM %Table(PSAPPCLASSDEFN)
- WHERE (:1 = 'Y' OR %Upper(PACKAGEROOT %Concat CASE WHEN QUALIFYPATH = ':' THEN '' ELSE ':' %Concat QUALIFYPATH END %Concat ':' %Concat APPCLASSID) LIKE %Upper(:2))
-   AND (:3 = 'Y' OR %Upper(DESCR) LIKE %Upper(:4))
+ WHERE (:1 = 'Y' OR %Upper(PACKAGEROOT %Concat CASE WHEN QUALIFYPATH = ':' THEN '' ELSE ':' %Concat QUALIFYPATH END %Concat ':' %Concat APPCLASSID) LIKE %Upper(:2) ESCAPE '\')
+   AND (:3 = 'Y' OR %Upper(DESCR) LIKE %Upper(:4) ESCAPE '\')
 ";
 
         public const string ApplicationPackage = @"
@@ -79,8 +79,8 @@ SELECT 'Application Package' AS DEFN_TYPE,
        DESCRLONG AS DESCR,
        LASTUPDDTTM
   FROM %Table(PSPACKAGEDEFN)
- WHERE (:1 = 'Y' OR %Upper(PACKAGEID) LIKE %Upper(:2))
-   AND (:3 = 'Y' OR %Upper(DESCRLONG) LIKE %Upper(:4))
+ WHERE (:1 = 'Y' OR %Upper(PACKAGEID) LIKE %Upper(:2) ESCAPE '\')
+   AND (:3 = 'Y' OR %Upper(DESCRLONG) LIKE %Upper(:4) ESCAPE '\')
  ORDER BY PACKAGEID
 ";
 
@@ -90,8 +90,8 @@ SELECT 'Approval Rule Set' AS DEFN_TYPE,
        DESCR60 AS DESCR,
        LASTUPDDTTM
   FROM %Table(APPR_RULE_HDR)
- WHERE (:1 = 'Y' OR %Upper(APPR_RULE_SET) LIKE %Upper(:2))
-   AND (:3 = 'Y' OR %Upper(DESCR60) LIKE %Upper(:4))
+ WHERE (:1 = 'Y' OR %Upper(APPR_RULE_SET) LIKE %Upper(:2) ESCAPE '\')
+   AND (:3 = 'Y' OR %Upper(DESCR60) LIKE %Upper(:4) ESCAPE '\')
  ORDER BY APPR_RULE_SET
 ";
 
@@ -101,8 +101,8 @@ SELECT 'Business Interlink' AS DEFN_TYPE,
        IODESCR AS DESCR,
        LASTUPDDTTM
   FROM %Table(PSIODEFN)
- WHERE (:1 = 'Y' OR %Upper(IONAME) LIKE %Upper(:2))
-   AND (:3 = 'Y' OR %Upper(IODESCR) LIKE %Upper(:4))
+ WHERE (:1 = 'Y' OR %Upper(IONAME) LIKE %Upper(:2) ESCAPE '\')
+   AND (:3 = 'Y' OR %Upper(IODESCR) LIKE %Upper(:4) ESCAPE '\')
  ORDER BY IONAME
 ";
 
@@ -112,8 +112,8 @@ SELECT 'Business Process' AS DEFN_TYPE,
        DESCR60 AS DESCR,
        LASTUPDDTTM
   FROM %Table(PSBUSPROCDEFN)
- WHERE (:1 = 'Y' OR %Upper(BUSPROCNAME) LIKE %Upper(:2))
-   AND (:3 = 'Y' OR %Upper(DESCR60) LIKE %Upper(:4))
+ WHERE (:1 = 'Y' OR %Upper(BUSPROCNAME) LIKE %Upper(:2) ESCAPE '\')
+   AND (:3 = 'Y' OR %Upper(DESCR60) LIKE %Upper(:4) ESCAPE '\')
  ORDER BY BUSPROCNAME
 ";
 
@@ -123,8 +123,8 @@ SELECT 'Component' AS DEFN_TYPE,
        DESCR AS DESCR,
        LASTUPDDTTM
   FROM %Table(PSPNLGRPDEFN)
- WHERE (:1 = 'Y' OR %Upper(PNLGRPNAME) LIKE %Upper(:2))
-   AND (:3 = 'Y' OR %Upper(DESCR) LIKE %Upper(:4))
+ WHERE (:1 = 'Y' OR %Upper(PNLGRPNAME) LIKE %Upper(:2) ESCAPE '\')
+   AND (:3 = 'Y' OR %Upper(DESCR) LIKE %Upper(:4) ESCAPE '\')
  ORDER BY PNLGRPNAME
 ";
 
@@ -134,8 +134,8 @@ SELECT 'Component Interface' AS DEFN_TYPE,
        DESCR AS DESCR,
        LASTUPDDTTM
   FROM %Table(PSBCDEFN)
- WHERE (:1 = 'Y' OR %Upper(BCNAME) LIKE %Upper(:2))
-   AND (:3 = 'Y' OR %Upper(DESCR) LIKE %Upper(:4))
+ WHERE (:1 = 'Y' OR %Upper(BCNAME) LIKE %Upper(:2) ESCAPE '\')
+   AND (:3 = 'Y' OR %Upper(DESCR) LIKE %Upper(:4) ESCAPE '\')
  ORDER BY BCNAME
 ";
 
@@ -146,8 +146,8 @@ SELECT 'Component Interface PeopleCode' AS DEFN_TYPE,
        LASTUPDDTTM
   FROM %Table(PSPCMPROG)
  WHERE OBJECTID1 = 74
-   AND (:1 = 'Y' OR %Upper(OBJECTVALUE1) LIKE %Upper(:2))
-   AND (:3 = 'Y' OR %Upper(OBJECTVALUE1 %Concat '.' %Concat OBJECTVALUE2) LIKE %Upper(:4))
+   AND (:1 = 'Y' OR %Upper(OBJECTVALUE1) LIKE %Upper(:2) ESCAPE '\')
+   AND (:3 = 'Y' OR %Upper(OBJECTVALUE1 %Concat '.' %Concat OBJECTVALUE2) LIKE %Upper(:4) ESCAPE '\')
  ORDER BY OBJECTVALUE1
 ";
 
@@ -158,8 +158,8 @@ SELECT 'Component PeopleCode' AS DEFN_TYPE,
        LASTUPDDTTM
   FROM %Table(PSPCMPROG)
  WHERE OBJECTID1 = 10 AND OBJECTID2 = 39 AND OBJECTID3 = 12
-   AND (:1 = 'Y' OR %Upper(OBJECTVALUE1 %Concat '.' %Concat OBJECTVALUE2 %Concat '.' %Concat OBJECTVALUE3) LIKE %Upper(:2))
-   AND (:3 = 'Y' OR %Upper(OBJECTVALUE1 %Concat '.' %Concat OBJECTVALUE2 %Concat '.' %Concat OBJECTVALUE3) LIKE %Upper(:4))
+   AND (:1 = 'Y' OR %Upper(OBJECTVALUE1 %Concat '.' %Concat OBJECTVALUE2 %Concat '.' %Concat OBJECTVALUE3) LIKE %Upper(:2) ESCAPE '\')
+   AND (:3 = 'Y' OR %Upper(OBJECTVALUE1 %Concat '.' %Concat OBJECTVALUE2 %Concat '.' %Concat OBJECTVALUE3) LIKE %Upper(:4) ESCAPE '\')
 ";
 
         public const string ComponentRecFieldPeopleCode = @"
@@ -169,8 +169,8 @@ SELECT 'Component Rec Field PeopleCode' AS DEFN_TYPE,
        LASTUPDDTTM
   FROM %Table(PSPCMPROG)
  WHERE OBJECTID1 = 10 AND OBJECTID2 = 39 AND OBJECTID3 = 1 AND OBJECTID4 = 2 AND OBJECTID5 = 12
-   AND (:1 = 'Y' OR %Upper(OBJECTVALUE1 %Concat '.' %Concat OBJECTVALUE2 %Concat '.' %Concat OBJECTVALUE3 %Concat '.' %Concat OBJECTVALUE4) LIKE %Upper(:2))
-   AND (:3 = 'Y' OR %Upper(OBJECTVALUE1 %Concat '.' %Concat OBJECTVALUE2 %Concat '.' %Concat OBJECTVALUE3 %Concat '.' %Concat OBJECTVALUE4 %Concat '.' %Concat OBJECTVALUE5) LIKE %Upper(:4))
+   AND (:1 = 'Y' OR %Upper(OBJECTVALUE1 %Concat '.' %Concat OBJECTVALUE2 %Concat '.' %Concat OBJECTVALUE3 %Concat '.' %Concat OBJECTVALUE4) LIKE %Upper(:2) ESCAPE '\')
+   AND (:3 = 'Y' OR %Upper(OBJECTVALUE1 %Concat '.' %Concat OBJECTVALUE2 %Concat '.' %Concat OBJECTVALUE3 %Concat '.' %Concat OBJECTVALUE4 %Concat '.' %Concat OBJECTVALUE5) LIKE %Upper(:4) ESCAPE '\')
 ";
 
         public const string ComponentRecordPeopleCode = @"
@@ -180,8 +180,8 @@ SELECT 'Component Record PeopleCode' AS DEFN_TYPE,
        LASTUPDDTTM
   FROM %Table(PSPCMPROG)
  WHERE OBJECTID1 = 10 AND OBJECTID2 = 39 AND OBJECTID3 = 1 AND OBJECTID4 = 12
-   AND (:1 = 'Y' OR %Upper(OBJECTVALUE1 %Concat '.' %Concat OBJECTVALUE2 %Concat '.' %Concat OBJECTVALUE3) LIKE %Upper(:2))
-   AND (:3 = 'Y' OR %Upper(OBJECTVALUE1 %Concat '.' %Concat OBJECTVALUE2 %Concat '.' %Concat OBJECTVALUE3 %Concat '.' %Concat OBJECTVALUE4) LIKE %Upper(:4))
+   AND (:1 = 'Y' OR %Upper(OBJECTVALUE1 %Concat '.' %Concat OBJECTVALUE2 %Concat '.' %Concat OBJECTVALUE3) LIKE %Upper(:2) ESCAPE '\')
+   AND (:3 = 'Y' OR %Upper(OBJECTVALUE1 %Concat '.' %Concat OBJECTVALUE2 %Concat '.' %Concat OBJECTVALUE3 %Concat '.' %Concat OBJECTVALUE4) LIKE %Upper(:4) ESCAPE '\')
 ";
 
         public const string Field = @"
@@ -190,8 +190,8 @@ SELECT 'Field' AS DEFN_TYPE,
        DESCRLONG AS DESCR,
        LASTUPDDTTM
   FROM %Table(PSDBFIELD)
- WHERE (:1 = 'Y' OR %Upper(FIELDNAME) LIKE %Upper(:2))
-   AND (:3 = 'Y' OR %Upper(DESCRLONG) LIKE %Upper(:4))
+ WHERE (:1 = 'Y' OR %Upper(FIELDNAME) LIKE %Upper(:2) ESCAPE '\')
+   AND (:3 = 'Y' OR %Upper(DESCRLONG) LIKE %Upper(:4) ESCAPE '\')
  ORDER BY FIELDNAME
 ";
 
@@ -201,8 +201,8 @@ SELECT 'File Layout' AS DEFN_TYPE,
        DESCR AS DESCR,
        LASTUPDDTTM
   FROM %Table(PSFLDDEFN)
- WHERE (:1 = 'Y' OR %Upper(FLDDEFNNAME) LIKE %Upper(:2))
-   AND (:3 = 'Y' OR %Upper(DESCR) LIKE %Upper(:4))
+ WHERE (:1 = 'Y' OR %Upper(FLDDEFNNAME) LIKE %Upper(:2) ESCAPE '\')
+   AND (:3 = 'Y' OR %Upper(DESCR) LIKE %Upper(:4) ESCAPE '\')
  ORDER BY FLDDEFNNAME
 ";
 
@@ -212,8 +212,8 @@ SELECT 'File Reference' AS DEFN_TYPE,
        DESCRLONG AS DESCR,
        LASTUPDDTTM
   FROM %Table(PSFILEREDEFN)
- WHERE (:1 = 'Y' OR %Upper(FILEREFNAME) LIKE %Upper(:2))
-   AND (:3 = 'Y' OR %Upper(DESCRLONG) LIKE %Upper(:4))
+ WHERE (:1 = 'Y' OR %Upper(FILEREFNAME) LIKE %Upper(:2) ESCAPE '\')
+   AND (:3 = 'Y' OR %Upper(DESCRLONG) LIKE %Upper(:4) ESCAPE '\')
  ORDER BY FILEREFNAME
 ";
 
@@ -224,8 +224,8 @@ SELECT 'HTML' AS DEFN_TYPE,
        LASTUPDDTTM
   FROM %Table(PSCONTDEFN)
  WHERE CONTTYPE = 4
-   AND (:1 = 'Y' OR %Upper(CONTNAME) LIKE %Upper(:2))
-   AND (:3 = 'Y' OR %Upper(DESCR) LIKE %Upper(:4))
+   AND (:1 = 'Y' OR %Upper(CONTNAME) LIKE %Upper(:2) ESCAPE '\')
+   AND (:3 = 'Y' OR %Upper(DESCR) LIKE %Upper(:4) ESCAPE '\')
  ORDER BY CONTNAME
 ";
 
@@ -236,8 +236,8 @@ SELECT 'Image' AS DEFN_TYPE,
        LASTUPDDTTM
   FROM %Table(PSCONTDEFN)
  WHERE CONTTYPE = 1
-   AND (:1 = 'Y' OR %Upper(CONTNAME) LIKE %Upper(:2))
-   AND (:3 = 'Y' OR %Upper(DESCR) LIKE %Upper(:4))
+   AND (:1 = 'Y' OR %Upper(CONTNAME) LIKE %Upper(:2) ESCAPE '\')
+   AND (:3 = 'Y' OR %Upper(DESCR) LIKE %Upper(:4) ESCAPE '\')
  ORDER BY CONTNAME
 ";
 
@@ -247,8 +247,8 @@ SELECT 'Menu' AS DEFN_TYPE,
        DESCR AS DESCR,
        LASTUPDDTTM
   FROM %Table(PSMENUDEFN)
- WHERE (:1 = 'Y' OR %Upper(MENUNAME) LIKE %Upper(:2))
-   AND (:3 = 'Y' OR %Upper(DESCR) LIKE %Upper(:4))
+ WHERE (:1 = 'Y' OR %Upper(MENUNAME) LIKE %Upper(:2) ESCAPE '\')
+   AND (:3 = 'Y' OR %Upper(DESCR) LIKE %Upper(:4) ESCAPE '\')
  ORDER BY MENUNAME
 ";
 
@@ -259,8 +259,8 @@ SELECT 'Menu PeopleCode' AS DEFN_TYPE,
        LASTUPDDTTM
   FROM %Table(PSPCMPROG)
  WHERE OBJECTID1 = 3 AND OBJECTID2 = 4 AND OBJECTID3 = 5 AND OBJECTID4 = 12
-   AND (:1 = 'Y' OR %Upper(OBJECTVALUE1 %Concat '.' %Concat OBJECTVALUE2 %Concat '.' %Concat OBJECTVALUE3) LIKE %Upper(:2))
-   AND (:3 = 'Y' OR %Upper(OBJECTVALUE1 %Concat '.' %Concat OBJECTVALUE2 %Concat '.' %Concat OBJECTVALUE3 %Concat '.' %Concat OBJECTVALUE4) LIKE %Upper(:4))
+   AND (:1 = 'Y' OR %Upper(OBJECTVALUE1 %Concat '.' %Concat OBJECTVALUE2 %Concat '.' %Concat OBJECTVALUE3) LIKE %Upper(:2) ESCAPE '\')
+   AND (:3 = 'Y' OR %Upper(OBJECTVALUE1 %Concat '.' %Concat OBJECTVALUE2 %Concat '.' %Concat OBJECTVALUE3 %Concat '.' %Concat OBJECTVALUE4) LIKE %Upper(:4) ESCAPE '\')
 ";
 
         public const string Message = @"
@@ -269,8 +269,8 @@ SELECT 'Message' AS DEFN_TYPE,
        DESCR AS DESCR,
        LASTUPDDTTM
   FROM %Table(PSMSGDEFN)
- WHERE (:1 = 'Y' OR %Upper(MSGNAME) LIKE %Upper(:2))
-   AND (:3 = 'Y' OR %Upper(DESCR) LIKE %Upper(:4))
+ WHERE (:1 = 'Y' OR %Upper(MSGNAME) LIKE %Upper(:2) ESCAPE '\')
+   AND (:3 = 'Y' OR %Upper(DESCR) LIKE %Upper(:4) ESCAPE '\')
  ORDER BY MSGNAME
 ";
 
@@ -281,8 +281,8 @@ SELECT 'Message PeopleCode' AS DEFN_TYPE,
        LASTUPDDTTM
   FROM %Table(PSPCMPROG)
  WHERE (OBJECTID1 = 60 OR OBJECTID1 = 87)
-   AND (:1 = 'Y' OR %Upper(OBJECTVALUE1 %Concat CASE WHEN OBJECTVALUE2 IS NOT NULL AND OBJECTVALUE2 != ' ' THEN '.' %Concat OBJECTVALUE2 ELSE '' END) LIKE %Upper(:2))
-   AND (:3 = 'Y' OR %Upper(OBJECTVALUE1 %Concat CASE WHEN OBJECTVALUE2 IS NOT NULL AND OBJECTVALUE2 != ' ' THEN '.' %Concat OBJECTVALUE2 ELSE '' END %Concat CASE WHEN OBJECTVALUE3 IS NOT NULL AND OBJECTVALUE3 != ' ' THEN '.' %Concat OBJECTVALUE3 ELSE '' END) LIKE %Upper(:4))
+   AND (:1 = 'Y' OR %Upper(OBJECTVALUE1 %Concat CASE WHEN OBJECTVALUE2 IS NOT NULL AND OBJECTVALUE2 != ' ' THEN '.' %Concat OBJECTVALUE2 ELSE '' END) LIKE %Upper(:2) ESCAPE '\')
+   AND (:3 = 'Y' OR %Upper(OBJECTVALUE1 %Concat CASE WHEN OBJECTVALUE2 IS NOT NULL AND OBJECTVALUE2 != ' ' THEN '.' %Concat OBJECTVALUE2 ELSE '' END %Concat CASE WHEN OBJECTVALUE3 IS NOT NULL AND OBJECTVALUE3 != ' ' THEN '.' %Concat OBJECTVALUE3 ELSE '' END) LIKE %Upper(:4) ESCAPE '\')
 ";
 
         public const string OptimizationModel = @"
@@ -291,8 +291,8 @@ SELECT 'Optimization Model' AS DEFN_TYPE,
        DESCR AS DESCR,
        LASTUPDDTTM
   FROM %Table(PSOPTMODEL)
- WHERE (:1 = 'Y' OR %Upper(PAMS_MODEL_NAME) LIKE %Upper(:2))
-   AND (:3 = 'Y' OR %Upper(DESCR) LIKE %Upper(:4))
+ WHERE (:1 = 'Y' OR %Upper(PAMS_MODEL_NAME) LIKE %Upper(:2) ESCAPE '\')
+   AND (:3 = 'Y' OR %Upper(DESCR) LIKE %Upper(:4) ESCAPE '\')
  ORDER BY PAMS_MODEL_NAME
 ";
 
@@ -303,8 +303,8 @@ SELECT 'Page' AS DEFN_TYPE,
        LASTUPDDTTM
   FROM %Table(PSPNLDEFN)
  WHERE PNLTYPE <> 7
-   AND (:1 = 'Y' OR %Upper(PNLNAME) LIKE %Upper(:2))
-   AND (:3 = 'Y' OR %Upper(DESCR) LIKE %Upper(:4))
+   AND (:1 = 'Y' OR %Upper(PNLNAME) LIKE %Upper(:2) ESCAPE '\')
+   AND (:3 = 'Y' OR %Upper(DESCR) LIKE %Upper(:4) ESCAPE '\')
  ORDER BY PNLNAME
 ";
 
@@ -315,8 +315,8 @@ SELECT 'Page (Fluid)' AS DEFN_TYPE,
        LASTUPDDTTM
   FROM %Table(PSPNLDEFN)
  WHERE PNLTYPE = 7
-   AND (:1 = 'Y' OR %Upper(PNLNAME) LIKE %Upper(:2))
-   AND (:3 = 'Y' OR %Upper(DESCR) LIKE %Upper(:4))
+   AND (:1 = 'Y' OR %Upper(PNLNAME) LIKE %Upper(:2) ESCAPE '\')
+   AND (:3 = 'Y' OR %Upper(DESCR) LIKE %Upper(:4) ESCAPE '\')
  ORDER BY PNLNAME
 ";
 
@@ -327,8 +327,8 @@ SELECT 'Page PeopleCode' AS DEFN_TYPE,
        LASTUPDDTTM
   FROM %Table(PSPCMPROG)
  WHERE OBJECTID1 = 9 AND OBJECTID2 = 12
-   AND (:1 = 'Y' OR %Upper(OBJECTVALUE1) LIKE %Upper(:2))
-   AND (:3 = 'Y' OR %Upper(OBJECTVALUE1 %Concat '.Activate') LIKE %Upper(:4))
+   AND (:1 = 'Y' OR %Upper(OBJECTVALUE1) LIKE %Upper(:2) ESCAPE '\')
+   AND (:3 = 'Y' OR %Upper(OBJECTVALUE1 %Concat '.Activate') LIKE %Upper(:4) ESCAPE '\')
  ORDER BY OBJECTVALUE1
 ";
 
@@ -338,8 +338,8 @@ SELECT 'Project' AS DEFN_TYPE,
        PROJECTDESCR AS DESCR,
        LASTUPDDTTM
   FROM %Table(PSPROJECTDEFN)
- WHERE (:1 = 'Y' OR %Upper(PROJECTNAME) LIKE %Upper(:2))
-   AND (:3 = 'Y' OR %Upper(PROJECTDESCR) LIKE %Upper(:4))
+ WHERE (:1 = 'Y' OR %Upper(PROJECTNAME) LIKE %Upper(:2) ESCAPE '\')
+   AND (:3 = 'Y' OR %Upper(PROJECTDESCR) LIKE %Upper(:4) ESCAPE '\')
  ORDER BY PROJECTNAME
 ";
 
@@ -349,8 +349,8 @@ SELECT 'Record' AS DEFN_TYPE,
        RECDESCR AS DESCR,
        LASTUPDDTTM
   FROM %Table(PSRECDEFN)
- WHERE (:1 = 'Y' OR %Upper(RECNAME) LIKE %Upper(:2))
-   AND (:3 = 'Y' OR %Upper(RECDESCR) LIKE %Upper(:4))
+ WHERE (:1 = 'Y' OR %Upper(RECNAME) LIKE %Upper(:2) ESCAPE '\')
+   AND (:3 = 'Y' OR %Upper(RECDESCR) LIKE %Upper(:4) ESCAPE '\')
  ORDER BY RECNAME
 ";
 
@@ -361,8 +361,8 @@ SELECT 'Record Field PeopleCode' AS DEFN_TYPE,
        LASTUPDDTTM
   FROM %Table(PSPCMPROG)
  WHERE OBJECTID1 = 1 AND OBJECTID2 = 2 AND OBJECTID3 = 12
-   AND (:1 = 'Y' OR %Upper(OBJECTVALUE1 %Concat '.' %Concat OBJECTVALUE2) LIKE %Upper(:2))
-   AND (:3 = 'Y' OR %Upper(OBJECTVALUE1 %Concat '.' %Concat OBJECTVALUE2 %Concat '.' %Concat OBJECTVALUE3) LIKE %Upper(:4))
+   AND (:1 = 'Y' OR %Upper(OBJECTVALUE1 %Concat '.' %Concat OBJECTVALUE2) LIKE %Upper(:2) ESCAPE '\')
+   AND (:3 = 'Y' OR %Upper(OBJECTVALUE1 %Concat '.' %Concat OBJECTVALUE2 %Concat '.' %Concat OBJECTVALUE3) LIKE %Upper(:4) ESCAPE '\')
 ";
 
         public const string SQL = @"
@@ -371,8 +371,8 @@ SELECT 'SQL' AS DEFN_TYPE,
        ' ' AS DESCR,
        LASTUPDDTTM
   FROM %Table(PSSQLDEFN)
- WHERE (:1 = 'Y' OR %Upper(SQLID) LIKE %Upper(:2))
-   AND (:3 = 'Y' OR %Upper(' ') LIKE %Upper(:4))
+ WHERE (:1 = 'Y' OR %Upper(SQLID) LIKE %Upper(:2) ESCAPE '\')
+   AND (:3 = 'Y' OR %Upper(' ') LIKE %Upper(:4) ESCAPE '\')
  ORDER BY SQLID
 ";
 
@@ -383,8 +383,8 @@ SELECT 'Style Sheet' AS DEFN_TYPE,
        LASTUPDDTTM
   FROM %Table(PSCONTDEFN)
  WHERE CONTTYPE = 9
-   AND (:1 = 'Y' OR %Upper(CONTNAME) LIKE %Upper(:2))
-   AND (:3 = 'Y' OR %Upper(DESCR) LIKE %Upper(:4))
+   AND (:1 = 'Y' OR %Upper(CONTNAME) LIKE %Upper(:2) ESCAPE '\')
+   AND (:3 = 'Y' OR %Upper(DESCR) LIKE %Upper(:4) ESCAPE '\')
  ORDER BY CONTNAME
 ";
 

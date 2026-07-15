@@ -15,8 +15,8 @@ SELECT 'Approval Rule Set' AS DEFN_TYPE,
        DESCR60 AS DESCR,
        LASTUPDDTTM
   FROM %Table(APPR_RULE_HDR)
- WHERE (:1 = 'Y' OR %Upper(APPR_RULE_SET) LIKE %Upper(:2))
-   AND (:3 = 'Y' OR %Upper(DESCR60) LIKE %Upper(:4))
+ WHERE (:1 = 'Y' OR %Upper(APPR_RULE_SET) LIKE %Upper(:2) ESCAPE '\')
+   AND (:3 = 'Y' OR %Upper(DESCR60) LIKE %Upper(:4) ESCAPE '\')
  ORDER BY APPR_RULE_SET
 ```
 

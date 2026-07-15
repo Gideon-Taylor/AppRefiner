@@ -997,44 +997,36 @@ namespace AppRefiner.Database
         {
             EnsureConnected();
 
-            // Static SQL only — no BuildMessageSetFilter injection.
+            // Static SQL only — no BuildMessageSetFilter / dynamic IN injection.
             // :1 and :2 bind the same uppercased %term% pattern (SAM positional).
             string pattern = $"%{searchTerm.ToUpperInvariant()}%";
-
-            int fetchCap = limit;
-            if (setNumbers != null && setNumbers.Count > 0)
-            {
-                // Over-fetch then filter; cap to avoid unbounded reads
-                fetchCap = Math.Max(limit * 20, 500);
-            }
-
             List<MessageCatalogEntry> messages = new();
+
             try
             {
-                DataTable result = Query(
-                    SqlProxyQueryCatalog.SearchMessageCatalog,
-                    new[] { S(pattern), S(pattern) },
-                    maxRows: fetchCap);
-
-                var setFilter = setNumbers != null && setNumbers.Count > 0
-                    ? new HashSet<int>(setNumbers)
-                    : null;
-
-                foreach (DataRow row in result.Rows)
+                if (setNumbers == null || setNumbers.Count == 0)
                 {
-                    int setNbr = Convert.ToInt32(row["MESSAGE_SET_NBR"]);
-                    if (setFilter != null && !setFilter.Contains(setNbr))
-                        continue;
+                    DataTable result = Query(
+                        SqlProxyQueryCatalog.SearchMessageCatalog,
+                        new[] { S(pattern), S(pattern) },
+                        maxRows: limit);
+                    AppendMessageCatalogRows(messages, result, limit);
+                }
+                else
+                {
+                    // One static SQL per set (MESSAGE_SET_NBR = :3); merge until limit.
+                    foreach (int setNumber in setNumbers)
+                    {
+                        if (messages.Count >= limit)
+                            break;
 
-                    messages.Add(new MessageCatalogEntry(
-                        setNbr,
-                        Convert.ToInt32(row["MESSAGE_NBR"]),
-                        row["MSG_SEVERITY"].ToString() ?? string.Empty,
-                        row["MESSAGE_TEXT"].ToString() ?? string.Empty,
-                        row["DESCRLONG"] == DBNull.Value ? string.Empty : row["DESCRLONG"].ToString() ?? string.Empty));
-
-                    if (messages.Count >= limit)
-                        break;
+                        int remaining = limit - messages.Count;
+                        DataTable result = Query(
+                            SqlProxyQueryCatalog.SearchMessageCatalogInSet,
+                            new[] { S(pattern), S(pattern), I(setNumber) },
+                            maxRows: remaining);
+                        AppendMessageCatalogRows(messages, result, limit);
+                    }
                 }
             }
             catch (Exception ex)
@@ -1042,6 +1034,23 @@ namespace AppRefiner.Database
                 Debug.Log($"SearchMessageCatalog failed: {ex.Message}");
             }
             return messages;
+        }
+
+        private static void AppendMessageCatalogRows(
+            List<MessageCatalogEntry> messages, DataTable result, int limit)
+        {
+            foreach (DataRow row in result.Rows)
+            {
+                if (messages.Count >= limit)
+                    break;
+
+                messages.Add(new MessageCatalogEntry(
+                    Convert.ToInt32(row["MESSAGE_SET_NBR"]),
+                    Convert.ToInt32(row["MESSAGE_NBR"]),
+                    row["MSG_SEVERITY"].ToString() ?? string.Empty,
+                    row["MESSAGE_TEXT"].ToString() ?? string.Empty,
+                    row["DESCRLONG"] == DBNull.Value ? string.Empty : row["DESCRLONG"].ToString() ?? string.Empty));
+            }
         }
 
         public List<EventMapInfo> GetEventMapXrefs(string classPath)

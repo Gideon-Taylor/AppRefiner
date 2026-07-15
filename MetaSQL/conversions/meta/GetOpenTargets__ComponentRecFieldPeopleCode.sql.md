@@ -16,8 +16,8 @@ SELECT 'Component Rec Field PeopleCode' AS DEFN_TYPE,
        LASTUPDDTTM
   FROM %Table(PSPCMPROG)
  WHERE OBJECTID1 = 10 AND OBJECTID2 = 39 AND OBJECTID3 = 1 AND OBJECTID4 = 2 AND OBJECTID5 = 12
-   AND (:1 = 'Y' OR %Upper(OBJECTVALUE1 %Concat '.' %Concat OBJECTVALUE2 %Concat '.' %Concat OBJECTVALUE3 %Concat '.' %Concat OBJECTVALUE4) LIKE %Upper(:2))
-   AND (:3 = 'Y' OR %Upper(OBJECTVALUE1 %Concat '.' %Concat OBJECTVALUE2 %Concat '.' %Concat OBJECTVALUE3 %Concat '.' %Concat OBJECTVALUE4 %Concat '.' %Concat OBJECTVALUE5) LIKE %Upper(:4))
+   AND (:1 = 'Y' OR %Upper(OBJECTVALUE1 %Concat '.' %Concat OBJECTVALUE2 %Concat '.' %Concat OBJECTVALUE3 %Concat '.' %Concat OBJECTVALUE4) LIKE %Upper(:2) ESCAPE '\')
+   AND (:3 = 'Y' OR %Upper(OBJECTVALUE1 %Concat '.' %Concat OBJECTVALUE2 %Concat '.' %Concat OBJECTVALUE3 %Concat '.' %Concat OBJECTVALUE4 %Concat '.' %Concat OBJECTVALUE5) LIKE %Upper(:4) ESCAPE '\')
 ```
 
 ## maxRows

@@ -15,8 +15,8 @@ SELECT 'SQL' AS DEFN_TYPE,
        ' ' AS DESCR,
        LASTUPDDTTM
   FROM %Table(PSSQLDEFN)
- WHERE (:1 = 'Y' OR %Upper(SQLID) LIKE %Upper(:2))
-   AND (:3 = 'Y' OR %Upper(' ') LIKE %Upper(:4))
+ WHERE (:1 = 'Y' OR %Upper(SQLID) LIKE %Upper(:2) ESCAPE '\')
+   AND (:3 = 'Y' OR %Upper(' ') LIKE %Upper(:4) ESCAPE '\')
  ORDER BY SQLID
 ```
 

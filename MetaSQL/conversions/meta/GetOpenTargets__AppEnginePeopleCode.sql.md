@@ -16,8 +16,8 @@ SELECT 'App Engine PeopleCode' AS DEFN_TYPE,
        LASTUPDDTTM
   FROM %Table(PSPCMPROG)
  WHERE OBJECTID1 = 66 AND OBJECTID2 = 77 AND OBJECTID3 = 39 AND OBJECTID4 = 20 AND OBJECTID5 = 21 AND OBJECTID6 = 78 AND OBJECTID7 = 12
-   AND (:1 = 'Y' OR %Upper(OBJECTVALUE1 %Concat '.' %Concat OBJECTVALUE2 %Concat '.' %Concat OBJECTVALUE6) LIKE %Upper(:2))
-   AND (:3 = 'Y' OR %Upper(OBJECTVALUE1 %Concat '.' %Concat OBJECTVALUE2 %Concat '.' %Concat OBJECTVALUE3 %Concat '.' %Concat OBJECTVALUE4 %Concat '.' %Concat OBJECTVALUE5 %Concat '.' %Concat OBJECTVALUE6 %Concat '.' %Concat OBJECTVALUE7) LIKE %Upper(:4))
+   AND (:1 = 'Y' OR %Upper(OBJECTVALUE1 %Concat '.' %Concat OBJECTVALUE2 %Concat '.' %Concat OBJECTVALUE6) LIKE %Upper(:2) ESCAPE '\')
+   AND (:3 = 'Y' OR %Upper(OBJECTVALUE1 %Concat '.' %Concat OBJECTVALUE2 %Concat '.' %Concat OBJECTVALUE3 %Concat '.' %Concat OBJECTVALUE4 %Concat '.' %Concat OBJECTVALUE5 %Concat '.' %Concat OBJECTVALUE6 %Concat '.' %Concat OBJECTVALUE7) LIKE %Upper(:4) ESCAPE '\')
 ```
 
 ## maxRows

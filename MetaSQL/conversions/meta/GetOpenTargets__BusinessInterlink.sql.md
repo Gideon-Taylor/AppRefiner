@@ -15,8 +15,8 @@ SELECT 'Business Interlink' AS DEFN_TYPE,
        IODESCR AS DESCR,
        LASTUPDDTTM
   FROM %Table(PSIODEFN)
- WHERE (:1 = 'Y' OR %Upper(IONAME) LIKE %Upper(:2))
-   AND (:3 = 'Y' OR %Upper(IODESCR) LIKE %Upper(:4))
+ WHERE (:1 = 'Y' OR %Upper(IONAME) LIKE %Upper(:2) ESCAPE '\')
+   AND (:3 = 'Y' OR %Upper(IODESCR) LIKE %Upper(:4) ESCAPE '\')
  ORDER BY IONAME
 ```
 

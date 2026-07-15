@@ -15,8 +15,8 @@ SELECT 'Project' AS DEFN_TYPE,
        PROJECTDESCR AS DESCR,
        LASTUPDDTTM
   FROM %Table(PSPROJECTDEFN)
- WHERE (:1 = 'Y' OR %Upper(PROJECTNAME) LIKE %Upper(:2))
-   AND (:3 = 'Y' OR %Upper(PROJECTDESCR) LIKE %Upper(:4))
+ WHERE (:1 = 'Y' OR %Upper(PROJECTNAME) LIKE %Upper(:2) ESCAPE '\')
+   AND (:3 = 'Y' OR %Upper(PROJECTDESCR) LIKE %Upper(:4) ESCAPE '\')
  ORDER BY PROJECTNAME
 ```
 

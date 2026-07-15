@@ -15,8 +15,8 @@ SELECT 'Field' AS DEFN_TYPE,
        DESCRLONG AS DESCR,
        LASTUPDDTTM
   FROM %Table(PSDBFIELD)
- WHERE (:1 = 'Y' OR %Upper(FIELDNAME) LIKE %Upper(:2))
-   AND (:3 = 'Y' OR %Upper(DESCRLONG) LIKE %Upper(:4))
+ WHERE (:1 = 'Y' OR %Upper(FIELDNAME) LIKE %Upper(:2) ESCAPE '\')
+   AND (:3 = 'Y' OR %Upper(DESCRLONG) LIKE %Upper(:4) ESCAPE '\')
  ORDER BY FIELDNAME
 ```
 

@@ -16,8 +16,8 @@ SELECT 'Image' AS DEFN_TYPE,
        LASTUPDDTTM
   FROM %Table(PSCONTDEFN)
  WHERE CONTTYPE = 1
-   AND (:1 = 'Y' OR %Upper(CONTNAME) LIKE %Upper(:2))
-   AND (:3 = 'Y' OR %Upper(DESCR) LIKE %Upper(:4))
+   AND (:1 = 'Y' OR %Upper(CONTNAME) LIKE %Upper(:2) ESCAPE '\')
+   AND (:3 = 'Y' OR %Upper(DESCR) LIKE %Upper(:4) ESCAPE '\')
  ORDER BY CONTNAME
 ```
 

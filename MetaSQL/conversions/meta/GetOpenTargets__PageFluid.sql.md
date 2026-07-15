@@ -16,8 +16,8 @@ SELECT 'Page (Fluid)' AS DEFN_TYPE,
        LASTUPDDTTM
   FROM %Table(PSPNLDEFN)
  WHERE PNLTYPE = 7
-   AND (:1 = 'Y' OR %Upper(PNLNAME) LIKE %Upper(:2))
-   AND (:3 = 'Y' OR %Upper(DESCR) LIKE %Upper(:4))
+   AND (:1 = 'Y' OR %Upper(PNLNAME) LIKE %Upper(:2) ESCAPE '\')
+   AND (:3 = 'Y' OR %Upper(DESCR) LIKE %Upper(:4) ESCAPE '\')
  ORDER BY PNLNAME
 ```
 

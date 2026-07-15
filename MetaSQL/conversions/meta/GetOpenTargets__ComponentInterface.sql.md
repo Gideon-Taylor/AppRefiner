@@ -15,8 +15,8 @@ SELECT 'Component Interface' AS DEFN_TYPE,
        DESCR AS DESCR,
        LASTUPDDTTM
   FROM %Table(PSBCDEFN)
- WHERE (:1 = 'Y' OR %Upper(BCNAME) LIKE %Upper(:2))
-   AND (:3 = 'Y' OR %Upper(DESCR) LIKE %Upper(:4))
+ WHERE (:1 = 'Y' OR %Upper(BCNAME) LIKE %Upper(:2) ESCAPE '\')
+   AND (:3 = 'Y' OR %Upper(DESCR) LIKE %Upper(:4) ESCAPE '\')
  ORDER BY BCNAME
 ```
 
