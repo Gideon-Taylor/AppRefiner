@@ -3,6 +3,8 @@ using AppRefiner.Database.SqlProxy;
 using AppRefiner.Database.SqlProxyQueries;
 using PeopleCodeTypeInfo.Types;
 using System.Data;
+using System.Text;
+using System.Text.RegularExpressions;
 
 namespace AppRefiner.Database
 {
@@ -11,7 +13,8 @@ namespace AppRefiner.Database
     /// </summary>
     public sealed class SqlProxyDataManager : IDataManager
     {
-        private const string PendingMessage = "SqlProxyDataManager: pending Task 7+";
+        private const string PendingMessage = "SqlProxyDataManager: pending Task 8+";
+        private const int MultiChunkMaxRows = 10000;
 
         private readonly SqlProxyDbConnection connection;
         private Dictionary<string, RecordFieldCache> recordFieldCache = new();
@@ -99,6 +102,24 @@ namespace AppRefiner.Database
         private static SqlProxyBind S(string? value) => SqlProxyBind.FromObject(value ?? string.Empty);
         private static SqlProxyBind I(int value) => SqlProxyBind.FromObject(value);
 
+        /// <summary>
+        /// Builds 14 ordered binds alternating I(objId), S(objVal) for 7 program field pairs.
+        /// </summary>
+        private static List<SqlProxyBind> BuildProgramFieldBinds(
+            IReadOnlyList<Tuple<int, string>> programFields,
+            string defaultObjVal = " ")
+        {
+            var binds = new List<SqlProxyBind>(14);
+            for (int i = 0; i < 7; i++)
+            {
+                int objId = i < programFields.Count ? programFields[i].Item1 : 0;
+                string objVal = i < programFields.Count ? programFields[i].Item2 : defaultObjVal;
+                binds.Add(I(objId));
+                binds.Add(S(objVal));
+            }
+            return binds;
+        }
+
         public string GetToolsVersion()
         {
             DataTable result = Query(SqlProxyQueryCatalog.GetToolsVersion);
@@ -109,37 +130,497 @@ namespace AppRefiner.Database
             return result.Rows[0][0]?.ToString() ?? string.Empty;
         }
 
-        // --- Remaining IDataManager members: stubs for Task 7+ ---
-
         public string GetSqlDefinition(string objectName)
-            => throw new NotImplementedException(PendingMessage);
+        {
+            DataTable result = Query(
+                SqlProxyQueryCatalog.GetSqlDefinition,
+                new[] { S(objectName) },
+                MultiChunkMaxRows);
+
+            if (result.Rows.Count == 0)
+            {
+                return string.Empty;
+            }
+
+            StringBuilder sqlDef = new();
+            foreach (DataRow row in result.Rows)
+            {
+                sqlDef.Append(row["SQLTEXT"]);
+            }
+
+            return sqlDef.ToString();
+        }
 
         public Dictionary<string, string> GetAllSqlDefinitions()
-            => throw new NotImplementedException(PendingMessage);
+        {
+            Dictionary<string, string> definitions = new();
+
+            DataTable namesResult = Query(SqlProxyQueryCatalog.GetAllSqlDefinitionNames);
+
+            foreach (DataRow row in namesResult.Rows)
+            {
+                string? objectName = row["SQLID"].ToString();
+                if (objectName != null)
+                {
+                    string definition = GetSqlDefinition(objectName);
+                    definitions[objectName] = definition;
+                }
+            }
+
+            return definitions;
+        }
 
         public HtmlDefinition GetHtmlDefinition(string objectName)
-            => throw new NotImplementedException(PendingMessage);
+        {
+            DataTable result = Query(
+                SqlProxyQueryCatalog.GetHtmlDefinition,
+                new[] { S(objectName) },
+                MultiChunkMaxRows);
+
+            if (result.Rows.Count == 0)
+            {
+                return new HtmlDefinition(string.Empty, 0);
+            }
+
+            StringBuilder htmlContent = new();
+            foreach (DataRow row in result.Rows)
+            {
+                if (row["CONTDATA"] is byte[] blob)
+                {
+                    htmlContent.Append(Encoding.Unicode.GetString(blob));
+                }
+            }
+
+            string content = htmlContent.ToString();
+
+            int maxBindNumber = 0;
+            Regex bindRegex = new(@"%Bind\(:(\d+)\)", RegexOptions.IgnoreCase);
+            MatchCollection matches = bindRegex.Matches(content);
+
+            foreach (Match match in matches)
+            {
+                if (match.Groups.Count > 1 && int.TryParse(match.Groups[1].Value, out int bindNumber))
+                {
+                    maxBindNumber = Math.Max(maxBindNumber, bindNumber);
+                }
+            }
+
+            return new HtmlDefinition(content, maxBindNumber);
+        }
 
         public Dictionary<string, HtmlDefinition> GetAllHtmlDefinitions()
-            => throw new NotImplementedException(PendingMessage);
+        {
+            Dictionary<string, HtmlDefinition> definitions = new();
 
-        public List<PeopleCodeItem> GetPeopleCodeItemsForProject(string projectName)
-            => throw new NotImplementedException(PendingMessage);
+            DataTable namesResult = Query(SqlProxyQueryCatalog.GetAllHtmlDefinitionNames);
+
+            foreach (DataRow row in namesResult.Rows)
+            {
+                string? objectName = row["CONTNAME"].ToString();
+                if (objectName != null)
+                {
+                    HtmlDefinition definition = GetHtmlDefinition(objectName);
+                    definitions[objectName] = definition;
+                }
+            }
+
+            return definitions;
+        }
 
         public List<PeopleCodeItem> GetPeopleCodeItemMetadataForProject(string projectName)
-            => throw new NotImplementedException(PendingMessage);
+        {
+            List<PeopleCodeItem> results = new();
+
+            DataTable projectItems = Query(
+                SqlProxyQueryCatalog.GetPeopleCodeItemMetadataForProject,
+                new[] { S(projectName) });
+
+            foreach (DataRow row in projectItems.Rows)
+            {
+                int objectType = Convert.ToInt32(row["OBJECTTYPE"]);
+
+                ProjectItem projectItem = new(
+                    objectType,
+                    Convert.ToInt32(row["OBJECTID1"]), row["OBJECTVALUE1"]?.ToString() ?? " ",
+                    Convert.ToInt32(row["OBJECTID2"]), row["OBJECTVALUE2"]?.ToString() ?? " ",
+                    Convert.ToInt32(row["OBJECTID3"]), row["OBJECTVALUE3"]?.ToString() ?? " ",
+                    Convert.ToInt32(row["OBJECTID4"]), row["OBJECTVALUE4"]?.ToString() ?? " "
+                );
+
+                string path = projectItem.BuildPath();
+
+                if (!string.IsNullOrEmpty(path))
+                {
+                    List<Tuple<int, string>> programFields = projectItem.ToProgramFields();
+
+                    PeopleCodeItem peopleCodeItem = new(
+                        new int[] {
+                            programFields[0].Item1, programFields[1].Item1, programFields[2].Item1,
+                            programFields[3].Item1, programFields[4].Item1, programFields[5].Item1,
+                            programFields[6].Item1
+                        },
+                        new string[] {
+                            programFields[0].Item2, programFields[1].Item2, programFields[2].Item2,
+                            programFields[3].Item2, programFields[4].Item2, programFields[5].Item2,
+                            programFields[6].Item2
+                        },
+                        Array.Empty<byte>(),
+                        new List<NameReference>()
+                    );
+
+                    results.Add(peopleCodeItem);
+                }
+            }
+
+            return results;
+        }
 
         public bool LoadPeopleCodeItemContent(PeopleCodeItem item)
-            => throw new NotImplementedException(PendingMessage);
+        {
+            List<Tuple<int, string>> programFields = new();
+            for (int i = 0; i < item.ObjectIDs.Length; i++)
+            {
+                programFields.Add(new Tuple<int, string>(item.ObjectIDs[i], item.ObjectValues[i]));
+            }
+
+            List<SqlProxyBind> progBinds = BuildProgramFieldBinds(programFields, defaultObjVal: " ");
+
+            DataTable programData = Query(
+                SqlProxyQueryCatalog.LoadPeopleCodeItemContent,
+                progBinds,
+                MultiChunkMaxRows);
+
+            List<byte[]> progTextParts = new();
+            foreach (DataRow progRow in programData.Rows)
+            {
+                if (progRow["PROGTXT"] is byte[] blobData)
+                {
+                    progTextParts.Add(blobData);
+                }
+            }
+
+            byte[] combinedProgramText = CombineBinaryData(progTextParts);
+            if (combinedProgramText.Length == 0)
+            {
+                return false;
+            }
+
+            List<NameReference> nameReferences = GetNameReferencesForProgram(programFields);
+
+            item.SetProgramText(combinedProgramText);
+            item.SetNameReferences(nameReferences);
+
+            return true;
+        }
+
+        public List<PeopleCodeItem> GetPeopleCodeItemsForProject(string projectName)
+        {
+            List<PeopleCodeItem> results = GetPeopleCodeItemMetadataForProject(projectName);
+
+            foreach (var item in results)
+            {
+                LoadPeopleCodeItemContent(item);
+            }
+
+            return results;
+        }
+
+        private static byte[] CombineBinaryData(List<byte[]> byteArrays)
+        {
+            if (byteArrays == null || byteArrays.Count == 0)
+                return Array.Empty<byte>();
+
+            int totalLength = 0;
+            foreach (byte[] array in byteArrays)
+            {
+                totalLength += array.Length;
+            }
+
+            byte[] result = new byte[totalLength];
+            int offset = 0;
+
+            foreach (byte[] array in byteArrays)
+            {
+                Buffer.BlockCopy(array, 0, result, offset, array.Length);
+                offset += array.Length;
+            }
+
+            return result;
+        }
+
+        private List<NameReference> GetNameReferencesForProgram(List<Tuple<int, string>> programFields)
+        {
+            List<NameReference> nameReferences = new();
+
+            List<SqlProxyBind> binds = BuildProgramFieldBinds(programFields, defaultObjVal: "");
+
+            DataTable nameData = Query(
+                SqlProxyQueryCatalog.GetNameReferencesForProgram,
+                binds);
+
+            foreach (DataRow row in nameData.Rows)
+            {
+                int nameNum = Convert.ToInt32(row["NAMENUM"]);
+                string recName = row["RECNAME"]?.ToString() ?? string.Empty;
+                string refName = row["REFNAME"]?.ToString() ?? string.Empty;
+
+                nameReferences.Add(new NameReference(nameNum, recName, refName));
+            }
+
+            return nameReferences;
+        }
 
         public bool CheckAppClassExists(string appClassPath)
-            => throw new NotImplementedException(PendingMessage);
+        {
+            string[] parts = appClassPath.Split(':');
+
+            if (parts.Length < 2)
+            {
+                return false;
+            }
+
+            var binds = new List<SqlProxyBind>(14);
+
+            for (int i = 0; i < 7; i++)
+            {
+                int objId = 0;
+                string objVal = " ";
+
+                if (i < parts.Length)
+                {
+                    if (i == parts.Length - 1)
+                    {
+                        objId = 107;
+                        objVal = parts[i].ToUpper();
+                    }
+                    else
+                    {
+                        objId = 104 + i;
+                        objVal = parts[i].ToUpper();
+                    }
+                }
+                else if (i == parts.Length)
+                {
+                    objId = 12;
+                    objVal = "ONEXECUTE";
+                }
+
+                binds.Add(I(objId));
+                binds.Add(S(objVal));
+            }
+
+            DataTable result = Query(SqlProxyQueryCatalog.CheckAppClassExists, binds);
+
+            if (result.Rows.Count > 0 && result.Rows[0][0] is string exists)
+            {
+                return exists == "Y";
+            }
+
+            // SAM may return non-string column types; accept any first-cell "Y"
+            if (result.Rows.Count > 0)
+            {
+                return string.Equals(result.Rows[0][0]?.ToString(), "Y", StringComparison.Ordinal);
+            }
+
+            return false;
+        }
 
         public string? GetAppClassSourceByPath(string appClassPath)
-            => throw new NotImplementedException(PendingMessage);
+        {
+            if (!CheckAppClassExists(appClassPath))
+            {
+                return null;
+            }
+
+            string[] parts = appClassPath.Split(':');
+
+            List<Tuple<int, string>> programFields = new();
+
+            for (int i = 0; i < parts.Length; i++)
+            {
+                int objId;
+                string objVal = parts[i];
+
+                if (i == parts.Length - 1)
+                {
+                    objId = 107;
+                }
+                else
+                {
+                    objId = 104 + i;
+                }
+
+                programFields.Add(new Tuple<int, string>(objId, objVal));
+            }
+
+            programFields.Add(new Tuple<int, string>(12, "OnExecute"));
+
+            int[] objectIDs = new int[7];
+            string[] objectValues = new string[7];
+
+            for (int i = 0; i < 7; i++)
+            {
+                if (i < programFields.Count)
+                {
+                    objectIDs[i] = programFields[i].Item1;
+                    objectValues[i] = programFields[i].Item2;
+                }
+                else
+                {
+                    objectIDs[i] = 0;
+                    objectValues[i] = " ";
+                }
+            }
+
+            PeopleCodeItem item = new(
+                objectIDs,
+                objectValues,
+                Array.Empty<byte>(),
+                new List<NameReference>()
+            );
+
+            if (LoadPeopleCodeItemContent(item))
+            {
+                return item.GetProgramTextAsString();
+            }
+
+            return null;
+        }
+
+        public List<OpenTarget> GetFunctionDefiningPrograms()
+        {
+            var results = new List<OpenTarget>();
+
+            try
+            {
+                DataTable result = Query(SqlProxyQueryCatalog.GetFunctionDefiningPrograms);
+
+                foreach (DataRow row in result.Rows)
+                {
+                    var objectPairs = new List<(PSCLASSID ObjectID, string ObjectValue)>();
+
+                    for (int i = 0; i < 7; i++)
+                    {
+                        int objIdIndex = i * 2;
+                        int objValueIndex = objIdIndex + 1;
+
+                        if (!row.IsNull(objIdIndex) && !row.IsNull(objValueIndex))
+                        {
+                            var objectId = (PSCLASSID)Convert.ToInt32(row[objIdIndex]);
+                            var objectValue = row[objValueIndex].ToString() ?? string.Empty;
+
+                            if (objectId != PSCLASSID.NONE && !string.IsNullOrEmpty(objectValue))
+                            {
+                                objectPairs.Add((objectId, objectValue));
+                            }
+                        }
+                    }
+
+                    if (objectPairs.Count > 0)
+                    {
+                        var name = BuildProgramName(objectPairs);
+                        results.Add(new OpenTarget(
+                            OpenTargetType.UNKNOWN,
+                            name,
+                            "PeopleCode Program",
+                            objectPairs
+                        ));
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.Log($"Error getting function defining programs: {ex.Message}");
+            }
+
+            return results;
+        }
+
+        private static string BuildProgramName(List<(PSCLASSID ObjectID, string ObjectValue)> objectPairs)
+        {
+            var values = objectPairs.Where(o => o.ObjectID != PSCLASSID.NONE).Select(p => p.ObjectValue).Where(v => !string.IsNullOrEmpty(v));
+            return string.Join(".", values);
+        }
 
         public string? GetPeopleCodeProgram(OpenTarget openTarget)
-            => throw new NotImplementedException(PendingMessage);
+        {
+            try
+            {
+                var item = new PeopleCodeItem(
+                    [.. openTarget.ObjectIDs.Select(a => (int)a)],
+                    [.. openTarget.ObjectValues.Select(a => a ?? " ")],
+                    Array.Empty<byte>(),
+                    new List<NameReference>()
+                );
+
+                if (LoadPeopleCodeItemContent(item))
+                {
+                    return item.GetProgramTextAsString();
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.Log($"Error getting PeopleCode program: {ex.Message}");
+            }
+
+            return null;
+        }
+
+        public List<(PSCLASSID[] ObjectIds, string[] ObjectValues)> GetProgramObjectIds(string[] objectValues)
+        {
+            if (!IsConnected)
+            {
+                return new List<(PSCLASSID[] ObjectIds, string[] ObjectValues)>();
+            }
+
+            string[] paddedValues = new string[7];
+            for (int i = 0; i < 7; i++)
+            {
+                paddedValues[i] = i < objectValues.Length && !string.IsNullOrEmpty(objectValues[i])
+                    ? objectValues[i]
+                    : " ";
+            }
+
+            var results = new List<(PSCLASSID[] ObjectIds, string[] ObjectValues)>();
+
+            try
+            {
+                var binds = new List<SqlProxyBind>(7)
+                {
+                    S(paddedValues[0]),
+                    S(paddedValues[1]),
+                    S(paddedValues[2]),
+                    S(paddedValues[3]),
+                    S(paddedValues[4]),
+                    S(paddedValues[5]),
+                    S(paddedValues[6]),
+                };
+
+                DataTable result = Query(SqlProxyQueryCatalog.GetProgramObjectIds, binds);
+
+                foreach (DataRow row in result.Rows)
+                {
+                    var objectIds = new PSCLASSID[7];
+                    var objectVals = new string[7];
+
+                    for (int i = 0; i < 7; i++)
+                    {
+                        objectIds[i] = (PSCLASSID)Convert.ToInt32(row[$"OBJECTID{i + 1}"]);
+                        objectVals[i] = row[$"OBJECTVALUE{i + 1}"]?.ToString() ?? " ";
+                    }
+
+                    results.Add((objectIds, objectVals));
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.Log($"Error querying PSPCMPROG for object IDs: {ex.Message}");
+            }
+
+            return results;
+        }
+
+        // --- Remaining IDataManager members: stubs for later tasks ---
 
         public List<RecordFieldInfo>? GetRecordFields(string recordName)
             => throw new NotImplementedException(PendingMessage);
@@ -156,13 +637,7 @@ namespace AppRefiner.Database
         public List<OpenTarget> GetOpenTargets(OpenTargetSearchOptions options)
             => throw new NotImplementedException(PendingMessage);
 
-        public List<OpenTarget> GetFunctionDefiningPrograms()
-            => throw new NotImplementedException(PendingMessage);
-
         public List<string> GetAllClassesForPackage(string packagePath)
-            => throw new NotImplementedException(PendingMessage);
-
-        public List<(PSCLASSID[] ObjectIds, string[] ObjectValues)> GetProgramObjectIds(string[] objectValues)
             => throw new NotImplementedException(PendingMessage);
 
         public PeopleCodeType GetFieldType(string fieldName)
