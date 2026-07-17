@@ -1153,6 +1153,11 @@ public class FunctionCallValidator
                     var expectedRefType = new ReferenceTypeInfo(t.Type, "", "");
                     if (expectedRefType.IsAssignableFrom(refType))
                     {
+                        // Must record the mapping — same as the non-reference branch below.
+                        // Without this, inlay parameter names are missing for the first arg of
+                        // signatures like GetSQL(sqlname: @SQL|string, paramlist: any*) when
+                        // callers pass SQL.FOO (a reference) rather than a string literal.
+                        ctx.RecordMapping(argIndex, union);
                         consumed = 1;
                         return true;
                     }

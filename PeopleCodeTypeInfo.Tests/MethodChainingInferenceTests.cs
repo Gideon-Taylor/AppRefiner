@@ -105,7 +105,7 @@ end-method;
         var xmlDoc1Type = xmlDoc1Initializer.GetInferredType();
         Assert.NotNull(xmlDoc1Type);
         Assert.Equal(TypeKind.BuiltinObject, xmlDoc1Type.Kind);
-        Assert.Equal(PeopleCodeType.Xmldoc, xmlDoc1Type.PeopleCodeType);
+        Assert.Equal(PeopleCodeType.XmlDoc, xmlDoc1Type.PeopleCodeType);
         Assert.Equal("Xmldoc", xmlDoc1Type.Name, true);
 
         // Test 3: &xmlDoc2 = %This.onAuthRequest(&msgAuthReq).GetXmlDoc() should be XmlDoc
@@ -119,7 +119,7 @@ end-method;
         var xmlDoc2Type = xmlDoc2Initializer.GetInferredType();
         Assert.NotNull(xmlDoc2Type);
         Assert.Equal(TypeKind.BuiltinObject, xmlDoc2Type.Kind);
-        Assert.Equal(PeopleCodeType.Xmldoc, xmlDoc2Type.PeopleCodeType);
+        Assert.Equal(PeopleCodeType.XmlDoc, xmlDoc2Type.PeopleCodeType);
         Assert.Equal("Xmldoc", xmlDoc2Type.Name, true);
 
         // Test 4: &string1 = &xmlDoc1.GenXmlString() should be string

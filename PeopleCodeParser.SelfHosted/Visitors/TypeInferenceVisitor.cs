@@ -502,17 +502,17 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
     }
 
     /// <summary>
-    /// If RHS is a named Record/Field instance and the variable is declared as a compatible
-    /// generic type (Record, Field, or any), store the specialized type on the variable so
-    /// later uses of &amp;r / &amp;f retain record/field identity.
+    /// If RHS is a specialized type and the variable is declared as a compatible broader type,
+    /// store the specialized type so later uses retain identity/members:
+    /// - Record/Field named instances when declared as Record/Field/any
+    /// - ApiObject subtypes (Session, ComponentInterface, …) when declared as ApiObject/any
     /// </summary>
     private void TryRefineVariableFromExpression(string variableName, ExpressionNode? expression)
     {
         if (expression == null) return;
 
         var rhsType = GetInferredType(expression);
-        if (rhsType is not (RecordTypeInfo or FieldTypeInfo))
-            return;
+        if (rhsType == null) return;
 
         var variable = FindVariable(variableName);
         if (variable == null) return;
@@ -527,13 +527,31 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
                 || declared is RecordTypeInfo))
         {
             variable.SetInferredType(rhsType.WithAssignable(true));
+            return;
         }
-        else if (rhsType is FieldTypeInfo
+
+        if (rhsType is FieldTypeInfo
             && (declaredIsAny
                 || declared.PeopleCodeType == PeopleCodeType.Field
                 || declared is FieldTypeInfo))
         {
             variable.SetInferredType(rhsType.WithAssignable(true));
+            return;
+        }
+
+        // Local ApiObject &s = %Session → refine to Session for member resolution
+        if (rhsType is BuiltinObjectTypeInfo rhsBuiltin
+            && PeopleCodeTypeDatabase.IsApiObjectSubtype(rhsBuiltin.Name))
+        {
+            bool declaredIsApiObject = declared is BuiltinObjectTypeInfo d
+                && (d.IsApiObjectBase
+                    || d.Name.Equals("ApiObject", StringComparison.OrdinalIgnoreCase)
+                    || d.PeopleCodeType == PeopleCodeType.ApiObject);
+
+            if (declaredIsAny || declaredIsApiObject)
+            {
+                variable.SetInferredType(rhsType.WithAssignable(true));
+            }
         }
     }
 
@@ -585,12 +603,10 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
             return new ArrayTypeInfo(1, AnyTypeInfo.Instance);
         }
 
-        // Try to parse as a builtin type
-        var peopleCodeType = BuiltinTypeExtensions.FromString(typeName);
-        if (peopleCodeType != PeopleCodeType.Unknown)
-        {
-            return TypeInfo.FromPeopleCodeType(peopleCodeType);
-        }
+        // Builtin enum types, typeinfo.dat objects (Session, …), and polymorphic tokens
+        var resolved = PeopleCodeTypeDatabase.ResolveType(typeName);
+        if (resolved is not UnknownTypeInfo)
+            return resolved;
 
         // Could be an app class - try to resolve
         // For now, create an AppClassTypeInfo with the name
@@ -712,7 +728,7 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
                 // Example: &grid.CHECKLIST_ITEMCODE acts as &grid.GetColumn("CHECKLIST_ITEMCODE") → returns GridColumn
                 if (objectType.PeopleCodeType.Value == PeopleCodeType.Grid && !isMethodCall)
                 {
-                    return TypeInfo.FromPeopleCodeType(PeopleCodeType.Gridcolumn);
+                    return TypeInfo.FromPeopleCodeType(PeopleCodeType.GridColumn);
                 }
 
                 // Row method call to non-existent method acts as GetRowset().GetRow()

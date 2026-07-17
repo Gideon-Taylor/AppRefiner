@@ -129,20 +129,23 @@ public static class PeopleCodeTypeDatabase
     /// <summary>
     /// Resolves a builtin type by name.
     /// Returns polymorphic TypeInfo for $same, $element, etc.
-    /// Returns concrete TypeInfo for builtin types like "string", "Record", etc.
+    /// Returns concrete TypeInfo for builtin types like "string", "Record", "Session", etc.
     /// Returns UnknownTypeInfo for unrecognized types.
     /// </summary>
     /// <param name="typeName">The type name to resolve.</param>
     /// <returns>The resolved TypeInfo.</returns>
     public static Types.TypeInfo ResolveType(string typeName)
     {
+        if (string.IsNullOrWhiteSpace(typeName))
+            return UnknownTypeInfo.Instance;
+
         // Handle polymorphic types
         if (typeName == "$same") return SameAsObjectTypeInfo.Instance;
         if (typeName == "$element") return ElementOfObjectTypeInfo.Instance;
         if (typeName == "$same_as_first") return SameAsFirstParameterTypeInfo.Instance;
         if (typeName == "$array_of_first") return ArrayOfFirstParameterTypeInfo.Instance;
 
-        // Try builtin type resolution
+        // Builtin type resolution via PeopleCodeType enum (includes ApiObject subtypes)
         var peopleCodeType = BuiltinTypeExtensions.FromString(typeName);
         if (peopleCodeType != PeopleCodeType.Unknown)
         {
@@ -150,6 +153,55 @@ public static class PeopleCodeTypeDatabase
         }
 
         return new UnknownTypeInfo(typeName);
+    }
+
+    /// <summary>
+    /// True when <paramref name="typeName"/> is a PeopleSoft API subtype marked with @ApiObject
+    /// (non-declarable; assignable to ApiObject).
+    /// </summary>
+    public static bool IsApiObjectSubtype(string typeName)
+    {
+        if (string.IsNullOrWhiteSpace(typeName))
+            return false;
+        var obj = GetObject(typeName);
+        return obj?.IsApiObjectType == true;
+    }
+
+    /// <summary>
+    /// True when <paramref name="typeName"/> may appear in Local/Global/Component declarations.
+    /// API subtypes (Session, ComponentInterface, …) return false; use ApiObject instead.
+    /// Unknown names return true (app classes / unresolved types handled elsewhere).
+    /// </summary>
+    public static bool IsDeclarableTypeName(string typeName)
+    {
+        return !IsApiObjectSubtype(typeName);
+    }
+
+    /// <summary>
+    /// Convert a TypeWithDimensionality (from signatures / typeinfo.dat) to a TypeInfo.
+    /// Does not resolve AppClass inheritance chains — callers that need chains should handle AppClass separately.
+    /// </summary>
+    public static Types.TypeInfo ToTypeInfo(TypeWithDimensionality twd)
+    {
+        Types.TypeInfo baseType;
+
+        if (twd.Type == PeopleCodeType.AppClass && !string.IsNullOrEmpty(twd.AppClassPath))
+        {
+            baseType = new AppClassTypeInfo(twd.AppClassPath);
+        }
+        else if (twd.Type != PeopleCodeType.Unknown)
+        {
+            baseType = Types.TypeInfo.FromPeopleCodeType(twd.Type);
+        }
+        else
+        {
+            baseType = UnknownTypeInfo.Instance;
+        }
+
+        if (twd.IsArray)
+            return new ArrayTypeInfo(twd.ArrayDimensionality, baseType);
+
+        return baseType;
     }
 
     /// <summary>

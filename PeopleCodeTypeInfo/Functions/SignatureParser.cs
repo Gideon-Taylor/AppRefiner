@@ -141,8 +141,9 @@ public static class SignatureParser
         }
         else
         {
+            // Preserve full TypeWithDimensionality (AppClassPath, named objects, refs, etc.)
             var returnTypeWithDim = TypeWithDimensionality.Parse(returnStr);
-            builder.Returns(returnTypeWithDim.Type, returnTypeWithDim.ArrayDimensionality);
+            builder.Returns(returnTypeWithDim);
         }
 
         if (isDefault)

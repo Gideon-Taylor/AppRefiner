@@ -22,6 +22,13 @@ public class BuiltinObjectInfo : IObjectInfo
     public uint DefaultMethodHash { get; set; } = 0;
 
     /// <summary>
+    /// True when this is a PeopleSoft API subtype (Session, ComponentInterface, etc.).
+    /// Implies: non-declarable in Local/Global/Component statements, and assignable to ApiObject.
+    /// Set from the @ApiObject annotation in generator signature files.
+    /// </summary>
+    public bool IsApiObjectType { get; set; }
+
+    /// <summary>
     /// Methods stored as hash->ComposableFunctionInfo dictionary for O(1) lookup
     /// </summary>
     public Dictionary<uint, FunctionInfo>? Methods { get; set; }

@@ -53,7 +53,7 @@ End-Function;
         var inferred = InferMemberAccess(source, "CHECKLIST_ITEMCODE");
 
         Assert.NotNull(inferred);
-        Assert.Equal(PeopleCodeType.Gridcolumn, inferred!.PeopleCodeType);
+        Assert.Equal(PeopleCodeType.GridColumn, inferred!.PeopleCodeType);
     }
 
     // Helper visitor to find a member access expression by member name.

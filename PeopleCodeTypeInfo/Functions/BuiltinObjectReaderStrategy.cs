@@ -34,10 +34,15 @@ public class BuiltinObjectReaderStrategy : VariableSizeReaderStrategy<BuiltinObj
 
         var defaultMethodHash = dataReader.ReadUInt32();
 
-        // Read reserved flags (ignore for now)
+        // Flags: bit 0 = IsApiObjectType; remaining bits reserved
         var flags = dataReader.ReadByte();
+        bool isApiObjectType = (flags & 0x01) != 0;
 
-        var obj = new BuiltinObjectInfo("") { DefaultMethodHash = defaultMethodHash };
+        var obj = new BuiltinObjectInfo("")
+        {
+            DefaultMethodHash = defaultMethodHash,
+            IsApiObjectType = isApiObjectType
+        };
 
         // Read methods
         ReadMethods(dataReader, obj, nameTable);

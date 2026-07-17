@@ -218,7 +218,7 @@ namespace AppRefiner.Shared.SQL
             // Check if the type is "SQL" (built-in SQL type)
             if (typeNode is BuiltInTypeNode builtInType)
             {
-                return builtInType.Type == PeopleCodeTypeInfo.Types.PeopleCodeType.Sql;
+                return builtInType.Type == PeopleCodeTypeInfo.Types.PeopleCodeType.SQL;
             }
             return false;
         }

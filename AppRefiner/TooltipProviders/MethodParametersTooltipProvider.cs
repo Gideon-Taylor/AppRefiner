@@ -357,15 +357,15 @@ namespace AppRefiner.TooltipProviders
                     return "Rowset";
                 case PeopleCodeType.Field:
                     return "Field";
-                case PeopleCodeType.Apiobject:
+                case PeopleCodeType.ApiObject:
                     return "ApiObject";
-                case PeopleCodeType.Jsonobject:
+                case PeopleCodeType.JsonObject:
                     return "JsonObject";
-                case PeopleCodeType.Jsonarray:
+                case PeopleCodeType.JsonArray:
                     return "JsonArray";
                 case PeopleCodeType.File:
                     return "File";
-                case PeopleCodeType.Sql:
+                case PeopleCodeType.SQL:
                     return "Sql";
 
                 default:

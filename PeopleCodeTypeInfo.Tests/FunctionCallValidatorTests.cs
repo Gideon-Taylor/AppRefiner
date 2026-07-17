@@ -923,4 +923,85 @@ public class FunctionCallValidatorTests
         Assert.Equal("", result.ArgumentMappings[0].ParameterName);
         Assert.Equal("", result.ArgumentMappings[1].ParameterName);
     }
+
+    /// <summary>
+    /// GetSQL / SQLExec style: first param is a union of reference and string
+    /// (sqlname: @SQL|string). When the caller passes a SQL reference (SQL.FOO),
+    /// MatchUnion must still record a mapping so inlay hints show "sqlname:".
+    /// Regression: reference branch of MatchUnion used to return without RecordMapping.
+    /// </summary>
+    [Fact]
+    public void UnionParameter_ReferenceAlternative_RecordsMappingName()
+    {
+        // Signature: GetSQL(sqlname: @SQL|string, paramlist: any*) -> SQL
+        var sqlname = new UnionParameter(
+            new[]
+            {
+                new TypeWithDimensionality(PeopleCodeType.SQL, isReference: true),
+                new TypeWithDimensionality(PeopleCodeType.String)
+            },
+            name: "sqlname");
+
+        var paramlist = new VariableParameter(
+            new SingleParameter(PeopleCodeType.Any, name: ""),
+            minCount: 0,
+            maxCount: int.MaxValue,
+            name: "paramlist");
+
+        var parameters = new List<Parameter> { sqlname, paramlist };
+        var arguments = new TypeInfo[]
+        {
+            new ReferenceTypeInfo(PeopleCodeType.SQL, "FOO", "SQL"),
+            PrimitiveTypeInfo.String,
+            PrimitiveTypeInfo.String
+        };
+
+        var validator = new FunctionCallValidator(NullTypeMetadataResolver.Instance);
+        var result = validator.Validate(parameters, arguments);
+
+        Assert.True(result.IsValid, $"Validation failed: {result.GetDetailedError()}");
+        Assert.NotNull(result.ArgumentMappings);
+        Assert.Equal(3, result.ArgumentMappings.Count);
+        Assert.Equal("sqlname", result.ArgumentMappings[0].ParameterName);
+        Assert.Equal("paramlist1", result.ArgumentMappings[1].ParameterName);
+        Assert.Equal("paramlist2", result.ArgumentMappings[2].ParameterName);
+    }
+
+    /// <summary>
+    /// Same GetSQL signature, but first arg is a string — the non-reference union
+    /// branch already recorded mappings; keep it covered.
+    /// </summary>
+    [Fact]
+    public void UnionParameter_StringAlternative_RecordsMappingName()
+    {
+        var sqlname = new UnionParameter(
+            new[]
+            {
+                new TypeWithDimensionality(PeopleCodeType.SQL, isReference: true),
+                new TypeWithDimensionality(PeopleCodeType.String)
+            },
+            name: "sqlname");
+
+        var paramlist = new VariableParameter(
+            new SingleParameter(PeopleCodeType.Any, name: ""),
+            minCount: 0,
+            maxCount: int.MaxValue,
+            name: "paramlist");
+
+        var parameters = new List<Parameter> { sqlname, paramlist };
+        var arguments = new TypeInfo[]
+        {
+            PrimitiveTypeInfo.String,
+            PrimitiveTypeInfo.String
+        };
+
+        var validator = new FunctionCallValidator(NullTypeMetadataResolver.Instance);
+        var result = validator.Validate(parameters, arguments);
+
+        Assert.True(result.IsValid, $"Validation failed: {result.GetDetailedError()}");
+        Assert.NotNull(result.ArgumentMappings);
+        Assert.Equal(2, result.ArgumentMappings.Count);
+        Assert.Equal("sqlname", result.ArgumentMappings[0].ParameterName);
+        Assert.Equal("paramlist1", result.ArgumentMappings[1].ParameterName);
+    }
 }

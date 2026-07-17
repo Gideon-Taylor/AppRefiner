@@ -30,6 +30,13 @@ public interface IObjectInfo
     int PropertyCount { get; }
 
     /// <summary>
+    /// True when this is a PeopleSoft API subtype (Session, ComponentInterface, etc.).
+    /// Implies non-declarable in Local/Global/Component statements and assignable to ApiObject.
+    /// Default false for types that do not participate in the API hierarchy.
+    /// </summary>
+    bool IsApiObjectType => false;
+
+    /// <summary>
     /// Looks up a method by name (case-insensitive; computes hash if needed).
     /// </summary>
     /// <param name="methodName">The method name.</param>

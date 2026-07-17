@@ -95,15 +95,11 @@ public static class AstTypeExtractor
 
     public static bool IsBuiltInType(string typeName)
     {
-        try
-        {
-            BuiltinTypeExtensions.FromString(typeName);
-            return true;
-        }
-        catch
-        {
+        if (string.IsNullOrWhiteSpace(typeName))
             return false;
-        }
+
+        var peopleCodeType = BuiltinTypeExtensions.FromString(typeName);
+        return peopleCodeType != PeopleCodeType.Unknown;
     }
 
     public static bool IsArrayType(string typeName)

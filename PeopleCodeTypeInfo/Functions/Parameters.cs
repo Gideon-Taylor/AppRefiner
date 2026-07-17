@@ -104,7 +104,7 @@ public struct TypeWithDimensionality : IEquatable<TypeWithDimensionality>
     {
         var baseTypeName = Type == PeopleCodeType.AppClass && !string.IsNullOrEmpty(AppClassPath)
             ? AppClassPath
-            : Type.ToString().ToLowerInvariant();
+            : Type.GetTypeName();
 
         // Build the result starting with optional & prefix
         var result = new StringBuilder();
@@ -191,7 +191,7 @@ public struct TypeWithDimensionality : IEquatable<TypeWithDimensionality>
             return new TypeWithDimensionality(PeopleCodeType.AppClass, arrayDimensionality, typeStr, isReference: false, mustBeVariable);
         }
 
-        // Builtin or special type
+        // Builtin or special type (including ApiObject subtypes in the PeopleCodeType enum)
         var builtinType = BuiltinTypeExtensions.FromString(typeStr);
         return new TypeWithDimensionality(builtinType, arrayDimensionality, null, isReference, mustBeVariable);
     }

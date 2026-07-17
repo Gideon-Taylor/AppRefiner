@@ -1,6 +1,7 @@
 
 using PeopleCodeParser.SelfHosted.Nodes;
 using PeopleCodeTypeInfo.Contracts;
+using PeopleCodeTypeInfo.Database;
 using PeopleCodeTypeInfo.Functions;
 using PeopleCodeTypeInfo.Inference;
 using PeopleCodeTypeInfo.Types;
@@ -104,9 +105,17 @@ namespace PeopleCodeParser.SelfHosted.Visitors
             }
         }
 
+        public override void VisitLocalVariableDeclaration(LocalVariableDeclarationNode node)
+        {
+            base.VisitLocalVariableDeclaration(node);
+            CheckDeclarableType(node.Type, node);
+        }
+
         public override void VisitLocalVariableDeclarationWithAssignment(LocalVariableDeclarationWithAssignmentNode node)
         {
             base.VisitLocalVariableDeclarationWithAssignment(node);
+
+            CheckDeclarableType(node.Type, node);
 
             var leftType = ConvertTypeNodeToTypeInfo(node.Type);
             var rightType = node.InitialValue.GetInferredType();
@@ -117,6 +126,37 @@ namespace PeopleCodeParser.SelfHosted.Visitors
                 {
                     RecordTypeError($"Cannot assign type '{rightType}' to '{leftType}'", node);
                 }
+            }
+        }
+
+        public override void VisitProgramVariable(ProgramVariableNode node)
+        {
+            base.VisitProgramVariable(node);
+            CheckDeclarableType(node.Type, node);
+        }
+
+        /// <summary>
+        /// Session / ComponentInterface / other @ApiObject subtypes are not legal declaration
+        /// types in PeopleCode — only ApiObject is. Report when those names appear in Local/Global/Component.
+        /// </summary>
+        private void CheckDeclarableType(TypeNode? typeNode, AstNode errorNode)
+        {
+            if (typeNode == null) return;
+
+            string? typeName = typeNode switch
+            {
+                BuiltInTypeNode b => b.Type.GetTypeName(),
+                AppClassTypeNode a when !a.QualifiedName.Contains(':') => a.QualifiedName,
+                _ => null
+            };
+
+            if (typeName == null) return;
+
+            if (!PeopleCodeTypeDatabase.IsDeclarableTypeName(typeName))
+            {
+                RecordTypeError(
+                    $"'{typeName}' is not a valid type for variable declarations. Use ApiObject instead.",
+                    typeNode);
             }
         }
 

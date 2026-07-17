@@ -180,7 +180,7 @@ public class PropertyInfo : IEquatable<PropertyInfo>
 
         var baseTypeName = Type == PeopleCodeType.AppClass && !string.IsNullOrEmpty(AppClassPath)
             ? AppClassPath
-            : Type.ToString().ToLowerInvariant();
+            : Type.GetTypeName();
 
         if (ArrayDimensionality == 0)
             return Type == PeopleCodeType.AppClass ? baseTypeName : $"{baseTypeName}";
