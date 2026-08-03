@@ -264,7 +264,12 @@ namespace AppRefiner.Dialogs
         public static DialogResult ShowDiff(string oldContent, string newContent, string title, IntPtr owner = default)
         {
             using var dialog = new DiffViewDialog(oldContent, newContent, title, owner);
-            return dialog.ShowDialog();
+
+            // Show owned by the App Designer window: an unowned dialog cannot activate
+            // itself when AppRefiner did not receive the last input event (foreground lock).
+            return owner != IntPtr.Zero
+                ? dialog.ShowDialog(new WindowWrapper(owner))
+                : dialog.ShowDialog();
         }
 
         /// <summary>

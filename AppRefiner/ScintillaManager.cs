@@ -2501,7 +2501,7 @@ namespace AppRefiner
                         // If dialog is already open, just bring it to front
 
                         existingDialog.BringToFront();
-                        existingDialog.Focus();
+                        existingDialog.Activate();
 
                         // If replace mode requested and current dialog is find-only, switch modes
                         if (enableReplaceMode && !existingDialog.IsReplaceMode)
@@ -2524,33 +2524,29 @@ namespace AppRefiner
                 try
                 {
                     var mainHandle = editor.AppDesignerProcess.MainWindowHandle;
-                    var handleWrapper = new WindowWrapper(0);
+                    var handleWrapper = new WindowWrapper(mainHandle);
 
-                    var dialog = new BetterFindDialog(editor, 0, enableReplaceMode);
+                    // Owner must be the App Designer main window: an unowned dialog cannot
+                    // activate itself when AppRefiner did not receive the last input event
+                    // (foreground lock), which leaves keyboard focus in the editor.
+                    var dialog = new BetterFindDialog(editor, mainHandle, enableReplaceMode);
 
                     // Track this dialog
                     editor.ActiveSearchDialog = dialog;
 
                     // Auto-cleanup when dialog closes
-                    BetterFindDialog? v = null;
                     dialog.FormClosed += (s, e) => editor.ActiveSearchDialog = null;
-
-                    WindowHelper.CenterFormOnWindow(dialog, mainHandle);
 
                     // Make the dialog always on top
                     dialog.MakeAlwaysOnTop();
 
                     // Show as non-modal dialog
-                    dialog.ShowDialog();
-
-                    /* focus dialog window */
-                    dialog.Focus();
+                    dialog.ShowDialog(handleWrapper);
                 }
                 catch (Exception ex)
                 {
                     Debug.LogError($"Error showing Better Find dialog: {ex.Message}");
                     // Clean up tracking on error
-                    BetterFindDialog? v = null;
                     editor.ActiveSearchDialog = null;
                 }
             }, TaskScheduler.Default);
