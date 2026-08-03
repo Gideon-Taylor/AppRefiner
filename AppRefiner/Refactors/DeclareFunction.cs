@@ -56,6 +56,15 @@ namespace AppRefiner.Refactors
                 var declarationString = "";
                 if (!alreadyDeclared)
                 {
+                    var declaration = _functionToDeclare.ToDeclaration();
+                    if (declaration == null)
+                    {
+                        SetFailure($"Cannot declare {_functionToDeclare.FunctionName}: the cached program path " +
+                            $"\"{_functionToDeclare.FunctionPath}\" is not a RECORD/FIELD/EVENT path. " +
+                            "Refresh the function cache and try again.");
+                        return;
+                    }
+
                     var lastDeclaration = node.Functions.OrderBy(f => f.SourceSpan.Start.Line).LastOrDefault<FunctionNode>(f => f.IsDeclaration);
                     var firstFuncImpl = node.Functions.Where(f => f.IsImplementation).OrderBy(f => f.SourceSpan.Start.Line).FirstOrDefault();
 
@@ -91,7 +100,7 @@ namespace AppRefiner.Refactors
                     insertIndex = ScintillaManager.GetLineStartIndex(Editor, insertLine);
 
 
-                    declarationString = $"{padding}{_functionToDeclare.ToDeclaration()}{Environment.NewLine}";
+                    declarationString = $"{padding}{declaration}{Environment.NewLine}";
                 }
 
                 if (insertIndex >= 0)

@@ -46,9 +46,17 @@ namespace AppRefiner
             ReturnType = returnType;
         }
 
-        public string ToDeclaration()
+        /// <summary>
+        /// Builds the "Declare Function" statement for this result, or null if the cached
+        /// path is not a RECORD:FIELD:EVENT triple.
+        /// </summary>
+        public string? ToDeclaration()
         {
             var parts = FunctionPath.Split(':');
+            if (parts.Length < 3)
+            {
+                return null;
+            }
 
             return $"Declare Function {FunctionName} PeopleCode {parts[0]}.{parts[1]} {parts[2]};";
         }
@@ -166,11 +174,94 @@ namespace AppRefiner
                 ";
 
                 command.ExecuteNonQuery();
+
+                MigrateLegacyFunctionPaths();
             }
             catch (Exception ex)
             {
                 Debug.Log($"Error initializing function cache database: {ex.Message}");
             }
+        }
+
+        /// <summary>
+        /// Schema version stamped into the cache file's PRAGMA user_version once the
+        /// legacy function-path migration has run. Bump this (and add another migration
+        /// step) if the stored path format ever changes again.
+        /// </summary>
+        private const int CurrentSchemaVersion = 1;
+
+        /// <summary>
+        /// Rewrites function paths written by older builds into the canonical
+        /// colon-separated form produced by <see cref="OpenTarget.BuildPath"/>.
+        /// </summary>
+        /// <remarks>
+        /// The save-time and "Update Function Cache" code paths used to store Record Field
+        /// programs as "RECORD.FIELD.EVENT" (and, in the command's case, with the
+        /// " (Record PeopleCode)" caption suffix still attached), which crashed
+        /// <see cref="FunctionSearchResult.ToDeclaration"/> and produced rows the
+        /// incremental delete could never match. Runs once per cache file for ALL
+        /// databases, not just the currently attached one.
+        /// </remarks>
+        private void MigrateLegacyFunctionPaths()
+        {
+            using var versionCommand = connection.CreateCommand();
+            versionCommand.CommandText = "PRAGMA user_version";
+            int schemaVersion = Convert.ToInt32(versionCommand.ExecuteScalar());
+
+            if (schemaVersion >= CurrentSchemaVersion)
+            {
+                return;
+            }
+
+            using var transaction = connection.BeginTransaction();
+            try
+            {
+                // Strip the caption suffix first, then normalize the separator.
+                // Only Record Field paths ever contained dots; app class and component
+                // paths were already colon-separated, so this is safe to apply globally.
+                using var updateCommand = connection.CreateCommand();
+                updateCommand.Transaction = transaction;
+                updateCommand.CommandText = @"
+                    UPDATE FunctionCache
+                    SET FunctionPath = REPLACE(REPLACE(FunctionPath, ' (Record PeopleCode)', ''), '.', ':')
+                    WHERE FunctionPath LIKE '%.%' OR FunctionPath LIKE '%(Record PeopleCode)%'
+                ";
+                int migratedCount = updateCommand.ExecuteNonQuery();
+
+                // Legacy rows could coexist with correctly-pathed rows for the same
+                // function (the incremental delete never matched them), so collapse
+                // any duplicates the rewrite just created.
+                using var dedupeCommand = connection.CreateCommand();
+                dedupeCommand.Transaction = transaction;
+                dedupeCommand.CommandText = @"
+                    DELETE FROM FunctionCache
+                    WHERE Id NOT IN (
+                        SELECT MIN(Id) FROM FunctionCache
+                        GROUP BY DBName, FunctionName, FunctionPath
+                    )
+                ";
+                int duplicateCount = dedupeCommand.ExecuteNonQuery();
+
+                transaction.Commit();
+
+                if (migratedCount > 0 || duplicateCount > 0)
+                {
+                    Debug.Log($"Function cache migration: normalized {migratedCount} legacy path(s), removed {duplicateCount} duplicate(s)");
+                }
+            }
+            catch (Exception ex)
+            {
+                transaction.Rollback();
+                Debug.Log($"Error migrating legacy function paths (transaction rolled back): {ex.Message}");
+                return;
+            }
+
+            // PRAGMA user_version cannot run inside a transaction, so stamp it only
+            // after the rewrite has committed. A crash in between just re-runs the
+            // migration, which is idempotent.
+            using var stampCommand = connection.CreateCommand();
+            stampCommand.CommandText = $"PRAGMA user_version = {CurrentSchemaVersion}";
+            stampCommand.ExecuteNonQuery();
         }
 
         /// <summary>
@@ -639,19 +730,35 @@ namespace AppRefiner
         /// <returns>The function path, or null if it cannot be determined</returns>
         private string? ExtractFunctionPathFromEditor(ScintillaEditor editor)
         {
-            if (editor.Caption == null)
+            return ExtractFunctionPathFromCaption(editor.Caption);
+        }
+
+        /// <summary>
+        /// Builds a cache function path from an editor caption.
+        /// Currently only supports Record Field PeopleCode.
+        /// </summary>
+        /// <remarks>
+        /// The returned path MUST use the same colon-separated format produced by
+        /// <see cref="OpenTarget.BuildPath"/>, which is what the full cache refresh stores.
+        /// Writing a different separator here creates duplicate rows that the incremental
+        /// delete cannot match and breaks <see cref="FunctionSearchResult.ToDeclaration"/>.
+        /// </remarks>
+        /// <param name="caption">The editor caption, e.g. "RECORD.FIELD.EVENT (Record PeopleCode)"</param>
+        /// <returns>The function path as "RECORD:FIELD:EVENT", or null if it cannot be determined</returns>
+        public static string? ExtractFunctionPathFromCaption(string? caption)
+        {
+            if (caption == null)
             {
                 return null;
             }
 
             // Record Field PeopleCode: "RECORD.FIELD.EVENT (Record PeopleCode)"
-            if (editor.Caption.Contains("(Record PeopleCode)"))
+            if (caption.Contains("(Record PeopleCode)"))
             {
-                var parts = editor.Caption.Replace(" (Record PeopleCode)", "").Split('.');
+                var parts = caption.Replace(" (Record PeopleCode)", "").Trim().Split('.');
                 if (parts.Length >= 3)
                 {
-                    // Keep dot-separated format (matches database format)
-                    return $"{parts[0]}.{parts[1]}.{parts[2]}";
+                    return $"{parts[0]}:{parts[1]}:{parts[2]}";
                 }
             }
 

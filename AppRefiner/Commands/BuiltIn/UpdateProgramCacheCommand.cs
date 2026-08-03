@@ -141,20 +141,13 @@ namespace AppRefiner.Commands.BuiltIn
 
         /// <summary>
         /// Gets the current program's path identifier for Record Field PeopleCode.
-        /// This must match the format used by PeopleCodeItem.BuildPath() which populates the cache.
+        /// This must match the format used by OpenTarget.BuildPath() which populates the cache.
         ///
-        /// For Record Field programs, the format is: "RECORD.FIELD.EVENT" (dot-separated)
+        /// For Record Field programs, the format is: "RECORD:FIELD:EVENT" (colon-separated)
         /// </summary>
         private string? GetCurrentProgramPath(ScintillaEditor editor)
         {
-            if (editor.Caption.Contains("Record PeopleCode"))
-            {
-                var parts = editor.Caption.Split('.');
-                return $"{parts[0]}.{parts[1]}.{parts[2]}";
-            }
-
-            // Not a Record Field program
-            return null;
+            return FunctionCacheManager.ExtractFunctionPathFromCaption(editor.Caption);
         }
 
         /// <summary>
@@ -176,7 +169,7 @@ namespace AppRefiner.Commands.BuiltIn
                 {
                     DBName = dbName,
                     FunctionName = function.Name,
-                    FunctionPath = programPath, // RECORD.FIELD.EVENT format
+                    FunctionPath = programPath, // RECORD:FIELD:EVENT format
                     ReturnType = function.ReturnType?.TypeName ?? "",
                     ParameterNames = [.. function.Parameters.Select(p => p.Name)],
                     ParameterTypes = [.. function.Parameters.Select(p => p.Type.TypeName)],
