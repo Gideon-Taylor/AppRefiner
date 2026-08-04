@@ -34,9 +34,6 @@ public class DeadCodeStyler : BaseStyler
     /// </summary>
     public override void VisitMethod(MethodNode node)
     {
-        if (node.Name == "FieldValueInRecord")
-        {
-        }
         // Check method body for dead code
         if (node.Body != null)
         {
