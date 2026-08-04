@@ -103,6 +103,103 @@ public class CompletionAnalyzerTests
         Assert.True(mode.HasFlag(ExitMode.Normal));
     }
 
+    // ---- Bodyless When clauses (the stacked-When idiom) ----------------------------
+    // A When with no statements and no ';' closing its condition has no body of its own:
+    // it shares the NEXT clause's block. With the ';' it is a real arm that runs nothing.
+
+    [Fact]
+    public void BodylessWhen_SharesNextClauseBody_NotItsOwnNormal()
+    {
+        var mode = AnalyzeBody(
+            "Evaluate &x\nWhen = 1\nWhen = 2\nReturn;\nWhen-Other\nReturn;\nEnd-Evaluate;");
+        Assert.Equal(ExitMode.Return, mode); // the empty When = 1 contributes no Normal
+    }
+
+    [Fact]
+    public void BodylessWhen_IsAnnotatedWithItsGroupsModes()
+    {
+        var (program, errors) = Parse(
+            "Function F()\nEvaluate &x\nWhen = 1\nWhen = 2\nReturn;\nEnd-Evaluate;\nEnd-Function;");
+        Assert.Empty(errors);
+        CompletionAnalyzer.Analyze(program.Functions.Single().Body!);
+
+        var evaluate = program.FindDescendants<EvaluateStatementNode>().Single();
+        // Consumers hunting for an incomplete arm must not see the shared block as Normal.
+        Assert.Equal(ExitMode.Return, evaluate.WhenClauses[0].Body.GetExitMode());
+    }
+
+    [Fact]
+    public void TerminatedEmptyWhen_IsItsOwnArm_AndKeepsNormal()
+    {
+        var mode = AnalyzeBody(
+            "Evaluate &x\nWhen = 1;\nWhen = 2\nReturn;\nWhen-Other\nReturn;\nEnd-Evaluate;");
+        Assert.True(mode.HasFlag(ExitMode.Normal)); // When = 1 matches and runs nothing
+        Assert.True(mode.HasFlag(ExitMode.Return));
+    }
+
+    [Fact]
+    public void TerminatedWhen_WithStatements_StillOwnsThem()
+    {
+        // `When = 1;` followed by statements: the terminator is inert, the body binds.
+        var mode = AnalyzeBody(
+            "Evaluate &x\nWhen = 1;\nReturn;\nWhen-Other\nReturn;\nEnd-Evaluate;");
+        Assert.Equal(ExitMode.Return, mode);
+    }
+
+    [Fact]
+    public void BodylessWhen_DoesNotGroupIntoWhenOther()
+    {
+        // The trailing When matches, runs nothing, and suppresses When-Other.
+        var mode = AnalyzeBody(
+            "Evaluate &x\nWhen = 1\nWhen-Other\nReturn;\nEnd-Evaluate;");
+        Assert.True(mode.HasFlag(ExitMode.Normal));
+    }
+
+    [Fact]
+    public void BodylessWhen_LastClause_NoWhenOther_KeepsNormal()
+    {
+        var mode = AnalyzeBody(
+            "Evaluate &x\nWhen = 1\nReturn;\nWhen = 2\nEnd-Evaluate;");
+        Assert.True(mode.HasFlag(ExitMode.Normal));
+    }
+
+    [Fact]
+    public void BodylessWhens_ChainThroughEachOther()
+    {
+        var mode = AnalyzeBody(
+            "Evaluate &x\nWhen = 1\nWhen = 2\nWhen = 3\nReturn;\nWhen-Other\nReturn;\nEnd-Evaluate;");
+        Assert.Equal(ExitMode.Return, mode);
+    }
+
+    [Fact]
+    public void BodylessWhen_ChainStopsAtTerminatedEmptyClause()
+    {
+        // When = 1 shares When = 2's block, and that block is empty because the ';' closed it.
+        var mode = AnalyzeBody(
+            "Evaluate &x\nWhen = 1\nWhen = 2;\nWhen = 3\nReturn;\nWhen-Other\nReturn;\nEnd-Evaluate;");
+        Assert.True(mode.HasFlag(ExitMode.Normal));
+    }
+
+    // The empirical App Designer program from the issue #79 discussion. Each row is one
+    // &x value; all four reach `%Response.Write("Done")`, so the Evaluate keeps Normal.
+    [Fact]
+    public void EmpiricalProgram_EveryPathCanCompleteNormally()
+    {
+        var mode = AnalyzeBody("""
+            Evaluate &x
+            When = 0;
+            When = 1;
+               %Response.Write("1");
+               Break;
+            When = 2
+            When-Other
+               %Response.Write("When-other");
+            End-Evaluate;
+            """);
+        Assert.False(mode.HasFlag(ExitMode.Break)); // Break ends the Evaluate, not the function
+        Assert.Equal(ExitMode.Normal, mode);
+    }
+
     [Fact]
     public void Loop_AlwaysFallsThrough_AndAbsorbsBreak()
     {

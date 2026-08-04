@@ -467,4 +467,89 @@ end-method;
         Assert.True(implPrimary.Span.ByteLength >= "method GetX".Length,
             $"impl primary should include method keyword, got {implPrimary.Span.ByteLength}");
     }
+
+    // Issue #79: stacked When clauses have no body of their own — they share the next
+    // clause's block — so they must not be read as paths that skip the Return.
+    [Fact]
+    public void Issue79_stacked_whens_all_returning_is_clean()
+    {
+        var diags = Check(@"
+class Sample
+   method FieldTypeNameConvertToString(&fieldTypeName As string, &anyValue As any) Returns string;
+end-class;
+
+method FieldTypeNameConvertToString
+   /+ &fieldTypeName as String, +/
+   /+ &anyValue as Any +/
+   /+ Returns String +/
+
+   Evaluate &fieldTypeName
+   When ""NUMBER""
+   When ""SIGNEDNUMBER""
+      Return (String(&anyValue));
+      Break;
+
+   When ""DATE""
+   When ""DATETIME""
+      If All(&anyValue) Then
+         If IsDate(&anyValue) Then
+            Return (DateTimeToLocalizedString(&anyValue));
+         Else
+            Return ""NULL date"";
+         End-If;
+      Else
+         Return ""NULL date"";
+      End-If;
+      Break;
+   When ""CHAR""
+   When ""LONGCHAR""
+      Return (&anyValue);
+      Break;
+   When-Other
+      Return (String(&anyValue));
+      Break;
+   End-Evaluate;
+
+end-method;
+");
+        Assert.Empty(PathDiags(diags));
+    }
+
+    [Fact]
+    public void Terminated_empty_when_is_a_real_path_and_still_reports()
+    {
+        // `When = 1;` closes the clause: it matches, runs nothing, and leaves the method
+        // without a return value.
+        var diags = Check(@"
+Function F(&x As number) Returns string
+   Evaluate &x
+   When = 1;
+   When = 2
+      Return ""two"";
+   When-Other
+      Return ""other"";
+   End-Evaluate;
+End-Function;
+");
+        Assert.NotEmpty(PathDiags(diags));
+    }
+
+    [Fact]
+    public void Bodyless_when_before_when_other_is_a_real_path_and_still_reports()
+    {
+        // Grouping stops at When-Other: `When = 2` matches, runs nothing, and suppresses
+        // the When-Other body.
+        var diags = Check(@"
+Function F(&x As number) Returns string
+   Evaluate &x
+   When = 1
+      Return ""one"";
+   When = 2
+   When-Other
+      Return ""other"";
+   End-Evaluate;
+End-Function;
+");
+        Assert.NotEmpty(PathDiags(diags));
+    }
 }

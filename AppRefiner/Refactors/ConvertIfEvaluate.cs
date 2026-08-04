@@ -9,10 +9,10 @@ namespace AppRefiner.Refactors
     /// <summary>
     /// Converts between an If/Else-If chain and an Evaluate statement, whichever
     /// direction applies at the cursor. Convertibility uses CompletionAnalyzer:
-    /// PeopleCode Evaluate falls through after a matching When unless control leaves
-    /// the clause, so a generated When body gets a trailing Break only when its body
-    /// can reach its end, and an Evaluate converts back to If only when no When body
-    /// can complete normally.
+    /// a PeopleCode Evaluate goes on testing later When conditions after a match unless
+    /// control leaves the clause, so a generated When body gets a trailing Break only
+    /// when its body can reach its end, and an Evaluate converts back to If only when no
+    /// When body can complete normally.
     /// </summary>
     public class ConvertIfEvaluate : BaseRefactor
     {
@@ -243,11 +243,12 @@ namespace AppRefiner.Refactors
                 var thenBlock = links[i].ThenBlock;
                 sb.Append($"{indent}When {whens[i].OpSymbol} {GetSourceText(whens[i].Value.SourceSpan)}{NewLine}");
                 sb.Append(RenderBody(thenBlock, indent + unit, dropTrailingBreak: false));
-                // Evaluate falls through: add a trailing Break only when the body can
-                // reach its end. A body that already always terminates (Return/Throw/
-                // etc.) needs none — an added Break would be unreachable, and omitting
-                // it keeps If<->Evaluate round-trips a fixpoint. Empty bodies fall
-                // through, so they still get one.
+                // Evaluate keeps testing later When conditions after a match, so add a
+                // trailing Break only when the body can reach its end. A body that already
+                // always terminates (Return/Throw/etc.) needs none — an added Break would
+                // be unreachable, and omitting it keeps If<->Evaluate round-trips a
+                // fixpoint. Empty bodies can reach their end, so they still get one (which
+                // also stops them grouping with the next clause).
                 if (CompletionAnalyzer.Analyze(thenBlock).HasFlag(ExitMode.Normal))
                     sb.Append($"{indent + unit}Break;{NewLine}");
             }
@@ -368,7 +369,16 @@ namespace AppRefiner.Refactors
             {
                 pending.Add(whenClause);
                 if (whenClause.Body.Statements.Count == 0)
+                {
+                    // `When = "x";` closes the clause: it matches and runs nothing. Folding
+                    // it into the next group's Or-condition would start running that body.
+                    if (whenClause.ConditionTerminator != null)
+                    {
+                        SetFailure("A When clause is closed with a semicolon and has an empty body — it matches without running anything, which cannot be expressed as If/Else.");
+                        return;
+                    }
                     continue;
+                }
 
                 // Fall-through = control can reach the end of the body. A trailing
                 // Return/Throw/Exit/Error/Break/Continue (or an If whose every branch

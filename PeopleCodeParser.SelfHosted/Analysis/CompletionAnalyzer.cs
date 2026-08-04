@@ -82,11 +82,47 @@ public static class CompletionAnalyzer
         return then | AnalyzeBlock(node.ElseBlock);
     }
 
+    /// <summary>
+    /// Every <c>When</c> whose condition matches runs its body, top to bottom — the arms
+    /// are not mutually exclusive — so any arm that can complete normally makes the whole
+    /// Evaluate able to complete normally. Hence the union.
+    /// <para>
+    /// A <c>When</c> with no statements of its own and no <c>;</c> closing its condition
+    /// has no body: it shares the NEXT clause's block (the stacked-When idiom). Grouping
+    /// stops at <c>When-Other</c> — a trailing bodyless <c>When</c> matches and runs
+    /// nothing, and suppresses <c>When-Other</c> in the process.
+    /// </para>
+    /// </summary>
     private static ExitMode AnalyzeEvaluate(EvaluateStatementNode node)
     {
+        var clauses = node.WhenClauses;
+
+        // Analyze every body first so nested/dead structure is annotated regardless of grouping.
+        var own = new ExitMode[clauses.Count];
+        for (var i = 0; i < clauses.Count; i++)
+            own[i] = AnalyzeBlock(clauses[i].Body);
+
+        // Resolve from the tail so each clause sees its successor's resolved modes.
+        var effective = new ExitMode[clauses.Count];
+        for (var i = clauses.Count - 1; i >= 0; i--)
+        {
+            bool sharesNextBlock =
+                clauses[i].Body.Statements.Count == 0
+                && clauses[i].ConditionTerminator == null
+                && i + 1 < clauses.Count;
+
+            effective[i] = sharesNextBlock ? effective[i + 1] : own[i];
+
+            // Re-annotate the shared (empty) block with the group's modes. Consumers that
+            // hunt for an incomplete arm — NotAllPathsReturnCheck — would otherwise blame
+            // this When for a Normal that belongs to no real path.
+            if (sharesNextBlock)
+                clauses[i].Body.SetExitMode(effective[i]);
+        }
+
         ExitMode union = ExitMode.None;
-        foreach (var whenClause in node.WhenClauses)
-            union |= AnalyzeBlock(whenClause.Body);
+        foreach (var modes in effective)
+            union |= modes;
 
         if (node.WhenOtherBlock != null)
             union |= AnalyzeBlock(node.WhenOtherBlock);

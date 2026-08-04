@@ -537,12 +537,21 @@ public class WhenClause
     /// </summary>
     public BlockNode Body { get; }
 
-    public WhenClause(ExpressionNode condition, BlockNode body, BinaryOperator? op = null, Token? whenToken = null)
+    /// <summary>
+    /// The semicolon that closed the condition, if one was written (<c>When = 1;</c>).
+    /// Only meaningful when <see cref="Body"/> is empty: a bodyless clause WITHOUT a
+    /// terminator shares the next clause's block (the stacked-When idiom), while one
+    /// WITH a terminator is its own arm that matches and runs nothing.
+    /// </summary>
+    public Token? ConditionTerminator { get; }
+
+    public WhenClause(ExpressionNode condition, BlockNode body, BinaryOperator? op = null, Token? whenToken = null, Token? conditionTerminator = null)
     {
         Condition = condition ?? throw new ArgumentNullException(nameof(condition));
         Body = body ?? throw new ArgumentNullException(nameof(body));
         Operator = op;
         WhenToken = whenToken;
+        ConditionTerminator = conditionTerminator;
     }
 
     public override string ToString()

@@ -4424,12 +4424,16 @@ public class PeopleCodeParser
                         continue;
                     }
 
-                    // SEMI*
-                    while (Match(TokenType.Semicolon)) { }
+                    // SEMI* — the first one closes the condition. Kept because it is
+                    // what distinguishes a bodyless `When = 1;` (its own empty arm)
+                    // from `When = 1` (shares the next clause's block).
+                    Token? conditionTerminator = null;
+                    while (Match(TokenType.Semicolon))
+                        conditionTerminator ??= Previous;
 
                     // Optional statementBlock? until WHEN/WHEN_OTHER/END_EVALUATE
                     var body = ParseStatementList(TokenType.When, TokenType.WhenOther, TokenType.EndEvaluate);
-                    evalNode.AddWhenClause(new WhenClause(condition, body, op, whenToken));
+                    evalNode.AddWhenClause(new WhenClause(condition, body, op, whenToken, conditionTerminator));
                 }
                 else if (Match(TokenType.WhenOther))
                 {
