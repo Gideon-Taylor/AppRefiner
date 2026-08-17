@@ -29,6 +29,12 @@ public enum VariableKind
     Component,
 
     /// <summary>
+    /// ComponentLife variable — component scope, but its value only lives for the
+    /// duration of the component rather than the whole session
+    /// </summary>
+    ComponentLife,
+
+    /// <summary>
     /// Method or function parameter
     /// </summary>
     Parameter,

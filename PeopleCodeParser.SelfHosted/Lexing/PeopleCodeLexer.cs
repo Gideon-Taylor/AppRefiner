@@ -44,7 +44,7 @@ public class PeopleCodeLexer
         { "CATCH", TokenType.Catch },
         { "CLASS", TokenType.Class },
         { "COMPONENT", TokenType.Component },
-        { "COMPONENTLIFE", TokenType.Component },
+        { "COMPONENTLIFE", TokenType.ComponentLife },
         { "PANELGROUP", TokenType.Component },
         { "CONSTANT", TokenType.Constant },
         { "CONTINUE", TokenType.Continue },

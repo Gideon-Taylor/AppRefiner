@@ -803,6 +803,7 @@ public enum VariableScope
 {
     Global,
     Component,
+    ComponentLife,
     Instance
 }
 

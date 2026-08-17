@@ -273,6 +273,7 @@ namespace AppRefiner.TooltipProviders
                 VariableKind.Constant => "Constant",
                 VariableKind.Global => "Global variable",
                 VariableKind.Component => "Component variable",
+                VariableKind.ComponentLife => "ComponentLife variable",
                 _ => "Variable"
             };
             parts.Add($"*{kindDescription}*");

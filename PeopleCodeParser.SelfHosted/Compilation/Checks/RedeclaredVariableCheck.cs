@@ -61,6 +61,7 @@ public sealed class RedeclaredVariableCheck : CompileCheckBase
             VariableKind.Property => $"Variable '{varName}' shadows property '{declaredVar.Name}'",
             VariableKind.Global => $"Variable '{varName}' shadows global variable '{declaredVar.Name}'",
             VariableKind.Component => $"Variable '{varName}' shadows component variable '{declaredVar.Name}'",
+            VariableKind.ComponentLife => $"Variable '{varName}' shadows componentlife variable '{declaredVar.Name}'",
             VariableKind.Local => $"Variable '{varName}' already declared in this scope",
             _ => null // Unknown kind - do nothing (matches the original styler's default).
         };

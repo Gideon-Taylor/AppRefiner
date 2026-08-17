@@ -453,7 +453,8 @@ namespace AppRefiner
                         VariableKind.Local => (int)AutoCompleteIcons.LocalVariable,
                         VariableKind.Instance => (int)AutoCompleteIcons.InstanceVariable,
                         VariableKind.Global => (int)AutoCompleteIcons.GlobalVariable,
-                        VariableKind.Component => (int)AutoCompleteIcons.ComponentVariable,
+                        // ComponentLife has no icon of its own — it shares the component glyph
+                        VariableKind.Component or VariableKind.ComponentLife => (int)AutoCompleteIcons.ComponentVariable,
                         VariableKind.Parameter => (int)AutoCompleteIcons.Parameter,
                         VariableKind.Constant => (int)AutoCompleteIcons.ConstantValue,
                         VariableKind.Property => (int)AutoCompleteIcons.Property,
@@ -1080,6 +1081,7 @@ namespace AppRefiner
                 VariableKind.Instance => "Instance",
                 VariableKind.Global => "Global",
                 VariableKind.Component => "Component",
+                VariableKind.ComponentLife => "ComponentLife",
                 VariableKind.Property => "Property",
                 VariableKind.Exception => "Exception",
                 VariableKind.Constant => "Constant",

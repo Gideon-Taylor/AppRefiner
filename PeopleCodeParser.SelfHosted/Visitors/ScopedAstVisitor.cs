@@ -870,6 +870,7 @@ public abstract class ScopedAstVisitor<T> : AstVisitorBase
             VariableScope.Instance => VariableKind.Instance,
             VariableScope.Global => VariableKind.Global,
             VariableScope.Component => VariableKind.Component,
+            VariableScope.ComponentLife => VariableKind.ComponentLife,
             _ => throw new ArgumentException($"Unexpected VariableScope: {scope}", nameof(scope))
         };
     }

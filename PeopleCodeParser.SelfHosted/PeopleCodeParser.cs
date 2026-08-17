@@ -45,6 +45,7 @@ public class PeopleCodeParser
         TokenType.Local,
         TokenType.Global,
         TokenType.Component,
+        TokenType.ComponentLife,
         TokenType.EndIf,
         TokenType.EndFor,
         TokenType.EndWhile,
@@ -729,7 +730,7 @@ public class PeopleCodeParser
                             _position++;
                         }
                     }
-                    else if (Check(TokenType.Global, TokenType.Component))
+                    else if (Check(TokenType.Global, TokenType.Component, TokenType.ComponentLife))
                     {
                         var variable = ParseVariableDeclaration();
                         if (variable != null)
@@ -795,7 +796,8 @@ public class PeopleCodeParser
     private bool IsProgramPreambleToken()
     {
         return Check(TokenType.Function, TokenType.PeopleCode, TokenType.Library, TokenType.Declare,
-                    TokenType.Global, TokenType.Component, TokenType.Constant, TokenType.Local);
+                    TokenType.Global, TokenType.Component, TokenType.ComponentLife, TokenType.Constant,
+                    TokenType.Local);
     }
 
     /// <summary>
@@ -846,7 +848,7 @@ public class PeopleCodeParser
                     // A program-structure keyword here means the package name is missing
                     // (half-typed "import" above real code) — don't swallow the next construct
                     if (Check(TokenType.Import, TokenType.Class, TokenType.Interface) ||
-                        Check(TokenType.Local, TokenType.Global, TokenType.Component) ||
+                        Check(TokenType.Local, TokenType.Global, TokenType.Component, TokenType.ComponentLife) ||
                         Check(TokenType.Function, TokenType.Declare))
                     {
                         ReportError("Expected package path after 'IMPORT'");
@@ -3371,8 +3373,8 @@ public class PeopleCodeParser
 
     /// <summary>
     /// Parse program variable declaration according to grammar:
-    /// nonLocalVarDeclaration: (COMPONENT | GLOBAL) typeT USER_VARIABLE (COMMA USER_VARIABLE)* COMMA?
-    ///                       | (COMPONENT | GLOBAL) typeT  // compiles yet is meaningless
+    /// nonLocalVarDeclaration: (COMPONENT | COMPONENTLIFE | GLOBAL) typeT USER_VARIABLE (COMMA USER_VARIABLE)* COMMA?
+    ///                       | (COMPONENT | COMPONENTLIFE | GLOBAL) typeT  // compiles yet is meaningless
     /// Note: LOCAL variables in preamble are handled by ParseLocalVariableDeclaration()
     /// </summary>
     private ProgramVariableNode? ParseVariableDeclaration()
@@ -3386,6 +3388,7 @@ public class PeopleCodeParser
             VariableScope scope;
             if (Match(TokenType.Global)) scope = VariableScope.Global;
             else if (Match(TokenType.Component)) scope = VariableScope.Component;
+            else if (Match(TokenType.ComponentLife)) scope = VariableScope.ComponentLife;
             else if (Match(TokenType.Local))
             {
                 // LOCAL variables should be handled separately as LocalVariableDeclarationNode
