@@ -154,8 +154,9 @@ namespace AppRefiner.Refactors.QuickFixes
                     var lineStart = ScintillaManager.GetLineStartIndex(editor, varDecl.SourceSpan.Start.Line);
                     var lineLength = ScintillaManager.GetLineLength(editor, varDecl.SourceSpan.Start.Line);
 
-                    /* +1 to remove the \n ? */
-                    DeleteText(new SourceSpan(lineStart, lineStart + lineLength + 1), "Delete unused local variable.");
+                    /* GetLineLength (SCI_LINELENGTH) already includes the line-end, so
+                       lineStart + lineLength is the start of the next line. */
+                    DeleteText(new SourceSpan(lineStart, lineStart + lineLength), "Delete unused local variable.");
                 }
             }
             else if (declNode is LocalVariableDeclarationWithAssignmentNode varWithAssign)
