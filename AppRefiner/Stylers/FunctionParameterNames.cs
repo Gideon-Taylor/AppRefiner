@@ -23,6 +23,10 @@ namespace AppRefiner.Stylers
         int SCI_STYLESETITALIC = 2054;
         int SCI_STYLESETBOLD = 2053;
         int SCI_STYLESETSIZE = 2055;
+        // Scintilla document coordinates (UTF-8 byte offsets)
+        const int SCI_LINEFROMPOSITION = 2166;
+        const int SCI_POSITIONFROMLINE = 2167;
+        const int SCI_GETCHARAT = 2007;
         const int STYLE_INLAY_HINT = 40;
 
         [StructLayout(LayoutKind.Sequential)]
@@ -202,7 +206,7 @@ namespace AppRefiner.Stylers
                         ? $"arg{mapping.ArgumentIndex}"
                         : mapping.ParameterName;
 
-                    AddDesiredHint(arg.SourceSpan.Start.Line, arg.SourceSpan.Start.Column, $"{displayName}:");
+                    AddHintForArgument(arg, $"{displayName}:");
                 }
             }
             else
@@ -215,9 +219,62 @@ namespace AppRefiner.Stylers
         {
             for (int i = 0; i < arguments.Count; i++)
             {
-                var arg = arguments[i];
-                AddDesiredHint(arg.SourceSpan.Start.Line, arg.SourceSpan.Start.Column, $"arg{i}:");
+                AddHintForArgument(arguments[i], $"arg{i}:");
             }
+        }
+
+        /// <summary>
+        /// Places an inlay at the true start of the argument expression.
+        /// Uses Scintilla UTF-8 byte coordinates (not parser character columns) so the
+        /// position matches the editor's line layout. Also pulls the label back onto a
+        /// leading <c>@</c> when the computed anchor sits immediately after one — that
+        /// is what made labels for <c>@("...")</c> / <c>@Record.X</c> render as
+        /// <c>@param:</c> with a gap before the rest of the argument.
+        /// </summary>
+        private void AddHintForArgument(ExpressionNode arg, string paramText)
+        {
+            // Prefer FirstToken so unary operators (@, -) are included even if a span
+            // calculation ever drifted to the operand.
+            var start = arg.FirstToken?.SourceSpan.Start ?? arg.SourceSpan.Start;
+            if (arg is UnaryOperationNode unary && unary.Operator == UnaryOperator.Reference
+                && unary.FirstToken != null)
+            {
+                start = unary.FirstToken.SourceSpan.Start;
+            }
+
+            int absByte = start.ByteIndex;
+            int line = start.Line;
+            int posInLine = start.Column;
+
+            if (Editor != null)
+            {
+                // Convert absolute document byte index through Scintilla so line-relative
+                // position is always a UTF-8 byte offset within the line.
+                line = unchecked((int)Editor.SendMessage(SCI_LINEFROMPOSITION, new IntPtr(absByte), IntPtr.Zero));
+                int lineStart = unchecked((int)Editor.SendMessage(SCI_POSITIONFROMLINE, new IntPtr(line), IntPtr.Zero));
+                absByte = PullBackOntoLeadingAt(absByte);
+                posInLine = absByte - lineStart;
+                if (posInLine < 0)
+                    posInLine = 0;
+            }
+
+            AddDesiredHint(line, posInLine, paramText);
+        }
+
+        /// <summary>
+        /// If the absolute byte position is immediately after a source <c>@</c>, return the
+        /// position of that <c>@</c>. Leaves all other anchors unchanged.
+        /// </summary>
+        private int PullBackOntoLeadingAt(int absBytePos)
+        {
+            if (Editor == null || absBytePos <= 0)
+                return absBytePos;
+
+            int prev = unchecked((int)Editor.SendMessage(SCI_GETCHARAT, new IntPtr(absBytePos - 1), IntPtr.Zero)) & 0xFF;
+            if (prev == '@')
+                return absBytePos - 1;
+
+            return absBytePos;
         }
 
         /// <summary>
@@ -294,7 +351,9 @@ namespace AppRefiner.Stylers
                     position = new IntPtr(desired.Position),
                     text = desired.TextAddress,
                     style = STYLE_INLAY_HINT,
-                    paddingLeft = false,
+                    // Small left pad so the label doesn't sit flush against the preceding comma
+                    // (or a leading '@' when width metrics undershoot).
+                    paddingLeft = true,
                     paddingRight = false
                 };
 
