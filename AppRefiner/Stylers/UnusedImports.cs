@@ -1,4 +1,5 @@
-﻿using PeopleCodeParser.SelfHosted;
+﻿using AppRefiner.Refactors.QuickFixes;
+using PeopleCodeParser.SelfHosted;
 using PeopleCodeParser.SelfHosted.Nodes;
 using PeopleCodeTypeInfo.Types;
 
@@ -52,7 +53,7 @@ namespace AppRefiner.Stylers
             {
                 if (import.Used == false)
                 {
-                    AddIndicator(import.Node.SourceSpan, IndicatorType.TEXTCOLOR, 0xFF808080, $"Unused import");
+                    AddIndicator(import.Node.SourceSpan, IndicatorType.TEXTCOLOR, 0xFF808080, $"Unused import", [(typeof(DeleteImport), "Delete unused import")]);
                 }
             }
         }
@@ -67,7 +68,7 @@ namespace AppRefiner.Stylers
             else
             {
                 /* duplicate import */
-                AddIndicator(node.SourceSpan, IndicatorType.TEXTCOLOR, 0xFFFFA500, "Duplicate import");
+                AddIndicator(node.SourceSpan, IndicatorType.TEXTCOLOR, 0xFFFFA500, "Duplicate import", [(typeof(DeleteImport), "Delete duplicate import")]);
             }
         }
 
