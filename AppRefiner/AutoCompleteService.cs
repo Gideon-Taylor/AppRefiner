@@ -366,12 +366,15 @@ namespace AppRefiner
                     return;
                 }
 
-                // Parse the current document to get AST
+                // Parse the current document to get AST.
+                // Do NOT run DB-backed type inference here: VariableCollector only needs the
+                // local AST, and full inference hits the SAM SQL proxy. With PostThreadMessage
+                // pumps, blocking the UI thread on proxy IO while AD is in SendMessage to us
+                // is a classic deadlock (the PUMP never runs).
                 var lexer = new PeopleCodeLexer(content);
                 var tokens = lexer.TokenizeAll();
                 var parser = new PeopleCodeParser.SelfHosted.PeopleCodeParser(tokens);
                 var program = parser.ParseProgram();
-                RunTypeInference(editor, program);
 
                 if (program == null)
                 {
