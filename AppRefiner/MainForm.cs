@@ -2853,7 +2853,7 @@ namespace AppRefiner
                 }
 
                 var editor = ResolveEditorFromHwnd(UnpackHwnd(m.LParam));
-                if (editor == null) return;
+                if (editor == null || editor.Type != EditorType.PeopleCode) return;
 
                 // Check if function signatures are enabled
                 if (!autoSuggestSettings.FunctionSignatures) return;
@@ -3036,6 +3036,8 @@ namespace AppRefiner
             {
                 var editor = ResolveEditorFromHwnd(UnpackHwnd(m.LParam));
                 if (editor == null || autoCompleteService == null) return;
+
+                if (editor.Type != EditorType.PeopleCode) return;
 
                 // Check if system variable suggestions are enabled
                 if (!autoSuggestSettings.SystemVariables) return;
