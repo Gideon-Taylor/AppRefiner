@@ -128,6 +128,94 @@ namespace AppRefiner
         [DllImport("user32.dll", CharSet = CharSet.Auto)]
         public static extern IntPtr SendMessage(IntPtr hWnd, uint Msg, int wParam, ref LVITEM lParam);
 
+        [StructLayout(LayoutKind.Sequential)]
+        public struct MSG
+        {
+            public IntPtr hwnd;
+            public uint message;
+            public IntPtr wParam;
+            public IntPtr lParam;
+            public uint time;
+            public POINT pt;
+        }
+
+        /// <summary>
+        /// Waits for objects or a new input of the specified types in the thread's message queue.
+        /// </summary>
+        [DllImport("user32.dll", SetLastError = true)]
+        public static extern uint MsgWaitForMultipleObjects(
+            uint nCount,
+            IntPtr[] pHandles,
+            [MarshalAs(UnmanagedType.Bool)] bool bWaitAll,
+            uint dwMilliseconds,
+            uint dwWakeMask);
+
+        [DllImport("user32.dll", SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        public static extern bool PeekMessage(
+            out MSG lpMsg,
+            IntPtr hWnd,
+            uint wMsgFilterMin,
+            uint wMsgFilterMax,
+            uint wRemoveMsg);
+
+        /// <summary>
+        /// While a thread is blocked in a kernel wait (e.g. ReadFile on a pipe), cross-thread
+        /// <c>SendMessage</c> into that thread cannot complete. For SQL-proxy waits we park the
+        /// blocking IO on a worker and use this helper so <b>sent</b> messages are still
+        /// dispatched (via PeekMessage side-effect) without pumping posted UI work that could
+        /// re-enter catalog SQL on the same call stack.
+        /// </summary>
+        public static void WaitForHandleDispatchingSentMessages(WaitHandle handle)
+        {
+            if (handle == null) throw new ArgumentNullException(nameof(handle));
+
+            // Non-STA / no message queue: plain wait is fine.
+            if (Thread.CurrentThread.GetApartmentState() != ApartmentState.STA)
+            {
+                handle.WaitOne();
+                return;
+            }
+
+            IntPtr raw = handle.SafeWaitHandle.DangerousGetHandle();
+            var handles = new[] { raw };
+
+            while (true)
+            {
+                uint result = MsgWaitForMultipleObjects(
+                    1,
+                    handles,
+                    false,
+                    INFINITE,
+                    QS_SENDMESSAGE);
+
+                if (result == WAIT_OBJECT_0)
+                {
+                    return; // handle signaled
+                }
+
+                if (result == WAIT_OBJECT_0 + 1)
+                {
+                    // Pending sent messages: PeekMessage dispatches them even with PM_NOREMOVE
+                    // (we intentionally do not DispatchMessage posted work here).
+                    PeekMessage(out _, IntPtr.Zero, 0, 0, PM_NOREMOVE);
+                    continue;
+                }
+
+                if (result == WAIT_FAILED)
+                {
+                    throw new InvalidOperationException(
+                        $"MsgWaitForMultipleObjects failed err={Marshal.GetLastWin32Error()}");
+                }
+
+                // Unexpected status — fall back to a short wait to avoid a tight spin.
+                if (handle.WaitOne(10))
+                {
+                    return;
+                }
+            }
+        }
+
         #endregion
 
         #region Kernel32.dll
@@ -246,6 +334,14 @@ namespace AppRefiner
         public const uint EVENT_OBJECT_FOCUS = 0x8005;
         public const uint WINEVENT_OUTOFCONTEXT = 0x0000;
         public const uint WINEVENT_SKIPOWNPROCESS = 0x0002;
+
+        // MsgWait / PeekMessage
+        public const uint QS_SENDMESSAGE = 0x0040;
+        public const uint PM_NOREMOVE = 0x0000;
+        public const uint PM_REMOVE = 0x0001;
+        public const uint WAIT_OBJECT_0 = 0;
+        public const uint WAIT_FAILED = 0xFFFFFFFF;
+        public const uint INFINITE = 0xFFFFFFFF;
 
         // Window Messages
         public const int WM_GETTEXT = 0x000D;

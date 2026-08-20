@@ -545,6 +545,21 @@ namespace AppRefiner.Database.SqlProxy
 
         private static void WriteAll(IntPtr handle, byte[] data)
         {
+            // Anonymous pipes are not overlapped. On the UI STA thread we must not block
+            // inside WriteFile: the hook's PostThreadMessage(PUMP) path needs this thread
+            // able to complete cross-thread SendMessage from App Designer (otherwise the
+            // AD UI thread can stall inside Sam* and never run the pump → deadlock).
+            if (Thread.CurrentThread.GetApartmentState() == ApartmentState.STA)
+            {
+                RunPipeIoWithSentMessageDispatch(() => WriteAllBlocking(handle, data));
+                return;
+            }
+
+            WriteAllBlocking(handle, data);
+        }
+
+        private static void WriteAllBlocking(IntPtr handle, byte[] data)
+        {
             int offset = 0;
             while (offset < data.Length)
             {
@@ -558,6 +573,16 @@ namespace AppRefiner.Database.SqlProxy
 
         private static byte[] ReadAll(IntPtr handle, int size)
         {
+            if (Thread.CurrentThread.GetApartmentState() == ApartmentState.STA)
+            {
+                return RunPipeIoWithSentMessageDispatch(() => ReadAllBlocking(handle, size));
+            }
+
+            return ReadAllBlocking(handle, size);
+        }
+
+        private static byte[] ReadAllBlocking(IntPtr handle, int size)
+        {
             byte[] buffer = new byte[size];
             int offset = 0;
             while (offset < size)
@@ -569,6 +594,68 @@ namespace AppRefiner.Database.SqlProxy
                 offset += read;
             }
             return buffer;
+        }
+
+        /// <summary>
+        /// Runs blocking pipe IO on a worker thread while the calling STA thread dispatches
+        /// only cross-thread <c>SendMessage</c> (not posted UI work). Required so App Designer
+        /// can finish nested sends while the SQL proxy waits for <c>WM_AR_SQLPROXY_PUMP</c>.
+        /// </summary>
+        private static void RunPipeIoWithSentMessageDispatch(Action action)
+        {
+            Exception? error = null;
+            using var done = new ManualResetEvent(false);
+            ThreadPool.QueueUserWorkItem(_ =>
+            {
+                try
+                {
+                    action();
+                }
+                catch (Exception ex)
+                {
+                    error = ex;
+                }
+                finally
+                {
+                    done.Set();
+                }
+            });
+
+            WinApi.WaitForHandleDispatchingSentMessages(done);
+            if (error != null)
+            {
+                throw error;
+            }
+        }
+
+        private static T RunPipeIoWithSentMessageDispatch<T>(Func<T> func)
+        {
+            T? result = default;
+            Exception? error = null;
+            using var done = new ManualResetEvent(false);
+            ThreadPool.QueueUserWorkItem(_ =>
+            {
+                try
+                {
+                    result = func();
+                }
+                catch (Exception ex)
+                {
+                    error = ex;
+                }
+                finally
+                {
+                    done.Set();
+                }
+            });
+
+            WinApi.WaitForHandleDispatchingSentMessages(done);
+            if (error != null)
+            {
+                throw error;
+            }
+
+            return result!;
         }
 
         private static byte[] StructureToBytes<T>(T value) where T : struct
