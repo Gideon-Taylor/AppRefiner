@@ -22,7 +22,7 @@ namespace AppRefiner.Commands.BuiltIn
             {
                 var mainHandle = context.ActiveAppDesigner.MainWindowHandle;
                 var handleWrapper = new WindowWrapper(mainHandle);
-                DBConnectDialog dialog = new(mainHandle, context.ActiveAppDesigner.DBName);
+                DBConnectDialog dialog = new(mainHandle, context.ActiveAppDesigner.DBName, context.ActiveAppDesigner);
                 dialog.StartPosition = FormStartPosition.CenterParent;
 
                 if (dialog.ShowDialog(handleWrapper) == DialogResult.OK)

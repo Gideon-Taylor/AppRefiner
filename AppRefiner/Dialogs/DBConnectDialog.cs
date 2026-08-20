@@ -1,4 +1,5 @@
 using AppRefiner.Database;
+using AppRefiner.Database.SqlProxy;
 using AppRefiner.Properties;
 using System.DirectoryServices;
 using System.Security.Cryptography;
@@ -28,8 +29,20 @@ namespace AppRefiner.Dialogs
         public string? ToolsVersion { get; private set; }
 
         // Class to store database connection settings
+        /// <summary>Combo entry for connecting through App Designer's own SAM session.</summary>
+        private const string SamProxyType = "App Designer Proxy";
+        private const string OracleType = "Oracle";
+        private const string SqlServerType = "SQL Server";
+
         private class DbConnectionSettings
         {
+            /// <summary>
+            /// Connection type this database was last connected with. Empty for settings saved
+            /// before the type was persisted — those fall back to TNS/DSN list inference in
+            /// <see cref="SelectDatabaseByName"/>. Required for <see cref="SamProxyType"/>,
+            /// whose DB name appears in neither list.
+            /// </summary>
+            public string DbType { get; set; } = string.Empty;
             public bool IsReadOnly { get; set; }
             public bool IsLdap { get; set; }
             public string LdapServer { get; set; } = string.Empty;
@@ -42,8 +55,9 @@ namespace AppRefiner.Dialogs
 
             public DbConnectionSettings() { }
 
-            public DbConnectionSettings(bool isReadOnly, bool isLdap, string ldapServer, string context, string dbService, string ldapDescriptor, string username, string @namespace, string? encryptedPassword = null)
+            public DbConnectionSettings(string dbType, bool isReadOnly, bool isLdap, string ldapServer, string context, string dbService, string ldapDescriptor, string username, string @namespace, string? encryptedPassword = null)
             {
+                DbType = dbType;
                 IsReadOnly = isReadOnly;
                 IsLdap = isLdap;
                 LdapServer = ldapServer;
@@ -107,15 +121,22 @@ namespace AppRefiner.Dialogs
         private readonly ProgressBar loadingProgressBar;
         private bool isConnecting = false;
         private bool isInitialLoad = true;
+        private bool isLoadingConnections;
         // Default DB selection is deferred until the async connection-list load completes
         private readonly string? pendingDefaultDbName;
+        // App Designer process backing the SAM proxy option; null hides that option entirely
+        private readonly AppDesignerProcess? appDesignerProcess;
 
         /// <summary>
         /// Initializes a new instance of the DBConnectDialog class
         /// </summary>
         /// <param name="owner">The owner window handle</param>
         /// <param name="defaultDbName">Optional default database name to select</param>
-        public DBConnectDialog(IntPtr owner = default, string? defaultDbName = null)
+        /// <param name="process">
+        /// App Designer process whose signed-on SAM session backs the "App Designer Proxy"
+        /// connection type. When null that option is not offered.
+        /// </param>
+        public DBConnectDialog(IntPtr owner = default, string? defaultDbName = null, AppDesignerProcess? process = null)
         {
             this.headerPanel = new Panel();
             this.headerLabel = new Label();
@@ -147,6 +168,8 @@ namespace AppRefiner.Dialogs
             this.loadingLabel = new Label();
             this.loadingProgressBar = new ProgressBar();
             this.owner = owner;
+            // Must precede InitializeComponent — it decides whether the SAM option is offered
+            this.appDesignerProcess = process;
 
             // Load saved settings
             LoadAllSettings();
@@ -189,8 +212,13 @@ namespace AppRefiner.Dialogs
             this.dbTypeComboBox.Location = new Point(130, 50);
             this.dbTypeComboBox.Size = new Size(250, 23);
             this.dbTypeComboBox.TabIndex = 2;
-            this.dbTypeComboBox.Items.Add("Oracle");
-            this.dbTypeComboBox.Items.Add("SQL Server");
+            this.dbTypeComboBox.Items.Add(OracleType);
+            this.dbTypeComboBox.Items.Add(SqlServerType);
+            // Only offered when we have an App Designer process to broker SAM calls through
+            if (this.appDesignerProcess != null)
+            {
+                this.dbTypeComboBox.Items.Add(SamProxyType);
+            }
             this.dbTypeComboBox.SelectedIndex = 0;
             this.dbTypeComboBox.SelectedIndexChanged += DbTypeComboBox_SelectedIndexChanged;
 
@@ -707,8 +735,11 @@ namespace AppRefiner.Dialogs
 
         private void UpdateUIForConnectionType()
         {
-            bool isReadOnly = readOnlyRadioButton.Checked;
-            bool isOracle = dbTypeComboBox.SelectedItem?.ToString() == "Oracle";
+            bool isSam = dbTypeComboBox.SelectedItem?.ToString() == SamProxyType;
+            // SAM runs inside App Designer's own signed-on session: no credentials, no
+            // bootstrap/read-only distinction, and %Table() handles schema qualification.
+            bool isReadOnly = !isSam && readOnlyRadioButton.Checked;
+            bool isOracle = dbTypeComboBox.SelectedItem?.ToString() == OracleType;
             string? connectionType = connectionTypeComboBox.SelectedItem?.ToString();
             bool isLdap = isOracle && connectionType == "LDAP";
 
@@ -725,6 +756,8 @@ namespace AppRefiner.Dialogs
             // DB Name is replaced by the DB Service combo in LDAP mode
             dbNameLabel.Visible = !isLdap;
             dbNameComboBox.Visible = !isLdap;
+            // The SAM session's database is a fact, not a choice — show it, don't let it change
+            dbNameComboBox.Enabled = !isSam && !isLoadingConnections;
             connectionTypeLabel.Visible = isOracle;
             connectionTypeComboBox.Visible = isOracle;
             namespaceLabel.Visible = isReadOnly;
@@ -737,6 +770,17 @@ namespace AppRefiner.Dialogs
             dbServiceComboBox.Visible = isLdap;
             loadButton.Visible = isLdap;
 
+            bootstrapRadioButton.Visible = !isSam;
+            readOnlyRadioButton.Visible = !isSam;
+            usernameLabel.Visible = !isSam;
+            usernameTextBox.Visible = !isSam;
+            passwordLabel.Visible = !isSam;
+            passwordTextBox.Visible = !isSam;
+
+            // For SAM there is no password to protect — the checkbox instead governs whether
+            // the SAM choice is remembered for this database (and so auto-connects next time).
+            savePasswordCheckBox.Text = isSam ? "Remember this connection" : "Save Password";
+
             if (!isOracle && connectionTypeComboBox.SelectedItem?.ToString() != "Standard")
             {
                 connectionTypeComboBox.SelectedItem = "Standard";
@@ -747,10 +791,10 @@ namespace AppRefiner.Dialogs
                 UpdateNamespaceForSqlServer();
             }
 
-            ApplyFormLayout(isLdap, isReadOnly, isOracle);
+            ApplyFormLayout(isLdap, isReadOnly, isOracle, isSam);
         }
 
-        private void ApplyFormLayout(bool isLdap, bool isReadOnly, bool isOracle)
+        private void ApplyFormLayout(bool isLdap, bool isReadOnly, bool isOracle, bool isSam)
         {
             const int labelX = 20;
             const int fieldX = 130;
@@ -775,9 +819,12 @@ namespace AppRefiner.Dialogs
                 }
             }
 
-            bootstrapRadioButton.Location = new Point(fieldX + 8, nextRowY);
-            readOnlyRadioButton.Location = new Point(fieldX + 98, nextRowY);
-            nextRowY += rowHeight;
+            if (!isSam)
+            {
+                bootstrapRadioButton.Location = new Point(fieldX + 8, nextRowY);
+                readOnlyRadioButton.Location = new Point(fieldX + 98, nextRowY);
+                nextRowY += rowHeight;
+            }
 
             if (isOracle)
             {
@@ -809,13 +856,16 @@ namespace AppRefiner.Dialogs
                 nextRowY += rowHeight;
             }
 
-            usernameLabel.Location = new Point(labelX, nextRowY);
-            usernameTextBox.Location = new Point(fieldX, nextRowY);
-            nextRowY += rowHeight;
+            if (!isSam)
+            {
+                usernameLabel.Location = new Point(labelX, nextRowY);
+                usernameTextBox.Location = new Point(fieldX, nextRowY);
+                nextRowY += rowHeight;
 
-            passwordLabel.Location = new Point(labelX, nextRowY);
-            passwordTextBox.Location = new Point(fieldX, nextRowY);
-            nextRowY += rowHeight;
+                passwordLabel.Location = new Point(labelX, nextRowY);
+                passwordTextBox.Location = new Point(fieldX, nextRowY);
+                nextRowY += rowHeight;
+            }
 
             savePasswordCheckBox.Location = new Point(fieldX, nextRowY);
 
@@ -861,16 +911,21 @@ namespace AppRefiner.Dialogs
 
                 switch (dbType)
                 {
-                    case "Oracle":
+                    case OracleType:
                         connectionTypeComboBox.Items.Add("Standard");
                         connectionTypeComboBox.Items.Add("LDAP");
                         connectionTypeComboBox.SelectedItem = "Standard";
                         LoadOracleTnsNames();
                         break;
-                    case "SQL Server":
+                    case SqlServerType:
                         connectionTypeComboBox.Items.Add("Standard");
                         connectionTypeComboBox.SelectedItem = "Standard";
                         LoadSqlServerDsns();
+                        break;
+                    case SamProxyType:
+                        connectionTypeComboBox.Items.Add("Standard");
+                        connectionTypeComboBox.SelectedItem = "Standard";
+                        LoadSamProxyDbName();
                         break;
                 }
 
@@ -901,6 +956,25 @@ namespace AppRefiner.Dialogs
             {
                 dbNameComboBox.SelectedIndex = 0;
             }
+        }
+
+        /// <summary>
+        /// Populates the DB Name combo with the single database the App Designer session is
+        /// signed on to. There is nothing to choose — the combo is disabled in SAM mode — but
+        /// it stays a combo so the selection change still drives settings apply / auto-connect.
+        /// </summary>
+        private void LoadSamProxyDbName()
+        {
+            dbNameComboBox.Items.Clear();
+
+            string? samDbName = appDesignerProcess?.DBName;
+            if (string.IsNullOrWhiteSpace(samDbName))
+            {
+                return;
+            }
+
+            dbNameComboBox.Items.Add(samDbName);
+            dbNameComboBox.SelectedIndex = 0;
         }
 
         /// <summary>
@@ -948,6 +1022,7 @@ namespace AppRefiner.Dialogs
         /// </summary>
         private void BeginLoadDatabaseConnections()
         {
+            isLoadingConnections = true;
             dbNameComboBox.Enabled = false;
             dbNameComboBox.Text = "Loading...";
             connectButton.Enabled = false;
@@ -984,16 +1059,17 @@ namespace AppRefiner.Dialogs
                 return;
             }
 
+            isLoadingConnections = false;
             dbNameComboBox.Enabled = true;
             dbNameComboBox.Text = string.Empty;
             connectButton.Enabled = true;
 
             string? dbType = dbTypeComboBox.SelectedItem?.ToString();
-            if (dbType == "Oracle")
+            if (dbType == OracleType)
             {
                 LoadOracleTnsNames();
             }
-            else if (dbType == "SQL Server")
+            else if (dbType == SqlServerType)
             {
                 LoadSqlServerDsns();
             }
@@ -1040,12 +1116,18 @@ namespace AppRefiner.Dialogs
                 // Update namespace for SQL Server read-only connections when DB name changes
                 UpdateNamespaceForSqlServer();
 
-                // Auto-connect on initial load if password is saved
-                if (isInitialLoad && settingsLoaded && !string.IsNullOrEmpty(passwordTextBox.Text) &&
-                    !string.IsNullOrEmpty(usernameTextBox.Text))
+                bool isSam = dbTypeComboBox.SelectedItem?.ToString() == SamProxyType;
+
+                // Auto-connect on initial load once the saved settings are complete enough to
+                // connect unattended. For Oracle/SQL Server that means saved credentials; SAM
+                // has none, so a remembered SAM choice is complete by itself.
+                bool savedSettingsAreComplete = isSam
+                    || (!string.IsNullOrEmpty(passwordTextBox.Text) && !string.IsNullOrEmpty(usernameTextBox.Text));
+
+                if (isInitialLoad && settingsLoaded && savedSettingsAreComplete)
                 {
                     // Check if namespace is required but missing
-                    if (readOnlyRadioButton.Checked && string.IsNullOrEmpty(namespaceTextBox.Text))
+                    if (!isSam && readOnlyRadioButton.Checked && string.IsNullOrEmpty(namespaceTextBox.Text))
                         return;
                     if (connectionTypeComboBox.SelectedItem?.ToString() == "LDAP" && (string.IsNullOrEmpty(ldapServerTextBox.Text) || string.IsNullOrEmpty(contextTextBox.Text)))
                         return;
@@ -1085,7 +1167,9 @@ namespace AppRefiner.Dialogs
 
             // Update UI controls
             dbTypeComboBox.Enabled = !isConnecting;
-            dbNameComboBox.Enabled = !isConnecting;
+            // The SAM session's database is fixed, so it stays disabled even when idle
+            bool isSam = dbTypeComboBox.SelectedItem?.ToString() == SamProxyType;
+            dbNameComboBox.Enabled = !isConnecting && !isSam && !isLoadingConnections;
             bootstrapRadioButton.Enabled = !isConnecting;
             readOnlyRadioButton.Enabled = !isConnecting;
             connectionTypeComboBox.Enabled = !isConnecting;
@@ -1131,13 +1215,14 @@ namespace AppRefiner.Dialogs
                 return;
 
             string? dbType = dbTypeComboBox.SelectedItem?.ToString();
-            
+            bool isSam = dbType == SamProxyType;
+
             // Get connection mode from radio buttons
-            bool isReadOnly = readOnlyRadioButton.Checked;
-            
+            bool isReadOnly = !isSam && readOnlyRadioButton.Checked;
+
             // Get connection type from dropdown
             string? connType = connectionTypeComboBox.SelectedItem?.ToString();
-            bool isLdap = connType == "LDAP";
+            bool isLdap = !isSam && connType == "LDAP";
 
             if (string.IsNullOrEmpty(dbType))
             {
@@ -1145,10 +1230,12 @@ namespace AppRefiner.Dialogs
                 return;
             }
 
-            string username = usernameTextBox.Text;
-            string password = passwordTextBox.Text;
+            string username = isSam ? string.Empty : usernameTextBox.Text;
+            string password = isSam ? string.Empty : passwordTextBox.Text;
 
-            if (string.IsNullOrEmpty(username) || string.IsNullOrEmpty(password))
+            // SAM borrows App Designer's already-authenticated session, so there are no
+            // credentials to validate here.
+            if (!isSam && (string.IsNullOrEmpty(username) || string.IsNullOrEmpty(password)))
             {
                 MessageBox.Show("Please enter username and password", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return;
@@ -1161,7 +1248,26 @@ namespace AppRefiner.Dialogs
 
             try
             {
-                if (isLdap)
+                if (isSam)
+                {
+                    // No connection string: SqlProxyDbConnection brokers SQL through the
+                    // App Designer process's own signed-on SAM session.
+                    if (appDesignerProcess == null)
+                    {
+                        MessageBox.Show("No App Designer session is available to proxy through", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                        return;
+                    }
+
+                    // The DB name is read from the App Designer caption and is only present
+                    // once signed on — which SAM requires anyway. Without it we would also
+                    // have no key to save settings under.
+                    if (string.IsNullOrWhiteSpace(saveKey))
+                    {
+                        MessageBox.Show("App Designer is not signed on to a database yet", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                        return;
+                    }
+                }
+                else if (isLdap)
                 {
                     // LDAP-specific validation
                     if (string.IsNullOrEmpty(ldapServerTextBox.Text) || string.IsNullOrEmpty(contextTextBox.Text) || string.IsNullOrEmpty(dbServiceComboBox.Text))
@@ -1228,7 +1334,7 @@ namespace AppRefiner.Dialogs
                     }
                 }
 
-                if (string.IsNullOrEmpty(connectionString))
+                if (!isSam && string.IsNullOrEmpty(connectionString))
                 {
                     throw new NotSupportedException($"Database type '{dbType}' is not supported.");
                 }
@@ -1240,11 +1346,14 @@ namespace AppRefiner.Dialogs
                 {
                     switch (dbType)
                     {
-                        case "Oracle":
+                        case OracleType:
                             DataManager = new OraclePeopleSoftDataManager(connectionString, namespaceForConnection);
                             break;
-                        case "SQL Server":
+                        case SqlServerType:
                             DataManager = new SqlServerPeopleSoftDataManager(connectionString, namespaceForConnection);
+                            break;
+                        case SamProxyType:
+                            DataManager = new SqlProxyDataManager(new SqlProxyDbConnection(appDesignerProcess!));
                             break;
                     }
 
@@ -1259,6 +1368,7 @@ namespace AppRefiner.Dialogs
                         {
                             OraclePeopleSoftDataManager oracleManager => oracleManager.LastConnectionError,
                             SqlServerPeopleSoftDataManager sqlServerManager => sqlServerManager.LastConnectionError,
+                            SqlProxyDataManager sqlProxyManager => sqlProxyManager.LastConnectionError,
                             _ => null
                         };
 
@@ -1273,14 +1383,32 @@ namespace AppRefiner.Dialogs
                 });
 
                 // Capture connection metadata for the Instances grid (no extra DB round-trips)
-                string mode = isReadOnly ? "Read-only" : "Bootstrap";
-                ConnectionDescription = string.IsNullOrWhiteSpace(username)
-                    ? mode
-                    : $"{mode} as {username.ToUpperInvariant()}";
+                if (isSam)
+                {
+                    ConnectionDescription = "App Designer SAM session";
+                }
+                else
+                {
+                    string mode = isReadOnly ? "Read-only" : "Bootstrap";
+                    ConnectionDescription = string.IsNullOrWhiteSpace(username)
+                        ? mode
+                        : $"{mode} as {username.ToUpperInvariant()}";
+                }
 
-                string? encryptedPassword = savePasswordCheckBox.Checked ? EncryptPassword(password, saveKey) : null;
+                // For SAM the checkbox governs whether the choice is remembered at all; an
+                // unremembered SAM connection leaves no saved type, so next launch prompts.
+                if (isSam && !savePasswordCheckBox.Checked)
+                {
+                    ForgetSamSettingsForDatabase(saveKey);
+                    DialogResult = DialogResult.OK;
+                    Close();
+                    return;
+                }
+
+                string? encryptedPassword = savePasswordCheckBox.Checked && !isSam ? EncryptPassword(password, saveKey) : null;
                 SaveSettingsForDatabase(
                     saveKey,
+                    dbType,
                     isReadOnly,
                     isLdap,
                     ldapServerTextBox.Text,
@@ -1313,6 +1441,18 @@ namespace AppRefiner.Dialogs
         {
             if (string.IsNullOrEmpty(dbName))
                 return;
+
+            // An explicitly saved type wins over list inference. Required for SAM, whose DB
+            // name comes from the App Designer caption and is in neither the TNS nor DSN list.
+            if (savedSettings != null
+                && savedSettings.TryGetValue(dbName, out var savedForDb)
+                && savedForDb.DbType == SamProxyType
+                && dbTypeComboBox.Items.Contains(SamProxyType))
+            {
+                dbTypeComboBox.SelectedItem = SamProxyType;
+                LoadSamProxyDbName();
+                return;
+            }
 
             // Smart detection: Check which database type contains this name
             bool foundInOracle = oracleNames.Any(name => name.Equals(dbName, StringComparison.OrdinalIgnoreCase));
@@ -1432,13 +1572,32 @@ namespace AppRefiner.Dialogs
         /// <summary>
         /// Saves connection settings for a specific database
         /// </summary>
-        private void SaveSettingsForDatabase(string dbName, bool isReadOnly, bool isLdap, string ldapServer, string context, string dbService, string ldapDescriptor, string username, string @namespace, string? encryptedPassword = null)
+        private void SaveSettingsForDatabase(string dbName, string dbType, bool isReadOnly, bool isLdap, string ldapServer, string context, string dbService, string ldapDescriptor, string username, string @namespace, string? encryptedPassword = null)
         {
             if (savedSettings == null)
                 savedSettings = new Dictionary<string, DbConnectionSettings>();
 
-            savedSettings[dbName] = new DbConnectionSettings(isReadOnly, isLdap, ldapServer, context, dbService, ldapDescriptor, username, @namespace, encryptedPassword);
+            savedSettings[dbName] = new DbConnectionSettings(dbType, isReadOnly, isLdap, ldapServer, context, dbService, ldapDescriptor, username, @namespace, encryptedPassword);
             SaveAllSettings();
+        }
+
+        /// <summary>
+        /// Drops a remembered SAM choice for a database, used when a SAM connection is made
+        /// with "Remember this connection" unchecked. Only removes entries that are themselves
+        /// SAM — an Oracle/SQL Server entry (which may hold a saved password) is left alone,
+        /// since declining to remember SAM is not a request to discard other credentials.
+        /// </summary>
+        private void ForgetSamSettingsForDatabase(string dbName)
+        {
+            if (savedSettings == null || string.IsNullOrEmpty(dbName))
+                return;
+
+            if (savedSettings.TryGetValue(dbName, out var existing)
+                && existing.DbType == SamProxyType
+                && savedSettings.Remove(dbName))
+            {
+                SaveAllSettings();
+            }
         }
 
         /// <summary>
@@ -1505,6 +1664,16 @@ namespace AppRefiner.Dialogs
                 {
                     ldapServiceDescriptors[settings.DbService] = settings.LdapDescriptor;
                 }
+            }
+
+            // A saved SAM entry only exists because the user chose to remember it, and it
+            // carries no password — reflect that in the (relabelled) checkbox and stop here.
+            if (settings.DbType == SamProxyType)
+            {
+                passwordTextBox.Text = string.Empty;
+                savePasswordCheckBox.Checked = true;
+                UpdateUIForConnectionType();
+                return true;
             }
 
             // Set password if it was saved

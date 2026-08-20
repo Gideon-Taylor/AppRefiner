@@ -2079,9 +2079,6 @@ namespace AppRefiner
                         // Initialize any other editors that were already open in this process
                         newProcess.InitExistingEditors();
 
-                        // SAM proxy when ready (may no-op until signed on; activation retries)
-                        TryAttachSqlProxyDataManager(newProcess);
-
                         // Apply current theme to newly created process
                         ApplyCurrentThemeToProcess(newProcess);
 
@@ -4091,10 +4088,6 @@ namespace AppRefiner
             // e.g. App Designer opened after AppRefiner, then the user signs on.
             RefreshDbNameFromCaption(process);
 
-            // Prefer SAM proxy over a separate Oracle/ODBC connection whenever possible.
-            TryAttachSqlProxyDataManager(process);
-            if (process.DataManager != null) return;
-
             if (!chkPromptForDB.Checked) return;
 
             // DBName is captured from the window title once signed on;
@@ -4141,8 +4134,9 @@ namespace AppRefiner
             var mainHandle = process.MainWindowHandle;
             var handleWrapper = new WindowWrapper(mainHandle);
 
-            // Pass the process's DBName to the dialog constructor
-            DBConnectDialog dialog = new(mainHandle, process.DBName);
+            // Pass the process's DBName and the process itself (the latter backs the
+            // "App Designer Proxy" connection type) to the dialog constructor
+            DBConnectDialog dialog = new(mainHandle, process.DBName, process);
             dialog.StartPosition = FormStartPosition.CenterParent;
             if (dialog.ShowDialog(handleWrapper) == DialogResult.OK)
             {
@@ -4179,48 +4173,6 @@ namespace AppRefiner
             // Force refresh all editors to allow DB-dependent stylers to run
             RefreshAllEditorsAfterDatabaseConnection();
             RefreshInstancesGrid();
-        }
-
-        /// <summary>
-        /// Builds a <see cref="SqlProxyDataManager"/> over the App Designer process's
-        /// signed-on SAM session via <see cref="SqlProxyDbConnection"/>.
-        /// Safe to call repeatedly; no-ops when already connected or attach is not ready yet.
-        /// </summary>
-        private void TryAttachSqlProxyDataManager(AppDesignerProcess process)
-        {
-            if (process == null || process.DataManager != null)
-            {
-                return;
-            }
-
-            try
-            {
-                var connection = new SqlProxyDbConnection(process);
-                var manager = new SqlProxyDataManager(connection);
-                if (!manager.Connect())
-                {
-                    Debug.Log($"TryAttachSqlProxyDataManager: connect failed for pid {process.ProcessId}: {manager.LastConnectionError}");
-                    manager.Dispose();
-                    return;
-                }
-
-                string? toolsVersion = null;
-                try
-                {
-                    toolsVersion = manager.GetToolsVersion();
-                }
-                catch (Exception ex)
-                {
-                    Debug.Log($"TryAttachSqlProxyDataManager: GetToolsVersion skipped: {ex.Message}");
-                }
-
-                ApplyDatabaseConnection(process, manager, "App Designer SAM proxy", toolsVersion);
-                Debug.Log($"TryAttachSqlProxyDataManager: attached SqlProxyDataManager via SQL proxy for pid {process.ProcessId}");
-            }
-            catch (Exception ex)
-            {
-                Debug.Log($"TryAttachSqlProxyDataManager: failed for pid {process.ProcessId}: {ex.Message}");
-            }
         }
 
         /// <summary>
@@ -5463,10 +5415,6 @@ namespace AppRefiner
                 WatchAppDesignerProcessExit(processId);
                 activeAppDesigner = newProcess;
 
-                // Prefer App Designer SAM session via SQL proxy when hooks can attach;
-                // falls back to no DataManager (user can still connect via DB dialog).
-                TryAttachSqlProxyDataManager(newProcess);
-
                 // App Designer may have been running (with editors open) before AppRefiner
                 // started — subclass and initialize any editors that already exist
                 newProcess.InitExistingEditors();
@@ -5490,8 +5438,6 @@ namespace AppRefiner
                     this.Invoke(() =>
                     {
                         RefreshDbNameFromCaption(newProcess);
-                        // Immediate discovery often runs before sign-on; retry proxy here.
-                        TryAttachSqlProxyDataManager(newProcess);
 
                         // Do NOT prompt unconditionally here: at startup AppRefiner enumerates every
                         // running App Designer while AppRefiner itself is foreground, and the modal
