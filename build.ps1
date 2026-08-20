@@ -191,7 +191,8 @@ function Build-ScintillaMods {
     $branches = @(
         @{ Branch = "4-4-6-mods"; Version = "4.4.6.0"; Project = "SciLexer.vcxproj"; Artifact = "SciLexer.dll" },
         @{ Branch = "5-3-3-mods"; Version = "5.3.3.0"; Project = "Scintilla.vcxproj"; Artifact = "Scintilla.dll" },
-        @{ Branch = "5-5-0-mods"; Version = "5.5.0.0"; Project = "Scintilla.vcxproj"; Artifact = "Scintilla.dll" }
+        @{ Branch = "5-5-0-mods"; Version = "5.5.0.0"; Project = "Scintilla.vcxproj"; Artifact = "Scintilla.dll" },
+        @{ Branch = "5-5-7-mods"; Version = "5.5.7.0"; Project = "Scintilla.vcxproj"; Artifact = "Scintilla.dll" }
     )
 
     $modsDir = Join-Path $DestinationDir "scintilla_mods"
