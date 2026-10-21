@@ -1,3 +1,5 @@
+#if DEBUG
+// Debug-only: a diagnostic for CompletionAnalyzer work, excluded from Release builds.
 using PeopleCodeParser.SelfHosted.Analysis;
 using PeopleCodeParser.SelfHosted.Nodes;
 
@@ -71,3 +73,4 @@ namespace AppRefiner.Linters
         }
     }
 }
+#endif
