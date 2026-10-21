@@ -33,7 +33,7 @@ namespace AppRefiner.Commands.BuiltIn
                         // Centralized path stamps connection metadata + refreshes the grid
                         var mainForm = context.MainForm as MainForm;
                         mainForm?.ApplyDatabaseConnection(
-                            context.ActiveAppDesigner, manager, dialog.ConnectionDescription, dialog.ToolsVersion);
+                            context.ActiveAppDesigner, manager, dialog.ConnectionDescription, dialog.ToolsVersion, dialog.SettingsKey);
                     }
                 }
             }

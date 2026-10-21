@@ -1822,7 +1822,7 @@ namespace AppRefiner
                             var context = CreateCommandContext();
                             commandManager.ExecuteCommand(currentCommand, context);
                         },
-                        currentCommand.DynamicEnabledCheck
+                        () => currentCommand.IsEnabled(CreateCommandContext())
                     )
                     {
                         RequiresActiveEditor = currentCommand.RequiresActiveEditor
@@ -4088,7 +4088,7 @@ namespace AppRefiner
             }
 
             /* If promptForDB is set, lets check if we have a datamanger already? if not, prompt for a db connection */
-            if (chkPromptForDB.Checked && editor.DataManager == null && editor.AppDesignerProcess.DoNotPromptForDB != true)
+            if (chkPromptForDB.Checked && editor.DataManager == null && !editor.AppDesignerProcess.HasAutoPromptedForDB)
             {
                 // ConnectToDB assigns the DataManager to every editor of the process on success
                 ConnectToDB(editor.AppDesignerProcess);
@@ -4114,7 +4114,7 @@ namespace AppRefiner
         /// <param name="process">The App Designer process to offer a connection for</param>
         private void MaybePromptForDbConnection(AppDesignerProcess process)
         {
-            if (process == null || process.DataManager != null || process.DoNotPromptForDB) return;
+            if (process == null || process.DataManager != null || process.HasAutoPromptedForDB) return;
 
             // Caption (and therefore DB name / signed-on state) can change after discovery —
             // e.g. App Designer opened after AppRefiner, then the user signs on.
@@ -4163,6 +4163,10 @@ namespace AppRefiner
         {
             if (process == null) return;
 
+            // The auto-prompt fires once per process, whatever the outcome — after a
+            // deliberate Disconnect DB it must not reopen; connecting again is manual.
+            process.HasAutoPromptedForDB = true;
+
             var mainHandle = process.MainWindowHandle;
             var handleWrapper = new WindowWrapper(mainHandle);
 
@@ -4170,16 +4174,9 @@ namespace AppRefiner
             // "App Designer Proxy" connection type) to the dialog constructor
             DBConnectDialog dialog = new(mainHandle, process.DBName, process);
             dialog.StartPosition = FormStartPosition.CenterParent;
-            if (dialog.ShowDialog(handleWrapper) == DialogResult.OK)
+            if (dialog.ShowDialog(handleWrapper) == DialogResult.OK && dialog.DataManager != null)
             {
-                if (dialog.DataManager != null)
-                {
-                    ApplyDatabaseConnection(process, dialog.DataManager, dialog.ConnectionDescription, dialog.ToolsVersion);
-                }
-            }
-            else
-            {
-                process.DoNotPromptForDB = true;
+                ApplyDatabaseConnection(process, dialog.DataManager, dialog.ConnectionDescription, dialog.ToolsVersion, dialog.SettingsKey);
             }
         }
 
@@ -4189,13 +4186,14 @@ namespace AppRefiner
         /// updates the grid. Shared by every connect path (Instances tab, auto-prompt,
         /// command palette).
         /// </summary>
-        public void ApplyDatabaseConnection(AppDesignerProcess process, IDataManager manager, string? connectionDescription, string? toolsVersion)
+        public void ApplyDatabaseConnection(AppDesignerProcess process, IDataManager manager, string? connectionDescription, string? toolsVersion, string? settingsKey)
         {
             if (process == null || manager == null) return;
 
             process.DataManager = manager;
             process.ConnectionDescription = connectionDescription;
             process.ToolsVersion = toolsVersion;
+            process.ConnectionSettingsKey = settingsKey;
 
             foreach (var editor in process.Editors.Values)
             {
@@ -4228,6 +4226,7 @@ namespace AppRefiner
             process.DataManager = null;
             process.ConnectionDescription = null;
             process.ToolsVersion = null;
+            process.ConnectionSettingsKey = null;
 
             foreach (var editor in process.Editors.Values)
             {
@@ -4356,7 +4355,7 @@ namespace AppRefiner
             dialog.StartPosition = FormStartPosition.CenterParent;
             if (dialog.ShowDialog(handleWrapper) == DialogResult.OK && dialog.DataManager != null)
             {
-                ApplyDatabaseConnection(process, dialog.DataManager, dialog.ConnectionDescription, dialog.ToolsVersion);
+                ApplyDatabaseConnection(process, dialog.DataManager, dialog.ConnectionDescription, dialog.ToolsVersion, dialog.SettingsKey);
             }
         }
 
@@ -5285,6 +5284,7 @@ namespace AppRefiner
                 process.DataManager = null;
                 process.ConnectionDescription = null;
                 process.ToolsVersion = null;
+                process.ConnectionSettingsKey = null;
             }
 
             try

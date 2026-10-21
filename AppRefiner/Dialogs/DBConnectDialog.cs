@@ -12,7 +12,7 @@ namespace AppRefiner.Dialogs
     /// <summary>
     /// Dialog for connecting to a database
     /// </summary>
-    public class DBConnectDialog : Form
+    public class DBConnectDialog : Form, IMessageFilter
     {
         // Data manager that will be created when connection is successful
         public IDataManager? DataManager { get; private set; }
@@ -27,6 +27,12 @@ namespace AppRefiner.Dialogs
         /// PeopleTools version string stamped from GetToolsVersion() on successful connect.
         /// </summary>
         public string? ToolsVersion { get; private set; }
+
+        /// <summary>
+        /// Key the successful connection's settings are saved under (the DB name, or the DB
+        /// service for LDAP), set on DialogResult.OK. Used to forget them later.
+        /// </summary>
+        public string? SettingsKey { get; private set; }
 
         // Class to store database connection settings
         /// <summary>Combo entry for connecting through App Designer's own SAM session.</summary>
@@ -121,6 +127,11 @@ namespace AppRefiner.Dialogs
         private readonly ProgressBar loadingProgressBar;
         private bool isConnecting = false;
         private bool isInitialLoad = true;
+        // Auto-connect waits out a short countdown that any click or key press in the dialog
+        // cancels, so saved settings (e.g. Save Password) can be changed before it connects.
+        private const int AutoConnectDelaySeconds = 3;
+        private System.Windows.Forms.Timer? autoConnectTimer;
+        private int autoConnectSecondsLeft;
         private bool isLoadingConnections;
         // Default DB selection is deferred until the async connection-list load completes
         private readonly string? pendingDefaultDbName;
@@ -490,13 +501,13 @@ namespace AppRefiner.Dialogs
             // Load available DB services from LDAP directory
             if (string.IsNullOrEmpty(ldapServerTextBox.Text))
             {
-                MessageBox.Show("Please enter LDAP Server address first", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                ShowMessage("Please enter LDAP Server address first", "Error");
                 return;
             }
 
             if (string.IsNullOrEmpty(contextTextBox.Text))
             {
-                MessageBox.Show("Please enter LDAP Context first", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                ShowMessage("Please enter LDAP Context first", "Error");
                 return;
             }
 
@@ -521,16 +532,16 @@ namespace AppRefiner.Dialogs
                         }
                     }
                     dbServiceComboBox.SelectedIndex = 0;
-                    MessageBox.Show($"Found {services.Count} database services in LDAP.", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    ShowMessage($"Found {services.Count} database services in LDAP.", "Success");
                 }
                 else
                 {
-                    MessageBox.Show("No database services found in LDAP directory. Please enter DB Service manually.", "Info", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    ShowMessage("No database services found in LDAP directory. Please enter DB Service manually.", "Info");
                 }
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Error loading LDAP services:\n{ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                ShowMessage($"Error loading LDAP services:\n{ex.Message}", "Error");
             }
             finally
             {
@@ -1136,29 +1147,89 @@ namespace AppRefiner.Dialogs
                     // SelectedIndexChanged events during load can't schedule it again
                     isInitialLoad = false;
 
-                    // Let the UI settle, then trigger the connect on the UI thread. The
-                    // continuation runs on a thread-pool thread, so marshal via BeginInvoke.
-                    Task.Delay(1000).ContinueWith(_ =>
-                    {
-                        try
-                        {
-                            if (IsDisposed || !IsHandleCreated)
-                                return;
-
-                            BeginInvoke(new Action(() =>
-                            {
-                                // Skip if the user already started connecting or closed the dialog
-                                if (!isConnecting && !IsDisposed)
-                                {
-                                    ConnectButton_Click(null, EventArgs.Empty);
-                                }
-                            }));
-                        }
-                        catch (ObjectDisposedException) { }
-                        catch (InvalidOperationException) { }
-                    });
+                    StartAutoConnectCountdown();
                 }
             }
+        }
+
+        private void StartAutoConnectCountdown()
+        {
+            autoConnectSecondsLeft = AutoConnectDelaySeconds;
+            UpdateAutoConnectCountdownText();
+
+            autoConnectTimer = new System.Windows.Forms.Timer { Interval = 1000 };
+            autoConnectTimer.Tick += AutoConnectTimer_Tick;
+            autoConnectTimer.Start();
+            Application.AddMessageFilter(this);
+        }
+
+        private void AutoConnectTimer_Tick(object? sender, EventArgs e)
+        {
+            autoConnectSecondsLeft--;
+            if (autoConnectSecondsLeft > 0)
+            {
+                UpdateAutoConnectCountdownText();
+                return;
+            }
+
+            StopAutoConnectCountdown();
+            if (!isConnecting && !IsDisposed)
+            {
+                ConnectButton_Click(null, EventArgs.Empty);
+            }
+        }
+
+        private void UpdateAutoConnectCountdownText()
+        {
+            connectButton.Text = $"Connect ({autoConnectSecondsLeft})";
+            headerLabel.Text = "Connecting with saved settings — click or press a key to cancel";
+        }
+
+        private void StopAutoConnectCountdown()
+        {
+            if (autoConnectTimer == null)
+                return;
+
+            Application.RemoveMessageFilter(this);
+            autoConnectTimer.Stop();
+            autoConnectTimer.Dispose();
+            autoConnectTimer = null;
+
+            connectButton.Text = "Connect";
+            headerLabel.Text = "Database Connection";
+        }
+
+        /// <summary>
+        /// Installed only while the auto-connect countdown runs: any click or key press in
+        /// this dialog cancels it. Never consumes the message, so the input still lands.
+        /// </summary>
+        public bool PreFilterMessage(ref Message m)
+        {
+            const int WM_KEYDOWN = 0x0100, WM_SYSKEYDOWN = 0x0104;
+            const int WM_LBUTTONDOWN = 0x0201, WM_RBUTTONDOWN = 0x0204, WM_MBUTTONDOWN = 0x0207;
+
+            if ((m.Msg is WM_KEYDOWN or WM_SYSKEYDOWN or WM_LBUTTONDOWN or WM_RBUTTONDOWN or WM_MBUTTONDOWN)
+                && Control.FromChildHandle(m.HWnd)?.FindForm() == this)
+            {
+                StopAutoConnectCountdown();
+            }
+
+            return false;
+        }
+
+        protected override void OnFormClosed(FormClosedEventArgs e)
+        {
+            StopAutoConnectCountdown();
+            base.OnFormClosed(e);
+        }
+
+        /// <summary>
+        /// Shows a message owned by this dialog (it is already modal over App Designer, so it
+        /// is the right owner and the message can be shown synchronously).
+        /// </summary>
+        private void ShowMessage(string message, string title)
+        {
+            new MessageBoxDialog(message, title, MessageBoxButtons.OK, Handle).ShowDialog(this);
         }
 
         private void SetConnectingState(bool isConnecting)
@@ -1214,6 +1285,8 @@ namespace AppRefiner.Dialogs
             if (isConnecting)
                 return;
 
+            StopAutoConnectCountdown();
+
             string? dbType = dbTypeComboBox.SelectedItem?.ToString();
             bool isSam = dbType == SamProxyType;
 
@@ -1226,7 +1299,7 @@ namespace AppRefiner.Dialogs
 
             if (string.IsNullOrEmpty(dbType))
             {
-                MessageBox.Show("Please select a database type", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                ShowMessage("Please select a database type", "Error");
                 return;
             }
 
@@ -1237,7 +1310,7 @@ namespace AppRefiner.Dialogs
             // credentials to validate here.
             if (!isSam && (string.IsNullOrEmpty(username) || string.IsNullOrEmpty(password)))
             {
-                MessageBox.Show("Please enter username and password", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                ShowMessage("Please enter username and password", "Error");
                 return;
             }
 
@@ -1254,7 +1327,7 @@ namespace AppRefiner.Dialogs
                     // App Designer process's own signed-on SAM session.
                     if (appDesignerProcess == null)
                     {
-                        MessageBox.Show("No App Designer session is available to proxy through", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                        ShowMessage("No App Designer session is available to proxy through", "Error");
                         return;
                     }
 
@@ -1263,7 +1336,7 @@ namespace AppRefiner.Dialogs
                     // have no key to save settings under.
                     if (string.IsNullOrWhiteSpace(saveKey))
                     {
-                        MessageBox.Show("App Designer is not signed on to a database yet", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                        ShowMessage("App Designer is not signed on to a database yet", "Error");
                         return;
                     }
                 }
@@ -1272,7 +1345,7 @@ namespace AppRefiner.Dialogs
                     // LDAP-specific validation
                     if (string.IsNullOrEmpty(ldapServerTextBox.Text) || string.IsNullOrEmpty(contextTextBox.Text) || string.IsNullOrEmpty(dbServiceComboBox.Text))
                     {
-                        MessageBox.Show("For LDAP connection, please enter LDAP Server, Context, and select DB Service", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                        ShowMessage("For LDAP connection, please enter LDAP Server, Context, and select DB Service", "Error");
                         return;
                     }
 
@@ -1300,7 +1373,7 @@ namespace AppRefiner.Dialogs
                     string @namespace = namespaceTextBox.Text;
                     if (string.IsNullOrEmpty(@namespace))
                     {
-                        MessageBox.Show("Please enter a namespace for Read Only User", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                        ShowMessage("Please enter a namespace for Read Only User", "Error");
                         return;
                     }
 
@@ -1320,7 +1393,7 @@ namespace AppRefiner.Dialogs
                     // Bootstrap connection
                     if (string.IsNullOrEmpty(dbNameComboBox.Text))
                     {
-                        MessageBox.Show("Please select a database name", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                        ShowMessage("Please select a database name", "Error");
                         return;
                     }
 
@@ -1395,6 +1468,8 @@ namespace AppRefiner.Dialogs
                         : $"{mode} as {username.ToUpperInvariant()}";
                 }
 
+                SettingsKey = saveKey;
+
                 // For SAM the checkbox governs whether the choice is remembered at all; an
                 // unremembered SAM connection leaves no saved type, so next launch prompts.
                 if (isSam && !savePasswordCheckBox.Checked)
@@ -1425,7 +1500,7 @@ namespace AppRefiner.Dialogs
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Error connecting to database: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                ShowMessage($"Error connecting to database: {ex.Message}", "Error");
             }
             finally
             {
@@ -1534,7 +1609,7 @@ namespace AppRefiner.Dialogs
         /// <summary>
         /// Loads all saved database connection settings
         /// </summary>
-        private void LoadAllSettings()
+        private static void LoadAllSettings()
         {
             if (savedSettings != null)
                 return;
@@ -1559,7 +1634,7 @@ namespace AppRefiner.Dialogs
         /// <summary>
         /// Saves all database connection settings
         /// </summary>
-        private void SaveAllSettings()
+        private static void SaveAllSettings()
         {
             if (savedSettings == null)
                 return;
@@ -1579,6 +1654,36 @@ namespace AppRefiner.Dialogs
 
             savedSettings[dbName] = new DbConnectionSettings(dbType, isReadOnly, isLdap, ldapServer, context, dbService, ldapDescriptor, username, @namespace, encryptedPassword);
             SaveAllSettings();
+        }
+
+        /// <summary>
+        /// Stops a database from auto-connecting: drops its saved password, or, for a
+        /// remembered App Designer Proxy choice (which has no password), the whole entry.
+        /// Other settings such as username and namespace are kept. Only the given key is
+        /// touched. Returns false when there was nothing saved to forget.
+        /// </summary>
+        public static bool ForgetSavedCredentials(string settingsKey)
+        {
+            LoadAllSettings();
+            if (savedSettings == null || string.IsNullOrEmpty(settingsKey)
+                || !savedSettings.TryGetValue(settingsKey, out var existing))
+                return false;
+
+            if (existing.DbType == SamProxyType)
+            {
+                savedSettings.Remove(settingsKey);
+            }
+            else if (!string.IsNullOrEmpty(existing.EncryptedPassword))
+            {
+                existing.EncryptedPassword = null;
+            }
+            else
+            {
+                return false;
+            }
+
+            SaveAllSettings();
+            return true;
         }
 
         /// <summary>

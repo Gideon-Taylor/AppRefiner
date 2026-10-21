@@ -111,7 +111,7 @@ namespace AppRefiner.Commands
                 }
 
                 // Check dynamic enabled state
-                if (command.DynamicEnabledCheck != null && !command.DynamicEnabledCheck())
+                if (!command.IsEnabled(context))
                 {
                     Debug.Log($"Command {command.CommandName} is currently disabled");
                     return;

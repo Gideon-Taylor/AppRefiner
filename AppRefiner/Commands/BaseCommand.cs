@@ -32,6 +32,13 @@ namespace AppRefiner.Commands
         public virtual Func<bool>? DynamicEnabledCheck => null;
 
         /// <summary>
+        /// Whether the command is enabled in the given context. Defaults to
+        /// <see cref="DynamicEnabledCheck"/>; override when the decision needs the context
+        /// (e.g. whether the active App Designer has a database connection).
+        /// </summary>
+        public virtual bool IsEnabled(CommandContext context) => DynamicEnabledCheck?.Invoke() ?? true;
+
+        /// <summary>
         /// The shortcut text that was successfully registered, or null if no shortcut is registered.
         /// This is set during initialization by the SetRegisteredShortcut method.
         /// </summary>

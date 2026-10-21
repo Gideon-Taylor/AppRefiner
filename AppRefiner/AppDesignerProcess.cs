@@ -153,7 +153,11 @@ namespace AppRefiner
 
         public GeneralSettingsData Settings {  get; set; }
 
-        public bool DoNotPromptForDB { get; set; }
+        /// <summary>
+        /// Set once the "prompt for DB" auto-connect dialog has been shown for this process,
+        /// so it never reopens on its own (e.g. after the user disconnects deliberately).
+        /// </summary>
+        public bool HasAutoPromptedForDB { get; set; }
         public string DBName { get; internal set; }
 
         /// <summary>
@@ -161,6 +165,12 @@ namespace AppRefiner
         /// Stamped on successful connect, cleared on disconnect. Null when not connected.
         /// </summary>
         public string? ConnectionDescription { get; set; }
+
+        /// <summary>
+        /// Key the active connection's settings are saved under in DBConnectDialog, so they
+        /// can be forgotten for this connection only. Null when not connected.
+        /// </summary>
+        public string? ConnectionSettingsKey { get; set; }
 
         /// <summary>
         /// PeopleTools version captured once at connect time (never re-queried). Null when
