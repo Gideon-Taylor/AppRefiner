@@ -123,6 +123,13 @@ namespace AppRefiner
         }
     }
 
+    /// <summary>
+    /// A cached event mapping annotation, kept so it can be re-applied after an
+    /// annotation-clearing pass. Top-anchored annotations keep their absolute line;
+    /// bottom-anchored ones are re-applied to whatever the last line currently is.
+    /// </summary>
+    public record EventMapAnnotation(int Line, string Text, bool IsBottomAnchored);
+
     public class ScintillaEditor
     {
         // Note: P/Invoke declarations moved to WinApi.cs for centralized access
@@ -132,6 +139,13 @@ namespace AppRefiner
 
         public IntPtr hWnd;
         public EventMapInfo? EventMapInfo = null;
+
+        /// <summary>
+        /// Event mapping annotations currently applied to this editor. ClearAnnotations
+        /// wipes every annotation in the document, so content-change passes re-apply
+        /// these afterward; cleared when the editor is reused for a different program.
+        /// </summary>
+        public readonly List<EventMapAnnotation> EventMapAnnotations = new();
         public string ClassPath = string.Empty;
         private string? _caption = null;
         public bool ExpectingSavePoint { get; set; }
@@ -213,6 +227,9 @@ namespace AppRefiner
                 // If the caption has actually changed, raise the event *after* all other logic.
                 if (hasChanged)
                 {
+                    // Editor now holds a different program — its event mapping annotations
+                    // no longer apply and must not be re-applied by content-change passes.
+                    EventMapAnnotations.Clear();
                     OnCaptionChanged(new CaptionChangedEventArgs(previousCaption, _caption));
                 }
             }

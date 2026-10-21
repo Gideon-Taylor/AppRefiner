@@ -1558,11 +1558,38 @@ namespace AppRefiner
             }
 
             // Note: No memory freeing needed - shared buffers persist and are reused.
+
+            // Event mapping annotations describe the program, not its current text, so
+            // they survive every clear (content changes, lint runs, Clear Annotations).
+            ReapplyEventMapAnnotations(editor);
+        }
+
+        /// <summary>
+        /// Re-applies the editor's cached event mapping annotations after
+        /// SCI_ANNOTATIONCLEARALL has wiped every annotation in the document.
+        /// </summary>
+        private static void ReapplyEventMapAnnotations(ScintillaEditor editor)
+        {
+            foreach (var annotation in editor.EventMapAnnotations)
+            {
+                SetAnnotation(editor, GetEventMapAnnotationLine(editor, annotation), annotation.Text, AnnotationStyle.Gray);
+            }
+        }
+
+        /// <summary>
+        /// The line an event mapping annotation currently belongs on. Top-anchored
+        /// annotations keep their original line; the bottom-anchored one follows
+        /// whatever the last line currently is.
+        /// </summary>
+        internal static int GetEventMapAnnotationLine(ScintillaEditor editor, EventMapAnnotation annotation)
+        {
+            return annotation.IsBottomAnchored ? GetLineCount(editor) - 1 : annotation.Line;
         }
 
         /// <summary>
         /// Sets multiple annotations on a single line with different styles per annotation.
         /// Each character in the combined annotation text can have its own style.
+        /// Entries are written as given, one per line; callers add any prefix they want.
         /// </summary>
         /// <param name="editor">The Scintilla editor instance</param>
         /// <param name="annotations">List of annotation strings to combine</param>
@@ -1577,30 +1604,27 @@ namespace AppRefiner
 
             try
             {
-                // First construct complete strings with prefixes to match exact byte layout
-                var formattedAnnotations = annotations.Select(a => $"^^ {a}").ToList();
-                var combinedText = string.Join("\n", formattedAnnotations);
+                var combinedText = string.Join("\n", annotations);
                 var neededSize = Encoding.Default.GetByteCount(combinedText) + 1; // +1 for the null terminator
 
                 // Create style bytes array matching exact text bytes length
                 var styleBytes = new byte[neededSize];
                 int currentPos = 0;
 
-                // Fill style bytes array for each formatted annotation including prefix and newline
-                for (int i = 0; i < formattedAnnotations.Count; i++)
+                // Fill style bytes array for each annotation including its separating newline
+                for (int i = 0; i < annotations.Count; i++)
                 {
-                    var annotationWithPrefix = formattedAnnotations[i];
-                    var bytesForThisLine = Encoding.Default.GetByteCount(annotationWithPrefix);
+                    var bytesForThisLine = Encoding.Default.GetByteCount(annotations[i]);
                     var styleValue = (byte)(int)styles[i];
 
-                    // Style all bytes for this line including prefix
+                    // Style all bytes for this annotation
                     for (int j = 0; j < bytesForThisLine; j++)
                     {
                         styleBytes[currentPos++] = styleValue;
                     }
 
                     // Add style for newline character if not the last annotation
-                    if (i < formattedAnnotations.Count - 1)
+                    if (i < annotations.Count - 1)
                     {
                         styleBytes[currentPos++] = styleValue;
                     }

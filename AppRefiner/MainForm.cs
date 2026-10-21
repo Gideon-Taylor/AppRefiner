@@ -2177,6 +2177,9 @@ namespace AppRefiner
                     // wipe them, so only clear when the content actually changed.
                     if (editor.ContentDirty)
                     {
+                        // Event mapping annotations are re-applied by ClearAnnotations, so they
+                        // survive this pass — including the content change ProcessEventMapping
+                        // itself makes when inserting its host lines.
                         ScintillaManager.ClearAnnotations(editor);
                     }
                     ScintillaManager.ResetStyles(editor);
@@ -3962,6 +3965,13 @@ namespace AppRefiner
             var checkForEventMapping = chkEventMapping.Checked;
             var checkForEventMapXrefs = chkEventMapXrefs.Checked;
             Debug.Log($"Event map info: {activeEditor.EventMapInfo}");
+
+            activeEditor.EventMapAnnotations.Clear();
+
+            string? preText = null;
+            string? postText = null;
+            string? xrefText = null;
+
             if (checkForEventMapping && activeEditor.EventMapInfo != null)
             {
                 var showClassText = optClassText.Checked;
@@ -3977,51 +3987,71 @@ namespace AppRefiner
 
                 Debug.Log($"Pre items: {preItems.Count}, Post items: {postItems.Count}, Override items: {overrideItems.Count}");
 
-                Debug.Log($"Inserting event mapping information...");
                 if (overrideItems.Count + preItems.Count > 0)
                 {
-                    ScintillaManager.InsertTextAtLocation(activeEditor, 0, "\n");
-                    var preText = FormatPrefixText(activeEditor, overrideItems, preItems, showClassText);
-                    ScintillaManager.SetAnnotation(activeEditor, 0, preText, AnnotationStyle.Gray);
+                    preText = FormatPrefixText(activeEditor, overrideItems, preItems, showClassText);
                 }
-
 
                 if (postItems.Count > 0)
                 {
-                    Debug.Log($"Inserting event mapping information:");
-                    var lineCount = ScintillaManager.GetLineCount(activeEditor);
-                    var postText = FormatPostfixText(activeEditor, postItems, showClassText);
-                    ScintillaManager.SetAnnotation(activeEditor, lineCount - 1, postText, AnnotationStyle.Gray);
+                    postText = FormatPostfixText(activeEditor, postItems, showClassText);
                 }
-
             }
 
-            if (checkForEventMapXrefs)
+            if (checkForEventMapXrefs && activeEditor.ClassPath != string.Empty)
             {
-                if (activeEditor.ClassPath != string.Empty)
+                var xrefs = activeEditor.DataManager.GetEventMapXrefs(activeEditor.ClassPath);
+                var groups = xrefs.GroupBy(x => x.ContentReference);
+
+                if (xrefs.Count > 0)
                 {
-                    var xrefs = activeEditor.DataManager.GetEventMapXrefs(activeEditor.ClassPath);
-                    var groups = xrefs.GroupBy(x => x.ContentReference);
+                    StringBuilder sb = new();
+                    sb.Append("Event Mapping Xrefs:\n");
 
-                    if (xrefs.Count > 0)
+                    foreach (var g in groups)
                     {
-                        StringBuilder sb = new();
-                        sb.Append("Event Mapping Xrefs:\n");
-
-                        foreach (var g in groups)
+                        sb.Append($"Content Reference: {g.Key}\n");
+                        foreach (var xref in g)
                         {
-                            sb.Append($"Content Reference: {g.Key}\n");
-                            foreach (var xref in g)
-                            {
-                                sb.Append($"  {xref}\n");
-                            }
+                            sb.Append($"  {xref}\n");
                         }
-
-                        ScintillaManager.InsertTextAtLocation(activeEditor, 0, "\n");
-                        ScintillaManager.SetAnnotation(activeEditor, 0, sb.ToString(), AnnotationStyle.Gray);
                     }
+
+                    xrefText = sb.ToString();
                 }
             }
+
+            // Top annotations in final display order: xrefs above the pre/override block.
+            List<string> topTexts = new();
+            if (xrefText != null) topTexts.Add(xrefText);
+            if (preText != null) topTexts.Add(preText);
+
+            if (topTexts.Count > 0 || postText != null)
+            {
+                Debug.Log("Inserting event mapping information...");
+            }
+
+            // Insert one blank host line per top annotation, then annotate those lines.
+            // Cache each annotation on the editor: the insertions themselves mark content
+            // dirty, and the follow-up content-change pass clears all annotations before
+            // re-applying the cached ones (see CheckForContentChanges).
+            for (var i = 0; i < topTexts.Count; i++)
+            {
+                ScintillaManager.InsertTextAtLocation(activeEditor, 0, "\n");
+            }
+            for (var i = 0; i < topTexts.Count; i++)
+            {
+                ScintillaManager.SetAnnotation(activeEditor, i, topTexts[i], AnnotationStyle.Gray);
+                activeEditor.EventMapAnnotations.Add(new EventMapAnnotation(i, topTexts[i], IsBottomAnchored: false));
+            }
+
+            if (postText != null)
+            {
+                var lineCount = ScintillaManager.GetLineCount(activeEditor);
+                ScintillaManager.SetAnnotation(activeEditor, lineCount - 1, postText, AnnotationStyle.Gray);
+                activeEditor.EventMapAnnotations.Add(new EventMapAnnotation(lineCount - 1, postText, IsBottomAnchored: true));
+            }
+
             if (editorCleanState)
             {
                 Debug.Log("Resetting save point");

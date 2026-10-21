@@ -287,7 +287,7 @@ namespace AppRefiner
 
                 foreach (var report in g)
                 {
-                    messages.Add($"{report.Message} ({report.GetFullId()})");
+                    messages.Add($"^^ {report.Message} ({report.GetFullId()})");
                     styles.Add(report.Type switch
                     {
                         ReportType.Error => AnnotationStyle.Red,
@@ -297,7 +297,17 @@ namespace AppRefiner
                     });
                 }
 
-                ScintillaManager.SetAnnotations(activeEditor, messages, g.First().Line, styles);
+                // A line holds only one annotation, so carry along any event mapping text
+                // on this line instead of letting the lint messages replace it.
+                var line = g.First().Line;
+                foreach (var eventMap in activeEditor.EventMapAnnotations
+                    .Where(a => ScintillaManager.GetEventMapAnnotationLine(activeEditor, a) == line))
+                {
+                    messages.Add(eventMap.Text);
+                    styles.Add(AnnotationStyle.Gray);
+                }
+
+                ScintillaManager.SetAnnotations(activeEditor, messages, line, styles);
             }
         }
 
