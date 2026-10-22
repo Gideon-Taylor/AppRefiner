@@ -29,6 +29,11 @@ jobs:
       - name: Setup MSBuild
         uses: microsoft/setup-msbuild@v1.1
 
+      # build.ps1 builds the Scintilla mod branches from a sibling ..\Scintilla checkout
+      - name: Clone Scintilla mods
+        run: git clone https://github.com/Gideon-Taylor/Scintilla.git "${{ github.workspace }}\..\Scintilla"
+        shell: pwsh
+
       - name: Decode strong name key
         run: |
           $keyBytes = [System.Convert]::FromBase64String("${{ secrets.STRONG_NAME_KEY }}")
