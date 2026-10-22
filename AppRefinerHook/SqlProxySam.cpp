@@ -1,4 +1,5 @@
 #include "SqlProxySam.h"
+#include "SqlProxySqlPolicy.h"
 #include <windows.h>
 #include <cstring>
 #include <vector>
@@ -432,46 +433,11 @@ bool BuildColumnsFromSpecs(const std::vector<ColumnSpec>& specs, uint32_t defaul
 
 } // namespace
 
-bool IsSelectOnly(const std::wstring& sql) {
-    size_t i = 0;
-    while (i < sql.size()) {
-        const wchar_t ch = sql[i];
-        if (ch != L' ' && ch != L'\t' && ch != L'\r' && ch != L'\n') {
-            break;
-        }
-        ++i;
-    }
-
-    static const wchar_t kSelect[] = L"SELECT";
-    constexpr size_t kLen = 6;
-    if (sql.size() - i < kLen) {
-        return false;
-    }
-
-    for (size_t c = 0; c < kLen; ++c) {
-        const wchar_t a = sql[i + c];
-        const wchar_t b = kSelect[c];
-        const wchar_t al = (a >= L'A' && a <= L'Z') ? static_cast<wchar_t>(a - L'A' + L'a') : a;
-        const wchar_t bl = (b >= L'A' && b <= L'Z') ? static_cast<wchar_t>(b - L'A' + L'a') : b;
-        if (al != bl) {
-            return false;
-        }
-    }
-
-    if (sql.size() - i == kLen) {
-        return true;
-    }
-
-    const wchar_t next = sql[i + kLen];
-    return next == L' ' || next == L'\t' || next == L'\r' || next == L'\n' || next == L'(';
-}
-
 ExecResult ExecuteSelect(const ExecRequest& request) {
     ExecResult result;
 
-    if (!IsSelectOnly(request.sql)) {
+    if (!IsAllowedSelect(request.sql, &result.errorMessage)) {
         result.status = Status::Rejected;
-        result.errorMessage = L"Only SELECT statements are allowed";
         return result;
     }
 

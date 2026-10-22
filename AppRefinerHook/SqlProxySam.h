@@ -52,8 +52,6 @@ struct ExecResult {
     std::vector<CellValue> cells; // row-major
 };
 
-bool IsSelectOnly(const std::wstring& sql);
-
 // Must run on App Designer UI thread only.
 ExecResult ExecuteSelect(const ExecRequest& request);
 

@@ -160,6 +160,7 @@
     <ClInclude Include="SqlProxyProtocol.h" />
     <ClInclude Include="SqlProxyIpc.h" />
     <ClInclude Include="SqlProxySam.h" />
+    <ClInclude Include="SqlProxySqlPolicy.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="AutoIndent.cpp" />
@@ -173,6 +174,7 @@
     <ClCompile Include="ScintillaUtils.cpp" />
     <ClCompile Include="SqlProxyIpc.cpp" />
     <ClCompile Include="SqlProxySam.cpp" />
+    <ClCompile Include="SqlProxySqlPolicy.cpp" />
   </ItemGroup>
   <ItemGroup>
     <Text Include="License.txt" />

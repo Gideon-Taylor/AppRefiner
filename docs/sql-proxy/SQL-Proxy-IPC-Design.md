@@ -52,7 +52,7 @@ This document locks the **IPC foundation and protocol**. Implementation of the f
 1. **Pipe = only request ingress.** Only data read from the AppRefiner-owned anonymous pipe ends may create work items.
 2. **In-process queue = only `Sam*` input.** Work items live in hook-private heap under a lock; not in `WPARAM`/`LPARAM`.
 3. **UI message = scheduling only.** e.g. `PostThreadMessage(WM_AR_SQLPROXY_PUMP)` means “dequeue and run pending items,” never “here is SQL.”
-4. **SELECT-only.** After trim of leading whitespace, SQL must start with `SELECT` (case-insensitive) or the command fails with no SAM call.
+4. **SELECT-only.** SQL must pass the read-only `SELECT` policy in section 8 or the command fails with no SAM call.
 5. **No `SamOpen` / `SamClose`.** Cursor-only: `SamCreate` / `SamDestroy` with default session (`pParms == NULL`).
 
 ### 3.3 Same-user ceiling
@@ -285,14 +285,19 @@ Payloads use sequential length-prefixed fields. Exact packing is fixed at implem
 
 ### 8.1 Rule
 
-Before any `SamCreate`:
+Implemented by `IsAllowedSelect` in `AppRefinerHook/SqlProxySqlPolicy.cpp`. Before any `SamCreate`, the request is set to **`Rejected`** (with the failing rule in the error message) and no SAM API is called unless all of these hold:
 
-1. Take the SQL string from the request.
-2. Trim leading whitespace (space, tab, CR, LF).
-3. If the remaining text does **not** start with `SELECT` when compared **case-insensitively** as a whole-word prefix of the first token (`SELECT` followed by end or whitespace), set status **`Rejected`** and return.
-4. Do not call any SAM API for that request.
+1. After leading whitespace (space, tab, CR, LF), the first word is `SELECT` (case-insensitive, whole word; `SELECT(` is allowed).
+2. The SQL contains no NUL character.
+3. Scanning outside `'string literals'` (with `''` escapes) and `"quoted identifiers"`:
+   - no `;` (no statement batches);
+   - no `--` or `/* */` comments (they could hide a quote and throw the scan out of step);
+   - no Oracle `q'…'` alternative quoting and no SQL Server `[bracketed]` identifiers, which the scan cannot track the same way the database does;
+   - every literal and quoted identifier is closed;
+   - no denied keyword as a whole word: data changes and DDL (`INSERT`, `UPDATE`, `DELETE`, `MERGE`, `UPSERT`, `INTO`, `TRUNCATE`, `CREATE`, `ALTER`, `DROP`, `RENAME`, `GRANT`, `REVOKE`), procedural code and transactions (`EXEC`, `EXECUTE`, `CALL`, `BEGIN`, `DECLARE`, `SET`, `USE`, `COMMIT`, `ROLLBACK`, `SAVEPOINT`, `LOCK`), and SQL Server administration and pass-through (`DBCC`, `BACKUP`, `RESTORE`, `SHUTDOWN`, `KILL`, `WAITFOR`, `BULK`, `OPENROWSET`, `OPENQUERY`, `OPENDATASOURCE`, `OPENXML`). `UPDATE` also covers `SELECT … FOR UPDATE`; `INTO` covers SQL Server `SELECT … INTO`.
+4. Every Meta-SQL name after `%` is on a read-only allow-list (`%Table`, `%Upper`, `%Concat`, `%Substring`, `%Coalesce`, `%Round`, `%Cast`, `%TextIn`, `%NumToChar`, the date/time `In`/`Out` and `Current…` conversions, `%DatePart`, `%TimePart`, `%DateAdd`, `%DateDiff`). SAM expands Meta-SQL after this check, so constructs such as `%SQL` or `%InsertSelect` could otherwise bring in SQL that was never checked. A bare `%` (SQL Server modulo) is allowed.
 
-Recommended check: after left-trim, require `SELECT` case-insensitive match on the first six characters **and** (length == 6 or character 7 is whitespace). This rejects `SELECTFOO` as a single token abuse while allowing `SELECT * …`.
+The check is deliberately conservative: it rejects what it cannot reason about rather than parsing SQL fully. It does not stop a `SELECT` from calling a database function that has side effects. App Designer's session is signed on as the bootstrap user, so this gate is the main protection against data changes.
 
 ### 8.2 Rationale
 
