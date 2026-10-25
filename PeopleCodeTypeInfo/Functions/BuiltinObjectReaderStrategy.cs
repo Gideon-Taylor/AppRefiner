@@ -139,7 +139,8 @@ public class BuiltinObjectReaderStrategy : VariableSizeReaderStrategy<BuiltinObj
             Name = "", // Name will be set externally or derived from hash
             IsDefaultMethod = isDefault,
             IsProperty = isProperty,
-            IsOptionalReturn = isOptionalReturn
+            IsOptionalReturn = isOptionalReturn,
+            IsBuiltin = true
         };
 
         // Read return type information

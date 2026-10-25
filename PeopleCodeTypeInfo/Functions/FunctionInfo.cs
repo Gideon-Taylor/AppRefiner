@@ -66,6 +66,12 @@ public class FunctionInfo
     public List<TypeWithDimensionality>? ReturnUnionTypes { get; set; } = null;
 
     /// <summary>
+    /// True when read from typeinfo.dat (builtin functions and builtin object methods).
+    /// User functions and app class methods leave this false.
+    /// </summary>
+    public bool IsBuiltin { get; set; } = false;
+
+    /// <summary>
     /// Whether this is a default method (can be called without the method name)
     /// Indicated by *default* prefix in signatures
     /// </summary>

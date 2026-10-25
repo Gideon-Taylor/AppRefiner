@@ -282,7 +282,12 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
             returnType = ConvertTypeWithDimensionalityToTypeInfo(func.ReturnType);
         }
 
-        // Specialize Record/Field returns from @RECORD / @FIELD arguments (and receiver context)
+        // User functions and app class methods return what they declare; argument naming is
+        // only meaningful for builtins whose @RECORD / @FIELD parameters select the definition.
+        if (!func.IsBuiltin)
+            return returnType;
+
+        // Specialize builtin Record/Field returns from @RECORD / @FIELD arguments (and receiver context)
         // e.g. CreateRecord(Record.FOO) → record(FOO), &rec.GetField(Field.BAR) → field(REC.BAR)
         // Also: GetField("OPRID"), CreateRecord(@("Record.NAME"))
         return SpecializeNamedInstanceReturn(returnType, objectType, parameterTypes, argumentNodes);

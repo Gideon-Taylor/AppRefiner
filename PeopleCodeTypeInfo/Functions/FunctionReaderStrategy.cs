@@ -48,7 +48,8 @@ public class FunctionReaderStrategy : VariableSizeReaderStrategy<FunctionInfo>
             Name = "", // Name will be set externally by hash table
             IsDefaultMethod = isDefault,
             IsProperty = isProperty,
-            IsOptionalReturn = isOptionalReturn
+            IsOptionalReturn = isOptionalReturn,
+            IsBuiltin = true
         };
 
         // Read return type information
