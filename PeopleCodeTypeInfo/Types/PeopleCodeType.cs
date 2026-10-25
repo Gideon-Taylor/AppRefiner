@@ -97,6 +97,26 @@ public abstract class TypeInfo
     public bool IsAutoDeclared { get; init; } = false;
 
     /// <summary>
+    /// Set when this expression is a buffer field reference (bare REC.FIELD, or a bare FIELD in
+    /// record PeopleCode). The type itself stays the field's data type; this marker additionally
+    /// lets the expression satisfy field-name parameters (signature prefix '*'). Like IsAssignable,
+    /// it does NOT propagate through expressions, variables, or call results.
+    /// </summary>
+    public BufferFieldReference? BufferField { get; private set; }
+
+    /// <summary>
+    /// Returns a new TypeInfo instance carrying the given buffer field reference (or none).
+    /// If the value is the same as the current value, returns this instance.
+    /// </summary>
+    public TypeInfo WithBufferField(BufferFieldReference? bufferField)
+    {
+        if (BufferField == bufferField) return this;
+        var clone = CloneWithState(isAssignable: IsAssignable, isAutoDeclared: IsAutoDeclared);
+        clone.BufferField = bufferField;
+        return clone;
+    }
+
+    /// <summary>
     /// Creates a shallow copy of this TypeInfo instance with optional state modifications.
     /// Subclasses must implement this to support the immutable builder pattern.
     /// </summary>
@@ -109,7 +129,9 @@ public abstract class TypeInfo
     public TypeInfo WithAssignable(bool isAssignable)
     {
         if (IsAssignable == isAssignable) return this;
-        return CloneWithState(isAssignable: isAssignable, isAutoDeclared: IsAutoDeclared);
+        var clone = CloneWithState(isAssignable: isAssignable, isAutoDeclared: IsAutoDeclared);
+        clone.BufferField = BufferField;
+        return clone;
     }
 
     /// <summary>
@@ -119,7 +141,9 @@ public abstract class TypeInfo
     public TypeInfo WithAutoDeclared(bool isAutoDeclared)
     {
         if (IsAutoDeclared == isAutoDeclared) return this;
-        return CloneWithState(isAssignable: IsAssignable, isAutoDeclared: isAutoDeclared);
+        var clone = CloneWithState(isAssignable: IsAssignable, isAutoDeclared: isAutoDeclared);
+        clone.BufferField = BufferField;
+        return clone;
     }
 
     /// <summary>
@@ -1749,10 +1773,11 @@ public class ReferenceTypeInfo : TypeInfo
         return type;
     }
 
+    // MARKET is deliberately absent: the compiler parses Market.GBL as REC.FIELD (use "GBL" / %Market).
     private static readonly HashSet<string> SpecialReferenceKeywords = new(StringComparer.OrdinalIgnoreCase)
     {
         "ANALYTICMODEL", "BARNAME", "BUSACTIVITY", "BUSEVENT", "BUSPROCESS", "COMPINTFC", "COMPONENT",
-        "FIELD", "FILELAYOUT", "HTML", "IMAGE", "INTERLINK", "ITEMNAME", "MARKET", "MENUNAME",
+        "FIELD", "FILELAYOUT", "HTML", "IMAGE", "INTERLINK", "ITEMNAME", "MENUNAME",
         "MESSAGE", "NODE", "OPERATION", "PACKAGE", "PAGE", "PANEL", "PANELGROUP", "PORTAL",
         "RECORD", "SCROLL", "SQL", "STYLESHEET", "URL"
     };

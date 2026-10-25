@@ -433,6 +433,16 @@ public class FunctionCallValidator
 
                 foreach (var t in union.AllowedTypes)
                 {
+                    if (t.MustBeFieldName)
+                    {
+                        if (MatchFieldNameArgument(t, arg) == FieldNameMatch.Accepted)
+                        {
+                            consumed = 1;
+                            return PrefixMatchResult.Completed;
+                        }
+                        continue;
+                    }
+
                     // Handle reference types
                     if (t.IsReference)
                     {
@@ -1020,6 +1030,24 @@ public class FunctionCallValidator
         // Reuse TypeNode acceptance logic equivalently
         var expected = single.ParameterType;
 
+        if (expected.MustBeFieldName)
+        {
+            switch (MatchFieldNameArgument(expected, arg))
+            {
+                case FieldNameMatch.Accepted:
+                    ctx.RecordMapping(argIndex, single);
+                    consumed = 1;
+                    return true;
+                case FieldNameMatch.NotAFieldName:
+                    ctx.RecordError(argIndex, "Field name required");
+                    ctx.RecordTypeMismatch(argIndex, single);
+                    return false;
+                default:
+                    ctx.RecordTypeMismatch(argIndex, single);
+                    return false;
+            }
+        }
+
         // Check if parameter requires variable but argument is not assignable
         if (expected.MustBeVariable && !arg.IsAssignable)
         {
@@ -1142,6 +1170,15 @@ public class FunctionCallValidator
             if (t.MustBeVariable && !arg.IsAssignable)
             {
                 continue; // Skip this alternative
+            }
+
+            if (t.MustBeFieldName)
+            {
+                if (MatchFieldNameArgument(t, arg) != FieldNameMatch.Accepted)
+                    continue;
+                ctx.RecordMapping(argIndex, union);
+                consumed = 1;
+                return true;
             }
 
             // Handle reference types
@@ -1399,6 +1436,9 @@ public class FunctionCallValidator
                 {
                     var expected = single.ParameterType;
 
+                    if (expected.MustBeFieldName)
+                        return MatchFieldNameArgument(expected, arg) == FieldNameMatch.Accepted;
+
                     // Handle reference types
                     if (expected.IsReference)
                     {
@@ -1455,6 +1495,13 @@ public class FunctionCallValidator
                 {
                     foreach (var t in union.AllowedTypes)
                     {
+                        if (t.MustBeFieldName)
+                        {
+                            if (MatchFieldNameArgument(t, arg) == FieldNameMatch.Accepted)
+                                return true;
+                            continue;
+                        }
+
                         // Handle reference types
                         if (t.IsReference)
                         {
@@ -1529,6 +1576,48 @@ public class FunctionCallValidator
             default:
                 return false;
         }
+    }
+
+    private enum FieldNameMatch
+    {
+        Accepted,
+        NotAFieldName,
+        WrongDataType
+    }
+
+    /// <summary>
+    /// Field-name parameters ('*' prefix), per compiler behavior:
+    /// - Field.X is accepted and not data-type checked; a dynamic @(...) can't be checked statically
+    /// - a buffer field reference (BufferField marker) is accepted when its data type fits the slot
+    /// - anything else (variables, Field objects, literals, expressions) is not a field name
+    /// Unresolved (Unknown) arguments are accepted, matching the validator's runtime-decides policy.
+    /// </summary>
+    private static FieldNameMatch MatchFieldNameArgument(TypeWithDimensionality expected, TypeInfo arg)
+    {
+        if (arg is ReferenceTypeInfo reference)
+        {
+            return reference.ReferenceCategory is PeopleCodeType.Field or PeopleCodeType.Any
+                ? FieldNameMatch.Accepted
+                : FieldNameMatch.NotAFieldName;
+        }
+
+        if (arg.BufferField == null)
+        {
+            return arg.PeopleCodeType == PeopleCodeType.Unknown
+                ? FieldNameMatch.Accepted
+                : FieldNameMatch.NotAFieldName;
+        }
+
+        // Field data type unknown, or the slot takes any data type
+        if (expected.Type is PeopleCodeType.Any or PeopleCodeType.AppClass || expected.Type.IsPolymorphic() ||
+            arg.Kind is TypeKind.Any or TypeKind.Unknown)
+        {
+            return FieldNameMatch.Accepted;
+        }
+
+        return TypeInfo.FromPeopleCodeType(expected.Type).IsAssignableFrom(arg)
+            ? FieldNameMatch.Accepted
+            : FieldNameMatch.WrongDataType;
     }
 
     /// <summary>
@@ -1735,6 +1824,13 @@ public class FunctionCallValidator
         /// </summary>
         private static string FormatType(TypeWithDimensionality t)
         {
+            if (t.MustBeFieldName)
+            {
+                return t.Type == PeopleCodeType.Any
+                    ? "a field name"
+                    : $"a {t.Type.GetTypeName()} field name";
+            }
+
             var s = t.ToString();
             if (s.StartsWith("@"))
             {

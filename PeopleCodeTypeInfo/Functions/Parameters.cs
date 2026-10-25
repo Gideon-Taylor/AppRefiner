@@ -72,14 +72,16 @@ public struct TypeWithDimensionality : IEquatable<TypeWithDimensionality>
     public string? AppClassPath { get; set; } // For AppClass types: "PACKAGE:Class", "PACKAGE:SubPackage:Class", etc.
     public bool IsReference { get; set; } // True for references (@RECORD, @FIELD), false for instances
     public bool MustBeVariable { get; set; } // True when caller must pass a variable (not a literal), indicated by & prefix
+    public bool MustBeFieldName { get; set; } // True when caller must pass a field name (REC.FIELD / Field.X), indicated by * prefix
 
-    public TypeWithDimensionality(PeopleCodeType type, byte arrayDimensionality = 0, string? appClassPath = null, bool isReference = false, bool mustBeVariable = false)
+    public TypeWithDimensionality(PeopleCodeType type, byte arrayDimensionality = 0, string? appClassPath = null, bool isReference = false, bool mustBeVariable = false, bool mustBeFieldName = false)
     {
         Type = type;
         ArrayDimensionality = arrayDimensionality;
         AppClassPath = appClassPath;
         IsReference = isReference;
         MustBeVariable = mustBeVariable;
+        MustBeFieldName = mustBeFieldName;
     }
 
     public bool IsArray => ArrayDimensionality > 0;
@@ -93,9 +95,10 @@ public struct TypeWithDimensionality : IEquatable<TypeWithDimensionality>
         ArrayDimensionality == other.ArrayDimensionality &&
         AppClassPath == other.AppClassPath &&
         IsReference == other.IsReference &&
-        MustBeVariable == other.MustBeVariable;
+        MustBeVariable == other.MustBeVariable &&
+        MustBeFieldName == other.MustBeFieldName;
 
-    public override int GetHashCode() => HashCode.Combine(Type, ArrayDimensionality, AppClassPath, IsReference, MustBeVariable);
+    public override int GetHashCode() => HashCode.Combine(Type, ArrayDimensionality, AppClassPath, IsReference, MustBeVariable, MustBeFieldName);
 
     public static bool operator ==(TypeWithDimensionality left, TypeWithDimensionality right) => left.Equals(right);
     public static bool operator !=(TypeWithDimensionality left, TypeWithDimensionality right) => !left.Equals(right);
@@ -106,10 +109,12 @@ public struct TypeWithDimensionality : IEquatable<TypeWithDimensionality>
             ? AppClassPath
             : Type.GetTypeName();
 
-        // Build the result starting with optional & prefix
+        // Build the result starting with optional & / * prefixes
         var result = new StringBuilder();
         if (MustBeVariable)
             result.Append('&');
+        if (MustBeFieldName)
+            result.Append('*');
 
         // Handle reference types with @ prefix
         if (IsReference)
@@ -152,8 +157,10 @@ public struct TypeWithDimensionality : IEquatable<TypeWithDimensionality>
 
     /// <summary>
     /// Parse a type string that may include AppClass paths like "PACKAGE:Class",
-    /// reference types like "@FIELD", must-be-variable indicator "&", and array dimensionality via leading "array_" prefixes.
-    /// Preserves the reference flag indicated by the '@' prefix and mustBeVariable flag indicated by '&' prefix.
+    /// reference types like "@FIELD", must-be-variable indicator "&", must-be-field-name indicator "*",
+    /// and array dimensionality via leading "array_" prefixes.
+    /// Preserves the reference flag indicated by the '@' prefix, mustBeVariable flag indicated by '&' prefix,
+    /// and mustBeFieldName flag indicated by '*' prefix ("*string" = a field name whose data is string).
     /// </summary>
     public static TypeWithDimensionality Parse(string typeStr)
     {
@@ -165,6 +172,14 @@ public struct TypeWithDimensionality : IEquatable<TypeWithDimensionality>
         if (typeStr.StartsWith("&"))
         {
             mustBeVariable = true;
+            typeStr = typeStr.Substring(1).Trim();
+        }
+
+        // Detect must-be-field-name '*' (REC.FIELD / Field.X) and strip it
+        bool mustBeFieldName = false;
+        if (typeStr.StartsWith("*"))
+        {
+            mustBeFieldName = true;
             typeStr = typeStr.Substring(1).Trim();
         }
 
@@ -188,12 +203,12 @@ public struct TypeWithDimensionality : IEquatable<TypeWithDimensionality>
         if (typeStr.Contains(':'))
         {
             // AppClass references are not expected; treat as regular AppClass
-            return new TypeWithDimensionality(PeopleCodeType.AppClass, arrayDimensionality, typeStr, isReference: false, mustBeVariable);
+            return new TypeWithDimensionality(PeopleCodeType.AppClass, arrayDimensionality, typeStr, isReference: false, mustBeVariable, mustBeFieldName);
         }
 
         // Builtin or special type (including ApiObject subtypes in the PeopleCodeType enum)
         var builtinType = BuiltinTypeExtensions.FromString(typeStr);
-        return new TypeWithDimensionality(builtinType, arrayDimensionality, null, isReference, mustBeVariable);
+        return new TypeWithDimensionality(builtinType, arrayDimensionality, null, isReference, mustBeVariable, mustBeFieldName);
     }
 
     /// <summary>

@@ -192,11 +192,31 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
         // Normalize Integer to Number - PeopleCode doesn't meaningfully distinguish them
         if (type.PeopleCodeType == PeopleCodeType.Integer)
         {
-            type = new PrimitiveTypeInfo("number",PeopleCodeType.Number) { IsAssignable = type.IsAssignable };
+            type = new PrimitiveTypeInfo("number",PeopleCodeType.Number) { IsAssignable = type.IsAssignable }
+                .WithBufferField(type.BufferField);
+        }
+
+        // Only a bare REC.FIELD / FIELD (optionally parenthesized) is a buffer field reference.
+        // Operators, casts, calls ($same_as_first) etc. may hand back an operand's TypeInfo
+        // instance — the result is a value, never a field name.
+        if (type.BufferField != null &&
+            node is not (IdentifierNode or MemberAccessNode or ParenthesizedExpressionNode))
+        {
+            type = type.WithBufferField(null);
         }
 
         node.SetInferredType(type);
     }
+
+    /// <summary>
+    /// Terminal buffer field access (bare REC.FIELD / bare FIELD in record PeopleCode): the
+    /// compiler treats it as the field's value (implicit .Value), and it also satisfies
+    /// field-name parameters — so the type is the field data type plus a BufferField marker.
+    /// </summary>
+    private static TypeInfo BufferFieldValue(FieldTypeInfo field) =>
+        field.GetFieldDataType()
+            .WithAssignable(true)
+            .WithBufferField(new BufferFieldReference(field.RecordName, field.FieldName));
 
     #region Type Conversion Helpers
 
@@ -1155,7 +1175,8 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
                 var rightHandType = GetInferredType(node.Value);
                 if (rightHandType != null && rightHandType.Name != null && !rightHandType.Name.Equals("any", StringComparison.OrdinalIgnoreCase))
                 {
-                    rightHandType = rightHandType.WithAutoDeclared(true);
+                    // A variable holds the value, not the buffer field — drop the field-name marker
+                    rightHandType = rightHandType.WithAutoDeclared(true).WithBufferField(null);
                     // Update the variable's type
                     variable.SetInferredType(rightHandType);
                 }
@@ -1217,8 +1238,12 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
         {
             if (_defaultRecordName != null && _defaultFieldName != null)
             {
+                // AppRefiner shorthand for the current buffer field: behaves like a bare
+                // FIELD in record PeopleCode, except ^.Member keeps the Field object.
                 var fieldType = new FieldTypeInfo(_defaultRecordName, _defaultFieldName, _typeResolver);
-                SetInferredType(node, fieldType);
+                bool isMemberAccessTarget =
+                    node.Parent is MemberAccessNode caretMa && ReferenceEquals(caretMa.Target, node);
+                SetInferredType(node, isMemberAccessTarget ? fieldType : BufferFieldValue(fieldType));
                 return;
             }
         }
@@ -1359,7 +1384,7 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
                         // Compiler treats this like REC.FIELD with implicit .Value — the
                         // expression type is the field's data type, not Field.
                         var fieldType = new FieldTypeInfo(_defaultRecordName, node.Name, _typeResolver);
-                        SetInferredType(node, fieldType.GetFieldDataType().WithAssignable(true));
+                        SetInferredType(node, BufferFieldValue(fieldType));
                     }
                     else
                     {
@@ -1709,7 +1734,7 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
                         node.Parent is MemberAccessNode parentMa && ReferenceEquals(parentMa.Target, node);
                     rightHandType = isIntermediateFieldAccess
                         ? bufferField
-                        : bufferField.GetFieldDataType().WithAssignable(true);
+                        : BufferFieldValue(bufferField);
                 }
             }
             else

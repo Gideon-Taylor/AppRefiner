@@ -128,12 +128,13 @@ public class FunctionReaderStrategy : VariableSizeReaderStrategy<FunctionInfo>
         byte flags = reader.ReadByte();
         bool isReference = (flags & 0x01) != 0;
         bool mustBeVariable = (flags & 0x02) != 0;
+        bool mustBeFieldName = (flags & 0x04) != 0;
 
         var (name, nameIndex) = ReadParameterName(reader, nameTable);
 
         var paramType = string.IsNullOrEmpty(appClassPath)
-            ? new TypeWithDimensionality(type, arrayDim, null, isReference, mustBeVariable)
-            : new TypeWithDimensionality(type, arrayDim, appClassPath, isReference, mustBeVariable);
+            ? new TypeWithDimensionality(type, arrayDim, null, isReference, mustBeVariable, mustBeFieldName)
+            : new TypeWithDimensionality(type, arrayDim, appClassPath, isReference, mustBeVariable, mustBeFieldName);
 
         return new SingleParameter(paramType, name) { NameIndex = nameIndex };
     }
@@ -153,10 +154,11 @@ public class FunctionReaderStrategy : VariableSizeReaderStrategy<FunctionInfo>
             byte flags = reader.ReadByte();
             bool isRef = (flags & 0x01) != 0;
             bool mustBeVariable = (flags & 0x02) != 0;
+            bool mustBeFieldName = (flags & 0x04) != 0;
 
             var typeWithDim = string.IsNullOrEmpty(appClassPath)
-                ? new TypeWithDimensionality(type, arrayDim, null, isRef, mustBeVariable)
-                : new TypeWithDimensionality(type, arrayDim, appClassPath, isRef, mustBeVariable);
+                ? new TypeWithDimensionality(type, arrayDim, null, isRef, mustBeVariable, mustBeFieldName)
+                : new TypeWithDimensionality(type, arrayDim, appClassPath, isRef, mustBeVariable, mustBeFieldName);
 
             allowedTypes.Add(typeWithDim);
         }
