@@ -283,7 +283,7 @@ SELECT B.SQLTEXT
 ";
 
         public const string GetToolsVersion = @"
-SELECT TOOLSREL %Concat '.' %Concat PTPATCHREL
+SELECT TOOLSREL %Concat '.' %Concat %Cast(PTPATCHREL,NUMBER,CHARACTER)
   FROM %Table(PSSTATUS)
 ";
 
