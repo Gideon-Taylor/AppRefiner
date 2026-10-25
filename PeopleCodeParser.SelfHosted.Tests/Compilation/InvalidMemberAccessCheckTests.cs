@@ -471,4 +471,44 @@ end-method;
             d.Code == DiagnosticCode.InvalidMemberAccess &&
             d.Message.Contains("CVProduct"));
     }
+
+    // -----------------------------------------------------------------------
+    // Component interface properties (CI keys and fields, resolved at runtime)
+    // -----------------------------------------------------------------------
+
+    private const string CiSetup = @"
+Local ApiObject &s = %Session;
+Local ApiObject &ci = &s.GetCompIntfc(CompIntfc.USER_PROFILE);
+";
+
+    [Fact]
+    public void Does_not_report_dynamic_property_read_on_component_interface()
+    {
+        var diags = Run(CiSetup + "Local string &e = &ci.EMPLID;");
+
+        Assert.DoesNotContain(diags, d =>
+            d.Code == DiagnosticCode.InvalidMemberAccess &&
+            d.Message.Contains("EMPLID"));
+    }
+
+    [Fact]
+    public void Does_not_report_dynamic_property_write_on_component_interface()
+    {
+        var diags = Run(CiSetup + "&ci.EMPLID = \"X\";");
+
+        Assert.DoesNotContain(diags, d =>
+            d.Code == DiagnosticCode.InvalidMemberAccess &&
+            d.Message.Contains("EMPLID"));
+    }
+
+    [Fact]
+    public void Still_reports_unknown_method_on_component_interface()
+    {
+        var diags = Run(CiSetup + "&ci.TotallyBogusMethod();");
+
+        Assert.Contains(diags, d =>
+            d.Code == DiagnosticCode.InvalidMemberAccess &&
+            d.Message.Contains("TotallyBogusMethod") &&
+            d.Message.Contains("method"));
+    }
 }

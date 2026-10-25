@@ -61,8 +61,11 @@ public sealed class InvalidMemberAccessCheck : CompileCheckBase
 
         // Property access on Record/Row/Grid is a dynamic lookup (field name / record name /
         // column name), resolved at runtime — Grid.COLUMNNAME acts as GetColumn("COLUMNNAME").
+        // ComponentInterface properties are the CI's own keys and fields, also resolved at
+        // runtime (a named CI will later be checked against its definition — spec §16).
         // Only method calls on these types are validated against their builtin members.
-        if (targetType.PeopleCodeType is PeopleCodeType.Record or PeopleCodeType.Row or PeopleCodeType.Grid && !isMethodCall)
+        if (targetType.PeopleCodeType is PeopleCodeType.Record or PeopleCodeType.Row or PeopleCodeType.Grid
+                or PeopleCodeType.ComponentInterface && !isMethodCall)
             return;
 
         var resolution = ResolveMember(targetType, m.MemberName, isMethodCall, ctx);
