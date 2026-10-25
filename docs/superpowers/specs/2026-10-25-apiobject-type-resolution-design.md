@@ -202,6 +202,7 @@ Global ApiObject /* as Session */ &gSession;
 ```
 
 - Parameters, returns and properties in class headers and on `Function` lines.
+- **Methods are annotated only on their class-header declaration.** A method implementation (`method Foo` … `end-method`) has no parameter list or return type to annotate (App Designer generates the `/+ … +/` comment there), so the header annotation is the only source and applies to the body.
 - Local, Global, Component and instance variables declared without an initial value.
 - No exported/local distinction: a header or `Function`-line annotation is part of the signature, so `TypeMetadataBuilder` carries it to other programs like the declared type.
 - **Parameters keep a declared-vs-refined split** (decided). The parameter's declared type stays `ApiObject` for call validation; the annotation is stored beside it, as `RefinedReturnType` is for returns. Inside the callee, `&s` has the annotated type. At call sites:
