@@ -6,7 +6,7 @@
 
 **Architecture:**
 - **Phase 3:** a purely syntactic pre-pass (`UsageNarrowingAnalyzer`) computes, for each unannotated `ApiObject` variable, the candidate API types left after each direct member use. `TypeInferenceVisitor` seeds the result as a `Narrowing` refinement, and it stamps conflicts only on uses whose type actually came from narrowing.
-- **Phase 4, same program:** inference collects each routine's `Return` types and writes agreeing ones into the program's own `FunctionInfo.RefinedReturnType` at the end of the body, so later calls read it.
+- **Phase 4, same program:** inference visits method and getter bodies callee-first, collects each routine's `Return` types, and writes agreeing ones into the program's own `FunctionInfo.RefinedReturnType` at the end of the body, so later calls read it.
 - **Phase 4, cross program:** a shared `ReturnTypeRefiner` runs that inference on programs fetched by a resolver, with a per-thread cycle set and depth limit. Results cut short by the cycle set or depth limit are marked provisional and never cached.
 
 **Tech Stack:** C# / .NET 8, xUnit. Projects: `PeopleCodeTypeInfo`, `PeopleCodeParser.SelfHosted`, their test projects, `AppRefiner`.
@@ -207,8 +207,27 @@ An undecided identifier with candidates shows `Inferred Type: ApiObject ({phrase
 ### Task 4: Same-program return refinement
 
 **Files:**
-- Modify: `PeopleCodeParser.SelfHosted/Visitors/TypeInferenceVisitor.cs`: collect return types per routine; finalize after `Function` bodies, method implementations and property getters.
+- Modify: `PeopleCodeParser.SelfHosted/Visitors/TypeInferenceVisitor.cs`: collect return types per routine; finalize after `Function` bodies, method implementations and property getters. Override the routine visit order (below).
+- Modify: `PeopleCodeParser.SelfHosted/Visitors/IAstVisitor.cs`: give `AstVisitorBase.VisitAppClass` an ordering hook.
+- Create: `PeopleCodeParser.SelfHosted/Visitors/RoutineVisitOrder.cs`, the callee-first ordering.
 - Test: `PeopleCodeParser.SelfHosted.Tests/ReturnRefinementTests.cs`
+
+**Callee-first visit order** (the user chose this over header order):
+- **Hook:** `AstVisitorBase.VisitAppClass` currently visits `node.Methods`, then each property's `Getter` and `Setter`. Replace those two loops with `foreach (var routine in RoutineVisitOrder(node)) routine.Accept(this);`, where `protected virtual IEnumerable<AstNode> RoutineVisitOrder(AppClassNode node)` defaults to exactly today's order. Every other visitor keeps its behaviour.
+- **Override:** `TypeInferenceVisitor` overrides it with `RoutineVisitOrder.CalleesFirst(AppClassNode node)` (a static class in the new file).
+- **Graph:**
+  - The nodes are each `MethodNode` and each property's `Getter`.
+  - Setters keep their position after everything else.
+  - Edges are found syntactically in each routine's body:
+    - a method call `%This.Name(...)`, or a bare `Name(...)` naming a method of this class;
+    - a non-call `%This.Name` naming a property that has a getter.
+- **Order:**
+  - A depth-first post-order puts callees first.
+  - Start nodes are taken in header order: methods in `node.Methods` order, then getters in `node.Properties` order.
+  - A back edge (a cycle) is ignored, so mutually recursive routines fall back to header order.
+  - Each node is emitted once.
+
+**Testing for the visit order:** a `RoutineVisitOrder` unit test plus the two return-refinement tests in Step 1.
 
 **Interfaces:**
 - Produces: after a routine body is visited, the routine's `FunctionInfo` in `_programMetadata.Methods`, or the getter's `PropertyInfo` in `_programMetadata.Properties`, gets `RefinedReturnType` or `RefinedType`. The value is a `TypeWithDimensionality(PeopleCodeType.X)` with an `Identity` for Record (`RecordName`), Field (`RecordName`, `FieldName`) and named CIs.
@@ -222,7 +241,7 @@ An undecided identifier with candidates shows `Inferred Type: ApiObject ({phrase
 - Any `Any`, `Unknown`, plain `ApiObject`, or missing return type means no refinement and no warning.
 - Disagreeing API subtypes mean no refinement and one R1 warning. It goes on the first `Return` value whose type differs from the first return's. The routine name is the function or method name.
 - Disagreeing Record/Field returns stay plain, with no warning (spec §9).
-- Calls visited after the body pick the refinement up through the existing `ConvertFunctionInfoToTypeInfo` path. Function bodies are visited in source order, before the main block. Methods are visited in header declaration order (`ScopedAstVisitor.VisitMethod` → `Implementation`). A call reached before the body uses the declared or annotated type (spec §9, "Builder's call").
+- Calls visited after the body pick the refinement up through the existing `ConvertFunctionInfoToTypeInfo` path. Function bodies are visited in source order, before the main block, and PeopleCode requires definition before use. Methods and getters are visited callee-first (above). A call that is still reached before the body, which only happens in a cycle, uses the declared or annotated type.
 - Check first that `_programMetadata` is a fresh object per inference run in every AppRefiner caller (`TypeInferenceRunner`, `TypeErrorReporter`, `MainForm`, `AutoCompleteService`) and in tests. Mutating a cached `TypeMetadata` would leak a refinement into later runs. If any caller passes cached metadata, report it before writing to it.
 
 - [ ] **Step 1: Write the failing tests.** These are same-program tests, using `NullTypeMetadataResolver` except where noted.
@@ -243,9 +262,16 @@ An undecided identifier with candidates shows `Inferred Type: ApiObject ({phrase
   - `Method_called_from_later_body_gets_refined_return`:
     - A class declaring `method GetS() Returns ApiObject;` before `method Use();`.
     - `Use` calls `%This.GetS()` into a local. Expect Session.
-  - `Method_called_before_its_body_uses_declared_type`:
-    - The header declares `Use` before `GetS`, so `GetS`'s body is visited later.
-    - Expect plain `ApiObject`, with no warning.
+  - `Caller_declared_before_helper_gets_refined_return`:
+    - The header declares `Use` before `GetS`. `Use` calls `%This.GetS()`.
+    - Expect Session, because callee-first ordering visits `GetS` first.
+  - `Bare_call_to_own_method_counts_as_edge`: the same, with `Use` calling `GetS()` without `%This`. Expect Session.
+  - `Mutually_recursive_methods_use_declared_type`:
+    - `A() Returns ApiObject` returns `%This.B()`, and `B() Returns ApiObject` returns `%This.A()`.
+    - Expect no exception, no warning, and both unrefined (plain `ApiObject`).
+  - `RoutineVisitOrder` unit test, `Callees_first_with_header_order_for_ties`:
+    - Header order M1, M2, M3. M1 calls M3, M3 calls M2, and M2 calls nothing. There's a getter `G` read by M2 through `%This.G`.
+    - Expect the order `G, M2, M3, M1`. Setters, if any, come last.
   - `Getter_property_gets_refined_type`:
     - `property ApiObject Sess get;` with a getter body returning `%Session`.
     - A later method's `%This.Sess` resolves to Session. Use the property-get form `PropertyGetterWiringTests` uses.
@@ -322,7 +348,7 @@ An undecided identifier with candidates shows `Inferred Type: ApiObject ({phrase
 
 - [ ] **Step 1:** After `TypeMetadataBuilder.ExtractMetadata`, call `ReturnTypeRefiner.Refine(program, metadata, this)`. Leave the existing try/catch as is; `Refine` never throws. Add a `Debug.Log` line when the metadata comes back provisional.
 - [ ] **Step 2:** Update the weak-spots doc. Mark the items phase 3/4 resolve as fixed, and add any limitation the implementation leaves:
-  - methods called before their body is visited;
+  - mutually recursive methods keep their declared return type;
   - same-program callers aren't used to infer parameter types (§3 scope).
 - [ ] **Step 3:** Add a demo program, `04_Narrowing.pcode`, covering:
   - settling;
