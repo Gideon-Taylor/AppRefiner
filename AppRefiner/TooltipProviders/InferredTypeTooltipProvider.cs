@@ -1,6 +1,8 @@
 using AppRefiner.Database;
 using PeopleCodeParser.SelfHosted;
 using PeopleCodeParser.SelfHosted.Nodes;
+using PeopleCodeParser.SelfHosted.Visitors.Models;
+using PeopleCodeParser.SelfHosted.Visitors.Narrowing;
 using PeopleCodeTypeInfo.Types;
 
 namespace AppRefiner.TooltipProviders
@@ -54,7 +56,7 @@ namespace AppRefiner.TooltipProviders
             // Filter out unknown types - only show tooltip for concrete type information
             if (bestSpan.HasValue && bestTypeInfo != null && bestTypeInfo.Kind != TypeKind.Unknown)
             {
-                string tooltipText = FormatTypeInfo(bestTypeInfo);
+                string tooltipText = FormatTypeInfo(bestTypeInfo, bestNode);
                 RegisterTooltip(bestSpan.Value, tooltipText);
             }
             
@@ -64,11 +66,40 @@ namespace AppRefiner.TooltipProviders
 
         /// <summary>
         /// Formats type information for display in the tooltip (see <see cref="TypeDisplay"/>).
+        /// An identifier also says where its type came from, or which types its uses still allow.
         /// </summary>
         /// <param name="typeInfo">The type information to format</param>
+        /// <param name="node">The node the type belongs to</param>
         /// <returns>Formatted tooltip text</returns>
-        private string FormatTypeInfo(TypeInfo typeInfo)
+        private string FormatTypeInfo(TypeInfo typeInfo, AstNode? node)
         {
+            if (node is not IdentifierNode id)
+                return $"Inferred Type: {TypeDisplay.Format(typeInfo)}";
+
+            var source = id.GetRefinementSource();
+            if (source != null)
+            {
+                var origin = source.Kind switch
+                {
+                    RefinementKind.Annotation => "annotated",
+                    RefinementKind.Assignment => "assigned",
+                    RefinementKind.Narrowing => source.Node is MemberAccessNode decidingUse
+                        ? $"inferred from {UsageNarrowingAnalyzer.Decider(decidingUse)}"
+                        : "inferred",
+                    _ => null
+                };
+                if (origin != null)
+                    return $"Inferred Type: {TypeDisplay.Format(typeInfo)}, {origin} on line {source.Line + 1}";
+            }
+
+            // Undecided: still plain ApiObject, with the candidates its uses leave open
+            if (id.GetNarrowingCandidates() is { Count: > 0 } candidates
+                && typeInfo is BuiltinObjectTypeInfo { Name: var name }
+                && name.Equals("ApiObject", StringComparison.OrdinalIgnoreCase))
+            {
+                return $"Inferred Type: ApiObject ({UsageNarrowingAnalyzer.CandidatePhrase(candidates)})";
+            }
+
             return $"Inferred Type: {TypeDisplay.Format(typeInfo)}";
         }
     }

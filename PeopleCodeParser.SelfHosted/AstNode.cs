@@ -110,6 +110,18 @@ public abstract class AstNode
     public const string ParameterAnnotationsAttributeKey = "ParameterAnnotations";
 
     /// <summary>
+    /// Attribute key marking a member access whose narrowing conflict was reported in place of
+    /// the generic invalid-member error (bool)
+    /// </summary>
+    public const string NarrowingConflictAttributeKey = "NarrowingConflict";
+
+    /// <summary>
+    /// Attribute key for storing the API types an undecided ApiObject variable's uses still allow
+    /// (IReadOnlyList of string)
+    /// </summary>
+    public const string NarrowingCandidatesAttributeKey = "NarrowingCandidates";
+
+    /// <summary>
     /// Attribute key for storing type checking errors (TypeError)
     /// </summary>
     public const string TypeErrorAttributeKey = "TypeError";

@@ -1,6 +1,7 @@
 using PeopleCodeParser.SelfHosted.Annotations;
 using PeopleCodeParser.SelfHosted.Nodes;
 using PeopleCodeParser.SelfHosted.Visitors.Models;
+using PeopleCodeParser.SelfHosted.Visitors.Narrowing;
 using PeopleCodeParser.SelfHosted.Visitors.Utilities;
 using PeopleCodeTypeInfo.Contracts;
 using PeopleCodeTypeInfo.Database;
@@ -47,6 +48,9 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
     public delegate TypeInfo? UndefinedVariableHandler(IdentifierNode node, ScopeContext? scope, VariableRegistry? registry);
 
     private readonly UndefinedVariableHandler? _onUndefinedVariable;
+
+    // Usage narrowing pre-pass results (spec §8 "Where it runs"), set by Run before the main pass
+    private NarrowingResults? _narrowing;
 
     private TypeInferenceVisitor(
         ProgramNode program,
@@ -101,6 +105,9 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
 
         // Build import resolution map for unqualified class names
         visitor.BuildImportMap();
+
+        // Narrowing is syntactic, so it runs first and seeds types the main pass can replace
+        visitor._narrowing = UsageNarrowingAnalyzer.Analyze(program);
 
         program.Accept(visitor);
         return visitor;
@@ -619,6 +626,7 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
 
             if (declaredIsAny || declaredIsApiObject)
             {
+                WarnIfAssignmentContradictsNarrowing(variable, rhsBuiltin, expression, sourceNode);
                 variable.Refine(rhsType.WithAssignable(true), new RefinementSource(RefinementKind.Assignment, sourceNode));
             }
         }
@@ -749,10 +757,55 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
     }
 
     /// <summary>
-    /// Applies a <c>/* as T */</c> annotation written directly after the declaration's type.
-    /// Every variable of a multi-variable declaration shares the type node, so each is annotated.
+    /// Applies the variable's declaration annotation, then seeds a narrowed type if it has none.
     /// </summary>
     protected override void OnVariableDeclared(VariableInfo variable)
+    {
+        ApplyDeclarationAnnotation(variable);
+        SeedNarrowedType(variable);
+    }
+
+    /// <summary>
+    /// Seeds the type usage narrowing settled on (spec §4 row 3) as the variable's refined type.
+    /// Annotated variables, including parameters with an inherited annotation, keep their annotation.
+    /// </summary>
+    private void SeedNarrowedType(VariableInfo variable)
+    {
+        if (variable.AnnotatedType != null
+            || _narrowing?.For(variable.DeclarationNode, variable.Name) is not { NarrowedType: { } narrowed, DecidingUse: { } decidingUse })
+            return;
+
+        variable.Refine(ConvertTypeNameToTypeInfo(narrowed), new RefinementSource(RefinementKind.Narrowing, decidingUse));
+    }
+
+    /// <summary>
+    /// N4: uses settled a type, then an assignment gives a different API type. The assignment
+    /// still wins (latest wins); this is the single diagnostic for it, the checker's one-type
+    /// warning skips narrowed targets. Silent when the deciding use follows the assignment.
+    /// </summary>
+    private static void WarnIfAssignmentContradictsNarrowing(VariableInfo variable, BuiltinObjectTypeInfo assigned, ExpressionNode expression, AstNode sourceNode)
+    {
+        if (variable.RefinementSource is not { Kind: RefinementKind.Narrowing, Node: MemberAccessNode decidingUse }
+            || variable.InferredType is not BuiltinObjectTypeInfo narrowed
+            || narrowed.Name.Equals(assigned.Name, StringComparison.OrdinalIgnoreCase)
+            // A deciding use after the assignment sees the assigned type, and gets the precise member error
+            || decidingUse.SourceSpan.Start.Index > sourceNode.SourceSpan.Start.Index)
+            return;
+
+        bool isMethod = decidingUse.Parent is FunctionCallNode call && ReferenceEquals(call.Function, decidingUse);
+        var decider = isMethod ? $"{decidingUse.MemberName}()" : decidingUse.MemberName;
+        expression.AddTypeWarning(new TypeError(
+            $"Uses of {variable.Name} suggest {narrowed.Name} ({decider} on line {decidingUse.SourceSpan.Start.Line + 1}), " +
+            $"but it is assigned {assigned.Name} on line {sourceNode.SourceSpan.Start.Line + 1}.",
+            expression));
+    }
+
+    /// <summary>
+    /// Applies a <c>/* as T */</c> annotation written directly after the declaration's type, or one
+    /// a parameter inherits from its base declaration. Every variable of a multi-variable
+    /// declaration shares the type node, so each is annotated.
+    /// </summary>
+    private void ApplyDeclarationAnnotation(VariableInfo variable)
     {
         var declaringNode = variable.DeclarationNode;
         var typeNode = declaringNode switch
@@ -1615,6 +1668,11 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
     {
         base.VisitIdentifier(node);
 
+        // Stylers re-run inference on the hash-cached tree: drop the previous pass's variable
+        // stamps so a use whose variable is no longer refined doesn't keep a stale source
+        node.Attributes.Remove(AstNode.RefinementSourceAttributeKey);
+        node.Attributes.Remove(AstNode.NarrowingCandidatesAttributeKey);
+
         if (node.Name.Equals("^"))
         {
             if (_defaultRecordName != null && _defaultFieldName != null)
@@ -1701,7 +1759,10 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
                 }
 
                 SetInferredType(node, inferredType);
-                if (variable.RefinementSource is { } src) node.SetRefinementSource(src);
+                if (variable.RefinementSource is { } src)
+                    node.SetRefinementSource(src);
+                else if (_narrowing?.For(variable.DeclarationNode, variable.Name) is { NarrowedType: null, Candidates.Count: > 0 } undecided)
+                    node.SetNarrowingCandidates(undecided.Candidates);
             }
             // Handle auto-declared variables (delegate didn't provide a type)
             else if (variable != null && variable.IsAutoDeclared)
@@ -1999,11 +2060,28 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
     }
 
     /// <summary>
+    /// A narrowing conflict on this use replaces the generic invalid-member error (spec §8, §10),
+    /// unless the target's type came from an annotation or assignment: then the normal error applies.
+    /// </summary>
+    private void ReportNarrowingConflict(MemberAccessNode node)
+    {
+        if (_narrowing?.ConflictAt(node) is not { } conflict
+            || node.Target is not IdentifierNode target
+            || target.GetRefinementSource() is { Kind: not RefinementKind.Narrowing })
+            return;
+
+        node.AddTypeWarning(new TypeError(conflict.Message, node));
+        node.MarkNarrowingConflict();
+    }
+
+    /// <summary>
     /// Visit member access (property access, not method call)
     /// </summary>
     public override void VisitMemberAccess(MemberAccessNode node)
     {
         base.VisitMemberAccess(node);
+
+        ReportNarrowingConflict(node);
 
         // Check for special reference keywords (Record.X, Field.Y, etc.)
         // These create ReferenceTypeInfo, not builtin types

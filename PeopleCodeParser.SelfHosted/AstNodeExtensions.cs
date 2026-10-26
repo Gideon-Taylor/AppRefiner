@@ -141,6 +141,54 @@ public static class AstNodeExtensions
 
     #endregion
 
+    #region Narrowing Extensions
+
+    /// <summary>
+    /// Marks a member access whose usage-narrowing conflict was reported, so the generic
+    /// invalid-member check skips it.
+    /// </summary>
+    /// <param name="node">The AST node to mark (a MemberAccessNode)</param>
+    public static void MarkNarrowingConflict(this AstNode node)
+    {
+        node.Attributes[AstNode.NarrowingConflictAttributeKey] = true;
+    }
+
+    /// <summary>
+    /// Checks whether a usage-narrowing conflict was reported on this node.
+    /// </summary>
+    /// <param name="node">The AST node to check</param>
+    /// <returns>True if the node carries a narrowing conflict</returns>
+    public static bool HasNarrowingConflict(this AstNode node)
+    {
+        return node.Attributes.ContainsKey(AstNode.NarrowingConflictAttributeKey);
+    }
+
+    /// <summary>
+    /// Gets the API types an undecided <c>ApiObject</c> variable's uses still allow.
+    /// </summary>
+    /// <param name="node">The AST node to query (an IdentifierNode use)</param>
+    /// <returns>The candidates in ordinal order, or null if none were stored</returns>
+    public static IReadOnlyList<string>? GetNarrowingCandidates(this AstNode node)
+    {
+        if (node.Attributes.TryGetValue(AstNode.NarrowingCandidatesAttributeKey, out var candidates))
+        {
+            return candidates as IReadOnlyList<string>;
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// Sets the API types an undecided <c>ApiObject</c> variable's uses still allow.
+    /// </summary>
+    /// <param name="node">The AST node to update</param>
+    /// <param name="candidates">The remaining candidates</param>
+    public static void SetNarrowingCandidates(this AstNode node, IReadOnlyList<string> candidates)
+    {
+        node.Attributes[AstNode.NarrowingCandidatesAttributeKey] = candidates;
+    }
+
+    #endregion
+
     #region TypeError Extensions
 
     /// <summary>
@@ -212,6 +260,9 @@ public static class AstNodeExtensions
     {
         root.Attributes.Remove(AstNode.TypeErrorAttributeKey);
         root.Attributes.Remove(AstNode.TypeWarningAttributeKey);
+        // Narrowing markers are re-stamped with the diagnostics they stand for
+        root.Attributes.Remove(AstNode.NarrowingConflictAttributeKey);
+        root.Attributes.Remove(AstNode.NarrowingCandidatesAttributeKey);
 
         foreach (var child in root.Children)
         {

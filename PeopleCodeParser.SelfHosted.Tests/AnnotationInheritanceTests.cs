@@ -1,6 +1,7 @@
 using PeopleCodeParser.SelfHosted.Nodes;
 using PeopleCodeParser.SelfHosted.Tests.Compilation;
 using PeopleCodeParser.SelfHosted.Visitors;
+using PeopleCodeParser.SelfHosted.Visitors.Models;
 using PeopleCodeTypeInfo.Contracts;
 using PeopleCodeTypeInfo.Inference;
 using Xunit;
@@ -120,15 +121,24 @@ public class AnnotationInheritanceTests
         GetCallType(Infer(CallerSource("PKG:Sub"), null, resolver ?? ResolverWith(subHeader)));
 
     /// <summary>The inferred type of the last <c>&amp;s</c> use in a class's <c>Use</c> body.</summary>
-    private static string? BodyParameterType(string source, string qualifiedName, ITypeMetadataResolver resolver)
+    private static string? BodyParameterType(string source, string qualifiedName, ITypeMetadataResolver resolver) =>
+        BodyParameterUse(source, qualifiedName, resolver).GetInferredType()?.Name;
+
+    private static IdentifierNode BodyParameterUse(string source, string qualifiedName, ITypeMetadataResolver resolver)
     {
         var program = Infer(source, qualifiedName, resolver);
-        var use = program.FindDescendants<IdentifierNode>()
+        return program.FindDescendants<IdentifierNode>()
             .Where(n => n.Name.Equals("&s", StringComparison.OrdinalIgnoreCase))
             .OrderBy(n => n.SourceSpan.Start.Line)
             .Last();
-        return use.GetInferredType()?.Name;
     }
+
+    /// <summary>
+    /// Where the type of <c>&amp;s</c> in PKG:Sub's <c>Use</c> body came from. The body's
+    /// GetCompIntfc use narrows an unannotated parameter, so "not inherited" is checked on the source.
+    /// </summary>
+    private static RefinementKind? BodyParameterSource(string source, string qualifiedName, ITypeMetadataResolver resolver) =>
+        BodyParameterUse(source, qualifiedName, resolver).GetRefinementSource()?.Kind;
 
     /// <summary>The inferred type of <c>&amp;s</c> in PKG:Sub's <c>Use</c> body.</summary>
     private static string? BodyParameterType(string subHeader, ITypeMetadataResolver? resolver = null) =>
@@ -182,7 +192,8 @@ public class AnnotationInheritanceTests
     [Fact]
     public void Missing_base_metadata_means_no_inheritance()
     {
-        Assert.Equal("ApiObject", BodyParameterType(PlainSubHeader, new FakeTypeMetadataResolver()), ignoreCase: true);
+        Assert.NotEqual(RefinementKind.Annotation,
+            BodyParameterSource(PlainSubHeader + SubBody, "PKG:Sub", new FakeTypeMetadataResolver()));
     }
 
     [Fact]
@@ -204,9 +215,8 @@ public class AnnotationInheritanceTests
     [Fact]
     public void Intermediate_misfit_parameter_annotation_blocks_inheritance()
     {
-        Assert.Equal("ApiObject",
-            BodyParameterType(ClassSource("C", "PKG:B"), "PKG:C", ThreeLevelResolver(" /* as Foo */")),
-            ignoreCase: true);
+        Assert.NotEqual(RefinementKind.Annotation,
+            BodyParameterSource(ClassSource("C", "PKG:B"), "PKG:C", ThreeLevelResolver(" /* as Foo */")));
     }
 
     [Fact]

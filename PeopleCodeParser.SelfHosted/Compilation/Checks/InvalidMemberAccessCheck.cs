@@ -1,5 +1,6 @@
 using PeopleCodeParser.SelfHosted.Nodes;
 using PeopleCodeParser.SelfHosted.Visitors.Models;
+using PeopleCodeParser.SelfHosted.Visitors.Narrowing;
 using PeopleCodeTypeInfo.Contracts;
 using PeopleCodeTypeInfo.Database;
 using PeopleCodeTypeInfo.Functions;
@@ -41,6 +42,13 @@ public sealed class InvalidMemberAccessCheck : CompileCheckBase
 
         // Dynamic member access (obj."name") cannot be validated statically
         if (m.IsDynamic) return;
+
+        // Inference already reported this use as a usage-narrowing conflict (spec §10)
+        if (m.HasNarrowingConflict()) return;
+
+        // An undecided ApiObject variable is only typed ApiObject; its uses still allow several
+        // API types, so the base type's member list says nothing about them (spec §8 step 5)
+        if (m.Target.GetNarrowingCandidates() is { Count: > 0 }) return;
 
         var targetType = m.Target.GetInferredType();
         if (targetType == null) return;
@@ -303,6 +311,9 @@ public sealed class InvalidMemberAccessCheck : CompileCheckBase
         {
             RefinementKind.Annotation => "annotated",
             RefinementKind.Assignment => "assigned",
+            RefinementKind.Narrowing => source!.Node is MemberAccessNode decidingUse
+                ? $"inferred from {UsageNarrowingAnalyzer.Decider(decidingUse)}"
+                : "inferred",
             _ => null
         };
 

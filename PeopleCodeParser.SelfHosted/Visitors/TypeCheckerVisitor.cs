@@ -150,9 +150,9 @@ namespace PeopleCodeParser.SelfHosted.Visitors
                     ? annotated.Type.GetTypeName()
                     : rightApi.Name;
 
-            // An annotated target's conflict was already reported by inference, on the value
+            // An annotated or narrowed target's conflict was already reported by inference, on the value
             if (assignedName != null
-                && id.GetRefinementSource()?.Kind != RefinementKind.Annotation
+                && id.GetRefinementSource()?.Kind is not (RefinementKind.Annotation or RefinementKind.Narrowing)
                 && leftType is BuiltinObjectTypeInfo leftApi
                 && PeopleCodeTypeDatabase.IsApiObjectSubtype(leftApi.Name)
                 && !leftApi.Name.Equals(assignedName, StringComparison.OrdinalIgnoreCase))
