@@ -186,8 +186,7 @@ The parser handles `Doc` today but not `NoExport`.
   - its properties;
   - its child collections, recursively.
 - **Custom methods**: each method's name and signature (parameters with types, return type),
-  excluding `NoExport` functions, plus what go-to-definition needs to open the CI's PeopleCode at
-  that function.
+  excluding `NoExport` functions.
 
 **Custom methods are parsed when the definition is built (Tim).** Building the definition loads
 the CI's Methods program and parses it right away, with the same parser and metadata extraction
@@ -195,11 +194,11 @@ used for function libraries, so signatures and `/* as T */` annotations behave t
 what each method needs is kept:
 - name and documentation (`Doc`);
 - parameters with their types and annotations;
-- return type, with its annotation;
-- the function's position in the program, for go-to-definition.
+- return type, with its annotation.
 
 The PeopleCode source isn't kept in the definition or the cache. Go-to-definition opens the CI's
-PeopleCode in App Designer and selects the function at its recorded position.
+PeopleCode and finds the function by name in the program it just opened, as it does for app
+class methods, so no position needs caching.
 
 ### Caching
 
@@ -241,7 +240,8 @@ Standard methods keep their typeinfo.dat signatures.
 
 A named CI is `BuiltinObjectTypeInfo("ComponentInterface")` with `TypeIdentity.CompIntfcName`, as
 spec §16 set out (no subclass). Collections and items need more: `TypeIdentity` gains a collection
-path (my call: one field holding the path from the CI root, such as `Roles/RouteControls`), set on
+path (my call: one field holding the dotted path from the CI root, such as `Roles.RouteControls`,
+matching the annotation syntax), set on
 DataCollection and DataItem values. `IsRefinementOf` and `ConflictsWith` cover the new field:
 - more detail is a refinement;
 - two different paths, or two different CI names, conflict. The existing one-type warning applies
