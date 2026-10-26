@@ -187,6 +187,18 @@ public class UsageNarrowingAnalyzerTests
     }
 
     [Fact]
+    public void Unknown_method_on_settled_ci_is_not_a_conflict()
+    {
+        // A CI's definition can add methods; Bogus on a settled Session is still reported
+        var ci = ForLocal("Local ApiObject &x;\n&b = &x.Get();\n&x.MyCustomMethod();");
+        var session = ForLocal("Local ApiObject &x;\n&c = &x.GetCompIntfc(CompIntfc.A);\n&x.Bogus();");
+
+        Assert.Equal("ComponentInterface", ci!.NarrowedType);
+        Assert.Empty(ci.Conflicts);
+        Assert.Single(session!.Conflicts);
+    }
+
+    [Fact]
     public void Ci_method_narrows_to_ci()
     {
         // Save is on nine API types; Get is on ComponentInterface only

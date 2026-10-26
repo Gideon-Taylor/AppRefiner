@@ -503,14 +503,12 @@ Local ApiObject &ci = &s.GetCompIntfc(CompIntfc.USER_PROFILE);
     }
 
     [Fact]
-    public void Still_reports_unknown_method_on_component_interface()
+    public void Does_not_report_unknown_method_on_component_interface()
     {
-        var diags = Run(CiSetup + "&ci.TotallyBogusMethod();");
+        // A CI's definition can add its own methods, which aren't known until it's read
+        var diags = Run(CiSetup + "Local boolean &b = &ci.MyCustomMethod(1);");
 
-        Assert.Contains(diags, d =>
-            d.Code == DiagnosticCode.InvalidMemberAccess &&
-            d.Message.Contains("TotallyBogusMethod") &&
-            d.Message.Contains("method"));
+        Assert.DoesNotContain(diags, d => d.Code == DiagnosticCode.InvalidMemberAccess);
     }
 
     // -----------------------------------------------------------------------
@@ -583,11 +581,12 @@ Local ApiObject &role = &roles.Item(1);
     }
 
     [Fact]
-    public void Reports_method_no_api_type_has_on_untyped_api_object_value()
+    public void Does_not_report_unknown_method_on_untyped_api_object_value()
     {
-        var diag = SingleInvalidMember(Run(Untyped + "GetIt().Zzz();"));
+        // The value could be a CI with a method of its own
+        var diags = Run(Untyped + "GetIt().Zzz();");
 
-        Assert.Equal("'Zzz' is not a known method on 'ApiObject'", diag.Message);
+        Assert.DoesNotContain(diags, d => d.Code == DiagnosticCode.InvalidMemberAccess);
     }
 
     [Fact]

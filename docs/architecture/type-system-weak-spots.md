@@ -155,18 +155,21 @@ Left open by phases 3–4 (spec `docs/superpowers/specs/2026-10-25-apiobject-typ
 - **Global/Component redeclarations narrow per declaration.** A Global or Component variable
   declared again inside two method bodies is narrowed separately for each declaration, so the
   two can settle on different types although they are one variable at run time.
-- **A CI's own properties are untyped.** `&ci.Roles` is a DataCollection at run time because
-  Roles is a scroll in the CI's definition, but nothing reads that definition yet, so `&ci.Roles`
-  is untyped and the variable it's assigned to narrows from its own uses. Field types on a CI or a
-  DataItem are untyped too. Both wait on reading CI definitions (spec §16).
+- **A CI's own members are unchecked and untyped.** `&ci.Roles` is a DataCollection at run time
+  because Roles is a scroll in the CI's definition, but nothing reads that definition yet, so
+  `&ci.Roles` is untyped and the variable it's assigned to narrows from its own uses. Field types
+  on a CI or a DataItem are untyped too. A CI's definition can also add methods of its own, so no
+  method on a ComponentInterface is reported as unknown, and narrowing doesn't flag an unknown
+  method on a variable settled as one. All of this waits on reading CI definitions (spec §16).
 
 Fixed in 2026-10, from App Designer probes:
 - `DataCollection.Item`, `ItemByKeys`, `CurrentItem`, `GetEffectiveItem` and `InsertItem` return
   a `DataItem` (they were `Row` or `void` in `typeinfo.dat`), and `DeleteItem` returns an
   ignorable `boolean`. A DataItem's properties are its fields, dynamic like a component
   interface's.
-- Member access on a plain `ApiObject` that nothing has typed is checked only for methods no API
-  type has (it was a false error on CI code such as `&item.RoleName`).
+- Member access on a plain `ApiObject` that nothing has typed isn't checked, since it could be a
+  CI with fields and methods of its own (it was a false error on CI code such as
+  `&item.RoleName`).
 - In narrowing, a property some API type declares narrows to its declarers (`ItemNum` settles
   DataItem, `CurrentItemNumber` DataCollection). One nobody declares may be a CI or item field,
   or a typo, so it counts only after something else has narrowed the list. Accepted trade-off: a

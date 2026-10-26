@@ -1,5 +1,4 @@
 using PeopleCodeParser.SelfHosted.Nodes;
-using PeopleCodeParser.SelfHosted.Visitors.Narrowing;
 using PeopleCodeTypeInfo.Contracts;
 using PeopleCodeTypeInfo.Database;
 using PeopleCodeTypeInfo.Functions;
@@ -64,24 +63,24 @@ public sealed class InvalidMemberAccessCheck : CompileCheckBase
         // Explicit method call vs property / implicit access
         bool isMethodCall = m.Parent is FunctionCallNode fc && ReferenceEquals(fc.Function, m);
 
-        // A plain ApiObject nothing has typed could be any API type, so the base type's (empty)
-        // member list says nothing: only a method no API type has is reported. Any property may
-        // be a CI or item field. Variables are covered by usage narrowing instead.
-        if (targetType is BuiltinObjectTypeInfo { IsApiObjectBase: true }
-            && (!isMethodCall || UsageNarrowingAnalyzer.IsMethodOfAnyApiType(m.MemberName)))
-            return;
+        // A plain ApiObject nothing has typed could be any API type, including a CI with its own
+        // fields and methods, so the base type's (empty) member list says nothing. Variables are
+        // covered by usage narrowing instead.
+        if (targetType is BuiltinObjectTypeInfo { IsApiObjectBase: true }) return;
+
+        // A CI's definition can add its own methods (and its keys and fields are properties), so
+        // nothing on a ComponentInterface is checked until CI definitions are read (spec §16)
+        if (targetType.PeopleCodeType == PeopleCodeType.ComponentInterface) return;
 
         // Record property access is a dynamic field lookup — only validate method calls on Records
         if (targetType is RecordTypeInfo && !isMethodCall) return;
 
         // Property access on Record/Row/Grid is a dynamic lookup (field name / record name /
         // column name), resolved at runtime — Grid.COLUMNNAME acts as GetColumn("COLUMNNAME").
-        // ComponentInterface properties are the CI's own keys and fields, and DataItem properties
-        // (a CI collection's items) are its fields, also resolved at runtime (a named CI will
-        // later be checked against its definition — spec §16).
+        // DataItem properties (a CI collection's items) are its fields, also resolved at runtime.
         // Only method calls on these types are validated against their builtin members.
         if (targetType.PeopleCodeType is PeopleCodeType.Record or PeopleCodeType.Row or PeopleCodeType.Grid
-                or PeopleCodeType.ComponentInterface or PeopleCodeType.DataItem && !isMethodCall)
+                or PeopleCodeType.DataItem && !isMethodCall)
             return;
 
         var resolution = ResolveMember(targetType, m.MemberName, isMethodCall, ctx);

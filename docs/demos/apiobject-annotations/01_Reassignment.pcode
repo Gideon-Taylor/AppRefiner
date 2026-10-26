@@ -6,7 +6,7 @@ Local ApiObject &x = %Session;
 
 &x = %Session.GetCompIntfc(CompIntfc.USER_PROFILE); /* WARNING: &x is assigned more than one API type (Session on line 4, ComponentInterface on line 7) */
 Local boolean &ok = &x.Save(); /* OK: latest assignment wins, &x is now ComponentInterface */
-&x.Bogus(); /* ERROR: names the type and where it came from (&x is ComponentInterface, assigned on line 7) */
+&x.Bogus(); /* OK: a CI can have methods of its own, so methods on a CI aren't checked until CI definitions are read */
 
 Local ApiObject &ci = %Session.GetCompIntfc(CompIntfc.USER_PROFILE);
 Local string &uid = &ci.UserID; /* OK: component interface properties are dynamic, no false "not a known property" */

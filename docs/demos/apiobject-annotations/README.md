@@ -23,7 +23,7 @@ Only delivered metadata is used: `CompIntfc.USER_PROFILE` and `Record.PSOPRDEFN`
 | File | Line | Expected |
 |---|---|---|
 | 01_Reassignment | 7 | Warning: `&x is assigned more than one API type (Session on line 4, ComponentInterface on line 7)` |
-| | 9 | Error: `'Bogus' is not a known method on 'ComponentInterface' (&x is ComponentInterface, assigned on line 7)` |
+| | 9 | Nothing: a CI can have methods of its own, so methods on a ComponentInterface aren't checked |
 | | 18 | Error: `Cannot assign type 'string' to 'ApiObject'` |
 | | 12, 15, 20 | Nothing (CI property, `any`, record hover) |
 | 02_FunctionAnnotations | 11 | Warning: `'as Session' needs an ApiObject declaration; &r is Rowset.` |

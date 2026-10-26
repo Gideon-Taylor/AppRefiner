@@ -37,7 +37,7 @@ does. Only delivered metadata is used: `CompIntfc.USER_PROFILE` and `Record.PSOP
 | | 26 | Error: `... on 'Session' (&g is Session, assigned on line 24)`: getter-only property |
 | | 27 | Error: `... on 'Session' (&c is Session, assigned on line 25)`: property typed from the constructor's assignment |
 | | 33 | Error: `... on 'Session' (&s is Session, assigned on line 32)`: through Wrapper |
-| | 35 | Error: `... on 'ComponentInterface' (&ci is ComponentInterface, assigned on line 34)` |
+| | 35 | Nothing: `&ci` is ComponentInterface, and a CI can have methods of its own |
 | | 41 | Error: `... on 'Query' (&q is Query, assigned on line 40)`: Derived's own body, not Provider's |
 | | 43 | Warning (N3): `'Bogus' is not a member of any API object type.` (Derived.GetCI stays plain ApiObject) |
 | | 54 | Warning (N2): `&conn was inferred as Session from GetCompIntfc() on line 53, but Session has no member 'Bogus'.` |

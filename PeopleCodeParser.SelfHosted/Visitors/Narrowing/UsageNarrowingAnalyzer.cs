@@ -16,7 +16,9 @@ public sealed class UsageNarrowingAnalyzer : ScopedAstVisitor<object>
     // API types whose properties are resolved at runtime: a component interface's keys and fields,
     // and the fields of an item in one of its collections
     private static readonly HashSet<string> DynamicPropertyTypes =
-        new(StringComparer.OrdinalIgnoreCase) { "ComponentInterface", "DataItem" };
+        new(StringComparer.OrdinalIgnoreCase) { ComponentInterface, "DataItem" };
+
+    private const string ComponentInterface = "ComponentInterface";
 
     // Every API subtype reachable through a PeopleCodeType value, in ordinal name order.
     // typeinfo.dat can't be enumerated by name, so the enum is the only source.
@@ -69,12 +71,6 @@ public sealed class UsageNarrowingAnalyzer : ScopedAstVisitor<object>
             _ => $"one of {sorted.Count} types ({string.Join(", ", sorted.Take(3))}, …)"
         };
     }
-
-    /// <summary>
-    /// Whether any API object type has a method named <paramref name="name"/>.
-    /// </summary>
-    public static bool IsMethodOfAnyApiType(string name) =>
-        AllCandidates.Value.Any(type => PeopleCodeTypeDatabase.GetMethod(type, name) != null);
 
     /// <summary>
     /// A deciding use as messages and hovers name it: <c>Name()</c> for a method use, <c>Name</c> for a property.
@@ -222,8 +218,9 @@ public sealed class UsageNarrowingAnalyzer : ScopedAstVisitor<object>
 
             if (settled != null)
             {
-                // Settled types don't change; a use that doesn't fit is reported against the decider
-                if (!HasMember(settled, use))
+                // Settled types don't change; a use that doesn't fit is reported against the decider.
+                // A CI's definition can add methods, so an unknown method on one isn't reported
+                if (!HasMember(settled, use) && !(use.IsMethod && settled == ComponentInterface))
                 {
                     var d = decider!.Value;
                     conflicts.Add(new NarrowingConflict(use.Node,

@@ -32,7 +32,7 @@ method ThroughWrapper
    Local ApiObject &s = &w.GetSess(); /* OK: Session, two programs away */
    &s.Bogus(); /* ERROR: names Session */
    Local ApiObject &ci = &w.GetCI(); /* OK: ComponentInterface */
-   &ci.Bogus(); /* ERROR: names ComponentInterface */
+   &ci.Bogus(); /* OK: methods on a CI aren't checked (it can have its own) */
 end-method;
 
 method Overrides
