@@ -164,16 +164,10 @@ public abstract class AstVisitorBase : IAstVisitor
             constant.Accept(this);
         }
 
-        // 4. Then visit method declarations
-        foreach (var method in node.Methods)
+        // 4. Then visit method declarations (with their implementations) and property getters/setters
+        foreach (var routine in RoutineVisitOrder(node))
         {
-            method.Accept(this);
-        }
-
-        foreach(var property in node.Properties)
-        {
-            property.Getter?.Accept(this);
-            property.Setter?.Accept(this);
+            routine.Accept(this);
         }
 
         // 6. Finally visit any other children that might not be in the specialized collections
@@ -191,6 +185,26 @@ public abstract class AstVisitorBase : IAstVisitor
             }
 
             child.Accept(this);
+        }
+    }
+
+    /// <summary>
+    /// The order <see cref="VisitAppClass"/> visits methods and property getters/setters in.
+    /// Defaults to methods in header order, then each property's getter and setter.
+    /// </summary>
+    protected virtual IEnumerable<AstNode> RoutineVisitOrder(AppClassNode node)
+    {
+        foreach (var method in node.Methods)
+        {
+            yield return method;
+        }
+
+        foreach (var property in node.Properties)
+        {
+            if (property.Getter != null)
+                yield return property.Getter;
+            if (property.Setter != null)
+                yield return property.Setter;
         }
     }
 

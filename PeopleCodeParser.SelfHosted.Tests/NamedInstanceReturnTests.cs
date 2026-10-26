@@ -10,7 +10,10 @@ namespace PeopleCodeParser.SelfHosted.Tests;
 
 /// <summary>
 /// Record/Field return naming (record(X) / field(R.F)) is guessed from arguments and the
-/// default record only for builtin functions; user functions keep their declared bare type.
+/// default record only for builtin functions. User functions are never named from their
+/// arguments or the default record; only same-program return refinement can name them, from
+/// their own returns (see ReturnRefinementTests). The user-function tests here return an
+/// unnamed local so that refinement stays out of the way.
 /// </summary>
 public class NamedInstanceReturnTests
 {
@@ -68,7 +71,7 @@ public class NamedInstanceReturnTests
     public void Zero_arg_user_function_returning_record_is_not_named_after_default_record()
     {
         var type = InferLastLocalInitializer(
-            "Function GetIt() Returns Record\n   Return CreateRecord(Record.JOB);\nEnd-Function;\nLocal Record &r = GetIt();",
+            "Function GetIt() Returns Record\n   Local Record &x;\n   Return &x;\nEnd-Function;\nLocal Record &r = GetIt();",
             "MY_REC");
 
         Assert.NotNull(type);
@@ -90,7 +93,7 @@ public class NamedInstanceReturnTests
     public void User_function_returning_field_with_string_argument_is_not_named()
     {
         var type = InferLastLocalInitializer(
-            "Function MyFunc(&s As string) Returns Field\n   Return GetField(\"X\");\nEnd-Function;\nLocal Field &f = MyFunc(\"hello\");");
+            "Function MyFunc(&s As string) Returns Field\n   Local Field &f;\n   Return &f;\nEnd-Function;\nLocal Field &f = MyFunc(\"hello\");");
 
         Assert.NotNull(type);
         Assert.IsNotType<FieldTypeInfo>(type);

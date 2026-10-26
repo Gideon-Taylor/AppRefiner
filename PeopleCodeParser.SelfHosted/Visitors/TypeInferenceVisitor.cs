@@ -1223,7 +1223,17 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
         if (method.IsBuiltin || method.RefinedReturnType != null || method.HasReturnAnnotation)
             return null;
 
-        var className = appClassType.QualifiedName;
+        return AnnotatedReturnDeclaration(appClassType.QualifiedName, method.Name)?.RefinedReturnType;
+    }
+
+    /// <summary>
+    /// The first declaration of <paramref name="methodName"/> with a return annotation (even an
+    /// unknown or misfit one) walking up from <paramref name="className"/>, or null. Only
+    /// annotations count: a RefinedReturnType without one was inferred from returns (spec §9)
+    /// and is never inherited.
+    /// </summary>
+    private FunctionInfo? AnnotatedReturnDeclaration(string? className, string methodName)
+    {
         var visited = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         while (!string.IsNullOrEmpty(className) && visited.Add(className))
         {
@@ -1231,9 +1241,8 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
             if (metadata == null)
                 return null;
 
-            if (metadata.Methods.TryGetValue(method.Name, out var declaration)
-                && (declaration.RefinedReturnType != null || declaration.HasReturnAnnotation))
-                return declaration.RefinedReturnType;
+            if (metadata.Methods.TryGetValue(methodName, out var declaration) && declaration.HasReturnAnnotation)
+                return declaration;
 
             // Builtin bases carry no annotations
             if (metadata.IsBaseClassBuiltin)
@@ -1551,7 +1560,33 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
         CheckReturnAnnotation(node, node.Name, node.ReturnType);
 
         // NOW: Let base class create scope and register parameters
-        base.VisitMethod(node);
+        var collector = node.Implementation != null
+            && _programMetadata.Kind == ProgramKind.AppClass
+            && _programMetadata.Methods.TryGetValue(node.Name, out var methodInfo)
+            && !HasInheritedReturnAnnotation(methodInfo)
+            ? ReturnCollectorFor(node.Name, methodInfo)
+            : null;
+        VisitRoutine(collector, () => base.VisitMethod(node));
+    }
+
+    /// <summary>
+    /// Visits a property getter or setter; a getter's returns can refine the property's type.
+    /// </summary>
+    public override void VisitPropertyImpl(PropertyImplNode node)
+    {
+        ReturnCollector? collector = null;
+        if (node.IsGetter
+            && node.Parent is PropertyNode property
+            && _programMetadata.Kind == ProgramKind.AppClass
+            && _programMetadata.Properties.TryGetValue(property.Name, out var propertyInfo)
+            && propertyInfo.RefinedType == null
+            && _annotations.ForType(property.Type) == null
+            && IsRefinableReturnType(propertyInfo.ToTypeWithDimensionality()))
+        {
+            collector = new ReturnCollector(property.Name, propertyInfo.Type, refined => propertyInfo.RefinedType = refined);
+        }
+
+        VisitRoutine(collector, () => base.VisitPropertyImpl(node));
     }
 
     /// <summary>
@@ -1577,7 +1612,178 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
             CheckReturnAnnotation(node, node.Name, node.ReturnType);
 
         // NOW: Let base class handle scope creation and parameter registration
-        base.VisitFunction(node);
+        if (!node.IsImplementation)
+        {
+            base.VisitFunction(node);
+            return;
+        }
+
+        // Class programs' metadata holds methods, not functions, under the same names
+        var collector = _programMetadata.Kind is not (ProgramKind.AppClass or ProgramKind.Interface)
+            && _programMetadata.Methods.TryGetValue(node.Name, out var functionInfo)
+            ? ReturnCollectorFor(node.Name, functionInfo)
+            : null;
+        VisitRoutine(collector, () => base.VisitFunction(node));
+    }
+
+    /// <summary>
+    /// Methods and getters are visited callees first, so a call usually sees its callee's refined return.
+    /// </summary>
+    protected override IEnumerable<AstNode> RoutineVisitOrder(AppClassNode node) =>
+        global::PeopleCodeParser.SelfHosted.Visitors.RoutineVisitOrder.CalleesFirst(node);
+
+    #endregion
+
+    #region Same-program return refinement
+
+    /// <summary>
+    /// The <c>Return</c> values of one routine body being visited, and where an agreed type goes.
+    /// </summary>
+    private sealed class ReturnCollector(string name, PeopleCodeType declaredType, Action<TypeWithDimensionality> apply)
+    {
+        public string Name { get; } = name;
+        public PeopleCodeType DeclaredType { get; } = declaredType;
+        public Action<TypeWithDimensionality> Apply { get; } = apply;
+        public List<(ReturnStatementNode Node, TypeInfo? Type)> Returns { get; } = new();
+    }
+
+    // One entry per routine body being visited; null when the routine isn't refined
+    private readonly Stack<ReturnCollector?> _returnCollectors = new();
+
+    /// <summary>
+    /// A collector for a function or method declared to return scalar ApiObject, Record or Field
+    /// with no return annotation, or null.
+    /// </summary>
+    private static ReturnCollector? ReturnCollectorFor(string name, FunctionInfo info)
+    {
+        if (info.HasReturnAnnotation || info.RefinedReturnType != null || !IsRefinableReturnType(info.ReturnType))
+            return null;
+
+        return new ReturnCollector(name, info.ReturnType.Type, refined => info.RefinedReturnType = refined);
+    }
+
+    /// <summary>
+    /// True when a base declaration of this class's method annotates its return (spec §7
+    /// "Inheritance"): the annotation decides, so the body's returns don't refine it. Not
+    /// <c>InheritedReturnAnnotation(...) != null</c>: a misfit or unknown base annotation has no
+    /// RefinedReturnType but still decides (the declared type).
+    /// </summary>
+    private bool HasInheritedReturnAnnotation(FunctionInfo method) =>
+        !method.HasReturnAnnotation && AnnotatedReturnDeclaration(_programMetadata.QualifiedName, method.Name) != null;
+
+    private static bool IsRefinableReturnType(TypeWithDimensionality type) =>
+        type.IsScalar && type.Type is PeopleCodeType.ApiObject or PeopleCodeType.Record or PeopleCodeType.Field;
+
+    /// <summary>
+    /// Visits a routine body with its collector current, then writes the agreed return type.
+    /// </summary>
+    private void VisitRoutine(ReturnCollector? collector, Action visit)
+    {
+        _returnCollectors.Push(collector);
+        try
+        {
+            visit();
+        }
+        finally
+        {
+            _returnCollectors.Pop();
+        }
+
+        if (collector != null && AgreedReturnType(collector) is { } refined)
+            collector.Apply(refined);
+    }
+
+    public override void VisitReturn(ReturnStatementNode node)
+    {
+        base.VisitReturn(node);
+
+        if (node.Value != null && _returnCollectors.Count > 0 && _returnCollectors.Peek() is { } collector)
+            collector.Returns.Add((node, GetInferredType(node.Value)));
+    }
+
+    /// <summary>
+    /// The type every <c>Return</c> value agrees on (spec §9), or null. Disagreeing API subtypes
+    /// warn (R1) on the first return that differs; disagreeing records or fields stay silent.
+    /// </summary>
+    private static TypeWithDimensionality? AgreedReturnType(ReturnCollector collector)
+    {
+        var returns = collector.Returns;
+        if (returns.Count == 0)
+            return null;
+
+        switch (collector.DeclaredType)
+        {
+            case PeopleCodeType.Record:
+            {
+                if (returns[0].Type is not RecordTypeInfo first || string.IsNullOrEmpty(first.RecordName))
+                    return null;
+                bool agree = returns.All(r => r.Type is RecordTypeInfo record
+                    && first.RecordName.Equals(record.RecordName, StringComparison.OrdinalIgnoreCase));
+                return agree
+                    ? new TypeWithDimensionality(PeopleCodeType.Record) { Identity = new TypeIdentity(RecordName: first.RecordName) }
+                    : null;
+            }
+
+            case PeopleCodeType.Field:
+            {
+                if (returns[0].Type is not FieldTypeInfo first || string.IsNullOrEmpty(first.FieldName))
+                    return null;
+                bool agree = returns.All(r => r.Type is FieldTypeInfo field
+                    && (first.RecordName ?? "").Equals(field.RecordName ?? "", StringComparison.OrdinalIgnoreCase)
+                    && first.FieldName.Equals(field.FieldName, StringComparison.OrdinalIgnoreCase));
+                if (!agree)
+                    return null;
+                var recordName = string.IsNullOrEmpty(first.RecordName) ? null : first.RecordName;
+                return new TypeWithDimensionality(PeopleCodeType.Field) { Identity = new TypeIdentity(recordName, first.FieldName) };
+            }
+
+            case PeopleCodeType.ApiObject:
+                return AgreedApiReturnType(collector);
+        }
+
+        return null;
+    }
+
+    private static TypeWithDimensionality? AgreedApiReturnType(ReturnCollector collector)
+    {
+        var returns = collector.Returns;
+        var types = new List<BuiltinObjectTypeInfo>(returns.Count);
+        foreach (var (_, type) in returns)
+        {
+            // Any, Unknown, plain ApiObject or a non-API value: nothing to say
+            if (type is not BuiltinObjectTypeInfo { PeopleCodeType: not null } api
+                || api.IsApiObjectBase
+                || !PeopleCodeTypeDatabase.IsApiObjectSubtype(api.Name))
+                return null;
+            types.Add(api);
+        }
+
+        var first = types[0];
+        for (int i = 1; i < types.Count; i++)
+        {
+            if (types[i].PeopleCodeType == first.PeopleCodeType)
+                continue;
+
+            var value = returns[i].Node.Value!;
+            value.AddTypeWarning(new TypeError(
+                $"{collector.Name} returns more than one API type " +
+                $"({first.PeopleCodeType!.Value.GetTypeName()} on line {returns[0].Node.SourceSpan.Start.Line + 1}, " +
+                $"{types[i].PeopleCodeType!.Value.GetTypeName()} on line {returns[i].Node.SourceSpan.Start.Line + 1}).",
+                value));
+            return null;
+        }
+
+        // A CI name survives only when every return carries the same one
+        var identity = first.Identity is { IsEmpty: false } firstIdentity ? firstIdentity : null;
+        foreach (var type in types.Skip(1))
+        {
+            if (identity == null)
+                break;
+            if (type.Identity is not { } other || !other.IsRefinementOf(identity) || !identity.IsRefinementOf(other))
+                identity = null;
+        }
+
+        return new TypeWithDimensionality(first.PeopleCodeType!.Value) { Identity = identity };
     }
 
     #endregion

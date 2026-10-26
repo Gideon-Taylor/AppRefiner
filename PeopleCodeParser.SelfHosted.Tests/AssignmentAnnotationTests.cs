@@ -190,7 +190,8 @@ public class AssignmentAnnotationTests
         Assert.Empty(warnings);
         Assert.Null(TypeMetadataBuilder.ExtractMetadata(Parse(source).Program).Methods["F"].RefinedReturnType);
         var call = program.FindDescendants<FunctionCallNode>().Single(c => c.Function is IdentifierNode { Name: "F" });
-        Assert.Equal("ApiObject", call.GetInferredType()!.Name, ignoreCase: true);
+        // The Tree annotation is ignored; the return's own type refines the function (spec §9)
+        Assert.Equal("Session", call.GetInferredType()!.Name, ignoreCase: true);
     }
 
     [Fact]
