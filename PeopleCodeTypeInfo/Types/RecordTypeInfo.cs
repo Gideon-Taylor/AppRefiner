@@ -47,6 +47,11 @@ public class RecordTypeInfo : BuiltinObjectTypeInfo
         return $"record({RecordName})";
     }
 
+    /// <summary>
+    /// Exposes the record name as an identity for uniform comparison.
+    /// </summary>
+    public override TypeIdentity? EffectiveIdentity => new TypeIdentity(RecordName: RecordName);
+
     protected override TypeInfo CloneWithState(bool? isAssignable = null, bool? isAutoDeclared = null)
     {
         return new RecordTypeInfo(RecordName, _resolver)

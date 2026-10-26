@@ -113,6 +113,33 @@ public abstract class TypeInfo
         if (BufferField == bufferField) return this;
         var clone = CloneWithState(isAssignable: IsAssignable, isAutoDeclared: IsAutoDeclared);
         clone.BufferField = bufferField;
+        clone.Identity = Identity;
+        return clone;
+    }
+
+    /// <summary>
+    /// The definition names this value is known to belong to (record, field, component interface),
+    /// if any. Unlike BufferField, identity travels with the value through variables and call
+    /// results. It is NOT part of Equals; compare with TypeIdentity.IsRefinementOf / ConflictsWith.
+    /// </summary>
+    public TypeIdentity? Identity { get; private set; }
+
+    /// <summary>
+    /// The identity to compare against. RecordTypeInfo and FieldTypeInfo expose their names here,
+    /// so records, fields and identity-carrying types compare uniformly.
+    /// </summary>
+    public virtual TypeIdentity? EffectiveIdentity => Identity;
+
+    /// <summary>
+    /// Returns a new TypeInfo instance carrying the given identity (or none).
+    /// If the value is the same as the current value, returns this instance.
+    /// </summary>
+    public TypeInfo WithIdentity(TypeIdentity? identity)
+    {
+        if (Identity == identity) return this;
+        var clone = CloneWithState(isAssignable: IsAssignable, isAutoDeclared: IsAutoDeclared);
+        clone.BufferField = BufferField;
+        clone.Identity = identity;
         return clone;
     }
 
@@ -131,6 +158,7 @@ public abstract class TypeInfo
         if (IsAssignable == isAssignable) return this;
         var clone = CloneWithState(isAssignable: isAssignable, isAutoDeclared: IsAutoDeclared);
         clone.BufferField = BufferField;
+        clone.Identity = Identity;
         return clone;
     }
 
@@ -143,6 +171,7 @@ public abstract class TypeInfo
         if (IsAutoDeclared == isAutoDeclared) return this;
         var clone = CloneWithState(isAssignable: IsAssignable, isAutoDeclared: isAutoDeclared);
         clone.BufferField = BufferField;
+        clone.Identity = Identity;
         return clone;
     }
 

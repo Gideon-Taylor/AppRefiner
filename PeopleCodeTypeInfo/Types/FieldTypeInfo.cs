@@ -71,6 +71,11 @@ public class FieldTypeInfo : BuiltinObjectTypeInfo
         return PeopleCodeTypeEnum.Field;
     }
 
+    /// <summary>
+    /// Exposes the record and field names as an identity for uniform comparison.
+    /// </summary>
+    public override TypeIdentity? EffectiveIdentity => new TypeIdentity(RecordName, FieldName);
+
     protected override TypeInfo CloneWithState(bool? isAssignable = null, bool? isAutoDeclared = null)
     {
         return new FieldTypeInfo(RecordName, FieldName, _resolver)

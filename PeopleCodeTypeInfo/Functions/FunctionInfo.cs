@@ -66,6 +66,13 @@ public class FunctionInfo
     public List<TypeWithDimensionality>? ReturnUnionTypes { get; set; } = null;
 
     /// <summary>
+    /// A narrower return type than ReturnType (e.g. Session for a method declared to return
+    /// ApiObject), possibly with an Identity. When set, inference uses it as-is, with no union,
+    /// polymorphic or argument-based specialization.
+    /// </summary>
+    public TypeWithDimensionality? RefinedReturnType { get; set; }
+
+    /// <summary>
     /// True when read from typeinfo.dat (builtin functions and builtin object methods).
     /// User functions and app class methods leave this false.
     /// </summary>

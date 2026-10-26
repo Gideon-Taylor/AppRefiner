@@ -74,6 +74,12 @@ public struct TypeWithDimensionality : IEquatable<TypeWithDimensionality>
     public bool MustBeVariable { get; set; } // True when caller must pass a variable (not a literal), indicated by & prefix
     public bool MustBeFieldName { get; set; } // True when caller must pass a field name (REC.FIELD / Field.X), indicated by * prefix
 
+    /// <summary>
+    /// Definition names (record, field, component interface) this type is known to carry.
+    /// Not part of Equals / GetHashCode / ToString, and not serialized.
+    /// </summary>
+    public TypeIdentity? Identity { get; set; }
+
     public TypeWithDimensionality(PeopleCodeType type, byte arrayDimensionality = 0, string? appClassPath = null, bool isReference = false, bool mustBeVariable = false, bool mustBeFieldName = false)
     {
         Type = type;
@@ -271,6 +277,12 @@ public struct TypeWithDimensionality : IEquatable<TypeWithDimensionality>
 public class SingleParameter : Parameter
 {
     public TypeWithDimensionality ParameterType { get; set; }
+
+    /// <summary>
+    /// A narrower type than ParameterType the caller is expected to pass (e.g. Session for a
+    /// parameter declared ApiObject). Null when the parameter is not refined.
+    /// </summary>
+    public TypeWithDimensionality? RefinedParameterType { get; set; }
 
     public override ParameterTag Tag => ParameterTag.Single;
     public override bool IsOptional => false;

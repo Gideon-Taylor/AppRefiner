@@ -53,6 +53,12 @@ public class PropertyInfo : IEquatable<PropertyInfo>
     public List<TypeWithDimensionality>? UnionTypes { get; set; }
 
     /// <summary>
+    /// A narrower type than Type (e.g. Session for a property declared ApiObject), possibly with
+    /// an Identity. When set, inference uses it in preference to Type / UnionTypes.
+    /// </summary>
+    public TypeWithDimensionality? RefinedType { get; set; }
+
+    /// <summary>
     /// Whether the return value is optional (caller can ignore it)
     /// Indicated by ? suffix in return type (e.g., "-> string?")
     /// </summary>

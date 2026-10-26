@@ -246,9 +246,15 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
     /// </summary>
     private TypeInfo ConvertTypeWithDimensionalityToTypeInfo(TypeWithDimensionality twd)
     {
-        TypeInfo baseType = twd.IsAppClass
-            ? AppClassTypeInfo.CreateWithInheritanceChain(twd.AppClassPath!, _typeResolver, _typeCache)
-            : TypeInfo.FromPeopleCodeType(twd.Type);
+        TypeInfo baseType;
+        if (twd.IsAppClass)
+            baseType = AppClassTypeInfo.CreateWithInheritanceChain(twd.AppClassPath!, _typeResolver, _typeCache);
+        else if (twd.Type == PeopleCodeType.Record && !string.IsNullOrEmpty(twd.Identity?.RecordName))
+            baseType = new RecordTypeInfo(twd.Identity.RecordName, _typeResolver);
+        else if (twd.Type == PeopleCodeType.Field && !string.IsNullOrEmpty(twd.Identity?.FieldName))
+            baseType = new FieldTypeInfo(twd.Identity.RecordName ?? "", twd.Identity.FieldName, _typeResolver);
+        else
+            baseType = TypeInfo.FromPeopleCodeType(twd.Type).WithIdentity(twd.Identity);
 
         return twd.IsArray
             ? new ArrayTypeInfo(twd.ArrayDimensionality, baseType)
@@ -264,6 +270,10 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
         TypeInfo[]? parameterTypes,
         IReadOnlyList<ExpressionNode>? argumentNodes = null)
     {
+        // A refined return type is authoritative: no union, polymorphic or argument specialization
+        if (func.RefinedReturnType is { } refined)
+            return ConvertTypeWithDimensionalityToTypeInfo(refined);
+
         TypeInfo returnType;
         if (func.IsUnionReturn)
         {
@@ -587,7 +597,7 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
     /// </summary>
     private TypeInfo ConvertPropertyInfoToTypeInfo(PropertyInfo prop)
     {
-        return ConvertTypeWithDimensionalityToTypeInfo(prop.ToTypeWithDimensionality());
+        return ConvertTypeWithDimensionalityToTypeInfo(prop.RefinedType ?? prop.ToTypeWithDimensionality());
     }
 
     /// <summary>
