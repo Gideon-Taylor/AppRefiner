@@ -81,28 +81,55 @@ Local PKG:Foo:Bar &x;");
     }
 
     [Fact]
-    public void Reports_under_wildcard_import_when_no_resolver_available()
+    public void Assumes_wildcard_covers_class_when_no_resolver_available()
     {
-        // Wildcard expansion depends on the resolver — without one the wildcard
-        // cannot vouch for the class, matching the old styler's DB-less behavior.
+        // Without a resolver the wildcard can't be expanded, so it may cover any class
         var (program, errors) = ParseTestHelper.Parse(@"
 import PKG:Foo:*;
-Local PKG:Foo:Bar &x;");
+Local PKG:Foo:Bar &x;
+Local Baz &y;");
 
         var diags = CompileChecker.Check(program, errors, resolver: null, new CompileCheckContextInput(null));
 
-        Assert.Contains(diags, d => d.Code == DiagnosticCode.UnimportedClass);
+        Assert.DoesNotContain(diags, d => d.Code == DiagnosticCode.UnimportedClass);
     }
 
     [Fact]
-    public void Reports_under_wildcard_import_when_resolver_does_not_know_the_package()
+    public void Assumes_wildcard_covers_class_when_package_lists_no_classes()
     {
+        // The database resolver lists no classes when it isn't connected
         var (program, errors) = ParseTestHelper.Parse(@"
 import PKG:Foo:*;
 Local PKG:Foo:Bar &x;");
         var fake = new FakeTypeMetadataResolver(); // package not registered
 
         var diags = CompileChecker.Check(program, errors, fake, new CompileCheckContextInput(null));
+
+        Assert.DoesNotContain(diags, d => d.Code == DiagnosticCode.UnimportedClass);
+    }
+
+    [Fact]
+    public void Reports_class_an_expanded_wildcard_does_not_cover()
+    {
+        var (program, errors) = ParseTestHelper.Parse(@"
+import PKG:Foo:*;
+Local PKG:Foo:Baz &x;");
+        var fake = new FakeTypeMetadataResolver();
+        fake.AddPackageClasses("PKG:Foo", "Bar");
+
+        var diags = CompileChecker.Check(program, errors, fake, new CompileCheckContextInput(null));
+
+        Assert.Contains(diags, d => d.Code == DiagnosticCode.UnimportedClass);
+    }
+
+    [Fact]
+    public void Reports_without_resolver_when_there_is_no_wildcard()
+    {
+        var (program, errors) = ParseTestHelper.Parse(@"
+import PKG:Foo:Bar;
+Local Baz &x;");
+
+        var diags = CompileChecker.Check(program, errors, resolver: null, new CompileCheckContextInput(null));
 
         Assert.Contains(diags, d => d.Code == DiagnosticCode.UnimportedClass);
     }

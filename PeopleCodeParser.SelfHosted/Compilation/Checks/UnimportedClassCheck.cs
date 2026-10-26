@@ -15,8 +15,9 @@ namespace PeopleCodeParser.SelfHosted.Compilation.Checks;
 ///   references to a different package's Bar.
 /// - A fully-qualified reference (e.g. <c>Local PKG:Foo:Bar &amp;x;</c>) IS flagged when
 ///   nothing imports "Bar" — PeopleCode requires the import either way.
-/// - Without a resolver, wildcard imports vouch for nothing (mirrors the styler's
-///   DB-disconnected behavior).
+/// - A wildcard import that can't be expanded (no resolver, or the resolver lists no
+///   classes, as when the database isn't connected) is assumed to cover every class, so
+///   nothing is reported rather than every class under it.
 ///
 /// FixContext = the simple class name (string) — AppRefiner's deferred quick-fix
 /// resolver uses it to query candidate packages at Ctrl+. time.
@@ -27,6 +28,7 @@ public sealed class UnimportedClassCheck : CompileCheckBase
 
     private readonly HashSet<string> _importedClasses = new(StringComparer.OrdinalIgnoreCase);
     private readonly HashSet<string> _importedPackages = new(StringComparer.OrdinalIgnoreCase);
+    private bool _unexpandedWildcard;
 
     public override void OnNode(AstNode node, CompileCheckContext ctx, IDiagnosticSink sink)
     {
@@ -85,15 +87,21 @@ public sealed class UnimportedClassCheck : CompileCheckBase
             }
         }
 
-        // Expand wildcard imports through the resolver when one is available.
-        if (ctx.Resolver != null && _importedPackages.Count > 0)
+        // Expand wildcard imports through the resolver. A wildcard it can't expand (no resolver,
+        // or no classes listed, as when the database isn't connected) may cover any class.
+        _unexpandedWildcard = false;
+        foreach (var packagePath in _importedPackages)
         {
-            foreach (var packagePath in _importedPackages)
+            var classes = ctx.Resolver?.GetClassesInPackage(packagePath);
+            if (classes == null || classes.Count == 0)
             {
-                foreach (var className in ctx.Resolver.GetClassesInPackage(packagePath))
-                {
-                    _importedClasses.Add(className);
-                }
+                _unexpandedWildcard = true;
+                continue;
+            }
+
+            foreach (var className in classes)
+            {
+                _importedClasses.Add(className);
             }
         }
     }
@@ -104,7 +112,7 @@ public sealed class UnimportedClassCheck : CompileCheckBase
             return;
 
         var className = appClassType.ClassName;
-        if (_importedClasses.Contains(className))
+        if (_importedClasses.Contains(className) || _unexpandedWildcard)
             return;
 
         sink.Report(new CompileDiagnostic(
