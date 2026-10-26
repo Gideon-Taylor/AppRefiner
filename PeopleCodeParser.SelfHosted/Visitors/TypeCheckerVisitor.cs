@@ -1,4 +1,5 @@
 
+using PeopleCodeParser.SelfHosted.Annotations;
 using PeopleCodeParser.SelfHosted.Nodes;
 using PeopleCodeParser.SelfHosted.Visitors.Models;
 using PeopleCodeTypeInfo.Contracts;
@@ -30,16 +31,18 @@ namespace PeopleCodeParser.SelfHosted.Visitors
     {
         private readonly ITypeMetadataResolver _typeResolver;
         private readonly TypeCache _typeCache;
+        private readonly AnnotationIndex _annotations;
 
-        private TypeCheckerVisitor(ITypeMetadataResolver typeResolver, TypeCache typeCache)
+        private TypeCheckerVisitor(ITypeMetadataResolver typeResolver, TypeCache typeCache, AnnotationIndex annotations)
         {
             _typeResolver = typeResolver;
             _typeCache = typeCache;
+            _annotations = annotations;
         }
 
         public static TypeCheckerVisitor Run(ProgramNode program, ITypeMetadataResolver typeResolver, TypeCache typeCache)
         {
-            var visitor = new TypeCheckerVisitor(typeResolver, typeCache);
+            var visitor = new TypeCheckerVisitor(typeResolver, typeCache, program.Annotations);
             program.Accept(visitor);
             return visitor;
         }
@@ -139,17 +142,25 @@ namespace PeopleCodeParser.SelfHosted.Visitors
                 || !(rightApi.IsApiObjectBase || PeopleCodeTypeDatabase.IsApiObjectSubtype(rightApi.Name)))
                 return false;
 
+            // A fitting /* as T */ on a concrete value wins over the value's own type, as in
+            // inference; plain ApiObject values never count as a type change
+            string? assignedName = rightApi.IsApiObjectBase
+                ? null
+                : _annotations.ForValue(node.Value)?.Target is { Category: AnnotationCategory.ApiObject } annotated
+                    ? annotated.Type.GetTypeName()
+                    : rightApi.Name;
+
             // An annotated target's conflict was already reported by inference, on the value
-            if (!rightApi.IsApiObjectBase
+            if (assignedName != null
                 && id.GetRefinementSource()?.Kind != RefinementKind.Annotation
                 && leftType is BuiltinObjectTypeInfo leftApi
                 && PeopleCodeTypeDatabase.IsApiObjectSubtype(leftApi.Name)
-                && !leftApi.Name.Equals(rightApi.Name, StringComparison.OrdinalIgnoreCase))
+                && !leftApi.Name.Equals(assignedName, StringComparison.OrdinalIgnoreCase))
             {
                 var previousLine = id.GetRefinementSource()?.Line + 1;
                 var previous = previousLine.HasValue ? $"{leftApi.Name} on line {previousLine}" : leftApi.Name;
                 RecordTypeWarning(
-                    $"{id.Name} is assigned more than one API type ({previous}, {rightApi.Name} on line {node.SourceSpan.Start.Line + 1}). " +
+                    $"{id.Name} is assigned more than one API type ({previous}, {assignedName} on line {node.SourceSpan.Start.Line + 1}). " +
                     "Use a separate variable for each type.",
                     node);
             }

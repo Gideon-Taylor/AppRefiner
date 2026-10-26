@@ -203,4 +203,24 @@ public class AssignmentAnnotationTests
         Assert.Empty(warnings);
         Assert.Equal("string", LastUse(program, "&s").GetInferredType()!.Name, ignoreCase: true);
     }
+
+    [Fact]
+    public void Annotation_keeping_the_same_api_type_is_not_a_type_change()
+    {
+        var (_, _, warnings) = TypeCheck(
+            "Local ApiObject &q = %Session.GetQuery();\n&q = %Session.GetCompIntfc(CompIntfc.A) /* as Query */;");
+
+        Assert.DoesNotContain(warnings, w => w.Message.Contains("more than one API type"));
+        Assert.Single(warnings, w => w.Message == "The value is ComponentInterface, but it is annotated as Query. Using Query.");
+    }
+
+    [Fact]
+    public void One_type_warning_names_the_annotated_type()
+    {
+        var (_, _, warnings) = TypeCheck(
+            "Local ApiObject &q = %Session;\n&q = %Session.GetCompIntfc(CompIntfc.A) /* as Query */;");
+
+        Assert.Single(warnings, w => w.Message ==
+            "&q is assigned more than one API type (Session on line 1, Query on line 2). Use a separate variable for each type.");
+    }
 }
