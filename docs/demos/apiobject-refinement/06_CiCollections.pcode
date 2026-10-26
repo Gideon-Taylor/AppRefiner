@@ -6,8 +6,8 @@ Local boolean &found = &ci.Get();
 
 /* &ci.Roles is untyped until the CI's definition is read, so &roles narrows from its own uses */
 Local ApiObject &roles = &ci.Roles;
-Local number &current = &roles.CurrentItemNumber; /* OK: DataCollection, or a CI or item field of that name */
-Local ApiObject &role = &roles.Item(1); /* OK: settles &roles as DataCollection; hover &role shows ApiObject (DataItem) */
+Local number &current = &roles.CurrentItemNumber; /* OK: only DataCollection declares it, so this settles &roles */
+Local ApiObject &role = &roles.Item(1); /* OK: hover &role shows ApiObject (DataItem) */
 Local string &name = &role.RoleName; /* OK: DataItem field */
 Local number &num = &role.ItemNum; /* OK */
 &role.Bogus(); /* ERROR: names DataItem and the assignment */

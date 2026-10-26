@@ -56,7 +56,7 @@ does. Only delivered metadata is used: `CompIntfc.USER_PROFILE` and `Record.PSOP
   - `&cd` (line 65) is plain `ApiObject`: a function that returns itself can't be refined.
   - `&gConn` (line 68) and `&cQry` (line 70) narrow to Session and Query.
 - `06_CiCollections`:
-  - `&roles` (line 10) shows `ApiObject (DataCollection), inferred from Item() on line 10`.
+  - `&roles` (line 10) shows `ApiObject (DataCollection), inferred from CurrentItemNumber on line 9`.
   - `&role` (line 11) shows `ApiObject (DataItem), assigned on line 10`.
   - `&other` (line 20) shows plain `ApiObject`: a property nothing declares doesn't narrow.
 - `Consumer`:

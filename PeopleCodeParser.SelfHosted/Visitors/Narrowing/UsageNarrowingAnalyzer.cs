@@ -271,18 +271,17 @@ public sealed class UsageNarrowingAnalyzer : ScopedAstVisitor<object>
     }
 
     /// <summary>
-    /// The candidates a property use leaves: those that declare it, plus the ones with dynamic
-    /// properties (ComponentInterface and DataItem), where it may be a field named like a declared
-    /// property (NAME, COUNT). Only a property a dynamic type itself declares (InteractiveMode,
-    /// ItemNum) narrows to the declarers alone.
+    /// The candidates a property use leaves: those that declare it, or, when none does, the ones
+    /// with dynamic properties (ComponentInterface and DataItem), where it may be a field. A CI
+    /// field named like a declared property (NAME, COUNT) narrows away from ComponentInterface;
+    /// CI variables are nearly always typed by GetCompIntfc() or a CI method first, and an
+    /// annotation covers the rest.
     /// </summary>
     private static List<string> PropertyFits(IReadOnlyList<string> candidates, string member, out bool declared)
     {
         var declaring = candidates.Where(type => PeopleCodeTypeDatabase.GetProperty(type, member) != null).ToList();
         declared = declaring.Count > 0;
-        if (declaring.Any(DynamicPropertyTypes.Contains))
-            return declaring;
-        return candidates.Where(type => declaring.Contains(type) || DynamicPropertyTypes.Contains(type)).ToList();
+        return declared ? declaring : candidates.Where(DynamicPropertyTypes.Contains).ToList();
     }
 
     /// <summary>

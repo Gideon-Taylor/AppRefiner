@@ -517,8 +517,7 @@ Local ApiObject &ci = &s.GetCompIntfc(CompIntfc.USER_PROFILE);
     // CI collection items (DataItem): fields are dynamic like the CI's own
     // -----------------------------------------------------------------------
 
-    // Item() settles &roles as DataCollection after CurrentItemNumber left it, a CI or a DataItem (a
-    // CI's &ci.Roles is untyped until the CI's
+    // CurrentItemNumber settles &roles as DataCollection (a CI's &ci.Roles is untyped until the CI's
     // definition is read)
     private const string ItemSetup = @"
 Local ApiObject &roles;

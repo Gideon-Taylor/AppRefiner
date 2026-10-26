@@ -155,7 +155,8 @@ public class UsageNarrowingAnalyzerTests
     [Theory]
     [InlineData("InteractiveMode", "ComponentInterface")]
     [InlineData("ItemNum", "DataItem")]
-    public void Property_declared_on_a_dynamic_type_settles_it(string property, string type)
+    [InlineData("CurrentItemNumber", "DataCollection")]
+    public void Declared_property_settles_its_only_declarer(string property, string type)
     {
         var result = ForLocal($"Local ApiObject &x;\n&y = &x.{property};");
 
@@ -164,24 +165,14 @@ public class UsageNarrowingAnalyzerTests
     }
 
     [Fact]
-    public void Ci_field_named_like_a_declared_property_keeps_ci()
+    public void Ci_field_named_like_a_declared_property_narrows_away_from_ci()
     {
-        // Name is declared on 25 API types, but a CI can also have a NAME field
+        // Accepted trade-off: Name is declared on 25 API types, so a CI's NAME field rules
+        // ComponentInterface out; an annotation or a GetCompIntfc() assignment types such a CI
         var result = ForLocal("Local ApiObject &x;\n&n = &x.Name;\n&b = &x.Get();");
 
-        Assert.Equal("ComponentInterface", result!.NarrowedType);
-        Assert.Equal("Get", result.DecidingUse!.MemberName);
-        Assert.Empty(result.Conflicts);
-    }
-
-    [Fact]
-    public void Property_declared_only_on_a_collection_does_not_settle_it()
-    {
-        // CurrentItemNumber could still be a CI or item field
-        var result = ForLocal("Local ApiObject &x;\n&n = &x.CurrentItemNumber;");
-
         Assert.Null(result!.NarrowedType);
-        Assert.Equal(new[] { "ComponentInterface", "DataCollection", "DataItem" }, result.Candidates);
+        Assert.Single(result.Conflicts);
     }
 
     [Fact]

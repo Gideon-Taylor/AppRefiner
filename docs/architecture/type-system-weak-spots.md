@@ -167,10 +167,12 @@ Fixed in 2026-10, from App Designer probes:
   interface's.
 - Member access on a plain `ApiObject` that nothing has typed is checked only for methods no API
   type has (it was a false error on CI code such as `&item.RoleName`).
-- In narrowing, a property leaves the types that declare it plus ComponentInterface and DataItem,
-  since a CI or item field can share a declared name (`NAME`, `COUNT`). Only a property one of
-  those two declares itself (`InteractiveMode`, `ItemNum`) settles it. A property nobody declares
-  may be a field or a typo, so it counts only after something else has narrowed the list.
+- In narrowing, a property some API type declares narrows to its declarers (`ItemNum` settles
+  DataItem, `CurrentItemNumber` DataCollection). One nobody declares may be a CI or item field,
+  or a typo, so it counts only after something else has narrowed the list. Accepted trade-off: a
+  CI field named like a declared property (`NAME`, `COUNT`) on a variable not yet typed as a CI
+  narrows away from ComponentInterface. CI variables are nearly always typed by their
+  `GetCompIntfc()` assignment or a CI method first; otherwise annotate them.
 - An ignored return value is an error only for user-written functions and methods and for typed
   builtin methods not marked optional. App Designer accepts an ignored return from any API
   object method, even on `%Session`, because those calls are late-bound.
