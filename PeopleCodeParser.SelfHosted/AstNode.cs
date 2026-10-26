@@ -99,6 +99,11 @@ public abstract class AstNode
     public const string FunctionInfoAttributeKey = "FunctionInfo";
 
     /// <summary>
+    /// Attribute key for storing where a variable use's refined type came from (RefinementSource)
+    /// </summary>
+    public const string RefinementSourceAttributeKey = "RefinementSource";
+
+    /// <summary>
     /// Attribute key for storing type checking errors (TypeError)
     /// </summary>
     public const string TypeErrorAttributeKey = "TypeError";

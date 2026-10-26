@@ -70,7 +70,16 @@ public class VariableInfo
     /// </summary>
     public string Type { get; private set; }
 
-    public TypeInfo InferredType { get; private set; }
+    /// <summary>
+    /// Refined type of the variable (e.g. Session for a variable declared ApiObject).
+    /// <see cref="Type"/> stays the declared type.
+    /// </summary>
+    public TypeInfo? InferredType { get; private set; }
+
+    /// <summary>
+    /// Where <see cref="InferredType"/> came from, if it was set by refinement
+    /// </summary>
+    public RefinementSource? RefinementSource { get; private set; }
 
     /// <summary>
     /// Kind of variable (local, instance, global, etc.)
@@ -187,10 +196,24 @@ public class VariableInfo
         Type = newType;
     }
 
+    /// <summary>
+    /// Sets the inferred type and overwrites the declared <see cref="Type"/> with it.
+    /// Used only for auto-declared variables, which are typed on their first assignment;
+    /// use <see cref="Refine"/> for declared variables.
+    /// </summary>
     public void SetInferredType(TypeInfo typeInfo)
     {
         InferredType = typeInfo;
         UpdateType(typeInfo.Name);
+    }
+
+    /// <summary>
+    /// Sets the refined type and where it came from. The declared <see cref="Type"/> is left unchanged.
+    /// </summary>
+    public void Refine(TypeInfo type, RefinementSource source)
+    {
+        InferredType = type;
+        RefinementSource = source;
     }
 
     /// <summary>

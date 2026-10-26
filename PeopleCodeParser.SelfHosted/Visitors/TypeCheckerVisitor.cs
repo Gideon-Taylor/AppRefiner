@@ -89,6 +89,9 @@ namespace PeopleCodeParser.SelfHosted.Visitors
             var leftType = node.Target.GetInferredType();
             var rightType = node.Value.GetInferredType();
 
+            if (CheckApiObjectReassignment(node, leftType, rightType))
+                return;
+
             if (leftType != null && rightType != null)
             {
                 if (!AreTypesCompatible(leftType, rightType))
@@ -99,10 +102,54 @@ namespace PeopleCodeParser.SelfHosted.Visitors
                     }
                     else
                     {
-                        RecordTypeError($"Cannot assign type '{rightType}' to '{leftType}'", node);
+                        // The stamped type may be a refinement (Session for an ApiObject variable); name the declared type
+                        var targetTypeName = node.Target is IdentifierNode id
+                            && FindVariable(id.Name) is { IsAutoDeclared: false } variable
+                                ? variable.Type
+                                : leftType.ToString();
+                        RecordTypeError($"Cannot assign type '{rightType}' to '{targetTypeName}'", node);
                     }
                 }
             }
+        }
+
+        /// <summary>
+        /// An any variable accepts every value, and an ApiObject variable any API value: the target's
+        /// stamped type is only its refinement (for member resolution), so check against the declared
+        /// type (from this visitor's own registry) instead. Warns when an ApiObject variable changes
+        /// API subtype. Returns true if the assignment was handled.
+        /// </summary>
+        private bool CheckApiObjectReassignment(AssignmentNode node, TypeInfo? leftType, TypeInfo? rightType)
+        {
+            if (node.Target is not IdentifierNode id
+                || FindVariable(id.Name) is not { IsAutoDeclared: false } variable)
+                return false;
+
+            if (variable.Type.Equals("any", StringComparison.OrdinalIgnoreCase))
+                return true;
+
+            if (!variable.Type.Equals("apiobject", StringComparison.OrdinalIgnoreCase))
+                return false;
+
+            // ApiObject base values (e.g. an unresolved ApiObject return) fit the declared type too
+            if (rightType is not BuiltinObjectTypeInfo rightApi
+                || !(rightApi.IsApiObjectBase || PeopleCodeTypeDatabase.IsApiObjectSubtype(rightApi.Name)))
+                return false;
+
+            if (!rightApi.IsApiObjectBase
+                && leftType is BuiltinObjectTypeInfo leftApi
+                && PeopleCodeTypeDatabase.IsApiObjectSubtype(leftApi.Name)
+                && !leftApi.Name.Equals(rightApi.Name, StringComparison.OrdinalIgnoreCase))
+            {
+                var previousLine = id.GetRefinementSource()?.Line + 1;
+                var previous = previousLine.HasValue ? $"{leftApi.Name} on line {previousLine}" : leftApi.Name;
+                RecordTypeWarning(
+                    $"{id.Name} is assigned more than one API type ({previous}, {rightApi.Name} on line {node.SourceSpan.Start.Line + 1}). " +
+                    "Use a separate variable for each type.",
+                    node);
+            }
+
+            return true;
         }
 
         public override void VisitLocalVariableDeclaration(LocalVariableDeclarationNode node)

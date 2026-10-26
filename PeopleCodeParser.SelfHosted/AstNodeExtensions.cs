@@ -1,5 +1,6 @@
 using PeopleCodeParser.SelfHosted.Analysis;
 using PeopleCodeParser.SelfHosted.Visitors;
+using PeopleCodeParser.SelfHosted.Visitors.Models;
 using PeopleCodeTypeInfo.Functions;
 using PeopleCodeTypeInfo.Types;
 
@@ -83,6 +84,34 @@ public static class AstNodeExtensions
     public static void SetFunctionInfo(this AstNode node, FunctionInfo functionInfo)
     {
         node.Attributes[AstNode.FunctionInfoAttributeKey] = functionInfo;
+    }
+
+    #endregion
+
+    #region RefinementSource Extensions
+
+    /// <summary>
+    /// Gets where this variable use's refined type came from, if it was refined.
+    /// </summary>
+    /// <param name="node">The AST node to query</param>
+    /// <returns>The RefinementSource if one has been stored, null otherwise</returns>
+    public static RefinementSource? GetRefinementSource(this AstNode node)
+    {
+        if (node.Attributes.TryGetValue(AstNode.RefinementSourceAttributeKey, out var source))
+        {
+            return source as RefinementSource;
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// Sets where this variable use's refined type came from.
+    /// </summary>
+    /// <param name="node">The AST node to update</param>
+    /// <param name="source">The refinement source to store</param>
+    public static void SetRefinementSource(this AstNode node, RefinementSource source)
+    {
+        node.Attributes[AstNode.RefinementSourceAttributeKey] = source;
     }
 
     #endregion

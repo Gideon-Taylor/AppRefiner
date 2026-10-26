@@ -531,8 +531,10 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
     /// store the specialized type so later uses retain identity/members:
     /// - Record/Field named instances when declared as Record/Field/any
     /// - ApiObject subtypes (Session, ComponentInterface, …) when declared as ApiObject/any
+    /// Compares against the declared type, so a later assignment re-refines the variable.
+    /// <paramref name="sourceNode"/> (declaration or assignment) is recorded as the refinement source.
     /// </summary>
-    private void TryRefineVariableFromExpression(string variableName, ExpressionNode? expression)
+    private void TryRefineVariableFromExpression(string variableName, ExpressionNode? expression, AstNode sourceNode)
     {
         if (expression == null) return;
 
@@ -542,7 +544,7 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
         var variable = FindVariable(variableName);
         if (variable == null) return;
 
-        var declared = variable.InferredType ?? ConvertTypeNameToTypeInfo(variable.Type);
+        var declared = ConvertTypeNameToTypeInfo(variable.Type);
         bool declaredIsAny = declared.Kind == TypeKind.Any
             || variable.Type.Equals("any", StringComparison.OrdinalIgnoreCase);
 
@@ -551,7 +553,7 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
                 || declared.PeopleCodeType == PeopleCodeType.Record
                 || declared is RecordTypeInfo))
         {
-            variable.SetInferredType(rhsType.WithAssignable(true));
+            variable.Refine(rhsType.WithAssignable(true), new RefinementSource(RefinementKind.Assignment, sourceNode));
             return;
         }
 
@@ -560,7 +562,7 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
                 || declared.PeopleCodeType == PeopleCodeType.Field
                 || declared is FieldTypeInfo))
         {
-            variable.SetInferredType(rhsType.WithAssignable(true));
+            variable.Refine(rhsType.WithAssignable(true), new RefinementSource(RefinementKind.Assignment, sourceNode));
             return;
         }
 
@@ -575,7 +577,7 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
 
             if (declaredIsAny || declaredIsApiObject)
             {
-                variable.SetInferredType(rhsType.WithAssignable(true));
+                variable.Refine(rhsType.WithAssignable(true), new RefinementSource(RefinementKind.Assignment, sourceNode));
             }
         }
     }
@@ -1091,7 +1093,7 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
         base.VisitLocalVariableDeclarationWithAssignment(node);
 
         // Refine Local Record &r = CreateRecord(Record.NAME) → RecordTypeInfo(NAME)
-        TryRefineVariableFromExpression(node.VariableNameInfo.Name, node.InitialValue);
+        TryRefineVariableFromExpression(node.VariableNameInfo.Name, node.InitialValue, node);
     }
 
     /// <summary>
@@ -1188,7 +1190,7 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
             }
 
             // &r = CreateRecord(Record.NAME) / &f = &rec.GetField(Field.X) — keep named identity
-            TryRefineVariableFromExpression(identifier.Name, node.Value);
+            TryRefineVariableFromExpression(identifier.Name, node.Value, node);
         }
     }
 
@@ -1325,6 +1327,7 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
                 }
 
                 SetInferredType(node, inferredType);
+                if (variable.RefinementSource is { } src) node.SetRefinementSource(src);
             }
             // Handle auto-declared variables (delegate didn't provide a type)
             else if (variable != null && variable.IsAutoDeclared)
@@ -1339,6 +1342,7 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
                 }
 
                 SetInferredType(node, inferredType);
+                if (variable.RefinementSource is { } src) node.SetRefinementSource(src);
             }
             // Variable is null - try system variables and field types
             else
