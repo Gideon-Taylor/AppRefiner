@@ -16,7 +16,7 @@ namespace AppRefiner.Stylers;
 public class CompilerErrorsStyler : BaseStyler
 {
     private const uint ERROR_COLOR = 0x0000FFA0;   // red squiggle (matches old stylers)
-    private const uint WARNING_COLOR = 0x32FF32FF; // light green (matches TypeErrorStyler)
+    private const uint WARNING_COLOR = 0x008CF0FF; // amber squiggle (BGRA: R=F0 G=8C B=00)
     /// <summary>
     /// Soft red full-box for secondary path loci (e.g. NotAllPathsReturn incomplete branch).
     /// Distinct from the primary squiggle so it doesn't read as a syntax error on a token.

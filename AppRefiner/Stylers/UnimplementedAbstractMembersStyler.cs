@@ -24,7 +24,7 @@ namespace AppRefiner.Stylers;
 /// </summary>
 public class UnimplementedAbstractMembersStyler : BaseStyler
 {
-    private const uint WARNING_COLOR = 0xFF00A5FF; // Orange (BGRA) for the advisory squiggle
+    private const uint WARNING_COLOR = 0x008CF0FF; // amber (BGRA: R=F0 G=8C B=00), same as compiler warnings
 
     public override string Description => "Missing abstract implementations";
 
