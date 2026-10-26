@@ -1,6 +1,4 @@
 using PeopleCodeParser.SelfHosted.Nodes;
-using PeopleCodeParser.SelfHosted.Visitors.Models;
-using PeopleCodeParser.SelfHosted.Visitors.Narrowing;
 using PeopleCodeTypeInfo.Contracts;
 using PeopleCodeTypeInfo.Database;
 using PeopleCodeTypeInfo.Functions;
@@ -307,17 +305,7 @@ public sealed class InvalidMemberAccessCheck : CompileCheckBase
             return "";
 
         var source = id.GetRefinementSource();
-        var verb = source?.Kind switch
-        {
-            RefinementKind.Annotation => "annotated",
-            RefinementKind.Assignment => "assigned",
-            RefinementKind.Narrowing => source!.Node is MemberAccessNode decidingUse
-                ? $"inferred from {UsageNarrowingAnalyzer.Decider(decidingUse)}"
-                : "inferred",
-            _ => null
-        };
-
-        return verb == null ? "" : $" ({id.Name} is {DisplayName(targetType)}, {verb} on line {source!.Line + 1})";
+        return source == null ? "" : $" ({id.Name} is {DisplayName(targetType)}, {source.Origin} on line {source.Line + 1})";
     }
 
     private static string DisplayName(TypeInfo type) => type switch

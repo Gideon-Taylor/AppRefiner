@@ -4636,8 +4636,9 @@ namespace AppRefiner
 
                 var qualifiedName = DetermineQualifiedName(editor);
 
-                // Evict type metadata for this program only (do not Clear() the whole resolver —
-                // other classes are still valid after one save).
+                // Evict type metadata for this program, and (inside TypeCache.Remove) the cached
+                // refinements inferred from it. Don't Clear() the whole resolver: other classes
+                // are still valid after one save.
                 if (appDesignerProcess.TypeResolver != null)
                 {
                     bool removed = appDesignerProcess.TypeResolver.Cache.Remove(qualifiedName);

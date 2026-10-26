@@ -1199,7 +1199,9 @@ public abstract class ScopedAstVisitor<T> : AstVisitorBase
                 break;
 
             default:
-                // For unknown expression types, use the base visitor
+                // For unknown expression types, use the base visitor. UsageNarrowingAnalyzer
+                // overrides the nodes that fall through here to record nested uses, so adding a
+                // node type here means checking the analyzer.
                 previousSkip = skipChildTraversal;
                 skipChildTraversal = true;
                 try

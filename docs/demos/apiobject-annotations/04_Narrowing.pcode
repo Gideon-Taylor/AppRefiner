@@ -1,0 +1,33 @@
+/* Phase 3: usage narrowing. A Local ApiObject that is never assigned takes its API type from the
+   members used directly on it. Paste into any non-class PeopleCode event. */
+
+/* Settling: Save fits nine API types, Close two; RunToRowset fits only Query */
+Local ApiObject &q;
+Local number &saved = &q.Save(); /* OK: hover &q shows ApiObject (Query), inferred from RunToRowset() on line 8 */
+&q.Close(); /* OK: still before the deciding use, &q is already Query */
+Local Rowset &rs = &q.RunToRowset(CreateRecord(Record.PSOPRDEFN), 10); /* OK: settles &q as Query */
+&q.Disconnect(); /* WARNING (N2): &q was inferred as Query from RunToRowset() on line 8, but Query has no member 'Disconnect'. */
+
+/* N1: no candidate left after earlier uses narrowed the list */
+Local ApiObject &p;
+&p.Open("X"); /* OK: PortalRegistry or Query */
+&p.Cancel(); /* WARNING (N1): 'Cancel' is not a member of PortalRegistry or Query. Earlier uses of &p (Open() on line 13) suggested one of those types. */
+
+/* N3: the first use fits no API type at all */
+Local ApiObject &z;
+&z.Zzz(); /* WARNING (N3): 'Zzz' is not a member of any API object type. */
+
+/* N4: uses settle Session, then an assignment gives a Query */
+Local ApiObject &s;
+Local ApiObject &ci = &s.GetCompIntfc(CompIntfc.USER_PROFILE); /* OK: settles &s as Session */
+&s = %Session.GetQuery(); /* WARNING (N4): Uses of &s suggest Session (GetCompIntfc() on line 22), but it is assigned Query on line 23. */
+Local Rowset &rs2 = &s.RunToRowset(CreateRecord(Record.PSOPRDEFN), 10); /* OK: the latest assignment wins, &s is Query here */
+
+/* Undecided: Delete fits PortalRegistry and Query, and nothing narrows further */
+Local ApiObject &u;
+&u.Delete(); /* OK: hover &u shows ApiObject (PortalRegistry or Query) */
+
+/* A component interface property doesn't settle the type on its own */
+Local ApiObject &c;
+Local string &uid = &c.UserID; /* OK: UserID is a CI key, so only ComponentInterface fits, but it isn't enough to settle */
+Local boolean &found = &c.Get(); /* OK: Get settles &c as ComponentInterface; hover &c on line 32 shows inferred from Get() on line 33 */

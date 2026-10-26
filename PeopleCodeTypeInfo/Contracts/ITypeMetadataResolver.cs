@@ -49,7 +49,7 @@ public abstract class ITypeMetadataResolver
     /// </returns>
     public TypeMetadata? GetTypeMetadata(string qualifiedName)
     {
-        // Check cache first
+        // Check cache first (which also records the lookup for a refinement in progress)
         var cached = _cache.Get(qualifiedName);
         if (cached != null)
         {
@@ -82,7 +82,7 @@ public abstract class ITypeMetadataResolver
     /// </returns>
     public async Task<TypeMetadata?> GetTypeMetadataAsync(string qualifiedName)
     {
-        // Check cache first
+        // Check cache first (which also records the lookup for a refinement in progress)
         var cached = _cache.Get(qualifiedName);
         if (cached != null)
         {

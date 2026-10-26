@@ -1242,11 +1242,14 @@ public class AppClassTypeInfo : TypeInfo
     /// <param name="qualifiedName">The fully qualified name of the AppClass (e.g., "PKG:MyClass")</param>
     /// <param name="resolver">Type metadata resolver to resolve base class metadata</param>
     /// <param name="cache">Type cache for performance optimization</param>
+    /// <param name="known">Metadata to use for its own class instead of the cache or resolver,
+    /// typically the program being analyzed (so a class being refined never fetches itself)</param>
     /// <returns>AppClassTypeInfo with complete inheritance chain information</returns>
     public static AppClassTypeInfo CreateWithInheritanceChain(
         string qualifiedName,
         Contracts.ITypeMetadataResolver resolver,
-        Inference.TypeCache cache)
+        Inference.TypeCache cache,
+        Inference.TypeMetadata? known = null)
     {
         // Build the complete inheritance chain
         var chain = new List<InheritanceChainEntry>();
@@ -1266,7 +1269,10 @@ public class AppClassTypeInfo : TypeInfo
         while (!string.IsNullOrEmpty(currentClassName))
         {
             // Try to get metadata - check cache first, then resolver
-            Inference.TypeMetadata? metadata = cache.Get(currentClassName);
+            Inference.TypeMetadata? metadata =
+                known != null && currentClassName.Equals(known.QualifiedName, StringComparison.OrdinalIgnoreCase)
+                    ? known
+                    : cache.Get(currentClassName);
             if (metadata == null && resolver != null)
             {
                 metadata = resolver.GetTypeMetadata(currentClassName);

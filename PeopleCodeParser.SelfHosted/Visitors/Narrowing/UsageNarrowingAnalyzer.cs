@@ -33,7 +33,7 @@ public sealed class UsageNarrowingAnalyzer : ScopedAstVisitor<object>
 
     private readonly ProgramNode _program;
 
-    // Eligible variables in declaration order, with their names as declared
+    // Eligible variables, with their names as declared
     private readonly Dictionary<VariableKey, string> _eligible = new();
     private readonly HashSet<VariableKey> _annotated = new();
     private readonly Dictionary<VariableKey, List<Use>> _uses = new();

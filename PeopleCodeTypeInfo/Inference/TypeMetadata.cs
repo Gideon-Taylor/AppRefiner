@@ -100,6 +100,22 @@ public class TypeMetadata
     public IReadOnlyCollection<string> ConcreteMemberSignatures { get; init; } = Array.Empty<string>();
 
     /// <summary>
+    /// Refinement was cut short by a cycle, the depth limit or a self-reference. Cached anyway; if
+    /// it was refined nested inside another program's refinement, it's evicted when that top-level
+    /// refinement finishes, else it stays cached as the best result the cycle guard allows.
+    /// </summary>
+    public bool IsProvisional { get; set; }
+
+    /// <summary>
+    /// Qualified names of the programs this metadata's refinement looked up (case-insensitive).
+    /// Removing any of them from the <see cref="TypeCache"/> also removes this metadata, since its
+    /// refined types may have been inferred from theirs.
+    /// </summary>
+    public IReadOnlySet<string> RefinementDependencies { get; set; } = EmptyDependencies;
+
+    private static readonly IReadOnlySet<string> EmptyDependencies = new HashSet<string>();
+
+    /// <summary>
     /// Canonical method signature used by AbstractMemberSignatures/ConcreteMemberSignatures.
     /// Both TypeMetadataBuilder and the compile checks must use this helper so the
     /// scheme cannot drift.

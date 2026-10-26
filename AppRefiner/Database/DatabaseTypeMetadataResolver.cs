@@ -294,6 +294,14 @@ namespace AppRefiner.Database
                 // Extract metadata from the AST
                 var metadata = TypeMetadataBuilder.ExtractMetadata(program, qualifiedName);
 
+                // Refine unannotated ApiObject/Record/Field returns and properties from their bodies.
+                // Never throws; on failure the metadata stays as extracted.
+                ReturnTypeRefiner.Refine(program, metadata, this);
+                if (metadata.IsProvisional)
+                {
+                    Debug.Log($"DatabaseTypeMetadataResolver: Refinement of '{qualifiedName}' is provisional (cycle, depth limit or self-reference); cached only until the top-level refinement finishes");
+                }
+
                 return metadata;
             }
             catch (Exception ex)

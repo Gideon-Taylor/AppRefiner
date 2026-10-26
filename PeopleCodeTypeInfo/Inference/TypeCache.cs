@@ -58,6 +58,10 @@ public class TypeCache
     /// <returns>The cached metadata if found, null otherwise</returns>
     public TypeMetadata? Get(string qualifiedName)
     {
+        // Every lookup passes through here, GetTypeMetadata and inference's direct cache reads
+        // alike, so this is where a refinement in progress learns what it depends on
+        RefinementDependencyCollector.Record(qualifiedName);
+
         // Increment generation counter
         var generation = Interlocked.Increment(ref _currentGeneration);
 
@@ -108,6 +112,10 @@ public class TypeCache
     /// </summary>
     /// <param name="qualifiedName">The qualified name of the type</param>
     /// <param name="metadata">The metadata to cache</param>
+    /// <remarks>
+    /// Provisional metadata (refinement cut short) is cached too; the refiner evicts nested
+    /// provisional entries when the top-level refinement finishes.
+    /// </remarks>
     public void Set(string qualifiedName, TypeMetadata metadata)
     {
         // Increment generation counter
@@ -156,7 +164,8 @@ public class TypeCache
     }
 
     /// <summary>
-    /// Removes metadata for a specific type from the cache.
+    /// Removes metadata for a specific type from the cache, and transitively every entry whose
+    /// <see cref="TypeMetadata.RefinementDependencies"/> contain a removed name.
     /// </summary>
     /// <param name="qualifiedName">The qualified name of the type to remove</param>
     /// <returns>True if the entry was removed, false if it didn't exist</returns>
@@ -165,7 +174,23 @@ public class TypeCache
         _evictionLock.EnterReadLock();
         try
         {
-            return _cache.TryRemove(qualifiedName, out _);
+            bool removed = _cache.TryRemove(qualifiedName, out _);
+
+            // Dependents go even when the name itself wasn't cached: they may outlive it
+            var pending = new Queue<string>();
+            pending.Enqueue(qualifiedName);
+            while (pending.Count > 0)
+            {
+                var name = pending.Dequeue();
+                foreach (var kvp in _cache.ToArray())
+                {
+                    if (kvp.Value.Metadata.RefinementDependencies.Contains(name)
+                        && _cache.TryRemove(kvp.Key, out _))
+                        pending.Enqueue(kvp.Key);
+                }
+            }
+
+            return removed;
         }
         finally
         {

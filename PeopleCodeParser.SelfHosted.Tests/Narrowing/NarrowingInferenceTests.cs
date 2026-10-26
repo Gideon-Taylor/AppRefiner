@@ -233,6 +233,19 @@ public class NarrowingInferenceTests
     }
 
     [Fact]
+    public void Refinement_source_origin_names_kind_and_deciding_use()
+    {
+        var (program, parseErrors) = Parse("Local ApiObject &x;\n&x.GetCompIntfc(CompIntfc.A);");
+        Assert.Empty(parseErrors);
+        var use = program.FindDescendants<MemberAccessNode>().Single(m => m.MemberName == "GetCompIntfc");
+
+        Assert.Equal("annotated", new RefinementSource(RefinementKind.Annotation, use).Origin);
+        Assert.Equal("assigned", new RefinementSource(RefinementKind.Assignment, use).Origin);
+        Assert.Equal("inferred from GetCompIntfc()", new RefinementSource(RefinementKind.Narrowing, use).Origin);
+        Assert.Equal("inferred", new RefinementSource(RefinementKind.Narrowing, program).Origin);
+    }
+
+    [Fact]
     public void Member_error_on_narrowed_target_names_the_deciding_use()
     {
         // Every non-fitting counted use is a marked conflict, so no real source reaches the

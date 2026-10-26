@@ -75,8 +75,27 @@ failed, not because the code is correct.
 Globals/Components, properties, method returns) can now be typed with a `/* as T */`
 annotation (`Local ApiObject /* as Session */ &s;`, `&s As ApiObject /* as Session */`).
 Annotations on method headers flow to callers and are inherited by overrides, and calls
-warn when an argument is a different API subtype from an annotated parameter. Unannotated
-`ApiObject` values still resolve members to Any.
+warn when an argument is a different API subtype from an annotated parameter.
+
+**Mostly addressed (2026-10, phases 3–4):** unannotated `ApiObject` values are now typed in two
+more ways.
+- **Usage narrowing:** a variable declared `ApiObject` (local, parameter, Global/Component,
+  instance or property) with no annotation takes the one API type that has every member used
+  directly on it, settled by the first use that leaves a single candidate
+  (`Visitors/Narrowing/UsageNarrowingAnalyzer`). Uses that don't fit are reported once as
+  warnings (N1–N4) instead of a member error.
+- **Return refinement:** an unannotated method or function that returns `ApiObject`, `Record`
+  or `Field` is typed from the values it returns when they agree (R1 warns when they don't),
+  in the same program callee-first, and across programs through `ReturnTypeRefiner`, which the
+  database resolver runs on every program it loads. Unannotated properties with a getter are
+  refined from the getter's returns; those without one, and instance variables, from their
+  assignments. Cached refinements are evicted along with what they were inferred from, so
+  saving a class also drops the cached callers refined from it. Dependencies are recorded
+  generously (every class a refinement looks up), so saving a widely used class drops most of
+  the cache, and the next tooltip re-parses whatever it touches (no database round trips).
+
+An `ApiObject` value still resolves members to Any when no annotation, assignment, use or
+return decides it. See §8 for the remaining limits.
 
 ## 5. Checker validates calls without the receiver type
 
@@ -109,3 +128,40 @@ flow-insensitive; scope-aware typing is deferred (spec §15 of
 - `TypeInferenceVisitor.Run` setup is duplicated in `MainForm`, `AutoCompleteService` and
   `TypeErrorReporter` (which also has its own copy of `DetermineQualifiedName`) instead of
   going through `TypeInferenceRunner`.
+
+## 8. Limits of ApiObject narrowing and return refinement
+
+Left open by phases 3–4 (spec `docs/superpowers/specs/2026-10-25-apiobject-type-resolution-design.md`):
+
+- **Mutually recursive methods keep their declared return type.** Callee-first ordering can't
+  order a cycle, so `A` returning `B()` and `B` returning `A()` stay `ApiObject`. Across
+  programs, a cycle or a chain deeper than `ReturnTypeRefiner.MaxDepth` (3) leaves the metadata
+  `IsProvisional`. A cycle member refined at the top level is cached with whatever its cycle
+  partners could give it, so a return that depends on a partner through the cycle may stay
+  `ApiObject` until that class is evicted (on save) or re-fetched. The nested, cut-short members
+  are evicted when the top-level refinement finishes.
+- **Callers don't type parameters.** Same-program callers aren't used to infer a parameter's
+  type (spec §3); an unannotated parameter is typed only by narrowing on its own uses.
+- **Multi-name instance declarations share one `PropertyInfo`.** `instance ApiObject &a, &b;`
+  extracts one `PropertyInfo` for both names, so refining one from its assignments refines both.
+- **A library's own `Declare` sees the unrefined copy.** A function library that `Declare`s
+  one of its own functions gets that function's extracted (unrefined) signature through the
+  declaration, not the refined one.
+- **A parenthesized `(Null)` counts as a value.** The agreement rules skip a bare `Null` return
+  or assignment, but not `(Null)`, which then disagrees with the other values.
+- **An annotation with an unknown type still excludes the variable from narrowing.**
+  `Local ApiObject /* as Sesion */ &x;` warns about the unknown type and then leaves `&x` as plain
+  `ApiObject`, even if its uses would settle it.
+- **Global/Component redeclarations narrow per declaration.** A Global or Component variable
+  declared again inside two method bodies is narrowed separately for each declaration, so the
+  two can settle on different types although they are one variable at run time.
+- **DataCollection members are typed as returning `Row` (pending decision).** `typeinfo.dat`
+  declares `DataCollection.Item`, `ItemByKeys`, `CurrentItem`, `GetEffectiveItem` and
+  `DeleteItem` as returning `Row`, and `InsertItem` as `void`. Once a variable narrows to
+  DataCollection, valid component interface code such as
+  `Local ApiObject &row = &coll.Item(1);` gets "Cannot assign type 'Row' to 'ApiObject'". The
+  fix belongs in the dat generator, which isn't in this repo; no code overrides are applied.
+- **Bare own-method calls (pending confirmation).** A call to the class's own method without
+  `%This` (`Get()` rather than `%This.Get()`) is treated as an undeclared function call: it
+  isn't typed from the method and isn't used for callee-first ordering. This waits on
+  confirming the PeopleCode semantics for such calls.

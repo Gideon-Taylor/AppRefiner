@@ -7,6 +7,8 @@ class Svc
    method GetSession() Returns ApiObject /* as Session */;
    method Clone() Returns Svc;
    method Make();
+   method Make2() Returns ApiObject;
+   method MakeRec() Returns Record;
    property ApiObject /* as Session */ Sess;
 end-class;
 
@@ -39,4 +41,14 @@ method Make
 
    Local ApiObject &ci = %Session.GetCompIntfc(CompIntfc.USER_PROFILE);
    Local Svc &bad = create Svc(&ci); /* WARNING: Svc expects &s as Session (annotated); the argument is ComponentInterface */
+end-method;
+
+method Make2
+   /+ Returns ApiObject +/
+   Return %Session; /* OK: no annotation, but every Return gives a Session, so callers see Session */
+end-method;
+
+method MakeRec
+   /+ Returns Record +/
+   Return CreateRecord(Record.PSOPRDEFN); /* OK: callers see record (Record.PSOPRDEFN) */
 end-method;

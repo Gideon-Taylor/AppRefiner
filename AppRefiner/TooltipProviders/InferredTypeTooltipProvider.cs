@@ -1,7 +1,6 @@
 using AppRefiner.Database;
 using PeopleCodeParser.SelfHosted;
 using PeopleCodeParser.SelfHosted.Nodes;
-using PeopleCodeParser.SelfHosted.Visitors.Models;
 using PeopleCodeParser.SelfHosted.Visitors.Narrowing;
 using PeopleCodeTypeInfo.Types;
 
@@ -30,7 +29,6 @@ namespace AppRefiner.TooltipProviders
             SourceSpan? bestSpan = null;
             TypeInfo? bestTypeInfo = null;
             AstNode? bestNode = null;
-            var allNodes = program.FindNodes(n => n.SourceSpan.ContainsPositionExclusiveEnd(position)).ToList();
             foreach (var node in program.FindNodes(n => n.SourceSpan.ContainsPositionExclusiveEnd(position))) {
 
                 if (node is IdentifierNode idn && node.Parent is FunctionCallNode fcn && fcn.Function is IdentifierNode idn2 && idn2 == idn) {
@@ -76,26 +74,12 @@ namespace AppRefiner.TooltipProviders
             if (node is not IdentifierNode id)
                 return $"Inferred Type: {TypeDisplay.Format(typeInfo)}";
 
-            var source = id.GetRefinementSource();
-            if (source != null)
-            {
-                var origin = source.Kind switch
-                {
-                    RefinementKind.Annotation => "annotated",
-                    RefinementKind.Assignment => "assigned",
-                    RefinementKind.Narrowing => source.Node is MemberAccessNode decidingUse
-                        ? $"inferred from {UsageNarrowingAnalyzer.Decider(decidingUse)}"
-                        : "inferred",
-                    _ => null
-                };
-                if (origin != null)
-                    return $"Inferred Type: {TypeDisplay.Format(typeInfo)}, {origin} on line {source.Line + 1}";
-            }
+            if (id.GetRefinementSource() is { } source)
+                return $"Inferred Type: {TypeDisplay.Format(typeInfo)}, {source.Origin} on line {source.Line + 1}";
 
             // Undecided: still plain ApiObject, with the candidates its uses leave open
             if (id.GetNarrowingCandidates() is { Count: > 0 } candidates
-                && typeInfo is BuiltinObjectTypeInfo { Name: var name }
-                && name.Equals("ApiObject", StringComparison.OrdinalIgnoreCase))
+                && typeInfo is BuiltinObjectTypeInfo { IsApiObjectBase: true })
             {
                 return $"Inferred Type: ApiObject ({UsageNarrowingAnalyzer.CandidatePhrase(candidates)})";
             }

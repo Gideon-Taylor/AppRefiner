@@ -270,7 +270,7 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
     {
         TypeInfo baseType;
         if (twd.IsAppClass)
-            baseType = AppClassTypeInfo.CreateWithInheritanceChain(ResolveAppClassPath(twd.AppClassPath!), _typeResolver, _typeCache);
+            baseType = AppClassTypeInfo.CreateWithInheritanceChain(ResolveAppClassPath(twd.AppClassPath!), _typeResolver, _typeCache, OwnClassMetadata);
         else if (twd.Type == PeopleCodeType.Record && !string.IsNullOrEmpty(twd.Identity?.RecordName))
             baseType = new RecordTypeInfo(twd.Identity.RecordName, _typeResolver);
         else if (twd.Type == PeopleCodeType.Field && !string.IsNullOrEmpty(twd.Identity?.FieldName))
@@ -944,7 +944,7 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
         // The resolver will handle it if it's queried later
         if (typeName.Contains(':'))
         {
-            return AppClassTypeInfo.CreateWithInheritanceChain(typeName, _typeResolver, _typeCache);
+            return AppClassTypeInfo.CreateWithInheritanceChain(typeName, _typeResolver, _typeCache, OwnClassMetadata);
         }
 
         // Unknown type
@@ -972,7 +972,7 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
             qualifiedName = string.Join(":", appClass.PackagePath.Append(appClass.ClassName));
         }
 
-        return AppClassTypeInfo.CreateWithInheritanceChain(qualifiedName, _typeResolver, _typeCache);
+        return AppClassTypeInfo.CreateWithInheritanceChain(qualifiedName, _typeResolver, _typeCache, OwnClassMetadata);
     }
 
     /// <summary>
@@ -1192,6 +1192,13 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
 
         return null; // Method not found in the hierarchy
     }
+
+    /// <summary>
+    /// The program's own metadata when it is a class or interface, for inheritance-chain building
+    /// (so analyzing a class never fetches, and re-refines, the class itself), else null.
+    /// </summary>
+    private TypeMetadata? OwnClassMetadata =>
+        _programMetadata.Kind is ProgramKind.AppClass or ProgramKind.Interface ? _programMetadata : null;
 
     /// <summary>
     /// Metadata for an app class or interface: the current program's own, else the type cache,
@@ -1697,7 +1704,9 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
     {
         base.VisitReturn(node);
 
-        if (node.Value != null && _returnCollectors.Count > 0 && _returnCollectors.Peek() is { } collector)
+        // Return Null; says nothing about the type (e.g. a not-found path), so it doesn't disagree
+        if (node.Value != null && !IsNullLiteral(node.Value)
+            && _returnCollectors.Count > 0 && _returnCollectors.Peek() is { } collector)
             collector.Returns.Add((node, GetInferredType(node.Value)));
     }
 
@@ -1708,16 +1717,46 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
     private static TypeWithDimensionality? AgreedReturnType(ReturnCollector collector)
     {
         var returns = collector.Returns;
-        if (returns.Count == 0)
+        var refined = AgreedType(collector.DeclaredType, returns.Select(r => r.Type).ToList(), out int conflict);
+
+        if (conflict >= 0)
+        {
+            var first = (BuiltinObjectTypeInfo)returns[0].Type!;
+            var other = (BuiltinObjectTypeInfo)returns[conflict].Type!;
+            var value = returns[conflict].Node.Value!;
+            value.AddTypeWarning(new TypeError(
+                $"{collector.Name} returns more than one API type " +
+                $"({first.PeopleCodeType!.Value.GetTypeName()} on line {returns[0].Node.SourceSpan.Start.Line + 1}, " +
+                $"{other.PeopleCodeType!.Value.GetTypeName()} on line {returns[conflict].Node.SourceSpan.Start.Line + 1}).",
+                value));
+        }
+
+        return refined;
+    }
+
+    /// <summary>
+    /// The type a set of values (returns, or assignments to a member) agrees on for a declared
+    /// scalar ApiObject, Record or Field (spec §9), or null. API values must all be the same
+    /// non-base API subtype; records the same record name; fields the same record and field.
+    /// </summary>
+    internal static TypeWithDimensionality? AgreedType(PeopleCodeType declaredType, IReadOnlyList<TypeInfo?> values) =>
+        AgreedType(declaredType, values, out _);
+
+    /// <param name="conflict">The index of the first API value whose subtype differs from the
+    /// first one's (where R1 goes), or -1.</param>
+    private static TypeWithDimensionality? AgreedType(PeopleCodeType declaredType, IReadOnlyList<TypeInfo?> values, out int conflict)
+    {
+        conflict = -1;
+        if (values.Count == 0)
             return null;
 
-        switch (collector.DeclaredType)
+        switch (declaredType)
         {
             case PeopleCodeType.Record:
             {
-                if (returns[0].Type is not RecordTypeInfo first || string.IsNullOrEmpty(first.RecordName))
+                if (values[0] is not RecordTypeInfo first || string.IsNullOrEmpty(first.RecordName))
                     return null;
-                bool agree = returns.All(r => r.Type is RecordTypeInfo record
+                bool agree = values.All(v => v is RecordTypeInfo record
                     && first.RecordName.Equals(record.RecordName, StringComparison.OrdinalIgnoreCase));
                 return agree
                     ? new TypeWithDimensionality(PeopleCodeType.Record) { Identity = new TypeIdentity(RecordName: first.RecordName) }
@@ -1726,9 +1765,9 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
 
             case PeopleCodeType.Field:
             {
-                if (returns[0].Type is not FieldTypeInfo first || string.IsNullOrEmpty(first.FieldName))
+                if (values[0] is not FieldTypeInfo first || string.IsNullOrEmpty(first.FieldName))
                     return null;
-                bool agree = returns.All(r => r.Type is FieldTypeInfo field
+                bool agree = values.All(v => v is FieldTypeInfo field
                     && (first.RecordName ?? "").Equals(field.RecordName ?? "", StringComparison.OrdinalIgnoreCase)
                     && first.FieldName.Equals(field.FieldName, StringComparison.OrdinalIgnoreCase));
                 if (!agree)
@@ -1738,17 +1777,17 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
             }
 
             case PeopleCodeType.ApiObject:
-                return AgreedApiReturnType(collector);
+                return AgreedApiType(values, out conflict);
         }
 
         return null;
     }
 
-    private static TypeWithDimensionality? AgreedApiReturnType(ReturnCollector collector)
+    private static TypeWithDimensionality? AgreedApiType(IReadOnlyList<TypeInfo?> values, out int conflict)
     {
-        var returns = collector.Returns;
-        var types = new List<BuiltinObjectTypeInfo>(returns.Count);
-        foreach (var (_, type) in returns)
+        conflict = -1;
+        var types = new List<BuiltinObjectTypeInfo>(values.Count);
+        foreach (var type in values)
         {
             // Any, Unknown, plain ApiObject or a non-API value: nothing to say
             if (type is not BuiltinObjectTypeInfo { PeopleCodeType: not null } api
@@ -1764,16 +1803,11 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
             if (types[i].PeopleCodeType == first.PeopleCodeType)
                 continue;
 
-            var value = returns[i].Node.Value!;
-            value.AddTypeWarning(new TypeError(
-                $"{collector.Name} returns more than one API type " +
-                $"({first.PeopleCodeType!.Value.GetTypeName()} on line {returns[0].Node.SourceSpan.Start.Line + 1}, " +
-                $"{types[i].PeopleCodeType!.Value.GetTypeName()} on line {returns[i].Node.SourceSpan.Start.Line + 1}).",
-                value));
+            conflict = i;
             return null;
         }
 
-        // A CI name survives only when every return carries the same one
+        // A CI name survives only when every value carries the same one
         var identity = first.Identity is { IsEmpty: false } firstIdentity ? firstIdentity : null;
         foreach (var type in types.Skip(1))
         {
@@ -1788,6 +1822,53 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
 
     #endregion
 
+    #region Member assignments
+
+    private static bool IsNullLiteral(ExpressionNode expression) =>
+        expression is LiteralNode { LiteralType: LiteralType.Null };
+
+    // Values assigned to this class's own properties and instance variables, for ReturnTypeRefiner
+    private readonly Dictionary<PropertyInfo, List<TypeInfo?>> _memberAssignments = new(ReferenceEqualityComparer.Instance);
+
+    /// <summary>
+    /// The inferred types of the values assigned to each of this class's own properties and
+    /// instance variables, in visit order: <c>&amp;Name = …</c> where <c>&amp;Name</c> resolves to the
+    /// instance variable or property (not a shadowing local or parameter), and <c>%This.Name = …</c>.
+    /// Keyed by the metadata's PropertyInfo, which one multi-name instance declaration shares.
+    /// </summary>
+    internal IReadOnlyDictionary<PropertyInfo, List<TypeInfo?>> MemberAssignments => _memberAssignments;
+
+    private void RecordMemberAssignment(AssignmentNode node)
+    {
+        if (node.Operator != AssignmentOperator.Assign || _programMetadata.Kind != ProgramKind.AppClass)
+            return;
+
+        PropertyInfo? member = null;
+        if (node.Target is IdentifierNode identifier && identifier.Name.StartsWith('&'))
+        {
+            var variable = FindVariable(identifier.Name);
+            if (variable?.Kind == VariableKind.Instance)
+                _programMetadata.InstanceVariables.TryGetValue(variable.Name, out member);
+            else if (variable?.Kind == VariableKind.Property)
+                _programMetadata.Properties.TryGetValue(variable.Name, out member);
+        }
+        else if (node.Target is MemberAccessNode { Target: IdentifierNode target } memberAccess
+            && target.Name.Equals("%This", StringComparison.OrdinalIgnoreCase))
+        {
+            _programMetadata.Properties.TryGetValue(memberAccess.MemberName, out member);
+        }
+
+        // &x = Null; (teardown) says nothing about the type, so it doesn't disagree
+        if (member == null || IsNullLiteral(node.Value))
+            return;
+
+        if (!_memberAssignments.TryGetValue(member, out var values))
+            _memberAssignments[member] = values = new List<TypeInfo?>();
+        values.Add(GetInferredType(node.Value));
+    }
+
+    #endregion
+
     #region Statement Visitors
 
     /// <summary>
@@ -1797,6 +1878,8 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
     {
         // Let base class handle the assignment (reference tracking, etc.)
         base.VisitAssignment(node);
+
+        RecordMemberAssignment(node);
 
         // Check if the assignment target is an identifier (simple variable assignment)
         if (node.Target is IdentifierNode identifier)
@@ -1899,7 +1982,7 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
             // %This refers to the current instance of the class being analyzed
            if (_programMetadata.Kind == ProgramKind.AppClass || _programMetadata.Kind == ProgramKind.Interface)
             {
-                var thisType = AppClassTypeInfo.CreateWithInheritanceChain(_programMetadata.QualifiedName, _typeResolver, _typeCache);
+                var thisType = AppClassTypeInfo.CreateWithInheritanceChain(_programMetadata.QualifiedName, _typeResolver, _typeCache, OwnClassMetadata);
                 SetInferredType(node, thisType);
             }
             else
@@ -1925,7 +2008,7 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
                 else
                 {
                     // %Super refers to another AppClass
-                    var superType = AppClassTypeInfo.CreateWithInheritanceChain(_programMetadata.BaseClassName, _typeResolver, _typeCache);
+                    var superType = AppClassTypeInfo.CreateWithInheritanceChain(_programMetadata.BaseClassName, _typeResolver, _typeCache, OwnClassMetadata);
                     SetInferredType(node, superType);
                 }
             }

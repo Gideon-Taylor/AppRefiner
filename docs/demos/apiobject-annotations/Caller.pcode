@@ -4,6 +4,7 @@ import ZZ_AR_DEMO:*;
 class Caller
    method ShortNames();
    method Annotations();
+   method Refined();
 end-class;
 
 method ShortNames
@@ -31,10 +32,19 @@ method Annotations
 
    Local ApiObject &sess = &svc.GetSession();
    &sess.Disconnect(); /* OK: annotated return, &sess is Session */
-   &sess.Bogus(); /* ERROR: ... (&sess is Session, assigned on line 32) */
+   &sess.Bogus(); /* ERROR: ... (&sess is Session, assigned on line 33) */
    &svc.Sess.Disconnect(); /* OK: annotated property */
 
    Local Sub &sub = create Sub();
    &sub.Use(&ci); /* WARNING: inherited from Base.Use's annotation */
    &sub.Get().Disconnect(); /* OK: inherited return annotation */
+end-method;
+
+method Refined
+   Local Svc &svc = create Svc(%Session);
+   Local ApiObject &s2 = &svc.Make2();
+   &s2.Disconnect(); /* OK: Make2 isn't annotated, but Svc's body returns %Session, so &s2 is Session */
+   &s2.Bogus(); /* ERROR: names Session and the assignment (&s2 is Session, assigned on line 45) */
+   Local Record &rec = &svc.MakeRec(); /* OK */
+   &rec.SelectByKey(); /* OK: hover &rec shows record (Record.PSOPRDEFN), from MakeRec's Return */
 end-method;

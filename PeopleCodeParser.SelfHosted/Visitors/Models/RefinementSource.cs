@@ -1,3 +1,6 @@
+using PeopleCodeParser.SelfHosted.Nodes;
+using PeopleCodeParser.SelfHosted.Visitors.Narrowing;
+
 namespace PeopleCodeParser.SelfHosted.Visitors.Models;
 
 /// <summary>
@@ -33,4 +36,17 @@ public sealed record RefinementSource(RefinementKind Kind, AstNode Node)
     /// Zero-based line of the node that set the refinement
     /// </summary>
     public int Line => Node.SourceSpan.Start.Line;
+
+    /// <summary>
+    /// How messages and hovers say the type was set: "annotated", "assigned", or
+    /// "inferred from {decider}" (<see cref="UsageNarrowingAnalyzer.Decider"/>)
+    /// </summary>
+    public string Origin => Kind switch
+    {
+        RefinementKind.Annotation => "annotated",
+        RefinementKind.Assignment => "assigned",
+        _ => Node is MemberAccessNode decidingUse
+            ? $"inferred from {UsageNarrowingAnalyzer.Decider(decidingUse)}"
+            : "inferred"
+    };
 }
