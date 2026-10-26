@@ -59,6 +59,10 @@ public sealed class UnimportedClassCheck : CompileCheckBase
         _importedClasses.Clear();
         _importedPackages.Clear();
 
+        // A class may name itself without an import (App Designer qualifies it on save)
+        if (!string.IsNullOrEmpty(program.AppClass?.Name))
+            _importedClasses.Add(program.AppClass.Name);
+
         foreach (var import in program.Imports)
         {
             if (import.FullPath.EndsWith(":*"))

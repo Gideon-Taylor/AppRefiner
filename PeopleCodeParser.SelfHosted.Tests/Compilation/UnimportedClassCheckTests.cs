@@ -18,6 +18,43 @@ public class UnimportedClassCheckTests
     }
 
     [Fact]
+    public void Does_not_report_the_class_naming_itself()
+    {
+        // App Designer accepts a class's own short name without an import (it expands it on save)
+        var (program, errors) = ParseTestHelper.Parse(@"
+class Svc
+   method Make() Returns Svc;
+end-class;
+
+method Make
+   /+ Returns PKG:Svc +/
+   Local Svc &me = create Svc();
+   Return &me;
+end-method;");
+
+        var diags = CompileChecker.Check(program, errors, resolver: null, new CompileCheckContextInput(null));
+
+        Assert.DoesNotContain(diags, d => d.Code == DiagnosticCode.UnimportedClass);
+    }
+
+    [Fact]
+    public void Still_reports_another_class_inside_a_class()
+    {
+        var (program, errors) = ParseTestHelper.Parse(@"
+class Svc
+   method Make();
+end-class;
+
+method Make
+   Local Other &o;
+end-method;");
+
+        var diags = CompileChecker.Check(program, errors, resolver: null, new CompileCheckContextInput(null));
+
+        Assert.Contains(diags, d => d.Code == DiagnosticCode.UnimportedClass && d.Message.Contains("Other"));
+    }
+
+    [Fact]
     public void Does_not_report_when_class_is_explicitly_imported()
     {
         var (program, errors) = ParseTestHelper.Parse(@"
