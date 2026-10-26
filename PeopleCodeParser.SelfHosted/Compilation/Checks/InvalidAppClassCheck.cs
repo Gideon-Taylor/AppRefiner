@@ -48,6 +48,10 @@ public sealed class InvalidAppClassCheck : CompileCheckBase
         if (!appClassPath.Contains(':'))
             return;
 
+        // The class being edited exists even when its saved source is missing or unparseable
+        if (appClassPath.Equals(ctx.SelfMetadata?.QualifiedName, StringComparison.OrdinalIgnoreCase))
+            return;
+
         if (ctx.Resolver.GetTypeMetadata(appClassPath) == null)
         {
             sink.Report(new CompileDiagnostic(

@@ -17,13 +17,13 @@ public class AnnotatedParameterCallTests
     private const string FooSource = "Function Foo(&s As ApiObject /* as Session */)\nEnd-Function;\n";
 
     private static (List<TypeError> Errors, List<TypeError> Warnings) TypeCheck(
-        string source, ITypeMetadataResolver? resolver = null)
+        string source, ITypeMetadataResolver? resolver = null, string? qualifiedName = null)
     {
         resolver ??= NullTypeMetadataResolver.Instance;
         var (program, parseErrors) = Parse(source);
         Assert.Empty(parseErrors);
 
-        var metadata = TypeMetadataBuilder.ExtractMetadata(program);
+        var metadata = TypeMetadataBuilder.ExtractMetadata(program, qualifiedName);
         TypeInferenceVisitor.Run(program, metadata, resolver);
         TypeCheckerVisitor.Run(program, resolver, resolver.Cache);
 
@@ -163,27 +163,82 @@ public class AnnotatedParameterCallTests
         Assert.Empty(warnings);
     }
 
-    /// <summary>
-    /// Inference sets no constructor FunctionInfo for a same-program <c>create Svc(...)</c> (the
-    /// short name doesn't match the program's own metadata), so the call is not checked.
-    /// Documented in docs/architecture/type-system-weak-spots.md §4.
-    /// </summary>
+    private const string SameProgramSvcSource =
+        "class Svc\n" +
+        "   method Svc(&s As ApiObject /* as Session */);\n" +
+        "   method Make();\n" +
+        "end-class;\n" +
+        "\n" +
+        "method Svc\n" +
+        "end-method;\n" +
+        "\n" +
+        "method Make\n" +
+        "   Local ApiObject &t = %Session.GetCompIntfc(CompIntfc.A);\n" +
+        "   Local Svc &o = create Svc(&t);\n" +
+        "end-method;\n";
+
     [Fact]
-    public void Same_program_constructor_is_not_checked()
+    public void Same_program_constructor_argument_warns()
+    {
+        var (errors, warnings) = TypeCheck(SameProgramSvcSource, qualifiedName: "PKG:Svc");
+
+        Assert.Empty(errors);
+        var warning = Assert.Single(warnings);
+        Assert.Equal("Svc expects &s as Session (annotated); the argument is ComponentInterface.", warning.Message);
+    }
+
+    [Fact]
+    public void Same_program_short_name_local_accepts_This()
     {
         var (errors, warnings) = TypeCheck(
             "class Svc\n" +
-            "   method Svc(&s As ApiObject /* as Session */);\n" +
             "   method Make();\n" +
             "end-class;\n" +
             "\n" +
-            "method Svc\n" +
+            "method Make\n" +
+            "   Local Svc &me = %This;\n" +
+            "end-method;\n",
+            qualifiedName: "PKG:Svc");
+
+        Assert.Empty(errors);
+        Assert.Empty(warnings);
+    }
+
+    [Fact]
+    public void Same_program_short_name_method_return_assigns_cleanly()
+    {
+        var (errors, warnings) = TypeCheck(
+            "class Svc\n" +
+            "   method Clone() Returns Svc;\n" +
+            "   method Make();\n" +
+            "end-class;\n" +
+            "\n" +
+            "method Clone\n" +
+            "   Return %This;\n" +
             "end-method;\n" +
             "\n" +
             "method Make\n" +
-            "   Local ApiObject &t = %Session.GetCompIntfc(CompIntfc.A);\n" +
-            "   Local Svc &o = create Svc(&t);\n" +
-            "end-method;\n");
+            "   Local Svc &c = %This.Clone();\n" +
+            "end-method;\n",
+            qualifiedName: "PKG:Svc");
+
+        Assert.Empty(errors);
+        Assert.Empty(warnings);
+    }
+
+    [Fact]
+    public void Same_program_short_name_property_assigns_cleanly()
+    {
+        var (errors, warnings) = TypeCheck(
+            "class Svc\n" +
+            "   method Make();\n" +
+            "   property Svc Next;\n" +
+            "end-class;\n" +
+            "\n" +
+            "method Make\n" +
+            "   Local Svc &n = %This.Next;\n" +
+            "end-method;\n",
+            qualifiedName: "PKG:Svc");
 
         Assert.Empty(errors);
         Assert.Empty(warnings);

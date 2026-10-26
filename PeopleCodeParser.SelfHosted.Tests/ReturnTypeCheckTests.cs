@@ -1,7 +1,10 @@
 using PeopleCodeParser.SelfHosted.Lexing;
+using PeopleCodeParser.SelfHosted.Nodes;
+using PeopleCodeParser.SelfHosted.Tests.Compilation;
 using PeopleCodeParser.SelfHosted.Visitors;
 using PeopleCodeTypeInfo.Contracts;
 using PeopleCodeTypeInfo.Inference;
+using PeopleCodeTypeInfo.Types;
 using Xunit;
 using Parser = PeopleCodeParser.SelfHosted.PeopleCodeParser;
 
@@ -111,5 +114,110 @@ end-get;
 ");
         Assert.Contains(errors, e =>
             e.Message.Contains("Cannot return type", StringComparison.OrdinalIgnoreCase));
+    }
+
+    // Declared app class return types written as short names resolve the same way as locals:
+    // through imports, or to the program's own class (no self-import).
+
+    private static List<TypeError> TypeCheckAs(string source, string qualifiedName)
+    {
+        var lexer = new PeopleCodeLexer(source);
+        var parser = new Parser(lexer.TokenizeAll());
+        var program = parser.ParseProgram();
+        Assert.Empty(parser.Errors);
+
+        var metadata = TypeMetadataBuilder.ExtractMetadata(program, qualifiedName);
+        TypeInferenceVisitor.Run(program, metadata, NullTypeMetadataResolver.Instance);
+        TypeCheckerVisitor.Run(program, NullTypeMetadataResolver.Instance, NullTypeMetadataResolver.Instance.Cache);
+
+        return program.GetAllTypeErrors().ToList();
+    }
+
+    [Fact]
+    public void Return_This_from_method_returning_own_short_name_is_ok()
+    {
+        var errors = TypeCheckAs(@"
+class Svc
+   method Clone() Returns Svc;
+end-class;
+
+method Clone
+   Return %This;
+end-method;
+", "PKG:Svc");
+        Assert.Empty(errors);
+    }
+
+    [Fact]
+    public void Return_imported_class_from_method_returning_short_name_is_ok()
+    {
+        var errors = TypeCheckAs(@"
+import OTHER:Thing;
+
+class Svc
+   method Get() Returns Thing;
+end-class;
+
+method Get
+   Local Thing &t;
+   Return &t;
+end-method;
+", "PKG:Svc");
+        Assert.Empty(errors);
+    }
+
+    [Fact]
+    public void Return_imported_class_from_function_returning_short_name_is_ok()
+    {
+        var errors = TypeCheckAs(@"
+import OTHER:Thing;
+
+Function Get() Returns Thing
+   Local Thing &t;
+   Return &t;
+End-Function;
+", "PKG:Svc");
+        Assert.Empty(errors);
+    }
+
+    [Fact]
+    public void Return_This_from_getter_of_own_short_name_is_ok()
+    {
+        var errors = TypeCheckAs(@"
+class Svc
+   property Svc Me get;
+end-class;
+
+get Me
+   Return %This;
+end-get;
+", "PKG:Svc");
+        Assert.Empty(errors);
+    }
+
+    [Fact]
+    public void Rerun_refreshes_declared_return_type_stamp()
+    {
+        var parser = new Parser(new PeopleCodeLexer(@"
+class Svc
+   method Get() Returns PKG:Sub;
+end-class;
+").TokenizeAll());
+        var program = parser.ParseProgram();
+        Assert.Empty(parser.Errors);
+        var metadata = TypeMetadataBuilder.ExtractMetadata(program, "PKG:Svc");
+        var resolver = new FakeTypeMetadataResolver();
+
+        // First pass: PKG:Sub is not known yet, so its chain stops at itself
+        TypeInferenceVisitor.Run(program, metadata, resolver);
+
+        // PKG:Sub becomes resolvable (e.g. saved) before the styler re-runs inference
+        resolver.AddClass("PKG:Base");
+        resolver.AddClass("PKG:Sub", new TypeMetadata { QualifiedName = "PKG:Sub", Name = "Sub", BaseClassName = "PKG:Base" });
+        TypeInferenceVisitor.Run(program, metadata, resolver);
+
+        var returnType = program.FindDescendants<AppClassTypeNode>().Single();
+        var stamp = Assert.IsType<AppClassTypeInfo>(returnType.GetInferredType());
+        Assert.Contains(stamp.InheritanceChain, e => e.QualifiedName == "PKG:Base");
     }
 }

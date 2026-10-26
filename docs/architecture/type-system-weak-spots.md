@@ -39,6 +39,16 @@ the pattern a consolidation should follow.
 Passing a `PKG:MyClass` argument to a parameter declared with the imported short name may
 fail the QualifiedName comparison. Same issue for `BaseClassName`.
 
+`TypeInferenceVisitor` maps an app class's own short name to its `QualifiedName` (2026-10), so
+`Local Svc &o = create Svc(&t);` inside `PKG:Svc` resolves to the program's own metadata and
+its constructor is checked. When the metadata is extracted without a qualified name (the
+`QualifiedName` is empty), the short name stays unresolved and the constructor's arguments
+go unchecked. Metadata return and property types (`Returns Svc`, `property Svc Next`) are
+qualified the same way when inference converts them (`ResolveAppClassPath`), and inference
+stamps every app class type node with its import-resolved type, so declared return types
+checked by `TypeCheckerVisitor` match too. `FunctionCallValidator` still builds
+`new AppClassTypeInfo(expected.AppClassPath!)` from the bare metadata name.
+
 ## 4. Permissive sentinels mask failures
 
 Unknown, Any, `UnionReturnTypeInfo` (`Kind == Any`) and dynamic `@` references are accepted
@@ -52,13 +62,6 @@ annotation (`Local ApiObject /* as Session */ &s;`, `&s As ApiObject /* as Sessi
 Annotations on method headers flow to callers and are inherited by overrides, and calls
 warn when an argument is a different API subtype from an annotated parameter. Unannotated
 `ApiObject` values still resolve members to Any.
-
-Constructor calls (`create PKG:Svc(&t)`) get the same annotated-parameter warning, but only
-when inference attaches the constructor's `FunctionInfo`. A same-program `create Svc(&t)`
-does not: `TypeInferenceVisitor.VisitObjectCreation` looks the class up by the short name
-`Svc` and `GetClassMetadata` only matches the program's own `QualifiedName` (`PKG:Svc`, or
-empty when unnamed), so the constructor's arguments go unvalidated and unchecked
-(`Same_program_constructor_is_not_checked`).
 
 ## 5. Checker validates calls without the receiver type
 

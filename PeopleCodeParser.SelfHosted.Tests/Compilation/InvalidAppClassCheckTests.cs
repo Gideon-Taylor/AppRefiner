@@ -1,4 +1,5 @@
 using PeopleCodeParser.SelfHosted.Compilation;
+using PeopleCodeParser.SelfHosted.Visitors;
 using PeopleCodeTypeInfo.Contracts;
 using Xunit;
 
@@ -49,6 +50,29 @@ public class InvalidAppClassCheckTests
 
         var diags = CompileChecker.Check(
             program, errors, NullTypeMetadataResolver.Instance, new CompileCheckContextInput(null));
+
+        Assert.DoesNotContain(diags, d => d.Code == DiagnosticCode.InvalidAppClass);
+    }
+
+    [Fact]
+    public void Does_not_report_own_class_referenced_by_short_name()
+    {
+        // The class being edited may not be in the DB yet (or its saved source may not parse);
+        // its short name resolves to its own qualified name, which must not be flagged.
+        var (program, errors) = ParseTestHelper.Parse(@"
+class Svc
+   method Clone() Returns Svc;
+end-class;
+
+method Clone
+   Local Svc &me = %This;
+   Return &me;
+end-method;");
+        var metadata = TypeMetadataBuilder.ExtractMetadata(program, "PKG:Svc");
+        var fake = new FakeTypeMetadataResolver();
+        TypeInferenceVisitor.Run(program, metadata, fake);
+
+        var diags = CompileChecker.Check(program, errors, fake, new CompileCheckContextInput(null, metadata));
 
         Assert.DoesNotContain(diags, d => d.Code == DiagnosticCode.InvalidAppClass);
     }

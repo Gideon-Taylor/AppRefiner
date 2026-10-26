@@ -176,6 +176,15 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
                 }
             }
         }
+
+        // A class refers to itself by its short name without importing itself. An explicit
+        // import of the same short name wins (App Designer reports that conflict anyway).
+        if (_programMetadata.Kind is ProgramKind.AppClass or ProgramKind.Interface
+            && !string.IsNullOrEmpty(_programMetadata.QualifiedName)
+            && !_importMap.ContainsKey(_programMetadata.Name))
+        {
+            _importMap[_programMetadata.Name] = _programMetadata.QualifiedName;
+        }
     }
 
     /// <summary>
@@ -252,7 +261,7 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
     {
         TypeInfo baseType;
         if (twd.IsAppClass)
-            baseType = AppClassTypeInfo.CreateWithInheritanceChain(twd.AppClassPath!, _typeResolver, _typeCache);
+            baseType = AppClassTypeInfo.CreateWithInheritanceChain(ResolveAppClassPath(twd.AppClassPath!), _typeResolver, _typeCache);
         else if (twd.Type == PeopleCodeType.Record && !string.IsNullOrEmpty(twd.Identity?.RecordName))
             baseType = new RecordTypeInfo(twd.Identity.RecordName, _typeResolver);
         else if (twd.Type == PeopleCodeType.Field && !string.IsNullOrEmpty(twd.Identity?.FieldName))
@@ -901,6 +910,26 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
 
         return AppClassTypeInfo.CreateWithInheritanceChain(qualifiedName, _typeResolver, _typeCache);
     }
+
+    /// <summary>
+    /// Stamps every app class type reference (method/function returns, property types,
+    /// extends, casts), so the checker reads the import-resolved name instead of the short
+    /// name as written. Always overwrites: a re-run on a cached tree picks up resolver changes.
+    /// Declaration visitors stamp their type nodes first with the same resolved value.
+    /// </summary>
+    public override void VisitAppClassType(AppClassTypeNode node)
+    {
+        base.VisitAppClassType(node);
+        node.SetInferredType(ResolveAppClassType(node));
+    }
+
+    /// <summary>
+    /// Qualifies a bare class name taken from metadata (TypeMetadataBuilder keeps names as
+    /// written, e.g. <c>Returns Svc</c>) through the import map, so it matches locals declared
+    /// with the same short name. Qualified or unmapped names are returned unchanged.
+    /// </summary>
+    private string ResolveAppClassPath(string path) =>
+        !path.Contains(':') && _importMap.TryGetValue(path, out var qualified) ? qualified : path;
 
     #endregion
 
@@ -2179,7 +2208,7 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
 
             // Look up the constructor 
             if (sourceMetadata != null &&
-                sourceMetadata.Constructor != null && sourceMetadata.Constructor.Name == act.ClassName)
+                sourceMetadata.Constructor != null && sourceMetadata.Constructor.Name.Equals(act.ClassName, StringComparison.OrdinalIgnoreCase))
             {
                 node.SetFunctionInfo(sourceMetadata.Constructor);
             }
