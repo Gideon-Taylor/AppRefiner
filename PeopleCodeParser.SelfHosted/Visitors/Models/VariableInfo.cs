@@ -82,6 +82,12 @@ public class VariableInfo
     public RefinementSource? RefinementSource { get; private set; }
 
     /// <summary>
+    /// Type named by a <c>/* as T */</c> annotation on the declaration, if any. Authoritative for
+    /// the scope: assignments may add detail to <see cref="InferredType"/> but never replace it.
+    /// </summary>
+    public TypeInfo? AnnotatedType { get; private set; }
+
+    /// <summary>
     /// Kind of variable (local, instance, global, etc.)
     /// </summary>
     public VariableKind Kind { get; }
@@ -214,6 +220,16 @@ public class VariableInfo
     {
         InferredType = type;
         RefinementSource = source;
+    }
+
+    /// <summary>
+    /// Applies a declaration annotation: sets <see cref="AnnotatedType"/> and the refined type.
+    /// <paramref name="source"/> is the <see cref="RefinementKind.Annotation"/> source on the declaring node.
+    /// </summary>
+    public void Annotate(TypeInfo type, RefinementSource source)
+    {
+        AnnotatedType = type;
+        Refine(type, source);
     }
 
     /// <summary>

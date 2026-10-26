@@ -27,6 +27,23 @@ public sealed record AnnotationTarget(PeopleCodeType Type, TypeIdentity? Identit
         PeopleCodeType.Field => AnnotationCategory.Field,
         _ => AnnotationCategory.ApiObject
     };
+
+    /// <summary>
+    /// An annotation fits an <c>any</c> declaration, or one of its own category's declared type.
+    /// </summary>
+    public bool Fits(string declaredTypeName)
+    {
+        if (declaredTypeName.Equals("any", StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        var required = Category switch
+        {
+            AnnotationCategory.Record => "record",
+            AnnotationCategory.Field => "field",
+            _ => "apiobject"
+        };
+        return declaredTypeName.Equals(required, StringComparison.OrdinalIgnoreCase);
+    }
 }
 
 /// <summary>

@@ -1,4 +1,6 @@
+using PeopleCodeParser.SelfHosted.Annotations;
 using PeopleCodeParser.SelfHosted.Nodes;
+using PeopleCodeParser.SelfHosted.Visitors.Utilities;
 using PeopleCodeTypeInfo.Functions;
 using PeopleCodeTypeInfo.Inference;
 using PeopleCodeTypeInfo.Types;
@@ -33,6 +35,7 @@ public class TypeMetadataBuilder : AstVisitorBase
     private string? _baseClassName;
     private bool _isBaseClassBuiltin;
     private PeopleCodeType? _builtinBaseType;
+    private AnnotationIndex? _annotations;
     /// <summary>
     /// Extracts TypeMetadata from a parsed ProgramNode.
     /// </summary>
@@ -44,8 +47,7 @@ public class TypeMetadataBuilder : AstVisitorBase
     /// <returns>TypeMetadata containing the extracted type information</returns>
     public static TypeMetadata ExtractMetadata(ProgramNode program, string? qualifiedName = null)
     {
-        var builder = new TypeMetadataBuilder();
-        
+        var builder = new TypeMetadataBuilder { _annotations = program.Annotations };
 
         // Use provided qualified name or build from program
         if (!string.IsNullOrEmpty(qualifiedName))
@@ -221,7 +223,9 @@ public class TypeMetadataBuilder : AstVisitorBase
     private PropertyInfo BuildPropertyInfo(ProgramVariableNode instanceVar)
     {
         var typeWithDim = BuildTypeWithDimensionality(instanceVar.Type);
-        return PropertyInfo.FromTypeWithDimensionality(typeWithDim);
+        var propertyInfo = PropertyInfo.FromTypeWithDimensionality(typeWithDim);
+        propertyInfo.RefinedType = BuildRefinedType(instanceVar.Type);
+        return propertyInfo;
     }
 
     public override void VisitFunction(FunctionNode node)
@@ -241,7 +245,8 @@ public class TypeMetadataBuilder : AstVisitorBase
             ReturnType = method.ReturnType != null
                 ? BuildTypeWithDimensionality(method.ReturnType)
                 : new TypeWithDimensionality(PeopleCodeType.Void),
-            Parameters = method.Parameters.Select(BuildParameter).ToList()
+            Parameters = method.Parameters.Select(BuildParameter).ToList(),
+            RefinedReturnType = BuildRefinedType(method.ReturnType)
         };
 
         return functionInfo;
@@ -258,7 +263,8 @@ public class TypeMetadataBuilder : AstVisitorBase
             ReturnType = function.ReturnType != null
                 ? BuildTypeWithDimensionality(function.ReturnType)
                 : new TypeWithDimensionality(PeopleCodeType.Void),
-            Parameters = function.Parameters.Select(BuildParameter).ToList()
+            Parameters = function.Parameters.Select(BuildParameter).ToList(),
+            RefinedReturnType = BuildRefinedType(function.ReturnType)
         };
 
         return functionInfo;
@@ -270,7 +276,9 @@ public class TypeMetadataBuilder : AstVisitorBase
     private PropertyInfo BuildPropertyInfo(PropertyNode property)
     {
         var typeWithDim = BuildTypeWithDimensionality(property.Type);
-        return PropertyInfo.FromTypeWithDimensionality(typeWithDim);
+        var propertyInfo = PropertyInfo.FromTypeWithDimensionality(typeWithDim);
+        propertyInfo.RefinedType = BuildRefinedType(property.Type);
+        return propertyInfo;
     }
 
     /// <summary>
@@ -285,7 +293,23 @@ public class TypeMetadataBuilder : AstVisitorBase
             typeWithDim.MustBeVariable = true;
         }
 
-        return new SingleParameter(typeWithDim, paramNode.Name);
+        return new SingleParameter(typeWithDim, paramNode.Name)
+        {
+            RefinedParameterType = BuildRefinedType(paramNode.Type)
+        };
+    }
+
+    /// <summary>
+    /// The refined type from a <c>/* as T */</c> annotation directly after <paramref name="typeNode"/>
+    /// (spec §7), or null. Errors and misfits are skipped here; inference reports them.
+    /// </summary>
+    private TypeWithDimensionality? BuildRefinedType(TypeNode? typeNode)
+    {
+        var target = _annotations?.ForType(typeNode)?.Target;
+        if (target == null || !target.Fits(AstTypeExtractor.GetTypeFromNode(typeNode)))
+            return null;
+
+        return new TypeWithDimensionality(target.Type) { Identity = target.Identity };
     }
 
     /// <summary>

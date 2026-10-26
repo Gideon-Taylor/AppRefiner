@@ -1,5 +1,6 @@
 
 using PeopleCodeParser.SelfHosted.Nodes;
+using PeopleCodeParser.SelfHosted.Visitors.Models;
 using PeopleCodeTypeInfo.Contracts;
 using PeopleCodeTypeInfo.Database;
 using PeopleCodeTypeInfo.Functions;
@@ -136,7 +137,9 @@ namespace PeopleCodeParser.SelfHosted.Visitors
                 || !(rightApi.IsApiObjectBase || PeopleCodeTypeDatabase.IsApiObjectSubtype(rightApi.Name)))
                 return false;
 
+            // An annotated target's conflict was already reported by inference, on the value
             if (!rightApi.IsApiObjectBase
+                && id.GetRefinementSource()?.Kind != RefinementKind.Annotation
                 && leftType is BuiltinObjectTypeInfo leftApi
                 && PeopleCodeTypeDatabase.IsApiObjectSubtype(leftApi.Name)
                 && !leftApi.Name.Equals(rightApi.Name, StringComparison.OrdinalIgnoreCase))
