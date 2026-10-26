@@ -189,10 +189,17 @@ The parser handles `Doc` today but not `NoExport`.
   excluding `NoExport` functions, plus what go-to-definition needs to open the CI's PeopleCode at
   that function.
 
-How the provider and resolver divide the work is my call: the provider returns the structural
-rows plus the Methods program's source text, and the resolver (which can parse) builds the
-signatures. It parses with the same parser and metadata extraction used for function libraries,
-so signatures and `/* as T */` annotations behave the same.
+**Custom methods are parsed when the definition is built (Tim).** Building the definition loads
+the CI's Methods program and parses it right away, with the same parser and metadata extraction
+used for function libraries, so signatures and `/* as T */` annotations behave the same. Only
+what each method needs is kept:
+- name and documentation (`Doc`);
+- parameters with their types and annotations;
+- return type, with its annotation;
+- the function's position in the program, for go-to-definition.
+
+The PeopleCode source isn't kept in the definition or the cache. Go-to-definition opens the CI's
+PeopleCode in App Designer and selects the function at its recorded position.
 
 ### Caching
 
