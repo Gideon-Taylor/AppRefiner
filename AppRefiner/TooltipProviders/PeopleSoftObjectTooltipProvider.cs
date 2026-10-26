@@ -57,9 +57,9 @@ namespace AppRefiner.TooltipProviders
             }
 
             // Check if this is a RECORD.Name pattern
-            if (IsRecordMemberAccess(node, out var isTargetHover))
+            if (IsRecordMemberAccess(node, out var recordName))
             {
-                ProcessRecordMemberAccess(node, isTargetHover);
+                ProcessRecordMemberAccess(node, recordName);
             }
 
             if (IsSQLMemberAccess(node, out var isSQLTargetHover))
@@ -72,27 +72,34 @@ namespace AppRefiner.TooltipProviders
         /// <summary>
         /// Checks if a member access expression is a RECORD.Name pattern
         /// </summary>
-        private bool IsRecordMemberAccess(MemberAccessNode node, out bool isTargetHover)
+        private bool IsRecordMemberAccess(MemberAccessNode node, out string recordName)
         {
-            isTargetHover = false;
+            recordName = string.Empty;
             /* Default to type of the member access */
             var typeInfo = node.GetInferredType();
 
             /* If they are hovering over the left side, get its type instead */
             if (node.Target is IdentifierNode && node.Target.SourceSpan.ContainsPosition(CurrentPosition))
             {
-                isTargetHover = true;
                 typeInfo = node.Target.GetInferredType();
             }
 
-            if (typeInfo is RecordTypeInfo)
+            // A record-typed value (Record.X, or &rec refined from CreateRecord(Record.X)) carries its name
+            if (typeInfo is RecordTypeInfo { RecordName.Length: > 0 } record)
             {
+                recordName = record.RecordName;
                 return true;
             }
 
-            // Check if the left side is an identifier with text "RECORD"
-            return node.Target is IdentifierNode identifier &&
-                   (string.Equals(identifier.Name, "RECORD", StringComparison.OrdinalIgnoreCase) || string.Equals(identifier.Name, "Scroll", StringComparison.OrdinalIgnoreCase));
+            // Record.X / Scroll.X written out: the member is the record name
+            if (node.Target is IdentifierNode identifier &&
+                (string.Equals(identifier.Name, "RECORD", StringComparison.OrdinalIgnoreCase) || string.Equals(identifier.Name, "Scroll", StringComparison.OrdinalIgnoreCase)))
+            {
+                recordName = node.MemberName;
+                return true;
+            }
+
+            return false;
         }
 
         private bool IsSQLMemberAccess(MemberAccessNode node, out bool isTargetHover)
@@ -116,14 +123,13 @@ namespace AppRefiner.TooltipProviders
         /// <summary>
         /// Processes a Record.Name member access expression to show record field information
         /// </summary>
-        private void ProcessRecordMemberAccess(MemberAccessNode node, bool isTargetHover)
+        private void ProcessRecordMemberAccess(MemberAccessNode node, string recordName)
         {
             // Make sure we have DataManager available
             if (DataManager == null || !DataManager.IsConnected)
                 return;
 
-            // Get the record name from the member name
-            string recordName = (isTargetHover ? node.Target.ToString() : node.MemberName).ToUpperInvariant();
+            recordName = recordName.ToUpperInvariant();
 
             // Fetch record field info from the database
             List<RecordFieldInfo>? fields = DataManager.GetRecordFields(recordName);

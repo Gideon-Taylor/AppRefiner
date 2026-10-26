@@ -63,14 +63,13 @@ namespace AppRefiner.TooltipProviders
         
 
         /// <summary>
-        /// Formats type information for display in the tooltip.
-        /// Uses minimal formatting - just the type name.
+        /// Formats type information for display in the tooltip (see <see cref="TypeDisplay"/>).
         /// </summary>
         /// <param name="typeInfo">The type information to format</param>
         /// <returns>Formatted tooltip text</returns>
         private string FormatTypeInfo(TypeInfo typeInfo)
         {
-            return $"Inferred Type: {typeInfo.Name}";
+            return $"Inferred Type: {TypeDisplay.Format(typeInfo)}";
         }
     }
 }

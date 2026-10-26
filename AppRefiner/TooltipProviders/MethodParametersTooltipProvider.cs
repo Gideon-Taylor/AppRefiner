@@ -22,6 +22,7 @@ namespace AppRefiner.TooltipProviders
     {
         private AppClassNode? classNode;
         private string basePackage;
+        private FunctionCallNode? currentCall;
 
         /// <summary>
         /// Name of the tooltip provider.
@@ -98,6 +99,7 @@ namespace AppRefiner.TooltipProviders
         private void ProcessMethodCall(MemberAccessNode memberAccess, FunctionCallNode functionCall)
         {
             string methodName = memberAccess.MemberName;
+            currentCall = functionCall;
 
             // Try to get inferred type from type inference (works with or without database)
             var targetType = memberAccess.Target.GetInferredType();
@@ -184,16 +186,26 @@ namespace AppRefiner.TooltipProviders
             if (method.IsAbstract)
                 tooltipText += "Abstract Method\n";
 
+            // The call's type carries a return annotation (own or inherited): ApiObject (Session)
             if (method.ReturnType != null)
-                tooltipText += $"Returns: {method.ReturnType.ToString()}\n";
+            {
+                var returnDetail = currentCall?.GetInferredType() is { } callType ? TypeDisplay.Detail(callType) : null;
+                tooltipText += returnDetail != null
+                    ? $"Returns: {method.ReturnType} ({returnDetail})\n"
+                    : $"Returns: {method.ReturnType}\n";
+            }
 
-            // Parameters
+            // Parameters, with each one's own or inherited annotation as stamped on the call
             if (method.Parameters.Count > 0)
             {
+                var annotations = currentCall?.GetParameterAnnotations();
                 tooltipText += "Parameters:\n";
-                foreach (var param in method.Parameters)
+                for (int i = 0; i < method.Parameters.Count; i++)
                 {
-                    tooltipText += $"   {param}\n";
+                    var annotation = annotations != null && i < annotations.Count ? annotations[i] : null;
+                    tooltipText += annotation is { } a
+                        ? $"   {method.Parameters[i]} ({TypeDisplay.Detail(a)})\n"
+                        : $"   {method.Parameters[i]}\n";
                 }
             }
             else
