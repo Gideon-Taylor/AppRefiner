@@ -1,0 +1,14 @@
+/* App class ZZ_AR_REF:PingB. See PingA. */
+import ZZ_AR_REF:PingA;
+
+class PingB
+   method Get(&n As number) Returns ApiObject;
+end-class;
+
+method Get
+   If &n = 0 Then
+      Return %Session;
+   End-If;
+   Local PingA &a = create PingA();
+   Return &a.Get(&n - 1);
+end-method;

@@ -1,0 +1,18 @@
+/* App class ZZ_AR_REF:Wrapper. Returns whatever Provider returns, so its types come from another
+   program's bodies. */
+import ZZ_AR_REF:Provider;
+
+class Wrapper
+   method GetSess() Returns ApiObject;
+   method GetCI() Returns ApiObject;
+end-class;
+
+method GetSess
+   Local Provider &p = create Provider();
+   Return &p.GetSess(); /* OK: Provider.GetSess is refined to Session */
+end-method;
+
+method GetCI
+   Local Provider &p = create Provider();
+   Return &p.GetCI();
+end-method;

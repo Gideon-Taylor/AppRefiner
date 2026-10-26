@@ -1,0 +1,14 @@
+/* App class ZZ_AR_REF:PingA. PingA and PingB call each other: refinement must stop, not loop. */
+import ZZ_AR_REF:PingB;
+
+class PingA
+   method Get(&n As number) Returns ApiObject;
+end-class;
+
+method Get
+   If &n = 0 Then
+      Return %Session;
+   End-If;
+   Local PingB &b = create PingB();
+   Return &b.Get(&n - 1);
+end-method;

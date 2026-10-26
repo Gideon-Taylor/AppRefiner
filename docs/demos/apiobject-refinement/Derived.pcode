@@ -1,0 +1,23 @@
+/* App class ZZ_AR_REF:Derived. Overrides without annotations. An override only inherits types
+   written as annotations, never types inferred from the base class's body. */
+import ZZ_AR_REF:Provider;
+
+class Derived extends Provider
+   method Derived();
+   method GetSess() Returns ApiObject;
+   method GetCI() Returns ApiObject;
+private
+   instance ApiObject &held;
+end-class;
+
+method Derived
+   %Super = create Provider();
+end-method;
+
+method GetSess
+   Return %Session.GetQuery(); /* Derived's own body decides: Query */
+end-method;
+
+method GetCI
+   Return &held; /* nothing types &held, so GetCI stays plain ApiObject (not Provider's ComponentInterface) */
+end-method;

@@ -161,7 +161,11 @@ Left open by phases 3–4 (spec `docs/superpowers/specs/2026-10-25-apiobject-typ
   DataCollection, valid component interface code such as
   `Local ApiObject &row = &coll.Item(1);` gets "Cannot assign type 'Row' to 'ApiObject'". The
   fix belongs in the dat generator, which isn't in this repo; no code overrides are applied.
-- **Bare own-method calls (pending confirmation).** A call to the class's own method without
-  `%This` (`Get()` rather than `%This.Get()`) is treated as an undeclared function call: it
-  isn't typed from the method and isn't used for callee-first ordering. This waits on
-  confirming the PeopleCode semantics for such calls.
+- **Field access on an undecided ApiObject is an error (predates phases 3–4).** A property
+  access on a plain `ApiObject` that no annotation, assignment or use has typed, such as
+  `&item.RoleName` on a component interface collection item, reports "'RoleName' is not a known
+  property on 'ApiObject'". Collection items have no API type in `typeinfo.dat`, so this hits
+  ordinary CI code. Tied to the DataCollection question above.
+
+A call to the class's own method without `%This` (`Get()` rather than `%This.Get()`) isn't
+valid PeopleCode, so treating it as an undeclared function call is correct, not a limit.

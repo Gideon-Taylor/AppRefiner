@@ -1,0 +1,55 @@
+/* App class ZZ_AR_REF:Consumer. Calls into the other classes; every type here comes from their
+   bodies, and the instance variable is narrowed from its own uses. */
+import ZZ_AR_REF:*;
+
+class Consumer
+   method Direct();
+   method ThroughWrapper();
+   method Overrides();
+   method Cycle();
+   method Narrowed();
+private
+   instance ApiObject &conn;
+end-class;
+
+method Direct
+   Local Provider &p = create Provider();
+   Local ApiObject &s = &p.GetSess();
+   &s.Disconnect(); /* OK */
+   &s.Bogus(); /* ERROR: names Session and the assignment */
+   Local ApiObject &ci = &p.GetCI();
+   Local boolean &found = &ci.Get(); /* OK: &ci is ComponentInterface */
+   Local Record &rec = &p.GetRec(); /* OK: hover &rec shows record (Record.PSOPRDEFN) */
+   Local ApiObject &m = &p.Mixed(True); /* OK: Mixed stays plain ApiObject */
+   Local ApiObject &g = &p.Sess; /* OK: getter-only property, Session */
+   Local ApiObject &c = &p.Conn; /* OK: property assigned in the constructor, Session */
+   &g.Bogus(); /* ERROR: names Session */
+   &c.Bogus(); /* ERROR: names Session */
+end-method;
+
+method ThroughWrapper
+   Local Wrapper &w = create Wrapper();
+   Local ApiObject &s = &w.GetSess(); /* OK: Session, two programs away */
+   &s.Bogus(); /* ERROR: names Session */
+   Local ApiObject &ci = &w.GetCI(); /* OK: ComponentInterface */
+   &ci.Bogus(); /* ERROR: names ComponentInterface */
+end-method;
+
+method Overrides
+   Local Derived &d = create Derived();
+   Local ApiObject &q = &d.GetSess(); /* OK: Query, from Derived's own body */
+   &q.Bogus(); /* ERROR: names Query */
+   Local ApiObject &x = &d.GetCI(); /* OK: plain ApiObject, not Provider's ComponentInterface */
+   &x.Bogus(); /* WARNING (N3): nothing types &x, so narrowing reports it */
+end-method;
+
+method Cycle
+   Local PingA &a = create PingA();
+   Local ApiObject &r = &a.Get(2);
+   Local ApiObject &rCopy = &r; /* OK: hover &r; see the README for what a cycle gets */
+end-method;
+
+method Narrowed
+   Local ApiObject &ci = &conn.GetCompIntfc(CompIntfc.USER_PROFILE); /* OK: settles &conn as Session */
+   &conn.Bogus(); /* WARNING (N2): names Session and GetCompIntfc() */
+end-method;

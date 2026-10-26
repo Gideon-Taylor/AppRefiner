@@ -1,0 +1,24 @@
+/* App Designer probe: which ignored return values does the PeopleCode compiler reject?
+   Paste into any non-class event. Uncomment ONE case at a time and save; note whether the save
+   succeeds or what the compiler says. (The compiler stops at the first error, so one at a time.) */
+Local ApiObject &ci = %Session.GetCompIntfc(CompIntfc.USER_PROFILE);
+Local ApiObject &s = %Session;
+Local Rowset &rs = CreateRowset(Record.PSOPRDEFN);
+
+/* A: CI method through an ApiObject variable (typeinfo.dat: not optional) */
+/* &ci.Cancel(); */
+
+/* B: same, Save */
+/* &ci.Save(); */
+
+/* C: Session method called on %Session directly */
+/* %Session.GetCompIntfc(CompIntfc.USER_PROFILE); */
+
+/* D: Session method through an ApiObject variable */
+/* &s.GetQuery(); */
+
+/* E: control, typed builtin method that typeinfo.dat says is NOT optional */
+/* &rs.GetRow(1); */
+
+/* F: control, typed builtin method that typeinfo.dat says IS optional */
+/* &rs.Fill(); */

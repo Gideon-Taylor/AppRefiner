@@ -1,0 +1,48 @@
+/* App class ZZ_AR_REF:Provider. Nothing here is annotated: every ApiObject and Record type below
+   comes from the method bodies. GetCI is implemented above GetSess on purpose (callee-first order). */
+class Provider
+   method Provider();
+   method GetCI() Returns ApiObject;
+   method GetSess() Returns ApiObject;
+   method GetRec() Returns Record;
+   method Mixed(&b As boolean) Returns ApiObject;
+   method RunIt();
+   property ApiObject Sess get;
+   property ApiObject Conn;
+private
+   instance ApiObject &qry;
+end-class;
+
+method Provider
+   &Conn = %Session; /* Conn has no getter: callers see the type of its assignments */
+   &qry = %Session.GetQuery();
+end-method;
+
+method GetCI
+   Local ApiObject &s = %This.GetSess(); /* OK: GetSess is implemented below but refined first */
+   Return &s.GetCompIntfc(CompIntfc.USER_PROFILE);
+end-method;
+
+method GetSess
+   Return %Session;
+end-method;
+
+method GetRec
+   Return CreateRecord(Record.PSOPRDEFN);
+end-method;
+
+method Mixed
+   If &b Then
+      Return %Session;
+   End-If;
+   Return %Session.GetQuery(); /* WARNING (R1) */
+end-method;
+
+method RunIt
+   Local Rowset &rs = &qry.RunToRowset(CreateRecord(Record.PSOPRDEFN), 10); /* OK: &qry is Query */
+   &qry.Disconnect(); /* ERROR: names Query and the constructor's assignment */
+end-method;
+
+get Sess
+   Return %Session;
+end-get;

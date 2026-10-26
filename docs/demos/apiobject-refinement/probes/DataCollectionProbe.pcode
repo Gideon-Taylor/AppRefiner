@@ -1,0 +1,29 @@
+/* Runtime probe: what does a component interface collection's Item() actually return?
+   Run it somewhere you can see MessageBox output (an Application Engine PeopleCode action writes it
+   to the message log; a page event shows a popup). It reads your own user profile and changes nothing.
+   Run step 1 alone first, then uncomment steps 2-4 one at a time: a step that fails at run time
+   stops the program, so the earlier output still tells us something. */
+Local ApiObject &ci = %Session.GetCompIntfc(CompIntfc.USER_PROFILE);
+&ci.UserID = %OperatorId;
+Local boolean &found = &ci.Get();
+MessageBox(0, "", 0, 0, "Get() = %1", &found);
+
+Local ApiObject &roles = &ci.Roles;
+MessageBox(0, "", 0, 0, "Roles.Count = %1", &roles.Count);
+
+/* Step 1: Item into an ApiObject, then a CI field on it */
+Local ApiObject &item = &roles.Item(1);
+MessageBox(0, "", 0, 0, "Item(1).RoleName = %1", &item.RoleName);
+
+/* Step 2: does a Row variable accept Item's result? */
+/* Local Row &row = &roles.Item(1);
+MessageBox(0, "", 0, 0, "Row accepted; RowNumber = %1", &row.RowNumber); */
+
+/* Step 3: does the item have Row's members? */
+/* MessageBox(0, "", 0, 0, "Item(1).RowNumber = %1", &item.RowNumber); */
+
+/* Step 4: does InsertItem return the new item? (Cancel below discards it) */
+/* Local ApiObject &new = &roles.InsertItem(&roles.Count);
+MessageBox(0, "", 0, 0, "InsertItem returned an object; RoleName = '%1'", &new.RoleName); */
+
+Local boolean &cancelled = &ci.Cancel();

@@ -1,0 +1,70 @@
+/* Phases 3-4 in a non-class program: narrowing of parameters and Global/Component variables, and
+   functions typed from their Return statements. Nothing is annotated. Paste into any non-class event. */
+Global ApiObject &gConn;
+Component ApiObject &cQry;
+
+/* Narrowing a parameter from its uses inside the function */
+Function UseParam(&x As ApiObject)
+   Local ApiObject &ci = &x.GetCompIntfc(CompIntfc.USER_PROFILE); /* OK: settles &x as Session */
+   &x.Disconnect(); /* OK */
+   Local Rowset &rs = &x.RunToRowset(CreateRecord(Record.PSOPRDEFN), 10); /* WARNING (N2) */
+End-Function;
+
+/* Return refinement */
+Function MakeSession() Returns ApiObject
+   Return %Session;
+End-Function;
+
+Function MakeCI() Returns ApiObject
+   Local ApiObject &s = MakeSession(); /* OK: &s is Session, from MakeSession's Return */
+   Return &s.GetCompIntfc(CompIntfc.USER_PROFILE);
+End-Function;
+
+Function MaybeSession(&b As boolean) Returns ApiObject
+   If &b Then
+      Return %Session;
+   End-If;
+   Return Null; /* OK: a bare Null doesn't count against the other Returns */
+End-Function;
+
+Function Mixed(&b As boolean) Returns ApiObject
+   If &b Then
+      Return %Session;
+   End-If;
+   Return %Session.GetQuery(); /* WARNING (R1): the Returns disagree */
+End-Function;
+
+Function MakeRec() Returns Record
+   Return CreateRecord(Record.PSOPRDEFN);
+End-Function;
+
+Function Countdown(&n As number) Returns ApiObject
+   If &n = 0 Then
+      Return %Session;
+   End-If;
+   Return Countdown(&n - 1);
+End-Function;
+
+Local ApiObject &s = MakeSession();
+&s.Disconnect(); /* OK */
+&s.Bogus(); /* ERROR: names Session and the assignment */
+
+Local ApiObject &ci = MakeCI();
+Local boolean &found = &ci.Get(); /* OK: &ci is ComponentInterface */
+
+Local ApiObject &maybe = MaybeSession(True);
+&maybe.Disconnect(); /* OK: &maybe is Session */
+
+Local ApiObject &mixed = Mixed(True);
+&mixed.Disconnect(); /* OK: Mixed stays plain ApiObject, so &mixed narrows from this use instead: Session */
+
+Local Record &rec = MakeRec();
+Local boolean &hit = &rec.SelectByKey(); /* OK: hover &rec shows record (Record.PSOPRDEFN) */
+
+Local ApiObject &cd = Countdown(3);
+Local ApiObject &cdCopy = &cd; /* OK: hover &cd; see the README for what a self-recursive function gets */
+
+/* Global and Component variables narrow like locals */
+Local ApiObject &ci2 = &gConn.GetCompIntfc(CompIntfc.USER_PROFILE); /* OK: settles &gConn as Session */
+&gConn.Bogus(); /* WARNING (N2): names Session and GetCompIntfc() */
+Local Rowset &rs2 = &cQry.RunToRowset(CreateRecord(Record.PSOPRDEFN), 10); /* OK: settles &cQry as Query */
