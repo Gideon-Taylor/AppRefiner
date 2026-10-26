@@ -280,7 +280,7 @@ Behaviour (spec §7 "Behaviour"):
 [Fact] public void Global_and_instance_annotations_apply()          // Global; and a class with "instance ApiObject /* as Session */ &s;" used in a method body
 [Fact] public void Conflicting_assignment_warns_and_annotation_stays() // "Local ApiObject /* as Session */ &x;\n&x = %Session.GetCompIntfc(CompIntfc.A);\n&x.GetCompIntfc(CompIntfc.B);"
 //   warning == "&x is annotated as Session (line 1) but is assigned ComponentInterface here."; exactly one warning mentioning &x; last use "Session"; no "Cannot assign" error
-[Fact] public void More_detailed_assignment_adds_detail()           // "Local ApiObject /* as ComponentInterface */ &x;\n&x = %Session.GetCompIntfc(CompIntfc.USER_PROFILE);" → no warning (identity comes later in spec §16; same type → no warning)
+[Fact] public void Same_subtype_assignment_does_not_warn()          // "Local ApiObject /* as ComponentInterface */ &x;\n&x = %Session.GetCompIntfc(CompIntfc.USER_PROFILE);" → no warning (GetCompIntfc carries no CI name until spec §16; same subtype → no change)
 [Fact] public void Less_detailed_assignment_keeps_annotation()      // "Local ApiObject /* as CompIntfc.FOO */ &x;\n&x = %Session.GetCompIntfc(CompIntfc.A);\n&x.Save();" → last use Identity == new(CompIntfcName:"FOO"); no warning
 [Fact] public void Misfit_annotation_warns()                        // "Local Rowset /* as Session */ &rs;" → warning "'as Session' needs an ApiObject declaration; &rs is Rowset." (declared type as the registry holds it; match case-insensitively)
 [Fact] public void Unknown_annotation_warns()                       // "Local ApiObject /* as CompIntfc */ &x;" → the CompIntfc did-you-mean text
@@ -318,8 +318,9 @@ Then the Task 5 rules apply, using `A` as the RHS: a declaration-annotated varia
 [Fact] public void Annotation_after_semicolon_counts()        // "Local ApiObject &d;\n&d = GetIt(); /* as Session */\n&d.GetCompIntfc(CompIntfc.A);" → "Session"
 [Fact] public void Annotation_adds_ci_name()                  // "Local ApiObject &ci = %Session.GetCompIntfc(&n) /* as CompIntfc.FOO */;" → last use Identity CompIntfcName FOO, no warning
 [Fact] public void Conflicting_value_warns_and_annotation_wins() // "Local ApiObject &x = %Session /* as Tree */;\n&x.Foo();" → warning "The value is Session, but it is annotated as Tree. Using Tree."; last use "Tree"
-[Fact] public void Latest_wins_after_annotated_assignment()   // "Local ApiObject &x = GetIt() /* as Session */;\n&x = GetIt() /* as Tree */;" → last use Tree; one-type warning "(Session on line N, Tree on line M)" is NOT expected because the value nodes are ApiObject → assert no "Cannot assign" error only
+[Fact] public void Latest_wins_after_annotated_assignment()   // "Local ApiObject &x = GetIt() /* as Session */;\n&x = GetIt() /* as Tree */;" plus "\n&x.Foo();" → last use "Tree"; no "Cannot assign" error (the checker sees ApiObject value nodes, so no one-type warning either)
 [Fact] public void Declaration_annotation_still_governs()     // "Local ApiObject /* as Session */ &x;\n&x = GetIt() /* as Tree */;" → "&x is annotated as Session (line 1) but is assigned Tree here."; last use Session
+[Fact] public void Declaration_plus_more_detailed_assignment_annotation_adds_name() // "Local ApiObject /* as ComponentInterface */ &x;\n&x = %Session.GetCompIntfc(&n) /* as CompIntfc.FOO */;\n&x.Save();" → no warning; last use Identity CompIntfcName FOO (Review Focus 5)
 [Fact] public void Annotation_on_property_target_is_ignored()  // in a class: "&obj.P = GetIt() /* as Session */;" → no warning, no effect (no refinement for non-identifier targets)
 ```
 
