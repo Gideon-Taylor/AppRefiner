@@ -137,6 +137,25 @@ namespace AppRefiner.TooltipProviders
         }
 
         /// <summary>
+        /// The declared variable whose name is at <paramref name="position"/> in a declaration
+        /// (Local, Global, Component, instance or parameter), with the type it holds right after
+        /// the declaration. A declared name isn't an expression node, so identifier-based
+        /// lookups miss it.
+        /// </summary>
+        protected static DeclaredVariableType? DeclaredVariableAt(ProgramNode program, int position)
+        {
+            foreach (var node in program.FindNodes(n => n.SourceSpan.ContainsPositionExclusiveEnd(position)))
+            {
+                foreach (var declared in node.GetDeclaredVariableTypes())
+                {
+                    if (declared.NameSpan.ContainsPositionExclusiveEnd(position))
+                        return declared;
+                }
+            }
+            return null;
+        }
+
+        /// <summary>
         /// Parses an external class for database-integrated analysis
         /// </summary>
         protected ProgramNode? ParseExternalClass(string classPath)

@@ -26,16 +26,11 @@ namespace AppRefiner.TooltipProviders
             base.ProcessProgram(program, position, lineNumber);
 
             // A declared name isn't an expression node; its declaration records the type it holds
-            foreach (var declaration in program.FindNodes(n => n.SourceSpan.ContainsPositionExclusiveEnd(position)))
+            if (DeclaredVariableAt(program, position) is { } declared)
             {
-                foreach (var declared in declaration.GetDeclaredVariableTypes())
-                {
-                    if (declared.NameSpan.ContainsPositionExclusiveEnd(position) && declared.Type.Kind != TypeKind.Unknown)
-                    {
-                        RegisterTooltip(declared.NameSpan, FormatVariableType(declared.Type, declared.Source, declared.Candidates));
-                        return;
-                    }
-                }
+                if (declared.Type.Kind != TypeKind.Unknown)
+                    RegisterTooltip(declared.NameSpan, FormatVariableType(declared.Type, declared.Source, declared.Candidates));
+                return;
             }
 
             // Find the most specific node containing the cursor position that has type information

@@ -763,6 +763,10 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
     {
         ApplyDeclarationAnnotation(variable);
         SeedNarrowedType(variable);
+
+        // Parameters are registered inside their routine's scope, so they're recorded here
+        if (variable.DeclarationNode is ParameterNode parameter && parameter.NameToken != null)
+            StampDeclaredName(parameter, variable, parameter.NameToken.SourceSpan);
     }
 
     /// <summary>
@@ -1523,14 +1527,17 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
     {
         foreach (var name in names)
         {
-            if (name.Token == null || FindVariable(name.Name) is not { IsAutoDeclared: false } variable)
-                continue;
-
-            var type = variable.InferredType ?? ConvertTypeNameToTypeInfo(variable.Type);
-            var source = variable.RefinementSource;
-            declaration.SetDeclaredVariableType(new DeclaredVariableType(
-                name.Name, name.SourceSpan, type, source, source == null ? UndecidedCandidates(variable) : null));
+            if (name.Token != null && FindVariable(name.Name) is { IsAutoDeclared: false } variable)
+                StampDeclaredName(declaration, variable, name.SourceSpan);
         }
+    }
+
+    private void StampDeclaredName(AstNode declaration, VariableInfo variable, SourceSpan nameSpan)
+    {
+        var type = variable.InferredType ?? ConvertTypeNameToTypeInfo(variable.Type);
+        var source = variable.RefinementSource;
+        declaration.SetDeclaredVariableType(new DeclaredVariableType(
+            variable.Name, nameSpan, type, source, source == null ? UndecidedCandidates(variable) : null));
     }
 
     /// <summary>

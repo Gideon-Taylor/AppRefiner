@@ -63,6 +63,27 @@ public class DeclaredVariableTypeTests
     }
 
     [Fact]
+    public void Parameter_shows_its_narrowed_type()
+    {
+        var declared = Assert.Single(Declared(
+            "Function F(&x As ApiObject)\n   Local ApiObject &ci = &x.GetCompIntfc(CompIntfc.A);\nEnd-Function;"), d => d.Name == "&x");
+
+        Assert.Equal("Session", declared.Type.Name, ignoreCase: true);
+        Assert.Equal(RefinementKind.Narrowing, declared.Source!.Kind);
+        Assert.Equal(0, declared.NameSpan.Start.Line);
+    }
+
+    [Fact]
+    public void Parameter_shows_its_annotated_type()
+    {
+        var declared = Assert.Single(Declared(
+            "Function F(&s As ApiObject /* as Session */)\nEnd-Function;"), d => d.Name == "&s");
+
+        Assert.Equal("Session", declared.Type.Name, ignoreCase: true);
+        Assert.Equal(RefinementKind.Annotation, declared.Source!.Kind);
+    }
+
+    [Fact]
     public void Global_declaration_shows_the_narrowed_type()
     {
         var declared = Assert.Single(Declared("Global ApiObject &g;\nLocal ApiObject &ci = &g.GetCompIntfc(CompIntfc.A);"), d => d.Name == "&g");

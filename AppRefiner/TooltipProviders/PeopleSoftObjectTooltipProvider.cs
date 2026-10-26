@@ -43,6 +43,25 @@ namespace AppRefiner.TooltipProviders
         public override void ProcessProgram(ProgramNode program, int position, int lineNumber)
         {
             base.ProcessProgram(program, position, lineNumber);
+
+            // A record variable's declared name (Local Record &r = CreateRecord(Record.X))
+            if (DeclaredVariableAt(program, position) is { Type: RecordTypeInfo { RecordName.Length: > 0 } record } declared)
+                ProcessRecordReference(declared.NameSpan, record.RecordName);
+        }
+
+        /// <summary>
+        /// A record variable used on its own (an argument, an assignment's value), not as a
+        /// member access target
+        /// </summary>
+        public override void VisitIdentifier(IdentifierNode node)
+        {
+            if (node.SourceSpan.ContainsPosition(CurrentPosition)
+                && node.GetInferredType() is RecordTypeInfo { RecordName.Length: > 0 } record)
+            {
+                ProcessRecordReference(node.SourceSpan, record.RecordName);
+            }
+
+            base.VisitIdentifier(node);
         }
 
         /// <summary>
@@ -59,7 +78,7 @@ namespace AppRefiner.TooltipProviders
             // Check if this is a RECORD.Name pattern
             if (IsRecordMemberAccess(node, out var recordName))
             {
-                ProcessRecordMemberAccess(node, recordName);
+                ProcessRecordReference(node.SourceSpan, recordName);
             }
 
             if (IsSQLMemberAccess(node, out var isSQLTargetHover))
@@ -121,9 +140,9 @@ namespace AppRefiner.TooltipProviders
         }
 
         /// <summary>
-        /// Processes a Record.Name member access expression to show record field information
+        /// Shows a record's field information over <paramref name="span"/>
         /// </summary>
-        private void ProcessRecordMemberAccess(MemberAccessNode node, string recordName)
+        private void ProcessRecordReference(SourceSpan span, string recordName)
         {
             // Make sure we have DataManager available
             if (DataManager == null || !DataManager.IsConnected)
@@ -143,13 +162,12 @@ namespace AppRefiner.TooltipProviders
                     tooltipContent.AppendLine(field.ToString());
                 }
 
-                // Register the tooltip for the member access node
-                RegisterTooltip(node.SourceSpan, tooltipContent.ToString());
+                RegisterTooltip(span, tooltipContent.ToString());
             }
             else
             {
                 // Record not found or no fields
-                RegisterTooltip(node.SourceSpan, $"Record '{recordName}' not found or has no fields.");
+                RegisterTooltip(span, $"Record '{recordName}' not found or has no fields.");
             }
         }
 

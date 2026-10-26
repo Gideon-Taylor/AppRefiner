@@ -81,12 +81,31 @@ namespace AppRefiner.TooltipProviders
         {
             if (node.SourceSpan.ContainsPosition(CurrentPosition))
             {
-                _hoveredVariableName = node.Name;
-                _hoveredVariableSpan = node.SourceSpan;
+                // The name under the cursor in a multi-name declaration, else the declaration's name
+                var hovered = node.NameInfos.FirstOrDefault(n => n.SourceSpan.ContainsPosition(CurrentPosition));
+                _hoveredVariableName = hovered?.Name ?? node.Name;
+                _hoveredVariableSpan = hovered?.SourceSpan ?? node.SourceSpan;
                 _scopeContext = GetCurrentScope();
             }
 
             base.VisitProgramVariable(node);
+        }
+
+        /// <summary>
+        /// A parameter's name in its method or function header (registered inside the routine's scope)
+        /// </summary>
+        protected override void OnVariableDeclared(VariableInfo variable)
+        {
+            base.OnVariableDeclared(variable);
+
+            if (variable.DeclarationNode is ParameterNode parameter
+                && parameter.NameToken != null
+                && parameter.NameToken.SourceSpan.ContainsPosition(CurrentPosition))
+            {
+                _hoveredVariableName = variable.Name;
+                _hoveredVariableSpan = parameter.NameToken.SourceSpan;
+                _scopeContext = GetCurrentScope();
+            }
         }
 
         /// <summary>
