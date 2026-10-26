@@ -5842,22 +5842,39 @@ public class PeopleCodeParser
     /// </summary>
     private void CollectComments(ProgramNode program)
     {
+        // The last two significant tokens seen, recorded with each comment so annotations can be
+        // matched by position (comments in a token's leading trivia follow the tokens before it)
+        Token? previous = null;
+        Token? beforePrevious = null;
+
+        void Add(Token comment)
+        {
+            program.AddComment(comment);
+            program.AddCommentContext(new CommentContext(comment, previous, beforePrevious));
+        }
+
         // Traverse all tokens and collect comments from both the main tokens and their trivia
         foreach (var token in _tokens)
         {
-            // Check if the token itself is a comment
-            if (token.Type.IsCommentType())
-            {
-                program.AddComment(token);
-            }
-
             // Check leading trivia for comments
             foreach (var leadingTrivia in token.LeadingTrivia)
             {
                 if (leadingTrivia.Type.IsCommentType())
                 {
-                    program.AddComment(leadingTrivia);
+                    Add(leadingTrivia);
                 }
+            }
+
+            // Check if the token itself is a comment
+            if (token.Type.IsCommentType())
+            {
+                Add(token);
+            }
+
+            if (!token.Type.IsTrivia() && token.Type != TokenType.EndOfFile)
+            {
+                beforePrevious = previous;
+                previous = token;
             }
 
             // Check trailing trivia for comments
@@ -5865,7 +5882,7 @@ public class PeopleCodeParser
             {
                 if (trailingTrivia.Type.IsCommentType())
                 {
-                    program.AddComment(trailingTrivia);
+                    Add(trailingTrivia);
                 }
             }
         }

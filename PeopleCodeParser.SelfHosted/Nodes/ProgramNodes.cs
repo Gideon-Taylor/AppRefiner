@@ -1,3 +1,4 @@
+using PeopleCodeParser.SelfHosted.Annotations;
 using PeopleCodeParser.SelfHosted.Lexing;
 using PeopleCodeParser.SelfHosted.Visitors;
 using PeopleCodeParser.SelfHosted.Visitors.Models;
@@ -55,6 +56,19 @@ public class ProgramNode : AstNode
     /// All comments found in the program (both line and block comments)
     /// </summary>
     public List<Lexing.Token> Comments { get; } = new();
+
+    /// <summary>
+    /// Each comment with the significant tokens that precede it, for finding comments by position
+    /// </summary>
+    private readonly List<CommentContext> _commentContexts = new();
+    public IReadOnlyList<CommentContext> CommentContexts => _commentContexts;
+
+    private AnnotationIndex? _annotations;
+
+    /// <summary>
+    /// The program's <c>/* as T */</c> type annotations, indexed by position (built on first use)
+    /// </summary>
+    public AnnotationIndex Annotations => _annotations ??= AnnotationIndex.Build(this);
 
     /// <summary>
     /// True if this program defines an application class
@@ -120,6 +134,11 @@ public class ProgramNode : AstNode
         {
             Comments.Add(comment);
         }
+    }
+
+    internal void AddCommentContext(CommentContext context)
+    {
+        _commentContexts.Add(context);
     }
 
     public void SetAppClass(AppClassNode appClass)
@@ -470,3 +489,8 @@ public enum VisibilityModifier
     Protected,
     Private
 }
+
+/// <summary>
+/// A comment together with the two nearest significant (non-trivia, non-EOF) tokens before it
+/// </summary>
+public sealed record CommentContext(Lexing.Token Comment, Lexing.Token? Previous, Lexing.Token? BeforePrevious);
