@@ -1,0 +1,15 @@
+/* App class ZZ_AR_DEMO:Sink. Parameters typed with imported short names. */
+import ZZ_AR_DEMO:Config;
+
+class Sink
+   method Use(&cfg As Config);
+   method UseAll(&cfgs As array of Config);
+end-class;
+
+method Use
+   /+ &cfg as ZZ_AR_DEMO:Config +/
+end-method;
+
+method UseAll
+   /+ &cfgs as Array of ZZ_AR_DEMO:Config +/
+end-method;

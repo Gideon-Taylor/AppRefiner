@@ -1,0 +1,18 @@
+/* App class ZZ_AR_DEMO:Base. Annotations that a subclass inherits. */
+class Base
+   method Base();
+   method Use(&s As ApiObject /* as Session */);
+   method Get() Returns ApiObject /* as Session */;
+end-class;
+
+method Base
+end-method;
+
+method Use
+   /+ &s as ApiObject +/
+end-method;
+
+method Get
+   /+ Returns ApiObject +/
+   Return %Session;
+end-method;

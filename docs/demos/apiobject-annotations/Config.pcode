@@ -1,0 +1,3 @@
+/* App class ZZ_AR_DEMO:Config. Empty; used as a short-named type. */
+class Config
+end-class;

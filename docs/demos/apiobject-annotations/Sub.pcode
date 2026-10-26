@@ -1,0 +1,25 @@
+/* App class ZZ_AR_DEMO:Sub. Overrides without annotations; inherits Base's. */
+import ZZ_AR_DEMO:Base;
+
+class Sub extends ZZ_AR_DEMO:Base
+   method Sub();
+   method Use(&s As ApiObject);
+   method Get() Returns ApiObject;
+end-class;
+
+method Sub
+   %Super = create ZZ_AR_DEMO:Base();
+end-method;
+
+method Use
+   /+ &s as ApiObject +/
+   /+ Extends/implements ZZ_AR_DEMO:Base.Use +/
+   &s.Disconnect(); /* OK: &s inherits Session from Base.Use */
+   &s.Bogus(); /* ERROR: names Session and the annotation */
+end-method;
+
+method Get
+   /+ Returns ApiObject +/
+   /+ Extends/implements ZZ_AR_DEMO:Base.Get +/
+   Return %Session;
+end-method;

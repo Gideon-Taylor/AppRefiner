@@ -1,0 +1,19 @@
+/* App class ZZ_AR_DEMO:Factory. Return/property types written as imported short names. */
+import ZZ_AR_DEMO:Config;
+
+class Factory
+   method Get() Returns Config;
+   method GetAll() Returns array of Config;
+   property Config Current;
+end-class;
+
+method Get
+   /+ Returns ZZ_AR_DEMO:Config +/
+   Return create Config(); /* OK: used to be a false "Cannot return type 'ZZ_AR_DEMO:Config' from a routine that returns 'Config'" */
+end-method;
+
+method GetAll
+   /+ Returns Array of ZZ_AR_DEMO:Config +/
+   Local array of Config &all = CreateArrayRept(create Config(), 0);
+   Return &all;
+end-method;

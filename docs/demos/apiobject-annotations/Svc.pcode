@@ -1,0 +1,42 @@
+/* App class ZZ_AR_DEMO:Svc. Constructor/method/property annotations, and the class
+   referring to itself by its short name (no import needed; App Designer qualifies it on save,
+   so after saving, the short names below read ZZ_AR_DEMO:Svc). */
+class Svc
+   method Svc(&s As ApiObject /* as Session */);
+   method Use(&s As ApiObject /* as Session */);
+   method GetSession() Returns ApiObject /* as Session */;
+   method Clone() Returns Svc;
+   method Make();
+   property ApiObject /* as Session */ Sess;
+end-class;
+
+method Svc
+   /+ &s as ApiObject +/
+   &Sess = &s;
+   &s.Disconnect(); /* OK: constructor parameter is Session */
+end-method;
+
+method Use
+   /+ &s as ApiObject +/
+   &s.Disconnect(); /* OK */
+end-method;
+
+method GetSession
+   /+ Returns ApiObject +/
+   Return %Session;
+end-method;
+
+method Clone
+   /+ Returns ZZ_AR_DEMO:Svc +/
+   Return %This; /* OK: used to be a false "Cannot return type 'ZZ_AR_DEMO:Svc' from a routine that returns 'Svc'" */
+end-method;
+
+method Make
+   Local Svc &me = %This; /* OK: used to be a false "Cannot assign" */
+   Local Svc &c = %This.Clone(); /* OK */
+   Local Svc &copy = create Svc(%This.Sess); /* OK: own-class create is now checked, and this passes */
+   %This.Sess.Disconnect(); /* OK: annotated property is Session */
+
+   Local ApiObject &ci = %Session.GetCompIntfc(CompIntfc.USER_PROFILE);
+   Local Svc &bad = create Svc(&ci); /* WARNING: Svc expects &s as Session (annotated); the argument is ComponentInterface */
+end-method;

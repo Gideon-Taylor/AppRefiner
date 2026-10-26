@@ -1,0 +1,21 @@
+/* Phase 2: annotations on Local declarations and assignments. Paste into any non-class event. */
+
+Local ApiObject /* as Session */ &s;
+&s.Disconnect(); /* OK: annotation types &s as Session (autosuggest too) */
+&s.Bogus(); /* ERROR: ... (&s is Session, annotated on line 3) */
+
+Local ApiObject &q;
+&q = %Session.GetQuery() /* as Query */; /* OK: annotation matches the value */
+&q = %Session.GetCompIntfc(CompIntfc.USER_PROFILE) /* as Query */; /* WARNING: The value is ComponentInterface, but it is annotated as Query. Using Query.
+   (No "more than one API type" warning: the annotation keeps &q a Query.) */
+
+Local ApiObject /* as Sesion */ &typo; /* WARNING: unknown type in annotation */
+Local string /* as Session */ &a, &b; /* TWO WARNINGS: one naming &a, one naming &b (used to be only &b) */
+
+Local ApiObject /* as Session */ &d;
+&d = %Session.GetCompIntfc(CompIntfc.USER_PROFILE); /* WARNING: &d is annotated as Session (line 15) but is assigned ComponentInterface here. */
+&d = %Session.GetCompIntfc(CompIntfc.USER_PROFILE) /* as Query */; /* ONE warning: the declaration conflict only */
+&d = %Session.GetCompIntfc(CompIntfc.USER_PROFILE) /* as Bogus */; /* TWO warnings: unknown annotation + declaration conflict */
+
+Local any /* as Session */ &anyS;
+&anyS = "text"; /* WARNING: &anyS is annotated as Session but is assigned string */

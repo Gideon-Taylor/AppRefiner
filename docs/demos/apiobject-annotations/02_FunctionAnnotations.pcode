@@ -1,0 +1,26 @@
+/* Phase 2: "as T" annotations on Function headers. Paste into any non-class event. */
+
+Function GetSess() Returns ApiObject /* as Session */
+   Return %Session;
+End-Function;
+
+Function Take(&s As ApiObject /* as Session */)
+   &s.Disconnect(); /* OK: &s is Session inside the function */
+End-Function;
+
+Function Misfit(&r As Rowset /* as Session */) /* WARNING: 'as Session' needs an ApiObject declaration */
+End-Function;
+
+Function Typo() Returns ApiObject /* as Sesion */ /* WARNING: unknown type in annotation */
+   Return %Session;
+End-Function;
+
+Local ApiObject &sess = GetSess();
+&sess.Disconnect(); /* OK: annotated return refines &sess to Session */
+
+Local ApiObject &ci = %Session.GetCompIntfc(CompIntfc.USER_PROFILE);
+Take(%Session); /* OK: matching subtype */
+Take(&ci); /* WARNING: Take expects &s as Session (annotated); the argument is ComponentInterface */
+
+Local ApiObject &unknown;
+Take(&unknown); /* OK: plain ApiObject passes silently */

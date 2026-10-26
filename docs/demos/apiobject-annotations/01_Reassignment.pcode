@@ -1,0 +1,22 @@
+/* Phase 1: declared vs refined types. Paste into any non-class PeopleCode event
+   (e.g. a FieldFormula or a page Activate). No app package needed. */
+
+Local ApiObject &x = %Session;
+&x.Disconnect(); /* OK: &x is Session here */
+
+&x = %Session.GetCompIntfc(CompIntfc.USER_PROFILE); /* WARNING: &x is assigned more than one API type (Session on line 4, ComponentInterface on line 7) */
+Local boolean &ok = &x.Save(); /* OK: latest assignment wins, &x is now ComponentInterface */
+&x.Bogus(); /* ERROR: names the type and where it came from (&x is ComponentInterface, assigned on line 7) */
+
+Local ApiObject &ci = %Session.GetCompIntfc(CompIntfc.USER_PROFILE);
+Local string &uid = &ci.UserID; /* OK: component interface properties are dynamic, no false "not a known property" */
+
+Local any &a = %Session;
+&a = 5; /* OK: any accepts everything (used to be a false "Cannot assign") */
+
+Local ApiObject &api = %Session;
+&api = "text"; /* ERROR (real): names the declared type: Cannot assign type 'string' to 'ApiObject' (not 'Session') */
+
+Local Record &r = CreateRecord(Record.PSOPRDEFN);
+/* Hover CreateRecord / &r: should still show PSOPRDEFN */
+&r.SelectByKey();
