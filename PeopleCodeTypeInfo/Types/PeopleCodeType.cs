@@ -1350,6 +1350,15 @@ public class AppClassTypeInfo : TypeInfo
             return true;
         }
 
+        // Metadata keeps types as written ("Config") while inference qualifies values
+        // ("PKG:Config"), so a bare type matches on the class name. Weak-spots §3 approximation:
+        // two classes with the same short name in different packages are treated as the same.
+        if (PackagePath.Count == 0 && other is AppClassTypeInfo o &&
+            o.ClassName.Equals(ClassName, StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
         return false;
     }
 

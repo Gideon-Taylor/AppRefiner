@@ -32,12 +32,11 @@ There is also a fourth copy: the union branch of `TryMatchOnePrefix` (autocomple
 had to be added to all four sites; it lives in one helper (`MatchFieldNameArgument`), which is
 the pattern a consolidation should follow.
 
-## 3. TypeMetadataBuilder doesn't resolve imports (unverified)
+## 3. TypeMetadataBuilder doesn't resolve imports
 
-`TypeMetadataBuilder.ExtractTypeName` returns the bare class name for `As MyClass`, while
-`TypeInferenceVisitor` qualifies the same name to `PKG:MyClass` via `_importMap`.
-Passing a `PKG:MyClass` argument to a parameter declared with the imported short name may
-fail the QualifiedName comparison. Same issue for `BaseClassName`.
+`TypeMetadataBuilder.ExtractTypeName` still returns the bare class name for `As MyClass`
+(parameters, returns, properties, `BaseClassName`), while `TypeInferenceVisitor` qualifies the
+same name to `PKG:MyClass` via `_importMap`.
 
 `TypeInferenceVisitor` maps an app class's own short name to its `QualifiedName` (2026-10), so
 `Local Svc &o = create Svc(&t);` inside `PKG:Svc` resolves to the program's own metadata and
@@ -46,8 +45,21 @@ its constructor is checked. When the metadata is extracted without a qualified n
 go unchecked. Metadata return and property types (`Returns Svc`, `property Svc Next`) are
 qualified the same way when inference converts them (`ResolveAppClassPath`), and inference
 stamps every app class type node with its import-resolved type, so declared return types
-checked by `TypeCheckerVisitor` match too. `FunctionCallValidator` still builds
-`new AppClassTypeInfo(expected.AppClassPath!)` from the bare metadata name.
+checked by `TypeCheckerVisitor` match too.
+
+Parameters were verified to mismatch: `FunctionCallValidator` builds the expected type from
+the bare metadata name, so passing a `PKG:Config` value to `&cfg As Config` reported
+"Argument 1 should be Config, found PKG:Config". `IsAppClassCompatible` now matches a bare
+expected type on the class name (the value's own name or any entry in its inheritance chain).
+`AppClassTypeInfo.IsAssignableFrom` applies the same rule, so the leniency also holds inside
+array types (`&cfgs As array of Config` accepts `array of PKG:Config`) and in assignment
+compatibility. This is an approximation: two classes with the same short name in different
+packages are treated as the same. Qualifying metadata names through the declaring program's
+imports would remove it.
+
+Still open: the reverse case. A parameter declared with a qualified type (`&cfg As
+PKG:Config`) rejects an argument whose type stayed bare because the caller lacks the import
+(inference can't qualify it). This predates the 2026-10 changes.
 
 ## 4. Permissive sentinels mask failures
 

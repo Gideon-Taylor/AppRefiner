@@ -1629,12 +1629,28 @@ public class FunctionCallValidator
     /// <returns>True if valueType or any of its base classes match targetType</returns>
     private bool IsAppClassCompatible(AppClassTypeInfo targetType, AppClassTypeInfo valueType)
     {
+        // Metadata keeps parameter types as written in the signature ("Config"), while
+        // inference qualifies the argument ("PKG:Config"). A bare expected type therefore
+        // matches on the class name alone. Weak-spots §3 approximation: two classes with the
+        // same short name in different packages are treated as the same.
+        bool bareTarget = targetType.PackagePath.Count == 0;
+
+        bool Matches(string candidate) =>
+            candidate.Equals(targetType.QualifiedName, StringComparison.OrdinalIgnoreCase) ||
+            (bareTarget && candidate.Split(':')[^1].Equals(targetType.ClassName, StringComparison.OrdinalIgnoreCase));
+
+        // Types built with new AppClassTypeInfo(name) have an empty chain, so check the value itself first
+        if (Matches(valueType.QualifiedName))
+        {
+            return true;
+        }
+
         // Use the pre-computed inheritance chain for efficient lookup
         // Check if targetType appears anywhere in valueType's inheritance chain
         // This includes checking both base classes and implemented interfaces
         foreach (var entry in valueType.InheritanceChain)
         {
-            if (entry.QualifiedName.Equals(targetType.QualifiedName, StringComparison.OrdinalIgnoreCase))
+            if (Matches(entry.QualifiedName))
             {
                 return true;
             }
