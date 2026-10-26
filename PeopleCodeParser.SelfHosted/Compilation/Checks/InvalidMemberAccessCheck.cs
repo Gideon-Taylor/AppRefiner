@@ -1,4 +1,5 @@
 using PeopleCodeParser.SelfHosted.Nodes;
+using PeopleCodeParser.SelfHosted.Visitors.Narrowing;
 using PeopleCodeTypeInfo.Contracts;
 using PeopleCodeTypeInfo.Database;
 using PeopleCodeTypeInfo.Functions;
@@ -63,16 +64,24 @@ public sealed class InvalidMemberAccessCheck : CompileCheckBase
         // Explicit method call vs property / implicit access
         bool isMethodCall = m.Parent is FunctionCallNode fc && ReferenceEquals(fc.Function, m);
 
+        // A plain ApiObject nothing has typed could be any API type, so the base type's (empty)
+        // member list says nothing: only a method no API type has is reported. Any property may
+        // be a CI or item field. Variables are covered by usage narrowing instead.
+        if (targetType is BuiltinObjectTypeInfo { IsApiObjectBase: true }
+            && (!isMethodCall || UsageNarrowingAnalyzer.IsMethodOfAnyApiType(m.MemberName)))
+            return;
+
         // Record property access is a dynamic field lookup — only validate method calls on Records
         if (targetType is RecordTypeInfo && !isMethodCall) return;
 
         // Property access on Record/Row/Grid is a dynamic lookup (field name / record name /
         // column name), resolved at runtime — Grid.COLUMNNAME acts as GetColumn("COLUMNNAME").
-        // ComponentInterface properties are the CI's own keys and fields, also resolved at
-        // runtime (a named CI will later be checked against its definition — spec §16).
+        // ComponentInterface properties are the CI's own keys and fields, and DataItem properties
+        // (a CI collection's items) are its fields, also resolved at runtime (a named CI will
+        // later be checked against its definition — spec §16).
         // Only method calls on these types are validated against their builtin members.
         if (targetType.PeopleCodeType is PeopleCodeType.Record or PeopleCodeType.Row or PeopleCodeType.Grid
-                or PeopleCodeType.ComponentInterface && !isMethodCall)
+                or PeopleCodeType.ComponentInterface or PeopleCodeType.DataItem && !isMethodCall)
             return;
 
         var resolution = ResolveMember(targetType, m.MemberName, isMethodCall, ctx);

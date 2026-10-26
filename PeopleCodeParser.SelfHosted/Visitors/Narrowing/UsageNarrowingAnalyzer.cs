@@ -13,7 +13,10 @@ namespace PeopleCodeParser.SelfHosted.Visitors.Narrowing;
 /// </summary>
 public sealed class UsageNarrowingAnalyzer : ScopedAstVisitor<object>
 {
-    private const string ComponentInterface = "ComponentInterface";
+    // API types whose properties are resolved at runtime: a component interface's keys and fields,
+    // and the fields of an item in one of its collections
+    private static readonly HashSet<string> DynamicPropertyTypes =
+        new(StringComparer.OrdinalIgnoreCase) { "ComponentInterface", "DataItem" };
 
     // Every API subtype reachable through a PeopleCodeType value, in ordinal name order.
     // typeinfo.dat can't be enumerated by name, so the enum is the only source.
@@ -66,6 +69,12 @@ public sealed class UsageNarrowingAnalyzer : ScopedAstVisitor<object>
             _ => $"one of {sorted.Count} types ({string.Join(", ", sorted.Take(3))}, …)"
         };
     }
+
+    /// <summary>
+    /// Whether any API object type has a method named <paramref name="name"/>.
+    /// </summary>
+    public static bool IsMethodOfAnyApiType(string name) =>
+        AllCandidates.Value.Any(type => PeopleCodeTypeDatabase.GetMethod(type, name) != null);
 
     /// <summary>
     /// A deciding use as messages and hovers name it: <c>Name()</c> for a method use, <c>Name</c> for a property.
@@ -223,16 +232,15 @@ public sealed class UsageNarrowingAnalyzer : ScopedAstVisitor<object>
                 continue;
             }
 
-            var remaining = candidates.Where(type => HasMember(type, use)).ToList();
+            bool declared = false;
+            var remaining = use.IsMethod
+                ? candidates.Where(type => HasMember(type, use)).ToList()
+                : PropertyFits(candidates, member, out declared);
 
-            // An unknown property (a CI key/field) keeps ComponentInterface, but isn't enough to settle on it
-            if (!use.IsMethod
-                && remaining.Count == 1
-                && remaining[0] == ComponentInterface
-                && PeopleCodeTypeDatabase.GetProperty(ComponentInterface, member) == null)
-            {
+            // A property no candidate declares could be any CI or item field, or a typo; it doesn't
+            // count until a method or declared property has narrowed the list
+            if (!use.IsMethod && !declared && counted.Count == 0)
                 continue;
-            }
 
             if (remaining.Count == 0)
             {
@@ -263,13 +271,28 @@ public sealed class UsageNarrowingAnalyzer : ScopedAstVisitor<object>
     }
 
     /// <summary>
+    /// The candidates a property use leaves: those that declare it, plus the ones with dynamic
+    /// properties (ComponentInterface and DataItem), where it may be a field named like a declared
+    /// property (NAME, COUNT). Only a property a dynamic type itself declares (InteractiveMode,
+    /// ItemNum) narrows to the declarers alone.
+    /// </summary>
+    private static List<string> PropertyFits(IReadOnlyList<string> candidates, string member, out bool declared)
+    {
+        var declaring = candidates.Where(type => PeopleCodeTypeDatabase.GetProperty(type, member) != null).ToList();
+        declared = declaring.Count > 0;
+        if (declaring.Any(DynamicPropertyTypes.Contains))
+            return declaring;
+        return candidates.Where(type => declaring.Contains(type) || DynamicPropertyTypes.Contains(type)).ToList();
+    }
+
+    /// <summary>
     /// Whether <paramref name="type"/> has the used member. Properties always fit
-    /// ComponentInterface, whose keys and fields are dynamic properties.
+    /// ComponentInterface and DataItem, whose fields are dynamic properties.
     /// </summary>
     private static bool HasMember(string type, Use use) =>
         use.IsMethod
             ? PeopleCodeTypeDatabase.GetMethod(type, use.Node.MemberName) != null
-            : PeopleCodeTypeDatabase.GetProperty(type, use.Node.MemberName) != null || type == ComponentInterface;
+            : PeopleCodeTypeDatabase.GetProperty(type, use.Node.MemberName) != null || DynamicPropertyTypes.Contains(type);
 
     #endregion
 }

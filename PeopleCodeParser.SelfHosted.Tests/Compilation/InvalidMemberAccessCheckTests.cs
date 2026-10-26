@@ -1,4 +1,5 @@
 using PeopleCodeParser.SelfHosted.Compilation;
+using PeopleCodeParser.SelfHosted.Nodes;
 using PeopleCodeParser.SelfHosted.Visitors;
 using PeopleCodeTypeInfo.Functions;
 using PeopleCodeTypeInfo.Inference;
@@ -510,6 +511,101 @@ Local ApiObject &ci = &s.GetCompIntfc(CompIntfc.USER_PROFILE);
             d.Code == DiagnosticCode.InvalidMemberAccess &&
             d.Message.Contains("TotallyBogusMethod") &&
             d.Message.Contains("method"));
+    }
+
+    // -----------------------------------------------------------------------
+    // CI collection items (DataItem): fields are dynamic like the CI's own
+    // -----------------------------------------------------------------------
+
+    // Item() settles &roles as DataCollection after CurrentItemNumber left it, a CI or a DataItem (a
+    // CI's &ci.Roles is untyped until the CI's
+    // definition is read)
+    private const string ItemSetup = @"
+Local ApiObject &roles;
+Local number &current = &roles.CurrentItemNumber;
+Local ApiObject &role = &roles.Item(1);
+";
+
+    [Fact]
+    public void Collection_item_is_a_data_item()
+    {
+        var (program, _) = ParseTestHelper.Parse("Local ApiObject &c;\nLocal number &n = &c.CurrentItemNumber;\nLocal ApiObject &i = &c.Item(1);\nLocal number &k = &i.ItemNum;");
+        TypeInferenceVisitor.Run(program, TypeMetadataBuilder.ExtractMetadata(program), new FakeTypeMetadataResolver());
+
+        var item = program.FindDescendants<IdentifierNode>().Last(n => n.Name == "&i");
+        Assert.Equal("DataItem", item.GetInferredType()!.Name);
+    }
+
+    [Fact]
+    public void Does_not_report_field_read_on_data_item()
+    {
+        var diags = Run(ItemSetup + "Local string &n = &role.RoleName;\n&role.RoleName = \"X\";");
+
+        Assert.DoesNotContain(diags, d => d.Code == DiagnosticCode.InvalidMemberAccess);
+    }
+
+    [Fact]
+    public void Still_reports_unknown_method_on_data_item()
+    {
+        var diag = SingleInvalidMember(Run(ItemSetup + "&role.Bogus();"));
+
+        Assert.StartsWith("'Bogus' is not a known method on 'DataItem'", diag.Message);
+    }
+
+    [Fact]
+    public void Delete_item_returns_ignorable_boolean()
+    {
+        var diags = Run(ItemSetup + "Local boolean &deleted = &roles.DeleteItem(1);\n&roles.DeleteItem(2);");
+
+        Assert.DoesNotContain(diags, d => d.Message.Contains("Cannot assign") || d.Message.Contains("Return values"));
+    }
+
+    [Fact]
+    public void Chained_data_item_checks_methods_not_fields()
+    {
+        var diags = Run(ItemSetup + "Local string &n = &roles.Item(1).RoleName;\n&roles.Item(1).Bogus();");
+
+        var diag = SingleInvalidMember(diags);
+        Assert.StartsWith("'Bogus' is not a known method on 'DataItem'", diag.Message);
+    }
+
+    // -----------------------------------------------------------------------
+    // A plain ApiObject nothing has typed could be any API type
+    // -----------------------------------------------------------------------
+
+    private const string Untyped = "Function GetIt() Returns ApiObject\nEnd-Function;\n";
+
+    [Fact]
+    public void Does_not_report_members_of_untyped_api_object_value()
+    {
+        var diags = Run(Untyped + "Local string &n = GetIt().RoleName;\nLocal boolean &b = GetIt().Save();");
+
+        Assert.DoesNotContain(diags, d => d.Code == DiagnosticCode.InvalidMemberAccess);
+    }
+
+    [Fact]
+    public void Reports_method_no_api_type_has_on_untyped_api_object_value()
+    {
+        var diag = SingleInvalidMember(Run(Untyped + "GetIt().Zzz();"));
+
+        Assert.Equal("'Zzz' is not a known method on 'ApiObject'", diag.Message);
+    }
+
+    [Fact]
+    public void Reports_property_typo_once_a_method_settles_the_variable()
+    {
+        var diag = SingleInvalidMember(Run(
+            "Local ApiObject &s;\nLocal boolean &c = &s.IsConected;\nLocal ApiObject &ci = &s.GetCompIntfc(CompIntfc.USER_PROFILE);"));
+
+        Assert.StartsWith("'IsConected' is not a known property on 'Session'", diag.Message);
+    }
+
+    [Fact]
+    public void Does_not_report_field_read_on_undecided_variable()
+    {
+        var diags = Run("Local ApiObject &x;\nLocal string &e = &x.EMPLID;");
+
+        Assert.DoesNotContain(diags, d => d.Code == DiagnosticCode.InvalidMemberAccess);
     }
 
     // ------------------------------------------------------------------

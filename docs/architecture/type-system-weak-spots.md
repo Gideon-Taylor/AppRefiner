@@ -155,17 +155,25 @@ Left open by phases 3–4 (spec `docs/superpowers/specs/2026-10-25-apiobject-typ
 - **Global/Component redeclarations narrow per declaration.** A Global or Component variable
   declared again inside two method bodies is narrowed separately for each declaration, so the
   two can settle on different types although they are one variable at run time.
-- **DataCollection members are typed as returning `Row` (pending decision).** `typeinfo.dat`
-  declares `DataCollection.Item`, `ItemByKeys`, `CurrentItem`, `GetEffectiveItem` and
-  `DeleteItem` as returning `Row`, and `InsertItem` as `void`. Once a variable narrows to
-  DataCollection, valid component interface code such as
-  `Local ApiObject &row = &coll.Item(1);` gets "Cannot assign type 'Row' to 'ApiObject'". The
-  fix belongs in the dat generator, which isn't in this repo; no code overrides are applied.
-- **Field access on an undecided ApiObject is an error (predates phases 3–4).** A property
-  access on a plain `ApiObject` that no annotation, assignment or use has typed, such as
-  `&item.RoleName` on a component interface collection item, reports "'RoleName' is not a known
-  property on 'ApiObject'". Collection items have no API type in `typeinfo.dat`, so this hits
-  ordinary CI code. Tied to the DataCollection question above.
+- **A CI's own properties are untyped.** `&ci.Roles` is a DataCollection at run time because
+  Roles is a scroll in the CI's definition, but nothing reads that definition yet, so `&ci.Roles`
+  is untyped and the variable it's assigned to narrows from its own uses. Field types on a CI or a
+  DataItem are untyped too. Both wait on reading CI definitions (spec §16).
+
+Fixed in 2026-10, from App Designer probes:
+- `DataCollection.Item`, `ItemByKeys`, `CurrentItem`, `GetEffectiveItem` and `InsertItem` return
+  a `DataItem` (they were `Row` or `void` in `typeinfo.dat`), and `DeleteItem` returns an
+  ignorable `boolean`. A DataItem's properties are its fields, dynamic like a component
+  interface's.
+- Member access on a plain `ApiObject` that nothing has typed is checked only for methods no API
+  type has (it was a false error on CI code such as `&item.RoleName`).
+- In narrowing, a property leaves the types that declare it plus ComponentInterface and DataItem,
+  since a CI or item field can share a declared name (`NAME`, `COUNT`). Only a property one of
+  those two declares itself (`InteractiveMode`, `ItemNum`) settles it. A property nobody declares
+  may be a field or a typo, so it counts only after something else has narrowed the list.
+- An ignored return value is an error only for user-written functions and methods and for typed
+  builtin methods not marked optional. App Designer accepts an ignored return from any API
+  object method, even on `%Session`, because those calls are late-bound.
 
 A call to the class's own method without `%This` (`Get()` rather than `%This.Get()`) isn't
 valid PeopleCode, so treating it as an undeclared function call is correct, not a limit.

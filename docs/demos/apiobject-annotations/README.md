@@ -67,7 +67,7 @@ Only delivered metadata is used: `CompIntfc.USER_PROFILE` and `Record.PSOPRDEFN`
   - `&p` (lines 13–14) and `&u` (line 28) show `Inferred Type: ApiObject (PortalRegistry or Query)`: undecided.
   - `&s` on line 24 shows `ApiObject (Query), assigned on line 23` (the assignment replaced the narrowed Session).
   - `&c` on line 32 shows `ApiObject (ComponentInterface), inferred from Get() on line 33`: the `UserID`
-    property alone didn't settle it.
+    property alone didn't settle it, since it could also be a DataItem field.
   - Autosuggest after `&q.` lists Query members.
 - Cross-program refinement in `Caller.Refined`:
   - Hover on `&s2` (line 46) shows `Inferred Type: ApiObject (Session), assigned on line 45`, although

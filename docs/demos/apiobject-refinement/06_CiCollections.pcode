@@ -1,0 +1,22 @@
+/* Component interface collections. Item() and the other item methods return a DataItem, whose
+   fields are dynamic properties like the CI's own. Paste into any non-class event. */
+Local ApiObject &ci = %Session.GetCompIntfc(CompIntfc.USER_PROFILE);
+&ci.UserID = %OperatorId; /* OK: CI field */
+Local boolean &found = &ci.Get();
+
+/* &ci.Roles is untyped until the CI's definition is read, so &roles narrows from its own uses */
+Local ApiObject &roles = &ci.Roles;
+Local number &current = &roles.CurrentItemNumber; /* OK: DataCollection, or a CI or item field of that name */
+Local ApiObject &role = &roles.Item(1); /* OK: settles &roles as DataCollection; hover &role shows ApiObject (DataItem) */
+Local string &name = &role.RoleName; /* OK: DataItem field */
+Local number &num = &role.ItemNum; /* OK */
+&role.Bogus(); /* ERROR: names DataItem and the assignment */
+
+Local ApiObject &added = &roles.InsertItem(&roles.Count); /* OK: InsertItem returns the new item */
+Local boolean &deleted = &roles.DeleteItem(1); /* OK: DeleteItem returns boolean */
+
+/* A plain ApiObject nothing has typed: fields could belong to a CI or an item */
+Local ApiObject &other = &ci.Roles;
+Local string &otherName = &other.RoleName; /* OK: an undeclared property doesn't narrow, so &other stays plain ApiObject */
+
+Local boolean &cancelled = &ci.Cancel();

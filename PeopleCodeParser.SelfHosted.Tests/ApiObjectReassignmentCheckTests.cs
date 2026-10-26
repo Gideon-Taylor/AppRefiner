@@ -97,9 +97,8 @@ public class ApiObjectReassignmentCheckTests
         var (program, errors, warnings) = TypeCheck(
             "Function GetThing() Returns ApiObject\nEnd-Function;\nLocal ApiObject &x = %Session;\n&x = GetThing();\n&x.GetCompIntfc(CompIntfc.USER_PROFILE);");
 
-        // The bare &x.GetCompIntfc(...) statement raises an unrelated "Return values must assigned
-        // to a variable" error, so only the assignment-related diagnostics are asserted absent.
-        Assert.DoesNotContain(errors, e => e.Message.Contains("Cannot assign"));
+        // The bare &x.GetCompIntfc(...) statement is fine: API object methods may ignore their return
+        Assert.Empty(errors);
         Assert.DoesNotContain(warnings, w => w.Message.Contains(OneTypeWarning));
         Assert.Equal("Session", LastUse(program, "&x").GetInferredType()!.Name, ignoreCase: true);
     }

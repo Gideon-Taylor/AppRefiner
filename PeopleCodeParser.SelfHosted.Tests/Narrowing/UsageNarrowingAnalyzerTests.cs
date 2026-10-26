@@ -142,6 +142,60 @@ public class UsageNarrowingAnalyzerTests
     }
 
     [Fact]
+    public void Undeclared_property_does_not_block_a_later_method()
+    {
+        // A typo'd property doesn't narrow to the dynamic-property types and hide GetCompIntfc
+        var result = ForLocal("Local ApiObject &x;\n&b = &x.IsConected;\n&ci = &x.GetCompIntfc(CompIntfc.A);");
+
+        Assert.Equal("Session", result!.NarrowedType);
+        Assert.Equal("GetCompIntfc", result.DecidingUse!.MemberName);
+        Assert.Empty(result.Conflicts);
+    }
+
+    [Theory]
+    [InlineData("InteractiveMode", "ComponentInterface")]
+    [InlineData("ItemNum", "DataItem")]
+    public void Property_declared_on_a_dynamic_type_settles_it(string property, string type)
+    {
+        var result = ForLocal($"Local ApiObject &x;\n&y = &x.{property};");
+
+        Assert.Equal(type, result!.NarrowedType);
+        Assert.Equal(property, result.DecidingUse!.MemberName);
+    }
+
+    [Fact]
+    public void Ci_field_named_like_a_declared_property_keeps_ci()
+    {
+        // Name is declared on 25 API types, but a CI can also have a NAME field
+        var result = ForLocal("Local ApiObject &x;\n&n = &x.Name;\n&b = &x.Get();");
+
+        Assert.Equal("ComponentInterface", result!.NarrowedType);
+        Assert.Equal("Get", result.DecidingUse!.MemberName);
+        Assert.Empty(result.Conflicts);
+    }
+
+    [Fact]
+    public void Property_declared_only_on_a_collection_does_not_settle_it()
+    {
+        // CurrentItemNumber could still be a CI or item field
+        var result = ForLocal("Local ApiObject &x;\n&n = &x.CurrentItemNumber;");
+
+        Assert.Null(result!.NarrowedType);
+        Assert.Equal(new[] { "ComponentInterface", "DataCollection", "DataItem" }, result.Candidates);
+    }
+
+    [Fact]
+    public void Dynamic_property_settles_ci_once_data_item_is_ruled_out()
+    {
+        // Save is on ComponentInterface but not DataItem, so EMPLID leaves ComponentInterface alone
+        var result = ForLocal("Local ApiObject &x;\n&b = &x.Save();\n&y = &x.EMPLID;");
+
+        Assert.Equal("ComponentInterface", result!.NarrowedType);
+        Assert.Equal("EMPLID", result.DecidingUse!.MemberName);
+        Assert.Empty(result.Conflicts);
+    }
+
+    [Fact]
     public void Ci_method_narrows_to_ci()
     {
         // Save is on nine API types; Get is on ComponentInterface only

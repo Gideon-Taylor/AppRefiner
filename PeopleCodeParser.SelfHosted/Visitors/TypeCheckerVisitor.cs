@@ -229,6 +229,15 @@ namespace PeopleCodeParser.SelfHosted.Visitors
             var typeInfo = node.Expression.GetInferredType();
             if (typeInfo == null) { return; }
 
+            // API object methods are late-bound: App Designer accepts an ignored return from any of
+            // them (even on %Session), while typed builtin objects need IsOptionalReturn
+            if (node.Expression is FunctionCallNode { Function: MemberAccessNode member }
+                && member.Target.GetInferredType() is BuiltinObjectTypeInfo receiver
+                && (receiver.IsApiObjectBase || PeopleCodeTypeDatabase.IsApiObjectSubtype(receiver.Name)))
+            {
+                return;
+            }
+
             if (typeInfo.PeopleCodeType != PeopleCodeType.Void && typeInfo.PeopleCodeType != PeopleCodeType.Unknown)
             {
 

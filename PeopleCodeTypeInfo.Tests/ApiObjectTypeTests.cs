@@ -18,6 +18,23 @@ public class ApiObjectTypeTests
         Assert.Equal(PeopleCodeType.ApiObject, BuiltinTypeExtensions.FromString("ApiObject"));
     }
 
+    // Checked at run time in App Designer (2026-10): an item doesn't convert to Row, InsertItem
+    // returns the new item, and DeleteItem assigns to a boolean
+    [Theory]
+    [InlineData("Item", "DataItem")]
+    [InlineData("ItemByKeys", "DataItem")]
+    [InlineData("CurrentItem", "DataItem")]
+    [InlineData("GetEffectiveItem", "DataItem")]
+    [InlineData("InsertItem", "DataItem")]
+    [InlineData("DeleteItem", "boolean")]
+    public void DataCollection_Item_Methods_Return_Items(string method, string returnType)
+    {
+        var info = PeopleCodeTypeDatabase.GetMethod("DataCollection", method);
+
+        Assert.NotNull(info);
+        Assert.Equal(returnType, info!.ReturnType.ToString(), ignoreCase: true);
+    }
+
     [Fact]
     public void ApiObjectSubtypes_Are_BuiltinObjects()
     {
