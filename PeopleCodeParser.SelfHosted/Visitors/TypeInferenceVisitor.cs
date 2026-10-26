@@ -82,7 +82,9 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
         UndefinedVariableHandler? onUndefinedVariable = null
         )
     {
-
+        // Stylers re-run inference and checking on the hash-cached tree; drop the previous
+        // pass's diagnostics so changed messages don't pile up next to stale ones
+        program.ClearTypeDiagnostics();
 
         var visitor = new TypeInferenceVisitor(
             program,
@@ -570,13 +572,19 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
         var variable = FindVariable(variableName);
         if (variable == null) return;
 
-        rhsType = ApplyAssignmentAnnotation(variable, rhsType, expression);
+        rhsType = ApplyAssignmentAnnotation(variable, rhsType, expression, out var valueConflict);
 
         if (variable.AnnotatedType is { } annotated)
         {
-            RefineAnnotatedVariable(variable, annotated, rhsType, expression);
+            // One diagnostic per assignment: the declaration conflict outranks the value conflict
+            bool declarationWarned = RefineAnnotatedVariable(variable, annotated, rhsType, expression);
+            if (valueConflict != null && !declarationWarned)
+                expression.AddTypeWarning(new TypeError(valueConflict, expression));
             return;
         }
+
+        if (valueConflict != null)
+            expression.AddTypeWarning(new TypeError(valueConflict, expression));
 
         var declared = ConvertTypeNameToTypeInfo(variable.Type);
         bool declaredIsAny = declared.Kind == TypeKind.Any
@@ -621,23 +629,26 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
     /// for refining the variable. Unknown and misfit annotations warn on the value and are ignored;
     /// a concrete value of a different type, or conflicting identity, warns and T wins. Only the
     /// type used for refinement changes: the value node keeps its own inferred type.
+    /// The conflict warning is returned in <paramref name="conflictWarning"/> rather than recorded,
+    /// so the caller can let a declaration-annotation conflict on the same value take its place.
     /// </summary>
-    private TypeInfo ApplyAssignmentAnnotation(VariableInfo variable, TypeInfo rhsType, ExpressionNode expression)
+    private TypeInfo ApplyAssignmentAnnotation(VariableInfo variable, TypeInfo rhsType, ExpressionNode expression, out string? conflictWarning)
     {
+        conflictWarning = null;
         var annotation = _annotations.ForValue(expression);
         if (annotation == null)
             return rhsType;
 
         if (annotation.Error != null)
         {
-            expression.SetTypeWarning(new TypeError(annotation.Error, expression));
+            expression.AddTypeWarning(new TypeError(annotation.Error, expression));
             return rhsType;
         }
 
         var target = annotation.Target!;
         if (!target.Fits(variable.Type))
         {
-            expression.SetTypeWarning(new TypeError(MisfitMessage(target, variable), expression));
+            expression.AddTypeWarning(new TypeError(MisfitMessage(target, variable), expression));
             return rhsType;
         }
 
@@ -657,9 +668,7 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
             if (!sameType || (rhsType.EffectiveIdentity?.ConflictsWith(annotationType.EffectiveIdentity) ?? false))
             {
                 var annotated = DescribeType(annotationType);
-                expression.SetTypeWarning(new TypeError(
-                    $"The value is {DescribeType(rhsType)}, but it is annotated as {annotated}. Using {annotated}.",
-                    expression));
+                conflictWarning = $"The value is {DescribeType(rhsType)}, but it is annotated as {annotated}. Using {annotated}.";
             }
         }
 
@@ -670,12 +679,13 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
     /// Assignment to a variable with a declaration annotation (spec §7): the annotation stays
     /// authoritative. A same-type value with more identity detail refines it; ApiObject/any values
     /// and same-type values with less or equal detail change nothing; anything else warns.
+    /// Returns whether it recorded a warning.
     /// </summary>
-    private void RefineAnnotatedVariable(VariableInfo variable, TypeInfo annotated, TypeInfo rhsType, ExpressionNode expression)
+    private bool RefineAnnotatedVariable(VariableInfo variable, TypeInfo annotated, TypeInfo rhsType, ExpressionNode expression)
     {
         if (rhsType.Kind is TypeKind.Any or TypeKind.Unknown
             || rhsType is BuiltinObjectTypeInfo { IsApiObjectBase: true })
-            return;
+            return false;
 
         // Only values that could refine the variable are compared; the checker handles the rest.
         // An any variable holds every value, so there the checker is silent and any value is compared.
@@ -683,11 +693,11 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
             || (rhsType is BuiltinObjectTypeInfo rhsBuiltin && PeopleCodeTypeDatabase.IsApiObjectSubtype(rhsBuiltin.Name));
         var declared = ConvertTypeNameToTypeInfo(variable.Type);
         if (!refinable && declared.Kind != TypeKind.Any)
-            return;
+            return false;
 
         // A value the declared type can't hold is the checker's "Cannot assign" error, not a conflict
         if (!declared.IsAssignableFrom(rhsType))
-            return;
+            return false;
 
         bool sameType = annotated is BuiltinObjectTypeInfo annotatedBuiltin && rhsType is BuiltinObjectTypeInfo rhsObject
             ? annotatedBuiltin.Name.Equals(rhsObject.Name, StringComparison.OrdinalIgnoreCase)
@@ -701,17 +711,18 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
             // More detail: keep the annotation as the source, but carry the extra identity
             if (!annotatedIdentity.IsRefinementOf(rhsIdentity))
                 variable.Refine(rhsType.WithAssignable(true), variable.RefinementSource!);
-            return;
+            return false;
         }
 
         // Less detail (plain ComponentInterface after CompIntfc.FOO) doesn't erase the annotation
         if (sameType && annotatedIdentity.IsRefinementOf(rhsIdentity))
-            return;
+            return false;
 
         var annotatedLine = variable.RefinementSource is { } src ? $" (line {src.Line + 1})" : "";
-        expression.SetTypeWarning(new TypeError(
+        expression.AddTypeWarning(new TypeError(
             $"{variable.Name} is annotated as {DescribeType(annotated)}{annotatedLine} but is assigned {DescribeType(rhsType)} here.",
             expression));
+        return true;
     }
 
     /// <summary>
@@ -765,14 +776,14 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
 
         if (annotation.Error != null)
         {
-            declaringNode.SetTypeWarning(new TypeError(annotation.Error, declaringNode));
+            declaringNode.AddTypeWarning(new TypeError(annotation.Error, declaringNode));
             return;
         }
 
         var target = annotation.Target!;
         if (!target.Fits(variable.Type))
         {
-            declaringNode.SetTypeWarning(new TypeError(MisfitMessage(target, variable), declaringNode));
+            declaringNode.AddTypeWarning(new TypeError(MisfitMessage(target, variable), declaringNode));
             return;
         }
 
@@ -801,13 +812,13 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
 
         if (annotation.Error != null)
         {
-            declaringNode.SetTypeWarning(new TypeError(annotation.Error, declaringNode));
+            declaringNode.AddTypeWarning(new TypeError(annotation.Error, declaringNode));
             return;
         }
 
         var declaredTypeName = AstTypeExtractor.GetTypeFromNode(returnType);
         if (!annotation.Target!.Fits(declaredTypeName))
-            declaringNode.SetTypeWarning(new TypeError(MisfitMessage(annotation.Target, name, declaredTypeName), declaringNode));
+            declaringNode.AddTypeWarning(new TypeError(MisfitMessage(annotation.Target, name, declaredTypeName), declaringNode));
     }
 
     private TypeInfo AnnotationToTypeInfo(AnnotationTarget target)

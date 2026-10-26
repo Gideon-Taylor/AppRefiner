@@ -429,7 +429,7 @@ namespace PeopleCodeParser.SelfHosted.Visitors
         /// </summary>
         private void RecordTypeWarning(string message, AstNode node)
         {
-            node.SetTypeWarning(new TypeError(message, node));
+            node.AddTypeWarning(new TypeError(message, node));
         }
 
         /// <summary>

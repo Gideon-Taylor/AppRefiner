@@ -132,6 +132,25 @@ public class AssignmentAnnotationTests
     }
 
     [Fact]
+    public void Unknown_assignment_annotation_and_declaration_conflict_both_warn()
+    {
+        var (_, _, warnings) = TypeCheck(
+            "Local Record /* as Record.JOB */ &r;\n&r = CreateRecord(Record.PERSON) /* as Bogus */;");
+
+        var onValue = warnings.Where(w => w.Node.SourceSpan.Start.Line == 1).ToList();
+        Assert.Equal(2, onValue.Count);
+        Assert.IsAssignableFrom<ExpressionNode>(onValue[0].Node);
+        Assert.All(onValue, w => Assert.Same(onValue[0].Node, w.Node));
+        Assert.Equal(
+            new[]
+            {
+                "Unknown type 'Bogus' in annotation.",
+                "&r is annotated as Record.JOB (line 1) but is assigned Record.PERSON here.",
+            },
+            onValue.Select(w => w.Message));
+    }
+
+    [Fact]
     public void Misfit_annotation_warns_on_value()
     {
         var (_, _, warnings) = TypeCheck("Local Rowset &rs;\n&rs = CreateRowset(Record.JOB) /* as Session */;");

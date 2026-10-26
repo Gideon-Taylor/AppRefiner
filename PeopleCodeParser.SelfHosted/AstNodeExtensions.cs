@@ -158,17 +158,18 @@ public static class AstNodeExtensions
     }
 
     /// <summary>
-    /// Gets the type error for this node, if one has been recorded.
+    /// Gets the type warnings recorded on this node, in the order they were added.
     /// </summary>
     /// <param name="node">The AST node to query</param>
-    /// <returns>The TypeError if a type checking error was found, null otherwise</returns>
-    public static TypeError? GetTypeWarning(this AstNode node)
+    /// <returns>The node's warnings; empty when there are none</returns>
+    public static IReadOnlyList<TypeError> GetTypeWarnings(this AstNode node)
     {
-        if (node.Attributes.TryGetValue(AstNode.TypeWarningAttributeKey, out var error))
+        if (node.Attributes.TryGetValue(AstNode.TypeWarningAttributeKey, out var value)
+            && value is List<TypeError> warnings)
         {
-            return error as TypeError;
+            return warnings;
         }
-        return null;
+        return Array.Empty<TypeError>();
     }
 
     /// <summary>
@@ -182,13 +183,40 @@ public static class AstNodeExtensions
     }
 
     /// <summary>
-    /// Sets the type warning for this node.
+    /// Adds a type warning to this node. A warning whose message the node already holds
+    /// (ordinal comparison) is ignored, so re-running a pass doesn't double its warnings.
     /// </summary>
     /// <param name="node">The AST node to update</param>
-    /// <param name="error">The type error to record</param>
-    public static void SetTypeWarning(this AstNode node, TypeError error)
+    /// <param name="warning">The type warning to record</param>
+    public static void AddTypeWarning(this AstNode node, TypeError warning)
     {
-        node.Attributes[AstNode.TypeWarningAttributeKey] = error;
+        if (!node.Attributes.TryGetValue(AstNode.TypeWarningAttributeKey, out var value)
+            || value is not List<TypeError> warnings)
+        {
+            warnings = new List<TypeError>();
+            node.Attributes[AstNode.TypeWarningAttributeKey] = warnings;
+        }
+
+        if (warnings.Any(w => string.Equals(w.Message, warning.Message, StringComparison.Ordinal)))
+            return;
+
+        warnings.Add(warning);
+    }
+
+    /// <summary>
+    /// Removes the type error and type warnings from this node and all its descendants, so a
+    /// re-run of inference and checking on a cached tree starts from a clean slate.
+    /// </summary>
+    /// <param name="root">The root node to clear (typically a ProgramNode)</param>
+    public static void ClearTypeDiagnostics(this AstNode root)
+    {
+        root.Attributes.Remove(AstNode.TypeErrorAttributeKey);
+        root.Attributes.Remove(AstNode.TypeWarningAttributeKey);
+
+        foreach (var child in root.Children)
+        {
+            child.ClearTypeDiagnostics();
+        }
     }
 
     /// <summary>
@@ -205,7 +233,7 @@ public static class AstNodeExtensions
     /// Checks if this node has a type warning.
     /// </summary>
     /// <param name="node">The AST node to check</param>
-    /// <returns>True if the node has a type error, false otherwise</returns>
+    /// <returns>True if the node has a type warning, false otherwise</returns>
     public static bool HasTypeWarning(this AstNode node)
     {
         return node.Attributes.ContainsKey(AstNode.TypeWarningAttributeKey);
@@ -237,18 +265,16 @@ public static class AstNodeExtensions
     }
 
     /// <summary>
-    /// Gets all type warnings from this node and all its descendants.
-    /// Useful for collecting all type errors from a program after type checking.
+    /// Gets all type warnings from this node and all its descendants, each node's
+    /// warnings in the order they were added.
     /// </summary>
     /// <param name="root">The root node to start searching from (typically a ProgramNode)</param>
-    /// <returns>All type errors found in the tree</returns>
+    /// <returns>All type warnings found in the tree</returns>
     public static IEnumerable<TypeError> GetAllTypeWarnings(this AstNode root)
     {
-        // Check if this node has an error
-        var error = root.GetTypeWarning();
-        if (error != null)
+        foreach (var warning in root.GetTypeWarnings())
         {
-            yield return error;
+            yield return warning;
         }
 
         // Recursively check all children

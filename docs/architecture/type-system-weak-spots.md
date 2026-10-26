@@ -9,13 +9,16 @@ Pipeline for reference: `TypeMetadataBuilder` → `TypeInferenceVisitor` → `Ty
 
 ## 1. One error slot per node
 
-`AstNodeExtensions.SetTypeError` / `SetTypeWarning` overwrite `node.Attributes[...]`.
+`AstNodeExtensions.SetTypeError` overwrites `node.Attributes[...]`.
 Inference (array index, operator errors) and the checker (call validation) can both write
 to the same argument node; the last write silently wins.
 
-The ApiObject annotation work (2026-10) works around this rather than fixing it: each
-annotation or conflict warning goes on its own node (the declaring node, or the assignment's
-value), and the checker's one-type warning stays on the `AssignmentNode`.
+Warnings no longer have this problem (2026-10): `AddTypeWarning` appends to a per-node list,
+skipping a message the node already holds, so a multi-variable declaration warns once per
+variable and a re-run pass doesn't double up. Where one diagnostic is meant to replace
+another (a declaration-annotation conflict outranks an assignment-annotation value conflict
+on the same value), `TypeInferenceVisitor.TryRefineVariableFromExpression` decides that
+explicitly instead of relying on overwrite.
 
 ## 2. Assignability logic lives in three places
 
