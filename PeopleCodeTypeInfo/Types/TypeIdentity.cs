@@ -3,9 +3,10 @@ namespace PeopleCodeTypeInfo.Types;
 /// <summary>
 /// The definition names a value is known to belong to, beyond its PeopleCodeType: a record,
 /// a field (with or without its record) or a component interface. A partial identity (e.g. a
-/// Field with only its field name) is allowed. Empty strings count as null, and names compare
-/// case-insensitively. Identity is not part of TypeInfo equality; compare it explicitly with
-/// IsRefinementOf / ConflictsWith.
+/// Field with only its field name) is allowed. <c>==</c> is the record's structural equality,
+/// exact and case-sensitive; IsRefinementOf / ConflictsWith normalise, treating empty strings as
+/// null and comparing names case-insensitively. Identity is not part of TypeInfo equality;
+/// compare it explicitly with IsRefinementOf / ConflictsWith.
 /// </summary>
 public sealed record TypeIdentity(string? RecordName = null, string? FieldName = null, string? CompIntfcName = null)
 {

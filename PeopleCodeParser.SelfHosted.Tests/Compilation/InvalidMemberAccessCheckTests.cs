@@ -511,4 +511,35 @@ Local ApiObject &ci = &s.GetCompIntfc(CompIntfc.USER_PROFILE);
             d.Message.Contains("TotallyBogusMethod") &&
             d.Message.Contains("method"));
     }
+
+    // ------------------------------------------------------------------
+    // Refined targets name the annotation or assignment behind their type (spec §7, §10)
+    // ------------------------------------------------------------------
+
+    private static CompileDiagnostic SingleInvalidMember(IReadOnlyList<CompileDiagnostic> diags) =>
+        Assert.Single(diags, d => d.Code == DiagnosticCode.InvalidMemberAccess);
+
+    [Fact]
+    public void Unknown_member_on_annotated_variable_names_annotation()
+    {
+        var diag = SingleInvalidMember(Run("Local ApiObject /* as Session */ &x;\n&x.Bogus();"));
+
+        Assert.Equal("'Bogus' is not a known method on 'Session' (&x is Session, annotated on line 1)", diag.Message);
+    }
+
+    [Fact]
+    public void Unknown_member_on_assigned_variable_names_assignment()
+    {
+        var diag = SingleInvalidMember(Run("Local ApiObject &x;\n&x = %Session;\n&x.Bogus();"));
+
+        Assert.Equal("'Bogus' is not a known method on 'Session' (&x is Session, assigned on line 2)", diag.Message);
+    }
+
+    [Fact]
+    public void Unknown_member_on_declared_variable_has_no_suffix()
+    {
+        var diag = SingleInvalidMember(Run("Local Rowset &rs;\n&rs.Bogus();"));
+
+        Assert.Equal("'Bogus' is not a known method on 'Rowset'", diag.Message);
+    }
 }

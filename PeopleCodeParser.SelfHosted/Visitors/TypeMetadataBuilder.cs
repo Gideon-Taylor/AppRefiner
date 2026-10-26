@@ -246,7 +246,8 @@ public class TypeMetadataBuilder : AstVisitorBase
                 ? BuildTypeWithDimensionality(method.ReturnType)
                 : new TypeWithDimensionality(PeopleCodeType.Void),
             Parameters = method.Parameters.Select(BuildParameter).ToList(),
-            RefinedReturnType = BuildRefinedType(method.ReturnType)
+            RefinedReturnType = BuildRefinedType(method.ReturnType),
+            HasReturnAnnotation = _annotations?.ForType(method.ReturnType) != null
         };
 
         return functionInfo;
@@ -264,7 +265,8 @@ public class TypeMetadataBuilder : AstVisitorBase
                 ? BuildTypeWithDimensionality(function.ReturnType)
                 : new TypeWithDimensionality(PeopleCodeType.Void),
             Parameters = function.Parameters.Select(BuildParameter).ToList(),
-            RefinedReturnType = BuildRefinedType(function.ReturnType)
+            RefinedReturnType = BuildRefinedType(function.ReturnType),
+            HasReturnAnnotation = _annotations?.ForType(function.ReturnType) != null
         };
 
         return functionInfo;
@@ -295,7 +297,8 @@ public class TypeMetadataBuilder : AstVisitorBase
 
         return new SingleParameter(typeWithDim, paramNode.Name)
         {
-            RefinedParameterType = BuildRefinedType(paramNode.Type)
+            RefinedParameterType = BuildRefinedType(paramNode.Type),
+            HasAnnotation = _annotations?.ForType(paramNode.Type) != null
         };
     }
 

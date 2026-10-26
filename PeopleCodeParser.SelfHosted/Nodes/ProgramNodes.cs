@@ -57,10 +57,11 @@ public class ProgramNode : AstNode
     /// </summary>
     public List<Lexing.Token> Comments { get; } = new();
 
+    private readonly List<CommentContext> _commentContexts = new();
+
     /// <summary>
     /// Each comment with the significant tokens that precede it, for finding comments by position
     /// </summary>
-    private readonly List<CommentContext> _commentContexts = new();
     public IReadOnlyList<CommentContext> CommentContexts => _commentContexts;
 
     private AnnotationIndex? _annotations;

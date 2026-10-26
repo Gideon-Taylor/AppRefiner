@@ -547,6 +547,9 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
     /// - ApiObject subtypes (Session, ComponentInterface, …) when declared as ApiObject/any
     /// Compares against the declared type, so a later assignment re-refines the variable.
     /// <paramref name="sourceNode"/> (declaration or assignment) is recorded as the refinement source.
+    /// A <c>/* as T */</c> after the value replaces its type first (<see cref="ApplyAssignmentAnnotation"/>),
+    /// and a variable with a declaration annotation goes through <see cref="RefineAnnotatedVariable"/>
+    /// instead, which keeps the annotation authoritative.
     /// </summary>
     private void TryRefineVariableFromExpression(string variableName, ExpressionNode? expression, AstNode sourceNode)
     {
@@ -661,18 +664,20 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
     /// </summary>
     private void RefineAnnotatedVariable(VariableInfo variable, TypeInfo annotated, TypeInfo rhsType, ExpressionNode expression)
     {
-        if (rhsType.Kind == TypeKind.Any
+        if (rhsType.Kind is TypeKind.Any or TypeKind.Unknown
             || rhsType is BuiltinObjectTypeInfo { IsApiObjectBase: true })
             return;
 
-        // Only values that could refine the variable are compared; the checker handles the rest
+        // Only values that could refine the variable are compared; the checker handles the rest.
+        // An any variable holds every value, so there the checker is silent and any value is compared.
         bool refinable = rhsType is RecordTypeInfo or FieldTypeInfo
             || (rhsType is BuiltinObjectTypeInfo rhsBuiltin && PeopleCodeTypeDatabase.IsApiObjectSubtype(rhsBuiltin.Name));
-        if (!refinable)
+        var declared = ConvertTypeNameToTypeInfo(variable.Type);
+        if (!refinable && declared.Kind != TypeKind.Any)
             return;
 
         // A value the declared type can't hold is the checker's "Cannot assign" error, not a conflict
-        if (!ConvertTypeNameToTypeInfo(variable.Type).IsAssignableFrom(rhsType))
+        if (!declared.IsAssignableFrom(rhsType))
             return;
 
         bool sameType = annotated is BuiltinObjectTypeInfo annotatedBuiltin && rhsType is BuiltinObjectTypeInfo rhsObject
@@ -743,7 +748,11 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
 
         var annotation = _annotations.ForType(typeNode);
         if (annotation == null)
+        {
+            if (declaringNode is ParameterNode parameter && InheritedParameterAnnotation(parameter) is { } inherited)
+                variable.Annotate(ConvertTypeWithDimensionalityToTypeInfo(inherited), new RefinementSource(RefinementKind.Annotation, declaringNode));
             return;
+        }
 
         if (annotation.Error != null)
         {
@@ -997,7 +1006,11 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
                 // Walk up the inheritance chain to find the method
                 var method = LookupMethodInInheritanceChain(appClassType, memberName);
                 if (method != null)
-                    return ConvertFunctionInfoToTypeInfo(method, null, parameterTypes);
+                {
+                    return InheritedReturnAnnotation(appClassType, method) is { } inherited
+                        ? ConvertTypeWithDimensionalityToTypeInfo(inherited)
+                        : ConvertFunctionInfoToTypeInfo(method, null, parameterTypes);
+                }
             }
             else
             {
@@ -1034,25 +1047,7 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
 
         while (!string.IsNullOrEmpty(currentClassName))
         {
-            // Get metadata for the current class
-            TypeMetadata? metadata = null;
-
-            // Special case: if this is the current class, use _programMetadata directly
-            if (currentClassName.Equals(_programMetadata.QualifiedName, StringComparison.OrdinalIgnoreCase))
-            {
-                metadata = _programMetadata;
-            }
-            else
-            {
-                // Try cache first, then resolver
-                metadata = _typeCache.Get(currentClassName);
-                if (metadata == null && _typeResolver != null)
-                {
-                    metadata = _typeResolver.GetTypeMetadata(currentClassName);
-                    if (metadata != null)
-                        _typeCache.Set(currentClassName, metadata);
-                }
-            }
+            var metadata = GetClassMetadata(currentClassName);
 
             // If we have metadata, check for the method
             if (metadata != null && metadata.Methods.TryGetValue(methodName, out var method))
@@ -1105,6 +1100,134 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
         return null; // Method not found in the hierarchy
     }
 
+    /// <summary>
+    /// Metadata for an app class or interface: the current program's own, else the type cache,
+    /// else the resolver (caching what it returns). Null when the class can't be resolved.
+    /// </summary>
+    private TypeMetadata? GetClassMetadata(string className)
+    {
+        if (className.Equals(_programMetadata.QualifiedName, StringComparison.OrdinalIgnoreCase))
+            return _programMetadata;
+
+        var metadata = _typeCache.Get(className);
+        if (metadata == null && _typeResolver != null)
+        {
+            metadata = _typeResolver.GetTypeMetadata(className);
+            if (metadata != null)
+                _typeCache.Set(className, metadata);
+        }
+        return metadata;
+    }
+
+    /// <summary>
+    /// The base declaration's return annotation for an app-class method whose resolved
+    /// declaration has none of its own (spec §7 "Inheritance"), or null. Walks the same chain as
+    /// <see cref="LookupMethodInInheritanceChain"/>; the first declaration with an annotation,
+    /// even an unknown or misfit one, ends the walk.
+    /// </summary>
+    private TypeWithDimensionality? InheritedReturnAnnotation(AppClassTypeInfo appClassType, FunctionInfo method)
+    {
+        if (method.IsBuiltin || method.RefinedReturnType != null || method.HasReturnAnnotation)
+            return null;
+
+        var className = appClassType.QualifiedName;
+        var visited = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        while (!string.IsNullOrEmpty(className) && visited.Add(className))
+        {
+            var metadata = GetClassMetadata(className);
+            if (metadata == null)
+                return null;
+
+            if (metadata.Methods.TryGetValue(method.Name, out var declaration)
+                && (declaration.RefinedReturnType != null || declaration.HasReturnAnnotation))
+                return declaration.RefinedReturnType;
+
+            // Builtin bases carry no annotations
+            if (metadata.IsBaseClassBuiltin)
+                return null;
+
+            className = !string.IsNullOrEmpty(metadata.BaseClassName) ? metadata.BaseClassName : metadata.InterfaceName;
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// For a parameter of a method in the current class's header that has no annotation of its
+    /// own, the annotation on the same parameter of the nearest annotated base declaration of
+    /// the method (spec §7 "Inheritance"), or null. Base metadata comes from the resolver. Like
+    /// <see cref="InheritedReturnAnnotation"/>, the walk (<see cref="ParameterAnnotationInChain"/>) passes
+    /// overrides that leave the parameter unannotated and ends at the first declaration with an
+    /// annotation, even an unknown or misfit one.
+    /// </summary>
+    private TypeWithDimensionality? InheritedParameterAnnotation(ParameterNode parameter)
+    {
+        if (parameter.Parent is not MethodNode method || _programMetadata.IsBaseClassBuiltin)
+            return null;
+
+        var index = method.Parameters.ToList().IndexOf(parameter);
+        var className = !string.IsNullOrEmpty(_programMetadata.BaseClassName)
+            ? _programMetadata.BaseClassName
+            : _programMetadata.InterfaceName;
+        var visited = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { _programMetadata.QualifiedName };
+
+        return ParameterAnnotationInChain(className, method.Name, index, visited);
+    }
+
+    /// <summary>
+    /// Stamps a call to an app-class method with each parameter's effective annotation, own or
+    /// inherited, so the checker's annotated-parameter warning (spec §7) sees inherited ones too.
+    /// Nothing is stamped when no parameter is annotated.
+    /// </summary>
+    private void StampParameterAnnotations(FunctionCallNode node, AppClassTypeInfo appClassType, FunctionInfo method)
+    {
+        if (method.IsBuiltin)
+            return;
+
+        var annotations = new TypeWithDimensionality?[method.Parameters.Count];
+        for (int i = 0; i < annotations.Length; i++)
+        {
+            annotations[i] = ParameterAnnotationInChain(appClassType.QualifiedName, method.Name, i,
+                new HashSet<string>(StringComparer.OrdinalIgnoreCase));
+        }
+
+        if (annotations.Any(a => a != null))
+            node.SetParameterAnnotations(annotations);
+    }
+
+    /// <summary>
+    /// The annotation on parameter <paramref name="index"/> of the first declaration of
+    /// <paramref name="methodName"/> with one, walking up from <paramref name="className"/>
+    /// (inclusive). Overrides that leave the parameter unannotated are passed; the first
+    /// declaration with an annotation, even an unknown or misfit one, ends the walk.
+    /// </summary>
+    private TypeWithDimensionality? ParameterAnnotationInChain(string? className, string methodName, int index, HashSet<string> visited)
+    {
+        while (!string.IsNullOrEmpty(className) && visited.Add(className))
+        {
+            var metadata = GetClassMetadata(className);
+            if (metadata == null)
+                return null;
+
+            if (metadata.Methods.TryGetValue(methodName, out var declaration))
+            {
+                if (index < 0 || index >= declaration.Parameters.Count
+                    || declaration.Parameters[index] is not SingleParameter single)
+                    return null;
+
+                if (single.RefinedParameterType != null || single.HasAnnotation)
+                    return single.RefinedParameterType;
+            }
+
+            if (metadata.IsBaseClassBuiltin)
+                return null;
+
+            className = !string.IsNullOrEmpty(metadata.BaseClassName) ? metadata.BaseClassName : metadata.InterfaceName;
+        }
+
+        return null;
+    }
+
     private PropertyInfo? LookupPrivateInstanceVariable(AppClassTypeInfo classType, string propertyName)
     {
 
@@ -1129,25 +1252,7 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
 
         while (!string.IsNullOrEmpty(currentClassName))
         {
-            // Get metadata for the current class
-            TypeMetadata? metadata = null;
-
-            // Special case: if this is the current class, use _programMetadata directly
-            if (currentClassName.Equals(_programMetadata.QualifiedName, StringComparison.OrdinalIgnoreCase))
-            {
-                metadata = _programMetadata;
-            }
-            else
-            {
-                // Try cache first, then resolver
-                metadata = _typeCache.Get(currentClassName);
-                if (metadata == null && _typeResolver != null)
-                {
-                    metadata = _typeResolver.GetTypeMetadata(currentClassName);
-                    if (metadata != null)
-                        _typeCache.Set(currentClassName, metadata);
-                }
-            }
+            var metadata = GetClassMetadata(currentClassName);
 
             // If we have metadata, check for the property
             if (metadata != null && metadata.Properties.TryGetValue(propertyName, out var property))
@@ -1374,7 +1479,9 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
             }
         }
 
-        CheckReturnAnnotation(node, node.Name, node.ReturnType);
+        // Annotations on Declare Function lines have no effect, so they don't warn either
+        if (node.IsImplementation)
+            CheckReturnAnnotation(node, node.Name, node.ReturnType);
 
         // NOW: Let base class handle scope creation and parameter registration
         base.VisitFunction(node);
@@ -2036,8 +2143,13 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
                 parameterTypes = [AnyTypeInfo.Instance];
             }
 
-            var returnType = ConvertFunctionInfoToTypeInfo(
-                functionInfo, objectType, parameterTypes, node.Arguments);
+            if (objectType is AppClassTypeInfo receiverClass)
+                StampParameterAnnotations(node, receiverClass, functionInfo);
+
+            var returnType = objectType is AppClassTypeInfo appClassType
+                && InheritedReturnAnnotation(appClassType, functionInfo) is { } inherited
+                ? ConvertTypeWithDimensionalityToTypeInfo(inherited)
+                : ConvertFunctionInfoToTypeInfo(functionInfo, objectType, parameterTypes, node.Arguments);
             SetInferredType(node, returnType);
         }
         else
@@ -2063,14 +2175,7 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
         {
             var qualifiedName = inferredType.Name;
 
-            // Try cache first, then resolver
-            TypeMetadata? sourceMetadata = _typeCache.Get(qualifiedName);
-            if (sourceMetadata == null && _typeResolver != null)
-            {
-                sourceMetadata = _typeResolver.GetTypeMetadata(qualifiedName);
-                if (sourceMetadata != null)
-                    _typeCache.Set(qualifiedName, sourceMetadata);
-            }
+            var sourceMetadata = GetClassMetadata(qualifiedName);
 
             // Look up the constructor 
             if (sourceMetadata != null &&

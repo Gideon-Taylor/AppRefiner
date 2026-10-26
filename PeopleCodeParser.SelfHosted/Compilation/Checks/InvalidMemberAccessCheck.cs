@@ -1,4 +1,5 @@
 using PeopleCodeParser.SelfHosted.Nodes;
+using PeopleCodeParser.SelfHosted.Visitors.Models;
 using PeopleCodeTypeInfo.Contracts;
 using PeopleCodeTypeInfo.Database;
 using PeopleCodeTypeInfo.Functions;
@@ -81,7 +82,7 @@ public sealed class InvalidMemberAccessCheck : CompileCheckBase
                     DiagnosticCode.InvalidMemberAccess,
                     DiagnosticSeverity.Error,
                     m.MemberNameSpan,
-                    $"'{m.MemberName}' is not a known {kind} on '{DisplayName(targetType)}'"));
+                    $"'{m.MemberName}' is not a known {kind} on '{DisplayName(targetType)}'{RefinementSuffix(m.Target, targetType)}"));
                 return;
             }
 
@@ -287,6 +288,26 @@ public sealed class InvalidMemberAccessCheck : CompileCheckBase
     }
 
     #endregion
+
+    /// <summary>
+    /// Names the annotation or assignment that gave a variable target its type (spec §7, §10),
+    /// e.g. " (&amp;x is Session, annotated on line 1)". Empty for any other target.
+    /// </summary>
+    private static string RefinementSuffix(ExpressionNode target, TypeInfo targetType)
+    {
+        if (target is not IdentifierNode id)
+            return "";
+
+        var source = id.GetRefinementSource();
+        var verb = source?.Kind switch
+        {
+            RefinementKind.Annotation => "annotated",
+            RefinementKind.Assignment => "assigned",
+            _ => null
+        };
+
+        return verb == null ? "" : $" ({id.Name} is {DisplayName(targetType)}, {verb} on line {source!.Line + 1})";
+    }
 
     private static string DisplayName(TypeInfo type) => type switch
     {

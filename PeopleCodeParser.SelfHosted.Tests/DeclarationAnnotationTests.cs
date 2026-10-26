@@ -232,4 +232,46 @@ public class DeclarationAnnotationTests
         Assert.Single(warnings, w => w.Message.Equals(
             "'as Session' needs an ApiObject declaration; Bar is Rowset.", StringComparison.OrdinalIgnoreCase));
     }
+
+    [Fact]
+    public void Any_annotated_variable_assigned_string_warns()
+    {
+        var (program, _, warnings) = TypeCheck(
+            "Local any /* as Session */ &x;\n&x = \"abc\";\n&x.GetCompIntfc(CompIntfc.A);");
+
+        var warning = Assert.Single(warnings);
+        Assert.Equal("&x is annotated as Session (line 1) but is assigned string here.", warning.Message);
+        Assert.Equal("Session", LastUse(program, "&x").GetInferredType()!.Name, ignoreCase: true);
+    }
+
+    [Fact]
+    public void Declare_function_return_annotation_is_ignored()
+    {
+        var warnings = Warnings("Declare Function F PeopleCode REC.FLD FieldFormula Returns Rowset /* as Session */;");
+
+        Assert.Empty(warnings);
+    }
+
+    [Fact]
+    public void Annotated_property_is_typed_inside_its_class()
+    {
+        const string classSource =
+            "class Foo\n" +
+            "   method Bar();\n" +
+            "   property ApiObject /* as Session */ Sess;\n" +
+            "end-class;\n" +
+            "\n" +
+            "method Bar\n" +
+            "   %This.Sess.GetCompIntfc(CompIntfc.A);\n" +
+            "end-method;";
+
+        // %This resolves through the class's qualified name, so the program needs one
+        var (program, parseErrors) = Parse(classSource);
+        Assert.Empty(parseErrors);
+        TypeInferenceVisitor.Run(program, TypeMetadataBuilder.ExtractMetadata(program, "PKG:Foo"), NullTypeMetadataResolver.Instance);
+
+        var sess = program.FindDescendants<MemberAccessNode>().Single(m => m.MemberName == "Sess");
+        Assert.Equal("Session", sess.GetInferredType()!.Name, ignoreCase: true);
+        Assert.Empty(program.GetAllTypeWarnings());
+    }
 }

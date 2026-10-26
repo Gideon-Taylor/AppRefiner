@@ -6,7 +6,8 @@ namespace PeopleCodeParser.SelfHosted.Annotations;
 /// <summary>
 /// Finds a program's <c>/* as T */</c> annotations by position (spec §7). An annotation counts
 /// only directly after a type node, or directly after an assignment's value (either side of the
-/// <c>;</c>), on the same line. Use <see cref="ProgramNode.Annotations"/> for the cached instance.
+/// <c>;</c>), on the same line. When two annotations follow the same anchor, the first wins.
+/// Use <see cref="ProgramNode.Annotations"/> for the cached instance.
 /// </summary>
 public sealed class AnnotationIndex
 {

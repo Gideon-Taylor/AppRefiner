@@ -48,7 +48,8 @@ public class RecordTypeInfo : BuiltinObjectTypeInfo
     }
 
     /// <summary>
-    /// Exposes the record name as an identity for uniform comparison.
+    /// Exposes the record name this type was constructed with as an identity for uniform
+    /// comparison. Built from RecordName, not from WithIdentity.
     /// </summary>
     public override TypeIdentity? EffectiveIdentity => new TypeIdentity(RecordName: RecordName);
 

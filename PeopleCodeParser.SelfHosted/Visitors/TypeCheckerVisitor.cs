@@ -381,6 +381,43 @@ namespace PeopleCodeParser.SelfHosted.Visitors
 
                 RecordTypeError(result.GetDetailedError(), errorNode);
             }
+
+            CheckAnnotatedParameters(node, functionInfo);
+        }
+
+        /// <summary>
+        /// A parameter declared ApiObject but annotated as an API subtype still accepts any API
+        /// value; warn when an argument is known to be a different subtype (spec §7). App-class
+        /// method calls carry each parameter's own or inherited annotation, stamped by inference.
+        /// </summary>
+        private void CheckAnnotatedParameters(FunctionCallNode node, FunctionInfo functionInfo)
+        {
+            var parameters = functionInfo.Parameters;
+            var stamped = node.GetParameterAnnotations();
+            for (int i = 0; i < node.Arguments.Count && i < parameters.Count; i++)
+            {
+                if (parameters[i] is not SingleParameter parameter)
+                    continue;
+
+                var effective = stamped != null && i < stamped.Count ? stamped[i] : parameter.RefinedParameterType;
+                if (effective is not { } refined)
+                    continue;
+
+                var refinedName = refined.Type.GetTypeName();
+                if (!PeopleCodeTypeDatabase.IsApiObjectSubtype(refinedName))
+                    continue;
+
+                // Plain ApiObject, any and unknown arguments (anything not a known subtype) pass
+                var argNode = node.Arguments[i];
+                if (argNode.GetInferredType() is not BuiltinObjectTypeInfo { IsApiObjectBase: false } argApi
+                    || !PeopleCodeTypeDatabase.IsApiObjectSubtype(argApi.Name)
+                    || argApi.Name.Equals(refinedName, StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                RecordTypeWarning(
+                    $"{functionInfo.Name} expects {parameter.Name} as {refinedName} (annotated); the argument is {argApi.Name}.",
+                    argNode);
+            }
         }
 
         /// <summary>

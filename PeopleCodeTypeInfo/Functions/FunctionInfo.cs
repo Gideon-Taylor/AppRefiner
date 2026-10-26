@@ -73,6 +73,13 @@ public class FunctionInfo
     public TypeWithDimensionality? RefinedReturnType { get; set; }
 
     /// <summary>
+    /// True when the declaration's return type carries a <c>/* as T */</c> annotation of its own,
+    /// even one that was unknown or misfit and so left RefinedReturnType null. An override with
+    /// its own annotation does not inherit the base declaration's.
+    /// </summary>
+    public bool HasReturnAnnotation { get; set; }
+
+    /// <summary>
     /// True when read from typeinfo.dat (builtin functions and builtin object methods).
     /// User functions and app class methods leave this false.
     /// </summary>

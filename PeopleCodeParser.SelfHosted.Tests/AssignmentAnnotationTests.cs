@@ -161,4 +161,27 @@ public class AssignmentAnnotationTests
 
         Assert.Empty(warnings);
     }
+
+    [Fact]
+    public void Annotation_after_return_expression_is_ignored()
+    {
+        const string source = "Function F() Returns ApiObject\n   Return %Session /* as Tree */;\nEnd-Function;";
+        var (program, _, warnings) = TypeCheck(source + "\nLocal ApiObject &x = F();");
+
+        Assert.Empty(warnings);
+        Assert.Null(TypeMetadataBuilder.ExtractMetadata(Parse(source).Program).Methods["F"].RefinedReturnType);
+        var call = program.FindDescendants<FunctionCallNode>().Single(c => c.Function is IdentifierNode { Name: "F" });
+        Assert.Equal("ApiObject", call.GetInferredType()!.Name, ignoreCase: true);
+    }
+
+    [Fact]
+    public void Annotation_after_operand_is_ignored()
+    {
+        var (program, errors, warnings) = TypeCheck(
+            "Local string &s = \"a\" /* as Session */ | \"b\";\nLocal string &t = &s;");
+
+        Assert.Empty(errors);
+        Assert.Empty(warnings);
+        Assert.Equal("string", LastUse(program, "&s").GetInferredType()!.Name, ignoreCase: true);
+    }
 }

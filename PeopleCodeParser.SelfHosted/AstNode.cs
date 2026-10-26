@@ -104,6 +104,12 @@ public abstract class AstNode
     public const string RefinementSourceAttributeKey = "RefinementSource";
 
     /// <summary>
+    /// Attribute key for storing an app-class method call's effective parameter annotations,
+    /// own or inherited (IReadOnlyList of TypeWithDimensionality?, one per parameter)
+    /// </summary>
+    public const string ParameterAnnotationsAttributeKey = "ParameterAnnotations";
+
+    /// <summary>
     /// Attribute key for storing type checking errors (TypeError)
     /// </summary>
     public const string TypeErrorAttributeKey = "TypeError";

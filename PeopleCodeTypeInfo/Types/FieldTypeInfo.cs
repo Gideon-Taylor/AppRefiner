@@ -72,7 +72,8 @@ public class FieldTypeInfo : BuiltinObjectTypeInfo
     }
 
     /// <summary>
-    /// Exposes the record and field names as an identity for uniform comparison.
+    /// Exposes the record and field names this type was constructed with as an identity for
+    /// uniform comparison. Built from RecordName/FieldName, not from WithIdentity.
     /// </summary>
     public override TypeIdentity? EffectiveIdentity => new TypeIdentity(RecordName, FieldName);
 

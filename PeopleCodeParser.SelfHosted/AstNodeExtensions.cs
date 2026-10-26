@@ -86,6 +86,31 @@ public static class AstNodeExtensions
         node.Attributes[AstNode.FunctionInfoAttributeKey] = functionInfo;
     }
 
+    /// <summary>
+    /// Gets the effective <c>/* as T */</c> parameter annotations of an app-class method call:
+    /// for each parameter, its own annotation or the one inherited from a base declaration.
+    /// </summary>
+    /// <param name="node">The AST node to query (a FunctionCallNode)</param>
+    /// <returns>One entry per parameter (null where unannotated), or null if none were stored</returns>
+    public static IReadOnlyList<TypeWithDimensionality?>? GetParameterAnnotations(this AstNode node)
+    {
+        if (node.Attributes.TryGetValue(AstNode.ParameterAnnotationsAttributeKey, out var annotations))
+        {
+            return annotations as IReadOnlyList<TypeWithDimensionality?>;
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// Sets the effective parameter annotations of an app-class method call.
+    /// </summary>
+    /// <param name="node">The AST node to update</param>
+    /// <param name="annotations">One entry per parameter, null where unannotated</param>
+    public static void SetParameterAnnotations(this AstNode node, IReadOnlyList<TypeWithDimensionality?> annotations)
+    {
+        node.Attributes[AstNode.ParameterAnnotationsAttributeKey] = annotations;
+    }
+
     #endregion
 
     #region RefinementSource Extensions

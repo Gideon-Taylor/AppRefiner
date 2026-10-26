@@ -284,6 +284,13 @@ public class SingleParameter : Parameter
     /// </summary>
     public TypeWithDimensionality? RefinedParameterType { get; set; }
 
+    /// <summary>
+    /// True when the declaration's parameter type carries a <c>/* as T */</c> annotation of its
+    /// own, even one that was unknown or misfit and so left RefinedParameterType null. An
+    /// override with its own annotation does not inherit the base declaration's.
+    /// </summary>
+    public bool HasAnnotation { get; set; }
+
     public override ParameterTag Tag => ParameterTag.Single;
     public override bool IsOptional => false;
     public override int MinArgumentCount => 1;

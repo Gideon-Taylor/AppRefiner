@@ -95,9 +95,12 @@ public static class TypeAnnotationParser
 
         if (parts.Length == 1)
         {
-            return PeopleCodeTypeDatabase.IsApiObjectSubtype(written)
-                ? new AnnotationTarget(BuiltinTypeExtensions.FromString(written), null, written)
-                : null;
+            if (!PeopleCodeTypeDatabase.IsApiObjectSubtype(written))
+                return null;
+
+            // A subtype the PeopleCodeType enum doesn't know can't be a target; report it as unknown
+            var type = BuiltinTypeExtensions.FromString(written);
+            return type != PeopleCodeType.Unknown ? new AnnotationTarget(type, null, written) : null;
         }
 
         var keyword = parts[0];
