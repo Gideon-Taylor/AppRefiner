@@ -81,6 +81,8 @@ namespace PeopleCodeParser.SelfHosted.Visitors
 
                 RecordTypeError(result.GetDetailedError(), errorNode);
             }
+
+            CheckAnnotatedParameters(node, node.Arguments, functionInfo);
         }
 
         public override void VisitAssignment(AssignmentNode node)
@@ -382,19 +384,21 @@ namespace PeopleCodeParser.SelfHosted.Visitors
                 RecordTypeError(result.GetDetailedError(), errorNode);
             }
 
-            CheckAnnotatedParameters(node, functionInfo);
+            CheckAnnotatedParameters(node, node.Arguments, functionInfo);
         }
 
         /// <summary>
         /// A parameter declared ApiObject but annotated as an API subtype still accepts any API
-        /// value; warn when an argument is known to be a different subtype (spec §7). App-class
-        /// method calls carry each parameter's own or inherited annotation, stamped by inference.
+        /// value; warn when an argument is known to be a different subtype (spec §7). Covers function
+        /// and method calls and constructor calls (<c>create</c>). App-class method calls carry each
+        /// parameter's own or inherited annotation, stamped by inference on <paramref name="callNode"/>;
+        /// constructors are not inherited, so they use the parameter's own annotation.
         /// </summary>
-        private void CheckAnnotatedParameters(FunctionCallNode node, FunctionInfo functionInfo)
+        private void CheckAnnotatedParameters(AstNode callNode, IReadOnlyList<ExpressionNode> arguments, FunctionInfo functionInfo)
         {
             var parameters = functionInfo.Parameters;
-            var stamped = node.GetParameterAnnotations();
-            for (int i = 0; i < node.Arguments.Count && i < parameters.Count; i++)
+            var stamped = callNode.GetParameterAnnotations();
+            for (int i = 0; i < arguments.Count && i < parameters.Count; i++)
             {
                 if (parameters[i] is not SingleParameter parameter)
                     continue;
@@ -408,7 +412,7 @@ namespace PeopleCodeParser.SelfHosted.Visitors
                     continue;
 
                 // Plain ApiObject, any and unknown arguments (anything not a known subtype) pass
-                var argNode = node.Arguments[i];
+                var argNode = arguments[i];
                 if (argNode.GetInferredType() is not BuiltinObjectTypeInfo { IsApiObjectBase: false } argApi
                     || !PeopleCodeTypeDatabase.IsApiObjectSubtype(argApi.Name)
                     || argApi.Name.Equals(refinedName, StringComparison.OrdinalIgnoreCase))

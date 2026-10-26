@@ -53,6 +53,13 @@ Annotations on method headers flow to callers and are inherited by overrides, an
 warn when an argument is a different API subtype from an annotated parameter. Unannotated
 `ApiObject` values still resolve members to Any.
 
+Constructor calls (`create PKG:Svc(&t)`) get the same annotated-parameter warning, but only
+when inference attaches the constructor's `FunctionInfo`. A same-program `create Svc(&t)`
+does not: `TypeInferenceVisitor.VisitObjectCreation` looks the class up by the short name
+`Svc` and `GetClassMetadata` only matches the program's own `QualifiedName` (`PKG:Svc`, or
+empty when unnamed), so the constructor's arguments go unvalidated and unchecked
+(`Same_program_constructor_is_not_checked`).
+
 ## 5. Checker validates calls without the receiver type
 
 `TypeCheckerVisitor.VisitFunctionCall` calls `validator.Validate(functionInfo, arguments)`

@@ -106,6 +106,89 @@ public class AnnotatedParameterCallTests
         Assert.Equal("Use expects &s as Session (annotated); the argument is ComponentInterface.", warning.Message);
     }
 
+    private const string SvcConstructorSource =
+        "class Svc\n" +
+        "   method Svc(&s As ApiObject /* as Session */);\n" +
+        "end-class;\n";
+
+    private static FakeTypeMetadataResolver SvcResolver()
+    {
+        var resolver = new FakeTypeMetadataResolver();
+        resolver.AddClass("PKG:Svc", Extract(SvcConstructorSource, "PKG:Svc"));
+        return resolver;
+    }
+
+    [Fact]
+    public void Constructor_different_subtype_argument_warns()
+    {
+        var (errors, warnings) = TypeCheck(
+            "Local ApiObject &t = %Session.GetCompIntfc(CompIntfc.A);\n" +
+            "Local PKG:Svc &o = create PKG:Svc(&t);",
+            SvcResolver());
+
+        Assert.Empty(errors);
+        var warning = Assert.Single(warnings);
+        Assert.Equal("Svc expects &s as Session (annotated); the argument is ComponentInterface.", warning.Message);
+        Assert.IsType<IdentifierNode>(warning.Node);
+    }
+
+    [Fact]
+    public void Constructor_matching_subtype_argument_is_silent()
+    {
+        var (errors, warnings) = TypeCheck("Local PKG:Svc &o = create PKG:Svc(%Session);", SvcResolver());
+
+        Assert.Empty(errors);
+        Assert.Empty(warnings);
+    }
+
+    [Fact]
+    public void Constructor_plain_ApiObject_argument_is_silent()
+    {
+        var (errors, warnings) = TypeCheck(
+            "Local ApiObject &a;\nLocal PKG:Svc &o = create PKG:Svc(&a);", SvcResolver());
+
+        Assert.Empty(errors);
+        Assert.Empty(warnings);
+    }
+
+    [Fact]
+    public void Default_constructor_create_is_silent()
+    {
+        var resolver = new FakeTypeMetadataResolver();
+        resolver.AddClass("PKG:Empty", Extract("class Empty\nend-class;\n", "PKG:Empty"));
+
+        var (errors, warnings) = TypeCheck("Local PKG:Empty &o = create PKG:Empty();", resolver);
+
+        Assert.Empty(errors);
+        Assert.Empty(warnings);
+    }
+
+    /// <summary>
+    /// Inference sets no constructor FunctionInfo for a same-program <c>create Svc(...)</c> (the
+    /// short name doesn't match the program's own metadata), so the call is not checked.
+    /// Documented in docs/architecture/type-system-weak-spots.md §4.
+    /// </summary>
+    [Fact]
+    public void Same_program_constructor_is_not_checked()
+    {
+        var (errors, warnings) = TypeCheck(
+            "class Svc\n" +
+            "   method Svc(&s As ApiObject /* as Session */);\n" +
+            "   method Make();\n" +
+            "end-class;\n" +
+            "\n" +
+            "method Svc\n" +
+            "end-method;\n" +
+            "\n" +
+            "method Make\n" +
+            "   Local ApiObject &t = %Session.GetCompIntfc(CompIntfc.A);\n" +
+            "   Local Svc &o = create Svc(&t);\n" +
+            "end-method;\n");
+
+        Assert.Empty(errors);
+        Assert.Empty(warnings);
+    }
+
     private static TypeMetadata Extract(string source, string qualifiedName)
     {
         var (program, errors) = Parse(source);
