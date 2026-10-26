@@ -1,6 +1,7 @@
 using AppRefiner.Database;
 using PeopleCodeParser.SelfHosted;
 using PeopleCodeParser.SelfHosted.Nodes;
+using PeopleCodeParser.SelfHosted.Visitors.Models;
 using PeopleCodeParser.SelfHosted.Visitors.Narrowing;
 using PeopleCodeTypeInfo.Types;
 
@@ -23,6 +24,19 @@ namespace AppRefiner.TooltipProviders
         public override void ProcessProgram(ProgramNode program, int position, int lineNumber)
         {
             base.ProcessProgram(program, position, lineNumber);
+
+            // A declared name isn't an expression node; its declaration records the type it holds
+            foreach (var declaration in program.FindNodes(n => n.SourceSpan.ContainsPositionExclusiveEnd(position)))
+            {
+                foreach (var declared in declaration.GetDeclaredVariableTypes())
+                {
+                    if (declared.NameSpan.ContainsPositionExclusiveEnd(position) && declared.Type.Kind != TypeKind.Unknown)
+                    {
+                        RegisterTooltip(declared.NameSpan, FormatVariableType(declared.Type, declared.Source, declared.Candidates));
+                        return;
+                    }
+                }
+            }
 
             // Find the most specific node containing the cursor position that has type information
             var bestSpanLength = int.MaxValue;
@@ -74,15 +88,21 @@ namespace AppRefiner.TooltipProviders
             if (node is not IdentifierNode id)
                 return $"Inferred Type: {TypeDisplay.Format(typeInfo)}";
 
-            if (id.GetRefinementSource() is { } source)
+            return FormatVariableType(typeInfo, id.GetRefinementSource(), id.GetNarrowingCandidates());
+        }
+
+        /// <summary>
+        /// A variable's type, with where a refined type came from, or which types an undecided
+        /// ApiObject's uses still allow.
+        /// </summary>
+        private static string FormatVariableType(TypeInfo typeInfo, RefinementSource? source, IReadOnlyList<string>? candidates)
+        {
+            if (source != null)
                 return $"Inferred Type: {TypeDisplay.Format(typeInfo)}, {source.Origin} on line {source.Line + 1}";
 
             // Undecided: still plain ApiObject, with the candidates its uses leave open
-            if (id.GetNarrowingCandidates() is { Count: > 0 } candidates
-                && typeInfo is BuiltinObjectTypeInfo { IsApiObjectBase: true })
-            {
+            if (candidates is { Count: > 0 } && typeInfo is BuiltinObjectTypeInfo { IsApiObjectBase: true })
                 return $"Inferred Type: ApiObject ({UsageNarrowingAnalyzer.CandidatePhrase(candidates)})";
-            }
 
             return $"Inferred Type: {TypeDisplay.Format(typeInfo)}";
         }

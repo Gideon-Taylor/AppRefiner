@@ -122,6 +122,12 @@ public abstract class AstNode
     public const string NarrowingCandidatesAttributeKey = "NarrowingCandidates";
 
     /// <summary>
+    /// Attribute key for storing the types a declaration's variables hold right after it
+    /// (List of DeclaredVariableType)
+    /// </summary>
+    public const string DeclaredVariableTypesAttributeKey = "DeclaredVariableTypes";
+
+    /// <summary>
     /// Attribute key for storing type checking errors (TypeError)
     /// </summary>
     public const string TypeErrorAttributeKey = "TypeError";

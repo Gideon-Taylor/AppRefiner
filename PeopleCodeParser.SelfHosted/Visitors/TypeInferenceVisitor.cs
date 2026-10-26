@@ -1511,7 +1511,36 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
 
         // NOW: Let base class register variables (will read from attribute)
         base.VisitLocalVariableDeclaration(node);
+
+        StampDeclaredNames(node, node.VariableNameInfos);
     }
+
+    /// <summary>
+    /// Records on the declaration the type each declared name holds right after it, so a hover on
+    /// the declared name (not an expression node) shows what a use there would.
+    /// </summary>
+    private void StampDeclaredNames(AstNode declaration, IEnumerable<VariableNameInfo> names)
+    {
+        foreach (var name in names)
+        {
+            if (name.Token == null || FindVariable(name.Name) is not { IsAutoDeclared: false } variable)
+                continue;
+
+            var type = variable.InferredType ?? ConvertTypeNameToTypeInfo(variable.Type);
+            var source = variable.RefinementSource;
+            declaration.SetDeclaredVariableType(new DeclaredVariableType(
+                name.Name, name.SourceSpan, type, source, source == null ? UndecidedCandidates(variable) : null));
+        }
+    }
+
+    /// <summary>
+    /// The API types an undecided ApiObject variable's uses still allow, or null when narrowing
+    /// settled it or has nothing to say.
+    /// </summary>
+    private IReadOnlyList<string>? UndecidedCandidates(VariableInfo variable) =>
+        _narrowing?.For(variable.DeclarationNode, variable.Name) is { NarrowedType: null, Candidates.Count: > 0 } undecided
+            ? undecided.Candidates
+            : null;
 
     /// <summary>
     /// Visits local variable declaration with assignment, resolves types, then lets base class register
@@ -1530,6 +1559,8 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
 
         // Refine Local Record &r = CreateRecord(Record.NAME) → RecordTypeInfo(NAME)
         TryRefineVariableFromExpression(node.VariableNameInfo.Name, node.InitialValue, node);
+
+        StampDeclaredNames(node, new[] { node.VariableNameInfo });
     }
 
     /// <summary>
@@ -1546,6 +1577,8 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
 
         // NOW: Let base class register variables
         base.VisitProgramVariable(node);
+
+        StampDeclaredNames(node, node.NameInfos);
     }
 
     /// <summary>
@@ -2050,8 +2083,8 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
                 SetInferredType(node, inferredType);
                 if (variable.RefinementSource is { } src)
                     node.SetRefinementSource(src);
-                else if (_narrowing?.For(variable.DeclarationNode, variable.Name) is { NarrowedType: null, Candidates.Count: > 0 } undecided)
-                    node.SetNarrowingCandidates(undecided.Candidates);
+                else if (UndecidedCandidates(variable) is { } candidates)
+                    node.SetNarrowingCandidates(candidates);
             }
             // Handle auto-declared variables (delegate didn't provide a type)
             else if (variable != null && variable.IsAutoDeclared)

@@ -189,6 +189,44 @@ public static class AstNodeExtensions
 
     #endregion
 
+    #region DeclaredVariableType Extensions
+
+    /// <summary>
+    /// Gets the types this declaration's variables hold right after it.
+    /// </summary>
+    /// <param name="node">The declaration node to query</param>
+    /// <returns>One entry per declared name, or an empty list if none were stored</returns>
+    public static IReadOnlyList<DeclaredVariableType> GetDeclaredVariableTypes(this AstNode node)
+    {
+        if (node.Attributes.TryGetValue(AstNode.DeclaredVariableTypesAttributeKey, out var types)
+            && types is List<DeclaredVariableType> list)
+        {
+            return list;
+        }
+        return Array.Empty<DeclaredVariableType>();
+    }
+
+    /// <summary>
+    /// Records the type a declared variable holds right after the declaration, replacing an
+    /// earlier entry for the same name (a re-run pass).
+    /// </summary>
+    /// <param name="node">The declaration node to update</param>
+    /// <param name="declared">The declared variable's type</param>
+    public static void SetDeclaredVariableType(this AstNode node, DeclaredVariableType declared)
+    {
+        if (!node.Attributes.TryGetValue(AstNode.DeclaredVariableTypesAttributeKey, out var existing)
+            || existing is not List<DeclaredVariableType> list)
+        {
+            list = new List<DeclaredVariableType>();
+            node.Attributes[AstNode.DeclaredVariableTypesAttributeKey] = list;
+        }
+
+        list.RemoveAll(d => d.Name.Equals(declared.Name, StringComparison.OrdinalIgnoreCase));
+        list.Add(declared);
+    }
+
+    #endregion
+
     #region TypeError Extensions
 
     /// <summary>
