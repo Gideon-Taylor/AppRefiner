@@ -58,7 +58,17 @@ namespace AppRefiner.TooltipProviders
                 }
 
             }
-                           
+
+            // A method name in a call (&coll.Item(1)): the member reference itself has no useful
+            // type, so show what the call returns
+            if (bestNode is MemberAccessNode member
+                && member.Parent is FunctionCallNode call
+                && ReferenceEquals(call.Function, member)
+                && call.GetInferredType() is { } callType)
+            {
+                bestTypeInfo = callType;
+                bestNode = call;
+            }
 
             // Filter out unknown types - only show tooltip for concrete type information
             if (bestSpan.HasValue && bestTypeInfo != null && bestTypeInfo.Kind != TypeKind.Unknown)

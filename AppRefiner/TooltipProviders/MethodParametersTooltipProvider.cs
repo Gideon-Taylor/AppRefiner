@@ -142,6 +142,13 @@ namespace AppRefiner.TooltipProviders
                 }
             }
 
+            // Inference resolved the call itself (e.g. a method of a type the lookups above don't cover)
+            if (functionCall.GetFunctionInfo() is { } resolved)
+            {
+                RegisterTooltip(memberAccess.SourceSpan, FormatBuiltinFunctionTooltip(resolved, resolved.IsBuiltin ? "Builtin" : "Method", functionCall));
+                return;
+            }
+
             // Fall back to existing logic (variable tracking)
             // Check if target is an identifier (%This, &variable, etc.)
             if (memberAccess.Target is IdentifierNode targetIdentifier)
@@ -400,10 +407,16 @@ namespace AppRefiner.TooltipProviders
                     return "File";
                 case PeopleCodeType.SQL:
                     return "Sql";
-
-                default:
-                    return null; // Not a builtin type
             }
+
+            // Every other builtin object (API types such as Session or DataCollection, XmlDoc, …) is
+            // listed in typeinfo.dat under its type name, as the member-access check looks it up
+            return typeInfo.Kind switch
+            {
+                TypeKind.BuiltinObject => typeInfo.PeopleCodeType?.GetTypeName(),
+                TypeKind.Array => "Array",
+                _ => null // Not a builtin type
+            };
         }
 
         /// <summary>
