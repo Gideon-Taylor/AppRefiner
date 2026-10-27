@@ -2053,7 +2053,35 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
 
             // &r = CreateRecord(Record.NAME) / &f = &rec.GetField(Field.X) — keep named identity
             TryRefineVariableFromExpression(identifier.Name, node.Value, node);
+
+            // The target keeps the type it held before the assignment (the checker compares the two);
+            // the assignment records the type it holds now, for hovers on the target
+            if (variable != null && identifier.SourceSpan.IsValid)
+                StampDeclaredName(node, variable, identifier.SourceSpan);
         }
+    }
+
+    /// <summary>
+    /// Stamps a variable use with the variable's current type and where a refined type came from
+    /// (or, for an undecided ApiObject, the candidates its uses still allow).
+    /// </summary>
+    private void StampVariableUse(IdentifierNode node, VariableInfo variable)
+    {
+        var inferredType = variable.InferredType ?? ConvertTypeNameToTypeInfo(variable.Type);
+
+        // Variables (identifiers starting with &) are assignable
+        if (node.Name.StartsWith("&"))
+        {
+            inferredType = variable.IsAutoDeclared
+                ? inferredType.WithAssignable(true).WithAutoDeclared(true)
+                : inferredType.WithAssignable(true);
+        }
+
+        SetInferredType(node, inferredType);
+        if (variable.RefinementSource is { } src)
+            node.SetRefinementSource(src);
+        else if (!variable.IsAutoDeclared && UndecidedCandidates(variable) is { } candidates)
+            node.SetNarrowingCandidates(candidates);
     }
 
     #endregion
@@ -2181,38 +2209,10 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
                 }
             }
 
-            // If we have a real (non-auto-declared) variable, use its type
-            if (variable != null && !variable.IsAutoDeclared)
+            // A declared or auto-declared variable: use its type
+            if (variable != null)
             {
-                // Convert type name string to TypeInfo
-                var inferredType = variable.InferredType ?? ConvertTypeNameToTypeInfo(variable.Type);
-
-                // Variables (identifiers starting with &) are assignable
-                if (node.Name.StartsWith("&"))
-                {
-                    inferredType = inferredType.WithAssignable(true);
-                }
-
-                SetInferredType(node, inferredType);
-                if (variable.RefinementSource is { } src)
-                    node.SetRefinementSource(src);
-                else if (UndecidedCandidates(variable) is { } candidates)
-                    node.SetNarrowingCandidates(candidates);
-            }
-            // Handle auto-declared variables (delegate didn't provide a type)
-            else if (variable != null && variable.IsAutoDeclared)
-            {
-                // Convert type name string to TypeInfo
-                var inferredType = variable.InferredType ?? ConvertTypeNameToTypeInfo(variable.Type);
-
-                // Variables (identifiers starting with &) are assignable
-                if (node.Name.StartsWith("&"))
-                {
-                    inferredType = inferredType.WithAssignable(true).WithAutoDeclared(true);
-                }
-
-                SetInferredType(node, inferredType);
-                if (variable.RefinementSource is { } src) node.SetRefinementSource(src);
+                StampVariableUse(node, variable);
             }
             // Variable is null - try system variables and field types
             else

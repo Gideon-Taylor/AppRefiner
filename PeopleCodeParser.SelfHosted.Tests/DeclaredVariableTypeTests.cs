@@ -84,6 +84,17 @@ public class DeclaredVariableTypeTests
     }
 
     [Fact]
+    public void Assignment_target_shows_the_assigned_type()
+    {
+        var declared = Declared("Local ApiObject &q;\n&q = %Session.GetQuery();");
+
+        var assigned = Assert.Single(declared, d => d.NameSpan.Start.Line == 1);
+        Assert.Equal("&q", assigned.Name);
+        Assert.Equal("Query", assigned.Type.Name, ignoreCase: true);
+        Assert.Equal(RefinementKind.Assignment, assigned.Source!.Kind);
+    }
+
+    [Fact]
     public void Global_declaration_shows_the_narrowed_type()
     {
         var declared = Assert.Single(Declared("Global ApiObject &g;\nLocal ApiObject &ci = &g.GetCompIntfc(CompIntfc.A);"), d => d.Name == "&g");

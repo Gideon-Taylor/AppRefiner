@@ -3,8 +3,9 @@ using PeopleCodeTypeInfo.Types;
 namespace PeopleCodeParser.SelfHosted.Visitors.Models;
 
 /// <summary>
-/// The type a declared variable holds right after its declaration, kept on the declaration so a
-/// hover on the declared name can show it (the name itself isn't an expression node).
+/// The type a variable holds right after its declaration or an assignment to it, kept on that
+/// node so a hover on the declared name (not an expression node) or on the assignment's target
+/// (whose own stamp is the type before the assignment) can show it.
 /// </summary>
 /// <param name="Name">The declared variable name</param>
 /// <param name="NameSpan">Where the name appears in the declaration</param>

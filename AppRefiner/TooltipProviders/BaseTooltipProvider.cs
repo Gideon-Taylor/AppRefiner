@@ -137,10 +137,11 @@ namespace AppRefiner.TooltipProviders
         }
 
         /// <summary>
-        /// The declared variable whose name is at <paramref name="position"/> in a declaration
-        /// (Local, Global, Component, instance or parameter), with the type it holds right after
-        /// the declaration. A declared name isn't an expression node, so identifier-based
-        /// lookups miss it.
+        /// The variable whose name is at <paramref name="position"/> in a declaration (Local,
+        /// Global, Component, instance or parameter) or as an assignment's target, with the type it
+        /// holds right after that statement. A declared name isn't an expression node, and an
+        /// assignment target's own stamp is the type before the assignment, so identifier-based
+        /// lookups miss both.
         /// </summary>
         protected static DeclaredVariableType? DeclaredVariableAt(ProgramNode program, int position)
         {
