@@ -2,6 +2,7 @@ using System;
 using System.Runtime.InteropServices;
 using System.Windows.Forms;
 using AppRefiner.Dialogs;
+using PeopleCodeParser.SelfHosted.Annotations;
 using static AppRefiner.ScintillaEditor;
 
 namespace AppRefiner.Commands.BuiltIn
@@ -15,6 +16,8 @@ namespace AppRefiner.Commands.BuiltIn
         private const int AR_OBJECT_MEMBERS = 2512;
         private const int AR_SYSTEM_VARIABLE_SUGGEST = 2513;
         private const int AR_FUNCTION_SUGGEST = 2524;
+        private const int AR_DEFINITION_SUGGEST = 2525;
+        private const int AR_ANNOTATION_SUGGEST = 2526;
 
         [DllImport("user32.dll", CharSet = CharSet.Auto)]
         private static extern IntPtr SendMessage(IntPtr hWnd, int msg, IntPtr wParam, IntPtr lParam);
@@ -99,6 +102,8 @@ namespace AppRefiner.Commands.BuiltIn
                     AutoCompleteContext.SystemVariables => AR_SYSTEM_VARIABLE_SUGGEST,
                     AutoCompleteContext.FunctionCallTip => AR_FUNCTION_CALL_TIP,
                     AutoCompleteContext.FunctionNames => AR_FUNCTION_SUGGEST,
+                    AutoCompleteContext.DefinitionName => AR_DEFINITION_SUGGEST,
+                    AutoCompleteContext.AnnotationType => AR_ANNOTATION_SUGGEST,
                     _ => AR_VARIABLE_SUGGEST
                 };
 
@@ -127,6 +132,17 @@ namespace AppRefiner.Commands.BuiltIn
         private (AutoCompleteContext context, int triggerPosition, char triggerChar)? DetectAutocompleteContext(
             string text, int position)
         {
+            // Annotation types and definition names need the lexer (comment/string state), so
+            // check them before the character scan, which would see '.'/identifiers instead
+            if (position <= text.Length)
+            {
+                string textBeforeCursor = text[..position];
+                if (TypeAnnotationParser.TryGetPartialAnnotation(textBeforeCursor, out _, out _))
+                    return (AutoCompleteContext.AnnotationType, position, '\0');
+                if (AutoCompleteService.TryGetDefinitionReference(textBeforeCursor, out _, out _))
+                    return (AutoCompleteContext.DefinitionName, position, '\0');
+            }
+
             // Scan backward from cursor
             for (int i = position - 1; i >= 0; i--)
             {

@@ -3,6 +3,7 @@ using AppRefiner.LanguageExtensions;
 using AppRefiner.Refactors; // For ScopedRefactor, AddImport, CreateAutoComplete
 using AppRefiner.TooltipProviders; // For DllImport
 using PeopleCodeParser.SelfHosted;
+using PeopleCodeParser.SelfHosted.Annotations;
 using PeopleCodeParser.SelfHosted.ComponentInterfaces;
 using PeopleCodeParser.SelfHosted.Lexing;
 using PeopleCodeParser.SelfHosted.Nodes;
@@ -16,6 +17,7 @@ using PeopleCodeTypeInfo.Types;     // For TypeInfo and subclasses
 using PeopleCodeTypeInfo.Validation;
 using System.Runtime.InteropServices;
 using System.Text;
+using System.Text.RegularExpressions;
 using static AppRefiner.AppDesignerProcess;
 using static AppRefiner.ScintillaEditor;
 using static SqlParser.Ast.Statement;
@@ -174,7 +176,9 @@ namespace AppRefiner
             Variable = 3,
             ObjectMembers = 4,
             SystemVariables = 5,
-            FunctionNames = 6
+            FunctionNames = 6,
+            DefinitionName = 7,
+            AnnotationType = 8
         }
 
         // Constants related to Scintilla messages (can be kept private if only used here)
@@ -182,6 +186,7 @@ namespace AppRefiner
         private const int SCI_POSITIONFROMLINE = 2167;
         private const int SCI_GETCURRENTPOS = 2008;
         private const int SCI_SETSEL = 2160;
+        private const int SCI_AUTOCACTIVE = 2102;
         private const int AR_APP_PACKAGE_SUGGEST = 2500; // Keep for recursive call
 
         [DllImport("user32.dll", CharSet = CharSet.Auto)]
@@ -938,6 +943,219 @@ namespace AppRefiner
         }
 
         /// <summary>
+        /// Definition-name suggestions read the definition tables; with no connection nothing is shown.
+        /// </summary>
+        private const DataManagerRequirement DefinitionNameDatabaseRequirement = DataManagerRequirement.Required;
+
+        /// <summary>Rows shown in a definition-name popup; one more is fetched to detect truncation.</summary>
+        private const int DefinitionNameLimit = 500;
+
+        /// <summary>Text ending in &lt;keyword&gt;.&lt;ident&gt;, with at least one identifier character after the dot.</summary>
+        private static readonly Regex DefinitionReferenceTail =
+            new(@"([A-Za-z0-9_]+)\.([A-Za-z0-9_]+)$", RegexOptions.CultureInvariant);
+
+        /// <summary>Body of an unfinished block comment that is a type annotation (<c>/* as ...</c>).</summary>
+        private static readonly Regex AnnotationCommentBody =
+            new(@"^\s*as\s", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+
+        private static bool HasDatabaseConnection(ScintillaEditor editor) =>
+            editor.DataManager != null && editor.DataManager.IsConnected;
+
+        /// <summary>
+        /// Reads the document from its start up to <paramref name="position"/> (a UTF-8 byte offset).
+        /// The whole prefix is needed because a comment or string can span lines.
+        /// </summary>
+        private static string? ReadTextBeforePosition(ScintillaEditor editor, int position)
+        {
+            if (position <= 0) return null;
+            byte[]? bytes = ScintillaManager.ReadDocumentRange(editor, 0, position);
+            return bytes == null ? null : Encoding.UTF8.GetString(bytes);
+        }
+
+        /// <summary>
+        /// True when <paramref name="textBeforeCursor"/> ends in <c>&lt;keyword&gt;.&lt;ident&gt;</c> for a keyword
+        /// with a definition-name source (e.g. <c>Record.JOB</c>, <c>Panel.X</c>). The keyword must not
+        /// itself be a member (<c>&amp;rs.Record.A</c>, <c>%This.Page.A</c>) or part of a longer name, and
+        /// the cursor must not be in a string or comment — except an unfinished <c>/* as</c> annotation,
+        /// so <c>/* as CompIntfc.U</c> chains from the annotation popup to definition names.
+        /// </summary>
+        public static bool TryGetDefinitionReference(string textBeforeCursor, out string keyword, out string prefix)
+        {
+            keyword = "";
+            prefix = "";
+
+            var match = DefinitionReferenceTail.Match(textBeforeCursor);
+            if (!match.Success)
+                return false;
+
+            var keywordGroup = match.Groups[1];
+            if (IDataManager.DefinitionNameSource(keywordGroup.Value) == null)
+                return false;
+
+            if (keywordGroup.Index > 0)
+            {
+                char before = textBeforeCursor[keywordGroup.Index - 1];
+                // Identifier characters as the lexer defines them, plus member/variable/package sigils
+                if (char.IsLetterOrDigit(before) || before is '_' or '#' or '$' or '@' or '.' or '&' or '%' or ':')
+                    return false;
+            }
+
+            // The last token reaches the cursor; reject when it is a string or comment
+            var tokens = new PeopleCodeLexer(textBeforeCursor).TokenizeAll();
+            var last = tokens.LastOrDefault(t => t.Type != TokenType.EndOfFile);
+            if (last != null)
+            {
+                if (last.Type is TokenType.StringLiteral or TokenType.InterpStringStart or TokenType.InterpStringMid
+                    or TokenType.InterpStringEnd or TokenType.InterpStringUnterminated)
+                    return false;
+
+                if (last.Type.IsCommentType())
+                {
+                    bool unterminated = !(last.Text.Length >= 4 && last.Text.EndsWith("*/", StringComparison.Ordinal));
+                    bool annotation = last.Type == TokenType.BlockComment && unterminated &&
+                                      AnnotationCommentBody.IsMatch(last.Text[2..]);
+                    if (!annotation)
+                        return false;
+                }
+            }
+
+            keyword = keywordGroup.Value;
+            prefix = match.Groups[2].Value;
+            return true;
+        }
+
+        /// <summary>
+        /// Shows definition names (records, fields, pages, ...) starting with the identifier typed
+        /// after a definition-reference keyword. The query runs off the UI thread; the popup is
+        /// shown back on it. While a complete (untruncated) list for the same keyword is still open,
+        /// a longer prefix is left to Scintilla's own filtering instead of querying again.
+        /// </summary>
+        public void ShowDefinitionNameSuggestions(ScintillaEditor? editor, int position)
+        {
+            if (editor == null || !editor.IsValid()) return;
+
+            if (DefinitionNameDatabaseRequirement == DataManagerRequirement.Required && !HasDatabaseConnection(editor))
+            {
+                Debug.Log("No database connection; skipping definition name suggestions.");
+                return;
+            }
+
+            try
+            {
+                string? textBeforeCursor = ReadTextBeforePosition(editor, position);
+                if (textBeforeCursor == null) return;
+
+                if (!TryGetDefinitionReference(textBeforeCursor, out string keyword, out string prefix))
+                    return;
+
+                // Detection limits the prefix to [A-Za-z0-9_], so escaping \ % _ is sufficient
+                // (SQL Server's '[' LIKE wildcard cannot occur)
+                string escaped = prefix.ToUpperInvariant()
+                    .Replace("\\", "\\\\")
+                    .Replace("%", "\\%")
+                    .Replace("_", "\\_");
+
+                var last = editor.LastDefinitionSuggestion;
+                if (last.HasValue &&
+                    string.Equals(last.Value.Keyword, keyword, StringComparison.OrdinalIgnoreCase) &&
+                    escaped.StartsWith(last.Value.Prefix, StringComparison.Ordinal) &&
+                    !last.Value.Truncated &&
+                    editor.ActiveAutoCompleteContext == AutoCompleteContext.DefinitionName &&
+                    editor.SendMessage(SCI_AUTOCACTIVE, 0, 0) != IntPtr.Zero)
+                {
+                    Debug.Log($"Definition names for {keyword}.{prefix} already listed; Scintilla filters the open list");
+                    return;
+                }
+
+                var dataManager = editor.DataManager!;
+                int request = ++editor.DefinitionSuggestionRequest;
+
+                Task.Run(() =>
+                {
+                    List<string> names;
+                    try
+                    {
+                        names = dataManager.GetDefinitionNames(keyword, escaped, DefinitionNameLimit + 1);
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.LogException(ex, $"Error querying definition names for {keyword}.{prefix}");
+                        return;
+                    }
+
+                    mainForm.BeginInvoke((Action)(() =>
+                    {
+                        try
+                        {
+                            // A newer keystroke started its own query; drop this stale result
+                            if (request != editor.DefinitionSuggestionRequest || !editor.IsValid()) return;
+
+                            if (names.Count == 0)
+                            {
+                                Debug.Log($"No definition names for {keyword}.{prefix}");
+                                return;
+                            }
+
+                            bool truncated = names.Count > DefinitionNameLimit;
+                            var suggestions = truncated ? names.GetRange(0, DefinitionNameLimit) : names;
+
+                            Debug.Log($"Showing {suggestions.Count} definition names for {keyword}.{prefix} (truncated: {truncated})");
+                            if (ScintillaManager.ShowAutoComplete(editor, AutoCompleteContext.DefinitionName, position, suggestions))
+                            {
+                                editor.LastDefinitionSuggestion = (keyword, escaped, truncated);
+                            }
+                            else
+                            {
+                                Debug.Log("Failed to show definition name suggestions.");
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            Debug.LogException(ex, "Error showing definition name suggestions");
+                        }
+                    }));
+                });
+            }
+            catch (Exception ex)
+            {
+                Debug.LogException(ex, "Error getting definition name suggestions");
+            }
+        }
+
+        /// <summary>
+        /// Shows the annotation types that fit the declaration being annotated when the cursor is
+        /// in an unfinished <c>/* as</c> comment. Keyword entries such as <c>CompIntfc.</c> chain
+        /// into definition-name suggestions once a name character is typed.
+        /// </summary>
+        public void ShowAnnotationTypeSuggestions(ScintillaEditor? editor, int position)
+        {
+            if (editor == null || !editor.IsValid()) return;
+
+            try
+            {
+                string? textBeforeCursor = ReadTextBeforePosition(editor, position);
+                if (textBeforeCursor == null) return;
+
+                if (!TypeAnnotationParser.TryGetPartialAnnotation(textBeforeCursor, out var category, out _))
+                    return;
+
+                var suggestions = TypeAnnotationParser.SuggestedTypes(category).ToList();
+                if (suggestions.Count == 0) return;
+
+                Debug.Log($"Showing {suggestions.Count} annotation types (category: {category?.ToString() ?? "any"})");
+                // customOrder keeps the parser's display order (subtypes, then keyword prefixes)
+                if (!ScintillaManager.ShowAutoComplete(editor, AutoCompleteContext.AnnotationType, position, suggestions, customOrder: true))
+                {
+                    Debug.Log("Failed to show annotation type suggestions.");
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.LogException(ex, "Error showing annotation type suggestions");
+            }
+        }
+
+        /// <summary>
         /// Converts a PropertyInfo to TypeInfo for type compatibility checking.
         /// </summary>
         private TypeInfo ConvertPropertyToTypeInfo(PeopleCodeTypeInfo.Functions.PropertyInfo prop)
@@ -1495,6 +1713,12 @@ namespace AppRefiner
                     return HandleSystemVariableListSelection(editor, selection);
                 case UserListType.FunctionNames:
                     return HandleFunctionNamesSelection(editor, selection);
+                case UserListType.DefinitionName:
+                case UserListType.AnnotationType:
+                    // Entries are the exact text to insert; the typed prefix was already
+                    // removed by the SCN_AUTOCSELECTION handler
+                    ScintillaManager.InsertTextAtCursor(editor, selection);
+                    return null;
                 default:
                     Debug.Log($"Unknown list type: {listType}");
                     return null;

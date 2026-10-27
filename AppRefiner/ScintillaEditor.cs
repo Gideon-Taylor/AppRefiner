@@ -347,13 +347,27 @@ namespace AppRefiner
             ObjectMembers = 3,
             SystemVariables = 4,
             FunctionCallTip = 5,
-            FunctionNames = 6
+            FunctionNames = 6,
+            DefinitionName = 7,
+            AnnotationType = 8
         }
 
         /// <summary>
         /// Tracks the current autocomplete context for SCN_AUTOCSELECTION routing
         /// </summary>
         public AutoCompleteContext ActiveAutoCompleteContext { get; set; } = AutoCompleteContext.None;
+
+        /// <summary>
+        /// Keyword, escaped prefix and truncation flag of the last definition-name popup shown,
+        /// so a longer prefix can reuse the open list instead of querying again. UI thread only.
+        /// </summary>
+        public (string Keyword, string Prefix, bool Truncated)? LastDefinitionSuggestion { get; set; }
+
+        /// <summary>
+        /// Incremented per definition-name query; a result is shown only if no newer query
+        /// started while it ran. UI thread only.
+        /// </summary>
+        public int DefinitionSuggestionRequest { get; set; }
 
         /// <summary>
         /// Stores the search-related indicators created by the "Mark All" feature

@@ -2214,8 +2214,10 @@ namespace AppRefiner
                 return 0;
             }
 
-            // FunctionNames has no trigger character — the typed prefix is the identifier itself
-            if (context == AutoCompleteContext.FunctionNames)
+            // FunctionNames has no trigger character — the typed prefix is the identifier itself.
+            // AnnotationType likewise: the partial type after "/* as " is identifier characters
+            // only, so counting back stops at the whitespace after "as".
+            if (context == AutoCompleteContext.FunctionNames || context == AutoCompleteContext.AnnotationType)
             {
                 return CountIdentifierBytesBeforePosition(editor, position);
             }
@@ -2226,6 +2228,7 @@ namespace AppRefiner
                 AutoCompleteContext.AppPackage => ':',
                 AutoCompleteContext.Variable => '&',
                 AutoCompleteContext.ObjectMembers => '.',
+                AutoCompleteContext.DefinitionName => '.',
                 AutoCompleteContext.SystemVariables => '%',
                 _ => '\0'
             };
@@ -2352,6 +2355,8 @@ namespace AppRefiner
                     AutoCompleteContext.AppPackage => ":\t",      // ':' drills down into packages
                     AutoCompleteContext.SystemVariables => "\t;",  // No chaining for system variables
                     AutoCompleteContext.FunctionNames => "(\t;",   // '(' chains to the function call tip
+                    AutoCompleteContext.DefinitionName => "\t",
+                    AutoCompleteContext.AnnotationType => "\t",    // No '.': "CompIntfc." must insert whole
                     _ => "\t"
                 };
                 if (context is AutoCompleteContext.AppPackage && editor.HasLexilla == false)

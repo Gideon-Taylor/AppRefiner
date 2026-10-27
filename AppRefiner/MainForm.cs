@@ -142,6 +142,8 @@ namespace AppRefiner
         private const int AR_SUBCLASS_ACK = 2522; // Subclass request result (wParam=PACK(scintillaHwnd, SubclassAckFlags), lParam=parentHwnd)
         private const int AR_EDITOR_DESTROYED = 2523; // Subclassed editor received WM_NCDESTROY (posted; wParam=PACK(hwnd, 0)) - evicts tracked editor state
         private const int AR_FUNCTION_SUGGEST = 2524; // Function name suggestions (Ctrl+Space on a plain identifier; C#-only, no hook producer)
+        private const int AR_DEFINITION_SUGGEST = 2525; // Definition name suggestions after <keyword>.<ident> (wParam=position, lParam=PACK(hwnd, 0))
+        private const int AR_ANNOTATION_SUGGEST = 2526; // Annotation type suggestions inside "/* as " (wParam=position, lParam=PACK(hwnd, 0))
         private const int AR_SUBCLASS_RESULTS_LIST = 1007; // Message to subclass Results list view
         private const int AR_SET_OPEN_TARGET = 1008; // Message to set open target for Results list interception
 
@@ -2455,6 +2457,8 @@ namespace AppRefiner
                                         AutoCompleteContext.ObjectMembers => UserListType.ObjectMembers,
                                         AutoCompleteContext.SystemVariables => UserListType.SystemVariables,
                                         AutoCompleteContext.FunctionNames => UserListType.FunctionNames,
+                                        AutoCompleteContext.DefinitionName => UserListType.DefinitionName,
+                                        AutoCompleteContext.AnnotationType => UserListType.AnnotationType,
                                         _ => UserListType.QuickFix  // Fallback (should never happen)
                                     };
 
@@ -3100,6 +3104,40 @@ namespace AppRefiner
                 catch (Exception ex)
                 {
                     Debug.LogException(ex, "Error processing function name suggestion");
+                }
+            }
+            else if (m.Msg == AR_DEFINITION_SUGGEST)
+            {
+                var editor = ResolveEditorFromHwnd(UnpackHwnd(m.LParam));
+                if (editor == null || autoCompleteService == null) return;
+
+                // Always on (no AutoSuggestSettings flag); the service gates on the database
+                int position = m.WParam.ToInt32();
+
+                try
+                {
+                    autoCompleteService.ShowDefinitionNameSuggestions(editor, position);
+                }
+                catch (Exception ex)
+                {
+                    Debug.LogException(ex, "Error processing definition name suggestion");
+                }
+            }
+            else if (m.Msg == AR_ANNOTATION_SUGGEST)
+            {
+                var editor = ResolveEditorFromHwnd(UnpackHwnd(m.LParam));
+                if (editor == null || autoCompleteService == null) return;
+
+                // Always on (no AutoSuggestSettings flag)
+                int position = m.WParam.ToInt32();
+
+                try
+                {
+                    autoCompleteService.ShowAnnotationTypeSuggestions(editor, position);
+                }
+                catch (Exception ex)
+                {
+                    Debug.LogException(ex, "Error processing annotation type suggestion");
                 }
             }
             else if (m.Msg == AR_SCINTILLA_ALREADY_LOADED)
