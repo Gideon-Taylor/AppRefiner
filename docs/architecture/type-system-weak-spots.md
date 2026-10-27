@@ -132,18 +132,18 @@ Left open by phases 3–4 (spec `docs/superpowers/specs/2026-10-25-apiobject-typ
   are evicted when the top-level refinement finishes.
 - **Callers don't type parameters.** Same-program callers aren't used to infer a parameter's
   type (spec §3); an unannotated parameter is typed only by narrowing on its own uses.
-- **Multi-name instance declarations share one `PropertyInfo`.** `instance ApiObject &a, &b;`
-  extracts one `PropertyInfo` for both names, so refining one from its assignments refines both.
-- **A library's own `Declare` sees the unrefined copy.** A function library that `Declare`s
-  one of its own functions gets that function's extracted (unrefined) signature through the
-  declaration, not the refined one.
-- **Global/Component redeclarations narrow per declaration.** A Global or Component variable
-  declared again inside two method bodies is narrowed separately for each declaration, so the
-  two can settle on different types although they are one variable at run time.
 
 Fixed in 2026-10:
 - A parenthesized `(Null)` return or member assignment is skipped like a bare `Null`.
 - An annotation naming an unknown type is warned about but no longer turns narrowing off.
+- Each name in a multi-name instance declaration (`instance ApiObject &a, &b;`) gets its own
+  `PropertyInfo`, so each is refined from its own assignments; the declaration's annotation
+  (`instance ApiObject /* as Folder */ &a, &b;`) types every name.
+
+Not cases, so no longer listed: a function library can't `Declare` its own function (the
+declaration takes the name, so the definition then fails), and Global/Component variables are
+declared only at the top of a program (after the class header in a class), never inside two
+method bodies.
 
 Fixed in 2026-10, from App Designer probes:
 - `DataCollection.Item`, `ItemByKeys`, `CurrentItem`, `GetEffectiveItem` and `InsertItem` return

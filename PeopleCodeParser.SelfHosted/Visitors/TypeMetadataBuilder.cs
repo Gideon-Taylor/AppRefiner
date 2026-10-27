@@ -226,11 +226,12 @@ public class TypeMetadataBuilder : AstVisitorBase
         // Instance variables are only legal in the private section — always Private.
         foreach(var instanceVar in node.InstanceVariables)
         {
-            var propertyInfo = BuildPropertyInfo(instanceVar);
-            propertyInfo.Visibility = MemberVisibility.Private;
-            // Handle all variable names in multi-variable declarations
+            // One PropertyInfo per name in a multi-variable declaration: each is refined from
+            // its own assignments. The declaration's annotation applies to every name.
             foreach (var nameInfo in instanceVar.NameInfos)
             {
+                var propertyInfo = BuildPropertyInfo(instanceVar);
+                propertyInfo.Visibility = MemberVisibility.Private;
                 _instanceVariables[nameInfo.Name] = propertyInfo;
             }
         }

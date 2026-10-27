@@ -237,6 +237,51 @@ public class CrossProgramReturnTests
     }
 
     [Fact]
+    public void Names_in_one_instance_declaration_refine_separately()
+    {
+        var resolver = new SourceTypeMetadataResolver();
+        resolver.Add("PKG:Svc",
+            "class Svc\n" +
+            "   method Svc();\n" +
+            "private\n" +
+            "   instance ApiObject &sess, &q;\n" +
+            "end-class;\n" +
+            "\n" +
+            "method Svc\n" +
+            "   &sess = %Session;\n" +
+            "   &q = %Session.GetQuery();\n" +
+            "end-method;\n");
+
+        var metadata = resolver.GetTypeMetadata("PKG:Svc")!;
+
+        Assert.Equal(0, resolver.ParseErrorCount("PKG:Svc"));
+        Assert.Equal(PeopleCodeType.Session, metadata.InstanceVariables["&sess"].RefinedType!.Value.Type);
+        Assert.Equal(PeopleCodeType.Query, metadata.InstanceVariables["&q"].RefinedType!.Value.Type);
+    }
+
+    [Fact]
+    public void Annotation_on_multi_name_instance_declaration_types_every_name()
+    {
+        var resolver = new SourceTypeMetadataResolver();
+        resolver.Add("PKG:Svc",
+            "class Svc\n" +
+            "   method Svc();\n" +
+            "private\n" +
+            "   instance ApiObject /* as Folder */ &a, &b;\n" +
+            "end-class;\n" +
+            "\n" +
+            "method Svc\n" +
+            "end-method;\n");
+
+        var metadata = resolver.GetTypeMetadata("PKG:Svc")!;
+
+        Assert.Equal(0, resolver.ParseErrorCount("PKG:Svc"));
+        Assert.Equal(PeopleCodeType.Folder, metadata.InstanceVariables["&a"].RefinedType!.Value.Type);
+        Assert.Equal(PeopleCodeType.Folder, metadata.InstanceVariables["&b"].RefinedType!.Value.Type);
+        Assert.NotSame(metadata.InstanceVariables["&a"], metadata.InstanceVariables["&b"]);
+    }
+
+    [Fact]
     public void Function_returning_null_on_one_path_still_refines()
     {
         var resolver = new SourceTypeMetadataResolver();
