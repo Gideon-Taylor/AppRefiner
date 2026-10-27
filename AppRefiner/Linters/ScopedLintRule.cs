@@ -24,6 +24,13 @@ namespace AppRefiner.Linters
         public virtual DataManagerRequirement DatabaseRequirement => DataManagerRequirement.NotRequired;
         public IDataManager? DataManager { get; set; }
 
+        /// <summary>
+        /// When true, LinterManager runs type inference on the editor's program before this
+        /// linter visits it, so node.GetInferredType() is populated. Linting outside an editor
+        /// (whole projects) has no inference.
+        /// </summary>
+        public virtual bool RequiresTypeInference => false;
+
         // The suppression processor shared across all linters
         public LinterSuppressionProcessor? SuppressionProcessor { get; set; }
 

@@ -185,6 +185,8 @@ namespace AppRefiner
                     return;
                 }
 
+                RunTypeInferenceIfRequired(program, activeEditor, activeLinters);
+
                 // Create suppression processor
                 var suppressionProcessor = new LinterSuppressionProcessor();
 
@@ -211,6 +213,25 @@ namespace AppRefiner
             catch (Exception ex)
             {
                 ShowMessageBox(activeEditor, $"Error during linting: {ex.Message}", "Linting Error", MessageBoxButtons.OK);
+            }
+        }
+
+        /// <summary>
+        /// Types the program for linters that read inferred types, the same way stylers do.
+        /// </summary>
+        private void RunTypeInferenceIfRequired(PeopleCodeParser.SelfHosted.Nodes.ProgramNode program,
+            ScintillaEditor editor, IEnumerable<BaseLintRule> linters)
+        {
+            if (!linters.Any(l => l.RequiresTypeInference))
+                return;
+
+            try
+            {
+                Services.TypeInferenceRunner.Run(program, editor, editor.AppDesignerProcess?.TypeResolver, mainForm.TypeExtensionManager);
+            }
+            catch (Exception ex)
+            {
+                Debug.LogException(ex, "LinterManager: Error during type inference");
             }
         }
 
@@ -250,6 +271,8 @@ namespace AppRefiner
                     ShowMessageBox(activeEditor, "Failed to parse PeopleCode. Please check for syntax errors.", "Parse Error", MessageBoxButtons.OK);
                     return;
                 }
+
+                RunTypeInferenceIfRequired(program, activeEditor, new[] { linter });
 
                 // Create suppression processor
                 var suppressionProcessor = new LinterSuppressionProcessor();
