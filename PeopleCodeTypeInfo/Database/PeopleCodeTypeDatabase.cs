@@ -167,6 +167,21 @@ public static class PeopleCodeTypeDatabase
         return obj?.IsApiObjectType == true;
     }
 
+    private static readonly Lazy<IReadOnlyList<string>> _apiObjectSubtypeNames = new(() =>
+        Enum.GetValues<PeopleCodeType>()
+            .Select(t => t.GetTypeName())
+            .Where(name => IsApiObjectSubtype(name) && BuiltinTypeExtensions.FromString(name) != PeopleCodeType.Unknown)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(name => name, StringComparer.OrdinalIgnoreCase)
+            .ToList());
+
+    /// <summary>
+    /// The @ApiObject subtype names a type annotation accepts as a single-part target, sorted
+    /// case-insensitively. The type database can't enumerate its objects, so this walks the
+    /// <see cref="PeopleCodeType"/> enum instead.
+    /// </summary>
+    public static IReadOnlyList<string> GetApiObjectSubtypeNames() => _apiObjectSubtypeNames.Value;
+
     /// <summary>
     /// True when <paramref name="typeName"/> may appear in Local/Global/Component declarations.
     /// API subtypes (Session, ComponentInterface, …) return false; use ApiObject instead.
