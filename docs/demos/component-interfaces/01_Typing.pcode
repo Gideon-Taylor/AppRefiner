@@ -1,0 +1,35 @@
+/* Component interface typing. Paste into any non-class PeopleCode event. Nothing here should report. */
+Function ProcessRole(&role As ApiObject /* as CompIntfc.USER_PROFILE.Roles */)
+   Local string &roleName = &role.RoleName; /* OK: a Roles item property, typed string */
+   Local ApiObject &controls = &role.RouteControls; /* OK: hover &controls shows ApiObject (CompIntfc.USER_PROFILE.Roles.RouteControls[]) */
+   Local ApiObject &control = &controls.Item(1); /* OK: hover &control shows ApiObject (CompIntfc.USER_PROFILE.Roles.RouteControls) */
+   Local string &profile = &control.RouteControlProfile; /* OK: two collections down */
+End-Function;
+
+Function CountRoles(&roles As ApiObject /* as CompIntfc.USER_PROFILE.Roles[] */) Returns number
+   Return &roles.Count; /* OK: a DataCollection member */
+End-Function;
+
+Local ApiObject &ci = %Session.GetCompIntfc(CompIntfc.USER_PROFILE); /* OK: hover &ci shows ApiObject (CompIntfc.USER_PROFILE) */
+Local ApiObject &roles, &role, &email;
+Local string &descr, &address;
+Local date &lockDate;
+Local number &count, &i;
+
+&ci.UserID = %OperatorId; /* OK: a string get key */
+If &ci.Get() Then
+   &descr = &ci.UserDescription; /* OK: string */
+   &lockDate = &ci.AccountLockDate; /* OK: date */
+
+   &roles = &ci.Roles; /* OK: a Roles collection */
+   For &i = 1 To &roles.Count /* OK: hover &roles shows ApiObject (CompIntfc.USER_PROFILE.Roles[]) */
+      &role = &roles.Item(&i); /* OK: a Roles item */
+      ProcessRole(&role); /* OK: hover &role shows ApiObject (CompIntfc.USER_PROFILE.Roles); it matches the parameter's annotation */
+   End-For;
+   &count = CountRoles(&ci.Roles); /* OK: the collection matches the [] annotation */
+
+   Local ApiObject /* as CompIntfc.USER_PROFILE.EmailAddresses[] */ &annotated; /* OK: a collection annotation on a local */
+   &annotated = &ci.EmailAddresses; /* OK */
+   &email = &annotated.Item(1); /* OK: an EmailAddresses item */
+   &address = &email.EmailAddress; /* OK: string */
+End-If;

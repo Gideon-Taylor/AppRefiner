@@ -1,0 +1,18 @@
+/* Custom methods: every function in USER_PROFILE's Methods PeopleCode is a method, except one
+   declared NoExport. Paste into any non-class PeopleCode event. */
+Local ApiObject &ci = %Session.GetCompIntfc(CompIntfc.USER_PROFILE);
+Local boolean &ok;
+Local any &value;
+
+&ci.UserID = %OperatorId;
+If &ci.Get() Then
+   /* Type "(" after SetPassword for the "CI method:" signature tooltip; F12 on SetPassword opens
+      USER_PROFILE's Methods PeopleCode at the function */
+   &ok = &ci.SetPassword("NewPassword1"); /* OK: a custom method */
+   &value = &ci.GetPropertyByName("UserID"); /* OK: on every CI, never gated */
+   &ok = &ci.Save(); /* OK: an enabled standard method */
+
+   /* Cache refresh check (README): add ZZ_AR_Ping and ZZ_AR_Helper to the Methods program */
+   &ok = &ci.ZZ_AR_Ping(); /* ERROR: not a method; OK once ZZ_AR_Ping is added */
+   &ci.ZZ_AR_Helper(); /* ERROR: not a method; stays an error, since ZZ_AR_Helper is NoExport */
+End-If;

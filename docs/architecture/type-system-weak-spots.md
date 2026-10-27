@@ -155,12 +155,6 @@ Left open by phases 3–4 (spec `docs/superpowers/specs/2026-10-25-apiobject-typ
 - **Global/Component redeclarations narrow per declaration.** A Global or Component variable
   declared again inside two method bodies is narrowed separately for each declaration, so the
   two can settle on different types although they are one variable at run time.
-- **A CI's own members are unchecked and untyped.** `&ci.Roles` is a DataCollection at run time
-  because Roles is a scroll in the CI's definition, but nothing reads that definition yet, so
-  `&ci.Roles` is untyped and the variable it's assigned to narrows from its own uses. Field types
-  on a CI or a DataItem are untyped too. A CI's definition can also add methods of its own, so no
-  method on a ComponentInterface is reported as unknown, and narrowing doesn't flag an unknown
-  method on a variable settled as one. All of this waits on reading CI definitions (spec §16).
 
 Fixed in 2026-10, from App Designer probes:
 - `DataCollection.Item`, `ItemByKeys`, `CurrentItem`, `GetEffectiveItem` and `InsertItem` return
@@ -182,3 +176,33 @@ Fixed in 2026-10, from App Designer probes:
 
 A call to the class's own method without `%This` (`Get()` rather than `%This.Get()`) isn't
 valid PeopleCode, so treating it as an undeclared function call is correct, not a limit.
+
+## 9. Limits of component interface typing
+
+Left open by the component interface typing work (spec
+`docs/superpowers/specs/2026-10-26-component-interface-typing-design.md`):
+
+- **An unnamed CI's own members are unchecked and untyped.** A CI named by `CompIntfc.X` (in
+  `GetCompIntfc()` or a `/* as CompIntfc.X */` annotation) is typed and checked from its
+  definition when the database can supply it (see `docs/demos/component-interfaces`). Without a
+  name, or without the definition (no database, a failed lookup), `&ci.Roles` is untyped and the
+  variable it's assigned to narrows from its own uses, field types on the CI and its items are
+  untyped, and no method on a ComponentInterface is reported as unknown, since a CI can add
+  methods of its own. Narrowing settles the API type but never the CI name. Still untyped:
+  - `GetCompIntfc(&name)` and `GetCompIntfc("USER_PROFILE")`: only a `CompIntfc.X` reference
+    names the CI; annotate the variable to type it;
+  - what `Find()` returns: a plain DataCollection, not a collection of the CI's find results.
+- **An annotation that conflicts with its declaration's own initializer isn't reported.**
+  `Local ApiObject /* as CompIntfc.USER_PROFILE.Roles */ &r = &ci.EmailAddresses.Item(1);` gives no
+  warning; only a later assignment is compared with the annotation. (An annotation naming a CI
+  that doesn't exist, or a collection path the CI doesn't have, is a warning.)
+- **Item properties also accept the ComponentInterface type's own properties.** `typeinfo.dat`'s
+  DataItem declares only `ItemNum`, so a property on a known item is accepted when it's the
+  collection's, DataItem's or one of the builtin ComponentInterface type's (`PropertyInfoCollection`,
+  `InteractiveMode`, …). That lets a few names through on items that may not exist there.
+- **A failed lookup is retried after a short pause.** When the database throws, the CI is
+  unchecked (Unknown) and not queried again for `ITypeMetadataResolver.ComponentInterfaceFailureRetryInterval`
+  (10 s), so a database that recovers is noticed only on the next lookup after that.
+- **A very large CI is unchecked through the SQL proxy.** The proxy's items query is capped at
+  10000 rows; a CI with that many items is treated as a failed lookup rather than checked
+  against a possibly truncated definition. The Oracle and SQL Server managers aren't capped.

@@ -1,0 +1,26 @@
+/* One error per ERROR line once USER_PROFILE's definition is loaded. Paste into any non-class
+   PeopleCode event, but don't save: App Designer itself rejects the CompIntfc.ZZ_NO_SUCH_CI line. */
+Local ApiObject &ci = %Session.GetCompIntfc(CompIntfc.USER_PROFILE);
+Local ApiObject &role = &ci.Roles.Item(1);
+Local ApiObject &control = &role.RouteControls.Item(1);
+Local any &x;
+
+&x = &ci.UserDescr; /* ERROR: not a property of CompIntfc.USER_PROFILE */
+&x = &ci.Rolez; /* ERROR: a misspelled collection is reported the same way */
+&ci.Bogus(); /* ERROR: not a method of CompIntfc.USER_PROFILE */
+&x = &role.Bogus; /* ERROR: not a property of CompIntfc.USER_PROFILE.Roles */
+&x = &control.Bogus; /* ERROR: not a property of CompIntfc.USER_PROFILE.Roles.RouteControls */
+&ci.WorklistEntriesCount = 1; /* ERROR: read-only on CompIntfc.USER_PROFILE */
+&role.Dynamic = "Y"; /* ERROR: read-only on CompIntfc.USER_PROFILE.Roles */
+&ci.AccountLockDate = "2026-01-01"; /* ERROR: a string into a date property */
+Local ApiObject &found = &ci.Find(); /* OK: ERROR once Find is cleared on USER_PROFILE (see README) */
+Local ApiObject &missing = %Session.GetCompIntfc(CompIntfc.ZZ_NO_SUCH_CI); /* ERROR: component interface doesn't exist */
+
+/* An annotation conflict is a warning, not an error */
+Local ApiObject /* as CompIntfc.USER_PROFILE.Roles */ &wrongItem;
+&wrongItem = &ci.EmailAddresses.Item(1); /* WARNING: annotated as a Roles item but assigned an EmailAddresses item */
+
+/* So is an annotation naming a CI or collection that doesn't exist */
+Local ApiObject /* as CompIntfc.ZZ_NO_SUCH_CI */ &noCi; /* WARNING: component interface doesn't exist */
+Local ApiObject /* as CompIntfc.USER_PROFILE.Rolez[] */ &noRoles; /* WARNING: not a collection of CompIntfc.USER_PROFILE */
+Local ApiObject /* as CompIntfc.USER_PROFILE.Roles.Bogus */ &noChild; /* WARNING: not a collection of CompIntfc.USER_PROFILE.Roles */
