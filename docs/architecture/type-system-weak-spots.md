@@ -18,18 +18,15 @@ value), `TypeInferenceVisitor.TryRefineVariableFromExpression` decides that expl
 
 ## 2. Assignability logic lives in three places
 
-- `TypeInfo.IsAssignableFrom` overrides (`PeopleCodeTypeInfo/Types/PeopleCodeType.cs`)
-- `TypeCheckerVisitor.AreTypesCompatible`
-- `FunctionCallValidator.MatchSingle` / `MatchUnion` / `Accepts` (polymorphic-resolve block
-  duplicated three times)
-
-`AppClassTypeInfo.IsAssignableFrom` ignores inheritance, so each caller bolts on its own
-`IsAppClassCompatible` check.
-
-There is also a fourth copy: the union branch of `TryMatchOnePrefix` (autocomplete's
-`GetAllowedNextTypes`) re-implements union matching. The field-name rule (`*` prefix, 2026-10)
-had to be added to all four sites; it lives in one helper (`MatchFieldNameArgument`), which is
-the pattern a consolidation should follow.
+**Fixed (2026-10):** `TypeInfo.IsAssignableFrom` is the one answer to "does this value fit this
+type". `AppClassTypeInfo.IsAssignableFrom` follows the value's inheritance chain (base classes
+and interfaces) and applies the bare-name rule (§3), so inheritance also holds inside arrays
+(`array of PKG:Base` accepts `array of PKG:Derived`). In `FunctionCallValidator`, one parameter
+type is matched by `Fits` and resolved by `ExpectedType` (polymorphic types, app classes,
+arrays); `MatchSingle`, `MatchUnion`, `Accepts` and autocomplete's `TryMatchOnePrefix` all use
+them, so autocomplete's union matching now knows about inheritance too.
+`TypeCheckerVisitor.AreTypesCompatible` adds only what's specific to assignments
+(integer/number both ways, a field's data type).
 
 ## 3. TypeMetadataBuilder doesn't resolve imports
 

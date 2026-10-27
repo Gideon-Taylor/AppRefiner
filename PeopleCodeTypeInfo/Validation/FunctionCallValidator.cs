@@ -431,70 +431,10 @@ public class FunctionCallValidator
                     return PrefixMatchResult.Completed;
                 }
 
-                foreach (var t in union.AllowedTypes)
+                if (union.AllowedTypes.Any(t => Fits(ctx, t, arg)))
                 {
-                    if (t.MustBeFieldName)
-                    {
-                        if (MatchFieldNameArgument(t, arg) == FieldNameMatch.Accepted)
-                        {
-                            consumed = 1;
-                            return PrefixMatchResult.Completed;
-                        }
-                        continue;
-                    }
-
-                    // Handle reference types
-                    if (t.IsReference)
-                    {
-                        if (arg is ReferenceTypeInfo refType)
-                        {
-                            // Use IsAssignableFrom to support interchangeability (e.g., @RECORD/@SCROLL, @PAGE/@PANEL)
-                            var expectedRefType = new ReferenceTypeInfo(t.Type, "", "");
-                            if (expectedRefType.IsAssignableFrom(refType))
-                            {
-                                consumed = 1;
-                                return PrefixMatchResult.Completed;
-                            }
-                        }
-                        continue;
-                    }
-
-                    // Resolve polymorphic types if needed
-                    TypeInfo expectedTypeInfo;
-                    if (t.Type.IsPolymorphic())
-                    {
-                        var polymorphicTypeInfo = TypeInfo.FromPeopleCodeType(t.Type);
-                        if (polymorphicTypeInfo is PolymorphicTypeInfo polymorphic)
-                        {
-                            try
-                            {
-                                expectedTypeInfo = polymorphic.Resolve(ctx.ObjectType, ctx.Arguments);
-                            }
-                            catch (InvalidOperationException)
-                            {
-                                // Can't resolve without proper context - fall back to Any
-                                expectedTypeInfo = AnyTypeInfo.Instance;
-                            }
-                        }
-                        else
-                        {
-                            expectedTypeInfo = AnyTypeInfo.Instance;
-                        }
-                    }
-                    else
-                    {
-                        expectedTypeInfo = t.IsAppClass ? new AppClassTypeInfo(t.AppClassPath!) : TypeInfo.FromPeopleCodeType(t.Type);
-                    }
-
-                    if (t.IsArray)
-                    {
-                        expectedTypeInfo = new ArrayTypeInfo(t.ArrayDimensionality, expectedTypeInfo);
-                    }
-                    if (expectedTypeInfo.IsAssignableFrom(arg))
-                    {
-                        consumed = 1;
-                        return PrefixMatchResult.Completed;
-                    }
+                    consumed = 1;
+                    return PrefixMatchResult.Completed;
                 }
                 return PrefixMatchResult.TypeMismatch;
             }
@@ -1056,51 +996,7 @@ public class FunctionCallValidator
             return false;
         }
 
-        // Resolve polymorphic parameter types if needed
-        TypeInfo expectedTypeInfo;
-        if (expected.Type.IsPolymorphic())
-        {
-            var polymorphicTypeInfo = TypeInfo.FromPeopleCodeType(expected.Type);
-            if (polymorphicTypeInfo is PolymorphicTypeInfo polymorphic)
-            {
-                try
-                {
-                    expectedTypeInfo = polymorphic.Resolve(ctx.ObjectType, ctx.Arguments);
-                }
-                catch (InvalidOperationException)
-                {
-                    // Can't resolve without proper context - fall back to Any
-                    expectedTypeInfo = AnyTypeInfo.Instance;
-                }
-            }
-            else
-            {
-                // Should not happen, but handle gracefully
-                expectedTypeInfo = AnyTypeInfo.Instance;
-            }
-        }
-        else
-        {
-            expectedTypeInfo = expected.IsAppClass
-                ? new AppClassTypeInfo(expected.AppClassPath!)
-                : TypeInfo.FromPeopleCodeType(expected.Type);
-        }
-
-        if (expected.IsArray)
-        {
-            expectedTypeInfo = new ArrayTypeInfo(expected.ArrayDimensionality, expectedTypeInfo);
-        }
-
-        // Check AppClass inheritance if both are AppClass types
-        if (expectedTypeInfo is AppClassTypeInfo expectedAppClass && arg is AppClassTypeInfo argAppClass)
-        {
-            if (IsAppClassCompatible(expectedAppClass, argAppClass))
-            {
-                ctx.RecordMapping(argIndex, single);
-                consumed = 1;
-                return true;
-            }
-        }
+        var expectedTypeInfo = ExpectedType(ctx, expected);
 
         // Special case: implicit narrowing from 'any' or 'object' to AppClass
         // This is technically valid (works at runtime) but risky - issue warning
@@ -1172,86 +1068,13 @@ public class FunctionCallValidator
                 continue; // Skip this alternative
             }
 
-            if (t.MustBeFieldName)
-            {
-                if (MatchFieldNameArgument(t, arg) != FieldNameMatch.Accepted)
-                    continue;
-                ctx.RecordMapping(argIndex, union);
-                consumed = 1;
-                return true;
-            }
-
-            // Handle reference types
-            if (t.IsReference)
-            {
-                if (arg is ReferenceTypeInfo refType)
-                {
-                    // Use IsAssignableFrom to support interchangeability (e.g., @RECORD/@SCROLL, @PAGE/@PANEL)
-                    var expectedRefType = new ReferenceTypeInfo(t.Type, "", "");
-                    if (expectedRefType.IsAssignableFrom(refType))
-                    {
-                        // Must record the mapping — same as the non-reference branch below.
-                        // Without this, inlay parameter names are missing for the first arg of
-                        // signatures like GetSQL(sqlname: @SQL|string, paramlist: any*) when
-                        // callers pass SQL.FOO (a reference) rather than a string literal.
-                        ctx.RecordMapping(argIndex, union);
-                        consumed = 1;
-                        return true;
-                    }
-                }
-                continue; // Reference type expected but not matched
-            }
-
-            // Handle regular types (instances, not references)
-            // Resolve polymorphic types if needed
-            TypeInfo expectedTypeInfo;
-            if (t.Type.IsPolymorphic())
-            {
-                var polymorphicTypeInfo = TypeInfo.FromPeopleCodeType(t.Type);
-                if (polymorphicTypeInfo is PolymorphicTypeInfo polymorphic)
-                {
-                    try
-                    {
-                        expectedTypeInfo = polymorphic.Resolve(ctx.ObjectType, ctx.Arguments);
-                    }
-                    catch (InvalidOperationException)
-                    {
-                        // Can't resolve without proper context - fall back to Any
-                        expectedTypeInfo = AnyTypeInfo.Instance;
-                    }
-                }
-                else
-                {
-                    // Should not happen, but handle gracefully
-                    expectedTypeInfo = AnyTypeInfo.Instance;
-                }
-            }
-            else
-            {
-                expectedTypeInfo = t.IsAppClass ? new AppClassTypeInfo(t.AppClassPath!) : TypeInfo.FromPeopleCodeType(t.Type);
-            }
-
-            if (t.IsArray)
-            {
-                expectedTypeInfo = new ArrayTypeInfo(t.ArrayDimensionality, expectedTypeInfo);
-            }
-
-            // Check AppClass inheritance if both are AppClass types
-            bool isMatch = false;
-            if (expectedTypeInfo is AppClassTypeInfo expectedAppClass && arg is AppClassTypeInfo argAppClass)
-            {
-                isMatch = IsAppClassCompatible(expectedAppClass, argAppClass);
-            }
-            else
-            {
-                isMatch = expectedTypeInfo.IsAssignableFrom(arg);
-            }
-
-            if (!isMatch)
+            if (!Fits(ctx, t, arg))
             {
                 continue;
             }
 
+            // Record the mapping for every kind of alternative (references included), or inlay
+            // parameter names go missing, e.g. GetSQL(sqlname: @SQL|string, ...) called with SQL.FOO.
             // If this union consumes 1 and the remainder of the outer sequence matches, accept this branch.
             ctx.RecordMapping(argIndex, union);
             consumed = 1;
@@ -1433,133 +1256,9 @@ public class FunctionCallValidator
         switch (parameter)
         {
             case SingleParameter single:
-                {
-                    var expected = single.ParameterType;
-
-                    if (expected.MustBeFieldName)
-                        return MatchFieldNameArgument(expected, arg) == FieldNameMatch.Accepted;
-
-                    // Handle reference types
-                    if (expected.IsReference)
-                    {
-                        if (arg is not ReferenceTypeInfo refType)
-                            return false;
-                        if (expected.Type == PeopleCodeType.Any)
-                            return true;
-                        return refType.ReferenceCategory == expected.Type;
-                    }
-
-                    // Resolve polymorphic types if needed
-                    TypeInfo expectedTypeInfo;
-                    if (expected.Type.IsPolymorphic())
-                    {
-                        var polymorphicTypeInfo = TypeInfo.FromPeopleCodeType(expected.Type);
-                        if (polymorphicTypeInfo is PolymorphicTypeInfo polymorphic)
-                        {
-                            try
-                            {
-                                expectedTypeInfo = polymorphic.Resolve(ctx.ObjectType, ctx.Arguments);
-                            }
-                            catch (InvalidOperationException)
-                            {
-                                // Can't resolve without proper context - fall back to Any
-                                expectedTypeInfo = AnyTypeInfo.Instance;
-                            }
-                        }
-                        else
-                        {
-                            expectedTypeInfo = AnyTypeInfo.Instance;
-                        }
-                    }
-                    else
-                    {
-                        expectedTypeInfo = expected.IsAppClass
-                            ? new AppClassTypeInfo(expected.AppClassPath!)
-                            : TypeInfo.FromPeopleCodeType(expected.Type);
-                    }
-
-                    if (expected.IsArray)
-                    {
-                        expectedTypeInfo = new ArrayTypeInfo(expected.ArrayDimensionality, expectedTypeInfo);
-                    }
-
-                    // Check AppClass inheritance if both are AppClass types
-                    if (expectedTypeInfo is AppClassTypeInfo expectedAppClass && arg is AppClassTypeInfo argAppClass)
-                    {
-                        return IsAppClassCompatible(expectedAppClass, argAppClass);
-                    }
-
-                    return expectedTypeInfo.IsAssignableFrom(arg);
-                }
+                return Fits(ctx, single.ParameterType, arg);
             case UnionParameter union:
-                {
-                    foreach (var t in union.AllowedTypes)
-                    {
-                        if (t.MustBeFieldName)
-                        {
-                            if (MatchFieldNameArgument(t, arg) == FieldNameMatch.Accepted)
-                                return true;
-                            continue;
-                        }
-
-                        // Handle reference types
-                        if (t.IsReference)
-                        {
-                            if (arg is ReferenceTypeInfo refType)
-                            {
-                                // Use IsAssignableFrom to support interchangeability (e.g., @RECORD/@SCROLL, @PAGE/@PANEL)
-                                var expectedRefType = new ReferenceTypeInfo(t.Type, "", "");
-                                if (expectedRefType.IsAssignableFrom(refType))
-                                    return true;
-                            }
-                            continue;
-                        }
-
-                        // Resolve polymorphic types if needed
-                        TypeInfo expectedTypeInfo;
-                        if (t.Type.IsPolymorphic())
-                        {
-                            var polymorphicTypeInfo = TypeInfo.FromPeopleCodeType(t.Type);
-                            if (polymorphicTypeInfo is PolymorphicTypeInfo polymorphic)
-                            {
-                                try
-                                {
-                                    expectedTypeInfo = polymorphic.Resolve(ctx.ObjectType, ctx.Arguments);
-                                }
-                                catch (InvalidOperationException)
-                                {
-                                    // Can't resolve without proper context - fall back to Any
-                                    expectedTypeInfo = AnyTypeInfo.Instance;
-                                }
-                            }
-                            else
-                            {
-                                expectedTypeInfo = AnyTypeInfo.Instance;
-                            }
-                        }
-                        else
-                        {
-                            expectedTypeInfo = t.IsAppClass ? new AppClassTypeInfo(t.AppClassPath!) : TypeInfo.FromPeopleCodeType(t.Type);
-                        }
-
-                        if (t.IsArray)
-                        {
-                            expectedTypeInfo = new ArrayTypeInfo(t.ArrayDimensionality, expectedTypeInfo);
-                        }
-
-                        // Check AppClass inheritance if both are AppClass types
-                        if (expectedTypeInfo is AppClassTypeInfo expectedAppClass && arg is AppClassTypeInfo argAppClass)
-                        {
-                            if (IsAppClassCompatible(expectedAppClass, argAppClass))
-                                return true;
-                        }
-                        else if (expectedTypeInfo.IsAssignableFrom(arg))
-                        {
-                            return true;
-                        }
-                    }
-                    return false;
-                }
+                return union.AllowedTypes.Any(t => Fits(ctx, t, arg));
             case ParameterGroup group:
                 return group.Parameters.Count > 0 && Accepts(ctx, group.Parameters[0], arg);
             case VariableParameter variable:
@@ -1621,42 +1320,57 @@ public class FunctionCallValidator
     }
 
     /// <summary>
-    /// Check if a value of valueType can be assigned to a variable of targetType,
-    /// considering the AppClass inheritance hierarchy.
+    /// Whether <paramref name="arg"/> fits one parameter type: a field name for a field-name slot,
+    /// a reference of a compatible category for a reference slot, otherwise a value assignable to
+    /// <see cref="ExpectedType"/>. Callers handle what's specific to their path (variable-only
+    /// slots, unknown arguments, warnings and error recording).
     /// </summary>
-    /// <param name="targetType">The target type (e.g., parameter type)</param>
-    /// <param name="valueType">The value type being passed</param>
-    /// <returns>True if valueType or any of its base classes match targetType</returns>
-    private bool IsAppClassCompatible(AppClassTypeInfo targetType, AppClassTypeInfo valueType)
+    private static bool Fits(MatchContext ctx, TypeWithDimensionality expected, TypeInfo arg)
     {
-        // Metadata keeps parameter types as written in the signature ("Config"), while
-        // inference qualifies the argument ("PKG:Config"). A bare expected type therefore
-        // matches on the class name alone. Weak-spots §3 approximation: two classes with the
-        // same short name in different packages are treated as the same.
-        bool bareTarget = targetType.PackagePath.Count == 0;
+        if (expected.MustBeFieldName)
+            return MatchFieldNameArgument(expected, arg) == FieldNameMatch.Accepted;
 
-        bool Matches(string candidate) =>
-            candidate.Equals(targetType.QualifiedName, StringComparison.OrdinalIgnoreCase) ||
-            (bareTarget && candidate.Split(':')[^1].Equals(targetType.ClassName, StringComparison.OrdinalIgnoreCase));
+        // IsAssignableFrom lets interchangeable categories through (@RECORD/@SCROLL, @PAGE/@PANEL)
+        if (expected.IsReference)
+            return arg is ReferenceTypeInfo reference
+                && new ReferenceTypeInfo(expected.Type, "", "").IsAssignableFrom(reference);
 
-        // Types built with new AppClassTypeInfo(name) have an empty chain, so check the value itself first
-        if (Matches(valueType.QualifiedName))
+        return ExpectedType(ctx, expected).IsAssignableFrom(arg);
+    }
+
+    /// <summary>
+    /// The type a parameter takes in this call: a polymorphic type resolved against the receiver
+    /// and arguments (any when it can't be), an app class, or a builtin type, wrapped in its array
+    /// dimensions.
+    /// </summary>
+    private static TypeInfo ExpectedType(MatchContext ctx, TypeWithDimensionality expected)
+    {
+        TypeInfo type = expected.Type.IsPolymorphic()
+            ? ResolvePolymorphic(expected.Type, ctx.ObjectType, ctx.Arguments) ?? AnyTypeInfo.Instance
+            : expected.IsAppClass
+                ? new AppClassTypeInfo(expected.AppClassPath!)
+                : TypeInfo.FromPeopleCodeType(expected.Type);
+
+        return expected.IsArray ? new ArrayTypeInfo(expected.ArrayDimensionality, type) : type;
+    }
+
+    /// <summary>
+    /// The concrete type a polymorphic parameter type stands for (<c>$element</c> on an array of
+    /// string is string), or null when the call doesn't give enough context to say.
+    /// </summary>
+    private static TypeInfo? ResolvePolymorphic(PeopleCodeType type, TypeInfo? objectType, TypeInfo[] arguments)
+    {
+        if (TypeInfo.FromPeopleCodeType(type) is not PolymorphicTypeInfo polymorphic)
+            return null;
+
+        try
         {
-            return true;
+            return polymorphic.Resolve(objectType, arguments);
         }
-
-        // Use the pre-computed inheritance chain for efficient lookup
-        // Check if targetType appears anywhere in valueType's inheritance chain
-        // This includes checking both base classes and implemented interfaces
-        foreach (var entry in valueType.InheritanceChain)
+        catch (InvalidOperationException)
         {
-            if (Matches(entry.QualifiedName))
-            {
-                return true;
-            }
+            return null;
         }
-
-        return false;
     }
 
     /// <summary>
@@ -1842,7 +1556,8 @@ public class FunctionCallValidator
         /// </summary>
         private string FormatType(TypeWithDimensionality t)
         {
-            if (t.Type.IsPolymorphic() && ResolvePolymorphic(t.Type) is { } resolved)
+            if (t.Type.IsPolymorphic()
+                && ResolvePolymorphic(t.Type, ObjectType, Arguments) is { } resolved and not AnyTypeInfo)
             {
                 return t.IsArray ? new ArrayTypeInfo(t.ArrayDimensionality, resolved).Name : resolved.Name;
             }
@@ -1865,23 +1580,6 @@ public class FunctionCallValidator
             }
 
             return s;
-        }
-
-        /// <summary>The concrete type a polymorphic parameter type stands for in this call, or null.</summary>
-        private TypeInfo? ResolvePolymorphic(PeopleCodeType type)
-        {
-            if (TypeInfo.FromPeopleCodeType(type) is not PolymorphicTypeInfo polymorphic)
-                return null;
-
-            try
-            {
-                var resolved = polymorphic.Resolve(ObjectType, Arguments);
-                return resolved is AnyTypeInfo ? null : resolved;
-            }
-            catch (InvalidOperationException)
-            {
-                return null;
-            }
         }
     }
 }

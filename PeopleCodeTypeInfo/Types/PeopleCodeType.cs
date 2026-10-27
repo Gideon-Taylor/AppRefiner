@@ -1349,24 +1349,22 @@ public class AppClassTypeInfo : TypeInfo
         // This allows &variable As object to be passed where specific AppClass types are expected
         if (other is ObjectTypeInfo) return true;
 
-        // Same app class type
-        if (other is AppClassTypeInfo appClass &&
-            appClass.QualifiedName.Equals(QualifiedName, StringComparison.OrdinalIgnoreCase))
-        {
-            return true;
-        }
-
-        // Metadata keeps types as written ("Config") while inference qualifies values
-        // ("PKG:Config"), so a bare type matches on the class name. Weak-spots §3 approximation:
-        // two classes with the same short name in different packages are treated as the same.
-        if (PackagePath.Count == 0 && other is AppClassTypeInfo o &&
-            o.ClassName.Equals(ClassName, StringComparison.OrdinalIgnoreCase))
-        {
-            return true;
-        }
-
-        return false;
+        // The same class, or one that extends or implements it (its inheritance chain, when the
+        // value was built with one, lists every base class and interface)
+        return other is AppClassTypeInfo appClass
+            && (Names(appClass.QualifiedName) || appClass.InheritanceChain.Any(e => Names(e.QualifiedName)));
     }
+
+    /// <summary>
+    /// Whether <paramref name="qualifiedName"/> names this class. Metadata keeps types as written
+    /// ("Config") while inference qualifies values ("PKG:Config"), so a bare type matches on the
+    /// class name. Weak-spots §3 approximation: two classes with the same short name in different
+    /// packages are treated as the same.
+    /// </summary>
+    private bool Names(string qualifiedName) =>
+        qualifiedName.Equals(QualifiedName, StringComparison.OrdinalIgnoreCase)
+        || (PackagePath.Count == 0
+            && qualifiedName.Split(':')[^1].Equals(ClassName, StringComparison.OrdinalIgnoreCase));
 
     protected override TypeInfo CloneWithState(bool? isAssignable = null, bool? isAutoDeclared = null)
     {

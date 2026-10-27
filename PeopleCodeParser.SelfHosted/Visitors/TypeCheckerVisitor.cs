@@ -491,16 +491,10 @@ namespace PeopleCodeParser.SelfHosted.Visitors
             }
 
             // Use the TypeInfo's IsAssignableFrom method for proper type compatibility
-            // This handles Object accepting AppClass, arrays, builtins, etc.
+            // This handles Object accepting AppClass, app class inheritance, arrays, builtins, etc.
             if (targetType.IsAssignableFrom(valueType))
             {
                 return true;
-            }
-
-            // AppClass inheritance support: B extends A, so B can be assigned to A
-            if (targetType is AppClassTypeInfo targetAppClass && valueType is AppClassTypeInfo valueAppClass)
-            {
-                return IsAppClassCompatible(targetAppClass, valueAppClass);
             }
 
             if (targetType is FieldTypeInfo fti)
@@ -513,24 +507,6 @@ namespace PeopleCodeParser.SelfHosted.Visitors
             }
 
             return false;
-        }
-
-        /// <summary>
-        /// Check if a value of valueType can be assigned to a variable of targetType,
-        /// considering the AppClass inheritance hierarchy.
-        /// </summary>
-        /// <param name="targetType">The target type (e.g., variable type)</param>
-        /// <param name="valueType">The value type being assigned</param>
-        /// <returns>True if valueType or any of its base classes match targetType</returns>
-        private bool IsAppClassCompatible(AppClassTypeInfo targetType, AppClassTypeInfo valueType)
-        {
-            // Direct match already handled by caller, but check again for safety
-            if (valueType.QualifiedName.Equals(targetType.QualifiedName, StringComparison.OrdinalIgnoreCase))
-            {
-                return true;
-            }
-
-            return valueType.InheritanceChain.Any(c => c.QualifiedName.Equals(targetType.QualifiedName));
         }
 
         private TypeInfo ConvertTypeNodeToTypeInfo(TypeNode? typeNode)
