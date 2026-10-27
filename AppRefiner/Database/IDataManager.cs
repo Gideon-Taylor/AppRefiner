@@ -348,6 +348,42 @@ namespace AppRefiner.Database
         /// </summary>
         List<MessageCatalogEntry> SearchMessageCatalog(string searchTerm, IReadOnlyCollection<int>? setNumbers, int limit);
 
+        /// <summary>
+        /// Definition names for a definition-reference keyword (e.g. "Field", "Record") whose
+        /// key starts with <paramref name="prefix"/>, ordered by key, capped at <paramref name="limit"/>.
+        /// The caller supplies the prefix already upper-cased and LIKE-escaped (backslash escape);
+        /// the trailing % is appended here. Returns an empty list for unsupported keywords.
+        /// Query failures throw.
+        /// </summary>
+        List<string> GetDefinitionNames(string keyword, string prefix, int limit);
+
+        /// <summary>
+        /// Maps a definition-reference keyword (case-insensitive) to the table, key column and
+        /// optional extra predicate its names come from; null when the keyword is not supported.
+        /// Values are fixed literals — never user input — so callers may build SQL from them.
+        /// </summary>
+        public static (string Table, string Key, string? Filter)? DefinitionNameSource(string keyword)
+        {
+            return keyword.ToUpperInvariant() switch
+            {
+                "RECORD" => ("PSRECDEFN", "RECNAME", null),
+                "FIELD" => ("PSDBFIELD", "FIELDNAME", null),
+                "PAGE" or "PANEL" => ("PSPNLDEFN", "PNLNAME", null),
+                "COMPONENT" or "PANELGROUP" => ("PSPNLGRPDEFN", "PNLGRPNAME", null),
+                "COMPINTFC" => ("PSBCDEFN", "BCNAME", null),
+                "HTML" => ("PSCONTDEFN", "CONTNAME", "CONTTYPE = 4"),
+                "IMAGE" => ("PSCONTDEFN", "CONTNAME", "CONTTYPE = 1"),
+                "STYLESHEET" => ("PSCONTDEFN", "CONTNAME", "CONTTYPE = 9"),
+                "SQL" => ("PSSQLDEFN", "SQLID", "SQLTYPE = '0'"),
+                "MENUNAME" => ("PSMENUDEFN", "MENUNAME", null),
+                "MESSAGE" => ("PSMSGDEFN", "MSGNAME", null),
+                "FILELAYOUT" => ("PSFLDDEFN", "FLDDEFNNAME", null),
+                "NODE" => ("PSMSGNODEDEFN", "MSGNODENAME", null),
+                "OPERATION" => ("PSOPERATION", "IB_OPERATIONNAME", null),
+                _ => null
+            };
+        }
+
 
         public static bool TryMapStringToTargetType(string typeName, out OpenTargetType targetType)
         {

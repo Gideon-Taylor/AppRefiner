@@ -1128,6 +1128,32 @@ namespace AppRefiner.Database
             return messages;
         }
 
+        public List<string> GetDefinitionNames(string keyword, string prefix, int limit)
+        {
+            EnsureConnected();
+
+            var source = IDataManager.DefinitionNameSource(keyword);
+            if (source == null)
+            {
+                return new List<string>();
+            }
+
+            // Table, key and filter come only from the fixed map; the prefix is always bound.
+            var (table, key, filter) = source.Value;
+            string filterClause = filter == null ? string.Empty : $" AND {filter}";
+            string sql = string.Format(SqlProxyQueryCatalog.GetDefinitionNamesTemplate, key, table, filterClause);
+
+            DataTable result = Query(sql, new[] { S(prefix + "%") }, maxRows: limit);
+            List<string> names = new(result.Rows.Count);
+            foreach (DataRow row in result.Rows)
+            {
+                if (names.Count >= limit)
+                    break;
+                names.Add(row[0]?.ToString()?.Trim() ?? string.Empty);
+            }
+            return names;
+        }
+
         private static void AppendMessageCatalogRows(
             List<MessageCatalogEntry> messages, DataTable result, int limit)
         {

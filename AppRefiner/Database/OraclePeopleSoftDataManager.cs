@@ -1063,6 +1063,43 @@ namespace AppRefiner.Database
             return messages;
         }
 
+        public List<string> GetDefinitionNames(string keyword, string prefix, int limit)
+        {
+            if (!IsConnected)
+            {
+                throw new InvalidOperationException("Database connection is not open");
+            }
+
+            var source = IDataManager.DefinitionNameSource(keyword);
+            if (source == null)
+            {
+                return new List<string>();
+            }
+
+            // Table, key and filter come only from the fixed map; the prefix is always bound.
+            var (table, key, filter) = source.Value;
+            string filterClause = filter == null ? string.Empty : $" AND {filter}";
+            string sql = $@"
+                SELECT {key}
+                FROM {table}
+                WHERE {key} LIKE :prefix ESCAPE '\'{filterClause}
+                ORDER BY {key}
+                FETCH FIRST {limit} ROWS ONLY";
+
+            Dictionary<string, object> parameters = new()
+            {
+                { ":prefix", prefix + "%" }
+            };
+
+            DataTable result = _connection.ExecuteQuery(sql, parameters);
+            List<string> names = new(result.Rows.Count);
+            foreach (DataRow row in result.Rows)
+            {
+                names.Add(row[0]?.ToString()?.Trim() ?? string.Empty);
+            }
+            return names;
+        }
+
         /// <summary>
         /// Builds an AND predicate scoping PSMSGCATDEFN rows to the given set numbers,
         /// or an empty string for null/empty (all sets). Values are ints, interpolated

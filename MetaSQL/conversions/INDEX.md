@@ -23,6 +23,7 @@ Track extraction and conversion status for each SqlProxyDataManager query.
 | GetMessageCatalogEntry | main | oracle/GetMessageCatalogEntry__main.sql.md | meta/GetMessageCatalogEntry__main.sql.md | integrated |
 | SearchMessageCatalog | main | oracle/SearchMessageCatalog__main.sql.md | meta/SearchMessageCatalog__main.sql.md | integrated |
 | SearchMessageCatalog | inSet | — | meta/SearchMessageCatalogInSet__main.sql.md | integrated |
+| GetDefinitionNames | template | — | meta/GetDefinitionNames.sql.md | integrated |
 | GetEventMapXrefs | main | oracle/GetEventMapXrefs__main.sql.md | meta/GetEventMapXrefs__main.sql.md | integrated |
 | GetEventMapItems | component | oracle/GetEventMapItems__component.sql.md | meta/GetEventMapItems__component.sql.md | integrated |
 | GetEventMapItems | componentRecord | oracle/GetEventMapItems__componentRecord.sql.md | meta/GetEventMapItems__componentRecord.sql.md | integrated |

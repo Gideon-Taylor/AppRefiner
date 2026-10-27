@@ -79,6 +79,19 @@ SELECT i.BCTYPE, i.BCITEMPARENT, i.BCITEMNAME, i.SEQUENCE_NBR_6, i.BCACCESS,
  ORDER BY i.SEQUENCE_NBR_6
 ";
 
+        /// <summary>
+        /// Template, not a ready query: {0} = key column, {1} = record name (inside %Table),
+        /// {2} = "" or " AND &lt;filter&gt;". All three come only from
+        /// IDataManager.DefinitionNameSource's fixed map, never from user input.
+        /// :1 = upper-cased, LIKE-escaped prefix followed by %.
+        /// </summary>
+        public const string GetDefinitionNamesTemplate = @"
+SELECT {0}
+  FROM %Table({1})
+ WHERE {0} LIKE :1 ESCAPE '\'{2}
+ ORDER BY {0}
+";
+
         public const string GetEventMapItemsComponent = @"
 SELECT DISTINCT
        evt.portal_objname,
