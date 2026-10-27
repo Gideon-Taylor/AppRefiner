@@ -113,6 +113,95 @@ void TearDownAndUnload() {
 
 static void InvalidateMinimapForScintilla(HWND scintillaHwnd);
 
+// ASCII identifier character test ([A-Za-z0-9_]). Deliberately not isalnum: that takes
+// the C locale and is undefined for negative chars (UTF-8 continuation bytes).
+static bool IsAsciiIdentChar(int c) {
+    return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '_';
+}
+
+// Reads the text on the current line that precedes currentPos, at most maxChars bytes,
+// into buffer (which must hold maxChars + 1). Never reads across the line start.
+// Returns the number of bytes read; *startsAtLineStart says whether buffer[0] is the
+// first character of the line (false when the read was capped at maxChars).
+static int GetLineTextBeforePos(HWND hwnd, int currentPos, char* buffer, int maxChars, bool* startsAtLineStart) {
+    buffer[0] = '\0';
+    *startsAtLineStart = true;
+    if (currentPos <= 0) return 0;
+
+    int line = (int)SendMessage(hwnd, SCI_LINEFROMPOSITION, currentPos, 0);
+    int lineStart = (int)SendMessage(hwnd, SCI_POSITIONFROMLINE, line, 0);
+    if (lineStart < 0 || lineStart > currentPos) return 0;
+
+    int start = currentPos - maxChars;
+    if (start <= lineStart) {
+        start = lineStart;
+    } else {
+        *startsAtLineStart = false;
+    }
+
+    int length = currentPos - start;
+    if (length <= 0) return 0;
+
+    Sci_TextRange tr;
+    tr.chrg.cpMin = start;
+    tr.chrg.cpMax = currentPos;
+    tr.lpstrText = buffer;
+    SendMessage(hwnd, SCI_GETTEXTRANGE, 0, (LPARAM)&tr);
+    buffer[length] = '\0';
+    return length;
+}
+
+// Definition-reference keywords that take a definition name after the dot (Field.X,
+// SQL.X, ...). MUST match the keys of IDataManager.DefinitionNameSource
+// (AppRefiner/Database/IDataManager.cs), aliases included.
+static const char* const g_definitionKeywords[] = {
+    "Record", "Field", "Page", "Panel", "Component", "PanelGroup", "CompIntfc", "HTML",
+    "Image", "StyleSheet", "SQL", "MenuName", "Message", "FileLayout", "Node", "Operation"
+};
+
+// True when text (length bytes, the line text before the cursor) ends in
+// <keyword>.<ident> with at least one ident char, and the keyword is not itself
+// preceded by an identifier char, '.', '&', '%' or ':'.
+static bool EndsWithDefinitionReference(const char* text, int length, bool startsAtLineStart) {
+    int i = length;
+    while (i > 0 && IsAsciiIdentChar((unsigned char)text[i - 1])) i--;
+    if (i == length) return false;           // no identifier chars after the dot
+    if (i == 0 || text[i - 1] != '.') return false;
+
+    int keywordEnd = i - 1;                  // index of the '.'
+    int keywordStart = keywordEnd;
+    while (keywordStart > 0 && IsAsciiIdentChar((unsigned char)text[keywordStart - 1])) keywordStart--;
+    int keywordLength = keywordEnd - keywordStart;
+    if (keywordLength <= 0) return false;
+
+    if (keywordStart > 0) {
+        char before = text[keywordStart - 1];
+        if (before == '.' || before == '&' || before == '%' || before == ':') return false;
+        // (an identifier char cannot precede keywordStart: the scan above consumed them all)
+    } else if (!startsAtLineStart) {
+        return false;                        // read was capped; can't see what precedes the keyword
+    }
+
+    for (const char* keyword : g_definitionKeywords) {
+        if ((int)strlen(keyword) == keywordLength && _strnicmp(text + keywordStart, keyword, keywordLength) == 0) {
+            return true;
+        }
+    }
+    return false;
+}
+
+// True when text (the line text before the cursor) ends in "/*", optional whitespace,
+// then "as " (case-insensitive), i.e. matches /\*\s*as $/i.
+static bool EndsWithAnnotationStart(const char* text, int length) {
+    if (length < 5) return false;            // shortest match is "/*as "
+    if (text[length - 1] != ' ') return false;
+    if (tolower((unsigned char)text[length - 3]) != 'a' || tolower((unsigned char)text[length - 2]) != 's') return false;
+
+    int j = length - 4;                      // char before "as"
+    while (j >= 0 && (text[j] == ' ' || text[j] == '\t')) j--;
+    return j >= 1 && text[j] == '*' && text[j - 1] == '/';
+}
+
 // Function to handle Scintilla notifications
 void HandleScintillaNotification(HWND hwnd, SCNotification* scn, HWND callbackWindow) {
     if (!scn || !hwnd || !IsWindow(hwnd)) return;
@@ -437,6 +526,39 @@ void HandleScintillaNotification(HWND hwnd, SCNotification* scn, HWND callbackWi
                 if (shouldTriggerAutocomplete) {
                     // Post (not Send): member resolve often hits the SQL proxy.
                     PostMessage(callbackWindow, WM_AR_OBJECT_MEMBERS, (WPARAM)currentPos, (LPARAM)AR_PACK_HWND(hwnd, 0));
+                }
+            }
+
+            // Identifier character after <keyword>. (Field.E, SQL.X, ...) triggers definition-name
+            // suggestions. Fires on every identifier char typed; AppRefiner decides whether to
+            // re-query and does the real context checks (strings, comments).
+            if (IsAsciiIdentChar(scn->ch) && callbackWindow && IsWindow(callbackWindow)) {
+                int currentPos = SendMessage(hwnd, SCI_GETCURRENTPOS, 0, 0);
+                char lineText[65] = { 0 };
+                bool startsAtLineStart = true;
+                int lineTextLength = GetLineTextBeforePos(hwnd, currentPos, lineText, 64, &startsAtLineStart);
+
+                if (EndsWithDefinitionReference(lineText, lineTextLength, startsAtLineStart)) {
+                    sprintf_s(debugMsg, "Definition reference detected, triggering definition-name suggestions at position %d\n", currentPos);
+                    OutputDebugStringA(debugMsg);
+
+                    // Post (not Send): the handler queries the database (possibly via the SQL proxy).
+                    PostMessage(callbackWindow, WM_AR_DEFINITION_SUGGEST, (WPARAM)currentPos, (LPARAM)AR_PACK_HWND(hwnd, 0));
+                }
+            }
+
+            // Space after "/* as" triggers annotation-type suggestions.
+            if (scn->ch == ' ' && callbackWindow && IsWindow(callbackWindow)) {
+                int currentPos = SendMessage(hwnd, SCI_GETCURRENTPOS, 0, 0);
+                char lineText[65] = { 0 };
+                bool startsAtLineStart = true;
+                int lineTextLength = GetLineTextBeforePos(hwnd, currentPos, lineText, 64, &startsAtLineStart);
+
+                if (EndsWithAnnotationStart(lineText, lineTextLength)) {
+                    sprintf_s(debugMsg, "Annotation start detected, triggering annotation-type suggestions at position %d\n", currentPos);
+                    OutputDebugStringA(debugMsg);
+
+                    PostMessage(callbackWindow, WM_AR_ANNOTATION_SUGGEST, (WPARAM)currentPos, (LPARAM)AR_PACK_HWND(hwnd, 0));
                 }
             }
 

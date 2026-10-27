@@ -64,6 +64,8 @@
 //   WM_AR_VARIABLE_SUGGEST      wParam=position               lParam=PACK(hwnd, triggerChar or 0)
 //   WM_AR_OBJECT_MEMBERS        wParam=position               lParam=PACK(hwnd, triggerChar or 0)
 //   WM_AR_SYSTEM_VARIABLE_SUGGEST wParam=position             lParam=PACK(hwnd, triggerChar or 0)
+//   WM_AR_DEFINITION_SUGGEST    wParam=position               lParam=PACK(hwnd, 0)
+//   WM_AR_ANNOTATION_SUGGEST    wParam=position               lParam=PACK(hwnd, 0)
 //   WM_AR_FUNCTION_CALL_TIP     wParam=position               lParam=PACK(hwnd, char)
 //   WM_AR_CREATE_SHORTHAND      wParam=PACK(hwnd, autoPair)   lParam=position
 //   WM_AR_MSGBOX_SHORTHAND      wParam=PACK(hwnd, autoPair)   lParam=position
@@ -104,6 +106,8 @@
 // 2524 is AR_FUNCTION_SUGGEST (C#-side only: raised by InvokeAutocompleteCommand for
 // Ctrl+Space on a plain identifier; the hook never produces it - reserved here so the
 // next hook message doesn't collide)
+#define WM_AR_DEFINITION_SUGGEST 2525       // Definition-name suggestions when an identifier char is typed after <keyword>. (Field.X, SQL.X, ...)
+#define WM_AR_ANNOTATION_SUGGEST 2526       // Annotation-type suggestions when a space is typed after "/* as"
 
 // Status flags for WM_AR_SUBCLASS_ACK (low 32 bits of wParam)
 #define AR_SUB_ACK_PARENT_SUBCLASSED   0x0001  // SetWindowSubclass on the parent succeeded
