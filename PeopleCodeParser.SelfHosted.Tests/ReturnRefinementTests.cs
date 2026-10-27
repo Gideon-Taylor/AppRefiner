@@ -99,6 +99,25 @@ public class ReturnRefinementTests
         Assert.Equal(PeopleCodeType.ApiObject, LastInitializer(program)!.PeopleCodeType);
     }
 
+    [Theory]
+    [InlineData("Null")]
+    [InlineData("(Null)")]
+    [InlineData("((Null))")]
+    public void Null_return_does_not_disagree(string nullValue)
+    {
+        var (program, _, warnings) = TypeCheck(
+            "Function F(&b As boolean) Returns ApiObject\n" +
+            "   If &b Then\n" +
+            "      Return %Session;\n" +
+            "   End-If;\n" +
+            $"   Return {nullValue};\n" +
+            "End-Function;\n" +
+            "Local ApiObject &x = F(True);");
+
+        Assert.DoesNotContain(warnings, IsR1);
+        Assert.Equal("Session", LastInitializer(program)!.Name, ignoreCase: true);
+    }
+
     [Fact]
     public void Disagreeing_record_returns_stay_plain_silently()
     {

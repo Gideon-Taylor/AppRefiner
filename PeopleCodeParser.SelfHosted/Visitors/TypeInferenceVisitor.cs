@@ -1979,7 +1979,7 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
     #region Member assignments
 
     private static bool IsNullLiteral(ExpressionNode expression) =>
-        expression is LiteralNode { LiteralType: LiteralType.Null };
+        UnwrapParentheses(expression) is LiteralNode { LiteralType: LiteralType.Null };
 
     // Values assigned to this class's own properties and instance variables, for ReturnTypeRefiner
     private readonly Dictionary<PropertyInfo, List<TypeInfo?>> _memberAssignments = new(ReferenceEqualityComparer.Instance);
