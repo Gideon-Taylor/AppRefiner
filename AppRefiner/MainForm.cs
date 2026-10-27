@@ -3190,31 +3190,7 @@ namespace AppRefiner
         {
             try
             {
-                var qualifiedName = DetermineQualifiedName(editor);
-
-                var metadata = TypeMetadataBuilder.ExtractMetadata(program, qualifiedName);
-
-                // Get type resolver (may be null if no database)
-                var typeResolver = editor.AppDesignerProcess?.TypeResolver;
-
-                string? defaultRecord = null;
-                string? defaultField = null;
-                if (editor.Caption.EndsWith("(Record PeopleCode)"))
-                {
-                    var parts = qualifiedName.Split('.');
-                    defaultRecord = parts[0];
-                    defaultField = parts[1];
-                }
-
-                // Run type inference (works even with null resolver)
-                TypeInferenceVisitor.Run(
-                    program,
-                    metadata,
-                    typeResolver,
-                    defaultRecord,
-                    defaultField,
-                    inferAutoDeclaredTypes: false,
-                    onUndefinedVariable: extensionManager != null ? extensionManager.HandleUndefinedVariable : null);
+                TypeInferenceRunner.Run(program, editor, editor.AppDesignerProcess?.TypeResolver, extensionManager);
             }
             catch (Exception ex)
             {

@@ -54,35 +54,9 @@ namespace AppRefiner.Services
                 return null;
             }
 
-            // Determine the qualified name for the current program
-            string qualifiedName = DetermineQualifiedName(program, editor);
-
             try
             {
-                // Run type checking pipeline to populate type information
-                var programMetadata = TypeMetadataBuilder.ExtractMetadata(program, qualifiedName);
-
-                string? defaultRecord = null;
-                string? defaultField = null;
-                if (editor.Caption != null && editor.Caption.EndsWith("(Record PeopleCode)"))
-                {
-                    var parts = qualifiedName.Split('.');
-                    if (parts.Length >= 2)
-                    {
-                        defaultRecord = parts[0];
-                        defaultField = parts[1];
-                    }
-                }
-
-                // Run type inference
-                TypeInferenceVisitor.Run(
-                    program,
-                    programMetadata,
-                    typeResolver,
-                    defaultRecord,
-                    defaultField,
-                    inferAutoDeclaredTypes: false,
-                    onUndefinedVariable: extensionManager != null ? extensionManager.HandleUndefinedVariable : null);
+                TypeInferenceRunner.Run(program, editor, typeResolver, extensionManager);
 
                 // Run type checking
                 TypeCheckerVisitor.Run(program, typeResolver, typeResolver.Cache);
@@ -283,61 +257,6 @@ namespace AppRefiner.Services
             catch
             {
                 return "Unknown";
-            }
-        }
-
-        /// <summary>
-        /// Determines the qualified name for the current program.
-        /// Copied from TypeErrorStyler.
-        /// </summary>
-        private string DetermineQualifiedName(ProgramNode node, ScintillaEditor editor)
-        {
-            // Try to extract from AST structure first
-            if (node.AppClass != null)
-            {
-                // For app classes/interfaces, try to build qualified name from imports or use simple name
-                var className = node.AppClass.Name;
-
-                if (editor?.Caption != null && !string.IsNullOrWhiteSpace(editor.Caption))
-                {
-                    // Parse caption to get program identifier
-                    var openTarget = OpenTargetBuilder.CreateFromCaption(editor.Caption);
-                    if (openTarget != null)
-                    {
-                        var methodIndex = Array.IndexOf(openTarget.ObjectIDs, PSCLASSID.METHOD);
-                        if (methodIndex >= 0)
-                        {
-                            openTarget.ObjectIDs[methodIndex] = PSCLASSID.NONE;
-                            openTarget.ObjectValues[methodIndex] = null;
-                        }
-                        return openTarget.Path;
-                    }
-                    else
-                    {
-                        return className;
-                    }
-                }
-                else
-                {
-                    return className;
-                }
-            }
-            else
-            {
-                // For function libraries or other programs, use a generic name
-                // Try to extract from editor caption if available
-                if (editor?.Caption != null && !string.IsNullOrWhiteSpace(editor.Caption))
-                {
-                    // Parse caption to get program identifier
-                    var openTarget = OpenTargetBuilder.CreateFromCaption(editor.Caption);
-                    if (openTarget != null)
-                    {
-                        return string.Join(".", openTarget.ObjectValues.Where(v => v != null));
-                    }
-                }
-
-                // Fallback to generic name
-                return "Program";
             }
         }
     }

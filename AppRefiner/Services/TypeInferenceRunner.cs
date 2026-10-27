@@ -8,14 +8,18 @@ using PeopleCodeTypeInfo.Inference;
 namespace AppRefiner.Services
 {
     /// <summary>
-    /// Shared type-inference pipeline used by StylerManager (stylers) and
-    /// RefactorManager (refactors with RequiresTypeInference). Populates
-    /// node.Attributes["TypeInfo"] throughout the AST.
+    /// Shared type-inference pipeline used by stylers, refactors with RequiresTypeInference,
+    /// tooltips, autocomplete and the type error reporter. Populates node.Attributes["TypeInfo"]
+    /// throughout the AST.
     /// </summary>
     public static class TypeInferenceRunner
     {
+        /// <summary>
+        /// Runs inference on <paramref name="program"/> as the program open in <paramref name="editor"/>.
+        /// Without a resolver (no database) only the program's own types are known.
+        /// </summary>
         public static void Run(ProgramNode program, ScintillaEditor editor,
-            ITypeMetadataResolver typeResolver, TypeExtensionManager? typeExtensionManager)
+            ITypeMetadataResolver? typeResolver, TypeExtensionManager? typeExtensionManager)
         {
             string qualifiedName = DetermineQualifiedName(program, editor);
             var programMetadata = TypeMetadataBuilder.ExtractMetadata(program, qualifiedName);
@@ -35,7 +39,7 @@ namespace AppRefiner.Services
             TypeInferenceVisitor.Run(
                 program,
                 programMetadata,
-                typeResolver,
+                typeResolver ?? PeopleCodeTypeInfo.Contracts.NullTypeMetadataResolver.Instance,
                 defaultRecord,
                 defaultField,
                 inferAutoDeclaredTypes: false,
@@ -55,8 +59,11 @@ namespace AppRefiner.Services
                     if (openTarget != null)
                     {
                         var methodIndex = Array.IndexOf(openTarget.ObjectIDs, PSCLASSID.METHOD);
-                        openTarget.ObjectIDs[methodIndex] = PSCLASSID.NONE;
-                        openTarget.ObjectValues[methodIndex] = null;
+                        if (methodIndex >= 0)
+                        {
+                            openTarget.ObjectIDs[methodIndex] = PSCLASSID.NONE;
+                            openTarget.ObjectValues[methodIndex] = null;
+                        }
                         return openTarget.Path;
                     }
                     else
