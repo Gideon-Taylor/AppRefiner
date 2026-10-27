@@ -20,8 +20,9 @@ value), `TypeInferenceVisitor.TryRefineVariableFromExpression` decides that expl
 
 **Fixed (2026-10):** `TypeInfo.IsAssignableFrom` is the one answer to "does this value fit this
 type". `AppClassTypeInfo.IsAssignableFrom` follows the value's inheritance chain (base classes
-and interfaces) and applies the bare-name rule (§3), so inheritance also holds inside arrays
-(`array of PKG:Base` accepts `array of PKG:Derived`). In `FunctionCallValidator`, one parameter
+and interfaces) and applies the bare-name rule (§3). Arrays are invariant, as PeopleCode is:
+`array of PKG:Base` rejects `array of PKG:Derived` (verified in App Designer), so
+`ArrayTypeInfo` compares app class elements with `IsSameClass`. In `FunctionCallValidator`, one parameter
 type is matched by `Fits` and resolved by `ExpectedType` (polymorphic types, app classes,
 arrays); `MatchSingle`, `MatchUnion`, `Accepts` and autocomplete's `TryMatchOnePrefix` all use
 them, so autocomplete's union matching now knows about inheritance too.

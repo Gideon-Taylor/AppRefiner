@@ -7,7 +7,8 @@ namespace PeopleCodeTypeInfo.Tests;
 
 /// <summary>
 /// An app class type accepts a value whose inheritance chain (base classes and interfaces)
-/// reaches it, everywhere assignability is asked: directly, inside arrays, and in calls.
+/// reaches it, directly and in calls. Arrays are invariant: an array of a subclass is not an
+/// array of its base class.
 /// </summary>
 public class AppClassInheritanceAssignabilityTests
 {
@@ -40,10 +41,19 @@ public class AppClassInheritanceAssignabilityTests
     }
 
     [Fact]
-    public void Array_of_base_accepts_array_of_derived()
+    public void Array_of_base_rejects_array_of_derived()
     {
         var expected = new ArrayTypeInfo(1, new AppClassTypeInfo("PKG:Base"));
-        Assert.True(expected.IsAssignableFrom(new ArrayTypeInfo(1, Derived())));
+        Assert.False(expected.IsAssignableFrom(new ArrayTypeInfo(1, Derived())));
+        Assert.False(new ArrayTypeInfo(1, new AppClassTypeInfo("PKG:IThing")).IsAssignableFrom(new ArrayTypeInfo(1, Derived())));
+    }
+
+    [Fact]
+    public void Array_of_class_accepts_array_of_same_class()
+    {
+        Assert.True(new ArrayTypeInfo(1, new AppClassTypeInfo("pkg:derived")).IsAssignableFrom(new ArrayTypeInfo(1, Derived())));
+        Assert.True(new ArrayTypeInfo(1, new AppClassTypeInfo("Derived")).IsAssignableFrom(new ArrayTypeInfo(1, Derived())));
+        Assert.True(new ArrayTypeInfo(1, Derived()).IsAssignableFrom(new ArrayTypeInfo(1, new AppClassTypeInfo("Derived"))));
     }
 
     private static readonly TypeWithDimensionality Base = new(PeopleCodeType.AppClass, appClassPath: "PKG:Base");
@@ -79,7 +89,7 @@ public class AppClassInheritanceAssignabilityTests
     }
 
     [Fact]
-    public void Array_parameter_accepts_array_of_derived()
+    public void Array_parameter_rejects_array_of_derived()
     {
         var function = new FunctionInfo
         {
@@ -92,6 +102,6 @@ public class AppClassInheritanceAssignabilityTests
         };
         var validator = new FunctionCallValidator(NullTypeMetadataResolver.Instance);
 
-        Assert.True(validator.Validate(function, new TypeInfo[] { new ArrayTypeInfo(1, Derived()) }).IsValid);
+        Assert.False(validator.Validate(function, new TypeInfo[] { new ArrayTypeInfo(1, Derived()) }).IsValid);
     }
 }

@@ -1356,6 +1356,12 @@ public class AppClassTypeInfo : TypeInfo
     }
 
     /// <summary>
+    /// Whether both types name the same class, ignoring inheritance.
+    /// </summary>
+    public bool IsSameClass(AppClassTypeInfo other) =>
+        Names(other.QualifiedName) || other.Names(QualifiedName);
+
+    /// <summary>
     /// Whether <paramref name="qualifiedName"/> names this class. Metadata keeps types as written
     /// ("Config") while inference qualifies values ("PKG:Config"), so a bare type matches on the
     /// class name. Weak-spots §3 approximation: two classes with the same short name in different
@@ -1433,6 +1439,11 @@ public class ArrayTypeInfo : TypeInfo
             {
                 // Untyped arrays are compatible
                 if (ElementType == null || array.ElementType == null) return true;
+
+                // Arrays of app classes are invariant: PeopleCode rejects an array of a subclass
+                // where an array of its base class or interface is expected
+                if (ElementType is AppClassTypeInfo expectedClass && array.ElementType is AppClassTypeInfo actualClass)
+                    return expectedClass.IsSameClass(actualClass);
 
                 // Check element type compatibility (with null safety)
                 return ElementType?.IsAssignableFrom(array.ElementType) ?? true;
