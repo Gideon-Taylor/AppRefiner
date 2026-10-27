@@ -10,9 +10,9 @@ namespace PeopleCodeParser.SelfHosted.Compilation.Checks;
 /// Behavioral notes preserved from the styler:
 /// - Only UNQUALIFIED references (empty PackagePath) can be ambiguous; qualified
 ///   references are never flagged.
-/// - Exactly three contexts are checked (matching the styler — deliberately not all
-///   AppClassTypeNodes): object creation types, program variable (Global/Component/
-///   Instance) declaration types, and the base type of an <c>extends</c> clause.
+/// - Every short reference is checked (declarations, parameters, returns, properties,
+///   extends/implements, create), except the import statements themselves: App Designer
+///   can't expand any of them on save when two imports provide the name.
 /// - Wildcard imports (<c>PKG:*</c>) are expanded via
 ///   <c>ITypeMetadataResolver.GetClassesInPackage</c> (the resolver equivalent of the
 ///   old DataManager.GetAllClassesForPackage) when a resolver is available; without
@@ -37,18 +37,8 @@ public sealed class AmbiguousClassReferenceCheck : CompileCheckBase
             return;
         }
 
-        switch (node)
-        {
-            case ObjectCreationNode creation:
-                CheckForAmbiguity(creation.Type as AppClassTypeNode, sink);
-                break;
-            case ProgramVariableNode programVar:
-                CheckForAmbiguity(programVar.Type as AppClassTypeNode, sink);
-                break;
-            case AppClassNode appClass:
-                CheckForAmbiguity(appClass.BaseType as AppClassTypeNode, sink);
-                break;
-        }
+        if (node is AppClassTypeNode appClassType && appClassType.Parent is not ImportNode)
+            CheckForAmbiguity(appClassType, sink);
     }
 
     private void RebuildClassNameMap(ProgramNode program, CompileCheckContext ctx)

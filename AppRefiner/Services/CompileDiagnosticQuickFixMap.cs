@@ -111,7 +111,8 @@ internal static class CompileDiagnosticQuickFixMap
     /// Deferred resolver for UnimportedClass (ported from UnimportedClassStyler):
     /// queries the database for all packages containing the class and offers one
     /// AddImportQuickFix per package. Invoked only when the user presses Ctrl+.
-    /// The context is the class-name string attached by the library check (FixContext).
+    /// The context is the class-name string attached by the library check (FixContext), or
+    /// the full path for a qualified reference, which needs no query.
     /// </summary>
     private static List<QuickFixEntry> GetImportOptionsResolver(
         ScintillaEditor editor,
@@ -121,6 +122,10 @@ internal static class CompileDiagnosticQuickFixMap
         var className = context as string;
         if (string.IsNullOrEmpty(className))
             return new();
+
+        // A qualified reference names the one class to import
+        if (className.Contains(':'))
+            return new() { (typeof(Refactors.QuickFixes.AddImportQuickFix), $"Import {className}") };
 
         var dataManager = editor.DataManager;
         if (dataManager == null || !dataManager.IsConnected)

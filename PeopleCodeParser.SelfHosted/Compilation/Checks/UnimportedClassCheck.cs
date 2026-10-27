@@ -9,26 +9,31 @@ namespace PeopleCodeParser.SelfHosted.Compilation.Checks;
 /// <c>ITypeMetadataResolver.GetClassesInPackage</c> (the resolver equivalent of the old
 /// DataManager.GetAllClassesForPackage) when a resolver is available.
 ///
-/// Behavioral notes preserved from the styler:
-/// - Matching is by SIMPLE class name only (case-insensitive): any import ending in
-///   "Bar" vouches for every reference to a class named Bar, including fully-qualified
-///   references to a different package's Bar.
-/// - A fully-qualified reference (e.g. <c>Local PKG:Foo:Bar &amp;x;</c>) IS flagged when
-///   nothing imports "Bar" — PeopleCode requires the import either way.
-/// - A wildcard import that can't be expanded (no resolver, or the resolver lists no
-///   classes, as when the database isn't connected) is assumed to cover every class, so
-///   nothing is reported rather than every class under it.
+/// Every app class type reference is checked (declarations, parameters, returns, properties,
+/// extends/implements, create), except the import statements themselves.
+/// - A short reference (<c>Local Bar &amp;x;</c>) is covered by any import of a class named
+///   Bar, explicit or through an expanded wildcard. A wildcard import that can't be expanded
+///   (no resolver, or the resolver lists no classes, as when the database isn't connected)
+///   is assumed to cover every short name, so nothing is reported rather than everything.
+/// - A qualified reference (<c>Local PKG:Foo:Bar &amp;x;</c>) needs that exact class
+///   imported, or its own package by wildcard (<c>PKG:Foo:*</c>, which doesn't reach
+///   sub-packages). Another package's Bar doesn't cover it. No resolver is needed.
+/// - A class may name itself, short or qualified, without an import.
 ///
-/// FixContext = the simple class name (string) — AppRefiner's deferred quick-fix
-/// resolver uses it to query candidate packages at Ctrl+. time.
+/// FixContext = the simple class name for a short reference — AppRefiner's deferred
+/// quick-fix resolver queries candidate packages at Ctrl+. time — or the full path for a
+/// qualified reference, which is the one import that fixes it.
 /// </summary>
 public sealed class UnimportedClassCheck : CompileCheckBase
 {
     public override CheckRequirement Requirement => CheckRequirement.Optional;
 
     private readonly HashSet<string> _importedClasses = new(StringComparer.OrdinalIgnoreCase);
+    private readonly HashSet<string> _importedPaths = new(StringComparer.OrdinalIgnoreCase);
     private readonly HashSet<string> _importedPackages = new(StringComparer.OrdinalIgnoreCase);
     private bool _unexpandedWildcard;
+    private string? _ownName;
+    private string? _ownQualifiedName;
 
     public override void OnNode(AstNode node, CompileCheckContext ctx, IDiagnosticSink sink)
     {
@@ -39,31 +44,21 @@ public sealed class UnimportedClassCheck : CompileCheckBase
             return;
         }
 
-        switch (node)
-        {
-            case ObjectCreationNode creation:
-                CheckType(creation.Type, sink);
-                break;
-            case LocalVariableDeclarationNode local:
-                CheckType(local.Type, sink);
-                break;
-            case LocalVariableDeclarationWithAssignmentNode localAssign:
-                CheckType(localAssign.Type, sink);
-                break;
-            case ProgramVariableNode programVar:
-                CheckType(programVar.Type, sink);
-                break;
-        }
+        if (node is AppClassTypeNode appClassType && appClassType.Parent is not ImportNode)
+            CheckType(appClassType, sink);
     }
 
     private void RebuildImportSets(ProgramNode program, CompileCheckContext ctx)
     {
         _importedClasses.Clear();
+        _importedPaths.Clear();
         _importedPackages.Clear();
 
         // A class may name itself without an import (App Designer qualifies it on save)
-        if (!string.IsNullOrEmpty(program.AppClass?.Name))
-            _importedClasses.Add(program.AppClass.Name);
+        _ownName = program.AppClass?.Name;
+        _ownQualifiedName = ctx.SelfMetadata?.QualifiedName;
+        if (!string.IsNullOrEmpty(_ownName))
+            _importedClasses.Add(_ownName);
 
         foreach (var import in program.Imports)
         {
@@ -83,6 +78,7 @@ public sealed class UnimportedClassCheck : CompileCheckBase
                 if (parts.Length > 0)
                 {
                     _importedClasses.Add(parts[^1]);
+                    _importedPaths.Add(import.FullPath);
                 }
             }
         }
@@ -106,20 +102,38 @@ public sealed class UnimportedClassCheck : CompileCheckBase
         }
     }
 
-    private void CheckType(TypeNode? type, IDiagnosticSink sink)
+    private void CheckType(AppClassTypeNode appClassType, IDiagnosticSink sink)
     {
-        if (type is not AppClassTypeNode appClassType)
-            return;
-
         var className = appClassType.ClassName;
-        if (_importedClasses.Contains(className) || _unexpandedWildcard)
+        if (appClassType.PackagePath.Count == 0)
+        {
+            if (_importedClasses.Contains(className) || _unexpandedWildcard)
+                return;
+
+            Report(appClassType, $"Class '{className}' is not imported", className, sink);
+            return;
+        }
+
+        var packagePath = string.Join(":", appClassType.PackagePath);
+        var fullPath = $"{packagePath}:{className}";
+        if (_importedPaths.Contains(fullPath) || _importedPackages.Contains(packagePath) || IsOwnClass(fullPath, className))
             return;
 
+        Report(appClassType, $"Class '{fullPath}' is not imported", fullPath, sink);
+    }
+
+    // Without the program's qualified name, a qualified reference to a class with its own
+    // name is given the benefit of the doubt
+    private bool IsOwnClass(string fullPath, string className) =>
+        !string.IsNullOrEmpty(_ownQualifiedName)
+            ? fullPath.Equals(_ownQualifiedName, StringComparison.OrdinalIgnoreCase)
+            : className.Equals(_ownName, StringComparison.OrdinalIgnoreCase);
+
+    private static void Report(AppClassTypeNode appClassType, string message, string fixContext, IDiagnosticSink sink) =>
         sink.Report(new CompileDiagnostic(
             DiagnosticCode.UnimportedClass,
             DiagnosticSeverity.Error,
             appClassType.SourceSpan,
-            $"Class '{className}' is not imported",
-            className));
-    }
+            message,
+            fixContext));
 }
