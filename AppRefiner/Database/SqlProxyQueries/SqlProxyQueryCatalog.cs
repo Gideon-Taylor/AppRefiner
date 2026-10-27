@@ -66,6 +66,19 @@ SELECT PACKAGEID
  ORDER BY PACKAGEID
 ";
 
+        public const string GetComponentInterfaceDefn = @"
+SELECT VERSION, BCSTDMETHODS FROM %Table(PSBCDEFN) WHERE BCNAME = :1
+";
+
+        public const string GetComponentInterfaceItems = @"
+SELECT i.BCTYPE, i.BCITEMPARENT, i.BCITEMNAME, i.SEQUENCE_NBR_6, i.BCACCESS,
+       i.RECNAME, i.FIELDNAME, i.COMMENTSHORT, f.FIELDTYPE
+  FROM %Table(PSBCITEM) i
+  LEFT OUTER JOIN %Table(PSDBFIELD) f ON f.FIELDNAME = i.FIELDNAME
+ WHERE i.BCNAME = :1
+ ORDER BY i.SEQUENCE_NBR_6
+";
+
         public const string GetEventMapItemsComponent = @"
 SELECT DISTINCT
        evt.portal_objname,

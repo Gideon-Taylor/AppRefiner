@@ -1,4 +1,5 @@
 using AppRefiner.Database.Models;
+using PeopleCodeTypeInfo.Contracts;
 using PeopleCodeTypeInfo.Types;
 using System.Data;
 using System.Text;
@@ -17,6 +18,7 @@ namespace AppRefiner.Database
         // Cache for record field information
         private Dictionary<string, RecordFieldCache> _recordFieldCache = new();
         private readonly AppClassCatalogCache _appClassCache = new();
+        private readonly ComponentInterfaceCache _compIntfcCache = new();
 
         /// <summary>
         /// Gets the underlying database connection
@@ -65,6 +67,7 @@ namespace AppRefiner.Database
                     // Clear the record field cache when connecting
                     ClearRecordFieldCache();
                     _appClassCache.Clear();
+                    _compIntfcCache.Clear();
                 }
                 return true;
             }
@@ -90,10 +93,40 @@ namespace AppRefiner.Database
             // Clear the record field cache when disconnecting
             ClearRecordFieldCache();
             _appClassCache.Clear();
+            _compIntfcCache.Clear();
         }
 
         public void InvalidateAppClassCache(string? appClassPath = null) =>
             _appClassCache.Invalidate(appClassPath);
+
+        public IReadOnlyCollection<string> CachedComponentInterfaces => _compIntfcCache.Names;
+
+        public void InvalidateComponentInterface(string? ciName) => _compIntfcCache.Invalidate(ciName);
+
+        public CompIntfcDefinition? GetComponentInterface(string ciName)
+        {
+            if (!IsConnected)
+            {
+                throw new InvalidOperationException("Database connection is not open");
+            }
+
+            // Failures propagate: a failed lookup must never read as "doesn't exist".
+            // LoadPeopleCodeItemContent throws on query failure.
+            return _compIntfcCache.Get(
+                ciName,
+                name => _connection.ExecuteQuery(
+                    "SELECT VERSION, BCSTDMETHODS FROM PSBCDEFN WHERE BCNAME = :ciName",
+                    new Dictionary<string, object> { { ":ciName", name } }),
+                name => _connection.ExecuteQuery(@"
+                    SELECT i.BCTYPE, i.BCITEMPARENT, i.BCITEMNAME, i.SEQUENCE_NBR_6, i.BCACCESS,
+                           i.RECNAME, i.FIELDNAME, i.COMMENTSHORT, f.FIELDTYPE
+                    FROM PSBCITEM i
+                    LEFT OUTER JOIN PSDBFIELD f ON f.FIELDNAME = i.FIELDNAME
+                    WHERE i.BCNAME = :ciName
+                    ORDER BY i.SEQUENCE_NBR_6",
+                    new Dictionary<string, object> { { ":ciName", name } }),
+                LoadPeopleCodeItemContent);
+        }
 
         /// <summary>
         /// Retrieves the SQL definition for a given object name

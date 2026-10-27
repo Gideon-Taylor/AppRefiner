@@ -1,5 +1,6 @@
 using AppRefiner.Database.Models;
 using PeopleCodeParser.SelfHosted.Nodes;
+using PeopleCodeTypeInfo.Contracts;
 using PeopleCodeTypeInfo.Types;
 using static SqlParser.Ast.DataType;
 
@@ -260,6 +261,25 @@ namespace AppRefiner.Database
         /// <param name="recordName">The name of the record (uppercase).</param>
         /// <returns>A list of RecordFieldInfo objects, or null if the record doesn't exist or an error occurs.</returns>
         List<RecordFieldInfo>? GetRecordFields(string recordName);
+
+        /// <summary>
+        /// Gets a component interface definition (PSBCDEFN, PSBCITEM and its Methods program).
+        /// Cached per upper-cased name and keyed by PSBCDEFN.VERSION: each call runs the version
+        /// query and re-fetches when the version changed.
+        /// </summary>
+        /// <param name="ciName">The component interface name</param>
+        /// <returns>The definition, or null only when PSBCDEFN has no row. Query failures throw.</returns>
+        CompIntfcDefinition? GetComponentInterface(string ciName);
+
+        /// <summary>
+        /// Drops the cached definition of <paramref name="ciName"/>, or every cached definition when null.
+        /// </summary>
+        void InvalidateComponentInterface(string? ciName);
+
+        /// <summary>
+        /// Upper-cased names of the component interfaces currently cached.
+        /// </summary>
+        IReadOnlyCollection<string> CachedComponentInterfaces { get; }
 
         /// <summary>
         /// Gets all subpackages and classes in the specified application package path
@@ -534,7 +554,7 @@ namespace AppRefiner.Database
                 case OpenTargetType.ComponentInterfacePeopleCode:
                     // id format: CI name, descr adds .Method
                     parts = descr.Split('.');
-                    pairs.Add((PSCLASSID.COMPINTFCINTERFACE, parts[0]));
+                    pairs.Add((PSCLASSID.COMPONENTINTERFACE, parts[0]));
                     pairs.Add((PSCLASSID.METHOD, parts[1]));
                     break;
 

@@ -166,6 +166,33 @@ namespace AppRefiner.Database
         }
 
         /// <summary>
+        /// Looks up a component interface definition. Caching is handled by the base class.
+        /// Not connected is Unknown; a failure throws so the base class answers Unknown (never
+        /// Missing: a spurious Missing would report a CI that exists as "doesn't exist") and holds
+        /// off re-querying the failing database for a short while.
+        /// </summary>
+        protected override CompIntfcLookup GetComponentInterfaceCore(string name)
+        {
+            if (!_dataManager.IsConnected)
+            {
+                return CompIntfcLookup.Unknown;
+            }
+
+            var definition = _dataManager.GetComponentInterface(name);
+            return definition == null
+                ? CompIntfcLookup.Missing
+                : CompIntfcLookup.Found(definition);
+        }
+
+        /// <summary>
+        /// Logs a failed component interface lookup (once per name per retry interval).
+        /// </summary>
+        protected override void OnComponentInterfaceLookupFailed(string name, Exception exception)
+        {
+            Debug.Log($"DatabaseTypeMetadataResolver: Error resolving component interface '{name}': {exception.Message}");
+        }
+
+        /// <summary>
         /// Whether the field is on the record definition (via GetRecordFields).
         /// </summary>
         protected override bool? RecordHasFieldCore(string recordName, string fieldName)

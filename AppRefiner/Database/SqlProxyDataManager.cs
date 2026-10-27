@@ -1,6 +1,7 @@
 using AppRefiner.Database.Models;
 using AppRefiner.Database.SqlProxy;
 using AppRefiner.Database.SqlProxyQueries;
+using PeopleCodeTypeInfo.Contracts;
 using PeopleCodeTypeInfo.Types;
 using System.Data;
 using System.Text;
@@ -36,6 +37,11 @@ namespace AppRefiner.Database
         private Dictionary<string, RecordFieldCache> recordFieldCache = new();
 
         /// <summary>
+        /// Component interface definitions by upper-cased name; each is valid for its PSBCDEFN.VERSION.
+        /// </summary>
+        private readonly ComponentInterfaceCache compIntfcCache = new();
+
+        /// <summary>
         /// Creates a manager that owns <paramref name="connection"/>.
         /// </summary>
         public SqlProxyDataManager(SqlProxyDbConnection connection)
@@ -68,6 +74,7 @@ namespace AppRefiner.Database
                     connection.Open();
                     ClearRecordFieldCache();
                     appClassCache.Clear();
+                    compIntfcCache.Clear();
                 }
                 return true;
             }
@@ -90,6 +97,7 @@ namespace AppRefiner.Database
             }
             ClearRecordFieldCache();
             appClassCache.Clear();
+            compIntfcCache.Clear();
         }
 
         public void Dispose()
@@ -771,6 +779,44 @@ namespace AppRefiner.Database
             {
                 return null;
             }
+        }
+
+        public IReadOnlyCollection<string> CachedComponentInterfaces => compIntfcCache.Names;
+
+        public void InvalidateComponentInterface(string? ciName) => compIntfcCache.Invalidate(ciName);
+
+        public CompIntfcDefinition? GetComponentInterface(string ciName)
+        {
+            EnsureConnected();
+
+            // Failures propagate: a failed lookup must never read as "doesn't exist".
+            // LoadPeopleCodeItemContent throws on query failure.
+            return compIntfcCache.Get(
+                ciName,
+                name => Query(SqlProxyQueryCatalog.GetComponentInterfaceDefn, new[] { S(name) }, maxRows: 1),
+                ReadComponentInterfaceItems,
+                LoadPeopleCodeItemContent);
+        }
+
+        /// <summary>
+        /// Runs the items query capped at <see cref="MultiChunkMaxRows"/>. A result that reaches the
+        /// cap may be truncated, so it throws rather than build a partial definition whose missing
+        /// tail would read as "not a property" errors.
+        /// </summary>
+        private DataTable ReadComponentInterfaceItems(string ciName)
+        {
+            DataTable items = Query(
+                SqlProxyQueryCatalog.GetComponentInterfaceItems,
+                new[] { S(ciName) },
+                MultiChunkMaxRows);
+
+            if (items.Rows.Count >= MultiChunkMaxRows)
+            {
+                throw new InvalidOperationException(
+                    $"Component interface {ciName} has {MultiChunkMaxRows} or more items; the SQL proxy result may be truncated.");
+            }
+
+            return items;
         }
 
         public PackageItems GetAppPackageItems(string packagePath)
