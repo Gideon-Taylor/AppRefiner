@@ -99,8 +99,13 @@ return decides it. See §8 for the remaining limits.
 
 ## 5. Checker validates calls without the receiver type
 
-`TypeCheckerVisitor.VisitFunctionCall` calls `validator.Validate(functionInfo, arguments)`
-without `objectType`, so `$same` / `$element` parameter types fall back to Any.
+**Mostly fixed (2026-10):** `TypeCheckerVisitor.VisitFunctionCall` passes the receiver of an
+array method call, so `$element` parameters (`Push`, `Unshift`, `Find`, `Substitute`,
+`Replace`) are checked against the element type: pushing a number into an `array of string`
+is an error. Only `Array` uses `$element`/`$same` parameters.
+
+Still open: a multi-dimensional receiver isn't checked, since what App Designer accepts when
+pushing into an `array of array of T` (a row, an element, or both) isn't pinned down.
 
 ## 6. Variable typing is flow-insensitive
 
@@ -118,16 +123,14 @@ flow-insensitive; scope-aware typing is deferred (spec §15 of
 
 ## 7. Smaller gaps
 
-- `ResolveMemberAccessReturnType` has no branch for array receivers, so `&arr.Len` infers
-  as Any (array *methods* are handled in `ResolveFunctionInfo`).
 - `TypeInfo.Equals` compares only `PeopleCodeType`, so `record(A).Equals(record(B))` and
   `field(A.X).Equals(field(B.Y))` are true. This is now deliberate: names live in
   `TypeIdentity` (`TypeInfo.Identity` / `EffectiveIdentity`, 2026-10), which code that cares
   compares explicitly with `IsRefinementOf` / `ConflictsWith`. Callers that use `Equals` still
   ignore names.
-- `TypeInferenceVisitor.Run` setup is duplicated in `MainForm`, `AutoCompleteService` and
-  `TypeErrorReporter` (which also has its own copy of `DetermineQualifiedName`) instead of
-  going through `TypeInferenceRunner`.
+- `MainForm` and `AutoCompleteService` still have their own `DetermineQualifiedName` copies for
+  non-inference uses (member visibility, cache eviction, `%This` suggestions). Inference itself
+  goes through `TypeInferenceRunner` everywhere (2026-10).
 
 ## 8. Limits of ApiObject narrowing and return refinement
 
@@ -147,14 +150,13 @@ Left open by phases 3–4 (spec `docs/superpowers/specs/2026-10-25-apiobject-typ
 - **A library's own `Declare` sees the unrefined copy.** A function library that `Declare`s
   one of its own functions gets that function's extracted (unrefined) signature through the
   declaration, not the refined one.
-- **A parenthesized `(Null)` counts as a value.** The agreement rules skip a bare `Null` return
-  or assignment, but not `(Null)`, which then disagrees with the other values.
-- **An annotation with an unknown type still excludes the variable from narrowing.**
-  `Local ApiObject /* as Sesion */ &x;` warns about the unknown type and then leaves `&x` as plain
-  `ApiObject`, even if its uses would settle it.
 - **Global/Component redeclarations narrow per declaration.** A Global or Component variable
   declared again inside two method bodies is narrowed separately for each declaration, so the
   two can settle on different types although they are one variable at run time.
+
+Fixed in 2026-10:
+- A parenthesized `(Null)` return or member assignment is skipped like a bare `Null`.
+- An annotation naming an unknown type is warned about but no longer turns narrowing off.
 
 Fixed in 2026-10, from App Designer probes:
 - `DataCollection.Item`, `ItemByKeys`, `CurrentItem`, `GetEffectiveItem` and `InsertItem` return
