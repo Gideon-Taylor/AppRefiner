@@ -56,8 +56,8 @@ namespace AppRefiner.Database
                 return null;
             }
 
-            int version = Convert.ToInt32(defn.Rows[0]["VERSION"]);
-            int standardMethodBits = Convert.ToInt32(defn.Rows[0]["BCSTDMETHODS"]);
+            int version = Number(defn.Rows[0]["VERSION"]) ?? 0;
+            int standardMethodBits = Number(defn.Rows[0]["BCSTDMETHODS"]) ?? 0;
 
             if (definitions.TryGetValue(ciName, out CompIntfcDefinition? cached) && cached.Version == version)
             {
@@ -87,16 +87,16 @@ namespace AppRefiner.Database
             List<CompIntfcItemRow> rows = new();
             foreach (DataRow row in result.Rows)
             {
-                PeopleCodeType fieldType = row["FIELDTYPE"] is DBNull
-                    ? PeopleCodeType.Unknown
-                    : FieldTypes.ToPeopleCodeType(Convert.ToInt32(row["FIELDTYPE"]));
+                PeopleCodeType fieldType = Number(row["FIELDTYPE"]) is int type
+                    ? FieldTypes.ToPeopleCodeType(type)
+                    : PeopleCodeType.Unknown;
 
                 rows.Add(new CompIntfcItemRow(
-                    Convert.ToInt32(row["BCTYPE"]),
+                    Number(row["BCTYPE"]) ?? 0,
                     Text(row, "BCITEMPARENT").Trim(),
                     Text(row, "BCITEMNAME").Trim(),
-                    Convert.ToInt32(row["SEQUENCE_NBR_6"]),
-                    Convert.ToInt32(row["BCACCESS"]),
+                    Number(row["SEQUENCE_NBR_6"]) ?? 0,
+                    Number(row["BCACCESS"]) ?? 0,
                     Text(row, "RECNAME").Trim(),
                     Text(row, "FIELDNAME").Trim(),
                     row["COMMENTSHORT"] is DBNull ? null : row["COMMENTSHORT"].ToString()?.TrimEnd(),
@@ -104,6 +104,19 @@ namespace AppRefiner.Database
             }
             return rows;
         }
+
+        /// <summary>
+        /// A numeric column's value, or null when it is null or blank. The SQL proxy returns a null
+        /// column (such as FIELDTYPE for a collection row, whose blank FIELDNAME matches no
+        /// PSDBFIELD row) as an empty string rather than DBNull.
+        /// </summary>
+        private static int? Number(object value) => value switch
+        {
+            DBNull or null => null,
+            int i => i,
+            string s => int.TryParse(s.Trim(), out int parsed) ? parsed : null,
+            _ => Convert.ToInt32(value)
+        };
 
         /// <summary>
         /// The empty PeopleCodeItem naming the CI's Methods program in PSPCMPROG.
