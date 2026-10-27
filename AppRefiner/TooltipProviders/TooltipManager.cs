@@ -469,7 +469,8 @@ namespace AppRefiner.TooltipProviders
                 return false;
 
             // Combine all tooltips with blank lines between them
-            var combinedTooltip = string.Join(Environment.NewLine + Environment.NewLine, tooltips);
+            // (trailing newlines trimmed so each gap is exactly one blank line)
+            var combinedTooltip = string.Join(Environment.NewLine + Environment.NewLine, tooltips.Select(t => t.TrimEnd()));
 
             // Show the combined tooltip
             ScintillaManager.ShowCallTipWithText(editor, position, combinedTooltip);
