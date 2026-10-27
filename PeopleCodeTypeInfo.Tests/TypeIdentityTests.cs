@@ -37,6 +37,28 @@ public class TypeIdentityTests
     }
 
     [Fact]
+    public void Collection_path_more_detail_is_refinement()
+    {
+        var root = new TypeIdentity(CompIntfcName: "USER_PROFILE");
+        var roles = new TypeIdentity(CompIntfcName: "USER_PROFILE", CompIntfcPath: "Roles");
+        Assert.True(roles.IsRefinementOf(root));
+        Assert.False(root.IsRefinementOf(roles));
+        Assert.False(roles.IsEmpty);
+        Assert.False(new TypeIdentity(CompIntfcPath: "Roles").IsEmpty);
+        Assert.True(new TypeIdentity(CompIntfcPath: "").IsEmpty);
+    }
+
+    [Fact]
+    public void Different_paths_conflict()
+    {
+        var roles = new TypeIdentity(CompIntfcName: "USER_PROFILE", CompIntfcPath: "Roles");
+        Assert.True(roles.ConflictsWith(new TypeIdentity(CompIntfcName: "USER_PROFILE", CompIntfcPath: "EmailAddresses")));
+        Assert.False(roles.ConflictsWith(new TypeIdentity(CompIntfcName: "user_profile", CompIntfcPath: "ROLES")));
+        Assert.False(roles.ConflictsWith(new TypeIdentity(CompIntfcName: "USER_PROFILE")));
+        Assert.True(roles.IsRefinementOf(new TypeIdentity(CompIntfcName: "USER_PROFILE", CompIntfcPath: "roles")));
+    }
+
+    [Fact]
     public void Disjoint_names_do_not_conflict()
     {
         Assert.False(new TypeIdentity(FieldName: "X").ConflictsWith(new TypeIdentity(RecordName: "R")));

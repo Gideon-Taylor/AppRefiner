@@ -15,6 +15,8 @@ internal sealed class FakeTypeMetadataResolver : ITypeMetadataResolver
     private readonly Dictionary<string, TypeMetadata> _types = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, List<string>> _packages = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, HashSet<string>> _recordFields = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, CompIntfcDefinition> _componentInterfaces = new(StringComparer.OrdinalIgnoreCase);
+    private bool _componentInterfaceUnknown;
 
     /// <summary>
     /// Registers a class the resolver knows about. When no metadata is supplied, a
@@ -44,6 +46,31 @@ internal sealed class FakeTypeMetadataResolver : ITypeMetadataResolver
     public void AddRecordFields(string recordName, params string[] fieldNames)
     {
         _recordFields[recordName] = new HashSet<string>(fieldNames, StringComparer.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Registers a component interface definition; GetComponentInterface finds it by its Name.
+    /// Names not registered are Missing, unless SetComponentInterfaceUnknown(true).
+    /// </summary>
+    public void AddComponentInterface(CompIntfcDefinition definition)
+    {
+        _componentInterfaces[definition.Name] = definition;
+    }
+
+    /// <summary>
+    /// When true every component interface lookup is Unknown, as with no database.
+    /// </summary>
+    public void SetComponentInterfaceUnknown(bool unknown)
+    {
+        _componentInterfaceUnknown = unknown;
+    }
+
+    protected override CompIntfcLookup GetComponentInterfaceCore(string name)
+    {
+        if (_componentInterfaceUnknown) return CompIntfcLookup.Unknown;
+        return _componentInterfaces.TryGetValue(name, out var definition)
+            ? CompIntfcLookup.Found(definition)
+            : CompIntfcLookup.Missing;
     }
 
     protected override TypeMetadata? GetTypeMetadataCore(string qualifiedName)

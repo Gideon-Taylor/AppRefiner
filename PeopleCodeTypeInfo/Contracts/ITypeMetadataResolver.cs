@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using PeopleCodeTypeInfo.Inference;
 
 namespace PeopleCodeTypeInfo.Contracts;
@@ -133,11 +134,14 @@ public abstract class ITypeMetadataResolver
     }
 
     /// <summary>
-    /// Clears all cached metadata and resets generation counter.
+    /// Clears all cached metadata, including component interface lookups, and resets generation counter.
     /// </summary>
     public void Clear()
     {
         _cache.Clear();
+        _componentInterfaces.Clear();
+        _componentInterfaceFailures.Clear();
+        _componentInterfacesSeen.Clear();
     }
 
     /// <summary>
@@ -176,6 +180,117 @@ public abstract class ITypeMetadataResolver
             return null;
         return RecordHasFieldCore(recordName, fieldName);
     }
+
+    /// <summary>
+    /// How long a Found or Missing component interface lookup is trusted before it is fetched again.
+    /// </summary>
+    public static TimeSpan ComponentInterfaceRecheckInterval { get; set; } = TimeSpan.FromSeconds(30);
+
+    /// <summary>
+    /// How long a lookup whose Core threw is answered Unknown without calling Core again, so a
+    /// failing database isn't re-queried (and its driver timeout paid) on every member access.
+    /// </summary>
+    public static TimeSpan ComponentInterfaceFailureRetryInterval { get; set; } = TimeSpan.FromSeconds(10);
+
+    private readonly ConcurrentDictionary<string, (CompIntfcLookup Lookup, DateTime FetchedUtc)> _componentInterfaces = new();
+
+    // Names whose Core threw, with when; answered Unknown until the retry interval passes
+    private readonly ConcurrentDictionary<string, DateTime> _componentInterfaceFailures = new();
+
+    // Every name ever looked up, cached or not, so invalidating all also evicts metadata that
+    // depended on an Unknown or expired lookup
+    private readonly ConcurrentDictionary<string, byte> _componentInterfacesSeen = new();
+
+    /// <summary>
+    /// Looks up a component interface definition by name, case-insensitively. Found and Missing are
+    /// cached for <see cref="ComponentInterfaceRecheckInterval"/>. Unknown is never cached as an
+    /// answer, but when Core throws the name is answered Unknown without calling Core again for
+    /// <see cref="ComponentInterfaceFailureRetryInterval"/>. Records <c>CompIntfc:NAME</c> as a
+    /// dependency of a refinement in progress.
+    /// </summary>
+    public CompIntfcLookup GetComponentInterface(string name)
+    {
+        if (string.IsNullOrWhiteSpace(name)) return CompIntfcLookup.Unknown;
+
+        var upperName = name.ToUpperInvariant();
+        RefinementDependencyCollector.Record(ComponentInterfaceDependency(upperName));
+        _componentInterfacesSeen.TryAdd(upperName, 0);
+
+        if (_componentInterfaceFailures.TryGetValue(upperName, out var failedUtc))
+        {
+            if (DateTime.UtcNow - failedUtc < ComponentInterfaceFailureRetryInterval)
+                return CompIntfcLookup.Unknown;
+            _componentInterfaceFailures.TryRemove(upperName, out _);
+        }
+
+        bool hadEntry = _componentInterfaces.TryGetValue(upperName, out var cached);
+        if (hadEntry && DateTime.UtcNow - cached.FetchedUtc < ComponentInterfaceRecheckInterval)
+            return cached.Lookup;
+
+        CompIntfcLookup lookup;
+        try
+        {
+            lookup = GetComponentInterfaceCore(upperName);
+        }
+        catch (Exception ex)
+        {
+            // A failed lookup is never "doesn't exist"
+            lookup = CompIntfcLookup.Unknown;
+            _componentInterfaceFailures[upperName] = DateTime.UtcNow;
+            try
+            {
+                OnComponentInterfaceLookupFailed(upperName, ex);
+            }
+            catch
+            {
+                // Reporting must not turn a lookup into a failure
+            }
+        }
+
+        if (lookup.Status == CompIntfcLookupStatus.Unknown)
+        {
+            _componentInterfaces.TryRemove(upperName, out _);
+        }
+        else
+        {
+            // A recheck that finds the CI changed purges what was inferred from the old answer
+            if (hadEntry
+                && (cached.Lookup.Status != lookup.Status
+                    || cached.Lookup.Definition?.Version != lookup.Definition?.Version))
+                _cache.Remove(ComponentInterfaceDependency(upperName));
+            _componentInterfaces[upperName] = (lookup, DateTime.UtcNow);
+        }
+
+        return lookup;
+    }
+
+    /// <summary>
+    /// Drops the cached lookup for <paramref name="name"/>, or every lookup when null, and evicts
+    /// the type metadata whose refinement depended on it.
+    /// </summary>
+    public void InvalidateComponentInterface(string? name)
+    {
+        if (name == null)
+        {
+            foreach (var seen in _componentInterfacesSeen.Keys)
+                _cache.Remove(ComponentInterfaceDependency(seen));
+            _componentInterfaces.Clear();
+            _componentInterfaceFailures.Clear();
+            return;
+        }
+
+        var upperName = name.ToUpperInvariant();
+        _componentInterfaces.TryRemove(upperName, out _);
+        _componentInterfaceFailures.TryRemove(upperName, out _);
+        _cache.Remove(ComponentInterfaceDependency(upperName));
+    }
+
+    /// <summary>
+    /// The upper-cased names with a cached Found or Missing lookup.
+    /// </summary>
+    public IReadOnlyCollection<string> CachedComponentInterfaces => _componentInterfaces.Keys.ToArray();
+
+    private static string ComponentInterfaceDependency(string upperName) => "CompIntfc:" + upperName;
 
     /// <summary>
     /// Subclasses implement this method to perform the actual type metadata resolution.
@@ -221,6 +336,19 @@ public abstract class ITypeMetadataResolver
     /// Subclasses implement record field membership. Default is unknown (null).
     /// </summary>
     protected virtual bool? RecordHasFieldCore(string recordName, string fieldName) => null;
+
+    /// <summary>
+    /// Subclasses fetch a component interface definition by upper-cased name. Default is Unknown.
+    /// Throw on failure (rather than return Unknown) so the base class holds off retrying for
+    /// <see cref="ComponentInterfaceFailureRetryInterval"/>.
+    /// </summary>
+    protected virtual CompIntfcLookup GetComponentInterfaceCore(string name) => CompIntfcLookup.Unknown;
+
+    /// <summary>
+    /// Called when <see cref="GetComponentInterfaceCore"/> throws: at most once per name per
+    /// <see cref="ComponentInterfaceFailureRetryInterval"/>. Default does nothing.
+    /// </summary>
+    protected virtual void OnComponentInterfaceLookupFailed(string name, Exception exception) { }
 
     public TypeCache Cache
     {
