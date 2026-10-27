@@ -110,14 +110,16 @@ flow-insensitive; scope-aware typing is deferred (spec §15 of
 
 ## 7. Smaller gaps
 
+**Fixed (2026-10):**
 - `TypeInfo.Equals` compares only `PeopleCodeType`, so `record(A).Equals(record(B))` and
-  `field(A.X).Equals(field(B.Y))` are true. This is now deliberate: names live in
-  `TypeIdentity` (`TypeInfo.Identity` / `EffectiveIdentity`, 2026-10), which code that cares
-  compares explicitly with `IsRefinementOf` / `ConflictsWith`. Callers that use `Equals` still
-  ignore names.
-- `MainForm` and `AutoCompleteService` still have their own `DetermineQualifiedName` copies for
-  non-inference uses (member visibility, cache eviction, `%This` suggestions). Inference itself
-  goes through `TypeInferenceRunner` everywhere (2026-10).
+  `field(A.X).Equals(field(B.Y))` are true. This is deliberate: names live in `TypeIdentity`
+  (`TypeInfo.Identity` / `EffectiveIdentity`), which code that cares compares explicitly with
+  `IsRefinementOf` / `ConflictsWith`. The checker's assignment compatibility no longer starts
+  from `Equals` (`IsAssignableFrom` decides), so the only remaining callers merge the members of
+  a union return type, where same-kind types collapsing is harmless.
+- `DetermineQualifiedName` lives only in `TypeInferenceRunner` (one overload per program, one per
+  editor caption, for save-time cache eviction); the `MainForm`, `AutoCompleteService` and
+  `TooltipManager` copies, which lacked the no-method-in-caption guard, are gone.
 
 ## 8. Limits of ApiObject narrowing and return refinement
 

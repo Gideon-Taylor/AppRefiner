@@ -791,7 +791,7 @@ namespace AppRefiner
                 List<PropertyInfo> synthetics = new();
                 if (program.AppClass != null)
                 {
-                    synthetics.Add(new PropertyInfo(PeopleCodeType.AppClass, 0, DetermineQualifiedName(editor)) { Name = "%This" });
+                    synthetics.Add(new PropertyInfo(PeopleCodeType.AppClass, 0, Services.TypeInferenceRunner.DetermineQualifiedName(program, editor)) { Name = "%This" });
 
                     var baseTypeName = ImportResolution.BaseTypeName(program.AppClass, editor.AppDesignerProcess?.TypeResolver);
                     if (baseTypeName != null)
@@ -1053,35 +1053,6 @@ namespace AppRefiner
 
             string arrayIndicator = prop.IsArray ? $"[{prop.ArrayDimensionality}]" : "";
             return $"{typeName}{arrayIndicator}";
-        }
-
-        /// <summary>
-        /// Determines the qualified name for the current program for type inference.
-        /// </summary>
-        private static string DetermineQualifiedName(ScintillaEditor editor)
-        {
-            if (editor?.Caption != null && !string.IsNullOrWhiteSpace(editor.Caption))
-            {
-                // Parse caption to get program identifier
-                var openTarget = OpenTargetBuilder.CreateFromCaption(editor.Caption);
-                if (openTarget != null && editor.Caption.Contains("Application Package"))
-                {
-                    var methodIndex = Array.IndexOf(openTarget.ObjectIDs, PSCLASSID.METHOD);
-                    openTarget.ObjectIDs[methodIndex] = PSCLASSID.NONE;
-                    openTarget.ObjectValues[methodIndex] = null;
-                    return openTarget.Path;
-                }
-                else
-                {
-                    /* probably never what you want but we have to return something? */
-                    return "Program";
-                }
-            }
-            else
-            {
-                /* probably never what you want but we have to return something? */
-                return "Program";
-            }
         }
 
         /// <summary>

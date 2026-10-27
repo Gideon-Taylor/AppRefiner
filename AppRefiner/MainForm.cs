@@ -3000,7 +3000,7 @@ namespace AppRefiner
                         if (typeInfo is AppClassTypeInfo act && program.AppClass != null)
                         {
                             var typeResolver = editor.AppDesignerProcess.TypeResolver;
-                            var currentQualifiedName = DetermineQualifiedName(editor);
+                            var currentQualifiedName = TypeInferenceRunner.DetermineQualifiedName(program, editor);
                             var activeClassTypeInfo = AppClassTypeInfo.CreateWithInheritanceChain(currentQualifiedName, typeResolver, typeResolver.Cache);
 
                             if (activeClassTypeInfo.InheritanceChain.Any(e => e.QualifiedName == act.QualifiedName))
@@ -4460,7 +4460,7 @@ namespace AppRefiner
                         if (editorToSave.Type == EditorType.PeopleCode && editorToSave.Caption.Contains("Application Package"))
                         {
                             /* are we in an application class */
-                            var programName = DetermineQualifiedName(activeEditor);
+                            var programName = TypeInferenceRunner.DetermineQualifiedName(activeEditor);
                             stylerManager?.ClearMemberCacheForClass(programName);
                         }
 
@@ -4506,35 +4506,6 @@ namespace AppRefiner
             {
                 Debug.Log($"Error processing debounced savepoint: {ex.Message}");
                 Debug.Log(ex.StackTrace);
-            }
-        }
-
-        /// <summary>
-        /// Determines the qualified name for the current program for type inference.
-        /// </summary>
-        private static string DetermineQualifiedName(ScintillaEditor editor)
-        {
-            if (editor?.Caption != null && !string.IsNullOrWhiteSpace(editor.Caption))
-            {
-                // Parse caption to get program identifier
-                var openTarget = OpenTargetBuilder.CreateFromCaption(editor.Caption);
-                if (openTarget != null && editor.Caption.Contains("Application Package"))
-                {
-                    var methodIndex = Array.IndexOf(openTarget.ObjectIDs, PSCLASSID.METHOD);
-                    openTarget.ObjectIDs[methodIndex] = PSCLASSID.NONE;
-                    openTarget.ObjectValues[methodIndex] = null;
-                    return openTarget.Path;
-                }
-                else
-                {
-                    /* probably never what you want but we have to return something? */
-                    return string.Join(".", openTarget.ObjectValues);
-                }
-            }
-            else
-            {
-                /* probably never what you want but we have to return something? */
-                return "Program";
             }
         }
 
@@ -4628,7 +4599,7 @@ namespace AppRefiner
                     }
                 }
 
-                var qualifiedName = DetermineQualifiedName(editor);
+                var qualifiedName = TypeInferenceRunner.DetermineQualifiedName(editor);
 
                 // Evict type metadata for this program, and (inside TypeCache.Remove) the cached
                 // refinements inferred from it. Don't Clear() the whole resolver: other classes

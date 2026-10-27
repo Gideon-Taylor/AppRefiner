@@ -477,8 +477,9 @@ namespace PeopleCodeParser.SelfHosted.Visitors
 
         private bool AreTypesCompatible(TypeInfo targetType, TypeInfo valueType)
         {
-            // Fast path: exact match or Any/Unknown types (always compatible)
-            if (targetType.Equals(valueType) || targetType is AnyTypeInfo || valueType is AnyTypeInfo || targetType is UnknownTypeInfo || valueType is UnknownTypeInfo)
+            // Any/Unknown types are always compatible. Same types are IsAssignableFrom's answer:
+            // TypeInfo.Equals ignores record and field names, so it can't decide this.
+            if (targetType is AnyTypeInfo || valueType is AnyTypeInfo || targetType is UnknownTypeInfo || valueType is UnknownTypeInfo)
             {
                 return true;
             }

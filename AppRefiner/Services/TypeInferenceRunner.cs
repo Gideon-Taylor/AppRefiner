@@ -46,50 +46,44 @@ namespace AppRefiner.Services
                 onUndefinedVariable: typeExtensionManager != null ? typeExtensionManager.HandleUndefinedVariable : null);
         }
 
-        public static string DetermineQualifiedName(ProgramNode node, ScintillaEditor editor)
+        /// <summary>
+        /// The open program's qualified name: PKG:Class for an app class, the dotted object path
+        /// (REC.FIELD.Event, …) otherwise. Falls back to the class name, or "Program", when the
+        /// caption doesn't parse.
+        /// </summary>
+        public static string DetermineQualifiedName(ProgramNode node, ScintillaEditor editor) =>
+            QualifiedNameFromCaption(editor, isAppClass: node.AppClass != null)
+            ?? node.AppClass?.Name
+            ?? "Program";
+
+        /// <summary>
+        /// The open program's qualified name without a parsed program: an Application Package
+        /// caption is taken to be an app class.
+        /// </summary>
+        public static string DetermineQualifiedName(ScintillaEditor editor) =>
+            QualifiedNameFromCaption(editor, isAppClass: editor.Caption?.Contains("Application Package") == true)
+            ?? "Program";
+
+        private static string? QualifiedNameFromCaption(ScintillaEditor? editor, bool isAppClass)
         {
-            // Try to extract from AST structure first
-            if (node.AppClass != null)
-            {
-                var className = node.AppClass.Name;
+            if (string.IsNullOrWhiteSpace(editor?.Caption))
+                return null;
 
-                if (editor?.Caption != null && !string.IsNullOrWhiteSpace(editor.Caption))
-                {
-                    var openTarget = OpenTargetBuilder.CreateFromCaption(editor.Caption);
-                    if (openTarget != null)
-                    {
-                        var methodIndex = Array.IndexOf(openTarget.ObjectIDs, PSCLASSID.METHOD);
-                        if (methodIndex >= 0)
-                        {
-                            openTarget.ObjectIDs[methodIndex] = PSCLASSID.NONE;
-                            openTarget.ObjectValues[methodIndex] = null;
-                        }
-                        return openTarget.Path;
-                    }
-                    else
-                    {
-                        return className;
-                    }
-                }
-                else
-                {
-                    return className;
-                }
-            }
-            else
-            {
-                // For function libraries or other programs
-                if (editor?.Caption != null && !string.IsNullOrWhiteSpace(editor.Caption))
-                {
-                    var openTarget = OpenTargetBuilder.CreateFromCaption(editor.Caption);
-                    if (openTarget != null)
-                    {
-                        return string.Join(".", openTarget.ObjectValues);
-                    }
-                }
+            var openTarget = OpenTargetBuilder.CreateFromCaption(editor.Caption);
+            if (openTarget == null)
+                return null;
 
-                return "Program";
+            if (!isAppClass)
+                return string.Join(".", openTarget.ObjectValues);
+
+            // The caption names the method being edited; the class is the path without it
+            var methodIndex = Array.IndexOf(openTarget.ObjectIDs, PSCLASSID.METHOD);
+            if (methodIndex >= 0)
+            {
+                openTarget.ObjectIDs[methodIndex] = PSCLASSID.NONE;
+                openTarget.ObjectValues[methodIndex] = null;
             }
+            return openTarget.Path;
         }
 
         /// <summary>
