@@ -2988,9 +2988,10 @@ namespace AppRefiner
 
                     RunTypeInference(editor, program, languageExtensionManager);
 
-                    // Find the node just before the '.' character (position - 1)
-                    // The position is after the '.', so we need to look at what comes before it
-                    var targetPosition = position - 1;
+                    // Find the node just before the '.'. Ctrl+Space can come with a partial member
+                    // name already typed after it (&x.Us), so step back over that first.
+                    var dotPosition = position - ScintillaManager.CountIdentifierBytesBeforePosition(editor, position);
+                    var targetPosition = dotPosition - 1;
                     var nodeBeforeDot = program.FindNodes(n => n.SourceSpan.ContainsPosition(targetPosition))
                         .LastOrDefault();
 

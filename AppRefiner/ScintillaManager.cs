@@ -2299,7 +2299,7 @@ namespace AppRefiner
         /// the typed prefix is the identifier itself. Positions are UTF-8 byte offsets and
         /// PeopleCode identifier characters are ASCII, so byte-wise counting is exact.
         /// </summary>
-        private static int CountIdentifierBytesBeforePosition(ScintillaEditor editor, int position)
+        internal static int CountIdentifierBytesBeforePosition(ScintillaEditor editor, int position)
         {
             int lineNumber = (int)editor.SendMessage(SCI_LINEFROMPOSITION, position, IntPtr.Zero);
             int lineStart = (int)editor.SendMessage(SCI_POSITIONFROMLINE, lineNumber, IntPtr.Zero);
