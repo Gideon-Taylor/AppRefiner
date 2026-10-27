@@ -48,6 +48,16 @@ public class ArrayMemberTypeTests
         var error = Assert.Single(errors);
         var literal = program.FindDescendants<LiteralNode>().Single(l => l.Value is not string);
         Assert.Same(literal, error.Node);
+        Assert.Equal("Push(): Argument 2 should be string, found Number", error.Message);
+    }
+
+    [Fact]
+    public void Push_of_element_into_two_dimensional_array_is_error()
+    {
+        var (_, errors) = TypeCheck("Local array of array of string &a;\n&a.Push(\"x\");");
+
+        var error = Assert.Single(errors);
+        Assert.Equal("Push(): Argument 1 should be array of string, found String", error.Message);
     }
 
     [Theory]
@@ -56,8 +66,7 @@ public class ArrayMemberTypeTests
     [InlineData("Local array &a;\n&a.Push(1, \"x\");")]
     [InlineData("Local array of any &a;\n&a.Push(1, \"x\");")]
     [InlineData("Local array of string &a;\n&a.Unshift(\"x\");\n&a.Substitute(\"x\", \"y\");\nLocal number &i = &a.Find(\"y\");")]
-    // Multi-dimensional receivers aren't checked: App Designer's rules for pushing into them aren't pinned down
-    [InlineData("Local array of array of string &a;\n&a.Push(\"x\");\n&a.Push(CreateArray(\"y\"));")]
+    [InlineData("Local array of array of string &a;\nLocal array of string &row;\n&a.Push(&row, CreateArray(\"y\"));")]
     public void Matching_or_unchecked_elements_are_accepted(string source)
     {
         var (_, errors) = TypeCheck(source);

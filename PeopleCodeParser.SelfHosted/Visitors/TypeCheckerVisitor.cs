@@ -409,13 +409,14 @@ namespace PeopleCodeParser.SelfHosted.Visitors
 
         /// <summary>
         /// The receiver of an array method call, so its <c>$element</c> parameters (Push, Find,
-        /// Substitute, ...) are checked against the element type; null otherwise, which leaves them
-        /// accepting anything. Only one-dimensional arrays: what App Designer accepts when pushing
-        /// into a multi-dimensional array isn't pinned down.
+        /// Substitute, ...) are checked against the element type, one dimension down (an
+        /// <c>array of array of string</c> takes <c>array of string</c> values); null otherwise,
+        /// which leaves them accepting anything. App Designer saves a mismatched value, but it
+        /// fails or is wrong at run time, so it's an error.
         /// </summary>
         private static TypeInfo? ElementCheckedReceiver(FunctionCallNode node) =>
             node.Function is MemberAccessNode member
-            && member.Target.GetInferredType() is ArrayTypeInfo { Dimensions: 1 } array
+            && member.Target.GetInferredType() is ArrayTypeInfo array
                 ? array
                 : null;
 

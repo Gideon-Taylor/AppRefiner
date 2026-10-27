@@ -1803,7 +1803,7 @@ public class FunctionCallValidator
             return list;
         }
 
-        private static IEnumerable<ParameterTypeInfo> GetAcceptableTypes(Parameter parameter)
+        private IEnumerable<ParameterTypeInfo> GetAcceptableTypes(Parameter parameter)
         {
             switch (parameter)
             {
@@ -1837,9 +1837,16 @@ public class FunctionCallValidator
 
         /// <summary>
         /// Converts a <see cref="TypeWithDimensionality"/> to the externally-visible token used in errors.
+        /// A polymorphic type shows what it resolves to for this call (an array's element type for
+        /// <c>$element</c>), when that's known.
         /// </summary>
-        private static string FormatType(TypeWithDimensionality t)
+        private string FormatType(TypeWithDimensionality t)
         {
+            if (t.Type.IsPolymorphic() && ResolvePolymorphic(t.Type) is { } resolved)
+            {
+                return t.IsArray ? new ArrayTypeInfo(t.ArrayDimensionality, resolved).Name : resolved.Name;
+            }
+
             if (t.MustBeFieldName)
             {
                 return t.Type == PeopleCodeType.Any
@@ -1858,6 +1865,23 @@ public class FunctionCallValidator
             }
 
             return s;
+        }
+
+        /// <summary>The concrete type a polymorphic parameter type stands for in this call, or null.</summary>
+        private TypeInfo? ResolvePolymorphic(PeopleCodeType type)
+        {
+            if (TypeInfo.FromPeopleCodeType(type) is not PolymorphicTypeInfo polymorphic)
+                return null;
+
+            try
+            {
+                var resolved = polymorphic.Resolve(ObjectType, Arguments);
+                return resolved is AnyTypeInfo ? null : resolved;
+            }
+            catch (InvalidOperationException)
+            {
+                return null;
+            }
         }
     }
 }

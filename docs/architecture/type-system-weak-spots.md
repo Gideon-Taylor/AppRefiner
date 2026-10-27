@@ -99,13 +99,13 @@ return decides it. See §8 for the remaining limits.
 
 ## 5. Checker validates calls without the receiver type
 
-**Mostly fixed (2026-10):** `TypeCheckerVisitor.VisitFunctionCall` passes the receiver of an
-array method call, so `$element` parameters (`Push`, `Unshift`, `Find`, `Substitute`,
-`Replace`) are checked against the element type: pushing a number into an `array of string`
-is an error. Only `Array` uses `$element`/`$same` parameters.
-
-Still open: a multi-dimensional receiver isn't checked, since what App Designer accepts when
-pushing into an `array of array of T` (a row, an element, or both) isn't pinned down.
+**Fixed (2026-10):** `TypeCheckerVisitor.VisitFunctionCall` passes the receiver of an array
+method call, so `$element` parameters (`Push`, `Unshift`, `Find`, `Substitute`, `Replace`) are
+checked against the element type, one dimension down: pushing a number into an
+`array of string`, or a string into an `array of array of string`, is an error, and the
+message names the resolved type ("should be string"), not `$element`. App Designer saves both,
+but they fail or misbehave at run time, so they are errors by choice. Only `Array` uses
+`$element`/`$same` parameters.
 
 ## 6. Variable typing is flow-insensitive
 
