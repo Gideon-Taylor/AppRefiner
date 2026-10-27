@@ -364,12 +364,6 @@ namespace AppRefiner
         public (string Keyword, string Prefix, bool Truncated)? LastDefinitionSuggestion { get; set; }
 
         /// <summary>
-        /// Incremented per definition-name query; a result is shown only if no newer query
-        /// started while it ran. UI thread only.
-        /// </summary>
-        public int DefinitionSuggestionRequest { get; set; }
-
-        /// <summary>
         /// Stores the search-related indicators created by the "Mark All" feature
         /// </summary>
         public List<Indicator> SearchIndicators { get; set; } = new List<Indicator>();

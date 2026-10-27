@@ -942,11 +942,6 @@ namespace AppRefiner
             }
         }
 
-        /// <summary>
-        /// Definition-name suggestions read the definition tables; with no connection nothing is shown.
-        /// </summary>
-        private const DataManagerRequirement DefinitionNameDatabaseRequirement = DataManagerRequirement.Required;
-
         /// <summary>Rows shown in a definition-name popup; one more is fetched to detect truncation.</summary>
         private const int DefinitionNameLimit = 500;
 
@@ -957,9 +952,6 @@ namespace AppRefiner
         /// <summary>Body of an unfinished block comment that is a type annotation (<c>/* as ...</c>).</summary>
         private static readonly Regex AnnotationCommentBody =
             new(@"^\s*as\s", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
-
-        private static bool HasDatabaseConnection(ScintillaEditor editor) =>
-            editor.DataManager != null && editor.DataManager.IsConnected;
 
         /// <summary>
         /// Reads the document from its start up to <paramref name="position"/> (a UTF-8 byte offset).
@@ -1026,15 +1018,15 @@ namespace AppRefiner
 
         /// <summary>
         /// Shows definition names (records, fields, pages, ...) starting with the identifier typed
-        /// after a definition-reference keyword. The query runs off the UI thread; the popup is
-        /// shown back on it. While a complete (untruncated) list for the same keyword is still open,
+        /// after a definition-reference keyword. Queries synchronously on the UI thread, like
+        /// ShowAppPackageSuggestions. While a complete (untruncated) list for the same keyword is still open,
         /// a longer prefix is left to Scintilla's own filtering instead of querying again.
         /// </summary>
         public void ShowDefinitionNameSuggestions(ScintillaEditor? editor, int position)
         {
             if (editor == null || !editor.IsValid()) return;
 
-            if (DefinitionNameDatabaseRequirement == DataManagerRequirement.Required && !HasDatabaseConnection(editor))
+            if (editor.DataManager == null || !editor.DataManager.IsConnected)
             {
                 Debug.Log("No database connection; skipping definition name suggestions.");
                 return;
@@ -1067,54 +1059,25 @@ namespace AppRefiner
                     return;
                 }
 
-                var dataManager = editor.DataManager!;
-                int request = ++editor.DefinitionSuggestionRequest;
-
-                Task.Run(() =>
+                var names = editor.DataManager.GetDefinitionNames(keyword, escaped, DefinitionNameLimit + 1);
+                if (names.Count == 0)
                 {
-                    List<string> names;
-                    try
-                    {
-                        names = dataManager.GetDefinitionNames(keyword, escaped, DefinitionNameLimit + 1);
-                    }
-                    catch (Exception ex)
-                    {
-                        Debug.LogException(ex, $"Error querying definition names for {keyword}.{prefix}");
-                        return;
-                    }
+                    Debug.Log($"No definition names for {keyword}.{prefix}");
+                    return;
+                }
 
-                    mainForm.BeginInvoke((Action)(() =>
-                    {
-                        try
-                        {
-                            // A newer keystroke started its own query; drop this stale result
-                            if (request != editor.DefinitionSuggestionRequest || !editor.IsValid()) return;
+                bool truncated = names.Count > DefinitionNameLimit;
+                var suggestions = truncated ? names.GetRange(0, DefinitionNameLimit) : names;
 
-                            if (names.Count == 0)
-                            {
-                                Debug.Log($"No definition names for {keyword}.{prefix}");
-                                return;
-                            }
-
-                            bool truncated = names.Count > DefinitionNameLimit;
-                            var suggestions = truncated ? names.GetRange(0, DefinitionNameLimit) : names;
-
-                            Debug.Log($"Showing {suggestions.Count} definition names for {keyword}.{prefix} (truncated: {truncated})");
-                            if (ScintillaManager.ShowAutoComplete(editor, AutoCompleteContext.DefinitionName, position, suggestions))
-                            {
-                                editor.LastDefinitionSuggestion = (keyword, escaped, truncated);
-                            }
-                            else
-                            {
-                                Debug.Log("Failed to show definition name suggestions.");
-                            }
-                        }
-                        catch (Exception ex)
-                        {
-                            Debug.LogException(ex, "Error showing definition name suggestions");
-                        }
-                    }));
-                });
+                Debug.Log($"Showing {suggestions.Count} definition names for {keyword}.{prefix} (truncated: {truncated})");
+                if (ScintillaManager.ShowAutoComplete(editor, AutoCompleteContext.DefinitionName, position, suggestions))
+                {
+                    editor.LastDefinitionSuggestion = (keyword, escaped, truncated);
+                }
+                else
+                {
+                    Debug.Log("Failed to show definition name suggestions.");
+                }
             }
             catch (Exception ex)
             {
