@@ -16,6 +16,9 @@ public class AnnotationSuggestTests
     [InlineData("method M() Returns ApiObject /* as ", "ApiObject", "")]
     [InlineData("&f = &s.GetFolder() /* as ", "", "")]
     [InlineData("&f = &s.GetFolder(); /* as ", "", "")]
+    [InlineData("Local ApiObject &f = &s.GetFolder() /* as ", "", "")]
+    [InlineData("If &ok Then\n   &f = &s.Folders.Item(1) /* as ", "", "")]
+    [InlineData("&f = &s.GetFolder(&a, (&b)) /* as ", "", "")]
     public void Detects_partial_annotations(string text, string category, string partial)
     {
         Assert.True(TypeAnnotationParser.TryGetPartialAnnotation(text, out var actualCategory, out var actualPartial));
@@ -37,6 +40,16 @@ public class AnnotationSuggestTests
     [InlineData("Local ApiObject\n/* as ")]
     [InlineData("Local MyPkg:MyClass /* as ")]
     [InlineData("Local array of ApiObject /* as ")]
+    // Only an assigned value takes a value annotation
+    [InlineData("Local ApiObject &x /* as ")]
+    [InlineData("Local ApiObject &x; /* as ")]
+    [InlineData("instance ApiObject &a, &b /* as ")]
+    [InlineData("Function F(&a /* as ")]
+    [InlineData("Foo(&a /* as ")]
+    [InlineData("&x = Foo(&a /* as ")]
+    [InlineData("&s.Open() /* as ")]
+    [InlineData("Return &x /* as ")]
+    [InlineData("If &a = &b Then\n   DoIt(&c) /* as ")]
     public void Rejects_text_that_is_not_a_partial_annotation(string text)
     {
         Assert.False(TypeAnnotationParser.TryGetPartialAnnotation(text, out _, out _));

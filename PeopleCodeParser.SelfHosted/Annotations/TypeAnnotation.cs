@@ -161,9 +161,53 @@ public static class TypeAnnotationParser
         if (!endsValue)
             return false;
 
+        var valueEnd = significant.Count - (annotated.Type == TokenType.Semicolon ? 3 : 2);
+        if (!IsAssignedValue(significant, valueEnd))
+            return false;
+
         partial = match.Groups[1].Value;
         return true;
     }
+
+    /// <summary>
+    /// Whether the expression ending at <paramref name="end"/> is the value of an assignment or a
+    /// declaration's initializer, the only values an annotation applies to: scanning back at bracket
+    /// depth 0 reaches an <c>=</c> before an unmatched bracket or the start of the statement.
+    /// </summary>
+    private static bool IsAssignedValue(List<Token> tokens, int end)
+    {
+        int depth = 0;
+        for (int i = end; i >= 0; i--)
+        {
+            var type = tokens[i].Type;
+            if (type.IsCommentType())
+                continue;
+
+            if (type is TokenType.RightParen or TokenType.RightBracket)
+                depth++;
+            else if (type is TokenType.LeftParen or TokenType.LeftBracket)
+            {
+                if (depth-- == 0)
+                    return false;
+            }
+            else if (depth == 0)
+            {
+                if (type == TokenType.Equal)
+                    return true;
+                if (StatementBoundaries.Contains(type))
+                    return false;
+            }
+        }
+        return false;
+    }
+
+    private static readonly HashSet<TokenType> StatementBoundaries =
+    [
+        TokenType.Semicolon, TokenType.If, TokenType.Then, TokenType.Else, TokenType.While,
+        TokenType.Until, TokenType.Repeat, TokenType.For, TokenType.Evaluate, TokenType.When,
+        TokenType.WhenOther, TokenType.Return, TokenType.Break, TokenType.Exit, TokenType.Error,
+        TokenType.Warning
+    ];
 
     /// <summary>
     /// The annotation types to suggest for <paramref name="category"/>, in display order. Entries
