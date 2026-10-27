@@ -87,6 +87,88 @@ public static class TypeAnnotationParser
             : new ParsedAnnotation(comment, null, UnknownTypeMessage(written));
     }
 
+    private static readonly Regex PartialAnnotationBody =
+        new(@"^\s*as\s+([A-Za-z0-9_]*)$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+
+    private static readonly TokenType[] DeclarationKeywords =
+    {
+        TokenType.Local, TokenType.Global, TokenType.Component, TokenType.Instance,
+        TokenType.Property, TokenType.As, TokenType.Returns
+    };
+
+    /// <summary>
+    /// True when <paramref name="textBeforeCursor"/> ends inside an unfinished <c>/* as T</c>
+    /// annotation started on the current line. <paramref name="partial"/> is the T typed so far;
+    /// <paramref name="category"/> is the annotated declaration's category, or null for <c>any</c>
+    /// and value positions, where every type fits.
+    /// </summary>
+    public static bool TryGetPartialAnnotation(string textBeforeCursor, out AnnotationCategory? category, out string partial)
+    {
+        category = null;
+        partial = "";
+
+        // An unterminated comment runs to end of input, so it is the last token before EOF
+        var tokens = new PeopleCodeLexer(textBeforeCursor).TokenizeAll();
+        var significant = tokens.Where(t => t.Type != TokenType.EndOfFile).ToList();
+        if (significant.Count < 2)
+            return false;
+
+        var comment = significant[^1];
+        if (comment.Type != TokenType.BlockComment || comment.Text.Length >= 4 && comment.Text.EndsWith("*/", StringComparison.Ordinal))
+            return false;
+
+        var body = comment.Text[2..];
+        if (body.Contains('\n') || body.Contains('\r'))
+            return false;
+
+        var match = PartialAnnotationBody.Match(body);
+        if (!match.Success)
+            return false;
+
+        var annotated = significant[^2];
+        var beforeAnnotated = significant.Count >= 3 ? significant[^3] : null;
+        if (beforeAnnotated != null && DeclarationKeywords.Contains(beforeAnnotated.Type))
+        {
+            // A declared type: only any, ApiObject, Record and Field take annotations
+            if (annotated.Type == TokenType.Any)
+            {
+                partial = match.Groups[1].Value;
+                return true;
+            }
+
+            category = annotated.Text.ToLowerInvariant() switch
+            {
+                "apiobject" => AnnotationCategory.ApiObject,
+                "record" => AnnotationCategory.Record,
+                "field" => AnnotationCategory.Field,
+                _ => null
+            };
+            partial = category != null ? match.Groups[1].Value : "";
+            return category != null;
+        }
+
+        // After an expression or its statement's ';' the annotation is on a value: any type fits
+        var endsValue = annotated.Type.IsIdentifier() || annotated.Type.IsLiteral() ||
+                        annotated.Type is TokenType.RightParen or TokenType.RightBracket or TokenType.Semicolon;
+        if (!endsValue)
+            return false;
+
+        partial = match.Groups[1].Value;
+        return true;
+    }
+
+    /// <summary>
+    /// The annotation types to suggest for <paramref name="category"/>, in display order. Entries
+    /// ending in <c>.</c> are keyword prefixes the user completes with a definition name.
+    /// </summary>
+    public static IReadOnlyList<string> SuggestedTypes(AnnotationCategory? category) => category switch
+    {
+        AnnotationCategory.ApiObject => [.. PeopleCodeTypeDatabase.GetApiObjectSubtypeNames(), "CompIntfc."],
+        AnnotationCategory.Record => ["Record."],
+        AnnotationCategory.Field => ["Field.", "Record."],
+        _ => [.. PeopleCodeTypeDatabase.GetApiObjectSubtypeNames(), "CompIntfc.", "Field.", "Record."]
+    };
+
     private static AnnotationTarget? ParseTarget(string written)
     {
         var parts = written.Split('.');
