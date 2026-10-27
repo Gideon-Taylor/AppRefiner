@@ -3488,7 +3488,8 @@ namespace AppRefiner
                 }
 
                 // Use new scope-aware resolver with optional database support
-                var goToVisitor = new GoToDefinitionVisitor(program, cursorPosition, activeEditor.DataManager);
+                var goToVisitor = new GoToDefinitionVisitor(program, cursorPosition, activeEditor.DataManager,
+                    activeEditor.AppDesignerProcess?.TypeResolver);
 
                 goToVisitor.VisitProgram(program);
 
@@ -4632,6 +4633,23 @@ namespace AppRefiner
                 {
                     Debug.Log("InvalidateTypeCacheForEditor: No AppDesigner process available");
                     return;
+                }
+
+                // Saving a CI's PeopleCode can change its user-defined methods: drop the cached
+                // definition and the type metadata built from it so the next lookup re-reads it.
+                var openTarget = OpenTargetBuilder.CreateFromCaption(editor.Caption);
+                if (openTarget?.Type == OpenTargetType.ComponentInterfacePeopleCode)
+                {
+                    try
+                    {
+                        appDesignerProcess.DataManager?.InvalidateComponentInterface(openTarget.Name);
+                        appDesignerProcess.TypeResolver?.InvalidateComponentInterface(openTarget.Name);
+                        Debug.Log($"InvalidateTypeCacheForEditor: Component interface '{openTarget.Name}' invalidated");
+                    }
+                    catch (Exception ciEx)
+                    {
+                        Debug.Log($"InvalidateTypeCacheForEditor: Component interface invalidate failed: {ciEx.Message}");
+                    }
                 }
 
                 var qualifiedName = DetermineQualifiedName(editor);

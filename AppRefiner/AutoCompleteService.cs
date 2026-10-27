@@ -3,10 +3,12 @@ using AppRefiner.LanguageExtensions;
 using AppRefiner.Refactors; // For ScopedRefactor, AddImport, CreateAutoComplete
 using AppRefiner.TooltipProviders; // For DllImport
 using PeopleCodeParser.SelfHosted;
+using PeopleCodeParser.SelfHosted.ComponentInterfaces;
 using PeopleCodeParser.SelfHosted.Lexing;
 using PeopleCodeParser.SelfHosted.Nodes;
 using PeopleCodeParser.SelfHosted.Visitors;
 using PeopleCodeParser.SelfHosted.Visitors.Models;
+using PeopleCodeTypeInfo.Contracts; // For CompIntfcStandardMethods
 using PeopleCodeTypeInfo.Database;  // For PeopleCodeTypeDatabase
 using PeopleCodeTypeInfo.Functions; // For FunctionInfo, PropertyInfo, BuiltinObjectInfo
 using PeopleCodeTypeInfo.Inference;
@@ -629,6 +631,12 @@ namespace AppRefiner
                     }
                 }
 
+                // A named CI or a known item also has its definition's members
+                if (CompIntfcTarget.Find(typeInfo, editor.AppDesignerProcess?.TypeResolver) is { } ci)
+                {
+                    AddComponentInterfaceMembers(suggestions, typeInfo, ci);
+                }
+
                 /* we are going to do the sorting and not let Scintilla do it
                  * this is so we can keep Value at the top */
                 suggestions.Sort();
@@ -712,6 +720,44 @@ namespace AppRefiner
             catch (Exception ex)
             {
                 Debug.LogException(ex, "Error showing object members");
+            }
+        }
+
+        /// <summary>
+        /// Adds a component interface level's members from its definition: properties and keys,
+        /// collections and (on the root) custom methods. The root also loses the builtin entries for
+        /// standard methods the CI doesn't enable, and for any a custom method of the same name replaces.
+        /// </summary>
+        private void AddComponentInterfaceMembers(List<string> suggestions, TypeInfo typeInfo, CompIntfcTarget ci)
+        {
+            static void RemoveMethod(List<string> list, string name) =>
+                list.RemoveAll(s => s.StartsWith($"{name}()", StringComparison.OrdinalIgnoreCase));
+
+            if (ci.IsRoot)
+            {
+                foreach (var standard in Enum.GetValues<CompIntfcStandardMethods>())
+                {
+                    if (standard != CompIntfcStandardMethods.None && !ci.Definition.IsStandardMethodEnabled(standard.ToString()))
+                    {
+                        RemoveMethod(suggestions, standard.ToString());
+                    }
+                }
+
+                foreach (var method in ci.Definition.CustomMethods.Values.OrderBy(m => m.Name))
+                {
+                    RemoveMethod(suggestions, method.Name);
+                    suggestions.Add($"{method.Name}() -> {FormatReturnType(typeInfo, method.Signature)} (Method)?{(int)AutoCompleteIcons.ClassMethod}");
+                }
+            }
+
+            foreach (var property in ci.AllProperties().OrderBy(p => p.Name))
+            {
+                suggestions.Add($"{property.Name} -> {CompIntfcTarget.PropertyValueType(property).Name} (Property)?{(int)AutoCompleteIcons.Property}");
+            }
+
+            foreach (var collection in ci.Node.Collections.Values.OrderBy(c => c.Name))
+            {
+                suggestions.Add($"{collection.Name} -> DataCollection (Collection)?{(int)AutoCompleteIcons.Property}");
             }
         }
 

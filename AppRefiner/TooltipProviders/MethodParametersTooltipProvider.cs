@@ -1,8 +1,10 @@
 using AppRefiner.Database;
 using PeopleCodeParser.SelfHosted;
+using PeopleCodeParser.SelfHosted.ComponentInterfaces;
 using PeopleCodeParser.SelfHosted.Lexing;
 using PeopleCodeParser.SelfHosted.Nodes;
 using PeopleCodeParser.SelfHosted.Visitors.Models;
+using PeopleCodeTypeInfo.Contracts;
 using PeopleCodeTypeInfo.Database;
 using PeopleCodeTypeInfo.Types;
 using System;
@@ -23,6 +25,7 @@ namespace AppRefiner.TooltipProviders
         private AppClassNode? classNode;
         private string basePackage;
         private FunctionCallNode? currentCall;
+        private ITypeMetadataResolver? typeResolver;
 
         /// <summary>
         /// Name of the tooltip provider.
@@ -47,6 +50,7 @@ namespace AppRefiner.TooltipProviders
         public override bool CanProvideTooltipAt(ScintillaEditor editor, ProgramNode program, List<Token> tokens, int cursorPosition, int lineNumber)
         {
             basePackage = editor.ClassPath;
+            typeResolver = editor.AppDesignerProcess?.TypeResolver;
             return base.CanProvideTooltipAt(editor, program, tokens, cursorPosition, lineNumber);
         }
 
@@ -117,6 +121,13 @@ namespace AppRefiner.TooltipProviders
                         RegisterTooltip(memberAccess.SourceSpan, tooltip);
                         return; // Found builtin, done
                     }
+                }
+
+                // A user-defined method of a named CI, from its Methods PeopleCode
+                if (CompIntfcTarget.Find(targetType, typeResolver)?.FindCustomMethod(methodName) is { } ciMethod)
+                {
+                    RegisterTooltip(memberAccess.SourceSpan, FormatBuiltinFunctionTooltip(ciMethod.Signature, "CI method"));
+                    return;
                 }
 
                 // Check if it's an app class type (requires database)
@@ -388,12 +399,12 @@ namespace AppRefiner.TooltipProviders
         /// <summary>
         /// Formats a builtin function/method tooltip using PeopleCodeTypeDatabase information.
         /// </summary>
-        private string FormatBuiltinFunctionTooltip(PeopleCodeTypeInfo.Functions.FunctionInfo functionInfo)
+        private string FormatBuiltinFunctionTooltip(PeopleCodeTypeInfo.Functions.FunctionInfo functionInfo, string label = "Builtin")
         {
             var sb = new StringBuilder();
 
             // Use PeopleCodeTypeDatabase's signature formatter
-            sb.AppendLine($"Builtin: {PeopleCodeTypeDatabase.GetSignature(functionInfo)}");
+            sb.AppendLine($"{label}: {PeopleCodeTypeDatabase.GetSignature(functionInfo)}");
             sb.AppendLine();
 
             // Parameter details

@@ -1,9 +1,11 @@
 ﻿using AppRefiner.Database;
 using AppRefiner.Database.Models;
 using PeopleCodeParser.SelfHosted;
+using PeopleCodeParser.SelfHosted.ComponentInterfaces;
 using PeopleCodeParser.SelfHosted.Nodes;
 using PeopleCodeParser.SelfHosted.Visitors;
 using PeopleCodeParser.SelfHosted.Visitors.Models;
+using PeopleCodeTypeInfo.Contracts;
 using PeopleCodeTypeInfo.Types;
 using System;
 using System.Collections.Generic;
@@ -27,12 +29,15 @@ namespace AppRefiner
         private IDataManager? _dataManager;
         private ProgramNode _program;
         private string? _targetFunctionName;
+        private ITypeMetadataResolver? _typeResolver;
 
         public GoToDefnResult Result { get; set; }
 
-        public GoToDefinitionVisitor(ProgramNode program, int currentPosition, IDataManager? dataManager) 
+        public GoToDefinitionVisitor(ProgramNode program, int currentPosition, IDataManager? dataManager,
+            ITypeMetadataResolver? typeResolver = null)
         {
             _dataManager = dataManager;
+            _typeResolver = typeResolver;
             _position = currentPosition;
             _program = program;
             Result = new(); 
@@ -268,8 +273,49 @@ namespace AppRefiner
                             }
                         }
                     }
+                    else if (targetType != null
+                        && node.Parent is FunctionCallNode call && ReferenceEquals(call.Function, node)
+                        && CompIntfcTarget.Find(targetType, _typeResolver) is { } ci
+                        && ci.FindCustomMethod(node.MemberName) is { } ciMethod)
+                    {
+                        GoToCompIntfcMethod(ci.Definition.Name, ciMethod.Name);
+                    }
                 }
             }
+        }
+
+        /// <summary>
+        /// A CI's user-defined method is a function of its Methods PeopleCode: open that program
+        /// and select the function's name.
+        /// </summary>
+        private void GoToCompIntfcMethod(string ciName, string methodName)
+        {
+            var openTarget = new OpenTarget(OpenTargetType.ComponentInterfacePeopleCode,
+                ciName,
+                $"Component Interface PeopleCode: {ciName}.Methods",
+                [
+                    (PSCLASSID.COMPONENTINTERFACE, ciName),
+                    (PSCLASSID.METHOD, "Methods")
+                ]);
+
+            var program = GetParsedProgram(openTarget);
+            if (program is null)
+            {
+                Result.ErrorMessage = $"Unable to find the Methods PeopleCode of component interface {ciName} in the database.";
+                return;
+            }
+
+            var function = program.Functions.FirstOrDefault(f => f.IsImplementation
+                && f.Name.Equals(methodName, StringComparison.OrdinalIgnoreCase));
+            if (function is null)
+            {
+                // The cached definition is older than the program; refreshing the CI cache fixes it
+                Result.ErrorMessage = $"Method {methodName} is no longer in the Methods PeopleCode of component interface {ciName}. Run Refresh Component Interface Cache to update it.";
+                return;
+            }
+
+            Result.TargetProgram = openTarget;
+            Result.SourceSpan = function.NameToken.SourceSpan;
         }
 
 
