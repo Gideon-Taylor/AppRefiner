@@ -1,3 +1,4 @@
+using PeopleCodeParser.SelfHosted.Visitors;
 using PeopleCodeParser.SelfHosted;
 using PeopleCodeParser.SelfHosted.Nodes;
 using System.Text;
@@ -55,7 +56,7 @@ namespace AppRefiner.Refactors.QuickFixes
                 // Analyze base type hierarchy (handles both extends and implements)
                 if (node.BaseType != null)
                 {
-                    baseClassPath = node.BaseType.TypeName;
+                    baseClassPath = ImportResolution.BaseTypeName(node, Editor.AppDesignerProcess?.TypeResolver)!;
                     AnalyzeBaseClassForAbstractMembers(baseClassPath);
                 }
 

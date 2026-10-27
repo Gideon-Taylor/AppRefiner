@@ -1,3 +1,4 @@
+using PeopleCodeParser.SelfHosted;
 using AppRefiner.Database;
 using PeopleCodeParser.SelfHosted.Lexing;
 using PeopleCodeParser.SelfHosted.Nodes;
@@ -41,14 +42,9 @@ namespace AppRefiner.TooltipProviders
         {
             if (node.BaseType != null)
             {
-                if (node.BaseType is AppClassTypeNode classPath)
-                {
-                    extendedClassPath = classPath.QualifiedName;
-                }
-                else
-                {
-                    extendedClassPath = node.BaseType.ToString();
-                }
+                extendedClassPath = node.BaseType is AppClassTypeNode classPath
+                    ? QualifiedName(classPath)
+                    : node.BaseType.ToString();
             }
             base.VisitAppClass(node);
         }
@@ -68,13 +64,21 @@ namespace AppRefiner.TooltipProviders
         }
         
         /// <summary>
+        /// The reference's qualified name: inference (run before tooltips) stamps each class
+        /// reference with its import-resolved type, so a short name in an unsaved program
+        /// still finds its class.
+        /// </summary>
+        private static string QualifiedName(AppClassTypeNode node) =>
+            (node.GetInferredType() as PeopleCodeTypeInfo.Types.AppClassTypeInfo)?.QualifiedName ?? node.QualifiedName;
+
+        /// <summary>
         /// Processes an app class path identifier to generate tooltip information
         /// </summary>
         private void ProcessAppClassPath(AppClassTypeNode node)
         {
             if (DataManager == null) return;
 
-            string hoveredClassPath = node.QualifiedName;
+            string hoveredClassPath = QualifiedName(node);
 
             ProgramNode? appClassProgram = null;
             

@@ -51,11 +51,13 @@ public class CompilerErrorsStyler : BaseStyler
         // as TypeInferenceRunner does, so it matches the QualifiedName inference stamps onto
         // %This — that name equality is what lets the check pick the live metadata for the
         // self level of the inheritance walk. Only class/interface programs have a self type.
+        // Short class names are qualified through the imports (as App Designer does on save),
+        // so extends/implements and signatures name the classes the resolver knows.
         var qualifiedName = TypeInferenceRunner.DetermineQualifiedName(node, Editor);
         TypeMetadata? selfMetadata = null;
         if (node.AppClass != null)
         {
-            selfMetadata = TypeMetadataBuilder.ExtractMetadata(node, qualifiedName);
+            selfMetadata = TypeMetadataBuilder.ExtractEditedMetadata(node, qualifiedName, resolver);
         }
 
         // Record PeopleCode: bare fields are on this default record (same as type inference).

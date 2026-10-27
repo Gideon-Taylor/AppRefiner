@@ -1,3 +1,4 @@
+using PeopleCodeParser.SelfHosted.Visitors;
 using PeopleCodeParser.SelfHosted.Nodes;
 
 namespace AppRefiner.Refactors.QuickFixes
@@ -54,7 +55,7 @@ namespace AppRefiner.Refactors.QuickFixes
             // Check if this method exists in base class/interface for override annotation
             if (node.BaseType != null && Editor.DataManager != null)
             {
-                baseClassPath = node.BaseType.TypeName;
+                baseClassPath = ImportResolution.BaseTypeName(node, Editor.AppDesignerProcess?.TypeResolver);
                 AnalyzeBaseClassForOverride(baseClassPath, targetMethod.Name);
             }
 

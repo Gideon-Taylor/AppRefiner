@@ -36,6 +36,22 @@ public class TypeMetadataBuilder : AstVisitorBase
     private bool _isBaseClassBuiltin;
     private PeopleCodeType? _builtinBaseType;
     private AnnotationIndex? _annotations;
+
+    /// <summary>
+    /// Extracts the metadata of the program being edited with its short class names qualified
+    /// through its imports, as App Designer would save them. Saved programs need only
+    /// <see cref="ExtractMetadata(ProgramNode, string?)"/>: their names are already qualified.
+    /// </summary>
+    /// <param name="resolver">Lists the classes of wildcard-imported packages; without one,
+    /// only explicit imports and the class's own name are qualified.</param>
+    public static TypeMetadata ExtractEditedMetadata(ProgramNode program, string? qualifiedName,
+        PeopleCodeTypeInfo.Contracts.ITypeMetadataResolver? resolver)
+    {
+        var metadata = ExtractMetadata(program, qualifiedName);
+        ImportResolution.QualifyClassNames(metadata, ImportResolution.BuildImportMap(program, metadata.QualifiedName, resolver));
+        return metadata;
+    }
+
     /// <summary>
     /// Extracts TypeMetadata from a parsed ProgramNode.
     /// </summary>

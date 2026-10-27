@@ -1,3 +1,4 @@
+using PeopleCodeParser.SelfHosted.Visitors;
 using AppRefiner.Database;
 using AppRefiner.Refactors.QuickFixes;
 using PeopleCodeParser.SelfHosted.Nodes;
@@ -68,7 +69,7 @@ public class UnimplementedAbstractMembersStyler : BaseStyler
         var unimplemented = new List<string>();
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var visited = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var current = node.BaseType.TypeName;
+        var current = ImportResolution.BaseTypeName(node, resolver);
 
         while (!string.IsNullOrEmpty(current) && visited.Add(current))
         {

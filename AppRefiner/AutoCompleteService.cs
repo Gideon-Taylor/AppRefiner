@@ -793,9 +793,10 @@ namespace AppRefiner
                 {
                     synthetics.Add(new PropertyInfo(PeopleCodeType.AppClass, 0, DetermineQualifiedName(editor)) { Name = "%This" });
 
-                    if (program.AppClass.BaseType != null)
+                    var baseTypeName = ImportResolution.BaseTypeName(program.AppClass, editor.AppDesignerProcess?.TypeResolver);
+                    if (baseTypeName != null)
                     {
-                        synthetics.Add(new PropertyInfo(PeopleCodeType.AppClass, 0, program.AppClass.BaseType.TypeName) { Name = "%Super" });
+                        synthetics.Add(new PropertyInfo(PeopleCodeType.AppClass, 0, baseTypeName) { Name = "%Super" });
                     }
                 }
 

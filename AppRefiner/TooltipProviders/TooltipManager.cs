@@ -571,57 +571,5 @@ namespace AppRefiner.TooltipProviders
             }
         }
 
-        /// <summary>
-        /// Determines the qualified name for the current program for type inference.
-        /// </summary>
-        private static string DetermineQualifiedName(ScintillaEditor editor, ProgramNode node)
-        {
-            // Try to extract from AST structure first
-            if (node.AppClass != null)
-            {
-                // For app classes/interfaces, try to build qualified name from imports or use simple name
-                var className = node.AppClass.Name;
-
-                if (editor?.Caption != null && !string.IsNullOrWhiteSpace(editor.Caption))
-                {
-                    // Parse caption to get program identifier
-                    var openTarget = OpenTargetBuilder.CreateFromCaption(editor.Caption);
-                    if (openTarget != null)
-                    {
-                        var methodIndex = Array.IndexOf(openTarget.ObjectIDs, PSCLASSID.METHOD);
-                        openTarget.ObjectIDs[methodIndex] = PSCLASSID.NONE;
-                        openTarget.ObjectValues[methodIndex] = null;
-                        return openTarget.Path;
-                    }
-                    else
-                    {
-                        /* probably never what you want but we have to return something? */
-                        return className;
-                    }
-                }
-                else
-                {
-                    /* probably never what you want but we have to return something? */
-                    return className;
-                }
-            }
-            else
-            {
-                // For function libraries or other programs, use a generic name
-                // Try to extract from editor caption if available
-                if (editor?.Caption != null && !string.IsNullOrWhiteSpace(editor.Caption))
-                {
-                    // Parse caption to get program identifier
-                    var openTarget = OpenTargetBuilder.CreateFromCaption(editor.Caption);
-                    if (openTarget != null)
-                    {
-                        return openTarget.Path;
-                    }
-                }
-
-                // Fallback to generic name
-                return "Program";
-            }
-        }
     }
 }

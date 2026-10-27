@@ -44,6 +44,13 @@ treating `PKG:Config` and `OTHER:Config` as one class, is gone. A short name no 
 stays bare and matches nothing qualified; App Designer rejects it on save and
 `UnimportedClassCheck` reports it.
 
+The qualifying lives in `ImportResolution`, so everything that reads the edited program sees
+the same names: the compile checks' self metadata (`TypeMetadataBuilder.ExtractEditedMetadata`,
+so inherited members are checked through a short `extends`), and the features that read an
+`extends` clause directly (`ImportResolution.BaseTypeName`: `%Super` autocomplete, the
+unimplemented-abstract-members styler, Generate Base Constructor, Implement Abstract Members,
+Implement Missing Method, the app class tooltip).
+
 ## 4. Permissive sentinels mask failures
 
 Unknown, Any, `UnionReturnTypeInfo` (`Kind == Any`) and dynamic `@` references are accepted

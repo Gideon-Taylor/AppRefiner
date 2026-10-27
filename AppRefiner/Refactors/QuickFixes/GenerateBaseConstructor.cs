@@ -1,3 +1,4 @@
+using PeopleCodeParser.SelfHosted.Visitors;
 using PeopleCodeParser.SelfHosted.Nodes;
 using System.Text;
 
@@ -48,7 +49,7 @@ namespace AppRefiner.Refactors.QuickFixes
 
             if (Editor.DataManager != null)
             {
-                AnalyzeBaseClass(node.BaseType.TypeName);
+                AnalyzeBaseClass(ImportResolution.BaseTypeName(node, Editor.AppDesignerProcess?.TypeResolver)!);
             }
             else
             {
