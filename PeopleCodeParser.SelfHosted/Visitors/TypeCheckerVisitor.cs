@@ -417,14 +417,10 @@ namespace PeopleCodeParser.SelfHosted.Visitors
         private void CheckAnnotatedParameters(AstNode callNode, IReadOnlyList<ExpressionNode> arguments, FunctionInfo functionInfo)
         {
             var parameters = functionInfo.Parameters;
-            var stamped = callNode.GetParameterAnnotations();
             for (int i = 0; i < arguments.Count && i < parameters.Count; i++)
             {
-                if (parameters[i] is not SingleParameter parameter)
-                    continue;
-
-                var effective = stamped != null && i < stamped.Count ? stamped[i] : parameter.RefinedParameterType;
-                if (effective is not { } refined)
+                if (parameters[i] is not SingleParameter parameter
+                    || callNode.GetEffectiveParameterAnnotation(functionInfo, i) is not { } refined)
                     continue;
 
                 var refinedName = refined.Type.GetTypeName();

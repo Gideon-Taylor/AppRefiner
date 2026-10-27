@@ -43,6 +43,13 @@ namespace AppRefiner.TooltipProviders
             return annotation.Type.GetTypeName();
         }
 
+        /// <summary>
+        /// " (detail)" for an annotated or refined type in a signature, such as a parameter
+        /// <c>&amp;s As ApiObject /* as Session */</c> shown as "&amp;s: ApiObject (Session)"; empty when null.
+        /// </summary>
+        public static string Suffix(TypeWithDimensionality? annotation) =>
+            annotation is { } a ? $" ({Detail(a)})" : string.Empty;
+
         private static string FieldName(string? recordName, string fieldName) =>
             string.IsNullOrEmpty(recordName) ? $"Field.{fieldName}" : $"Record.{recordName}.{fieldName}";
 

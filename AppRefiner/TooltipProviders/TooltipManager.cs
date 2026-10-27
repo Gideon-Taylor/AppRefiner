@@ -129,7 +129,7 @@ namespace AppRefiner.TooltipProviders
                 PeopleCodeTypeInfo.Types.TypeInfo? objectType = GetObjectTypeFromFunctionCall(node);
 
                 List<(int start, int end)> highlightRanges = new List<(int start, int end)>();
-                (var text, highlightRanges) = FormatFunctionCallTip(funcInfo, arguments, allowedTypes, objectType);
+                (var text, highlightRanges) = FormatFunctionCallTip(funcInfo, arguments, allowedTypes, objectType, node);
 
                 ScintillaManager.ShowCallTipWithText(editor, editor.FunctionCallNode.FirstToken.SourceSpan.Start.ByteIndex + 1, text, true);
                 foreach (var highlightRange in highlightRanges)
@@ -140,8 +140,13 @@ namespace AppRefiner.TooltipProviders
 
         }
 
-        private static (string, List<(int start, int end)>) FormatFunctionCallTip(FunctionInfo funcInfo, List<PeopleCodeTypeInfo.Types.TypeInfo> arguments, List<FunctionCallValidator.ParameterTypeInfo> allowedTypes, PeopleCodeTypeInfo.Types.TypeInfo? objectType)
+        /// <summary>
+        /// The call tip text: the signature (annotated parameters and returns show their annotated
+        /// type, e.g. "&amp;s: ApiObject (Session)") and the types the next argument may have.
+        /// </summary>
+        private static (string, List<(int start, int end)>) FormatFunctionCallTip(FunctionInfo funcInfo, List<PeopleCodeTypeInfo.Types.TypeInfo> arguments, List<FunctionCallValidator.ParameterTypeInfo> allowedTypes, PeopleCodeTypeInfo.Types.TypeInfo? objectType, FunctionCallNode callNode)
         {
+            string AnnotationSuffix(int index) => TypeDisplay.Suffix(callNode.GetEffectiveParameterAnnotation(funcInfo, index));
             List<(int start, int end)> highlightRanges = new List<(int start, int end)>();
             StringBuilder sb = new StringBuilder();
             int paramStart = 0;
@@ -172,6 +177,7 @@ namespace AppRefiner.TooltipProviders
                 }
 
                 sb.Append(typeName);
+                sb.Append(AnnotationSuffix(x));
 
                 if (x < funcInfo.Parameters.Count - 1)
                 {
@@ -191,7 +197,7 @@ namespace AppRefiner.TooltipProviders
                 Debug.LogError($"Error resolving return type for {funcInfo.Name}: {ex.Message}");
                 returnTypeStr = funcInfo.GetReturnTypeString(); // Fallback to original method
             }
-            sb.Append($") -> {returnTypeStr}");
+            sb.Append($") -> {returnTypeStr}{TypeDisplay.Suffix(funcInfo.RefinedReturnType)}");
             sb.Append("\n\n");
             paramStart = sb.Length;
             sb.Append($"Next allowed type{(allowedTypes.Count > 1 ? "(s)" : "")}:\n");
@@ -213,7 +219,8 @@ namespace AppRefiner.TooltipProviders
 
                 if (!string.IsNullOrEmpty(type.ParameterName))
                 {
-                    sb.Append($"{type.ParameterName}: {typeName}\n");
+                    var index = funcInfo.Parameters.ToList().FindIndex(p => p.Name == type.ParameterName);
+                    sb.Append($"{type.ParameterName}: {typeName}{AnnotationSuffix(index)}\n");
                 } else
                 {
                     sb.Append($"{typeName}\n");

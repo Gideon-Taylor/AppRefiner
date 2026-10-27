@@ -111,6 +111,23 @@ public static class AstNodeExtensions
         node.Attributes[AstNode.ParameterAnnotationsAttributeKey] = annotations;
     }
 
+    /// <summary>
+    /// The effective <c>/* as T */</c> annotation of one parameter of a call: the annotation
+    /// stamped on an app-class method call (own or inherited), else the parameter's own.
+    /// </summary>
+    /// <param name="callNode">The call (FunctionCallNode or object creation); may be null</param>
+    /// <param name="functionInfo">The called function's signature</param>
+    /// <param name="index">The parameter's position</param>
+    /// <returns>The annotated type, or null when the parameter isn't annotated</returns>
+    public static TypeWithDimensionality? GetEffectiveParameterAnnotation(this AstNode? callNode, FunctionInfo functionInfo, int index)
+    {
+        if (index < 0 || index >= functionInfo.Parameters.Count || functionInfo.Parameters[index] is not SingleParameter parameter)
+            return null;
+
+        var stamped = callNode?.GetParameterAnnotations();
+        return stamped != null && index < stamped.Count ? stamped[index] : parameter.RefinedParameterType;
+    }
+
     #endregion
 
     #region RefinementSource Extensions

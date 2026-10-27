@@ -81,7 +81,7 @@ namespace AppRefiner.TooltipProviders
                 // Global function like Split(), Left(), Right()
                 if (identifier.SourceSpan.ContainsPositionExclusiveEnd(CurrentPosition))
                 {
-                    HandleGlobalFunction(identifier.Name, node.SourceSpan);
+                    HandleGlobalFunction(identifier.Name, node);
                 }
             }
             else if (node.Function is MemberAccessNode memberAccess)
@@ -126,7 +126,7 @@ namespace AppRefiner.TooltipProviders
                 // A user-defined method of a named CI, from its Methods PeopleCode
                 if (CompIntfcTarget.Find(targetType, typeResolver)?.FindCustomMethod(methodName) is { } ciMethod)
                 {
-                    RegisterTooltip(memberAccess.SourceSpan, FormatBuiltinFunctionTooltip(ciMethod.Signature, "CI method"));
+                    RegisterTooltip(memberAccess.SourceSpan, FormatBuiltinFunctionTooltip(ciMethod.Signature, "CI method", functionCall));
                     return;
                 }
 
@@ -322,8 +322,18 @@ namespace AppRefiner.TooltipProviders
         /// Checks declared functions first (which may be imports from other programs),
         /// then falls back to builtin functions.
         /// </summary>
-        private void HandleGlobalFunction(string functionName, SourceSpan span)
+        private void HandleGlobalFunction(string functionName, FunctionCallNode call)
         {
+            var span = call.SourceSpan;
+
+            // A function defined in this program (or declared and resolved): inference attached its
+            // signature to the call, annotations included
+            if (call.GetFunctionInfo() is { IsBuiltin: false } resolved)
+            {
+                RegisterTooltip(span, FormatBuiltinFunctionTooltip(resolved, "Function", call));
+                return;
+            }
+
             // First check if this is a declared external function
             if (Program != null)
             {
@@ -399,7 +409,7 @@ namespace AppRefiner.TooltipProviders
         /// <summary>
         /// Formats a builtin function/method tooltip using PeopleCodeTypeDatabase information.
         /// </summary>
-        private string FormatBuiltinFunctionTooltip(PeopleCodeTypeInfo.Functions.FunctionInfo functionInfo, string label = "Builtin")
+        private string FormatBuiltinFunctionTooltip(PeopleCodeTypeInfo.Functions.FunctionInfo functionInfo, string label = "Builtin", FunctionCallNode? call = null)
         {
             var sb = new StringBuilder();
 
@@ -407,13 +417,19 @@ namespace AppRefiner.TooltipProviders
             sb.AppendLine($"{label}: {PeopleCodeTypeDatabase.GetSignature(functionInfo)}");
             sb.AppendLine();
 
-            // Parameter details
+            // An annotated or refined return: Returns: ApiObject (Session)
+            if (functionInfo.RefinedReturnType is { } refinedReturn)
+            {
+                sb.AppendLine($"Returns: {functionInfo.GetReturnTypeString()}{TypeDisplay.Suffix(refinedReturn)}");
+            }
+
+            // Parameter details, each with its annotation (own, or inherited as stamped on the call)
             if (functionInfo.Parameters.Count > 0)
             {
                 sb.AppendLine("Parameters:");
-                foreach (var param in functionInfo.Parameters)
+                for (int i = 0; i < functionInfo.Parameters.Count; i++)
                 {
-                    sb.AppendLine($"   {param}");
+                    sb.AppendLine($"   {functionInfo.Parameters[i]}{TypeDisplay.Suffix(call.GetEffectiveParameterAnnotation(functionInfo, i))}");
                 }
             }
             else
