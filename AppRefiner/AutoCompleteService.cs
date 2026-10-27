@@ -1083,18 +1083,6 @@ namespace AppRefiner
             }
         }
 
-        private static void RunTypeInference(ScintillaEditor editor, ProgramNode program)
-        {
-            try
-            {
-                Services.TypeInferenceRunner.Run(program, editor, editor.AppDesignerProcess?.TypeResolver, ExtensionManager);
-            }
-            catch (Exception ex)
-            {
-                Debug.LogError($"Error running type inference for tooltips: {ex.Message}");
-            }
-        }
-
         /// <summary>
         /// Formats a variable for display in the suggestion list
         /// </summary>
