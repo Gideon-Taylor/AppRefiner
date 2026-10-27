@@ -388,7 +388,7 @@ namespace PeopleCodeParser.SelfHosted.Visitors
 
             // Validate the call
             var validator = new FunctionCallValidator(_typeResolver);
-            var result = validator.Validate(functionInfo, arguments);
+            var result = validator.Validate(functionInfo, arguments, ElementCheckedReceiver(node));
 
             if (!result.IsValid)
             {
@@ -406,6 +406,18 @@ namespace PeopleCodeParser.SelfHosted.Visitors
 
             CheckAnnotatedParameters(node, node.Arguments, functionInfo);
         }
+
+        /// <summary>
+        /// The receiver of an array method call, so its <c>$element</c> parameters (Push, Find,
+        /// Substitute, ...) are checked against the element type; null otherwise, which leaves them
+        /// accepting anything. Only one-dimensional arrays: what App Designer accepts when pushing
+        /// into a multi-dimensional array isn't pinned down.
+        /// </summary>
+        private static TypeInfo? ElementCheckedReceiver(FunctionCallNode node) =>
+            node.Function is MemberAccessNode member
+            && member.Target.GetInferredType() is ArrayTypeInfo { Dimensions: 1 } array
+                ? array
+                : null;
 
         /// <summary>
         /// A parameter declared ApiObject but annotated as an API subtype still accepts any API

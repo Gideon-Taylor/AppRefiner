@@ -1120,6 +1120,14 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
             return ciMember;
         }
 
+        // Array properties (Len, Dimension); array methods are resolved in ResolveFunctionInfo
+        if (objectType.Kind == TypeKind.Array && !isMethodCall)
+        {
+            return PeopleCodeTypeDatabase.GetProperty("Array", memberName) is { } arrayProperty
+                ? ConvertPropertyInfoToTypeInfo(arrayProperty)
+                : AnyTypeInfo.Instance;
+        }
+
         // Builtin types (primitives and builtin objects)
         if (objectType.Kind == TypeKind.BuiltinObject || objectType.Kind == TypeKind.Primitive)
         {
