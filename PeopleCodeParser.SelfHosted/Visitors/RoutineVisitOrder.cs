@@ -62,6 +62,79 @@ public static class RoutineVisitOrder
     }
 
     /// <summary>
+    /// Groups of routines that call each other (strongly connected components of the same call
+    /// graph), including a routine that calls itself. Callees-first order can't put one before
+    /// the other, so their returns are settled together once the group has been visited.
+    /// </summary>
+    public static IReadOnlyList<IReadOnlyList<AstNode>> Cycles(AppClassNode node)
+    {
+        var methods = new Dictionary<string, MethodNode>(StringComparer.OrdinalIgnoreCase);
+        foreach (var method in node.Methods)
+            methods.TryAdd(method.Name, method);
+
+        var getters = new Dictionary<string, PropertyImplNode>(StringComparer.OrdinalIgnoreCase);
+        foreach (var property in node.Properties)
+        {
+            if (property.Getter != null)
+                getters.TryAdd(property.Name, property.Getter);
+        }
+
+        var routines = methods.Values.Cast<AstNode>().Concat(getters.Values).ToList();
+        var edges = routines.ToDictionary(r => r, r => Callees(r, methods, getters).Distinct().ToList(),
+            ReferenceEqualityComparer.Instance);
+
+        // Tarjan's algorithm
+        var index = new Dictionary<AstNode, int>(ReferenceEqualityComparer.Instance);
+        var low = new Dictionary<AstNode, int>(ReferenceEqualityComparer.Instance);
+        var stack = new Stack<AstNode>();
+        var onStack = new HashSet<AstNode>(ReferenceEqualityComparer.Instance);
+        var cycles = new List<IReadOnlyList<AstNode>>();
+
+        void Connect(AstNode routine)
+        {
+            index[routine] = low[routine] = index.Count;
+            stack.Push(routine);
+            onStack.Add(routine);
+
+            foreach (var callee in edges[routine])
+            {
+                if (!index.ContainsKey(callee))
+                {
+                    Connect(callee);
+                    low[routine] = Math.Min(low[routine], low[callee]);
+                }
+                else if (onStack.Contains(callee))
+                {
+                    low[routine] = Math.Min(low[routine], index[callee]);
+                }
+            }
+
+            if (low[routine] != index[routine])
+                return;
+
+            var component = new List<AstNode>();
+            AstNode member;
+            do
+            {
+                member = stack.Pop();
+                onStack.Remove(member);
+                component.Add(member);
+            } while (!ReferenceEquals(member, routine));
+
+            if (component.Count > 1 || edges[routine].Contains(routine))
+                cycles.Add(component);
+        }
+
+        foreach (var routine in routines)
+        {
+            if (!index.ContainsKey(routine))
+                Connect(routine);
+        }
+
+        return cycles;
+    }
+
+    /// <summary>
     /// The routines <paramref name="routine"/>'s body references, in source order.
     /// </summary>
     private static IEnumerable<AstNode> Callees(

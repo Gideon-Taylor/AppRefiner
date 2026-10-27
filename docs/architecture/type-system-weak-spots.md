@@ -125,9 +125,13 @@ flow-insensitive; scope-aware typing is deferred (spec §15 of
 
 Left open by phases 3–4 (spec `docs/superpowers/specs/2026-10-25-apiobject-type-resolution-design.md`):
 
-- **Mutually recursive methods keep their declared return type.** Callee-first ordering can't
-  order a cycle, so `A` returning `B()` and `B` returning `A()` stay `ApiObject`. Across
-  programs, a cycle or a chain deeper than `ReturnTypeRefiner.MaxDepth` (3) leaves the metadata
+- **Mutually recursive methods across programs keep their declared return type.** Within one
+  class this is fixed (2026-10): methods and getters that call each other, or one that calls
+  itself, are settled together after the last of them is visited (`RoutineVisitOrder.Cycles`,
+  `SettleCycle`). A return of a partner's call takes the partner's result, a partner with no
+  known value yet says nothing, and one whose own returns disagree blocks the cycle; so `A`
+  returning `%Session` or `%This.B()` with `B` returning `%This.A()` makes both Session, while
+  `A` and `B` returning only each other stay `ApiObject`. Across programs, a cycle or a chain deeper than `ReturnTypeRefiner.MaxDepth` (3) leaves the metadata
   `IsProvisional`. A cycle member refined at the top level is cached with whatever its cycle
   partners could give it, so a return that depends on a partner through the cycle may stay
   `ApiObject` until that class is evicted (on save) or re-fetched. The nested, cut-short members

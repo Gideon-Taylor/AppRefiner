@@ -191,7 +191,7 @@ public class ReturnRefinementTests
     }
 
     [Fact]
-    public void Mutually_recursive_methods_use_declared_type()
+    public void Methods_returning_only_each_other_stay_unrefined()
     {
         const string source =
             "class Svc\n" +
@@ -217,6 +217,137 @@ public class ReturnRefinementTests
         Assert.Empty(program.GetAllTypeWarnings());
         Assert.All(program.FindDescendants<FunctionCallNode>(),
             call => Assert.Equal(PeopleCodeType.ApiObject, call.GetInferredType()!.PeopleCodeType));
+    }
+
+    private static TypeMetadata Refine(string source)
+    {
+        var (program, parseErrors) = Parse(source);
+        Assert.Empty(parseErrors);
+        var metadata = TypeMetadataBuilder.ExtractMetadata(program, "PKG:Svc");
+        TypeInferenceVisitor.Run(program, metadata, NullTypeMetadataResolver.Instance);
+        return metadata;
+    }
+
+    [Fact]
+    public void Mutually_recursive_methods_share_the_type_one_returns()
+    {
+        var metadata = Refine(
+            "class Svc\n" +
+            "   method A(&b As boolean) Returns ApiObject;\n" +
+            "   method B(&b As boolean) Returns ApiObject;\n" +
+            "end-class;\n" +
+            "\n" +
+            "method A\n" +
+            "   If &b Then\n" +
+            "      Return %Session;\n" +
+            "   End-If;\n" +
+            "   Return %This.B( Not &b);\n" +
+            "end-method;\n" +
+            "\n" +
+            "method B\n" +
+            "   Return %This.A(&b);\n" +
+            "end-method;\n");
+
+        Assert.Equal(PeopleCodeType.Session, metadata.Methods["A"].RefinedReturnType!.Value.Type);
+        Assert.Equal(PeopleCodeType.Session, metadata.Methods["B"].RefinedReturnType!.Value.Type);
+    }
+
+    [Fact]
+    public void Self_recursive_method_takes_its_other_returns_type()
+    {
+        var metadata = Refine(
+            "class Svc\n" +
+            "   method A(&n As number) Returns ApiObject;\n" +
+            "end-class;\n" +
+            "\n" +
+            "method A\n" +
+            "   If &n = 0 Then\n" +
+            "      Return %Session;\n" +
+            "   End-If;\n" +
+            "   Return (%This.A(&n - 1));\n" +
+            "end-method;\n");
+
+        Assert.Equal(PeopleCodeType.Session, metadata.Methods["A"].RefinedReturnType!.Value.Type);
+    }
+
+    [Fact]
+    public void Partner_whose_returns_disagree_blocks_the_cycle()
+    {
+        // B returns a Query itself, so A can return a Query or a Session: neither is refined
+        var metadata = Refine(
+            "class Svc\n" +
+            "   method A(&b As boolean) Returns ApiObject;\n" +
+            "   method B(&b As boolean) Returns ApiObject;\n" +
+            "end-class;\n" +
+            "\n" +
+            "method A\n" +
+            "   If &b Then\n" +
+            "      Return %Session;\n" +
+            "   End-If;\n" +
+            "   Return %This.B( Not &b);\n" +
+            "end-method;\n" +
+            "\n" +
+            "method B\n" +
+            "   If &b Then\n" +
+            "      Return %Session.GetQuery();\n" +
+            "   End-If;\n" +
+            "   Return %This.A(&b);\n" +
+            "end-method;\n");
+
+        Assert.Null(metadata.Methods["A"].RefinedReturnType);
+        Assert.Null(metadata.Methods["B"].RefinedReturnType);
+    }
+
+    [Fact]
+    public void Getter_in_a_cycle_with_a_method_is_refined()
+    {
+        var metadata = Refine(
+            "class Svc\n" +
+            "   method Make(&b As boolean) Returns ApiObject;\n" +
+            "   property ApiObject Current get;\n" +
+            "end-class;\n" +
+            "\n" +
+            "method Make\n" +
+            "   If &b Then\n" +
+            "      Return %Session;\n" +
+            "   End-If;\n" +
+            "   Return %This.Current;\n" +
+            "end-method;\n" +
+            "\n" +
+            "get Current\n" +
+            "   Return %This.Make(True);\n" +
+            "end-get;\n");
+
+        Assert.Equal(PeopleCodeType.Session, metadata.Methods["Make"].RefinedReturnType!.Value.Type);
+        Assert.Equal(PeopleCodeType.Session, metadata.Properties["Current"].RefinedType!.Value.Type);
+    }
+
+    [Fact]
+    public void Caller_outside_the_cycle_sees_its_refined_return()
+    {
+        var (program, _, _) = TypeCheck(
+            "class Svc\n" +
+            "   method A(&b As boolean) Returns ApiObject;\n" +
+            "   method B(&b As boolean) Returns ApiObject;\n" +
+            "   method Use();\n" +
+            "end-class;\n" +
+            "\n" +
+            "method Use\n" +
+            "   Local ApiObject &s = %This.B(True);\n" +
+            "end-method;\n" +
+            "\n" +
+            "method A\n" +
+            "   If &b Then\n" +
+            "      Return %Session;\n" +
+            "   End-If;\n" +
+            "   Return %This.B( Not &b);\n" +
+            "end-method;\n" +
+            "\n" +
+            "method B\n" +
+            "   Return %This.A(&b);\n" +
+            "end-method;\n", "PKG:Svc");
+
+        Assert.Equal(PeopleCodeType.Session, LastInitializer(program)!.PeopleCodeType);
     }
 
     [Fact]

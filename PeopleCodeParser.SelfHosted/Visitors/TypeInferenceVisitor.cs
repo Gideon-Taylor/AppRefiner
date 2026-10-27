@@ -1702,7 +1702,7 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
             && !HasInheritedReturnAnnotation(methodInfo)
             ? ReturnCollectorFor(node.Name, methodInfo)
             : null;
-        VisitRoutine(collector, () => base.VisitMethod(node));
+        VisitRoutine(node, collector, () => base.VisitMethod(node));
     }
 
     /// <summary>
@@ -1722,7 +1722,7 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
             collector = new ReturnCollector(property.Name, propertyInfo.Type, refined => propertyInfo.RefinedType = refined);
         }
 
-        VisitRoutine(collector, () => base.VisitPropertyImpl(node));
+        VisitRoutine(node, collector, () => base.VisitPropertyImpl(node));
     }
 
     /// <summary>
@@ -1759,14 +1759,23 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
             && _programMetadata.Methods.TryGetValue(node.Name, out var functionInfo)
             ? ReturnCollectorFor(node.Name, functionInfo)
             : null;
-        VisitRoutine(collector, () => base.VisitFunction(node));
+        VisitRoutine(node, collector, () => base.VisitFunction(node));
     }
 
     /// <summary>
     /// Methods and getters are visited callees first, so a call usually sees its callee's refined return.
     /// </summary>
-    protected override IEnumerable<AstNode> RoutineVisitOrder(AppClassNode node) =>
-        global::PeopleCodeParser.SelfHosted.Visitors.RoutineVisitOrder.CalleesFirst(node);
+    protected override IEnumerable<AstNode> RoutineVisitOrder(AppClassNode node)
+    {
+        var order = global::PeopleCodeParser.SelfHosted.Visitors.RoutineVisitOrder.CalleesFirst(node).ToList();
+        foreach (var members in global::PeopleCodeParser.SelfHosted.Visitors.RoutineVisitOrder.Cycles(node))
+        {
+            var cycle = new ReturnCycle(members, order.Last(members.Contains));
+            foreach (var member in members)
+                _cycleOf[member] = cycle;
+        }
+        return order;
+    }
 
     #endregion
 
@@ -1781,7 +1790,59 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
         public PeopleCodeType DeclaredType { get; } = declaredType;
         public Action<TypeWithDimensionality> Apply { get; } = apply;
         public List<(ReturnStatementNode Node, TypeInfo? Type)> Returns { get; } = new();
+
+        // In a cycle: returns that call a routine of the same cycle, typed once the cycle settles
+        public ReturnCycle? Cycle { get; set; }
+        public List<(AstNode Partner, TypeInfo? TypeAtVisit)> PartnerReturns { get; } = new();
+        public TypeWithDimensionality? Result { get; set; }
+
+        // Some value was known, so a null Result means the values disagree rather than "not yet"
+        public bool HasValues { get; set; }
     }
+
+    /// <summary>
+    /// Routines that call each other (or one that calls itself). Each one's return of a partner's
+    /// call is typed by the partner's result, so the cycle is settled together after its last
+    /// member is visited: optimistically, a partner whose result is still unknown says nothing
+    /// (like <c>Return Null</c>), and results are recomputed until none changes.
+    /// </summary>
+    private sealed class ReturnCycle
+    {
+        public ReturnCycle(IReadOnlyList<AstNode> members, AstNode last)
+        {
+            Last = last;
+            foreach (var member in members)
+            {
+                if (member is MethodNode method)
+                    Methods.TryAdd(method.Name, method);
+                else if (member is PropertyImplNode { Parent: PropertyNode property })
+                    Getters.TryAdd(property.Name, member);
+            }
+        }
+
+        public AstNode Last { get; }
+        public Dictionary<string, AstNode> Methods { get; } = new(StringComparer.OrdinalIgnoreCase);
+        public Dictionary<string, AstNode> Getters { get; } = new(StringComparer.OrdinalIgnoreCase);
+        public Dictionary<AstNode, ReturnCollector> Collectors { get; } = new(ReferenceEqualityComparer.Instance);
+
+        /// <summary>
+        /// The cycle member a returned value calls directly (<c>%This.M(...)</c> or a getter's
+        /// <c>%This.P</c>), or null.
+        /// </summary>
+        public AstNode? PartnerCalledBy(ExpressionNode value) => UnwrapParentheses(value) switch
+        {
+            FunctionCallNode { Function: MemberAccessNode { Target: IdentifierNode target } access }
+                when IsThis(target) => Methods.GetValueOrDefault(access.MemberName),
+            MemberAccessNode { Target: IdentifierNode target } access
+                when IsThis(target) => Getters.GetValueOrDefault(access.MemberName),
+            _ => null
+        };
+
+        private static bool IsThis(IdentifierNode identifier) =>
+            identifier.Name.Equals("%This", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private readonly Dictionary<AstNode, ReturnCycle> _cycleOf = new(ReferenceEqualityComparer.Instance);
 
     // One entry per routine body being visited; null when the routine isn't refined
     private readonly Stack<ReturnCollector?> _returnCollectors = new();
@@ -1811,10 +1872,18 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
         type.IsScalar && type.Type is PeopleCodeType.ApiObject or PeopleCodeType.Record or PeopleCodeType.Field;
 
     /// <summary>
-    /// Visits a routine body with its collector current, then writes the agreed return type.
+    /// Visits a routine body with its collector current, then writes the agreed return type. A
+    /// routine in a cycle is written when the cycle settles, after its last member.
     /// </summary>
-    private void VisitRoutine(ReturnCollector? collector, Action visit)
+    private void VisitRoutine(AstNode routine, ReturnCollector? collector, Action visit)
     {
+        _cycleOf.TryGetValue(routine, out var cycle);
+        if (collector != null && cycle != null)
+        {
+            collector.Cycle = cycle;
+            cycle.Collectors[routine] = collector;
+        }
+
         _returnCollectors.Push(collector);
         try
         {
@@ -1825,17 +1894,76 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
             _returnCollectors.Pop();
         }
 
-        if (collector != null && AgreedReturnType(collector) is { } refined)
+        // Agreement over the direct returns also raises R1 for a cycle member
+        if (collector != null && AgreedReturnType(collector) is { } refined && cycle == null)
             collector.Apply(refined);
+
+        if (cycle != null && ReferenceEquals(routine, cycle.Last))
+            SettleCycle(cycle);
     }
+
+    /// <summary>
+    /// Recomputes each cycle member's agreed return from its direct returns and its partners'
+    /// current results until no result changes, then writes them. A partner with no known value
+    /// yet says nothing; one whose values disagree blocks its callers' agreement too; one that
+    /// isn't refined (no collector) contributes the type its call had. Left unrefined if it
+    /// doesn't settle.
+    /// </summary>
+    private void SettleCycle(ReturnCycle cycle)
+    {
+        var collectors = cycle.Collectors.Values.ToList();
+        for (int round = 0; round <= 2 * collectors.Count + 1; round++)
+        {
+            bool changed = false;
+            foreach (var collector in collectors)
+            {
+                var values = collector.Returns.Select(r => r.Type).ToList();
+                foreach (var (partner, typeAtVisit) in collector.PartnerReturns)
+                {
+                    if (!cycle.Collectors.TryGetValue(partner, out var partnerCollector))
+                        values.Add(typeAtVisit);
+                    else if (partnerCollector.Result is { } partnerResult)
+                        values.Add(ConvertTypeWithDimensionalityToTypeInfo(partnerResult));
+                    else if (partnerCollector.HasValues)
+                        values.Add(AnyTypeInfo.Instance);
+                }
+
+                var result = AgreedType(collector.DeclaredType, values);
+                if (!SameRefinement(result, collector.Result) || collector.HasValues != values.Count > 0)
+                {
+                    collector.Result = result;
+                    collector.HasValues = values.Count > 0;
+                    changed = true;
+                }
+            }
+
+            if (!changed)
+            {
+                foreach (var collector in collectors)
+                {
+                    if (collector.Result is { } result)
+                        collector.Apply(result);
+                }
+                return;
+            }
+        }
+    }
+
+    private static bool SameRefinement(TypeWithDimensionality? a, TypeWithDimensionality? b) =>
+        a is { } x ? b is { } y && x.Equals(y) && x.Identity == y.Identity : b == null;
 
     public override void VisitReturn(ReturnStatementNode node)
     {
         base.VisitReturn(node);
 
         // Return Null; says nothing about the type (e.g. a not-found path), so it doesn't disagree
-        if (node.Value != null && !IsNullLiteral(node.Value)
-            && _returnCollectors.Count > 0 && _returnCollectors.Peek() is { } collector)
+        if (node.Value == null || IsNullLiteral(node.Value)
+            || _returnCollectors.Count == 0 || _returnCollectors.Peek() is not { } collector)
+            return;
+
+        if (collector.Cycle?.PartnerCalledBy(node.Value) is { } partner)
+            collector.PartnerReturns.Add((partner, GetInferredType(node.Value)));
+        else
             collector.Returns.Add((node, GetInferredType(node.Value)));
     }
 
