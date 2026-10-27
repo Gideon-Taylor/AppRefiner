@@ -19,7 +19,7 @@ Two kinds of name are hard to remember and currently get no autosuggest:
 - **No popup at the bare dot.** `Field.` shows nothing, and neither does `SQL.`. Showing a list for some keywords at the dot but not others would read as a bug. The rule is the same for every keyword: **at least one character after the dot**.
 - No caching of full name lists per kind. The kinds are too large.
 - No suggestions after `CompIntfc.X.`, the collection paths. Not in v1.
-- Keywords with no single obvious table stay silent: `BarName`, `ItemName`, `Scroll`, `Operation`, `Package`, `Portal`, `URL`, `BusEvent`, `BusActivity`, `BusProcess`, `AnalyticModel`, `Interlink`.
+- Keywords not in the table below stay silent for now: `BarName`, `ItemName`, `Scroll`, `Package`, `Portal`, `URL`, `BusEvent`, `BusActivity`, `BusProcess`, `AnalyticModel`, `Interlink`. Adding one later is a row in the keyword table plus the hook's keyword list.
 
 ## Feature 1: definition names
 
@@ -39,7 +39,7 @@ New `AutoCompleteService.ShowDefinitionNameSuggestions(editor, position)`:
 - **Database.** Declares `DataManagerRequirement`. Without a database connection it returns without showing anything.
 - **Comments and strings.** The cursor must not be inside a string or comment. The one exception is an unfinished `/* as …` annotation comment, which Feature 2 needs for chaining.
 - **Query.**
-  - Calls a new data-manager method, `GetDefinitionNames(DefinitionKind kind, string prefix, int limit)`, implemented in both the Oracle and SQL Server managers.
+  - Calls a new data-manager method, `GetDefinitionNames(string keyword, string prefix, int limit)`, implemented in the Oracle, SQL Server and SQL proxy managers.
   - Each query is a prefix `LIKE` on the key column, ordered by name, and returns `limit + 1` rows so the handler can tell when the result was truncated.
   - `limit` = 500.
 - **Popup.**
@@ -67,8 +67,11 @@ New `AutoCompleteService.ShowDefinitionNameSuggestions(editor, position)`:
 | `Message` | PSMSGDEFN | MSGNAME | |
 | `FileLayout` | PSFLDDEFN | FLDDEFNNAME | |
 | `Node` | PSMSGNODEDEFN | MSGNODENAME | |
+| `Operation` | PSOPERATION | IB_OPERATIONNAME | |
 
-The Open Definition queries in `OraclePeopleSoftDataManager.GetOpenTargets` hold most of this mapping. Reuse their table and filter knowledge, but write separate queries: these return names only, filter by prefix only, and SQL needs the SQLTYPE filter.
+This is a dedicated query, separate from the Open Definition queries (`GetOpenTargets`), which stay unchanged. It returns names only and filters by prefix only. The Open dialog keeps listing every SQL type.
+
+Definition names are always upper case, so AppRefiner upper-cases the typed prefix before binding it, and the SQL compares the bare key column (`KEY LIKE ?`, no `UPPER()`) so the key index is used.
 
 **SQL Server:** use positional `?` parameters only (ODBC).
 
@@ -132,5 +135,5 @@ None. Both suggestions are always on, like app package suggestions; no new `auto
 ## Left to the builder
 
 - How the hook reads the line text. `SCI_GETLINE` up to the cursor is fine.
-- Where the context detection lives. Prefer one C# helper used by both the message handlers and Ctrl+Space.
-- Exact names for `DefinitionKind` and the settings properties.
+- Context detection lives in existing classes, not new ones: annotation detection on `TypeAnnotationParser`, definition-name detection on `AutoCompleteService`, the keyword → table map as a static on `IDataManager`.
+- Exact method names.
