@@ -947,7 +947,7 @@ namespace AppRefiner
 
         /// <summary>Text ending in &lt;keyword&gt;.&lt;ident&gt;, with at least one identifier character after the dot.</summary>
         private static readonly Regex DefinitionReferenceTail =
-            new(@"([A-Za-z0-9_]+)\.([A-Za-z0-9_]+)$", RegexOptions.CultureInvariant);
+            new(@"([A-Za-z0-9_]+)\.([A-Za-z0-9_]+)\z", RegexOptions.CultureInvariant);
 
         /// <summary>Body of an unfinished block comment that is a type annotation (<c>/* as ...</c>).</summary>
         private static readonly Regex AnnotationCommentBody =
@@ -1032,6 +1032,9 @@ namespace AppRefiner
                 return;
             }
 
+            // The caret has moved on: a newer message for the current caret is queued
+            if (position != ScintillaManager.GetCursorPosition(editor)) return;
+
             try
             {
                 string? textBeforeCursor = ReadTextBeforePosition(editor, position);
@@ -1093,6 +1096,9 @@ namespace AppRefiner
         public void ShowAnnotationTypeSuggestions(ScintillaEditor? editor, int position)
         {
             if (editor == null || !editor.IsValid()) return;
+
+            // The caret has moved on: a newer message for the current caret is queued
+            if (position != ScintillaManager.GetCursorPosition(editor)) return;
 
             try
             {

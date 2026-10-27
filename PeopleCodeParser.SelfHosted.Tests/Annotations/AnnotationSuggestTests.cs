@@ -33,6 +33,10 @@ public class AnnotationSuggestTests
     [InlineData("x = \"/* as ")]
     [InlineData("Local MyClass /* as ")]
     [InlineData("Local ApiObject /* as Fo\n")]
+    [InlineData("&x = 1;\n/* as ")]
+    [InlineData("Local ApiObject\n/* as ")]
+    [InlineData("Local MyPkg:MyClass /* as ")]
+    [InlineData("Local array of ApiObject /* as ")]
     public void Rejects_text_that_is_not_a_partial_annotation(string text)
     {
         Assert.False(TypeAnnotationParser.TryGetPartialAnnotation(text, out _, out _));

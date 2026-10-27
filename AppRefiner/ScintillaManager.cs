@@ -2355,7 +2355,7 @@ namespace AppRefiner
                     AutoCompleteContext.AppPackage => ":\t",      // ':' drills down into packages
                     AutoCompleteContext.SystemVariables => "\t;",  // No chaining for system variables
                     AutoCompleteContext.FunctionNames => "(\t;",   // '(' chains to the function call tip
-                    AutoCompleteContext.DefinitionName => "\t",
+                    AutoCompleteContext.DefinitionName => "\t;),", // Field.EMPLID; / Record.JOB) / Field.X,
                     AutoCompleteContext.AnnotationType => "\t",    // No '.': "CompIntfc." must insert whole
                     _ => "\t"
                 };

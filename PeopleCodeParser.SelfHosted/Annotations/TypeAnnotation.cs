@@ -125,8 +125,16 @@ public static class TypeAnnotationParser
         if (!match.Success)
             return false;
 
+        // The index only honours an annotation that starts on its anchor token's line
         var annotated = significant[^2];
+        if (comment.SourceSpan.Start.Line != annotated.SourceSpan.End.Line)
+            return false;
+
+        // Package-qualified (MyPkg:MyClass) and array (array of T) declared types take no annotation
         var beforeAnnotated = significant.Count >= 3 ? significant[^3] : null;
+        if (beforeAnnotated?.Type is TokenType.Colon or TokenType.Of)
+            return false;
+
         if (beforeAnnotated != null && DeclarationKeywords.Contains(beforeAnnotated.Type))
         {
             // A declared type: only any, ApiObject, Record and Field take annotations
