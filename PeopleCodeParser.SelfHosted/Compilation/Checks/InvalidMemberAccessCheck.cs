@@ -153,10 +153,8 @@ public sealed class InvalidMemberAccessCheck : CompileCheckBase
     /// <summary>
     /// A member of a named CI or a known item: from the definition (properties, keys, collections,
     /// custom methods), else one of the builtin type's own members. Disabled standard methods
-    /// still exist here; ComponentInterfaceCheck reports them. typeinfo.dat's DataItem has only
-    /// ItemNum, so an item's property is also accepted when it's a property of the builtin
-    /// ComponentInterface type (PropertyInfoCollection, InteractiveMode, …): permissive, so an
-    /// incomplete DataItem entry can't produce a false error.
+    /// still exist here; ComponentInterfaceCheck reports them. An item's only documented builtin
+    /// property is ItemNum; the rest are its collection's fields and collections.
     /// </summary>
     private static bool HasCompIntfcMember(CompIntfcTarget ci, TypeInfo targetType, string name, bool isMethodCall)
     {
@@ -171,9 +169,7 @@ public sealed class InvalidMemberAccessCheck : CompileCheckBase
 
         return ci.FindProperty(name) != null
             || ci.Node.Collections.ContainsKey(name)
-            || (typeName != null && PeopleCodeTypeDatabase.GetProperty(typeName, name) != null)
-            || (!ci.IsRoot
-                && PeopleCodeTypeDatabase.GetProperty(PeopleCodeType.ComponentInterface.GetTypeName(), name) != null);
+            || (typeName != null && PeopleCodeTypeDatabase.GetProperty(typeName, name) != null);
     }
 
     private enum ResolutionKind { Skip, NotFound, Found }

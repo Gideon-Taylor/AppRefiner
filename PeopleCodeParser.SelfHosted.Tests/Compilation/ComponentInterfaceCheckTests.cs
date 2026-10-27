@@ -178,9 +178,12 @@ public class ComponentInterfaceCheckTests
     }
 
     [Fact]
-    public void Item_accepts_builtin_ComponentInterface_properties()
+    public void Item_has_only_ItemNum_besides_its_fields()
     {
-        Assert.Empty(Run(GetRole + "Local any &p = &role.PropertyInfoCollection;\nLocal any &m = &role.InteractiveMode;"));
+        // ItemNum is the only documented DataItem property; the CI's own builtin properties aren't an item's
+        Assert.Empty(Run(GetRole + "Local number &n = &role.ItemNum;"));
+        AssertSingleError(Run(GetRole + "Local any &m = &role.InteractiveMode;"),
+            "'InteractiveMode' is not a property of CompIntfc.USER_PROFILE.Roles (&role is DataItem, assigned on line 2)");
         AssertSingleError(Run(GetRole + "Local any &x = &role.Bogus;"),
             "'Bogus' is not a property of CompIntfc.USER_PROFILE.Roles (&role is DataItem, assigned on line 2)");
     }

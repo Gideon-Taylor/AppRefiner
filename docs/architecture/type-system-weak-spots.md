@@ -189,10 +189,9 @@ Left open by the component interface typing work (spec
   initializer that conflicts with it warns ("&r is annotated as … but is initialized with …"),
   like a later assignment. (An annotation naming a CI that doesn't exist, or a collection path
   the CI doesn't have, is a warning.)
-- **Item properties also accept the ComponentInterface type's own properties.** `typeinfo.dat`'s
-  DataItem declares only `ItemNum`, so a property on a known item is accepted when it's the
-  collection's, DataItem's or one of the builtin ComponentInterface type's (`PropertyInfoCollection`,
-  `InteractiveMode`, …). That lets a few names through on items that may not exist there.
+- **Fixed (2026-10):** a known item's properties are its collection's fields and collections and
+  `ItemNum`, DataItem's only documented property. The builtin ComponentInterface type's own
+  properties (`InteractiveMode`, `PropertyInfoCollection`, …) are no longer accepted on an item.
 - **A failed lookup is retried after a short pause.** When the database throws, the CI is
   unchecked (Unknown) and not queried again for `ITypeMetadataResolver.ComponentInterfaceFailureRetryInterval`
   (10 s), so a database that recovers is noticed only on the next lookup after that.
