@@ -110,6 +110,18 @@ Local Rowset &rs;
     }
 
     [Fact]
+    public void Does_not_report_rowset_SelectNew()
+    {
+        var diags = Run(@"
+Local Rowset &rs;
+Local string &id;
+Local number &n = &rs.SelectNew(Record.JOB, ""WHERE EMPLID = :1"", &id);
+&rs.SelectNew(Record.JOB);");
+
+        Assert.Empty(diags);
+    }
+
+    [Fact]
     public void Reports_unknown_property_on_builtin_object_but_not_valid_one()
     {
         var diags = Run(@"
