@@ -121,6 +121,17 @@ public class ComponentInterfaceCheckTests
     }
 
     [Fact]
+    public void Find_result_is_checked_as_the_ci()
+    {
+        // Find() returns instances of the CI, each checked against its definition
+        var find = GetCi + "Local ApiObject &list = &ci.Find();\nLocal ApiObject &one = &list.Item(1);\n";
+
+        Assert.Empty(Run(find + "Local boolean &b = &one.Get();\nLocal any &r = &one.Roles;"));
+        var diag = Assert.Single(Run(find + "Local any &x = &one.Bogus;"));
+        Assert.StartsWith("'Bogus' is not a property of CompIntfc.USER_PROFILE", diag.Message);
+    }
+
+    [Fact]
     public void Disabled_standard_method()
     {
         var definition = ComponentInterfaceFixtures.UserProfile(

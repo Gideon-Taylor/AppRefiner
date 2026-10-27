@@ -123,12 +123,16 @@ public static class TypeAnnotationParser
 
     /// <summary>
     /// <c>CompIntfc.X</c> is the CI, <c>CompIntfc.X.Coll[.Child…]</c> an item of that collection,
-    /// and a trailing <c>[]</c> on the last part the collection itself. The CI itself takes no <c>[]</c>.
+    /// and a trailing <c>[]</c> on the last part the collection itself. <c>CompIntfc.X[]</c> is the
+    /// collection <c>Find()</c> returns: instances of the CI.
     /// </summary>
     private static AnnotationTarget? ParseCompIntfcTarget(string[] parts, string written)
     {
         if (parts.Length == 2)
         {
+            if (parts[1].EndsWith("[]", StringComparison.Ordinal) && IsName(parts[1][..^2]))
+                return new AnnotationTarget(PeopleCodeType.DataCollection, new TypeIdentity(CompIntfcName: parts[1][..^2]), written);
+
             return IsName(parts[1])
                 ? new AnnotationTarget(PeopleCodeType.ComponentInterface, new TypeIdentity(CompIntfcName: parts[1]), written)
                 : null;

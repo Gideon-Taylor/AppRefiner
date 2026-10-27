@@ -179,8 +179,11 @@ Left open by the component interface typing work (spec
   name, or without the definition (no database, a failed lookup), `&ci.Roles` is untyped and the
   variable it's assigned to narrows from its own uses, field types on the CI and its items are
   untyped, and no method on a ComponentInterface is reported as unknown, since a CI can add
-  methods of its own. Narrowing settles the API type but never the CI name. Still untyped:
-  - what `Find()` returns: a plain DataCollection, not a collection of the CI's find results.
+  methods of its own. Narrowing settles the API type but never the CI name.
+
+  **Fixed (2026-10):** `&ci.Find()` on a named CI returns a collection of instances of that CI
+  (a DataCollection tagged with the CI name and no path, `CompIntfc.X[]` in annotations), and
+  its `Item()` is a ComponentInterface of the same CI, checked against its definition.
 
   `GetCompIntfc(&name)` is untyped by necessity: a variable's content isn't known statically.
   Annotate the variable to type it.

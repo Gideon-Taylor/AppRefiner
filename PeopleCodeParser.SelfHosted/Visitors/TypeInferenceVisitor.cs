@@ -347,13 +347,26 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
                 : returnType.WithIdentity(new TypeIdentity(CompIntfcName: ciName));
         }
 
+        // &ci.Find() → the CI's find results: a collection of instances of the same CI, tagged
+        // with the CI name and no collection path (a child collection always has one). Find is
+        // the only ComponentInterface method that returns a DataCollection.
+        if (returnType.PeopleCodeType == PeopleCodeType.DataCollection && returnType.Identity == null
+            && objectType?.PeopleCodeType == PeopleCodeType.ComponentInterface
+            && !string.IsNullOrEmpty(objectType.Identity?.CompIntfcName))
+        {
+            return returnType.WithIdentity(new TypeIdentity(CompIntfcName: objectType.Identity.CompIntfcName));
+        }
+
         // &coll.Item(n) (ItemByKeys, CurrentItem, GetEffectiveItem, InsertItem) → an item of
-        // the same collection path
+        // the same collection path, or for find results an instance of the CI itself
         if (returnType.PeopleCodeType == PeopleCodeType.DataItem && returnType.Identity == null
             && objectType?.PeopleCodeType == PeopleCodeType.DataCollection
             && !string.IsNullOrEmpty(objectType.Identity?.CompIntfcName))
         {
-            return returnType.WithIdentity(objectType.Identity);
+            return string.IsNullOrEmpty(objectType.Identity.CompIntfcPath)
+                ? TypeInfo.FromPeopleCodeType(PeopleCodeType.ComponentInterface)
+                    .WithIdentity(new TypeIdentity(CompIntfcName: objectType.Identity.CompIntfcName))
+                : returnType.WithIdentity(objectType.Identity);
         }
 
         return returnType;

@@ -46,6 +46,7 @@ public class ComponentInterfaceAnnotationTests
     [InlineData("CompIntfc.USER_PROFILE.Roles.RouteControls", PeopleCodeType.DataItem, "Roles.RouteControls")]
     [InlineData("CompIntfc.USER_PROFILE.Roles[]", PeopleCodeType.DataCollection, "Roles")]
     [InlineData("CompIntfc.USER_PROFILE.Roles.RouteControls[]", PeopleCodeType.DataCollection, "Roles.RouteControls")]
+    [InlineData("CompIntfc.USER_PROFILE[]", PeopleCodeType.DataCollection, null)]
     public void Parses_ci_paths(string written, PeopleCodeType type, string? path)
     {
         var parsed = ParseAnnotation($"/* as {written} */");
@@ -58,7 +59,7 @@ public class ComponentInterfaceAnnotationTests
     }
 
     [Theory]
-    [InlineData("CompIntfc.USER_PROFILE[]")]
+    [InlineData("CompIntfc.USER_PROFILE[][]")]
     [InlineData("CompIntfc.USER_PROFILE.")]
     [InlineData("CompIntfc.USER_PROFILE.Roles.")]
     [InlineData("CompIntfc.USER_PROFILE..Roles")]
@@ -101,6 +102,36 @@ public class ComponentInterfaceAnnotationTests
         var type = LastUse(program, "&c").GetInferredType();
         Assert.Equal(PeopleCodeType.DataCollection, type?.PeopleCodeType);
         Assert.Equal(new TypeIdentity(CompIntfcName: "USER_PROFILE", CompIntfcPath: "Roles"), type?.Identity);
+    }
+
+    [Fact]
+    public void Find_returns_instances_of_the_ci()
+    {
+        var (program, errors, warnings) = TypeCheck(
+            "Local ApiObject &ci = %Session.GetCompIntfc(CompIntfc.USER_PROFILE);\n" +
+            "Local ApiObject &list = &ci.Find();\n" +
+            "Local ApiObject &one = &list.Item(1);\n" +
+            "Local any &x = &one;");
+
+        Assert.Empty(errors);
+        Assert.Empty(warnings);
+        var list = LastUse(program, "&list").GetInferredType();
+        Assert.Equal(PeopleCodeType.DataCollection, list?.PeopleCodeType);
+        Assert.Equal(new TypeIdentity(CompIntfcName: "USER_PROFILE"), list?.Identity);
+        var one = LastUse(program, "&one").GetInferredType();
+        Assert.Equal(PeopleCodeType.ComponentInterface, one?.PeopleCodeType);
+        Assert.Equal(new TypeIdentity(CompIntfcName: "USER_PROFILE"), one?.Identity);
+    }
+
+    [Fact]
+    public void Find_results_annotation_types_the_variable()
+    {
+        var (program, _, warnings) = TypeCheck(
+            "Local ApiObject /* as CompIntfc.USER_PROFILE[] */ &list;\nLocal ApiObject &one = &list.Item(1);\nLocal any &x = &one;");
+
+        Assert.Empty(warnings);
+        Assert.Equal(new TypeIdentity(CompIntfcName: "USER_PROFILE"), LastUse(program, "&list").GetInferredType()?.Identity);
+        Assert.Equal(PeopleCodeType.ComponentInterface, LastUse(program, "&one").GetInferredType()?.PeopleCodeType);
     }
 
     [Fact]
