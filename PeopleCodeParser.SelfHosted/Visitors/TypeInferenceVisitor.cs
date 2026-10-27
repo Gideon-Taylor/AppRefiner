@@ -601,7 +601,8 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
         if (variable.AnnotatedType is { } annotated)
         {
             // One diagnostic per assignment: the declaration conflict outranks the value conflict
-            bool declarationWarned = RefineAnnotatedVariable(variable, annotated, rhsType, expression);
+            bool declarationWarned = RefineAnnotatedVariable(variable, annotated, rhsType, expression,
+                initializer: ReferenceEquals(sourceNode, variable.DeclarationNode));
             if (valueConflict != null && !declarationWarned)
                 expression.AddTypeWarning(new TypeError(valueConflict, expression));
             return;
@@ -707,7 +708,7 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
     /// and same-type values with less or equal detail change nothing; anything else warns.
     /// Returns whether it recorded a warning.
     /// </summary>
-    private bool RefineAnnotatedVariable(VariableInfo variable, TypeInfo annotated, TypeInfo rhsType, ExpressionNode expression)
+    private bool RefineAnnotatedVariable(VariableInfo variable, TypeInfo annotated, TypeInfo rhsType, ExpressionNode expression, bool initializer)
     {
         if (rhsType.Kind is TypeKind.Any or TypeKind.Unknown
             || rhsType is BuiltinObjectTypeInfo { IsApiObjectBase: true })
@@ -746,7 +747,9 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
 
         var annotatedLine = variable.RefinementSource is { } src ? $" (line {src.Line + 1})" : "";
         expression.AddTypeWarning(new TypeError(
-            $"{variable.Name} is annotated as {DescribeType(annotated)}{annotatedLine} but is assigned {DescribeType(rhsType)} here.",
+            initializer
+                ? $"{variable.Name} is annotated as {DescribeType(annotated)} but is initialized with {DescribeType(rhsType)}."
+                : $"{variable.Name} is annotated as {DescribeType(annotated)}{annotatedLine} but is assigned {DescribeType(rhsType)} here.",
             expression));
         return true;
     }
@@ -836,6 +839,7 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
             ProgramVariableNode pv => pv.Type,
             PropertyNode prop => prop.Type,
             LocalVariableDeclarationNode local => local.Type,
+            LocalVariableDeclarationWithAssignmentNode initialized => initialized.Type,
             _ => null
         };
         if (typeNode == null)

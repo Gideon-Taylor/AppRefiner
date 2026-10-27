@@ -178,13 +178,15 @@ Left open by the component interface typing work (spec
   variable it's assigned to narrows from its own uses, field types on the CI and its items are
   untyped, and no method on a ComponentInterface is reported as unknown, since a CI can add
   methods of its own. Narrowing settles the API type but never the CI name. Still untyped:
-  - `GetCompIntfc(&name)` and `GetCompIntfc("USER_PROFILE")`: only a `CompIntfc.X` reference
-    names the CI; annotate the variable to type it;
   - what `Find()` returns: a plain DataCollection, not a collection of the CI's find results.
-- **An annotation that conflicts with its declaration's own initializer isn't reported.**
-  `Local ApiObject /* as CompIntfc.USER_PROFILE.Roles */ &r = &ci.EmailAddresses.Item(1);` gives no
-  warning; only a later assignment is compared with the annotation. (An annotation naming a CI
-  that doesn't exist, or a collection path the CI doesn't have, is a warning.)
+
+  `GetCompIntfc(&name)` is untyped by necessity: a variable's content isn't known statically.
+  Annotate the variable to type it.
+- **Fixed (2026-10):** a declaration annotation applies when the declaration has an initializer
+  (`Local ApiObject /* as Session */ &x = &v;` used to ignore the annotation), and an
+  initializer that conflicts with it warns ("&r is annotated as … but is initialized with …"),
+  like a later assignment. (An annotation naming a CI that doesn't exist, or a collection path
+  the CI doesn't have, is a warning.)
 - **Item properties also accept the ComponentInterface type's own properties.** `typeinfo.dat`'s
   DataItem declares only `ItemNum`, so a property on a known item is accepted when it's the
   collection's, DataItem's or one of the builtin ComponentInterface type's (`PropertyInfoCollection`,

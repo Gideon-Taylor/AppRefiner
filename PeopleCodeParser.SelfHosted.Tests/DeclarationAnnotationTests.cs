@@ -109,6 +109,38 @@ public class DeclarationAnnotationTests
     }
 
     [Fact]
+    public void Conflicting_initializer_warns_and_annotation_stays()
+    {
+        var (program, errors, warnings) = TypeCheck(
+            "Local ApiObject /* as Session */ &x = %Session.GetCompIntfc(CompIntfc.A);\n&x.GetCompIntfc(CompIntfc.B);");
+
+        var warning = Assert.Single(warnings, w => w.Message.Contains("&x"));
+        Assert.Equal("&x is annotated as Session but is initialized with CompIntfc.A.", warning.Message);
+        Assert.Equal("Session", LastUse(program, "&x").GetInferredType()!.Name, ignoreCase: true);
+        Assert.DoesNotContain(errors, e => e.Message.Contains("Cannot assign"));
+    }
+
+    [Fact]
+    public void Agreeing_initializer_does_not_warn()
+    {
+        var (program, _, warnings) = TypeCheck(
+            "Local ApiObject /* as Session */ &x = %Session;\n&x.GetCompIntfc(CompIntfc.B);");
+
+        Assert.DoesNotContain(warnings, w => w.Message.Contains("&x"));
+        Assert.Equal("Session", LastUse(program, "&x").GetInferredType()!.Name, ignoreCase: true);
+    }
+
+    [Fact]
+    public void Annotation_types_a_variable_whose_initializer_is_untyped()
+    {
+        var (program, _, warnings) = TypeCheck(
+            "Local any &v;\nLocal ApiObject /* as Session */ &x = &v;\n&x.GetCompIntfc(CompIntfc.B);");
+
+        Assert.Empty(warnings);
+        Assert.Equal("Session", LastUse(program, "&x").GetInferredType()!.Name, ignoreCase: true);
+    }
+
+    [Fact]
     public void Same_subtype_assignment_does_not_warn()
     {
         var warnings = Warnings(
