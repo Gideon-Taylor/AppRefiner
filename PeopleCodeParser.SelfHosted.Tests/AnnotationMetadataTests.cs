@@ -58,6 +58,26 @@ public class AnnotationMetadataTests
     }
 
     [Fact]
+    public void Ci_item_and_collection_annotations_carry_the_path()
+    {
+        var metadata = Extract(
+            "class Svc\n" +
+            "   method GetRole(&roles As ApiObject /* as CompIntfc.USER_PROFILE.Roles[] */) Returns ApiObject /* as CompIntfc.USER_PROFILE.Roles.RouteControls */;\n" +
+            "end-class;\n");
+
+        var getRole = metadata.Methods["GetRole"];
+        var item = getRole.RefinedReturnType;
+        Assert.NotNull(item);
+        Assert.Equal(PeopleCodeType.DataItem, item!.Value.Type);
+        Assert.Equal(new TypeIdentity(CompIntfcName: "USER_PROFILE", CompIntfcPath: "Roles.RouteControls"), item!.Value.Identity);
+
+        var collection = Param(getRole, 0).RefinedParameterType;
+        Assert.NotNull(collection);
+        Assert.Equal(PeopleCodeType.DataCollection, collection!.Value.Type);
+        Assert.Equal(new TypeIdentity(CompIntfcName: "USER_PROFILE", CompIntfcPath: "Roles"), collection!.Value.Identity);
+    }
+
+    [Fact]
     public void Method_parameter_annotations_fill_refined_parameter_type()
     {
         var take = Extract(ClassSource).Methods["Take"];

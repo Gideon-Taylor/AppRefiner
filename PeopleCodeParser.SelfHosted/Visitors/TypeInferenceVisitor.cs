@@ -1,4 +1,5 @@
 using PeopleCodeParser.SelfHosted.Annotations;
+using PeopleCodeParser.SelfHosted.ComponentInterfaces;
 using PeopleCodeParser.SelfHosted.Nodes;
 using PeopleCodeParser.SelfHosted.Visitors.Models;
 using PeopleCodeParser.SelfHosted.Visitors.Narrowing;
@@ -370,7 +371,57 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
             return new FieldTypeInfo(recordName, fieldName, _typeResolver).WithAssignable(true);
         }
 
+        // GetCompIntfc(CompIntfc.FOO) → ComponentInterface named FOO. Tagged whatever the lookup
+        // says, so identity checks work without a database; members need the definition.
+        if (returnType.PeopleCodeType == PeopleCodeType.ComponentInterface && returnType.Identity == null)
+        {
+            var ciName = FindCompIntfcNameFromArgs(parameterTypes, argumentNodes);
+            return string.IsNullOrEmpty(ciName)
+                ? returnType
+                : returnType.WithIdentity(new TypeIdentity(CompIntfcName: ciName));
+        }
+
+        // &coll.Item(n) (ItemByKeys, CurrentItem, GetEffectiveItem, InsertItem) → an item of
+        // the same collection path
+        if (returnType.PeopleCodeType == PeopleCodeType.DataItem && returnType.Identity == null
+            && objectType?.PeopleCodeType == PeopleCodeType.DataCollection
+            && !string.IsNullOrEmpty(objectType.Identity?.CompIntfcName))
+        {
+            return returnType.WithIdentity(objectType.Identity);
+        }
+
         return returnType;
+    }
+
+    private static string? FindCompIntfcNameFromArgs(
+        TypeInfo[] parameterTypes,
+        IReadOnlyList<ExpressionNode>? argumentNodes = null)
+    {
+        foreach (var p in parameterTypes)
+        {
+            if (p is ReferenceTypeInfo r
+                && r.ReferenceCategory == PeopleCodeType.CompIntfc
+                && !string.IsNullOrEmpty(r.ReferencedName)
+                && !IsUnresolvedDynamicReference(r))
+            {
+                return r.ReferencedName;
+            }
+        }
+
+        // @("CompIntfc.NAME") from the AST when the type path missed it
+        if (argumentNodes != null)
+        {
+            foreach (var arg in argumentNodes)
+            {
+                if (TryGetDefinitionReferenceFromExpression(arg, out var category, out var name)
+                    && category == PeopleCodeType.CompIntfc)
+                {
+                    return name;
+                }
+            }
+        }
+
+        return null;
     }
 
     private static string? FindRecordNameFromArgs(
@@ -660,6 +711,7 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
             return rhsType;
         }
 
+        WarnIfUnknownCompIntfc(target, expression);
         var annotationType = AnnotationToTypeInfo(target);
 
         // ApiObject/any values are what annotations are for; a value the declared type can't hold
@@ -735,7 +787,7 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
 
     /// <summary>
     /// A type's name for annotation messages, including its identity in annotation syntax
-    /// (Record.JOB, Record.JOB.EMPLID, Field.EMPLID, CompIntfc.FOO) when it has one.
+    /// (Record.JOB, Record.JOB.EMPLID, Field.EMPLID, CompIntfc.FOO, CompIntfc.FOO.Coll[]) when it has one.
     /// </summary>
     private static string DescribeType(TypeInfo type)
     {
@@ -749,9 +801,9 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
                     : $"Record.{field.RecordName}.{field.FieldName}";
         }
 
-        if (type.PeopleCodeType == PeopleCodeType.ComponentInterface
-            && !string.IsNullOrEmpty(type.Identity?.CompIntfcName))
-            return $"CompIntfc.{type.Identity.CompIntfcName}";
+        if (type.PeopleCodeType is PeopleCodeType.ComponentInterface or PeopleCodeType.DataItem or PeopleCodeType.DataCollection
+            && TypeAnnotationParser.FormatCompIntfc(type.PeopleCodeType, type.Identity) is { } ci)
+            return ci;
 
         return type.Name;
     }
@@ -844,6 +896,7 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
             return;
         }
 
+        WarnIfUnknownCompIntfc(target, declaringNode);
         variable.Annotate(AnnotationToTypeInfo(target), new RefinementSource(RefinementKind.Annotation, declaringNode));
     }
 
@@ -876,6 +929,19 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
         var declaredTypeName = AstTypeExtractor.GetTypeFromNode(returnType);
         if (!annotation.Target!.Fits(declaredTypeName))
             declaringNode.AddTypeWarning(new TypeError(MisfitMessage(annotation.Target, name, declaredTypeName), declaringNode));
+        else
+            WarnIfUnknownCompIntfc(annotation.Target, declaringNode);
+    }
+
+    /// <summary>
+    /// An annotation naming a CI that doesn't exist, or a collection path not in the CI, warns
+    /// (like an unknown type) on the node its other annotation warnings go on. The annotation
+    /// still applies. Silent when the lookup doesn't answer (no database, error).
+    /// </summary>
+    private void WarnIfUnknownCompIntfc(AnnotationTarget target, AstNode warnOn)
+    {
+        if (CompIntfcTarget.AnnotationWarning(target.Identity, _typeResolver) is { } warning)
+            warnOn.AddTypeWarning(new TypeError(warning, warnOn));
     }
 
     private TypeInfo AnnotationToTypeInfo(AnnotationTarget target)
@@ -1043,6 +1109,17 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
         bool isMethodCall,
         TypeInfo[]? parameterTypes)
     {
+        // Members a named CI or a known item gets from the CI's definition
+        if (isMethodCall)
+        {
+            if (FindCompIntfcCustomMethod(objectType, memberName) is { } customMethod)
+                return ConvertFunctionInfoToTypeInfo(customMethod, objectType, parameterTypes);
+        }
+        else if (ResolveCompIntfcProperty(objectType, memberName) is { } ciMember)
+        {
+            return ciMember;
+        }
+
         // Builtin types (primitives and builtin objects)
         if (objectType.Kind == TypeKind.BuiltinObject || objectType.Kind == TypeKind.Primitive)
         {
@@ -1125,6 +1202,31 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
 
         return AnyTypeInfo.Instance;
     }
+
+    /// <summary>
+    /// A property or collection of a named CI or a known item, from its definition: a property is
+    /// its field's primitive type (any when unknown), a collection a DataCollection one level
+    /// deeper on the path. Null when the definition doesn't name it (today's typing applies).
+    /// A collection's own members are DataCollection's (Count, Item, ...), so it has none here.
+    /// </summary>
+    private TypeInfo? ResolveCompIntfcProperty(TypeInfo objectType, string memberName)
+    {
+        if (CompIntfcTarget.Find(objectType, _typeResolver) is not { } ci)
+            return null;
+
+        if (ci.FindProperty(memberName) is { } property)
+            return CompIntfcTarget.PropertyValueType(property).WithAssignable(true);
+
+        return ci.Node.Collections.TryGetValue(memberName, out var collection)
+            ? ci.CollectionType(collection)
+            : null;
+    }
+
+    /// <summary>
+    /// A user-defined method of a named CI (from its Methods PeopleCode), or null.
+    /// </summary>
+    private FunctionInfo? FindCompIntfcCustomMethod(TypeInfo objectType, string methodName) =>
+        CompIntfcTarget.Find(objectType, _typeResolver)?.FindCustomMethod(methodName)?.Signature;
 
 
     #endregion
@@ -1467,6 +1569,10 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
             var objectType = GetInferredType(memberAccess.Target);
             if (objectType != null)
             {
+                // A named CI's own methods come from its definition; its standard ones from typeinfo
+                if (FindCompIntfcCustomMethod(objectType, memberAccess.MemberName) is { } customMethod)
+                    return customMethod;
+
                 if (objectType.Kind == TypeKind.BuiltinObject || objectType.Kind == TypeKind.Primitive)
                 {
                     return PeopleCodeTypeDatabase.GetMethod(objectType.Name, memberAccess.MemberName);

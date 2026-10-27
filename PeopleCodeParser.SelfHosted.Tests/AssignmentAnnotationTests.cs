@@ -212,7 +212,7 @@ public class AssignmentAnnotationTests
             "Local ApiObject &q = %Session.GetQuery();\n&q = %Session.GetCompIntfc(CompIntfc.A) /* as Query */;");
 
         Assert.DoesNotContain(warnings, w => w.Message.Contains("more than one API type"));
-        Assert.Single(warnings, w => w.Message == "The value is ComponentInterface, but it is annotated as Query. Using Query.");
+        Assert.Single(warnings, w => w.Message == "The value is CompIntfc.A, but it is annotated as Query. Using Query.");
     }
 
     [Fact]

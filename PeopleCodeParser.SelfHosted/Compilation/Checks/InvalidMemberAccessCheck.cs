@@ -1,3 +1,4 @@
+using PeopleCodeParser.SelfHosted.ComponentInterfaces;
 using PeopleCodeParser.SelfHosted.Nodes;
 using PeopleCodeTypeInfo.Contracts;
 using PeopleCodeTypeInfo.Database;
@@ -68,8 +69,25 @@ public sealed class InvalidMemberAccessCheck : CompileCheckBase
         // covered by usage narrowing instead.
         if (targetType is BuiltinObjectTypeInfo { IsApiObjectBase: true }) return;
 
-        // A CI's definition can add its own methods (and its keys and fields are properties), so
-        // nothing on a ComponentInterface is checked until CI definitions are read (spec §16)
+        // A named CI, or an item whose collection path is known, is checked against the CI's
+        // definition when the lookup finds it. An item's methods are DataItem's (checked below).
+        if ((targetType.PeopleCodeType == PeopleCodeType.ComponentInterface || !isMethodCall)
+            && CompIntfcTarget.Find(targetType, ctx.Resolver) is { } ci)
+        {
+            if (!HasCompIntfcMember(ci, targetType, m.MemberName, isMethodCall))
+            {
+                string kind = isMethodCall ? "method" : "property";
+                sink.Report(new CompileDiagnostic(
+                    DiagnosticCode.InvalidMemberAccess,
+                    DiagnosticSeverity.Error,
+                    m.MemberNameSpan,
+                    $"'{m.MemberName}' is not a {kind} of {ci.DisplayName}{RefinementSuffix(m.Target, targetType)}"));
+            }
+            return;
+        }
+
+        // Otherwise a CI's definition could add its own methods (and its keys and fields are
+        // properties), so nothing on an unnamed or unresolved ComponentInterface is checked (spec §16)
         if (targetType.PeopleCodeType == PeopleCodeType.ComponentInterface) return;
 
         // Record property access is a dynamic field lookup — only validate method calls on Records
@@ -121,6 +139,42 @@ public sealed class InvalidMemberAccessCheck : CompileCheckBase
     }
 
     #region Member resolution
+
+    // Methods every CI declares whatever its definition says. The five BCSTDMETHODS-gated ones
+    // (Cancel … Save) are here too: whether they're enabled is ComponentInterfaceCheck's to report,
+    // and here they only have to exist.
+    private static readonly HashSet<string> AlwaysDeclaredCompIntfcMethods = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "Cancel", "Create", "Find", "Get", "Save",
+        "GetPropertyByName", "SetPropertyByName",
+        "CopyRowset", "CopyRowsetDelta", "CopySetupRowset", "CopySetupRowsetDelta",
+    };
+
+    /// <summary>
+    /// A member of a named CI or a known item: from the definition (properties, keys, collections,
+    /// custom methods), else one of the builtin type's own members. Disabled standard methods
+    /// still exist here; ComponentInterfaceCheck reports them. typeinfo.dat's DataItem has only
+    /// ItemNum, so an item's property is also accepted when it's a property of the builtin
+    /// ComponentInterface type (PropertyInfoCollection, InteractiveMode, …): permissive, so an
+    /// incomplete DataItem entry can't produce a false error.
+    /// </summary>
+    private static bool HasCompIntfcMember(CompIntfcTarget ci, TypeInfo targetType, string name, bool isMethodCall)
+    {
+        var typeName = targetType.PeopleCodeType?.GetTypeName();
+
+        if (isMethodCall)
+        {
+            return ci.Definition.CustomMethods.ContainsKey(name)
+                || AlwaysDeclaredCompIntfcMethods.Contains(name)
+                || (typeName != null && PeopleCodeTypeDatabase.GetMethod(typeName, name) != null);
+        }
+
+        return ci.FindProperty(name) != null
+            || ci.Node.Collections.ContainsKey(name)
+            || (typeName != null && PeopleCodeTypeDatabase.GetProperty(typeName, name) != null)
+            || (!ci.IsRoot
+                && PeopleCodeTypeDatabase.GetProperty(PeopleCodeType.ComponentInterface.GetTypeName(), name) != null);
+    }
 
     private enum ResolutionKind { Skip, NotFound, Found }
 

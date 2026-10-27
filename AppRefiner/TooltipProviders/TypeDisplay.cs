@@ -1,3 +1,4 @@
+using PeopleCodeParser.SelfHosted.Annotations;
 using PeopleCodeTypeInfo.Database;
 using PeopleCodeTypeInfo.Functions;
 using PeopleCodeTypeInfo.Types;
@@ -8,7 +9,8 @@ namespace AppRefiner.TooltipProviders
     /// Tooltip text for types that carry more than their declarable name. API subtypes show
     /// as "ApiObject (Session)" because Session itself can't be used in a declaration, and
     /// records, fields and component interfaces add the definition they are known to be,
-    /// e.g. "record (Record.PSOPRDEFN)".
+    /// e.g. "record (Record.PSOPRDEFN)", and CI items and collections their path from the CI root,
+    /// e.g. "ApiObject (CompIntfc.USER_PROFILE.Roles[])".
     /// </summary>
     internal static class TypeDisplay
     {
@@ -24,7 +26,7 @@ namespace AppRefiner.TooltipProviders
             RecordTypeInfo { RecordName.Length: > 0 } record => $"Record.{record.RecordName}",
             FieldTypeInfo { FieldName.Length: > 0 } field => FieldName(field.RecordName, field.FieldName),
             BuiltinObjectTypeInfo { IsApiObjectBase: false } api when IsApiSubtype(api.Name) =>
-                string.IsNullOrEmpty(api.Identity?.CompIntfcName) ? api.Name : $"CompIntfc.{api.Identity.CompIntfcName}",
+                TypeAnnotationParser.FormatCompIntfc(api.PeopleCodeType, api.Identity) ?? api.Name,
             _ => null
         };
 
@@ -32,8 +34,8 @@ namespace AppRefiner.TooltipProviders
         public static string Detail(TypeWithDimensionality annotation)
         {
             var identity = annotation.Identity;
-            if (!string.IsNullOrEmpty(identity?.CompIntfcName))
-                return $"CompIntfc.{identity.CompIntfcName}";
+            if (TypeAnnotationParser.FormatCompIntfc(annotation.Type, identity) is { } compIntfc)
+                return compIntfc;
             if (!string.IsNullOrEmpty(identity?.FieldName))
                 return FieldName(identity.RecordName, identity.FieldName);
             if (!string.IsNullOrEmpty(identity?.RecordName))

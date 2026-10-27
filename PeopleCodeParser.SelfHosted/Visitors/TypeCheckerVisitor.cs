@@ -434,12 +434,18 @@ namespace PeopleCodeParser.SelfHosted.Visitors
                 // Plain ApiObject, any and unknown arguments (anything not a known subtype) pass
                 var argNode = arguments[i];
                 if (argNode.GetInferredType() is not BuiltinObjectTypeInfo { IsApiObjectBase: false } argApi
-                    || !PeopleCodeTypeDatabase.IsApiObjectSubtype(argApi.Name)
-                    || argApi.Name.Equals(refinedName, StringComparison.OrdinalIgnoreCase))
+                    || !PeopleCodeTypeDatabase.IsApiObjectSubtype(argApi.Name))
                     continue;
 
+                // The same subtype passes unless both name a CI (or CI path) and they differ
+                if (argApi.Name.Equals(refinedName, StringComparison.OrdinalIgnoreCase)
+                    && !(argApi.EffectiveIdentity?.ConflictsWith(refined.Identity) ?? false))
+                    continue;
+
+                var expected = TypeAnnotationParser.FormatCompIntfc(refined.Type, refined.Identity) ?? refinedName;
+                var actual = TypeAnnotationParser.FormatCompIntfc(argApi.PeopleCodeType, argApi.EffectiveIdentity) ?? argApi.Name;
                 RecordTypeWarning(
-                    $"{functionInfo.Name} expects {parameter.Name} as {refinedName} (annotated); the argument is {argApi.Name}.",
+                    $"{functionInfo.Name} expects {parameter.Name} as {expected} (annotated); the argument is {actual}.",
                     argNode);
             }
         }

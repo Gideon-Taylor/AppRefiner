@@ -56,7 +56,7 @@ public class AnnotatedParameterCallTests
 
         Assert.Empty(errors);
         var warning = Assert.Single(warnings);
-        Assert.Equal("Foo expects &s as Session (annotated); the argument is ComponentInterface.", warning.Message);
+        Assert.Equal("Foo expects &s as Session (annotated); the argument is CompIntfc.A.", warning.Message);
         Assert.IsType<IdentifierNode>(warning.Node);
     }
 
@@ -79,7 +79,7 @@ public class AnnotatedParameterCallTests
 
         Assert.Empty(errors);
         var warning = Assert.Single(warnings);
-        Assert.Equal("Use expects &s as Session (annotated); the argument is ComponentInterface.", warning.Message);
+        Assert.Equal("Use expects &s as Session (annotated); the argument is CompIntfc.A.", warning.Message);
     }
 
     [Fact]
@@ -103,7 +103,7 @@ public class AnnotatedParameterCallTests
 
         Assert.Empty(errors);
         var warning = Assert.Single(warnings);
-        Assert.Equal("Use expects &s as Session (annotated); the argument is ComponentInterface.", warning.Message);
+        Assert.Equal("Use expects &s as Session (annotated); the argument is CompIntfc.A.", warning.Message);
     }
 
     private const string SvcConstructorSource =
@@ -128,7 +128,7 @@ public class AnnotatedParameterCallTests
 
         Assert.Empty(errors);
         var warning = Assert.Single(warnings);
-        Assert.Equal("Svc expects &s as Session (annotated); the argument is ComponentInterface.", warning.Message);
+        Assert.Equal("Svc expects &s as Session (annotated); the argument is CompIntfc.A.", warning.Message);
         Assert.IsType<IdentifierNode>(warning.Node);
     }
 
@@ -184,7 +184,7 @@ public class AnnotatedParameterCallTests
 
         Assert.Empty(errors);
         var warning = Assert.Single(warnings);
-        Assert.Equal("Svc expects &s as Session (annotated); the argument is ComponentInterface.", warning.Message);
+        Assert.Equal("Svc expects &s as Session (annotated); the argument is CompIntfc.A.", warning.Message);
     }
 
     [Fact]

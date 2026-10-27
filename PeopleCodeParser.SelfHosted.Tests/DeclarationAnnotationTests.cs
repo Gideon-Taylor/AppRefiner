@@ -102,7 +102,7 @@ public class DeclarationAnnotationTests
             "Local ApiObject /* as Session */ &x;\n&x = %Session.GetCompIntfc(CompIntfc.A);\n&x.GetCompIntfc(CompIntfc.B);");
 
         Assert.Contains(warnings, w => w.Message ==
-            "&x is annotated as Session (line 1) but is assigned ComponentInterface here.");
+            "&x is annotated as Session (line 1) but is assigned CompIntfc.A here.");
         Assert.Single(warnings, w => w.Message.Contains("&x"));
         Assert.Equal("Session", LastUse(program, "&x").GetInferredType()!.Name, ignoreCase: true);
         Assert.DoesNotContain(errors, e => e.Message.Contains("Cannot assign"));
@@ -121,10 +121,22 @@ public class DeclarationAnnotationTests
     public void Less_detailed_assignment_keeps_annotation()
     {
         var (program, _, warnings) = TypeCheck(
-            "Local ApiObject /* as CompIntfc.FOO */ &x;\n&x = %Session.GetCompIntfc(CompIntfc.A);\n&x.Save();");
+            // GetCompIntfc(&n) is a CI with no name (GetCompIntfc(CompIntfc.A) would be a conflict)
+            "Local ApiObject /* as CompIntfc.FOO */ &x;\nLocal string &n;\n&x = %Session.GetCompIntfc(&n);\n&x.Save();");
 
         Assert.Equal(new TypeIdentity(CompIntfcName: "FOO"), LastUse(program, "&x").GetInferredType()!.Identity);
         Assert.Empty(warnings);
+    }
+
+    [Fact]
+    public void Assigning_a_different_named_ci_conflicts_and_keeps_annotation()
+    {
+        var (program, _, warnings) = TypeCheck(
+            "Local ApiObject /* as CompIntfc.FOO */ &x;\n&x = %Session.GetCompIntfc(CompIntfc.A);\n&x.Save();");
+
+        Assert.Equal(new TypeIdentity(CompIntfcName: "FOO"), LastUse(program, "&x").GetInferredType()!.Identity);
+        var warning = Assert.Single(warnings);
+        Assert.Equal("&x is annotated as CompIntfc.FOO (line 1) but is assigned CompIntfc.A here.", warning.Message);
     }
 
     [Fact]

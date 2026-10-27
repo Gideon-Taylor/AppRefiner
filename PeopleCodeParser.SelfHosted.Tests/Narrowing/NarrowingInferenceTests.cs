@@ -225,7 +225,10 @@ public class NarrowingInferenceTests
     [Fact]
     public void Deciding_use_after_conflicting_assignment_gets_member_error_not_N4()
     {
-        var diags = Check("Local ApiObject &x;\n&x = %Session.GetQuery();\n&x.GetCompIntfc(CompIntfc.A);");
+        // CI A isn't defined anywhere; an Unknown lookup keeps its existence out of this test
+        var resolver = new FakeTypeMetadataResolver();
+        resolver.SetComponentInterfaceUnknown(true);
+        var diags = Check("Local ApiObject &x;\n&x = %Session.GetQuery();\n&x.GetCompIntfc(CompIntfc.A);", resolver);
 
         var diag = Assert.Single(diags);
         Assert.Equal(DiagnosticCode.InvalidMemberAccess, diag.Code);

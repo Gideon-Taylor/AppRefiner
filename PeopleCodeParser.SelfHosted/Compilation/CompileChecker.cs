@@ -50,6 +50,7 @@ public static class CompileChecker
         new Checks.AmbiguousClassReferenceCheck(),
         new Checks.InvalidMemberAccessCheck(),
         new Checks.UnknownRecordFieldCheck(),
+        new Checks.ComponentInterfaceCheck(),
         new Checks.UndeclaredFunctionCheck(),
         new Checks.MissingMethodImplementationCheck(),
         new Checks.MissingConstructorCheck(),

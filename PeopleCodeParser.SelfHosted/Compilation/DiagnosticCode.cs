@@ -41,4 +41,16 @@ public enum DiagnosticCode
     /// (e.g. ACCTLOCK in record PeopleCode whose default record has no such field).
     /// </summary>
     UnknownRecordField = 25,
+    /// <summary>
+    /// Assignment to a read-only property of a component interface or one of its items.
+    /// </summary>
+    ReadOnlyCompIntfcProperty = 26,
+    /// <summary>
+    /// Call to a standard method (Cancel, Create, Find, Get, Save) the CI doesn't enable.
+    /// </summary>
+    DisabledCompIntfcMethod = 27,
+    /// <summary>
+    /// CompIntfc.X names a component interface the database doesn't have.
+    /// </summary>
+    UnknownComponentInterface = 28,
 }

@@ -104,8 +104,8 @@ public static class TypeAnnotationParser
         }
 
         var keyword = parts[0];
-        if (keyword.Equals("CompIntfc", StringComparison.OrdinalIgnoreCase) && parts.Length == 2)
-            return new AnnotationTarget(PeopleCodeType.ComponentInterface, new TypeIdentity(CompIntfcName: parts[1]), written);
+        if (keyword.Equals("CompIntfc", StringComparison.OrdinalIgnoreCase))
+            return ParseCompIntfcTarget(parts, written);
 
         if (keyword.Equals("Record", StringComparison.OrdinalIgnoreCase))
         {
@@ -119,6 +119,50 @@ public static class TypeAnnotationParser
             return new AnnotationTarget(PeopleCodeType.Field, new TypeIdentity(FieldName: parts[1]), written);
 
         return null;
+    }
+
+    /// <summary>
+    /// <c>CompIntfc.X</c> is the CI, <c>CompIntfc.X.Coll[.Child…]</c> an item of that collection,
+    /// and a trailing <c>[]</c> on the last part the collection itself. The CI itself takes no <c>[]</c>.
+    /// </summary>
+    private static AnnotationTarget? ParseCompIntfcTarget(string[] parts, string written)
+    {
+        if (parts.Length == 2)
+        {
+            return IsName(parts[1])
+                ? new AnnotationTarget(PeopleCodeType.ComponentInterface, new TypeIdentity(CompIntfcName: parts[1]), written)
+                : null;
+        }
+
+        var path = parts[2..];
+        var type = PeopleCodeType.DataItem;
+        if (path[^1].EndsWith("[]", StringComparison.Ordinal))
+        {
+            path[^1] = path[^1][..^2];
+            type = PeopleCodeType.DataCollection;
+        }
+
+        if (!IsName(parts[1]) || !path.All(IsName))
+            return null;
+
+        return new AnnotationTarget(type, new TypeIdentity(CompIntfcName: parts[1], CompIntfcPath: string.Join('.', path)), written);
+    }
+
+    private static bool IsName(string part) => part.Length > 0 && !part.Contains('[') && !part.Contains(']');
+
+    /// <summary>
+    /// A CI, CI item or CI collection in annotation syntax (<c>CompIntfc.X</c>, <c>CompIntfc.X.A.B</c>,
+    /// <c>CompIntfc.X.A.B[]</c>), or null when <paramref name="identity"/> names no CI.
+    /// </summary>
+    public static string? FormatCompIntfc(PeopleCodeType? type, TypeIdentity? identity)
+    {
+        if (string.IsNullOrEmpty(identity?.CompIntfcName))
+            return null;
+
+        var name = $"CompIntfc.{identity.CompIntfcName}";
+        if (type is PeopleCodeType.DataItem or PeopleCodeType.DataCollection && !string.IsNullOrEmpty(identity.CompIntfcPath))
+            name += $".{identity.CompIntfcPath}";
+        return type == PeopleCodeType.DataCollection ? name + "[]" : name;
     }
 
     private static string UnknownTypeMessage(string written)
