@@ -20,7 +20,7 @@ value), `TypeInferenceVisitor.TryRefineVariableFromExpression` decides that expl
 
 **Fixed (2026-10):** `TypeInfo.IsAssignableFrom` is the one answer to "does this value fit this
 type". `AppClassTypeInfo.IsAssignableFrom` follows the value's inheritance chain (base classes
-and interfaces) and applies the bare-name rule (§3). Arrays are invariant, as PeopleCode is:
+and interfaces), comparing class names whole (§3). Arrays are invariant, as PeopleCode is:
 `array of PKG:Base` rejects `array of PKG:Derived` (verified in App Designer), so
 `ArrayTypeInfo` compares app class elements with `IsSameClass`. In `FunctionCallValidator`, one parameter
 type is matched by `Fits` and resolved by `ExpectedType` (polymorphic types, app classes,
@@ -31,32 +31,18 @@ them, so autocomplete's union matching now knows about inheritance too.
 
 ## 3. TypeMetadataBuilder doesn't resolve imports
 
-`TypeMetadataBuilder.ExtractTypeName` still returns the bare class name for `As MyClass`
-(parameters, returns, properties, `BaseClassName`), while `TypeInferenceVisitor` qualifies the
-same name to `PKG:MyClass` via `_importMap`.
-
-`TypeInferenceVisitor` maps an app class's own short name to its `QualifiedName` (2026-10), so
-`Local Svc &o = create Svc(&t);` inside `PKG:Svc` resolves to the program's own metadata and
-its constructor is checked. When the metadata is extracted without a qualified name (the
-`QualifiedName` is empty), the short name stays unresolved and the constructor's arguments
-go unchecked. Metadata return and property types (`Returns Svc`, `property Svc Next`) are
-qualified the same way when inference converts them (`ResolveAppClassPath`), and inference
-stamps every app class type node with its import-resolved type, so declared return types
-checked by `TypeCheckerVisitor` match too.
-
-Parameters were verified to mismatch: `FunctionCallValidator` builds the expected type from
-the bare metadata name, so passing a `PKG:Config` value to `&cfg As Config` reported
-"Argument 1 should be Config, found PKG:Config". `IsAppClassCompatible` now matches a bare
-expected type on the class name (the value's own name or any entry in its inheritance chain).
-`AppClassTypeInfo.IsAssignableFrom` applies the same rule, so the leniency also holds inside
-array types (`&cfgs As array of Config` accepts `array of PKG:Config`) and in assignment
-compatibility. This is an approximation: two classes with the same short name in different
-packages are treated as the same. Qualifying metadata names through the declaring program's
-imports would remove it.
-
-Still open: the reverse case. A parameter declared with a qualified type (`&cfg As
-PKG:Config`) rejects an argument whose type stayed bare because the caller lacks the import
-(inference can't qualify it). This predates the 2026-10 changes.
+**Fixed (2026-10):** a short class name (`Local Config &c`) is an editor convenience: App
+Designer expands every class name to its qualified form on save, through the program's
+imports (a class's own short name expands without one). Saved programs, and so all metadata
+fetched from the database, are already qualified; only the program being edited can hold short
+names. `TypeMetadataBuilder` keeps names as written, and `TypeInferenceVisitor` qualifies that
+program's own metadata (parameters, returns, properties, instance variables, extends and
+implements) through its import map before inferring (`QualifyOwnClassNames`), so its signatures
+match the qualified values passed to them. Class names are then compared whole
+(`AppClassTypeInfo.Names`): the earlier rule that matched a bare name on the class name alone,
+treating `PKG:Config` and `OTHER:Config` as one class, is gone. A short name no import resolves
+stays bare and matches nothing qualified; App Designer rejects it on save and
+`UnimportedClassCheck` reports it.
 
 ## 4. Permissive sentinels mask failures
 

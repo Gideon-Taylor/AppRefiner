@@ -1358,19 +1358,15 @@ public class AppClassTypeInfo : TypeInfo
     /// <summary>
     /// Whether both types name the same class, ignoring inheritance.
     /// </summary>
-    public bool IsSameClass(AppClassTypeInfo other) =>
-        Names(other.QualifiedName) || other.Names(QualifiedName);
+    public bool IsSameClass(AppClassTypeInfo other) => Names(other.QualifiedName);
 
     /// <summary>
-    /// Whether <paramref name="qualifiedName"/> names this class. Metadata keeps types as written
-    /// ("Config") while inference qualifies values ("PKG:Config"), so a bare type matches on the
-    /// class name. Weak-spots §3 approximation: two classes with the same short name in different
-    /// packages are treated as the same.
+    /// Whether <paramref name="qualifiedName"/> names this class. Names are compared whole: App
+    /// Designer qualifies every class name on save, and inference qualifies the edited program's
+    /// own bare names through its imports, so a bare name here is one no import resolves.
     /// </summary>
     private bool Names(string qualifiedName) =>
-        qualifiedName.Equals(QualifiedName, StringComparison.OrdinalIgnoreCase)
-        || (PackagePath.Count == 0
-            && qualifiedName.Split(':')[^1].Equals(ClassName, StringComparison.OrdinalIgnoreCase));
+        qualifiedName.Equals(QualifiedName, StringComparison.OrdinalIgnoreCase);
 
     protected override TypeInfo CloneWithState(bool? isAssignable = null, bool? isAutoDeclared = null)
     {

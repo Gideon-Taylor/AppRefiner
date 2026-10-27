@@ -106,6 +106,7 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
 
         // Build import resolution map for unqualified class names
         visitor.BuildImportMap();
+        visitor.QualifyOwnClassNames();
 
         // Narrowing is syntactic, so it runs first and seeds types the main pass can replace
         visitor._narrowing = UsageNarrowingAnalyzer.Analyze(program);
@@ -271,7 +272,7 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
     {
         TypeInfo baseType;
         if (twd.IsAppClass)
-            baseType = AppClassTypeInfo.CreateWithInheritanceChain(ResolveAppClassPath(twd.AppClassPath!), _typeResolver, _typeCache, OwnClassMetadata);
+            baseType = AppClassTypeInfo.CreateWithInheritanceChain(twd.AppClassPath!, _typeResolver, _typeCache, OwnClassMetadata);
         else if (twd.Type == PeopleCodeType.Record && !string.IsNullOrEmpty(twd.Identity?.RecordName))
             baseType = new RecordTypeInfo(twd.Identity.RecordName, _typeResolver);
         else if (twd.Type == PeopleCodeType.Field && !string.IsNullOrEmpty(twd.Identity?.FieldName))
@@ -1058,12 +1059,79 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
     }
 
     /// <summary>
-    /// Qualifies a bare class name taken from metadata (TypeMetadataBuilder keeps names as
-    /// written, e.g. <c>Returns Svc</c>) through the import map, so it matches locals declared
-    /// with the same short name. Qualified or unmapped names are returned unchanged.
+    /// Qualifies a bare class name through the import map. Qualified or unmapped names are
+    /// returned unchanged.
     /// </summary>
     private string ResolveAppClassPath(string path) =>
         !path.Contains(':') && _importMap.TryGetValue(path, out var qualified) ? qualified : path;
+
+    /// <summary>
+    /// Qualifies the bare class names in this program's own metadata (signatures, properties,
+    /// extends/implements) through its imports, as App Designer does on save. Only the program
+    /// being edited can hold bare names: saved programs, and so all fetched metadata, are
+    /// already qualified. Idempotent, so re-running inference on the same metadata is safe.
+    /// </summary>
+    private void QualifyOwnClassNames()
+    {
+        var metadata = _programMetadata;
+        if (!string.IsNullOrEmpty(metadata.BaseClassName) && !metadata.IsBaseClassBuiltin)
+            metadata.BaseClassName = ResolveAppClassPath(metadata.BaseClassName);
+        if (!string.IsNullOrEmpty(metadata.InterfaceName))
+            metadata.InterfaceName = ResolveAppClassPath(metadata.InterfaceName);
+
+        var functions = metadata.Methods.Values.AsEnumerable();
+        if (metadata.Constructor != null)
+            functions = functions.Append(metadata.Constructor);
+        foreach (var function in functions)
+        {
+            function.ReturnType = Qualify(function.ReturnType);
+            if (function.RefinedReturnType is { } refinedReturn)
+                function.RefinedReturnType = Qualify(refinedReturn);
+            foreach (var parameter in function.Parameters)
+                QualifyParameter(parameter);
+        }
+
+        foreach (var property in metadata.Properties.Values.Concat(metadata.InstanceVariables.Values))
+        {
+            if (property.AppClassPath != null)
+                property.AppClassPath = ResolveAppClassPath(property.AppClassPath);
+            if (property.UnionTypes != null)
+                for (var i = 0; i < property.UnionTypes.Count; i++)
+                    property.UnionTypes[i] = Qualify(property.UnionTypes[i]);
+            if (property.RefinedType is { } refined)
+                property.RefinedType = Qualify(refined);
+        }
+    }
+
+    private void QualifyParameter(Parameter parameter)
+    {
+        switch (parameter)
+        {
+            case SingleParameter single:
+                single.ParameterType = Qualify(single.ParameterType);
+                if (single.RefinedParameterType is { } refined)
+                    single.RefinedParameterType = Qualify(refined);
+                break;
+            case UnionParameter union:
+                for (var i = 0; i < union.AllowedTypes.Count; i++)
+                    union.AllowedTypes[i] = Qualify(union.AllowedTypes[i]);
+                break;
+            case ParameterGroup group:
+                foreach (var inner in group.Parameters)
+                    QualifyParameter(inner);
+                break;
+            case VariableParameter variable:
+                QualifyParameter(variable.InnerParameter);
+                break;
+        }
+    }
+
+    private TypeWithDimensionality Qualify(TypeWithDimensionality type)
+    {
+        if (type.IsAppClass)
+            type.AppClassPath = ResolveAppClassPath(type.AppClassPath!);
+        return type;
+    }
 
     #endregion
 

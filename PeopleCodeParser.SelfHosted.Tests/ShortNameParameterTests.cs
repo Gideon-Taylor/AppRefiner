@@ -1,6 +1,7 @@
 using PeopleCodeParser.SelfHosted.Tests.Compilation;
 using PeopleCodeParser.SelfHosted.Visitors;
 using PeopleCodeTypeInfo.Contracts;
+using PeopleCodeTypeInfo.Functions;
 using PeopleCodeTypeInfo.Inference;
 using Xunit;
 using static PeopleCodeParser.SelfHosted.Tests.ParseTestHelper;
@@ -8,9 +9,10 @@ using static PeopleCodeParser.SelfHosted.Tests.ParseTestHelper;
 namespace PeopleCodeParser.SelfHosted.Tests;
 
 /// <summary>
-/// Metadata stores a parameter's app class type by the short name written in the signature
-/// ("Config"), while inference qualifies the argument ("PKG:Config"). The call validator
-/// matches the two on the class name (weak-spots §3).
+/// App Designer qualifies every class name on save, so fetched programs are always qualified;
+/// only the program being edited can use short names. Inference qualifies that program's own
+/// signatures through its imports, so they match the qualified values passed to them, and
+/// class names are otherwise compared whole.
 /// </summary>
 public class ShortNameParameterTests
 {
@@ -68,24 +70,25 @@ public class ShortNameParameterTests
         var resolver = new FakeTypeMetadataResolver();
         resolver.AddClass("PKG:Config", Extract("class Config\nend-class;\n", "PKG:Config"));
         resolver.AddClass("PKG:Other", Extract("class Other\nend-class;\n", "PKG:Other"));
+        resolver.AddClass("OTHER:Config", Extract("class Config\nend-class;\n", "OTHER:Config"));
+        // Fetched programs as saved: App Designer has qualified every class name
         resolver.AddClass("PKG:Factory", Extract(
             "import PKG:Config;\n" +
             "class Factory\n" +
-            "   method Get() Returns Config;\n" +
-            "   method GetAll() Returns array of Config;\n" +
-            "   property Config Current;\n" +
+            "   method Get() Returns PKG:Config;\n" +
+            "   method GetAll() Returns array of PKG:Config;\n" +
+            "   property PKG:Config Current;\n" +
             "end-class;\n", "PKG:Factory"));
         resolver.AddClass("PKG:Svc", Extract(
             "import PKG:Config;\n" +
             "class Svc\n" +
-            "   method Svc(&cfg As Config);\n" +
-            "   method Use(&cfg As Config);\n" +
-            "   method UseAll(&cfgs As array of Config);\n" +
+            "   method Svc(&cfg As PKG:Config);\n" +
+            "   method Use(&cfg As PKG:Config);\n" +
+            "   method UseAll(&cfgs As array of PKG:Config);\n" +
             "end-class;\n", "PKG:Svc"));
         return resolver;
     }
 
-    // The import lets inference qualify Factory's "Returns Config" to PKG:Config
     private const string CrossPrelude =
         "import PKG:Config;\n" +
         "Local PKG:Factory &f = create PKG:Factory();\n" +
@@ -98,7 +101,9 @@ public class ShortNameParameterTests
     [InlineData("Local PKG:Config &c = create PKG:Config();\n&s.Use(&c);")]
     [InlineData("&s.UseAll(&f.GetAll());")]
     [InlineData("Local array of PKG:Config &arr;\n&s.UseAll(&arr);")]
-    public void Cross_program_short_name_parameter_accepts_qualified_value(string call)
+    [InlineData("Local Config &c = create Config();\n&s.Use(&c);")]
+    [InlineData("Local array of Config &arr;\n&s.UseAll(&arr);")]
+    public void Cross_program_parameter_accepts_values_named_either_way(string call)
     {
         Assert.Empty(TypeErrors(CrossPrelude + call, CrossResolver()));
     }
@@ -120,5 +125,75 @@ public class ShortNameParameterTests
 
         var error = Assert.Single(errors);
         Assert.Contains("Argument 1", error.Message);
+    }
+
+    [Fact]
+    public void Same_short_name_in_another_package_errors()
+    {
+        var errors = TypeErrors(CrossPrelude + "&s.Use(create OTHER:Config());", CrossResolver());
+
+        var error = Assert.Single(errors);
+        Assert.Contains("Argument 1", error.Message);
+    }
+
+    // The edited program, unsaved: its own signatures and extends still use imported short names
+    private static string Edited(string body) =>
+        "import PKG:Config;\n" +
+        "import PKG:Base;\n" +
+        "class Svc extends Base\n" +
+        "   method Svc();\n" +
+        "   method Use(&cfg As Config) Returns Config;\n" +
+        "   method Run();\n" +
+        "end-class;\n" +
+        "\n" +
+        "method Svc\n" +
+        "   %Super = create Base();\n" +
+        "end-method;\n" +
+        "\n" +
+        "method Use\n" +
+        "   Return &cfg;\n" +
+        "end-method;\n" +
+        "\n" +
+        "method Run\n" +
+        body +
+        "end-method;\n";
+
+    private static FakeTypeMetadataResolver EditedResolver()
+    {
+        var resolver = CrossResolver();
+        resolver.AddClass("PKG:Base", Extract(
+            "class Base\n   method Ping(&cfg As PKG:Config);\nend-class;\n", "PKG:Base"));
+        return resolver;
+    }
+
+    [Theory]
+    [InlineData("   Local PKG:Config &c = %This.Use(create PKG:Config());\n")]
+    [InlineData("   Local Config &c = %This.Use(create Config());\n")]
+    [InlineData("   %This.Ping(%This.Use(create Config()));\n")]
+    public void Edited_program_short_name_signatures_match_qualified_values(string body)
+    {
+        Assert.Empty(TypeErrors(Edited(body), EditedResolver(), "PKG:Svc"));
+    }
+
+    [Fact]
+    public void Edited_program_signatures_and_extends_are_qualified_through_imports()
+    {
+        var (program, _) = Parse(Edited(""));
+        var metadata = TypeMetadataBuilder.ExtractMetadata(program, "PKG:Svc");
+
+        TypeInferenceVisitor.Run(program, metadata, EditedResolver());
+
+        Assert.Equal("PKG:Base", metadata.BaseClassName);
+        var use = metadata.Methods["Use"];
+        Assert.Equal("PKG:Config", use.ReturnType.AppClassPath);
+        Assert.Equal("PKG:Config", Assert.IsType<SingleParameter>(use.Parameters[0]).ParameterType.AppClassPath);
+    }
+
+    [Fact]
+    public void Edited_program_rejects_same_short_name_from_another_package()
+    {
+        var errors = TypeErrors(Edited("   Local Config &c = %This.Use(create OTHER:Config());\n"), EditedResolver(), "PKG:Svc");
+
+        Assert.Contains(errors, e => e.Message.Contains("Argument 1"));
     }
 }

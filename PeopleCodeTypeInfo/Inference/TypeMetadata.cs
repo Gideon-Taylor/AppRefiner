@@ -32,7 +32,7 @@ public class TypeMetadata
     /// <summary>
     /// Base class name if this is a class that extends another class
     /// </summary>
-    public string? BaseClassName { get; init; }
+    public string? BaseClassName { get; set; }
 
     /// <summary>
     /// True if BaseClassName refers to a builtin type (like Record, Field, etc.)
@@ -47,7 +47,7 @@ public class TypeMetadata
     /// <summary>
     /// Interface that this class implements (PeopleCode allows at most 1 interface)
     /// </summary>
-    public string? InterfaceName { get; init; }
+    public string? InterfaceName { get; set; }
 
     /// <summary>
     /// Methods/functions defined in this program

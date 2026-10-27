@@ -27,9 +27,9 @@ public class AppClassInheritanceAssignabilityTests
     }
 
     [Fact]
-    public void Bare_base_accepts_derived_value()
+    public void Same_short_name_in_another_package_rejects_derived_value()
     {
-        Assert.True(new AppClassTypeInfo("Base").IsAssignableFrom(Derived()));
+        Assert.False(new AppClassTypeInfo("OTHER:Base").IsAssignableFrom(Derived()));
     }
 
     [Fact]
@@ -52,8 +52,6 @@ public class AppClassInheritanceAssignabilityTests
     public void Array_of_class_accepts_array_of_same_class()
     {
         Assert.True(new ArrayTypeInfo(1, new AppClassTypeInfo("pkg:derived")).IsAssignableFrom(new ArrayTypeInfo(1, Derived())));
-        Assert.True(new ArrayTypeInfo(1, new AppClassTypeInfo("Derived")).IsAssignableFrom(new ArrayTypeInfo(1, Derived())));
-        Assert.True(new ArrayTypeInfo(1, Derived()).IsAssignableFrom(new ArrayTypeInfo(1, new AppClassTypeInfo("Derived"))));
     }
 
     private static readonly TypeWithDimensionality Base = new(PeopleCodeType.AppClass, appClassPath: "PKG:Base");
