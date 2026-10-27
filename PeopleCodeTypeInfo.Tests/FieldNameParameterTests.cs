@@ -389,12 +389,12 @@ GetNextNumberWithGaps(&testNumber,999999,1);
         TypeCheckerVisitor.Run(program, Resolver, Resolver.Cache);
 
         var declarations = program.FindDescendants<LocalVariableDeclarationWithAssignmentNode>().ToList();
-        Assert.Null(declarations[0].GetTypeError());
-        Assert.Null(declarations[1].GetTypeError());
-        Assert.NotNull(declarations[2].GetTypeError());                // line 3: number into field
-        Assert.Null(calls[0].Arguments[0].GetTypeError());              // line 4: buffer field name
-        Assert.NotNull(calls[1].Arguments[0].GetTypeError());           // line 6: field name required
-        Assert.Contains("field name", calls[1].Arguments[0].GetTypeError()!.Message,
+        Assert.Empty(declarations[0].GetTypeErrors());
+        Assert.Empty(declarations[1].GetTypeErrors());
+        Assert.NotEmpty(declarations[2].GetTypeErrors());         // line 3: number into field
+        Assert.Empty(calls[0].Arguments[0].GetTypeErrors());         // line 4: buffer field name
+        Assert.NotEmpty(calls[1].Arguments[0].GetTypeErrors());         // line 6: field name required
+        Assert.Contains("field name", Assert.Single(calls[1].Arguments[0].GetTypeErrors()).Message,
             StringComparison.OrdinalIgnoreCase);
     }
 

@@ -472,7 +472,7 @@ namespace PeopleCodeParser.SelfHosted.Visitors
         /// </summary>
         private void RecordTypeError(string message, AstNode node)
         {
-            node.SetTypeError(new TypeError(message, node));
+            node.AddTypeError(new TypeError(message, node));
         }
 
         private bool AreTypesCompatible(TypeInfo targetType, TypeInfo valueType)

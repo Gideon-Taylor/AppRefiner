@@ -2317,7 +2317,7 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
             {
                 var invalid = new InvalidTypeInfo(
                     $"Cannot index type '{arrayType}' - indexing requires an array type");
-                node.SetTypeError(new TypeError(invalid.Reason, node));
+                node.AddTypeError(new TypeError(invalid.Reason, node));
                 SetInferredType(node, UnknownTypeInfo.Instance);
                 return;
             }
@@ -2330,7 +2330,7 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
                 {
                     var invalid = new InvalidTypeInfo(
                         $"Array index must be numeric; cannot use type '{indexType}'");
-                    index.SetTypeError(new TypeError(invalid.Reason, index));
+                    index.AddTypeError(new TypeError(invalid.Reason, index));
                 }
             }
 
@@ -2380,7 +2380,7 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
             {
                 var invalid = new InvalidTypeInfo(
                     $"Cannot perform arithmetic operation '{OperatorToString(node.Operator)}' on types '{leftType}' and '{rightType}'");
-                node.SetTypeError(new TypeError(invalid.Reason, node));
+                node.AddTypeError(new TypeError(invalid.Reason, node));
                 SetInferredType(node, UnknownTypeInfo.Instance);
                 return;
             }
@@ -2391,7 +2391,7 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
             {
                 var invalid = new InvalidTypeInfo(
                     $"Cannot perform logical operation '{OperatorToString(node.Operator)}' on types '{leftType}' and '{rightType}'");
-                node.SetTypeError(new TypeError(invalid.Reason, node));
+                node.AddTypeError(new TypeError(invalid.Reason, node));
                 SetInferredType(node, UnknownTypeInfo.Instance);
                 return;
             }
@@ -2457,7 +2457,7 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
             {
                 var invalid = new InvalidTypeInfo(
                     $"Cannot apply logical operator 'Not' to type '{operandType}'");
-                node.SetTypeError(new TypeError(invalid.Reason, node));
+                node.AddTypeError(new TypeError(invalid.Reason, node));
                 SetInferredType(node, UnknownTypeInfo.Instance);
                 return;
             }
@@ -2469,7 +2469,7 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
             {
                 var invalid = new InvalidTypeInfo(
                     $"Cannot apply unary negate to type '{operandType}'");
-                node.SetTypeError(new TypeError(invalid.Reason, node));
+                node.AddTypeError(new TypeError(invalid.Reason, node));
                 SetInferredType(node, UnknownTypeInfo.Instance);
                 return;
             }
@@ -2950,7 +2950,7 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
         {
             var invalid = new InvalidTypeInfo(
                 "Cannot subtract time from datetime - this operation is not supported");
-            node.SetTypeError(new TypeError(invalid.Reason, node));
+            node.AddTypeError(new TypeError(invalid.Reason, node));
             return UnknownTypeInfo.Instance;
         }
 
@@ -2959,7 +2959,7 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
         {
             var invalid = new InvalidTypeInfo(
                 "Cannot subtract datetime from time - this operation is not supported");
-            node.SetTypeError(new TypeError(invalid.Reason, node));
+            node.AddTypeError(new TypeError(invalid.Reason, node));
             return UnknownTypeInfo.Instance;
         }
 
@@ -2968,7 +2968,7 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
         {
             var invalid = new InvalidTypeInfo(
                 "Cannot add datetime to datetime - this operation is not supported");
-            node.SetTypeError(new TypeError(invalid.Reason, node));
+            node.AddTypeError(new TypeError(invalid.Reason, node));
             return UnknownTypeInfo.Instance;
         }
 
@@ -2977,7 +2977,7 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
         {
             var invalid = new InvalidTypeInfo(
                 "Cannot add time to datetime - this operation is not supported");
-            node.SetTypeError(new TypeError(invalid.Reason, node));
+            node.AddTypeError(new TypeError(invalid.Reason, node));
             return UnknownTypeInfo.Instance;
         }
 
@@ -2986,7 +2986,7 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
         {
             var invalid = new InvalidTypeInfo(
                 "Cannot add datetime to time - this operation is not supported");
-            node.SetTypeError(new TypeError(invalid.Reason, node));
+            node.AddTypeError(new TypeError(invalid.Reason, node));
             return UnknownTypeInfo.Instance;
         }
 
@@ -2995,7 +2995,7 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
         {
             var invalid = new InvalidTypeInfo(
                 "Cannot add date to datetime - this operation is not supported");
-            node.SetTypeError(new TypeError(invalid.Reason, node));
+            node.AddTypeError(new TypeError(invalid.Reason, node));
             return UnknownTypeInfo.Instance;
         }
 
@@ -3004,7 +3004,7 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
         {
             var invalid = new InvalidTypeInfo(
                 "Cannot add datetime to date - this operation is not supported");
-            node.SetTypeError(new TypeError(invalid.Reason, node));
+            node.AddTypeError(new TypeError(invalid.Reason, node));
             return UnknownTypeInfo.Instance;
         }
 
@@ -3013,7 +3013,7 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
         {
             var invalid = new InvalidTypeInfo(
                 "Cannot subtract date from datetime - this operation is not supported");
-            node.SetTypeError(new TypeError(invalid.Reason, node));
+            node.AddTypeError(new TypeError(invalid.Reason, node));
             return UnknownTypeInfo.Instance;
         }
 
@@ -3022,7 +3022,7 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
         {
             var invalid = new InvalidTypeInfo(
                 "Cannot subtract datetime from date - this operation is not supported");
-            node.SetTypeError(new TypeError(invalid.Reason, node));
+            node.AddTypeError(new TypeError(invalid.Reason, node));
             return UnknownTypeInfo.Instance;
         }
 
@@ -3031,7 +3031,7 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
         {
             var invalid = new InvalidTypeInfo(
                 "Cannot subtract time from date - this operation is not supported");
-            node.SetTypeError(new TypeError(invalid.Reason, node));
+            node.AddTypeError(new TypeError(invalid.Reason, node));
             return UnknownTypeInfo.Instance;
         }
 
@@ -3040,7 +3040,7 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
         {
             var invalid = new InvalidTypeInfo(
                 "Cannot subtract date from time - this operation is not supported");
-            node.SetTypeError(new TypeError(invalid.Reason, node));
+            node.AddTypeError(new TypeError(invalid.Reason, node));
             return UnknownTypeInfo.Instance;
         }
 
@@ -3049,7 +3049,7 @@ public class TypeInferenceVisitor : ScopedAstVisitor<object>
         {
             var invalid = new InvalidTypeInfo(
                 "Cannot add datetime to number - this operation is not supported");
-            node.SetTypeError(new TypeError(invalid.Reason, node));
+            node.AddTypeError(new TypeError(invalid.Reason, node));
             return UnknownTypeInfo.Instance;
         }
 

@@ -9,9 +9,10 @@ using static PeopleCodeParser.SelfHosted.Tests.ParseTestHelper;
 namespace PeopleCodeParser.SelfHosted.Tests;
 
 /// <summary>
-/// A node holds a list of type warnings: distinct messages are all kept, a repeated message once.
+/// A node holds a list of type errors and a list of type warnings: distinct messages are all
+/// kept, a repeated message once.
 /// </summary>
-public class TypeWarningListTests
+public class TypeDiagnosticListTests
 {
     private static ProgramNode ParseClean(string source)
     {
@@ -57,6 +58,31 @@ public class TypeWarningListTests
     }
 
     [Fact]
+    public void Two_different_errors_on_one_node_are_both_kept()
+    {
+        var program = ParseClean("Local string &a;");
+        var node = program.FindDescendants<LocalVariableDeclarationNode>().Single();
+
+        node.AddTypeError(new TypeError("a", node));
+        node.AddTypeError(new TypeError("b", node));
+        node.AddTypeError(new TypeError("a", node));
+
+        Assert.Equal(new[] { "a", "b" }, node.GetTypeErrors().Select(e => e.Message));
+        Assert.Equal(new[] { "a", "b" }, program.GetAllTypeErrors().Select(e => e.Message));
+        Assert.True(node.HasTypeError());
+    }
+
+    [Fact]
+    public void Rerunning_checker_does_not_duplicate_errors()
+    {
+        var program = ParseClean("Local array of string &a;\n&a.Push(42);");
+        InferAndCheck(program);
+        TypeCheckerVisitor.Run(program, NullTypeMetadataResolver.Instance, NullTypeMetadataResolver.Instance.Cache);
+
+        Assert.Single(program.GetAllTypeErrors());
+    }
+
+    [Fact]
     public void Rerunning_inference_does_not_duplicate_warnings()
     {
         var program = ParseClean("Local string /* as Session */ &a;");
@@ -74,7 +100,7 @@ public class TypeWarningListTests
         var program = ParseClean("Local string &a;");
         var node = program.FindDescendants<LocalVariableDeclarationNode>().Single();
         node.AddTypeWarning(new TypeError("stale warning", node));
-        node.SetTypeError(new TypeError("stale error", node));
+        node.AddTypeError(new TypeError("stale error", node));
 
         TypeInferenceVisitor.Run(program, TypeMetadataBuilder.ExtractMetadata(program), NullTypeMetadataResolver.Instance);
 

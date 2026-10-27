@@ -247,43 +247,30 @@ public static class AstNodeExtensions
     #region TypeError Extensions
 
     /// <summary>
-    /// Gets the type error for this node, if one has been recorded.
+    /// Gets the type errors recorded on this node, in the order they were added.
     /// </summary>
     /// <param name="node">The AST node to query</param>
-    /// <returns>The TypeError if a type checking error was found, null otherwise</returns>
-    public static TypeError? GetTypeError(this AstNode node)
-    {
-        if (node.Attributes.TryGetValue(AstNode.TypeErrorAttributeKey, out var error))
-        {
-            return error as TypeError;
-        }
-        return null;
-    }
+    /// <returns>The node's errors; empty when there are none</returns>
+    public static IReadOnlyList<TypeError> GetTypeErrors(this AstNode node) =>
+        DiagnosticList(node, AstNode.TypeErrorAttributeKey);
 
     /// <summary>
     /// Gets the type warnings recorded on this node, in the order they were added.
     /// </summary>
     /// <param name="node">The AST node to query</param>
     /// <returns>The node's warnings; empty when there are none</returns>
-    public static IReadOnlyList<TypeError> GetTypeWarnings(this AstNode node)
-    {
-        if (node.Attributes.TryGetValue(AstNode.TypeWarningAttributeKey, out var value)
-            && value is List<TypeError> warnings)
-        {
-            return warnings;
-        }
-        return Array.Empty<TypeError>();
-    }
+    public static IReadOnlyList<TypeError> GetTypeWarnings(this AstNode node) =>
+        DiagnosticList(node, AstNode.TypeWarningAttributeKey);
 
     /// <summary>
-    /// Sets the type error for this node.
+    /// Adds a type error to this node. Inference and the checker can both report on one node
+    /// (an argument, say), and each error is kept. An error whose message the node already
+    /// holds (ordinal comparison) is ignored, so re-running a pass doesn't double its errors.
     /// </summary>
     /// <param name="node">The AST node to update</param>
     /// <param name="error">The type error to record</param>
-    public static void SetTypeError(this AstNode node, TypeError error)
-    {
-        node.Attributes[AstNode.TypeErrorAttributeKey] = error;
-    }
+    public static void AddTypeError(this AstNode node, TypeError error) =>
+        AddDiagnostic(node, AstNode.TypeErrorAttributeKey, error);
 
     /// <summary>
     /// Adds a type warning to this node. A warning whose message the node already holds
@@ -291,23 +278,30 @@ public static class AstNodeExtensions
     /// </summary>
     /// <param name="node">The AST node to update</param>
     /// <param name="warning">The type warning to record</param>
-    public static void AddTypeWarning(this AstNode node, TypeError warning)
+    public static void AddTypeWarning(this AstNode node, TypeError warning) =>
+        AddDiagnostic(node, AstNode.TypeWarningAttributeKey, warning);
+
+    private static IReadOnlyList<TypeError> DiagnosticList(AstNode node, string key) =>
+        node.Attributes.TryGetValue(key, out var value) && value is List<TypeError> list
+            ? list
+            : Array.Empty<TypeError>();
+
+    private static void AddDiagnostic(AstNode node, string key, TypeError diagnostic)
     {
-        if (!node.Attributes.TryGetValue(AstNode.TypeWarningAttributeKey, out var value)
-            || value is not List<TypeError> warnings)
+        if (!node.Attributes.TryGetValue(key, out var value) || value is not List<TypeError> list)
         {
-            warnings = new List<TypeError>();
-            node.Attributes[AstNode.TypeWarningAttributeKey] = warnings;
+            list = new List<TypeError>();
+            node.Attributes[key] = list;
         }
 
-        if (warnings.Any(w => string.Equals(w.Message, warning.Message, StringComparison.Ordinal)))
+        if (list.Any(d => string.Equals(d.Message, diagnostic.Message, StringComparison.Ordinal)))
             return;
 
-        warnings.Add(warning);
+        list.Add(diagnostic);
     }
 
     /// <summary>
-    /// Removes the type error and type warnings from this node and all its descendants, so a
+    /// Removes the type errors and type warnings from this node and all its descendants, so a
     /// re-run of inference and checking on a cached tree starts from a clean slate.
     /// </summary>
     /// <param name="root">The root node to clear (typically a ProgramNode)</param>
@@ -329,7 +323,7 @@ public static class AstNodeExtensions
     /// Checks if this node has a type error.
     /// </summary>
     /// <param name="node">The AST node to check</param>
-    /// <returns>True if the node has a type error, false otherwise</returns>
+    /// <returns>True if the node has at least one type error, false otherwise</returns>
     public static bool HasTypeError(this AstNode node)
     {
         return node.Attributes.ContainsKey(AstNode.TypeErrorAttributeKey);
@@ -353,9 +347,7 @@ public static class AstNodeExtensions
     /// <returns>All type errors found in the tree</returns>
     public static IEnumerable<TypeError> GetAllTypeErrors(this AstNode root)
     {
-        // Check if this node has an error
-        var error = root.GetTypeError();
-        if (error != null)
+        foreach (var error in root.GetTypeErrors())
         {
             yield return error;
         }
