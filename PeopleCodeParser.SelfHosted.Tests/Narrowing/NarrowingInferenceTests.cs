@@ -69,6 +69,18 @@ public class NarrowingInferenceTests
             .OrderBy(t => t, StringComparer.Ordinal)
             .ToList();
 
+    [Theory]
+    [InlineData("Local ApiObject /* as Sesion */ &x;\n&x.GetCompIntfc(CompIntfc.A);")]
+    [InlineData("Local ApiObject &x;\n&x = Null /* as Sesion */;\n&x.GetCompIntfc(CompIntfc.A);")]
+    public void Annotation_naming_unknown_type_still_narrows(string source)
+    {
+        var (program, _, warnings) = TypeCheck(source);
+
+        Assert.Contains(warnings, w => w.Message.Contains("Sesion"));
+        var use = UseOn(program, "&x", source.Count(c => c == '\n') + 1);
+        Assert.Equal("Session", use.GetInferredType()!.Name, ignoreCase: true);
+    }
+
     [Fact]
     public void Narrowed_type_reaches_uses_before_the_deciding_one()
     {

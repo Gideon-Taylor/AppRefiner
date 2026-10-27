@@ -1,3 +1,4 @@
+using PeopleCodeParser.SelfHosted.Annotations;
 using PeopleCodeParser.SelfHosted.Nodes;
 using PeopleCodeParser.SelfHosted.Visitors.Models;
 using PeopleCodeTypeInfo.Database;
@@ -91,23 +92,29 @@ public sealed class UsageNarrowingAnalyzer : ScopedAstVisitor<object>
         var annotations = _program.Annotations;
         bool annotated = variable.DeclarationNode switch
         {
-            ParameterNode p => annotations.ForType(p.Type) != null,
-            ProgramVariableNode pv => annotations.ForType(pv.Type) != null,
-            PropertyNode prop => annotations.ForType(prop.Type) != null,
-            LocalVariableDeclarationNode local => annotations.ForType(local.Type) != null,
+            ParameterNode p => Types(annotations.ForType(p.Type)),
+            ProgramVariableNode pv => Types(annotations.ForType(pv.Type)),
+            PropertyNode prop => Types(annotations.ForType(prop.Type)),
+            LocalVariableDeclarationNode local => Types(annotations.ForType(local.Type)),
             LocalVariableDeclarationWithAssignmentNode withValue =>
-                annotations.ForType(withValue.Type) != null || annotations.ForValue(withValue.InitialValue) != null,
+                Types(annotations.ForType(withValue.Type)) || Types(annotations.ForValue(withValue.InitialValue)),
             _ => false
         };
         if (annotated)
             _annotated.Add(key);
     }
 
+    /// <summary>
+    /// Whether an annotation types its variable. One naming an unknown type is only warned
+    /// about, so the variable is still narrowed from its uses.
+    /// </summary>
+    private static bool Types(ParsedAnnotation? annotation) => annotation?.Target != null;
+
     public override void VisitAssignment(AssignmentNode node)
     {
         // An annotated assignment to the variable anywhere turns narrowing off for it
         if (node.Target is IdentifierNode target
-            && _program.Annotations.ForValue(node.Value) != null
+            && Types(_program.Annotations.ForValue(node.Value))
             && FindVariable(target.Name) is { } variable)
         {
             _annotated.Add(new VariableKey(variable.DeclarationNode, variable.Name));
