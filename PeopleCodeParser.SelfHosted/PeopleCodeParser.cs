@@ -3152,6 +3152,13 @@ public class PeopleCodeParser
                 }
             }
 
+            // Optional NOEXPORT, matched contextually so identifiers named NoExport still work
+            if (Check(TokenType.GenericId) && string.Equals(Current.Text, "NoExport", StringComparison.OrdinalIgnoreCase))
+            {
+                functionNode.IsNoExport = true;
+                _position++;
+            }
+
             // Optional documentation comment (DOC StringLiteral)
             if (Match(TokenType.Doc))
             {

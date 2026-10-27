@@ -495,6 +495,11 @@ public class FunctionNode : DeclarationNode
     public string? Documentation { get; set; }
 
     /// <summary>
+    /// True if the header declares NoExport (excluded from a component interface's custom methods)
+    /// </summary>
+    public bool IsNoExport { get; set; }
+
+    /// <summary>
     /// True if this is a function implementation (has a body)
     /// </summary>
     public bool IsImplementation => Body != null;
