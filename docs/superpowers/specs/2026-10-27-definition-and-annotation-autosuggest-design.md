@@ -117,7 +117,7 @@ Extend `InvokeAutocompleteCommand.DetectAutocompleteContext`:
 
 ## Settings
 
-Add two toggles next to the existing `autoSuggestSettings` flags, both on by default (my call): "Definition names" and "Annotation types". Each handler checks its flag first, the same way `AR_OBJECT_MEMBERS` checks `ObjectMembers`.
+None. Both suggestions are always on, like app package suggestions; no new `autoSuggestSettings` flags. Whether autosuggest needs more than a single on/off is a separate question, out of scope here.
 
 ## Testing
 
