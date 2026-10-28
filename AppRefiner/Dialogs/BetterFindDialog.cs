@@ -21,11 +21,15 @@ namespace AppRefiner.Dialogs
         [DllImport("user32.dll")]
         private static extern bool BringWindowToTop(IntPtr hWnd);
 
+        [DllImport("user32.dll")]
+        private static extern bool SetForegroundWindow(IntPtr hWnd);
+
         private static readonly IntPtr HWND_TOPMOST = new(-1);
         private static readonly IntPtr HWND_NOTOPMOST = new(-2);
         private const uint SWP_NOMOVE = 0x0002;
         private const uint SWP_NOSIZE = 0x0001;
         private const uint SWP_SHOWWINDOW = 0x0040;
+        private const uint SWP_NOACTIVATE = 0x0010;
 
         // UI Controls
         private Panel headerPanel;
@@ -158,7 +162,7 @@ namespace AppRefiner.Dialogs
         {
             if (this.Handle != IntPtr.Zero)
             {
-                SetWindowPos(this.Handle, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW);
+                SetWindowPos(this.Handle, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
             }
         }
 
@@ -648,7 +652,22 @@ namespace AppRefiner.Dialogs
             resultsListBox.SelectedIndexChanged += ResultsListBox_SelectedIndexChanged;
 
             // Form events
+            this.FormClosing += BetterFindDialog_FormClosing;
             this.FormClosed += BetterFindDialog_FormClosed;
+        }
+
+        private void BetterFindDialog_FormClosing(object? sender, FormClosingEventArgs e)
+        {
+            // This dialog runs on a worker thread, so when it hides nothing hands activation back
+            // to App Designer and Windows activates whatever window is next (#77). While we still
+            // hold the foreground, give it to App Designer ourselves. Skip it when the user has
+            // already switched to another program (EnsureOnTop closes us then).
+            if (owner == IntPtr.Zero) return;
+            GetWindowThreadProcessId(GetForegroundWindow(), out uint foregroundPid);
+            if (foregroundPid == (uint)Environment.ProcessId)
+            {
+                SetForegroundWindow(owner);
+            }
         }
 
         private void FindComboBox_DropDownClosed(object? sender, EventArgs e)

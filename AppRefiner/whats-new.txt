@@ -158,6 +158,9 @@ BUG FIXES
   value ... to data type smallint") while reading the tools version.
 • Ctrl+Space After a Partial Member Name - At &obj.Us, Ctrl+Space now reopens
   the member list filtered to "Us". It used to show nothing.
+• Closing Better Find - Closing Better Find with Esc or its close button
+  returns you to Application Designer. It used to bring up whichever program
+  was behind it (#77).
 
 
 VERSION 1.3.3
