@@ -152,8 +152,10 @@ BUG FIXES
 • Optional Parameters - CreateProcessRequest's parameters are now optional.
 • Rowset.SelectNew - Now known. It used to be reported as an unknown method.
 • NoExport Function Headers - Function headers marked NoExport now parse.
-• Tools Version Through the App Designer Proxy - The tools version query now
-  converts PTPATCHREL to text before joining it.
+• SQL Error Dialog on SQL Server Through the App Designer Proxy - Connecting
+  through the App Designer Proxy on SQL Server no longer makes Application
+  Designer show a SQL error ("Conversion failed when converting the nvarchar
+  value ... to data type smallint") while reading the tools version.
 • Ctrl+Space After a Partial Member Name - At &obj.Us, Ctrl+Space now reopens
   the member list filtered to "Us". It used to show nothing.
 
