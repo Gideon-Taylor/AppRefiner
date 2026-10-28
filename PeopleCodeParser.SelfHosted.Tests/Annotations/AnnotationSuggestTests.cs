@@ -81,7 +81,7 @@ public class AnnotationSuggestTests
     {
         var list = TypeAnnotationParser.SuggestedTypes(AnnotationCategory.ApiObject);
 
-        Assert.Equal("CompIntfc.", list[^1]);
+        Assert.Equal("CompIntfc.", list[0]);
         Assert.Contains("Session", list);
         Assert.DoesNotContain("Record.", list);
     }
@@ -91,7 +91,7 @@ public class AnnotationSuggestTests
     {
         var list = TypeAnnotationParser.SuggestedTypes(null);
 
-        Assert.Equal(new[] { "CompIntfc.", "Field.", "Record." }, list.TakeLast(3));
+        Assert.Equal(new[] { "CompIntfc.", "Field.", "Record." }, list.Take(3));
     }
 
     [Fact]

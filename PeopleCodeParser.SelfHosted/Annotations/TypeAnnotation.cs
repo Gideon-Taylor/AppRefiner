@@ -211,14 +211,16 @@ public static class TypeAnnotationParser
 
     /// <summary>
     /// The annotation types to suggest for <paramref name="category"/>, in display order. Entries
-    /// ending in <c>.</c> are keyword prefixes the user completes with a definition name.
+    /// ending in <c>.</c> are keyword prefixes the user completes with a definition name. They come
+    /// first: the list keeps this order and selects the first match, so <c>CompI</c> must reach
+    /// <c>CompIntfc.</c> before <c>CompIntfcCollection</c>.
     /// </summary>
     public static IReadOnlyList<string> SuggestedTypes(AnnotationCategory? category) => category switch
     {
-        AnnotationCategory.ApiObject => [.. PeopleCodeTypeDatabase.GetApiObjectSubtypeNames(), "CompIntfc."],
+        AnnotationCategory.ApiObject => ["CompIntfc.", .. PeopleCodeTypeDatabase.GetApiObjectSubtypeNames()],
         AnnotationCategory.Record => ["Record."],
         AnnotationCategory.Field => ["Field.", "Record."],
-        _ => [.. PeopleCodeTypeDatabase.GetApiObjectSubtypeNames(), "CompIntfc.", "Field.", "Record."]
+        _ => ["CompIntfc.", "Field.", "Record.", .. PeopleCodeTypeDatabase.GetApiObjectSubtypeNames()]
     };
 
     private static AnnotationTarget? ParseTarget(string written)
