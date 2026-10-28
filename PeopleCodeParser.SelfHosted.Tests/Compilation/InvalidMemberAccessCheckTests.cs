@@ -122,6 +122,24 @@ Local number &n = &rs.SelectNew(Record.JOB, ""WHERE EMPLID = :1"", &id);
     }
 
     [Fact]
+    public void Does_not_report_members_of_java_objects()
+    {
+        var diags = Run(@"
+Local JavaObject &anchor = CreateJavaObject(""java.lang.Object"");
+Local JavaObject &class = &anchor.getClass();
+Local JavaObject &method = &class.getDeclaredMethod(""setCol1"", CreateJavaObject(""java.lang.Class[]""));
+&method.invoke(&anchor, CreateJavaObject(""java.lang.Object[]""));
+Local string &name = &anchor.getClass().getName();
+Local number &len = GetJavaClass(""java.lang.String"").valueOf(1).length();
+&class.someField = 1;
+&x = &class.someField;
+Local object &o = &anchor;
+&o.hashCode();");
+
+        Assert.Empty(diags);
+    }
+
+    [Fact]
     public void Reports_unknown_property_on_builtin_object_but_not_valid_one()
     {
         var diags = Run(@"

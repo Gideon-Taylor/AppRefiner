@@ -69,6 +69,10 @@ public sealed class InvalidMemberAccessCheck : CompileCheckBase
         // covered by usage narrowing instead.
         if (targetType is BuiltinObjectTypeInfo { IsApiObjectBase: true }) return;
 
+        // A Java object's members are the Java class's, which we have no definitions for; a plain
+        // object could hold one (or anything else)
+        if (targetType.PeopleCodeType is PeopleCodeType.JavaObject or PeopleCodeType.Object) return;
+
         // A named CI, or an item whose collection path is known, is checked against the CI's
         // definition when the lookup finds it. An item's methods are DataItem's (checked below).
         if ((targetType.PeopleCodeType == PeopleCodeType.ComponentInterface || !isMethodCall)
