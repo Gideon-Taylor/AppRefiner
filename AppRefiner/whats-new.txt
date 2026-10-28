@@ -1,3 +1,163 @@
+VERSION 1.4.0
+=============
+
+*** PLEASE READ: RESTART APPLICATION DESIGNER ***
+-------------------------------------------------
+
+This release updates the AppRefiner integration running inside Application
+Designer. Close and reopen any Application Designer that was already open —
+until you do, the new definition-name and annotation suggestions won't appear.
+
+
+FAR FEWER FALSE ERRORS IN RECORD, FIELD AND COMPONENT CODE
+----------------------------------------------------------
+
+Several cases where AppRefiner reported errors in valid code that uses
+records, fields and component interfaces are fixed. Component- and
+record-heavy programs should show far fewer false reports.
+
+• REC.FIELD as a Field-Name Argument - Functions that take a field name, such
+  as GetNextNumberWithGaps(REC.FIELD), accept a bare REC.FIELD, as the
+  compiler does. AppRefiner used to report it as the wrong parameter type.
+  These parameters now accept REC.FIELD and Field.X, and check the field's
+  data type where the parameter requires one. Market.GBL is read as a
+  REC.FIELD reference, as the compiler reads it.
+• Records Returned by Your Own Functions - A user function or method declared
+  Returns Record was assumed to return a record named after its arguments or
+  the program's default record, which led to false member errors on the
+  result. Only builtin functions such as CreateRecord(Record.JOB) and
+  GetRecord() name the record they return now.
+• Reassigned Record and Field Variables - A Record, Field, ApiObject or any
+  variable used to keep the first type assigned to it, so members of a
+  different record assigned later were reported as errors. Now the latest
+  assignment decides. Assigning a different API object to an ApiObject
+  variable no longer gives a false "Cannot assign" error, and variables
+  declared any accept any value.
+• Component Interface Properties and Items
+  - A CI's keys and fields are valid properties: reading or setting
+    &ci.EMPLID is no longer reported.
+  - Collection items are typed as DataItems instead of Rows, so their fields
+    aren't reported either.
+  - Unknown methods are no longer reported on a CI, since a CI can define its
+    own.
+  - An ignored return from an API object method is no longer an error,
+    matching App Designer.
+  - With a database connection, named CIs are now checked against their real
+    definition (see Component Interface Typing below).
+
+
+NEW FEATURES
+------------
+
+• Type Annotations for ApiObject - PeopleCode makes you declare API objects as
+  plain ApiObject, so AppRefiner couldn't check what you did with them. You
+  can now name the real type in a /* as T */ comment, and AppRefiner types
+  and checks the variable as that type. App Designer treats the annotation as
+  an ordinary comment.
+  - Annotate a declaration (Local ApiObject /* as Session */ &s;), a
+    parameter (&f As ApiObject /* as Folder */), a property, an instance
+    variable or a method's return type.
+  - Annotate an assigned value: &f = &s.GetFolder() /* as Folder */;
+  - Annotate Record and Field declarations with a specific definition
+    (Local Record /* as Record.JOB */ &r;), and any with any of these types.
+  - Annotations on method headers apply to callers and are inherited by
+    overriding methods.
+  - AppRefiner warns when a call passes a different API type than the
+    annotated parameter expects, or when an initializer or later assignment
+    contradicts the annotation.
+• ApiObject Types Worked Out Without Annotations - Most ApiObject variables
+  now get a type even with no annotation:
+  - From how the variable is used: it takes the one API type that has every
+    member you use on it. A use that doesn't fit is a single warning instead
+    of a member error.
+  - From what a method returns: a method or function declared to return
+    ApiObject, Record or Field takes the type its Return statements agree on,
+    including calls between methods in the same class and in other programs.
+    A warning shows when the returns disagree.
+  - From assignments: properties and instance variables are typed from their
+    getters and from what is assigned to them.
+• Component Interface Typing - A CI named with CompIntfc.X (in GetCompIntfc()
+  or an annotation) is read from the database and checked against its
+  definition.
+  - Its properties, collections, items, and custom and standard methods are
+    typed and checked. Find() returns a collection of the CI's instances, and
+    Item() on that collection is the CI. CI items accept their own fields and
+    collections, plus ItemNum.
+  - Autosuggest lists a CI's members, hovering a CI property shows its type,
+    record field, read-only flag and comment, signature help shows the CI's
+    custom methods, and Go To Definition opens the CI's Methods PeopleCode at
+    the function.
+  - The new "Refresh Component Interface Cache" command re-reads cached CIs.
+    Saving a CI's PeopleCode refreshes that CI automatically.
+• Definition Name Suggestions - Type a reference keyword, a dot and at least
+  one letter, and AppRefiner lists matching definition names from the
+  database. For example, HTML.Z lists HTML definitions starting with Z.
+  - Supported keywords: Record, Field, Page/Panel, Component/PanelGroup,
+    CompIntfc, HTML, Image, StyleSheet, SQL (standalone SQL only), MenuName,
+    Message, FileLayout, Node and Operation.
+  - The list holds 500 names at a time and is re-queried as you type, so
+    large databases are fully reachable. Ctrl+Space reopens the list.
+  - Needs a database connection.
+• Annotation Type Suggestions - Typing "/* as " where an annotation applies
+  lists the types that fit there: the ApiObject subtypes, plus CompIntfc.,
+  Record. and Field. entries that lead straight into definition name
+  suggestions. No database connection needed.
+
+
+IMPROVEMENTS
+------------
+
+• Hovers Show Refined and Annotated Types - Hovering a variable shows the type
+  AppRefiner worked out for it and where that type came from, on its
+  declaration, on a parameter, and on an assignment target (where it shows the
+  type just assigned). Signature help shows annotated parameter and return
+  types.
+• Builtin Method Hovers for Every API Type - Methods of every builtin type now
+  show their signature and return type on hover; this used to cover only about
+  a dozen types. Hovering a method name in a call shows the call's real return
+  type instead of "any".
+• Array Checks - Push, Unshift, Find, Substitute and Replace arguments are
+  checked against the array's element type, including in multi-dimensional
+  arrays, and errors name the expected type. &arr.Len and &arr.Dimension are
+  typed as number.
+• Every Type Error Is Reported - A line with several type problems now shows
+  all of them instead of only the last one found.
+• Warning Squiggles Are Amber - Compiler warnings used to be light green, and
+  the unimplemented-abstract-members squiggle rendered purple.
+
+
+BUG FIXES
+---------
+
+• Short Class Names in the Program Being Edited - The program being edited can
+  refer to classes by their short names (App Designer expands them when it
+  saves). AppRefiner now expands them through the program's imports the same
+  way. PKG:Config and OTHER:Config are no longer treated as the same class,
+  and with a short "extends Base", inherited members, %Super autocomplete, the
+  abstract-member checks and quick fixes, and the class hover find the right
+  base class.
+• Missing and Ambiguous Imports - "import PKG:Config;" no longer counts as
+  importing ZZ_AR_DEMO:Config. Every class reference is checked, including
+  Locals, parameters, return types and properties, so an ambiguous short name
+  is reported the way App Designer reports it on save. The quick fix offers
+  the exact import needed.
+• Wildcard Imports Without a Database - Without a database connection, every
+  class under "import PKG:*;" was reported as not imported.
+• Arrays of App Classes - An array of a subclass is no longer accepted where an
+  array of its base class is expected; App Designer rejects it too.
+• Java Objects - Methods and properties called on a JavaObject (from
+  CreateJavaObject, GetJavaClass and so on) or a plain object are no longer
+  reported as unknown. They belong to the Java class, which AppRefiner can't
+  see.
+• Optional Parameters - CreateProcessRequest's parameters are now optional.
+• Rowset.SelectNew - Now known. It used to be reported as an unknown method.
+• NoExport Function Headers - Function headers marked NoExport now parse.
+• Tools Version Through the App Designer Proxy - The tools version query now
+  converts PTPATCHREL to text before joining it.
+• Ctrl+Space After a Partial Member Name - At &obj.Us, Ctrl+Space now reopens
+  the member list filtered to "Us". It used to show nothing.
+
+
 VERSION 1.3.3
 =============
 
